@@ -3855,10 +3855,20 @@ fn key_value_editor(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
 
 // A key-value editor's words (D983): the column labels, the Add button's
 // label and the Remove buttons' verb, for localisation.
-type KeyValueOptions = struct { name_label: str, value_label: str, add_label: str, remove_label: str, duplicate_message: str }
+// (D1259) `secret` marks pairs whose values are masked; `empty_row` adds the
+// trailing empty row over the caller's `spare` buffers; `empty_hint` stands
+// above an empty list.
+type KeyValueOptions = struct { name_label: str, value_label: str, add_label: str, remove_label: str, duplicate_message: str, secret: []const bool, empty_row: bool, spare: Pair, empty_name: str, empty_hint: str }
 
 fn key_value_options() -> KeyValueOptions {
-    ret KeyValueOptions { name_label: "Name", value_label: "Value", add_label: "Add variable", remove_label: "Remove", duplicate_message: "Duplicate name" }
+    var out: KeyValueOptions = zero
+    out.name_label = "Name"
+    out.value_label = "Value"
+    out.add_label = "Add variable"
+    out.remove_label = "Remove"
+    out.duplicate_message = "Duplicate name"
+    out.empty_name = "Add a name"
+    ret out
 }
 
 // Two words and a third joined by spaces into the arena ("Remove API_URL").
@@ -3894,9 +3904,11 @@ fn joined(a: *mem.Arena, first: str, second: str, third: []const u8) -> (str, er
 // `body-small` `error` after a 16 `error` icon under the row. An "Add variable"
 // text button 8 below (keyed as before). A table of three columns named
 // `label`, its rows Rows of Cells.
-// ponytail: no empty add-row, secret values, text mode, ordered variant,
-// removal with Undo, `code` names, or the touch list form; the Add button has
-// no `add` glyph.
+// (D1259) Secret values are masked, an empty row adds pairs, and an empty
+// list can carry a hint.
+// ponytail: no Show value toggle (no `visibility` glyph), text mode, ordered
+// variant, removal with Undo, `code` names, or the touch list form; the Add
+// button has no `add` glyph.
 fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
     if pairs.len > 128usize { ret (zero, TooLarge) }
     let dense = density_of(t) == 0usize
@@ -3907,9 +3919,9 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let name_w = avail * 0.4
     let value_w = avail - name_w
     let muted = style.color(t.tokens, .OnSurfaceVariant)
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * pairs.len + 2usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * pairs.len + 4usize)
     if rows_error != ok { ret (zero, TooLarge) }
-    let (changes, changes_error) = mem.alloc[PairChange](a, 2usize * pairs.len)
+    let (changes, changes_error) = mem.alloc[PairChange](a, 2usize * pairs.len + 2usize)
     if changes_error != ok { ret (zero, TooLarge) }
     let (removes, removes_error) = mem.alloc[PairRemove](a, pairs.len)
     if removes_error != ok { ret (zero, TooLarge) }
@@ -3959,8 +3971,17 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         field.width = value_w
         field.placeholder = options.value_label
         field.invalid = false
-        let (value_field, value_error) = control.text_field(a, key + 2u64 + 3u64 * u64(i), t, value_name, pairs[i].value, pairs[i].value_len, widget.Change[str] { ctx: ctx_of(&changes[2usize * i + 1usize]), invoke: pair_change_fire }, zero, field)
-        if value_error != ok { ret (zero, value_error) }
+        var value_field: widget.Node = zero
+        if i < options.secret.len && options.secret[i] {
+            // (D1259) A secret value is a password field, shown as bullets.
+            let (masked, masked_error) = control.password_field(a, key + 2u64 + 3u64 * u64(i), t, value_name, pairs[i].value, pairs[i].value_len, widget.Change[str] { ctx: ctx_of(&changes[2usize * i + 1usize]), invoke: pair_change_fire }, zero, field)
+            if masked_error != ok { ret (zero, masked_error) }
+            value_field = masked
+        } else {
+            let (plain_value, value_error) = control.text_field(a, key + 2u64 + 3u64 * u64(i), t, value_name, pairs[i].value, pairs[i].value_len, widget.Change[str] { ctx: ctx_of(&changes[2usize * i + 1usize]), invoke: pair_change_fire }, zero, field)
+            if value_error != ok { ret (zero, value_error) }
+            value_field = plain_value
+        }
         let (remove_name, remove_name_error) = joined(a, options.remove_label, "", name_text)
         if remove_name_error != ok { ret (zero, remove_name_error) }
         let (gone, gone_error) = glyph_in(a, key + 3u64 + 3u64 * u64(i), t, .Cross, remove_name, &actions[i], remove_w, control.if_else(dense, t.tokens.sizes.icon_sm, t.tokens.sizes.icon_md), control.with_alpha(style.color(t.tokens, .OnSurface), 0.0), muted, false, true)
@@ -4004,6 +4025,39 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             n += 1usize
         }
         i += 1usize
+    }
+    // (D1259) The empty row: "Add a name" and "Value" over the caller's spare
+    // buffers (keyed `key + 1 + 3 * pairs.len` and one more), no Remove; typing
+    // in it reports an edit at index `pairs.len`, which the caller turns into a
+    // pair. Above an empty list, `empty_hint` in `body-small`.
+    if pairs.len == 0usize && options.empty_hint.len > 0usize {
+        var hinted = control.text_options()
+        hinted.role = .BodySmall
+        let (hint_node, hint_error) = control.colored_text(a, 0u64, options.empty_hint, t, hinted, muted)
+        if hint_error != ok { ret (zero, hint_error) }
+        rows[n] = hint_node
+        n += 1usize
+    }
+    if options.empty_row && options.spare.name.len > 0usize && options.spare.value.len > 0usize {
+        let last = pairs.len
+        changes[2usize * last] = PairChange { index: last, value: false, edit: edit }
+        changes[2usize * last + 1usize] = PairChange { index: last, value: true, edit: edit }
+        var blank = control.field_options()
+        blank.width = name_w
+        blank.height = field_h
+        blank.placeholder = options.empty_name
+        let (blank_name, blank_name_error) = control.text_field(a, key + 1u64 + 3u64 * u64(last), t, options.empty_name, options.spare.name, options.spare.name_len, widget.Change[str] { ctx: ctx_of(&changes[2usize * last]), invoke: pair_change_fire }, zero, blank)
+        if blank_name_error != ok { ret (zero, blank_name_error) }
+        blank.width = value_w
+        blank.placeholder = options.value_label
+        let (blank_value, blank_value_error) = control.text_field(a, key + 2u64 + 3u64 * u64(last), t, options.value_label, options.spare.value, options.spare.value_len, widget.Change[str] { ctx: ctx_of(&changes[2usize * last + 1usize]), invoke: pair_change_fire }, zero, blank)
+        if blank_value_error != ok { ret (zero, blank_value_error) }
+        let (blanks, blanks_error) = mem.alloc[widget.Node](a, 2usize)
+        if blanks_error != ok { ret (zero, TooLarge) }
+        blanks[0usize] = blank_name
+        blanks[1usize] = blank_value
+        rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, style.defaults(), blanks[0usize..2usize])
+        n += 1usize
     }
     var plain = control.button_options()
     plain.variant = .Plain

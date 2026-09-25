@@ -24563,3 +24563,18 @@ picker pass no footer and are unchanged.
 
 `ui_pickers_v2` holds the spread, Today's commit and Clear on Windows and
 Linux; the other date fixtures still pass.
+
+## D1259 — Key-value editors have secret values and an empty row
+
+`KeyValueOptions.secret` marks the pairs whose values are password fields,
+which show an asterisk per byte and are never copied. `empty_row` adds the
+spec's trailing empty row over the caller's `spare` pair buffers: "Add a name"
+and "Value" placeholders, no Remove, and typing that reports a `PairEdit` at
+index `pairs.len`, which the caller turns into a new pair. `empty_hint` stands
+above an empty list in `body-small`. `key_value_options` now builds from zero.
+The element `Summary` gains `secret`, so a test or tool can see that a field
+masks its value. The Show value toggle waits on a `visibility` glyph; text
+mode, the ordered variant and removal with Undo remain.
+
+`ui_collections5_v2` holds the masked and plain values, the empty row and its
+edit at index 2 on Windows and Linux; `ui_property` still passes.

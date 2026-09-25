@@ -40,6 +40,17 @@ fn on_edit(ctx: *void, value: collection.PairEdit) -> err {
     ret ok
 }
 
+// (D1259) The last pair edit and how many.
+type Edits = struct { count: usize, index: usize, value: bool }
+
+fn on_pair_edit(ctx: *void, value: collection.PairEdit) -> err {
+    let edits = mem.cast[*Edits](ctx)
+    edits.count += 1usize
+    edits.index = value.index
+    edits.value = value.value
+    ret ok
+}
+
 fn on_remove(ctx: *void, value: usize) -> err {
     let log = mem.cast[*Log](ctx)
     log.removes += 1usize
@@ -295,6 +306,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     logs[0usize].reordered = true
     let (root_4, build_4_error) = build(&f, &theme, ctx, shut[..], filter, 0usize, pairs[0usize..2usize], &adds[0usize])
     if build_4_error != ok || testing.pump(&harness, root_4, now) != ok || testing.by_key(&harness, look_heading).count != 1usize || testing.by_key(&harness, person_heading).count != 1usize || testing.by_key(&harness, 103u64).count != 0usize || testing.by_key(&harness, 101u64).count != 1usize { os.exit(32i32) }
+    // (D1259) The second value is secret, a masked field; the empty row after the
+    // pairs takes typing as an edit at index 2 and has no Remove.
+    var edits: Edits = zero
+    var kv_secret: [2]bool = zero
+    kv_secret[1usize] = true
+    var kv = collection.key_value_options()
+    kv.secret = kv_secret[..]
+    kv.empty_row = true
+    kv.spare = collection.Pair { name: buffers[160usize..192usize], name_len: 0usize, value: buffers[192usize..224usize], value_len: 0usize }
+    f = mem.arena_from(storage)
+    let (kv_editor, kv_error) = collection.key_value_editor_of(&f, 700u64, &theme, "Secrets", pairs[0usize..2usize], widget.Change[collection.PairEdit] { ctx: mem.cast[*void](&edits), invoke: on_pair_edit }, zero, &adds[0usize], 400.0, kv)
+    let (kv_page, kv_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if kv_error != ok || kv_page_error != ok { os.exit(36i32) }
+    kv_page[0usize] = kv_editor
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(420.0, 700.0), kv_page[0usize..1usize]), time.Instant { nanos: 4000000000i64 }) != ok { os.exit(37i32) }
+    let (plain_value, has_plain_value) = widget.summary_at(&runtime, usize(testing.by_key(&harness, 702u64).element.slot))
+    let (secret_value, has_secret_value) = widget.summary_at(&runtime, usize(testing.by_key(&harness, 705u64).element.slot))
+    if !has_plain_value || !has_secret_value || plain_value.secret || !secret_value.secret { os.exit(38i32) }
+    if testing.by_key(&harness, 707u64).count != 1usize || testing.by_key(&harness, 709u64).count != 0usize || testing.by_label(&harness, "Add a name").count == 0usize { os.exit(39i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 707u64).element) != ok || testing.type_text(&harness, "X") != ok || edits.count == 0usize || edits.index != 2usize || edits.value { os.exit(40i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui collections5 v2 ok\n")
     ret ok
