@@ -22255,3 +22255,15 @@ normal command lists; the source marks its measurable upgrade point.
 `ui_overlays4_v2` holds all three tiers, recency ordering and mapped execution on
 Windows and Linux. `palette-ranked.png` is the Segoe UI visual check and also
 holds spaces beside split match runs.
+
+## D1064 — Compact palettes are the same ranked command model
+
+`command_palette_ranked_adaptive` selects a Compact layout without forking the
+matching, command identity or callbacks: a full-window `surface`, an inset 48px
+Back/query pill, the same optional 2px Busy progress, 48px rows without shortcut
+caps or persistent selection fill, and no desktop footer. Percent sizing keeps
+the first frame independent of a previously measured host surface.
+
+`ui_overlays4_v2` holds the full bounds, Back dismissal, Busy semantics, row
+height, surface colour and removed desktop-only content on Windows and Linux.
+`palette-compact.png` is the 360px Segoe UI visual check.

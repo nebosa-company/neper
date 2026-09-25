@@ -3828,7 +3828,7 @@ fn index_pick_fire(ctx: *void) -> err {
 // in its height, under the `on-surface` state layer; the active one
 // `secondary-container` with its label in `on-secondary-container`. A list item
 // in the tree with its position, Selected when active.
-fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, unavailable: []const str, active: usize, pick: widget.Change[usize]) -> ([]widget.Node, err) {
+fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, unavailable: []const str, active: usize, compact: bool, pick: widget.Change[usize]) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
     let (rows, rows_error) = mem.alloc[widget.Node](a, names.len)
     if rows_error != ok { ret (none, TooLarge) }
@@ -3846,7 +3846,7 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         let state = control.control_state(t, row_key, enabled, false)
         var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
         var ink = style.color(t.tokens, .OnSurface)
-        if i == active && enabled {
+        if i == active && enabled && !compact {
             fill = style.color(t.tokens, .SecondaryContainer)
             ink = style.color(t.tokens, .OnSecondaryContainer)
         }
@@ -3858,8 +3858,10 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         look.radius = t.tokens.radii.sm
         look.custom_padding = true
         look.padding = 12.0
-        look.padding_y = control.max_zero((40.0 - line) * 0.5)
-        look.min_height = 40.0
+        var row_height: f32 = 40.0
+        if compact { row_height = 48.0 }
+        look.padding_y = control.max_zero((row_height - line) * 0.5)
+        look.min_height = row_height
         look.min_width = 24.0
         if !enabled { look.opacity = t.tokens.states.disabled_content }
         var caption = control.text_options()
@@ -3933,7 +3935,7 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
             if reason_error != ok { ret (none, reason_error) }
             trailing = reason
             has_trailing = true
-        } else if shortcuts.len == names.len && shortcuts[i].len > 0usize {
+        } else if !compact && shortcuts.len == names.len && shortcuts[i].len > 0usize {
             let (caps, caps_error) = control.compact_key_caps(a, t, shortcuts[i])
             if caps_error != ok { ret (none, caps_error) }
             trailing = caps
@@ -4035,6 +4037,27 @@ fn centred_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     ret (made, made_error)
 }
 
+fn compact_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, content: widget.Node, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    var full = style.defaults()
+    full.width = style.Length { Percent: 100.0 }
+    full.height = style.Length { Percent: 100.0 }
+    full.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
+    if boxed_error != ok { ret (zero, TooLarge) }
+    boxed[0usize] = widget.box(0u64, full, body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 23u8
+    sem.label = label
+    sem.states = accessibility.STATE_MODAL
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.semantics(0u64, sem, style.defaults(), boxed[0usize..1usize])
+    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
+}
+
 // A window switcher: the application's windows or documents by name in a modal
 // panel in the middle of the window while `open`, the active one filled; Up and
 // Down move the active one through `activate` (the caller keeps it), Enter and a
@@ -4050,7 +4073,7 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var no_categories: []const str = zero
     var no_shortcuts: []const str = zero
     var no_matches: []const usize = zero
-    let (rows, rows_error) = choice_rows(a, key + 2u64, t, names, no_categories, no_matches, no_matches, no_shortcuts, no_shortcuts, active, pick)
+    let (rows, rows_error) = choice_rows(a, key + 2u64, t, names, no_categories, no_matches, no_matches, no_shortcuts, no_shortcuts, active, false, pick)
     if rows_error != ok { ret (zero, rows_error) }
     var inset = style.defaults()
     inset.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 4.0 } }
@@ -4310,6 +4333,42 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, bar, layers[2usize..field_end]), ok)
 }
 
+fn palette_compact_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    let (query_look, look_error) = control.text_style(a, t, .BodyMedium)
+    if look_error != ok { ret (zero, look_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (back, back_error) = control.glyph_button(a, key + 200u64, t, .ArrowBack, "Back", dismiss, 32.0, 24.0)
+    if back_error != ok { ret (zero, back_error) }
+    parts[0usize] = back
+    var at = 0usize
+    if len == 0usize {
+        var hint = control.text_options()
+        hint.role = .BodyMedium
+        hint.wrap = .None
+        let (hint_node, hint_error) = control.colored_text(a, 0u64, palette_mode_placeholder(mode), t, hint, muted)
+        if hint_error != ok { ret (zero, hint_error) }
+        parts[2usize + at] = hint_node
+        at += 1usize
+    }
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: style.text_style(t.tokens, .BodyMedium).line_height }
+    parts[2usize + at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: query_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    at += 1usize
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    parts[1usize] = widget.stack(0u64, grow, parts[2usize..2usize + at])
+    var bar = style.defaults()
+    bar.height = style.Length { Px: 48.0 }
+    bar.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
+    bar.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+    bar.radius = t.tokens.radii.full
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, bar, parts[0usize..2usize]), ok)
+}
+
 // A command palette: a search field (keyed `key + 2`, over the caller's buffer,
 // typed text reaching `typed` for the caller to filter by) over the matching
 // commands' names in a modal panel in the middle of the window while `open`, the
@@ -4325,8 +4384,8 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
 // `body-medium` `on-surface-variant`, centred. The footer is 32 tall, 16 at the
 // sides, below a 1px `outline-variant` line: "Up and Down to move, Enter to run"
 // in `body-small` `on-surface-variant`.
-// ponytail: no compact form; command_palette_ranked owns matching while the
-// source-compatible wrappers keep caller filtering.
+// command_palette_ranked owns matching while the source-compatible wrappers
+// keep caller filtering; its adaptive form uses the compact full-screen layout.
 fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (made, made_error) = command_palette_mode(a, key, t, label, buffer, len, typed, .Commands, commands, active, open, activate, run, dismiss, width)
     ret (made, made_error)
@@ -4335,7 +4394,7 @@ fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 fn command_palette_mode(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     var no_text: []const str = zero
     var no_matches: []const usize = zero
-    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, commands, no_text, no_text, no_matches, no_matches, no_text, no_text, active, false, open, activate, run, dismiss, width)
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, commands, no_text, no_text, no_matches, no_matches, no_text, no_text, active, false, false, open, activate, run, dismiss, width)
     ret (made, made_error)
 }
 
@@ -4345,6 +4404,11 @@ fn command_palette_grouped(a: *mem.Arena, key: widget.Key, t: *const control.The
 }
 
 fn command_palette_grouped_busy(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const PaletteCommand, active: usize, busy: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = command_palette_grouped_form(a, key, t, label, buffer, len, typed, mode, commands, active, busy, false, open, activate, run, dismiss, width)
+    ret (made, made_error)
+}
+
+fn command_palette_grouped_form(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const PaletteCommand, active: usize, busy: bool, compact: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (names, names_error) = mem.alloc[str](a, commands.len)
     if names_error != ok { ret (zero, TooLarge) }
     let (groups, groups_error) = mem.alloc[str](a, commands.len)
@@ -4370,11 +4434,21 @@ fn command_palette_grouped_busy(a: *mem.Arena, key: widget.Key, t: *const contro
         unavailable[i] = commands[i].unavailable
         i += 1usize
     }
-    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, categories, match_starts, match_ends, shortcuts, unavailable, active, busy, open, activate, run, dismiss, width)
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, categories, match_starts, match_ends, shortcuts, unavailable, active, busy, compact, open, activate, run, dismiss, width)
     ret (made, made_error)
 }
 
 fn command_palette_ranked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const PaletteCommand, active: usize, busy: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = command_palette_ranked_form(a, key, t, label, buffer, len, typed, mode, commands, active, busy, false, open, activate, run, dismiss, width)
+    ret (made, made_error)
+}
+
+fn command_palette_ranked_adaptive(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const PaletteCommand, active: usize, busy: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32, size: style.SizeClass) -> (widget.Node, err) {
+    let (made, made_error) = command_palette_ranked_form(a, key, t, label, buffer, len, typed, mode, commands, active, busy, size == .Compact, open, activate, run, dismiss, width)
+    ret (made, made_error)
+}
+
+fn command_palette_ranked_form(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const PaletteCommand, active: usize, busy: bool, compact: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     var query_len = len
     if query_len > buffer.len { query_len = buffer.len }
     let (ranked, ranked_error) = palette_rank(a, commands, buffer[0usize..query_len])
@@ -4393,17 +4467,27 @@ fn command_palette_ranked(a: *mem.Arena, key: widget.Key, t: *const control.Them
     if maps_error != ok { ret (zero, TooLarge) }
     maps[0usize] = PaletteIndexMap { indices: indices, change: run }
     let mapped_run = widget.Change[usize] { ctx: mem.cast[*void](&maps[0usize]), invoke: palette_mapped_change }
-    let (made, made_error) = command_palette_grouped_busy(a, key, t, label, buffer, query_len, typed, mode, shown, active, busy, open, activate, mapped_run, dismiss, width)
+    let (made, made_error) = command_palette_grouped_form(a, key, t, label, buffer, query_len, typed, mode, shown, active, busy, compact, open, activate, mapped_run, dismiss, width)
     ret (made, made_error)
 }
 
-fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, unavailable: []const str, active: usize, busy: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, unavailable: []const str, active: usize, busy: bool, compact: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (relays, relays_error) = mem.alloc[PaletteTyped](a, 1usize)
     if relays_error != ok { ret (zero, TooLarge) }
     relays[0usize] = PaletteTyped { typed: typed, activate: activate }
     let relayed = widget.Change[str] { ctx: mem.cast[*void](&relays[0usize]), invoke: palette_typed_fire }
-    let (field, field_error) = palette_field(a, key + 2u64, t, buffer, len, relayed, mode)
+    var field: widget.Node = zero
+    var field_error: err = ok
+    if compact {
+        let (made_field, made_field_error) = palette_compact_field(a, key + 2u64, t, buffer, len, relayed, mode, dismiss)
+        field = made_field
+        field_error = made_field_error
+    } else {
+        let (made_field, made_field_error) = palette_field(a, key + 2u64, t, buffer, len, relayed, mode)
+        field = made_field
+        field_error = made_field_error
+    }
     if field_error != ok { ret (zero, field_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -4417,9 +4501,14 @@ fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
     if active < commands.len { combo_sem.active = key + 3u64 + u64(active) }
     parts[0usize] = widget.semantics(0u64, combo_sem, style.defaults(), field_body[0usize..1usize])
     if busy {
+        var bar_width = width
+        if compact {
+            bar_width = 360.0
+            if mem.address_of(t.runtime) != 0usize { bar_width = widget.surface_size(t.runtime).width }
+        }
         var progress_options = control.progress_options()
         progress_options.full_bleed = true
-        let (progress, progress_error) = control.progress_bar_of(a, key + 100u64, t, "Loading commands", 0.0, true, width, progress_options)
+        let (progress, progress_error) = control.progress_bar_of(a, key + 100u64, t, "Loading commands", 0.0, true, bar_width, progress_options)
         if progress_error != ok { ret (zero, progress_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
@@ -4434,9 +4523,9 @@ fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
         parts[1usize] = rule
     }
     var results = style.defaults()
-    results.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
+    if !compact { results.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } } }
     if commands.len > 0usize {
-        let (plain_rows, rows_error) = choice_rows(a, key + 3u64, t, commands, categories, match_starts, match_ends, shortcuts, unavailable, active, run)
+        let (plain_rows, rows_error) = choice_rows(a, key + 3u64, t, commands, categories, match_starts, match_ends, shortcuts, unavailable, active, compact, run)
         if rows_error != ok { ret (zero, rows_error) }
         var rows = plain_rows
         if groups.len == commands.len {
@@ -4469,24 +4558,32 @@ fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
     result_sem.row_count = u32(commands.len)
     if active < commands.len { result_sem.active = key + 3u64 + u64(active) }
     parts[2usize] = widget.semantics(0u64, result_sem, style.defaults(), result_body[0usize..1usize])
-    var foot = style.defaults()
-    foot.width = style.Length { Percent: 100.0 }
-    foot.height = style.Length { Px: 32.0 }
-    foot.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 0.0 } }
-    var small = control.text_options()
-    small.role = .BodySmall
-    small.wrap = .None
-    let (hints, hints_error) = control.colored_text(a, 0u64, "Up and Down to move, Enter to run", t, small, style.color(t.tokens, .OnSurfaceVariant))
-    if hints_error != ok { ret (zero, hints_error) }
-    parts[7usize] = hints
-    let (edge, edge_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
-    if edge_error != ok { ret (zero, edge_error) }
-    parts[3usize] = edge
-    parts[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, foot, parts[7usize..8usize])
-    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..5usize])
+    var part_count = 3usize
+    if !compact {
+        var foot = style.defaults()
+        foot.width = style.Length { Percent: 100.0 }
+        foot.height = style.Length { Px: 32.0 }
+        foot.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 0.0 } }
+        var small = control.text_options()
+        small.role = .BodySmall
+        small.wrap = .None
+        let (hints, hints_error) = control.colored_text(a, 0u64, "Up and Down to move, Enter to run", t, small, style.color(t.tokens, .OnSurfaceVariant))
+        if hints_error != ok { ret (zero, hints_error) }
+        parts[7usize] = hints
+        let (edge, edge_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+        if edge_error != ok { ret (zero, edge_error) }
+        parts[3usize] = edge
+        parts[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, foot, parts[7usize..8usize])
+        part_count = 5usize
+    }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
     let runnable = active < commands.len && (unavailable.len != commands.len || unavailable[active].len == 0usize)
     let (scoped, scoped_error) = choice_scope(a, key + 1u64, commands.len, active, runnable, activate, run, dismiss, column)
     if scoped_error != ok { ret (zero, scoped_error) }
+    if compact {
+        let (made, made_error) = compact_modal(a, key, t, label, scoped, dismiss)
+        ret (made, made_error)
+    }
     let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width, true)
     ret (made, made_error)
 }

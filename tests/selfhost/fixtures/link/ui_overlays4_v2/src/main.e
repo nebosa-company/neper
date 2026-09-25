@@ -28,7 +28,7 @@ use e.ui.widget
 
 type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, typed: usize, dismisses: usize }
 
-type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, Empty, Switcher }
+type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, PaletteCompact, Empty, Switcher }
 
 fn on_activate(ctx: *void, index: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -93,7 +93,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
     if which == .PaletteSymbols { mode = .Symbols }
     var palette: widget.Node = zero
     var e1: err = ok
-    if which == .PaletteRanked {
+    if which == .PaletteRanked || which == .PaletteCompact {
         buffer[0usize] = 114u8
         buffer[1usize] = 101u8
         var ranked: [4]navigation.PaletteCommand = zero
@@ -101,9 +101,15 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
         ranked[1usize] = navigation.PaletteCommand { name: "Create release", group: "Commands", category: "Task", match_start: 0usize, match_end: 0usize, shortcut: "", unavailable: "", recency: 99u32 }
         ranked[2usize] = navigation.PaletteCommand { name: "Restore", group: "Commands", category: "Task", match_start: 0usize, match_end: 0usize, shortcut: "", unavailable: "", recency: 1u32 }
         ranked[3usize] = navigation.PaletteCommand { name: "Release notes", group: "Commands", category: "Task", match_start: 0usize, match_end: 0usize, shortcut: "", unavailable: "", recency: 50u32 }
-        let (made_palette, made_palette_error) = navigation.command_palette_ranked(a, 100u64, t, "Commands", buffer, 2usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, ranked[..], active, false, true, activate, run, dismiss, 560.0)
-        palette = made_palette
-        e1 = made_palette_error
+        if which == .PaletteCompact {
+            let (made_palette, made_palette_error) = navigation.command_palette_ranked_adaptive(a, 100u64, t, "Commands", buffer, 2usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, ranked[..], active, true, true, activate, run, dismiss, 560.0, .Compact)
+            palette = made_palette
+            e1 = made_palette_error
+        } else {
+            let (made_palette, made_palette_error) = navigation.command_palette_ranked(a, 100u64, t, "Commands", buffer, 2usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, ranked[..], active, false, true, activate, run, dismiss, 560.0)
+            palette = made_palette
+            e1 = made_palette_error
+        }
     } else if which == .PaletteGrouped || which == .PaletteBusy {
         var grouped: [3]navigation.PaletteCommand = zero
         grouped[0usize] = navigation.PaletteCommand { name: names[0usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 2usize, shortcut: "Ctrl+Shift+B", unavailable: "", recency: 0u32 }
@@ -270,12 +276,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (run_everything, has_run_everything) = find(ranked_tree, .Option, "Task: Run everything")
     if !has_release_notes || release_notes.position.row != 1u32 || !has_restore || restore.position.row != 2u32 || !has_create_release || create_release.position.row != 3u32 || !has_run_everything || run_everything.position.row != 4u32 { os.exit(51i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].runs != 2usize || logs[0usize].ran != 3usize { os.exit(52i32) }
+    // Compact uses the whole surface, an inset Back/search pill and 48px rows;
+    // it removes shortcut caps, the persistent selected fill and the footer.
+    let (root_compact, build_compact_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .PaletteCompact, 0usize)
+    if build_compact_error != ok || testing.pump(&harness, root_compact, time.Instant { nanos: 1195000000i64 }) != ok { os.exit(53i32) }
+    let (compact_shot, compact_shot_error) = testing.snapshot(&harness, a)
+    if compact_shot_error != ok { os.exit(54i32) }
+    let (compact_panel, has_compact_panel) = lifted(&harness, 100u64)
+    let (compact_first, has_compact_first) = bounds(&harness, &runtime, 103u64)
+    let (back_button, has_back_button) = bounds(&harness, &runtime, 302u64)
+    let (compact_tree, compact_tree_error) = testing.semantics(&harness)
+    if compact_tree_error != ok { os.exit(55i32) }
+    let (_, has_back_semantics) = find(compact_tree, .Button, "Back")
+    let (compact_progress, has_compact_progress) = find(compact_tree, .Progress, "Loading commands")
+    if !has_compact_panel || !near(compact_panel.x, 0.0) || !near(compact_panel.y, 0.0) || !near(compact_panel.width, 640.0) || !near(compact_panel.height, 480.0) || !has_compact_first || !near(compact_first.y, 78.0) || !near(compact_first.height, 48.0) || !has_back_button || !has_back_semantics || !has_compact_progress || !compact_progress.state.busy { os.exit(56i32) }
+    if testing.by_text(&harness, "Ctrl").count != 0usize || testing.by_text(&harness, "Up and Down to move, Enter to run").count != 0usize || !is_color(compact_shot, at(320.0, compact_first.y + 24.0), style.color(&tokens, .Surface)) { os.exit(57i32) }
+    if testing.tap(&harness, back_button.x + back_button.width * 0.5, back_button.y + back_button.height * 0.5) != ok || logs[0usize].dismisses != 1usize { os.exit(58i32) }
     // With no match: the empty state, 24 above and below (142 in all).
     let (root_3, build_3_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Empty, 0usize)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(26i32) }
     let (empty, has_empty) = lifted(&harness, 100u64)
     if !has_empty || !near(empty.height, 142.0) || testing.by_text(&harness, "No matching commands").count != 1usize { os.exit(27i32) }
-    if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].dismisses != 1usize { os.exit(28i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].dismisses != 2usize { os.exit(28i32) }
     // The switcher's list form: 480 wide, 64 down, no scrim; rows 4 and 8 in;
     // Down moves on, Up from the first wraps, Escape dismisses.
     let (root_4, build_4_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Switcher, 0usize)
@@ -293,7 +315,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_windows || !has_main_window || !main_window.state.selected { os.exit(32i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].active != 1usize { os.exit(33i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].active != 2usize { os.exit(34i32) }
-    if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].dismisses != 2usize { os.exit(35i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].dismisses != 3usize { os.exit(35i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(36i32) }
     try io.print("ui overlays4 v2 ok\n")
     ret ok
