@@ -25,13 +25,14 @@ use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
 
 type Hit = struct { store: *Store, index: usize }
-type Store = struct { hits: [8]u32, targets: [8]Hit, actions: [8]widget.Submit, words: [3]str, lines: [3]str, open: [3]bool, disclosed: bool, group_open: bool }
+type Store = struct { hits: [9]u32, targets: [9]Hit, actions: [9]widget.Submit, words: [3]str, lines: [3]str, open: [3]bool, disclosed: bool, group_open: bool }
 
 fn on_hit(ctx: *void) -> err {
     let h = mem.cast[*Hit](ctx)
@@ -107,6 +108,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     chosen.title = "Selected project"
     chosen.action = &s.actions[0usize]
     chosen.select = &s.actions[7usize]
+    chosen.range_select = &s.actions[8usize]
     let (five, e5) = control.card_of(a, 22u64, t, chosen, fillers[3usize..4usize])
     var dragged_options = lifted
     dragged_options.dragged = true
@@ -238,7 +240,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var store: Store = zero
     stores[0usize] = store
     var i = 0usize
-    while i < 8usize {
+    while i < 9usize {
         stores[0usize].targets[i] = Hit { store: &stores[0usize], index: i }
         stores[0usize].actions[i] = widget.Submit { ctx: mem.cast[*void](&stores[0usize].targets[i]), invoke: on_hit }
         i += 1usize
@@ -323,6 +325,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         sem_at += 1usize
     }
     if widget.semantic_action(&runtime, testing.by_label(&harness, "Selected project").element, accessibility.ACTION_SELECT) != ok || stores[0usize].hits[7usize] != 2u32 { os.exit(55i32) }
+    var command: input.Modifiers = zero
+    command.control = true
+    if testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: command, repeat: false } }) != ok || testing.tap(&harness, chosen.x + 20.0, chosen.y + 26.0) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: zero, repeat: false } }) != ok || stores[0usize].hits[7usize] != 3u32 { os.exit(56i32) }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
+    if testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 16u32, logical: 16u32 }, modifiers: shifted, repeat: false } }) != ok || testing.tap(&harness, chosen.x + 20.0, chosen.y + 26.0) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 16u32, logical: 16u32 }, modifiers: zero, repeat: false } }) != ok || stores[0usize].hits[8usize] != 1u32 { os.exit(57i32) }
+    var touch = testing.pointer_at(chosen.x + 20.0, chosen.y + 26.0)
+    touch.kind = .Touch
+    if testing.send(&harness, input.Event { PointerDown: touch }) != ok || testing.begin(&harness, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(58i32) }
+    f = mem.arena_from(frame_storage)
+    let (hold_start, hold_start_error) = build(&f, &theme, &stores[0usize])
+    if hold_start_error != ok || testing.pump(&harness, hold_start, time.Instant { nanos: 1100000000i64 }) != ok || testing.begin(&harness, time.Instant { nanos: 1700000000i64 }) != ok { os.exit(59i32) }
+    f = mem.arena_from(frame_storage)
+    let (hold_end, hold_end_error) = build(&f, &theme, &stores[0usize])
+    if hold_end_error != ok || testing.pump(&harness, hold_end, time.Instant { nanos: 1700000000i64 }) != ok || testing.send(&harness, input.Event { PointerUp: touch }) != ok || stores[0usize].hits[7usize] != 4u32 { os.exit(60i32) }
     if !advanced_sem || !invalid_alert || !described_card || !loading_card_busy || !selectable_card || testing.by_label(&harness, "Loading project").count != 1usize || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[6usize] != 2u32 { os.exit(46i32) }
     // The disclosure: a 40 header, the content 40 in and 4 below; open, the
@@ -354,7 +371,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     stores[0usize].group_open = true
     f = mem.arena_from(frame_storage)
     let (group_open_root, group_open_error) = build(&f, &theme, &stores[0usize])
-    if group_open_error != ok || testing.pump(&harness, group_open_root, time.Instant { nanos: 1500000000i64 }) != ok || testing.by_key(&harness, 320u64).count != 1usize { os.exit(47i32) }
+    if group_open_error != ok || testing.pump(&harness, group_open_root, time.Instant { nanos: 2000000000i64 }) != ok || testing.by_key(&harness, 320u64).count != 1usize { os.exit(47i32) }
     let (open_tree, open_tree_error) = testing.semantics(&harness)
     if open_tree_error != ok { os.exit(48i32) }
     advanced_sem = false
@@ -375,7 +392,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     f = mem.arena_from(frame_storage)
     let (rtl_root, rtl_build_error) = build(&f, &theme, &stores[0usize])
     if rtl_build_error != ok { os.exit(34i32) }
-    if testing.pump(&harness, rtl_root, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(35i32) }
+    if testing.pump(&harness, rtl_root, time.Instant { nanos: 2500000000i64 }) != ok { os.exit(35i32) }
     let (rtl_shot, rtl_shot_error) = testing.snapshot(&harness, a)
     if rtl_shot_error != ok { os.exit(36i32) }
     let (rtl_inset, has_rtl_inset) = bounds(&harness, &runtime, 11u64)
@@ -388,7 +405,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 37u32, zero) != ok || stores[0usize].hits[1usize] != 4u32 { os.exit(40i32) }
     stores[0usize].disclosed = true
     let (rtl_open, rtl_open_error) = build(&f, &theme, &stores[0usize])
-    if rtl_open_error != ok || testing.pump(&harness, rtl_open, time.Instant { nanos: 3000000000i64 }) != ok { os.exit(41i32) }
+    if rtl_open_error != ok || testing.pump(&harness, rtl_open, time.Instant { nanos: 3500000000i64 }) != ok { os.exit(41i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[1usize] != 5u32 { os.exit(42i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(33i32) }
     try io.print("ui containers v2 ok\n")

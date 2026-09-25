@@ -303,7 +303,7 @@ type Element = struct {
 type Undo = struct { element: u32, at: usize, removed_off: usize, removed_len: usize, inserted_off: usize, inserted_len: usize }
 // The gesture arena: one pointer, the region it went down on, where, whether it has
 // become a drag, and the region hovered last.
-type Arena = struct { pressed: bool, candidate: u32, down: geometry.Point, last: geometry.Point, dragging: bool, hovered: u32, has_hovered: bool }
+type Arena = struct { pressed: bool, candidate: u32, down: geometry.Point, last: geometry.Point, kind: input.PointerKind, dragging: bool, hovered: u32, has_hovered: bool }
 // The logical size of a device pixel, which a scrolled viewport's offset snaps
 // to when placed; zero snaps nothing. The application sets it from the window's
 // scale (D917).
@@ -4335,6 +4335,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if p.changed == .Back { ret dispatch(widget_runtime, input.Event { Back: p.window }) }
         s.has_pointer = true
         s.arena_state.last = p.position
+        s.arena_state.kind = p.kind
         s.has_tooltip_touch = false
         s.tooltip_touch_shown = false
         s.tooltip_touch_released = false
@@ -4666,13 +4667,22 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             let (accessed, access_error) = menu_bar_access_key(s, k.key.logical)
             if accessed || access_error != ok { ret access_error }
         }
-        let (taken, key_error) = dispatch_key(s, k)
-        if taken || key_error != ok { ret key_error }
+        // Space may be specialised by an ancestor (for example, selection on a
+        // Card whose ordinary activation opens it). Enter keeps region activation
+        // ahead of a scope's default action.
+        if code == 32u32 {
+            let (space_taken, space_error) = dispatch_key(s, k)
+            if space_taken || space_error != ok { ret space_error }
+        }
         if s.has_focus {
             let f = &s.elements[usize(s.focus)]
             if f.live && f.kind == REGION_TAG && f.enabled && (f.gestures & GESTURE_TAP) != 0u8 && (code == 13u32 || code == 32u32) {
                 ret menu_tap(s, usize(s.focus), geometry.Point { x: f.bounds.x + f.bounds.width * 0.5, y: f.bounds.y + f.bounds.height * 0.5 })
             }
+        }
+        if code != 32u32 {
+            let (taken, key_error) = dispatch_key(s, k)
+            if taken || key_error != ok { ret key_error }
         }
         if s.has_focus && s.elements[usize(s.focus)].has_action {
             let action = s.elements[usize(s.focus)].action
@@ -5143,6 +5153,14 @@ fn long_press(widget_runtime: *Runtime, key: Key, action: *const Submit) -> err 
     s.animation_due = true
     if s.has_long_press_feedback { let _ = fire_submit(s.long_press_feedback) }
     ret fire_submit(*action)
+}
+
+// The same hold gesture, limited to a touch pointer.
+fn long_press_touch(widget_runtime: *Runtime, key: Key, action: *const Submit) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    if s.arena_state.kind != .Touch { ret ok }
+    ret long_press(widget_runtime, key, action)
 }
 
 // Whether focus is on the keyed element or one of its descendants.
