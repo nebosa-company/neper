@@ -23339,3 +23339,11 @@ value. Tapping that same star reports zero; every other star still reports its
 one-based logical value through the same change channel.
 
 `ui_actions` holds clear-by-reclick and ordinary selection on Windows and Linux.
+
+## D1168 — Rating exposes a complete spoken value
+
+Rating semantics now say `N of M stars` instead of a bare number, and say
+`Not rated` at zero. The control keeps its existing Slider role and actions;
+only the value text becomes self-contained for assistive technology.
+
+`ui_actions` holds both rated and unset values on Windows and Linux.
