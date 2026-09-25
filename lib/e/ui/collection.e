@@ -2516,7 +2516,7 @@ fn flatten(source: TreeSource, expanded: []const widget.Key, parent: widget.Key,
 
 // A tree row's keys: Left collapses or moves to its parent; Right expands or
 // moves to its first child. The visible keys already carry both targets.
-type TreeKeys = struct { key: widget.Key, open: bool, branch: bool, has_parent: bool, has_child: bool, parent: control.FocusTo, child: control.FocusTo, toggle: widget.Change[widget.Key] }
+type TreeKeys = struct { key: widget.Key, open: bool, branch: bool, has_parent: bool, has_child: bool, parent: control.FocusTo, child: control.FocusTo, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key] }
 
 fn tree_expand(ctx: *void) -> err {
     let k = mem.cast[*TreeKeys](ctx)
@@ -2534,6 +2534,7 @@ fn tree_collapse(ctx: *void) -> err {
 
 fn tree_action(ctx: *void, action: u32) -> err {
     let k = mem.cast[*TreeKeys](ctx)
+    if action == accessibility.ACTION_PRESS { ret widget.fire_change[widget.Key](k.pick, k.key) }
     if action == accessibility.ACTION_EXPAND && k.branch && !k.open { ret widget.fire_change[widget.Key](k.toggle, k.key) }
     if action == accessibility.ACTION_COLLAPSE && k.open { ret widget.fire_change[widget.Key](k.toggle, k.key) }
     ret ok
@@ -2717,7 +2718,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         let has_child = open && i + 1usize < count && visible[i + 1usize].depth == entry.depth + 1usize
         var child_key: widget.Key = 0u64
         if has_child { child_key = visible[i + 1usize].key }
-        keys[i] = TreeKeys { key: entry.key, open: open, branch: entry.branch, has_parent: has_parent, has_child: has_child, parent: control.FocusTo { runtime: t.runtime, key: parent_key }, child: control.FocusTo { runtime: t.runtime, key: child_key }, toggle: toggle }
+        keys[i] = TreeKeys { key: entry.key, open: open, branch: entry.branch, has_parent: has_parent, has_child: has_child, parent: control.FocusTo { runtime: t.runtime, key: parent_key }, child: control.FocusTo { runtime: t.runtime, key: child_key }, toggle: toggle, pick: pick }
         let base = 8usize * i
         shortcuts[base] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_collapse } }
         shortcuts[base + 1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_expand } }
@@ -2752,11 +2753,12 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         item_sem.row = u32(entry.index + 1usize)
         item_sem.row_count = u32(entry.siblings)
         if open { item_sem.states = accessibility.STATE_EXPANDED }
+        item_sem.actions = accessibility.ACTION_PRESS
         if entry.branch {
-            item_sem.actions = accessibility.ACTION_EXPAND
-            if open { item_sem.actions = accessibility.ACTION_COLLAPSE }
-            item_sem.on_action = widget.Change[u32] { ctx: ctx_of(&keys[i]), invoke: tree_action }
+            item_sem.actions = item_sem.actions | accessibility.ACTION_EXPAND
+            if open { item_sem.actions = accessibility.ACTION_PRESS | accessibility.ACTION_COLLAPSE }
         }
+        item_sem.on_action = widget.Change[u32] { ctx: ctx_of(&keys[i]), invoke: tree_action }
         if chosen { item_sem.states = item_sem.states | accessibility.STATE_SELECTED }
         if current != 0u64 && entry.key == current { item_sem.states = item_sem.states | accessibility.STATE_CURRENT }
         let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
