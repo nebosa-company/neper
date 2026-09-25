@@ -25306,3 +25306,16 @@ cursor, and the collapse does not animate.
 `ui_panes` drags a collapsible pane (120, minimum 80) to 20, where it snaps
 to 0, and to 60, where it stops at 80, on Windows and Linux;
 `ui_containers4_v2` and `ui_containers5_v2` still pass on both.
+
+## D1311 — Picker sheets cap at 60% of the window
+
+A picker's bottom sheet no longer opens at its full height. When its rows
+would take the sheet past 60% of the window (`widget.surface_size`), they
+scroll in a viewport (keyed `key + 1048576`) under the handle and title.
+The viewport's height is 60% of the window less the 80 of handle, title
+and foot. This follows the Picker spec's cap. Dragging to expand and the
+slide are still to come.
+
+`ui_pickers_v2` opens a sheet of twelve options in a 720 tall window: its
+rows stand in a viewport 352 tall, on Windows and Linux. `ui_entry`'s
+three-option sheet is unchanged and still passes on both.
