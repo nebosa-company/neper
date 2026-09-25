@@ -24705,3 +24705,17 @@ for compact windows, which is the caller's choice.
 
 `ui_navigation_v2` holds 24 of a 48 bar at half shown and 0 hidden on Windows
 and Linux.
+
+## D1269 — Standard drawers hide, collapse to the rail and resize
+
+`navigation.navigation_drawer_standard_with` gives the standard drawer its
+three states (`DrawerState`). Hidden is an empty box, nothing wide. Rail is
+the same destinations as an 80 rail, through `destination_bar_of`. Shown is
+the drawer with the ResizablePane sash on its end edge (`pane_with_reserve`,
+keyed `key + 4096`), whose drags, arrows, Home/End, double-click restore and
+Escape report widths held to 200..280 through `resize`. The caller keeps the
+state and width, which the spec says persist. Width motion between states is
+still to come.
+
+`ui_navigation3_v2` holds the hidden 0, the rail's 80, and Right on the sash
+widening the drawer to 248 on Windows and Linux.
