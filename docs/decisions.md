@@ -24844,3 +24844,18 @@ yet extend it.
 
 `ui_status4_v2` holds no dismissal at 3 s, one by 4.1 s and none after, on
 Windows and Linux; `ui_feedback` still passes.
+
+## D1279 — Progress bars and gauges ease to new values
+
+`control.eased_share` keeps an `EaseCell` on the element and eases a drawn
+share to each new value over `duration-medium-2` with the standard curve
+(`animation.ease(.EaseInOut)`), starting from wherever it stood, and asks for
+frames until it arrives. Under reduced motion, or before the element exists,
+it is the value itself. A determinate progress bar uses it with `forward`, so
+a lower value jumps (the work restarted) as the ProgressBar spec says, while
+its percentage readout and tree value stay the true value. A gauge's arc
+eases the same way, but its digits change at once, as the Gauge spec asks.
+
+`ui_progress` holds a bar from 0.2 to 0.8 lit at 35 but not at 70 of its 100
+half way through the ease, and lit at 70 once done, on Windows and Linux;
+`ui_status_v2` still passes.
