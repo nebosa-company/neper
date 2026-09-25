@@ -119,8 +119,9 @@ fn selectable_block(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t:
     ret (node, node_error)
 }
 
-// ponytail: the unfocused-window colour, the context menu, touch handles and
-// toolbar, word selection, and `align`/`max_lines` are not yet the editor's.
+// Its context menu is `overlay.editor_context_menu` round a `context_target` (D1228).
+// ponytail: the unfocused-window colour, touch handles and toolbar, word
+// selection, and `align`/`max_lines` are not yet the editor's.
 fn selectable(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *const Theme, options: TextOptions, block: bool) -> (widget.Node, err) {
     let (text_look, style_error) = text_style(a, t, options.role)
     if style_error != ok { ret (zero, style_error) }

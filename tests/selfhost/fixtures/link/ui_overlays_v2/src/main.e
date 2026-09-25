@@ -539,6 +539,61 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.begin(&harness, rich_escape_at) != ok { os.exit(163i32) }
     let (rich_escaped, rich_escaped_error) = build(&f, &theme, s, .Rich)
     if rich_escaped_error != ok || testing.pump(&harness, rich_escaped, rich_escape_at) != ok || testing.by_key(&harness, 300u64).count != 0usize { os.exit(164i32) }
+    // (D1228) A text field's context menu: a secondary press on its target opens
+    // Cut, Copy, Paste and Select all for the editor keyed 950; Select all selects
+    // the value and closes, and Copy then puts it on the clipboard.
+    let (field_text, field_text_error) = mem.alloc[u8](a, 32usize)
+    if field_text_error != ok { os.exit(180i32) }
+    field_text[0usize] = 104u8
+    field_text[1usize] = 101u8
+    field_text[2usize] = 108u8
+    field_text[3usize] = 108u8
+    field_text[4usize] = 111u8
+    let edit_base = s.counters[8usize].count
+    var edit_step = 0usize
+    while edit_step < 5usize {
+        f = mem.arena_from(frame_storage)
+        let menu_open = (s.counters[8usize].count - edit_base) % 2usize == 1usize
+        let (field_node, field_node_error) = control.text_field(&f, 950u64, &theme, "Name", field_text, 5usize, zero, zero, control.field_options())
+        if field_node_error != ok { os.exit(181i32) }
+        let (field_target, field_target_error) = overlay.context_target(&f, 960u64, &theme, .Group, "Name field", 970u64, menu_open, &s.subs[8usize], field_node)
+        let (field_menu, field_menu_error) = overlay.editor_context_menu(&f, 970u64, &theme, 950u64, menu_open, &s.subs[8usize])
+        if field_target_error != ok || field_menu_error != ok { os.exit(182i32) }
+        let (field_parts, field_parts_error) = mem.alloc[widget.Node](&f, 2usize)
+        if field_parts_error != ok { os.exit(183i32) }
+        field_parts[0usize] = field_target
+        field_parts[1usize] = field_menu
+        let field_page = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(640.0, 480.0), field_parts[0usize..2usize])
+        if testing.pump(&harness, field_page, time.Instant { nanos: 6000000000i64 + i64(edit_step) }) != ok { os.exit(184i32) }
+        if edit_step == 0usize || edit_step == 2usize {
+            // Closed: a secondary press on the field asks for its menu.
+            let (field_box, has_field_box) = bounds(&harness, &runtime, 950u64)
+            if !has_field_box || testing.by_role(&harness, .Menu).count != 0usize { os.exit(185i32) }
+            var right_press = testing.pointer_at(field_box.x + 10.0, field_box.y + 10.0)
+            right_press.buttons = 2u32
+            right_press.changed = .Secondary
+            let before = s.counters[8usize].count
+            if testing.send(&harness, input.Event { PointerDown: right_press }) != ok || s.counters[8usize].count != before + 1usize { os.exit(186i32) }
+            right_press.buttons = 0u32
+            if testing.send(&harness, input.Event { PointerUp: right_press }) != ok { os.exit(187i32) }
+        }
+        if edit_step == 1usize || edit_step == 3usize {
+            let (menu_tree, menu_tree_error) = testing.semantics(&harness)
+            if menu_tree_error != ok { os.exit(188i32) }
+            var chosen = "Select all"
+            if edit_step == 3usize { chosen = "Copy" }
+            let (pick, has_pick) = find(menu_tree, .MenuItem, chosen)
+            let (cut, has_cut) = find(menu_tree, .MenuItem, "Cut")
+            if !has_pick || !has_cut || pick.state.disabled { os.exit(189i32) }
+            if edit_step == 1usize && !cut.state.disabled { os.exit(190i32) }
+            if edit_step == 3usize && cut.state.disabled { os.exit(191i32) }
+            let before = s.counters[8usize].count
+            if testing.tap(&harness, pick.bounds.x + 20.0, pick.bounds.y + pick.bounds.height * 0.5) != ok || s.counters[8usize].count != before + 1usize { os.exit(192i32) }
+        }
+        edit_step += 1usize
+    }
+    let (clipped, clipped_error) = widget.clipboard_get(&runtime, a)
+    if clipped_error != ok || !same(clipped, "hello") { os.exit(193i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(51i32) }
     try io.print("ui overlays v2 ok\n")
     ret ok

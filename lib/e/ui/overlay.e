@@ -264,6 +264,46 @@ fn context_menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owne
     ret (made, made_error)
 }
 
+// (D1228, docs/ux/components/ContextMenu, text) The context menu of the editor
+// keyed `editor`: Cut, Copy, Paste and Select all with their shortcuts, each
+// disabled when it cannot act now. A command acts on that editor and the menu
+// closes through `dismiss` as every menu command does (D998). Wrap the field in `context_target` (keyed apart from the editor,
+// naming this menu's `key`) so a secondary press, the Menu key, Shift+F10 or a
+// touch hold opens it; it opens at the pointer or below the editor.
+type EditorPick = struct { runtime: *widget.Runtime, editor: widget.Key, command: widget.EditorCommand }
+
+fn editor_pick(ctx: *void) -> err {
+    let p = mem.cast[*EditorPick](ctx)
+    ret widget.editor_command(p.runtime, p.editor, p.command)
+}
+
+fn editor_context_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, editor: widget.Key, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    if !open || mem.address_of(t.runtime) == 0usize { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let can = widget.editor_commands(t.runtime, editor)
+    let (picks, picks_error) = mem.alloc[EditorPick](a, 4usize)
+    if picks_error != ok { ret (zero, TooLarge) }
+    let (commands, commands_error) = mem.alloc[MenuCommand](a, 4usize)
+    if commands_error != ok { ret (zero, TooLarge) }
+    picks[0usize] = EditorPick { runtime: t.runtime, editor: editor, command: .Cut }
+    picks[1usize] = EditorPick { runtime: t.runtime, editor: editor, command: .Copy }
+    picks[2usize] = EditorPick { runtime: t.runtime, editor: editor, command: .Paste }
+    picks[3usize] = EditorPick { runtime: t.runtime, editor: editor, command: .SelectAll }
+    commands[0usize] = menu_command("Cut", widget.Submit { ctx: mem.cast[*void](&picks[0usize]), invoke: editor_pick })
+    commands[1usize] = menu_command("Copy", widget.Submit { ctx: mem.cast[*void](&picks[1usize]), invoke: editor_pick })
+    commands[2usize] = menu_command("Paste", widget.Submit { ctx: mem.cast[*void](&picks[2usize]), invoke: editor_pick })
+    commands[3usize] = menu_command("Select all", widget.Submit { ctx: mem.cast[*void](&picks[3usize]), invoke: editor_pick })
+    commands[0usize].enabled = can.cut
+    commands[1usize].enabled = can.copy
+    commands[2usize].enabled = can.paste
+    commands[0usize].shortcut = "Ctrl+X"
+    commands[1usize].shortcut = "Ctrl+C"
+    commands[2usize].shortcut = "Ctrl+V"
+    commands[3usize].shortcut = "Ctrl+A"
+    let (at, pointed) = widget.context_point(t.runtime)
+    let (made, made_error) = context_menu_of(a, key, t, editor, "Edit", commands[0usize..4usize], true, dismiss, at, pointed)
+    ret (made, made_error)
+}
+
 fn context_show(ctx: *void, action: u32) -> err {
     if action != accessibility.ACTION_SHOW_MENU { ret ok }
     let show = mem.cast[*const widget.Submit](ctx)
