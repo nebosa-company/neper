@@ -566,6 +566,64 @@ Hello, Neper</code></pre>
       dialog.dataset.loaded = "true"
     }
 
+    const moduleDescriptionOverrides = new Map([
+      ["e.algo.bdd", "Reduced ordered binary decision diagrams with Boolean operations, evaluation, and model counting."],
+      ["e.algo.bignum", "Arbitrary-precision integer arithmetic."],
+      ["e.algo.complex", "Complex-number arithmetic for 32-bit and 64-bit floating-point values."],
+      ["e.algo.decimal", "Fixed-scale decimal arithmetic with explicit precision."],
+      ["e.algo.deflate", "DEFLATE compression and decompression over bounded buffers."],
+      ["e.algo.disjoint_set", "Disjoint-set unions with path compression and union strategies."],
+      ["e.algo.hash", "Non-cryptographic hashing algorithms and checksums."],
+      ["e.algo.linalg.matrix", "Dense and sparse matrix operations for linear algebra."],
+      ["e.algo.linalg.tensor", "Multidimensional tensor views and operations for linear algebra."],
+      ["e.algo.rand", "Deterministic random-number generation with unbiased bounded sampling."],
+      ["e.algo.rand.dist", "Probability distributions sampled from deterministic random-number generators."],
+      ["e.algo.sketch", "Probabilistic data sketches for cardinality, frequency, similarity, and heavy-hitter estimation."],
+      ["e.algo.smt", "Satisfiability-modulo-theories solving for equality logic and bit-vector constraints."],
+      ["e.algo.sort", "Sorting, selection, partitioning, and ordering algorithms."],
+      ["e.algo.stat", "Statistical summaries, distributions, sampling, and analysis."],
+      ["e.audio.mixer", "Multichannel audio mixing, routing, gain, and buses."],
+      ["e.audio.spatial", "Spatial audio positioning, attenuation, and listener transforms."],
+      ["e.crypto.hash", "Cryptographic hash functions and secure digest operations."],
+      ["e.concurrent.deque", "Chase–Lev work-stealing double-ended queues over caller-provided bounded storage."],
+      ["e.data.deque", "Double-ended queues with efficient insertion and removal at either end."],
+      ["e.data.list", "Generic dynamic lists with caller-controlled storage."],
+      ["e.data.map", "Generic key-value maps with deterministic storage behavior."],
+      ["e.data.ring", "Fixed-capacity ring buffers for bounded streaming data."],
+      ["e.fmt.csv", "CSV parsing and generation with explicit dialect handling."],
+      ["e.fmt.json.schema", "JSON Schema validation for types, values, arrays, objects, composition, and references."],
+      ["e.fmt.mp3", "MP3 audio stream parsing and decoding."],
+      ["e.fmt.msgpack", "MessagePack encoding and decoding."],
+      ["e.fmt.wav", "WAV audio file encoding and decoding."],
+      ["e.fmt.zlib", "Zlib encoding and decoding with RFC 1950 framing and Adler-32 integrity checks."],
+      ["e.game.ai", "Artificial-intelligence behaviors and decision systems for games."],
+      ["e.game.camera", "Game-camera transforms, tracking, bounds, and viewport control."],
+      ["e.game.collide2d", "Two-dimensional collision detection and contact tests."],
+      ["e.game.dialog", "Branching dialogue trees, conditions, and conversation state."],
+      ["e.game.ecs", "Entity-component-system storage, queries, and updates."],
+      ["e.game.grid", "Grid coordinates, neighborhoods, traversal, and spatial queries."],
+      ["e.game.input", "Game-input actions, bindings, and device state."],
+      ["e.game.loop", "Deterministic game-loop timing and frame scheduling."],
+      ["e.game.netsync", "Network synchronization and state reconciliation for games."],
+      ["e.game.particle", "Particle-system simulation, emission, and lifecycle updates."],
+      ["e.game.sprite", "Two-dimensional sprite animation, batching, and rendering data."],
+      ["e.game.tilemap", "Tile-map layers, coordinates, traversal, and queries."],
+      ["e.game.vision", "Visibility, field-of-view, and line-of-sight calculations."],
+      ["e.gpu.tensor", "GPU-accelerated tensor operations over deterministic linear-algebra views."],
+      ["e.math", "Scalar mathematics, floating-point operations, and numerical helpers."],
+      ["e.math.fixed", "Fixed-point arithmetic with explicit scale and overflow behavior."],
+      ["e.net.snapshot", "Compact network-state snapshots and deterministic reconciliation."],
+      ["e.text.normalize", "Unicode text normalization and canonical equivalence."],
+      ["e.text.unicode", "Unicode properties, categories, and character operations."],
+      ["e.text.utf8", "UTF-8 validation, decoding, encoding, and traversal."],
+      ["e.thread", "Native thread creation, coordination, and lifecycle management."],
+      ["e.thread.pool", "Bounded thread pools, task submission, parallel ranges, work stealing, and orderly shutdown."],
+      ["e.time", "Monotonic clocks, wall time, durations, and timers."],
+      ["e.ui.collection", "Lists, tables, trees, grids, and virtualized user-interface collections."],
+      ["e.ui.navigation", "Navigation stacks, tabs, breadcrumbs, drawers, and routing controls."],
+      ["e.ui.overlay", "Dialogs, popovers, menus, tooltips, and other user-interface overlays."]
+    ])
+
     async function loadModules(dialog) {
       const [modulesResponse, apiResponse] = await Promise.all([fetch("modules.json"), fetch("module-apis.md")])
       if (!modulesResponse.ok || !apiResponse.ok) throw new Error("module catalog unavailable")
@@ -587,7 +645,7 @@ Hello, Neper</code></pre>
         const namespace = name.split(".").slice(0, 2).join(".")
         if (!groups.has(namespace)) groups.set(namespace, [])
         const topic = name.replace(/^e\.(?:[^.]+\.)?/, "").replaceAll(".", " ").replaceAll("_", " ")
-        groups.get(namespace).push({name, description: descriptions.get(name) || `Standard-library support for ${topic}.`})
+        groups.get(namespace).push({name, description: moduleDescriptionOverrides.get(name) || descriptions.get(name) || `Standard-library support for ${topic}.`})
       }
       renderCatalog(dialog, groups, 344, (count, namespaces) => `${count} modules across ${namespaces} namespaces.`)
     }
