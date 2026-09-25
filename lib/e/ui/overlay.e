@@ -728,7 +728,8 @@ fn with_scrim(a: *mem.Arena, t: *const control.Theme, top: widget.Node) -> (widg
 // heading), 16 above the content, 8 above the actions at the end 8 apart -- the
 // default a filled button, a destructive one filled in `error`, the others text
 // buttons, all at the control height.
-// ponytail: no scroll dividers or host button order.
+// The buttons stand in array order; `dialog_host_order` (D1049) orders them for
+// the host and `dialog_scrolled` (D1050) adds the scroll dividers.
 fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool) -> (widget.Node, err) {
     let (made, made_error) = dialog_as(a, key, t, title, content, buttons, open, described, 23u8)
     ret (made, made_error)
