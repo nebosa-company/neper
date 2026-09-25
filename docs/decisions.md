@@ -22709,3 +22709,12 @@ state-matched Expand or Collapse action through the same action dispatcher.
 
 `ui_collections3_v2` holds leaf and branch action sets, Press, Expand and
 Collapse on Windows and Linux. The reviewed Tree surface is unchanged.
+
+## D1104 — Tree no longer truncates at 512 visible rows
+
+Tree first counts the exact hierarchy exposed by the current expansion set,
+allocates that many visible rows, then fills them. If the source changes between
+the two passes, the build returns `TooLarge` instead of exposing partial data.
+
+`ui_collections3_v2` holds a flat 513-row source on Windows and Linux. Tree is
+still not virtualised, but it no longer silently drops rows.
