@@ -25214,3 +25214,17 @@ its name. A list's selection bar keeps its icon buttons.
 `ui_collections2_v2` gives its selectable table Archive and Delete (the
 latter destructive). With a row selected, both stand in the bar as worded
 buttons on Windows and Linux; `ui_collections_v2` still passes on both.
+
+## D1305 — Expanders and accordions move
+
+The section header shared by the expander and the accordion now turns its
+chevron a half turn to point up while open, easing over `duration-short-3`;
+under reduced motion it swaps as before. The expander's content grows open
+and shrinks shut over `duration-medium-2`, and stays built while it
+closes, as the disclosure's has since D1285. The clipping window that does
+this is now one helper, `reveal_window`, shared by the disclosure and the
+expander.
+
+`ui_containers_v2` shuts an open expander: half way its content is still
+built, and once settled it is gone. It passes on Windows and Linux, and
+`ui_panes` and `ui_feedback` still pass on both.

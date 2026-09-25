@@ -4745,27 +4745,35 @@ fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ex
         sem.labelled_by = key
         var padded = style.defaults()
         padded.padding = style.EdgeLengths { left: style.Length { Px: 40.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
-        parts[1usize] = widget.semantics(key + 1u64, sem, padded, body[0usize..1usize])
-        if reveal < 1.0 && mem.address_of(t.runtime) != 0usize {
-            var natural: f32 = 0.0
-            let (s, state_error) = widget.state_of(t.runtime)
-            if state_error == ok {
-                let (inner_id, inner_count) = widget.find_by_key(s, key + 1u64)
-                if inner_count == 1usize {
-                    let (inner_box, has_inner) = widget.bounds_of(t.runtime, inner_id)
-                    if has_inner { natural = inner_box.height }
-                }
-            }
-            if natural > 0.0 {
-                body[1usize] = parts[1usize]
-                var window = style.defaults()
-                window.height = style.Length { Px: natural * reveal }
-                window.overflow = .Clip
-                parts[1usize] = widget.box(0u64, window, body[1usize..2usize])
-            }
-        }
+        let (grown, grown_error) = reveal_window(a, t, key + 1u64, reveal, widget.semantics(key + 1u64, sem, padded, body[0usize..1usize]))
+        if grown_error != ok { ret (zero, grown_error) }
+        parts[1usize] = grown
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
+}
+
+// (D1285, D1305) `node` in a clipping window `reveal` of its last frame's height
+// (the element keyed `measured`); whole at 1, before it was measured, or with no
+// runtime.
+fn reveal_window(a: *mem.Arena, t: *const Theme, measured: widget.Key, reveal: f32, node: widget.Node) -> (widget.Node, err) {
+    if reveal >= 1.0 || mem.address_of(t.runtime) == 0usize { ret (node, ok) }
+    var natural: f32 = 0.0
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error == ok {
+        let (inner_id, inner_count) = widget.find_by_key(s, measured)
+        if inner_count == 1usize {
+            let (inner_box, has_inner) = widget.bounds_of(t.runtime, inner_id)
+            if has_inner { natural = inner_box.height }
+        }
+    }
+    if !(natural > 0.0) { ret (node, ok) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = node
+    var window = style.defaults()
+    window.height = style.Length { Px: natural * reveal }
+    window.overflow = .Clip
+    ret (widget.box(0u64, window, held[0usize..1usize]), ok)
 }
 
 // An expander: the outlined section of D965 below.
@@ -4839,10 +4847,23 @@ fn section_header_icon(a: *mem.Arena, key: widget.Key, t: *const Theme, title: s
     row[cells] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, words_style, words[0usize..word_count])
     cells += 1usize
     var kind: GlyphKind = .ChevronDown
-    if expanded { kind = .ChevronUp }
+    if expanded && t.tokens.motion.reduced { kind = .ChevronUp }
     let (chevron, chevron_error) = icon_square(a, muted, kind, t.tokens.sizes.icon_md)
     if chevron_error != ok { ret (zero, chevron_error) }
     row[cells] = chevron
+    if !t.tokens.motion.reduced {
+        // (D1305) The chevron turns a half to point up while open, easing over
+        // `duration-short-3`; with reduced motion it swaps.
+        var open_share: f32 = 0.0
+        if expanded { open_share = 1.0 }
+        let turned = eased_over(t, key, open_share, false, t.tokens.durations.short3)
+        if turned != 0.0 {
+            let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
+            if turning_error != ok { ret (zero, TooLarge) }
+            turning[0usize] = chevron
+            row[cells] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * turned, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
+        }
+    }
     cells += 1usize
     var row_style = style.defaults()
     if width > 0.0 { row_style.width = style.Length { Px: width - 32.0 } }
@@ -4886,7 +4907,8 @@ fn section_body_from(a: *mem.Arena, key: widget.Key, header: widget.Key, content
 // `body-medium`, and the content 16 in at the sides and below while open. Right
 // opens and Left closes a focused header. (D1221) With `has_icon` the header
 // leads with a 24 `on-surface-variant` icon and the open content is 56 in.
-// ponytail: no motion.
+// (D1305) The chevron turns and the content grows and shrinks as the
+// disclosure's does (D1282, D1285).
 fn expander_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, options: DisclosureOptions, content: widget.Node) -> (widget.Node, err) {
     let (header, header_error) = section_header_icon(a, key, t, label, options.supporting, expanded, options.enabled, toggle, options.width, t.tokens.sizes.control_xl, .BodyLarge, .BodyMedium, options.has_icon, options.icon)
     if header_error != ok { ret (zero, header_error) }
@@ -4896,13 +4918,18 @@ fn expander_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expa
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = keyed
     var count = 1usize
-    if expanded {
+    var open_goal: f32 = 0.0
+    if expanded { open_goal = 1.0 }
+    let reveal = eased_on(t, key, key + 1048576u64, open_goal, false, t.tokens.durations.medium2)
+    if expanded || reveal > 0.0 {
         var left: f32 = 16.0
         var right: f32 = 16.0
         if options.has_icon && t.tokens.direction == .RightToLeft { right = 56.0 } else if options.has_icon { left = 56.0 }
         let (inner, inner_error) = section_body_from(a, key + 1u64, key, content, left, right)
         if inner_error != ok { ret (zero, inner_error) }
-        parts[1usize] = inner
+        let (grown, grown_error) = reveal_window(a, t, key + 1u64, reveal, inner)
+        if grown_error != ok { ret (zero, grown_error) }
+        parts[1usize] = grown
         count = 2usize
     }
     var sheet = style.defaults()

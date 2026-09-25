@@ -553,6 +553,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if shut_step == 2usize && shut_count != 0usize { os.exit(84i32) }
         shut_step += 1usize
     }
+    // (D1305) An expander shut after opening keeps its content while it shrinks:
+    // half way the content is built; settled, it is gone.
+    var fold_step = 0usize
+    while fold_step < 5usize {
+        var fold_at = 32000000000i64
+        var fold_open = true
+        if fold_step == 1usize { fold_at = 32016000000i64 }
+        if fold_step == 2usize {
+            fold_at = 32100000000i64
+            fold_open = false
+        }
+        if fold_step == 3usize {
+            fold_at = 32250000000i64
+            fold_open = false
+        }
+        if fold_step == 4usize {
+            fold_at = 33000000000i64
+            fold_open = false
+        }
+        if testing.begin(&harness, time.Instant { nanos: fold_at }) != ok { os.exit(85i32) }
+        f = mem.arena_from(frame_storage)
+        let (folding, folding_error) = control.expander(&f, 1500u64, &theme, "Folding", fold_open, &stores[0usize].actions[1usize], widget.box(0u64, control.sized_style(20.0, 10.0), zero))
+        let (fold_page, fold_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if folding_error != ok || fold_page_error != ok { os.exit(86i32) }
+        fold_page[0usize] = folding
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 1250.0), fold_page[0usize..1usize]), time.Instant { nanos: fold_at }) != ok { os.exit(87i32) }
+        let fold_count = testing.by_key(&harness, 1501u64).count
+        if fold_step == 3usize && fold_count != 1usize { os.exit(88i32) }
+        if fold_step == 4usize && fold_count != 0usize { os.exit(89i32) }
+        fold_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(33i32) }
     try io.print("ui containers v2 ok\n")
     ret ok
