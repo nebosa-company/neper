@@ -2996,17 +2996,25 @@ fn dock_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
 // content), the tab group sharing its slot (the panels' names, their count badges
 // -- empty or one each --, the current one and a pick each), and the Maximise and
 // Dock actions (none: no button).
-type DockPanelOptions = struct { focused: bool, floating: bool, maximised: bool, busy: bool, empty: str, tabs: []const str, counts: []const str, current: usize, picks: []const widget.Submit, maximise: *const widget.Submit, dock: *const widget.Submit }
+// (D1297) `move` hears a floating panel's header dragged: each move's distance.
+type DockPanelOptions = struct { focused: bool, floating: bool, maximised: bool, busy: bool, empty: str, tabs: []const str, counts: []const str, current: usize, picks: []const widget.Submit, maximise: *const widget.Submit, dock: *const widget.Submit, move: widget.Change[geometry.Point] }
 
 fn dock_panel_options() -> DockPanelOptions {
     var out: DockPanelOptions = zero
     ret out
 }
 
+// (D1297) A panel header's gestures: a double press maximises, a drag moves.
+type DockHeader = struct { maximise: *const widget.Submit, move: widget.Change[geometry.Point] }
+
 fn dock_header_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let h = mem.cast[*DockHeader](ctx)
     switch g {
     case .DoubleTap as at:
-        ret widget.fire_submit(*mem.cast[*const widget.Submit](ctx))
+        if mem.address_of(h.maximise) == 0usize { ret ok }
+        ret widget.fire_submit(*h.maximise)
+    case .DragMove as d:
+        ret widget.fire_change[geometry.Point](h.move, d.delta)
     default:
         ret ok
     }
@@ -3087,7 +3095,8 @@ fn panel_tab(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 // with an empty sentence the body is that sentence in `body-small`
 // `on-surface-variant`, 12 in and 8 down. A region in the tree named by the title,
 // busy while busy.
-// ponytail: moving a floating panel is the caller's (its header is no drag region yet).
+// (D1297) A floating panel's header drags it through `move`.
+// ponytail: no snap to the window's edges while it moves.
 fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit, options: DockPanelOptions) -> (widget.Node, err) {
     let floating = options.floating
     let focused = options.focused || widget.focus_within(t.runtime, key)
@@ -3199,12 +3208,23 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
         header.height = style.Length { Px: h }
         parts[0usize] = widget.stack(0u64, header, parts[3usize..5usize])
     }
-    if mem.address_of(options.maximise) != 0usize {
+    let moving = floating && widget.change_set[geometry.Point](options.move.invoke)
+    if mem.address_of(options.maximise) != 0usize || moving {
         let (header_child, header_child_error) = mem.alloc[widget.Node](a, 1usize)
         if header_child_error != ok { ret (zero, TooLarge) }
         header_child[0usize] = parts[0usize]
-        let gesture = widget.GestureAction { ctx: mem.cast[*void](options.maximise), invoke: dock_header_gesture }
-        parts[0usize] = widget.region(0u64, widget.Region { gesture: gesture, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), header_child[0usize..1usize])
+        let (headers, headers_error) = mem.alloc[DockHeader](a, 1usize)
+        if headers_error != ok { ret (zero, TooLarge) }
+        headers[0usize] = DockHeader { maximise: options.maximise, move: options.move }
+        let gesture = widget.GestureAction { ctx: mem.cast[*void](&headers[0usize]), invoke: dock_header_gesture }
+        // (D1297) A floating panel's header drags it (keyed `key + 4096`).
+        var gestures = 1u8
+        var header_key = 0u64
+        if moving {
+            gestures = 1u8 | widget.GESTURE_DRAG
+            header_key = key + 4096u64
+        }
+        parts[0usize] = widget.region(header_key, widget.Region { gesture: gesture, gestures: gestures, enabled: true, focusable: false }, style.defaults(), header_child[0usize..1usize])
     }
     var count = 1usize
     if options.busy {

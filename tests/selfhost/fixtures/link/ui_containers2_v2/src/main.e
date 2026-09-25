@@ -77,6 +77,17 @@ fn blank(w: f32, h: f32) -> widget.Node {
     ret widget.box(0u64, control.sized_style(w, h), zero)
 }
 
+// (D1297) Where a dragged floating panel has been moved in all.
+type Moved = struct { x: f32, y: f32, moves: usize }
+
+fn on_panel_move(ctx: *void, delta: geometry.Point) -> err {
+    let m = mem.cast[*Moved](ctx)
+    m.x += delta.x
+    m.y += delta.y
+    m.moves += 1usize
+    ret ok
+}
+
 fn focused_panel() -> navigation.DockPanelOptions {
     var out = navigation.dock_panel_options()
     out.focused = true
@@ -273,6 +284,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var held: input.Modifiers = zero
     held.control = true
     if testing.press_key(&harness, 34u32, held) != ok || stores[0usize].picks != 2usize || stores[0usize].picked != 0usize { os.exit(38i32) }
+    // (D1297) Dragging a floating panel's header by (30, 10) reports that move.
+    var moved: Moved = zero
+    var floating = navigation.dock_panel_options()
+    floating.floating = true
+    floating.move = widget.Change[geometry.Point] { ctx: mem.cast[*void](&moved), invoke: on_panel_move }
+    f = mem.arena_from(frame_storage)
+    let (float_panel, float_error) = navigation.dock_panel_of(&f, 700u64, &theme, "Output", blank(10.0, 10.0), &stores[0usize].press, floating)
+    let (float_page, float_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if float_error != ok || float_page_error != ok { os.exit(80i32) }
+    float_page[0usize] = float_panel
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 300.0), float_page[0usize..1usize]), time.Instant { nanos: 7000000000i64 }) != ok { os.exit(81i32) }
+    let (float_head, has_float_head) = bounds(&harness, &runtime, 700u64 + 4096u64)
+    if !has_float_head { os.exit(82i32) }
+    let from = geometry.Point { x: float_head.x + 80.0, y: float_head.y + float_head.height * 0.5 }
+    if testing.drag(&harness, from, geometry.Point { x: from.x + 30.0, y: from.y + 10.0 }, 5usize) != ok || moved.moves == 0usize { os.exit(83i32) }
+    if !(moved.x > 10.0) || !(moved.y > 0.0) || moved.x > 30.5 || moved.y > 10.5 { os.exit(84i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(39i32) }
     try io.print("ui containers2 v2 ok\n")
     ret ok
