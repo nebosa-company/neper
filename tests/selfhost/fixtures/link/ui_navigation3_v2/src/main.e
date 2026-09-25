@@ -229,12 +229,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (row, has_row) = bounds(&harness, &runtime, 3303u64)
     if !has_standard || !has_row || !near(standard.width, 240.0) || !near(row.x, standard.x + 8.0) || !near(row.y, standard.y + 60.0) || !near(row.height, 40.0) || testing.by_text(&harness, "Workspace").count != 1usize { os.exit(22i32) }
     if !is_color(shot, at(row.x + 100.0, row.y + 20.0), style.color(&tokens, .SecondaryContainer)) || !is_color(shot, at(standard.x + 4.0, standard.y + 150.0), style.color(&tokens, .SurfaceContainerLow)) { os.exit(23i32) }
+    if !focusable(&harness, &runtime, 3303u64) || focusable(&harness, &runtime, 3302u64) { os.exit(47i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 3303u64).element) != ok || testing.press_key(&harness, 38u32, zero) != ok || !widget.focus_within(&runtime, 3302u64) { os.exit(48i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 3303u64) || testing.press_key(&harness, 36u32, zero) != ok || !widget.focus_within(&runtime, 3302u64) { os.exit(49i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 3002u64).element) != ok { os.exit(50i32) }
     // The modal drawer open: 300 wide at the start, its end corners rounded, over
     // the scrim; 56 tall rows; Sent picks, Escape dismisses.
     let (root_2, build_2_error) = build(&f, &theme, s, true)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(24i32) }
     let (drawer_focus, has_drawer_focus) = testing.focused(&harness)
     if !has_drawer_focus || drawer_focus.slot != testing.by_key(&harness, 3402u64).element.slot { os.exit(32i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || !widget.focus_within(&runtime, 3403u64) || testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 3404u64) { os.exit(51i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok || s.counters[2usize].count != 2usize || testing.press_key(&harness, 36u32, zero) != ok || !widget.focus_within(&runtime, 3402u64) { os.exit(52i32) }
     let (shot_2, shot_2_error) = testing.snapshot(&harness, a)
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if shot_2_error != ok || tree_2_error != ok { os.exit(25i32) }
