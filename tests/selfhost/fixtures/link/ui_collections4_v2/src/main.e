@@ -648,6 +648,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         settle_step += 1usize
     }
+    // (D1289) While refreshing the arc spins: a quarter turn later its circle is
+    // drawn differently.
+    var spin_sums: [2]u64 = zero
+    var spin_step = 0usize
+    while spin_step < 2usize {
+        let spin_at = 60000000000i64 + i64(spin_step) * 333000000i64
+        if testing.begin(&harness, time.Instant { nanos: spin_at }) != ok { os.exit(178i32) }
+        f = mem.arena_from(frame_storage)
+        var spin_pull = collection.pull_options()
+        spin_pull.label = "Spin"
+        spin_pull.width = 240.0
+        spin_pull.height = 200.0
+        spin_pull.at_top = true
+        let (spinning, spinning_error) = collection.pull_to_refresh_of(&f, 1950u64, &touch, widget.box(0u64, control.sized_style(240.0, 200.0), zero), true, &s.refresh, spin_pull)
+        let (spin_root, spin_root_error) = mem.alloc[widget.Node](&f, 1usize)
+        if spinning_error != ok || spin_root_error != ok { os.exit(179i32) }
+        spin_root[0usize] = spinning
+        var spin_ground = control.sized_style(900.0, 780.0)
+        spin_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.box(0u64, spin_ground, spin_root[0usize..1usize]), time.Instant { nanos: spin_at }) != ok { os.exit(180i32) }
+        let (arc_box, has_arc_box) = bounds(&harness, &runtime, 1952u64)
+        let (spin_shot, spin_shot_error) = testing.snapshot(&harness, a)
+        if !has_arc_box || spin_shot_error != ok { os.exit(181i32) }
+        var sum = 0u64
+        var yy = usize(arc_box.y)
+        while yy < usize(arc_box.y + arc_box.height) {
+            var xx = usize(arc_box.x)
+            while xx < usize(arc_box.x + arc_box.width) {
+                let px = (yy * 900usize + xx) * 4usize
+                sum += u64(spin_shot.pixels[px + 1usize]) * u64(xx + 3usize * yy + 1usize)
+                xx += 1usize
+            }
+            yy += 1usize
+        }
+        spin_sums[spin_step] = sum
+        spin_step += 1usize
+    }
+    if spin_sums[0usize] == spin_sums[1usize] { os.exit(182i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(68i32) }
     try io.print("ui collections4 v2 ok\n")
     ret ok
