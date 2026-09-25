@@ -3648,9 +3648,11 @@ type WizardStep = struct { label: str, note: str, attention: bool }
 // The three wizard forms (D974, docs/ux/components/Wizard).
 type WizardForm = enum u8 { Horizontal, Vertical, Compact }
 
-// A wizard's options (D974): its form, whether it stands in a dialog, and the
-// last step's action ("Create project"; empty: "Finish").
-type WizardOptions = struct { form: WizardForm, dialog: bool, finish_label: str }
+// A wizard's options (D974): its form, whether it stands in a dialog, the last
+// step's action ("Create project"; empty: "Finish"), and an optional step-pick
+// path. With `pressable_steps`, completed and current steps can be revisited;
+// `nonlinear` also makes upcoming steps reachable.
+type WizardOptions = struct { form: WizardForm, dialog: bool, finish_label: str, pressable_steps: bool, nonlinear: bool, step: widget.Change[usize] }
 
 fn wizard_options() -> WizardOptions {
     var out: WizardOptions = zero
@@ -3695,9 +3697,20 @@ fn wizard_move_fire(ctx: *void) -> err {
     ret widget.focus_key(m.runtime, m.focus)
 }
 
+type WizardStepPick = struct { index: usize, pick: widget.Change[usize], runtime: *widget.Runtime, focus: widget.Key }
+
+fn wizard_step_pick(ctx: *void, gesture: widget.Gesture) -> err {
+    if gesture.tag != .Tap { ret ok }
+    let p = mem.cast[*WizardStepPick](ctx)
+    let picked = widget.fire_change[usize](p.pick, p.index)
+    if picked != ok { ret picked }
+    ret widget.focus_key(p.runtime, p.focus)
+}
+
 // One step of the stepper (D974): the 24 marker, then 8 on, the label over its
-// note; a list item named with its state.
-fn wizard_step(a: *mem.Arena, t: *const control.Theme, step: *const WizardStep, index: usize, count: usize, current: usize) -> (widget.Node, err) {
+// note; a list item named with its state. When reachable it is a 32 (48 touch)
+// pressable target keyed by the caller, with one roving stepper Tab stop.
+fn wizard_step(a: *mem.Arena, key: widget.Key, t: *const control.Theme, step: *const WizardStep, index: usize, count: usize, current: usize, pressable: bool, focusable: bool, pick: *WizardStepPick) -> (widget.Node, err) {
     let done = index < current
     let now = index == current
     let primary = style.color(t.tokens, .Primary)
@@ -3793,7 +3806,19 @@ fn wizard_step(a: *mem.Arena, t: *const control.Theme, step: *const WizardStep, 
     sem.row = u32(index + 1usize)
     sem.row_count = u32(count)
     if now { sem.states = accessibility.STATE_CURRENT }
-    ret (widget.semantics(0u64, sem, style.defaults(), held[0usize..1usize]), ok)
+    if !pressable { ret (widget.semantics(0u64, sem, style.defaults(), held[0usize..1usize]), ok) }
+    sem.actions = accessibility.ACTION_PRESS
+    var hit = style.defaults()
+    hit.min_height = style.Length { Px: 32.0 }
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { hit.min_height = style.Length { Px: 48.0 } }
+    let state = control.control_state(t, key, true, now)
+    hit.background = paint.Brush { Solid: control.with_alpha(ink, control.state_opacity(t, state)) }
+    hit.radius = t.tokens.radii.sm
+    control.focus_look(t)
+    let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
+    if region_error != ok { ret (zero, TooLarge) }
+    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](pick), invoke: wizard_step_pick }, gestures: 1u8 | 4u8, enabled: true, focusable: focusable }, hit, held[0usize..1usize])
+    ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
 }
 
 // v2 (D974, docs/ux/components/Wizard). Expanded, the wizard is `width` by
@@ -3823,8 +3848,7 @@ fn wizard_step(a: *mem.Arena, t: *const control.Theme, step: *const WizardStep, 
 // paths.
 // `legacy` keeps D853's contract: Back stays (disabled) on the first step and
 // Next and Finish follow `can_advance`.
-// ponytail: no pressable steps (non-linear wizards), Finish's progress ring or
-// discard confirmation.
+// ponytail: no Finish progress ring or discard confirmation.
 fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, steps: []const WizardStep, current: usize, content: widget.Node, can_advance: bool, legacy: bool, back: *const widget.Submit, next: *const widget.Submit, finish: *const widget.Submit, cancel: *const widget.Submit, options: WizardOptions, width: f32, height: f32) -> (widget.Node, err) {
     if steps.len == 0usize || current >= steps.len { ret (zero, TooLarge) }
     let last = current + 1usize == steps.len
@@ -3839,6 +3863,19 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     moves[1usize] = WizardMove { action: *next, runtime: t.runtime, focus: key + 5u64 }
     move_actions[0usize] = widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: wizard_move_fire }
     move_actions[1usize] = widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: wizard_move_fire }
+    var pressable_count = 0usize
+    if options.pressable_steps {
+        pressable_count = current + 1usize
+        if options.nonlinear { pressable_count = steps.len }
+    }
+    var step_tab_stop = current
+    var focused_step = 0usize
+    while focused_step < pressable_count {
+        if widget.focus_within(t.runtime, key + 16u64 + u64(focused_step)) { step_tab_stop = focused_step }
+        focused_step += 1usize
+    }
+    let (step_picks, step_picks_error) = mem.alloc[WizardStepPick](a, steps.len)
+    if step_picks_error != ok { ret (zero, TooLarge) }
     let flat = style.Length { Px: 0.0 }
     var finish_label = options.finish_label
     if finish_label.len == 0usize { finish_label = "Finish" }
@@ -3848,7 +3885,9 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     var n = 0usize
     var i = 0usize
     while i < steps.len {
-        let (made, made_error) = wizard_step(a, t, &steps[i], i, steps.len, current)
+        let step_key = key + 16u64 + u64(i)
+        step_picks[i] = WizardStepPick { index: i, pick: options.step, runtime: t.runtime, focus: step_key }
+        let (made, made_error) = wizard_step(a, step_key, t, &steps[i], i, steps.len, current, i < pressable_count, i == step_tab_stop, &step_picks[i])
         if made_error != ok { ret (zero, made_error) }
         items[n] = made
         n += 1usize
@@ -3892,7 +3931,31 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         stepper_style.padding = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 16.0 }, right: style.Length { Px: 24.0 }, bottom: style.Length { Px: 16.0 } }
         listed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, stepper_style, items[0usize..n])
     }
-    let stepper = widget.semantics(0u64, list_sem, style.defaults(), listed[0usize..1usize])
+    var stepper = widget.semantics(0u64, list_sem, style.defaults(), listed[0usize..1usize])
+    if pressable_count > 0usize {
+        let (step_moves, step_moves_error) = mem.alloc[DestinationMove](a, 4usize)
+        if step_moves_error != ok { ret (zero, TooLarge) }
+        let (step_shortcuts, step_shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
+        if step_shortcuts_error != ok { ret (zero, TooLarge) }
+        var previous = 37u32
+        var next_key = 39u32
+        if vertical {
+            previous = 38u32
+            next_key = 40u32
+        }
+        step_moves[0usize] = DestinationMove { runtime: t.runtime, first: key + 16u64, count: pressable_count, backward: true, edge: false }
+        step_moves[1usize] = DestinationMove { runtime: t.runtime, first: key + 16u64, count: pressable_count, backward: false, edge: false }
+        step_moves[2usize] = DestinationMove { runtime: t.runtime, first: key + 16u64, count: pressable_count, backward: true, edge: true }
+        step_moves[3usize] = DestinationMove { runtime: t.runtime, first: key + 16u64, count: pressable_count, backward: false, edge: true }
+        step_shortcuts[0usize] = widget.Shortcut { key: previous, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&step_moves[0usize]), invoke: destination_move_fire } }
+        step_shortcuts[1usize] = widget.Shortcut { key: next_key, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&step_moves[1usize]), invoke: destination_move_fire } }
+        step_shortcuts[2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&step_moves[2usize]), invoke: destination_move_fire } }
+        step_shortcuts[3usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&step_moves[3usize]), invoke: destination_move_fire } }
+        let (step_held, step_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if step_held_error != ok { ret (zero, TooLarge) }
+        step_held[0usize] = stepper
+        stepper = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: step_shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), step_held[0usize..1usize])
+    }
     // The page, growing.
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }

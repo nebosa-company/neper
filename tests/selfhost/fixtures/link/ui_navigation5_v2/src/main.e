@@ -35,7 +35,7 @@ type Turned = struct { count: usize, last: usize }
 type Moved = struct { count: usize, from: usize, to: usize }
 
 // The counters: 0 back, 1 next, 2 finish, 3 cancel.
-type Store = struct { counters: [4]Counter, subs: [4]widget.Submit, picks: Turned, closes: Turned, moves: Moved, documents: [3]navigation.Document, steps: [3]navigation.WizardStep }
+type Store = struct { counters: [4]Counter, subs: [4]widget.Submit, picks: Turned, closes: Turned, step_picks: Turned, moves: Moved, documents: [3]navigation.Document, steps: [3]navigation.WizardStep }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -85,7 +85,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     let move = widget.Change[navigation.DocumentMove] { ctx: mem.cast[*void](&s.moves), invoke: on_move }
     let (strip, e1) = navigation.document_tabs_marked(a, 5000u64, t, "Open files", s.documents[0usize..3usize], 1usize, pick, close, move, true, true)
     let (page, e2) = control.text(a, 0u64, "Step page", t, control.text_options())
-    let (across, e3) = navigation.wizard_of(a, 6000u64, t, "Setup", s.steps[0usize..3usize], 1usize, page, &s.subs[0usize], &s.subs[1usize], &s.subs[2usize], &s.subs[3usize], navigation.wizard_options(), 600.0, 260.0)
+    var across_options = navigation.wizard_options()
+    across_options.pressable_steps = true
+    across_options.nonlinear = true
+    across_options.step = widget.Change[usize] { ctx: mem.cast[*void](&s.step_picks), invoke: on_turn }
+    let (across, e3) = navigation.wizard_of(a, 6000u64, t, "Setup", s.steps[0usize..3usize], 1usize, page, &s.subs[0usize], &s.subs[1usize], &s.subs[2usize], &s.subs[3usize], across_options, 600.0, 260.0)
     var down = navigation.wizard_options()
     down.form = .Vertical
     down.dialog = true
@@ -238,8 +242,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (building, has_building) = find(tree, .ListItem, "Build")
     let (deploy, has_deploy) = find(tree, .ListItem, "Deploy, needs attention: Fix 1 field")
     if !has_account || !has_building || !building.state.current || account.state.current || !has_deploy || testing.by_text(&harness, "Optional").count != 2usize { os.exit(22i32) }
+    let (build_step, has_build_step) = bounds(&harness, &runtime, 6017u64)
+    if !has_build_step || !near(build_step.height, 32.0) || !focusable(&harness, &runtime, 6017u64) || focusable(&harness, &runtime, 6016u64) || focusable(&harness, &runtime, 6018u64) { os.exit(42i32) }
+    if !tap_key(&harness, &runtime, 6016u64) || s.step_picks.count != 1usize || s.step_picks.last != 0usize || !widget.focus_within(&runtime, 6016u64) { os.exit(43i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !widget.focus_within(&runtime, 6017u64) || testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 6018u64) { os.exit(44i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok || s.step_picks.count != 2usize || s.step_picks.last != 2usize || testing.press_key(&harness, 36u32, zero) != ok || testing.press_key(&harness, 32u32, zero) != ok || s.step_picks.count != 3usize || s.step_picks.last != 0usize { os.exit(45i32) }
     let primary = style.color(&tokens, .Primary)
-    if !is_color(shot, at(account.bounds.x + 2.0, account.bounds.y + 12.0), primary) || !is_color(shot, at(account.bounds.x + account.bounds.width + 60.0, account.bounds.y + 12.0), primary) { os.exit(23i32) }
+    if !is_color(shot, at(account.bounds.x + 2.0, account.bounds.y + 12.0), primary) || !is_color(shot, at(account.bounds.x + account.bounds.width + 60.0, account.bounds.y + 16.0), primary) { os.exit(23i32) }
     // The footer: Cancel at the start, Back and Next at the end; Next fires.
     let (cancel, has_cancel) = bounds(&harness, &runtime, 6001u64)
     let (next, has_next) = bounds(&harness, &runtime, 6003u64)
