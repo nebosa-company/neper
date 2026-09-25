@@ -110,6 +110,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if accessibility.publish(window.Id { slot: 3u32, generation: 9u32 }, &tree) != accessibility.Invalid { os.exit(19i32) }
     let stale = widget.ElementId { slot: 99u32, generation: 1u32 }
     if accessibility.perform(&runtime, stale, .Focus, "") != accessibility.Invalid { os.exit(20i32) }
+    let all_flags = accessibility.flags_of(accessibility.State { disabled: true, focused: true, selected: true, checked: true, expanded: true, hidden: true, mixed: true, busy: true, invalid: true, required: true, read_only: true, modal: true, current: true })
+    if all_flags != 8191u16 { os.exit(22i32) }
     if widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui accessibility ok\n")
     ret ok

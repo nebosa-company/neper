@@ -419,14 +419,21 @@ fn role_code(role: Role) -> u8 {
     ret 0u8
 }
 
-fn flags_of(state: State) -> u8 {
-    var bits = 0u8
-    if state.disabled { bits = bits | 1u8 }
-    if state.focused { bits = bits | 2u8 }
-    if state.selected { bits = bits | 4u8 }
-    if state.checked { bits = bits | 8u8 }
-    if state.expanded { bits = bits | 16u8 }
-    if state.hidden { bits = bits | 32u8 }
+fn flags_of(state: State) -> u16 {
+    var bits = 0u16
+    if state.disabled { bits = bits | 1u16 }
+    if state.focused { bits = bits | 2u16 }
+    if state.selected { bits = bits | 4u16 }
+    if state.checked { bits = bits | 8u16 }
+    if state.expanded { bits = bits | 16u16 }
+    if state.hidden { bits = bits | 32u16 }
+    if state.mixed { bits = bits | 64u16 }
+    if state.busy { bits = bits | 128u16 }
+    if state.invalid { bits = bits | 256u16 }
+    if state.required { bits = bits | 512u16 }
+    if state.read_only { bits = bits | 1024u16 }
+    if state.modal { bits = bits | 2048u16 }
+    if state.current { bits = bits | 4096u16 }
     ret bits
 }
 
