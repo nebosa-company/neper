@@ -22961,3 +22961,12 @@ the same month in the previous or next year.
 
 `ui_pickers_v2` holds all four dates on Windows and Linux. The reviewed surface
 is unchanged.
+
+## D1130 — Date fields share the picker opening chord
+
+A closed DatePicker or DateRangePicker binds Alt+Down to its existing
+caller-owned toggle. The binding is absent while open so calendar navigation
+keeps the Down key.
+
+`ui_pickers_v2` holds the closed chord on Windows and Linux. The reviewed
+surface is unchanged.
