@@ -4461,7 +4461,13 @@ fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, se
 // A tab bar's form (D972): secondary (a 2px line across the tab, the active
 // label `on-surface`) rather than primary, and fixed (the tabs share `width`)
 // rather than scrollable (each as wide as its label, from the start inset).
-type TabsOptions = struct { secondary: bool, fixed: bool, width: f32 }
+// (D1213) `disabled` marks tabs by index (shorter than the tabs: the rest are
+// enabled).
+type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool }
+
+fn tab_enabled(options: *const TabsOptions, i: usize) -> bool {
+    ret i >= options.disabled.len || !options.disabled[i]
+}
 
 fn tabs_options() -> TabsOptions {
     var out: TabsOptions = zero
@@ -4475,9 +4481,11 @@ fn tabs_options() -> TabsOptions {
 // -- under the `state-hover`/`state-pressed` layer of the label colour. The
 // active indicator is 3px `primary` as wide as the label (at least 24) with 3
 // rounded top corners, or 2px across the whole tab when secondary. A scrollable
-// bar starts 8 in (16 touch).
-// ponytail: no icon tabs, badges, disabled tabs, overflow button or horizontal
-// scrolling; the indicator does not slide between tabs.
+// bar starts 8 in (16 touch). (D1213) A disabled tab's label is `on-surface` at
+// 38%, it is neither pressable nor focusable, and Left, Right, Home and End
+// skip it.
+// ponytail: no icon tabs, badges, overflow button or horizontal scrolling; the
+// indicator does not slide between tabs.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -4492,10 +4500,12 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     while i < labels.len {
         let chosen = i == selected
         let tab_key = key + 1u64 + u64(i)
-        let state = control_state(t, tab_key, true, chosen)
+        let enabled = tab_enabled(&options, i)
+        let state = control_state(t, tab_key, enabled, chosen)
         var ink = style.color(t.tokens, .OnSurfaceVariant)
         if chosen && options.secondary { ink = style.color(t.tokens, .OnSurface) }
         if chosen && !options.secondary { ink = style.color(t.tokens, .Primary) }
+        if !enabled { ink = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
         var look = style.resolve(t.tokens, .Plain, state)
         look.background = with_alpha(ink, state_opacity(t, state))
         look.foreground = ink
@@ -4549,7 +4559,8 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             column_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
             content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..4usize])
         }
-        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, true, chosen, 0u32, 0u32, 0u64, &picks[i], content)
+        if !enabled { look.background = with_alpha(ink, 0.0) }
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, enabled, chosen, 0u32, 0u32, 0u64, &picks[i], content)
         if tab_error != ok { ret (zero, tab_error) }
         items[i] = tab
         i += 1usize
@@ -4583,15 +4594,34 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         back = 39u32
         forward = 37u32
     }
+    // The enabled neighbours and ends of the selected tab (D1213).
+    var before = labels.len
+    var first = labels.len
+    var after = labels.len
+    var last = labels.len
+    var k = 0usize
+    while k < labels.len {
+        if tab_enabled(&options, k) {
+            if k < selected {
+                before = k
+                if first == labels.len { first = k }
+            }
+            if k > selected {
+                if after == labels.len { after = k }
+                last = k
+            }
+        }
+        k += 1usize
+    }
     var bound = 0usize
-    if selected > 0usize && selected < labels.len {
-        shortcuts[bound] = widget.Shortcut { key: back, modifiers: zero, action: picks[selected - 1usize] }
-        shortcuts[bound + 1usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: picks[0usize] }
+    if before < labels.len && selected < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: back, modifiers: zero, action: picks[before] }
+        shortcuts[bound + 1usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: picks[first] }
         bound += 2usize
     }
-    if selected + 1usize < labels.len {
-        shortcuts[bound] = widget.Shortcut { key: forward, modifiers: zero, action: picks[selected + 1usize] }
-        shortcuts[bound + 1usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: picks[labels.len - 1usize] }
+    if after < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: forward, modifiers: zero, action: picks[after] }
+        shortcuts[bound + 1usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: picks[last] }
         bound += 2usize
     }
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
