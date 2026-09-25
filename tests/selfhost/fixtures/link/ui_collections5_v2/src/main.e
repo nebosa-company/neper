@@ -19,6 +19,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
+use e.algo.hash as hash
 use e.ui.collection
 use e.ui.control
 use e.ui.layout as ui_layout
@@ -367,6 +368,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
         reveal_step += 1usize
     }
     if testing.by_label(&harness, "Add variable").count == 0usize { os.exit(47i32) }
+    // (D1314) Text mode: the pairs written one a line; parsed back, blank lines
+    // and comments pass and a line with no `=` is named; the Text segment fires
+    // the switch, and in text mode the area stands with its hint.
+    let (as_text, as_text_error) = mem.alloc[u8](a, 128usize)
+    if as_text_error != ok { os.exit(48i32) }
+    let written = collection.pairs_text(as_text, pairs[0usize..2usize])
+    if !same(as_text[0usize..written], "API=\nAPI=") { os.exit(49i32) }
+    let (parsed_count, parsed_bad) = collection.pairs_parse("# env\nHOME = /root\n\nPATH=/bin\n", pairs[0usize..2usize])
+    if parsed_count != 2usize || parsed_bad != 0usize || !same(pairs[0usize].name[0usize..pairs[0usize].name_len], "HOME") || !same(pairs[0usize].value[0usize..pairs[0usize].value_len], " /root") || !same(pairs[1usize].name[0usize..pairs[1usize].name_len], "PATH") { os.exit(50i32) }
+    let (_, broken_line) = collection.pairs_parse("A=1\noops", pairs[0usize..2usize])
+    if broken_line != 2usize { os.exit(51i32) }
+    var mode_log: Log = zero
+    kv.toggle_mode = widget.Submit { ctx: mem.cast[*void](&mode_log), invoke: on_add }
+    f = mem.arena_from(storage)
+    let (moded_editor, moded_error) = collection.key_value_editor_of(&f, 700u64, &theme, "Secrets", pairs[0usize..2usize], widget.Change[collection.PairEdit] { ctx: mem.cast[*void](&edits), invoke: on_pair_edit }, zero, &adds[0usize], 400.0, kv)
+    let (moded_page, moded_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if moded_error != ok || moded_page_error != ok { os.exit(52i32) }
+    moded_page[0usize] = moded_editor
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(420.0, 700.0), moded_page[0usize..1usize]), time.Instant { nanos: 4200000000i64 }) != ok { os.exit(53i32) }
+    let mode_key = 700u64 ^ hash.fnv1a64("kv-mode")
+    if !tap_bounds(&harness, &runtime, mode_key + 1u64) || mode_log.adds != 0usize || !tap_bounds(&harness, &runtime, mode_key + 2u64) || mode_log.adds != 1usize { os.exit(54i32) }
+    let (typed_bytes, typed_bytes_error) = mem.alloc[u8](a, 128usize)
+    if typed_bytes_error != ok { os.exit(55i32) }
+    kv.text_mode = true
+    kv.text = typed_bytes
+    kv.text_len = collection.pairs_text(typed_bytes, pairs[0usize..2usize])
+    kv.text_error = "Line 2 has no ="
+    f = mem.arena_from(storage)
+    let (texted, texted_error) = collection.key_value_editor_of(&f, 700u64, &theme, "Secrets", pairs[0usize..2usize], widget.Change[collection.PairEdit] { ctx: mem.cast[*void](&edits), invoke: on_pair_edit }, zero, &adds[0usize], 400.0, kv)
+    let (texted_page, texted_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if texted_error != ok || texted_page_error != ok { os.exit(56i32) }
+    texted_page[0usize] = texted
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(420.0, 700.0), texted_page[0usize..1usize]), time.Instant { nanos: 4300000000i64 }) != ok { os.exit(57i32) }
+    if testing.by_key(&harness, 700u64 ^ hash.fnv1a64("kv-text")).count != 1usize || testing.by_key(&harness, 702u64).count != 0usize || testing.by_text(&harness, "Line 2 has no =").count == 0usize { os.exit(58i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui collections5 v2 ok\n")
     ret ok

@@ -4079,7 +4079,142 @@ fn key_value_editor(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
 // above an empty list.
 // (D1260) `shown` marks the secret values revealed, and `reveal` hears a pair's
 // Show value toggle.
-type KeyValueOptions = struct { name_label: str, value_label: str, add_label: str, remove_label: str, duplicate_message: str, secret: []const bool, empty_row: bool, spare: Pair, empty_name: str, empty_hint: str, shown: []const bool, reveal: widget.Change[usize] }
+// (D1314) With `toggle_mode` set a Table / Text segmented button (keyed
+// `key ^ fnv1a64("kv-mode")`) fires it from the other mode; `text_mode` shows the
+// pairs as the caller's `text` (`text_len` long, told through `typed`), one
+// NAME=value a line, with `text_error` (a line that did not parse) under it.
+type KeyValueOptions = struct { name_label: str, value_label: str, add_label: str, remove_label: str, duplicate_message: str, secret: []const bool, empty_row: bool, spare: Pair, empty_name: str, empty_hint: str, shown: []const bool, reveal: widget.Change[usize], text_mode: bool, toggle_mode: widget.Submit, text: []u8, text_len: usize, typed: widget.Change[str], text_error: str }
+
+// (D1314) The pairs as text, one NAME=value a line, into `out`; how many bytes.
+fn pairs_text(out: []u8, pairs: []const Pair) -> usize {
+    var n = 0usize
+    var i = 0usize
+    while i < pairs.len {
+        if i > 0usize && n < out.len {
+            out[n] = 10u8
+            n += 1usize
+        }
+        var k = 0usize
+        while k < pairs[i].name_len && n < out.len {
+            out[n] = pairs[i].name[k]
+            n += 1usize
+            k += 1usize
+        }
+        if n < out.len {
+            out[n] = 61u8
+            n += 1usize
+        }
+        k = 0usize
+        while k < pairs[i].value_len && n < out.len {
+            out[n] = pairs[i].value[k]
+            n += 1usize
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret n
+}
+
+// (D1314) Text back into `pairs` (their buffers): one NAME=value a line, blank
+// lines and `#` comments passed over, the name trimmed of spaces. Answers how
+// many pairs it filled and the first line (from 1) that did not parse -- no `=`,
+// an empty name, a part longer than its buffer, or more pairs than `pairs` -- or
+// 0 when every line did.
+// ponytail: comments are dropped, not kept for the way back.
+fn pairs_parse(text: str, pairs: []Pair) -> (usize, usize) {
+    var count = 0usize
+    var line = 1usize
+    var start = 0usize
+    while start <= text.len {
+        var end = start
+        while end < text.len && text[end] != 10u8 { end += 1usize }
+        var from = start
+        var upto = end
+        if upto > from && text[upto - 1usize] == 13u8 { upto -= 1usize }
+        while from < upto && text[from] == 32u8 { from += 1usize }
+        if from < upto && text[from] != 35u8 {
+            var eq = from
+            while eq < upto && text[eq] != 61u8 { eq += 1usize }
+            var name_end = eq
+            while name_end > from && text[name_end - 1usize] == 32u8 { name_end -= 1usize }
+            if eq == upto || name_end == from || count >= pairs.len { ret (count, line) }
+            let name_len = name_end - from
+            let value_len = upto - eq - 1usize
+            if name_len > pairs[count].name.len || value_len > pairs[count].value.len { ret (count, line) }
+            var k = 0usize
+            while k < name_len {
+                pairs[count].name[k] = text[from + k]
+                k += 1usize
+            }
+            k = 0usize
+            while k < value_len {
+                pairs[count].value[k] = text[eq + 1usize + k]
+                k += 1usize
+            }
+            pairs[count].name_len = name_len
+            pairs[count].value_len = value_len
+            count += 1usize
+        }
+        if end >= text.len { ret (count, 0usize) }
+        start = end + 1usize
+        line += 1usize
+    }
+    ret (count, 0usize)
+}
+
+// (D1314) The Table / Text switch: the mode not shown fires `toggle`.
+fn key_value_mode(a: *mem.Arena, key: widget.Key, t: *const control.Theme, text_mode: bool, toggle: widget.Submit) -> (widget.Node, err) {
+    let (labels, labels_error) = mem.alloc[str](a, 2usize)
+    let (presses, presses_error) = mem.alloc[widget.Submit](a, 2usize)
+    if labels_error != ok || presses_error != ok { ret (zero, TooLarge) }
+    labels[0usize] = "Table"
+    labels[1usize] = "Text"
+    var still: widget.Submit = zero
+    presses[0usize] = still
+    presses[1usize] = still
+    var chosen = 0usize
+    if text_mode {
+        chosen = 1usize
+        presses[0usize] = toggle
+    } else {
+        presses[1usize] = toggle
+    }
+    let (made, made_error) = control.segmented_control(a, key ^ hash.fnv1a64("kv-mode"), t, "Edit as", labels[0usize..2usize], chosen, presses[0usize..2usize], true)
+    ret (made, made_error)
+}
+
+// (D1314, docs/ux/components/KeyValueEditor, text mode) The pairs as text: a
+// text area `width` wide (keyed `key ^ fnv1a64("kv-text")`) as tall as the pairs
+// and one more line (at least four), "One NAME=value per line" in `body-small`
+// `on-surface-variant` under it (or `text_error` as its error), then the mode
+// switch.
+// ponytail: the area is the theme's face, not a mono `code` face.
+fn key_value_text(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
+    let area_key = key ^ hash.fnv1a64("kv-text")
+    var lines = u32(pairs.len + 1usize)
+    if lines < 4u32 { lines = 4u32 }
+    var field = control.field_options()
+    field.width = width
+    field.rows = lines
+    field.invalid = options.text_error.len != 0usize
+    var no_submit: widget.Submit = zero
+    let (area, area_error) = control.text_field(a, area_key, t, label, options.text, options.text_len, options.typed, no_submit, field)
+    if area_error != ok { ret (zero, area_error) }
+    var line = control.Message { validity: .Valid, text: "One NAME=value per line" }
+    if options.text_error.len != 0usize { line = control.Message { validity: .Invalid, text: options.text_error } }
+    let (said, said_error) = control.field_message(a, area_key + 1u64, t, line, area_key)
+    if said_error != ok { ret (zero, said_error) }
+    let (mode, mode_error) = key_value_mode(a, key, t, true, options.toggle_mode)
+    if mode_error != ok { ret (zero, mode_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = area
+    parts[1usize] = said
+    parts[2usize] = mode
+    var column_style = style.defaults()
+    column_style.width = style.Length { Px: width }
+    ret (widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, column_style, parts[0usize..3usize]), ok)
+}
 
 // (D1260) A pair's Show value press.
 type PairReveal = struct { index: usize, reveal: widget.Change[usize] }
@@ -4136,10 +4271,16 @@ fn joined(a: *mem.Arena, first: str, second: str, third: []const u8) -> (str, er
 // (D1259) Secret values are masked, an empty row adds pairs, and an empty
 // list can carry a hint.
 // (D1260) A secret value has its Show value toggle and the Add button its glyph.
-// ponytail: no text mode, ordered variant, removal with Undo, `code` names,
+// (D1314) Text mode and its switch (`KeyValueOptions.text_mode`, `pairs_text`,
+// `pairs_parse`).
+// ponytail: no ordered variant, removal with Undo, `code` names,
 // the 30 s reveal limit or the touch list form.
 fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
     if pairs.len > 128usize { ret (zero, TooLarge) }
+    if options.text_mode {
+        let (texted, texted_error) = key_value_text(a, key, t, label, pairs, width, options)
+        ret (texted, texted_error)
+    }
     let dense = density_of(t) == 0usize
     let field_h = control.if_else(dense, 32.0, 40.0)
     let gap = control.if_else(dense, 4.0, 8.0)
@@ -4148,7 +4289,7 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let name_w = avail * 0.4
     let value_w = avail - name_w
     let muted = style.color(t.tokens, .OnSurfaceVariant)
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * pairs.len + 4usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * pairs.len + 5usize)
     if rows_error != ok { ret (zero, TooLarge) }
     let (changes, changes_error) = mem.alloc[PairChange](a, 2usize * pairs.len + 2usize)
     if changes_error != ok { ret (zero, TooLarge) }
@@ -4342,6 +4483,13 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if more_error != ok { ret (zero, more_error) }
     rows[n] = more
     n += 1usize
+    if widget.submit_set(options.toggle_mode.invoke) {
+        // (D1314) The mode switch under the Add button.
+        let (mode, mode_error) = key_value_mode(a, key, t, false, options.toggle_mode)
+        if mode_error != ok { ret (zero, mode_error) }
+        rows[n] = mode
+        n += 1usize
+    }
     var column_style = style.defaults()
     column_style.width = style.Length { Px: width }
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
