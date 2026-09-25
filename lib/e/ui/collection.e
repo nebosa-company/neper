@@ -3534,20 +3534,21 @@ fn bind_move(moves: []control.FocusTo, shortcuts: []widget.Shortcut, at: usize, 
 }
 
 // Roving focus over `nodes` keyed `keys`, `across` to a row (1 for a list), each
-// node wrapped in a scope (D979): Up and Down move a row, Left and Right one
-// item when there are columns, Home and End to the first and last.
+// node wrapped in a scope (D979): Up and Down move a row (to the nearest item in
+// a short last row), Left and Right one item when there are columns, Home and End
+// to the row ends (Ctrl: the set ends), or the set ends for a one-column list.
 fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []const widget.Key, across: usize) -> err {
     let n = nodes.len
     if n == 0usize || mem.address_of(t.runtime) == 0usize { ret ok }
-    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 6usize * n)
+    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 8usize * n)
     if moves_error != ok { ret TooLarge }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize * n)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 8usize * n)
     if shortcuts_error != ok { ret TooLarge }
     let (held, held_error) = mem.alloc[widget.Node](a, n)
     if held_error != ok { ret TooLarge }
     var i = 0usize
     while i < n {
-        let base = 6usize * i
+        let base = 8usize * i
         var k = base
         if i >= across {
             bind_move(moves, shortcuts, k, t.runtime, keys[i - across], 38u32)
@@ -3555,6 +3556,9 @@ fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []
         }
         if i + across < n {
             bind_move(moves, shortcuts, k, t.runtime, keys[i + across], 40u32)
+            k += 1usize
+        } else if across > 1usize && i / across < (n - 1usize) / across {
+            bind_move(moves, shortcuts, k, t.runtime, keys[n - 1usize], 40u32)
             k += 1usize
         }
         if across > 1usize && i > 0usize {
@@ -3565,9 +3569,22 @@ fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []
             bind_move(moves, shortcuts, k, t.runtime, keys[i + 1usize], 39u32)
             k += 1usize
         }
-        bind_move(moves, shortcuts, k, t.runtime, keys[0usize], 36u32)
-        bind_move(moves, shortcuts, k + 1usize, t.runtime, keys[n - 1usize], 35u32)
-        k += 2usize
+        if across > 1usize {
+            let row_first = (i / across) * across
+            var row_last = row_first + across - 1usize
+            if row_last >= n { row_last = n - 1usize }
+            bind_move(moves, shortcuts, k, t.runtime, keys[row_first], 36u32)
+            bind_move(moves, shortcuts, k + 1usize, t.runtime, keys[row_last], 35u32)
+            bind_move(moves, shortcuts, k + 2usize, t.runtime, keys[0usize], 36u32)
+            shortcuts[k + 2usize].modifiers.control = true
+            bind_move(moves, shortcuts, k + 3usize, t.runtime, keys[n - 1usize], 35u32)
+            shortcuts[k + 3usize].modifiers.control = true
+            k += 4usize
+        } else {
+            bind_move(moves, shortcuts, k, t.runtime, keys[0usize], 36u32)
+            bind_move(moves, shortcuts, k + 1usize, t.runtime, keys[n - 1usize], 35u32)
+            k += 2usize
+        }
         held[i] = nodes[i]
         nodes[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..k], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
         i += 1usize
@@ -4004,8 +4021,9 @@ fn grid_options() -> GridOptions {
 
 // v2 (D979, docs/ux/components/GridView): media tiles (`tile_node`, keyed by
 // `keys`) in `floor((width + 8) / (min + 8))` equal columns 8 apart both ways,
-// stretched to fill the width; arrows move the focus in two dimensions, Home
-// and End to the first and last. A grid named `label` with its counts.
+// stretched to fill the width; arrows move the focus in two dimensions (Down
+// clamps into a short last row), Home and End to the row ends, and Ctrl+Home and
+// Ctrl+End to the set ends. A grid named `label` with its counts.
 // ponytail: no selection model, typeahead, Page keys, rubber band, reflow
 // motion, loading or empty state; the caller keeps the page margins.
 fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, tiles: []const Tile, keys: []const widget.Key, options: GridOptions) -> (widget.Node, err) {

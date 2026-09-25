@@ -24,6 +24,7 @@ use e.text.shape
 use e.ui.accessibility
 use e.ui.collection
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.testing
@@ -351,6 +352,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot, at(two.x + 4.0, two.y + 60.0), style.color(&tokens, .SecondaryContainer)) || !is_color(shot, at(two.x + 70.0, two.y + 60.0), style.color(&tokens, .SurfaceContainerHighest)) { os.exit(37i32) }
     if !is_color(shot, at(two.x + 14.5, two.y + 24.0), style.color(&tokens, .Primary)) { os.exit(38i32) }
     if !tap_key(&harness, &runtime, 503u64) || s.presses != 2usize { os.exit(39i32) }
+    // Grid Home/End stay in the row, Ctrl reaches the set, and Down clamps to
+    // the only tile in a short final row.
+    if widget.focus(&runtime, testing.by_key(&harness, 501u64).element) != ok { os.exit(74i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !focused_is(&harness, 502u64) { os.exit(75i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 503u64) { os.exit(76i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !focused_is(&harness, 503u64) { os.exit(77i32) }
+    var ctrl: input.Modifiers = zero
+    ctrl.control = true
+    if testing.press_key(&harness, 36u32, ctrl) != ok || !focused_is(&harness, 501u64) { os.exit(78i32) }
+    if testing.press_key(&harness, 35u32, ctrl) != ok || !focused_is(&harness, 503u64) { os.exit(79i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 501u64) { os.exit(80i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 502u64) { os.exit(81i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 501u64) { os.exit(82i32) }
     // The virtual grid: 1:1 photo tiles 136 across, 12 in and 4 apart.
     let (wall, has_wall) = bounds(&harness, &runtime, 600u64)
     let (first_photo, has_first_photo) = bounds(&harness, &runtime, 6000u64)
