@@ -170,7 +170,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(14i32) }
     let (slider, has_slider) = find(tree, .Slider, "Quality")
-    if !has_slider || !same(slider.value, "2") { os.exit(15i32) }
+    if !has_slider || !same(slider.value, "2 of 5 stars") { os.exit(15i32) }
     let (second_at, has_second) = centre_of(&harness, &runtime, 3u64)
     if !has_second || testing.tap(&harness, second_at.x, second_at.y) != ok || logs[0usize].ratings != 1usize || logs[0usize].rating != 0u32 { os.exit(57i32) }
     let (fourth_at, has_fourth) = centre_of(&harness, &runtime, 5u64)
@@ -196,6 +196,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].rating != 1u32 { os.exit(51i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || logs[0usize].rating != 0u32 { os.exit(52i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || logs[0usize].rating != 5u32 { os.exit(53i32) }
+    let (root_unset, build_unset_error) = build(&frame, &theme, ctx, &handlers[0usize], dial_actions[0usize..2usize], menu_items[0usize..1usize], 0u32, false, false, false)
+    if build_unset_error != ok || testing.pump(&harness, root_unset, time.Instant { nanos: 3000000000i64 }) != ok { os.exit(58i32) }
+    let (tree_unset, tree_unset_error) = testing.semantics(&harness)
+    if tree_unset_error != ok { os.exit(59i32) }
+    let (slider_unset, has_slider_unset) = find(tree_unset, .Slider, "Quality")
+    if !has_slider_unset || !same(slider_unset.value, "Not rated") { os.exit(60i32) }
     tokens.direction = .LeftToRight
     // The split button: the primary fires; the second toggles; open, the menu the
     // caller anchors to it lies below it and the second says expanded.

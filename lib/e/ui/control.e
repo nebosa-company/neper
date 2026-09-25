@@ -5062,19 +5062,22 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focus[0usize..1usize])
-    let (digits, digits_error) = mem.alloc[u8](a, 2usize)
-    if digits_error != ok { ret (zero, TooLarge) }
-    var digit_count = 0usize
-    if value >= 10u32 {
-        digits[0usize] = u8(48u32 + value / 10u32)
-        digit_count = 1usize
+    // D1168: expose the scale, and give zero its specified spoken value.
+    let (said, said_error) = mem.alloc[u8](a, 32usize)
+    if said_error != ok { ret (zero, TooLarge) }
+    var said_len = 0usize
+    if value == 0u32 {
+        said_len = copy_text(said, "Not rated")
+    } else {
+        said_len = write_i64(said, i64(value))
+        said_len += copy_text(said[said_len..], " of ")
+        said_len += write_i64(said[said_len..], i64(max))
+        said_len += copy_text(said[said_len..], " stars")
     }
-    digits[digit_count] = u8(48u32 + value % 10u32)
-    digit_count += 1usize
     var sem: widget.Semantics = zero
     sem.role = 15u8
     sem.label = label
-    sem.value = digits[0usize..digit_count]
+    sem.value = said[0usize..said_len]
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
