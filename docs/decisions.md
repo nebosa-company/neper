@@ -22943,3 +22943,12 @@ Existing swipe-right and More paths remain caller-owned and unchanged.
 
 `ui_interaction` holds action-close, reopen, swipe-close and More-open behavior
 on Windows and Linux. The reviewed surface is unchanged.
+
+## D1128 — Time fields reserve Alt+Down for opening
+
+A closed TimePicker field binds Alt+Down in its existing scope to the supplied
+toggle callback. The binding is absent while open, where plain Down continues
+to select the next caller-owned time.
+
+`ui_pickers2_v2` holds closed opening and open navigation on Windows and Linux.
+The reviewed surface is unchanged.

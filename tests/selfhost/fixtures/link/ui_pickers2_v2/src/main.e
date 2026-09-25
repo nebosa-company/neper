@@ -18,15 +18,18 @@ use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
 
-type Store = struct { press: widget.Submit, picked: [8]u32, picks: [8]widget.Submit, times: [8]str, offsets: [8]str, presets: [3]str, clock: [8]u8, taken: [8]u8, cap: [8]u8 }
+type Store = struct { press: widget.Submit, toggles: u32, picked: [8]u32, picks: [8]widget.Submit, times: [8]str, offsets: [8]str, presets: [3]str, clock: [8]u8, taken: [8]u8, cap: [8]u8 }
 
 fn on_press(ctx: *void) -> err {
+    let s = mem.cast[*Store](ctx)
+    s.toggles += 1u32
     ret ok
 }
 
@@ -51,11 +54,11 @@ fn close_to(value: u8, expected: f32) -> bool {
     ret v - e < 4.0 && e - v < 4.0
 }
 
-fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err) {
+fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, open: bool) -> (widget.Node, err) {
     let typed = widget.Change[str] { ctx: mem.cast[*void](s), invoke: on_text }
     var options = control.field_options()
     options.width = 200.0
-    let (starts, e1) = overlay.time_field(a, 400u64, t, "Starts", s.clock[0usize..8usize], 5usize, typed, true, &s.press, s.times[0usize..8usize], s.offsets[0usize..8usize], 3usize, s.picks[0usize..8usize], "", options)
+    let (starts, e1) = overlay.time_field(a, 400u64, t, "Starts", s.clock[0usize..8usize], 5usize, typed, open, &s.press, s.times[0usize..8usize], s.offsets[0usize..8usize], 3usize, s.picks[0usize..8usize], "", options)
     let (timeout, e2) = overlay.duration_field(a, 500u64, t, "Build timeout", s.taken[0usize..8usize], 3usize, typed, "Reads as 45 min", s.presets[0usize..3usize], 2usize, s.picks[0usize..3usize], options)
     var wrong = options
     wrong.invalid = true
@@ -183,7 +186,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (frame_storage, storage_error) = mem.alloc[u8](a, 2097152usize)
     if storage_error != ok { os.exit(8i32) }
     var f = mem.arena_from(frame_storage)
-    let (root, build_error) = build(&f, &theme, s)
+    let (root, build_error) = build(&f, &theme, s, true)
     if build_error != ok { os.exit(9i32) }
     if testing.pump(&harness, root, time.Instant { nanos: 1000000000i64 }) != ok { os.exit(10i32) }
     let (shot, shot_error) = testing.snapshot(&harness, a)
@@ -231,6 +234,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (bad, has_bad) = bounds(&harness, &runtime, 602u64)
     let error_color = style.color(&tokens, .Error)
     if !has_bad || !near(bad.height, 40.0) || !is_color(shot, at(bad.x + 0.5, bad.y + 20.0), error_color) || !is_color(shot, at(bad.x + 1.5, bad.y + 20.0), error_color) { os.exit(24i32) }
+    // Alt+Down on the closed field reports its existing open toggle.
+    let (closed, closed_error) = build(&f, &theme, s, false)
+    if closed_error != ok || testing.pump(&harness, closed, time.Instant { nanos: 1100000000i64 }) != ok || testing.tap(&harness, frame.x + 40.0, frame.y + 20.0) != ok { os.exit(47i32) }
+    var alt: input.Modifiers = zero
+    alt.alt = true
+    if testing.press_key(&harness, 40u32, alt) != ok || s.toggles != 1u32 { os.exit(48i32) }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }
