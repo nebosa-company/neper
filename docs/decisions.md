@@ -23544,3 +23544,13 @@ touch hold consumes release so opening does not follow selection.
 The gesture arena now remembers pointer kind and offers a touch-only wrapper
 around its existing long-press clock and feedback. `ui_containers_v2` holds all
 three selection paths on Windows and Linux.
+
+## D1190 — Nested Card actions own hover
+
+The existing deepest-region gesture routing already sends HoverEnd to a Card
+when the pointer enters one of its slotted controls. The Card therefore drops
+its state layer while the child action paints its own, with no parallel hover
+state or special-case control code.
+
+`ui_containers_v2` now holds both parent-hover and child-hover pixels on Windows
+and Linux. The Segoe review is `build/ux/card-child-hover-segoe.png`.

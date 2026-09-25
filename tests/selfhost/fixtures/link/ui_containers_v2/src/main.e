@@ -129,21 +129,24 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     if slot_actions_error != ok { ret (zero, slot_actions_error) }
     var media_style = control.sized_style(200.0, 48.0)
     media_style.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) }
-    var action_style = control.sized_style(40.0, 40.0)
-    action_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) }
+    var slot_button_options = control.button_options()
+    slot_button_options.variant = .Plain
+    let (slot_action_button, slot_action_error) = control.button(a, 253u64, t, "More", &s.actions[8usize], slot_button_options)
+    if slot_action_error != ok { ret (zero, slot_action_error) }
     var slots = control.card_slots()
     slots.media = widget.box(250u64, media_style, zero)
     slots.has_media = true
     slots.header = widget.box(251u64, control.sized_style(20.0, 24.0), zero)
     slots.has_header = true
     slot_content[0usize] = widget.box(252u64, control.sized_style(20.0, 20.0), zero)
-    slot_actions[0usize] = widget.box(253u64, action_style, zero)
+    slot_actions[0usize] = slot_action_button
     slots.content = slot_content
     slots.actions = slot_actions
     var slotted_options = lifted
     slotted_options.width = 200.0
     slotted_options.variant = .Outlined
     slotted_options.title = "Release"
+    slotted_options.action = &s.actions[0usize]
     let (slotted_card, slotted_error) = control.card_with_slots(a, 25u64, t, slotted_options, slots)
     // Group boxes.
     var boxed = control.group_options()
@@ -288,8 +291,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (slotted, has_slotted) = bounds(&harness, &runtime, 25u64)
     let (slot_header, has_slot_header) = bounds(&harness, &runtime, 251u64)
     let (slot_action, has_slot_action) = bounds(&harness, &runtime, 253u64)
-    if !has_slotted || !has_slot_header || !has_slot_action || !near(slotted.width, 200.0) || !near(slot_header.x - slotted.x, 16.0) || !near(slot_header.y - slotted.y, 64.0) || !near(slot_action.x - slotted.x, 144.0) { os.exit(52i32) }
-    if !is_color(shot, at(slotted.x + 100.0, slotted.y + 24.0), style.color(&tokens, .PrimaryContainer)) || !is_color(shot, at(slot_action.x + 20.0, slot_action.y + 20.0), style.color(&tokens, .SecondaryContainer)) { os.exit(53i32) }
+    if !has_slotted || !has_slot_header || !has_slot_action || !near(slotted.width, 200.0) || !near(slot_header.x - slotted.x, 16.0) || !near(slot_header.y - slotted.y, 64.0) || !near(slot_action.x + slot_action.width, slotted.x + slotted.width - 16.0) { os.exit(52i32) }
+    if !is_color(shot, at(slotted.x + 100.0, slotted.y + 24.0), style.color(&tokens, .PrimaryContainer)) { os.exit(53i32) }
+    if testing.hover(&harness, slotted.x + 100.0, slot_header.y + 12.0) != ok { os.exit(61i32) }
+    f = mem.arena_from(frame_storage)
+    let (parent_hover_root, parent_hover_error) = build(&f, &theme, &stores[0usize])
+    if parent_hover_error != ok || testing.pump(&harness, parent_hover_root, time.Instant { nanos: 1010000000i64 }) != ok { os.exit(62i32) }
+    let (parent_hover_shot, parent_hover_shot_error) = testing.snapshot(&harness, a)
+    if parent_hover_shot_error != ok || !is_color(parent_hover_shot, at(slotted.x + 100.0, slot_header.y + 12.0), style.layer(page, style.color(&tokens, .OnSurface), tokens.states.hover)) { os.exit(63i32) }
+    if testing.hover(&harness, slot_action.x + slot_action.width * 0.5, slot_action.y + slot_action.height * 0.5) != ok { os.exit(64i32) }
+    f = mem.arena_from(frame_storage)
+    let (child_hover_root, child_hover_error) = build(&f, &theme, &stores[0usize])
+    if child_hover_error != ok || testing.pump(&harness, child_hover_root, time.Instant { nanos: 1020000000i64 }) != ok { os.exit(65i32) }
+    let (child_hover_shot, child_hover_shot_error) = testing.snapshot(&harness, a)
+    if child_hover_shot_error != ok || !is_color(child_hover_shot, at(slotted.x + 100.0, slot_header.y + 12.0), page) { os.exit(66i32) }
     // The pressable card is a Button named by its title, and fires on a tap.
     if testing.by_label(&harness, "Open").count != 1usize || testing.by_role(&harness, .Button).count == 0usize { os.exit(17i32) }
     if testing.tap(&harness, filled.x + 60.0, filled.y + 21.0) != ok || stores[0usize].hits[0usize] != 2u32 { os.exit(18i32) }

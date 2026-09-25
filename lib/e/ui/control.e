@@ -962,9 +962,9 @@ fn card_options() -> CardOptions {
 // content at 38%, no shadow, not focusable. Loading replaces the content with
 // synchronised media, title (60%) and supporting-line (90%) skeletons, and marks
 // the non-interactive Card busy; the caller owns the 300ms delay and phase.
-// ponytail: child hover does not suppress the parent layer. Dragged omits the
-// 1.5-degree tilt and 102% scale until nodes have a visual transform independent
-// of layout.
+// ponytail: slotted action semantics remain descendants rather than siblings.
+// Dragged omits the 1.5-degree tilt and 102% scale until nodes have a visual
+// transform independent of layout.
 fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, children: []const widget.Node) -> (widget.Node, err) {
     let (made, made_error) = card_render(a, key, t, options, false, children)
     ret (made, made_error)
