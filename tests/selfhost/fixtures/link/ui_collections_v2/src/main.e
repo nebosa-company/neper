@@ -100,6 +100,17 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
+// (D1240) What a multi-select list said last, and how often.
+type Selected = struct { count: usize, kind: collection.ListSelectKind, index: usize }
+
+fn on_select(ctx: *void, value: collection.ListSelect) -> err {
+    let chosen = mem.cast[*Selected](ctx)
+    chosen.count += 1usize
+    chosen.kind = value.kind
+    chosen.index = value.index
+    ret ok
+}
+
 fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err) {
     var file_keys: [3]widget.Key = zero
     file_keys[0usize] = 101u64
@@ -493,6 +504,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
         icon_step += 1usize
     }
     if testing.hover(&harness, 1.0, 1.0) != ok { os.exit(111i32) }
+    // (D1240) A multi-select list reports its gestures: Space toggles, Shift+Down
+    // extends and moves, Ctrl+A selects all, Escape clears, Ctrl-click toggles and
+    // Shift-click extends; a plain click is the row's own action.
+    var chosen: Selected = zero
+    var multi = collection.list_options()
+    multi.width = 300.0
+    multi.select = widget.Change[collection.ListSelect] { ctx: mem.cast[*void](&chosen), invoke: on_select }
+    var multi_keys: [3]widget.Key = zero
+    multi_keys[0usize] = 901u64
+    multi_keys[1usize] = 902u64
+    multi_keys[2usize] = 903u64
+    f = mem.arena_from(frame_storage)
+    let (multi_list, multi_list_error) = collection.list_of(&f, 900u64, &theme, "Pick", s.files[0usize..3usize], multi_keys[..], multi)
+    if multi_list_error != ok || testing.pump(&harness, multi_list, now) != ok { os.exit(113i32) }
+    var shift_only: input.Modifiers = zero
+    shift_only.shift = true
+    var control_only: input.Modifiers = zero
+    control_only.control = true
+    if widget.focus(&runtime, testing.by_key(&harness, 901u64).element) != ok || testing.press_key(&harness, 32u32, zero) != ok || chosen.count != 1usize || chosen.kind != .Toggle || chosen.index != 0usize { os.exit(114i32) }
+    if testing.press_key(&harness, 40u32, shift_only) != ok || chosen.kind != .Extend || chosen.index != 1usize || !focused_is(&harness, 902u64) { os.exit(115i32) }
+    if testing.press_key(&harness, 65u32, control_only) != ok || chosen.kind != .All { os.exit(116i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || chosen.kind != .Clear { os.exit(117i32) }
+    let (second, has_second) = bounds(&harness, &runtime, 902u64)
+    if !has_second { os.exit(118i32) }
+    if widget.dispatch(&runtime, input.Event { KeyDown: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: control_only, repeat: false } }) != ok { os.exit(119i32) }
+    if testing.tap(&harness, second.x + second.width * 0.5, second.y + second.height * 0.5) != ok || chosen.kind != .Toggle || chosen.index != 1usize { os.exit(120i32) }
+    if widget.dispatch(&runtime, input.Event { KeyUp: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(121i32) }
+    if widget.dispatch(&runtime, input.Event { KeyDown: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 16u32, logical: 16u32 }, modifiers: shift_only, repeat: false } }) != ok { os.exit(122i32) }
+    if testing.tap(&harness, second.x + second.width * 0.5, second.y + second.height * 0.5) != ok || chosen.kind != .Extend || chosen.index != 1usize { os.exit(123i32) }
+    if widget.dispatch(&runtime, input.Event { KeyUp: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 16u32, logical: 16u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(124i32) }
+    let plain_before = s.presses
+    let select_before = chosen.count
+    if testing.tap(&harness, second.x + second.width * 0.5, second.y + second.height * 0.5) != ok || chosen.count != select_before || s.presses != plain_before + 1usize { os.exit(125i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok
