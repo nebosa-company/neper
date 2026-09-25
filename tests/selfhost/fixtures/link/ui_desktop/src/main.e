@@ -176,6 +176,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (undo_at, has_undo) = centre_of(&harness, &runtime, 103u64)
     if !has_undo || testing.tap(&harness, undo_at.x, undo_at.y) != ok || logs[0usize].undos != 1usize { os.exit(19i32) }
     if testing.by_key(&harness, 106u64).count != 0usize { os.exit(20i32) }
+    // (D1220) The close button shows while its row is hovered.
+    if testing.by_key(&harness, 107u64).count != 0usize { os.exit(30i32) }
+    let (backup_at, has_backup_at) = centre_of(&harness, &runtime, 105u64)
+    if !has_backup_at || testing.hover(&harness, backup_at.x, backup_at.y) != ok { os.exit(31i32) }
+    frame = mem.arena_from(frame_storage)
+    let (hovered_root, hovered_error) = build(&frame, &theme, ctx, notices[0usize..2usize], &clears[0usize], 1usize)
+    if hovered_error != ok || testing.pump(&harness, hovered_root, now) != ok { os.exit(32i32) }
     let (close_at, has_close) = centre_of(&harness, &runtime, 107u64)
     if !has_close || testing.tap(&harness, close_at.x, close_at.y) != ok || logs[0usize].dismisses != 1usize { os.exit(21i32) }
     let (clear_at, has_clear) = centre_of(&harness, &runtime, 101u64)

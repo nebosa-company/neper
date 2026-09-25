@@ -23953,3 +23953,18 @@ width and the hovered width on Windows and Linux; `ui_scroll` and
 `ui_collections2_v2` pass. A sweep of all 103 `ui_*` fixtures on both hosts
 shows only the 12 pre-existing failures recorded in D1195, with unchanged exit
 codes.
+
+## D1220 — A notification's Dismiss shows on hover and focus
+
+NotificationList rows now take part in hover. With a pointer, a row's 32
+Dismiss button is built only while the row or the button is hovered or
+focused, as the NotificationList spec asks; otherwise a 32 x 32 space holds its
+place, so the unread dot and text do not move. On touch it always shows,
+because swipe-to-dismiss is not written. Delete on a focused row still fires
+the row's dismiss, so a keyboard user loses nothing, and focusing the row shows
+the button before Tab reaches it.
+
+ and  now hover a row before pressing its Dismiss,
+and hold that no Dismiss is built at rest, on Windows and Linux. A sweep of all
+103 `ui_*` fixtures on both hosts shows only the 12 pre-existing failures
+recorded in D1195, with unchanged exit codes.

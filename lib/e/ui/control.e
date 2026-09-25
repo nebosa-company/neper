@@ -7875,9 +7875,11 @@ fn joined(a: *mem.Arena, head: str, tail: str) -> (str, err) {
 // unread count ("Notifications, 2 unread"); each row a list item named by its
 // title, "Unread, " first when unread.
 // Up, Down, Home and End move focus between rows, skipping day headings; Delete
-// fires that row's existing dismiss action.
-// ponytail: the dismiss button always shows (not on hover alone); no settings
-// button, grouping of repeats, loading rows or insert motion.
+// fires that row's existing dismiss action. (D1220) With a pointer the Dismiss
+// button is built only while its row or the button is hovered or focused (a 32
+// space holds its place otherwise); on touch it always shows.
+// ponytail: no settings button, grouping of repeats, loading rows or insert
+// motion.
 fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
     if items.len > 64usize { ret (zero, TooLarge) }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -7965,9 +7967,17 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
             cells[cell_count] = widget.box(0u64, dot, zero)
             cell_count += 1usize
         }
-        let (close, close_error) = glyph_button(a, key + 4u64 + 3u64 * u64(i), t, .Cross, "Dismiss", &item.dismiss, 32.0, 18.0)
-        if close_error != ok { ret (zero, close_error) }
-        cells[cell_count] = close
+        let close_key = key + 4u64 + 3u64 * u64(i)
+        let row_state = control_state(t, targets[i].key, true, false)
+        let close_state = control_state(t, close_key, true, false)
+        let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+        if touch || row_state.hovered || row_state.focused || close_state.hovered || close_state.focused {
+            let (close, close_error) = glyph_button(a, close_key, t, .Cross, "Dismiss", &item.dismiss, 32.0, 18.0)
+            if close_error != ok { ret (zero, close_error) }
+            cells[cell_count] = close
+        } else {
+            cells[cell_count] = widget.box(0u64, sized_style(32.0, 32.0), zero)
+        }
         cell_count += 1usize
         var row_style = style.defaults()
         row_style.width = style.Length { Px: inner }
@@ -8009,7 +8019,7 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
         var focus_style = style.defaults()
         focus_style.radius = t.tokens.radii.sm
         focus_look(t)
-        focused[0usize] = widget.region(targets[i].key, widget.Region { gesture: none_gesture, gestures: 0u8, enabled: true, focusable: true }, focus_style, named[0usize..1usize])
+        focused[0usize] = widget.region(targets[i].key, widget.Region { gesture: none_gesture, gestures: 4u8, enabled: true, focusable: true }, focus_style, named[0usize..1usize])
         rows[n] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: row_shortcuts[base..base + 5usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focused[0usize..1usize])
         n += 1usize
         i += 1usize

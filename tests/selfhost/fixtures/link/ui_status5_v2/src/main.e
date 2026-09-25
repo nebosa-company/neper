@@ -181,8 +181,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_unread || !has_read { os.exit(17i32) }
     if !is_color(shot, at(row.x + 22.0, row.y + 32.0), style.color(&tokens, .ErrorContainer)) { os.exit(18i32) }
     if !is_color(shot, at(row.x + row.width - 56.0, row.y + 16.0), style.color(&tokens, .Primary)) { os.exit(19i32) }
-    // The action, Dismiss and Mark all read press.
-    if testing.by_label(&harness, "Dismiss").count != 3usize || !tap_key(&harness, &runtime, 1003u64) || !tap_key(&harness, &runtime, 1004u64) || !tap_key(&harness, &runtime, 1001u64) || s.presses != 3usize { os.exit(20i32) }
+    // The action, Dismiss and Mark all read press; (D1220) Dismiss shows only
+    // while its row is hovered.
+    if testing.by_label(&harness, "Dismiss").count != 0usize || testing.hover(&harness, row.x + 100.0, row.y + 20.0) != ok { os.exit(20i32) }
+    f = mem.arena_from(frame_storage)
+    let (hovered_root, hovered_error) = build(&f, &theme, s)
+    if hovered_error != ok || testing.pump(&harness, hovered_root, time.Instant { nanos: 1000000000i64 }) != ok || testing.by_label(&harness, "Dismiss").count != 1usize { os.exit(40i32) }
+    if !tap_key(&harness, &runtime, 1003u64) || !tap_key(&harness, &runtime, 1004u64) || !tap_key(&harness, &runtime, 1001u64) || s.presses != 3usize { os.exit(41i32) }
     // Empty: the compact empty state.
     let (caught, has_caught) = find(tree, .Group, "You're all caught up")
     if !has_caught { os.exit(21i32) }
