@@ -2684,7 +2684,8 @@ fn weekday_name(day: usize, narrow: bool) -> str {
 // label while there is none) firing `toggle`, with a calendar (keyed `key + 2`,
 // in a flyout keyed `key + 1`) of the month `shown` below it while `open`; a pick
 // reaches `pick`, a month turn `show`, and the flyout's dismissal is `toggle` again.
-// Alt+Down opens a closed picker.
+// Alt+Down opens a closed picker; opening requests focus on the selected day in
+// the shown month, or day 1 otherwise.
 fn date_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (made, made_error) = dated(a, key, t, label, value, has_value, false, value, value, open, toggle, shown, show, pick)
     ret (made, made_error)
@@ -2696,6 +2697,15 @@ fn date_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 fn date_range_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, from: time.Date, to: time.Date, has_range: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (made, made_error) = dated(a, key, t, label, from, has_range, true, from, to, open, toggle, shown, show, pick)
     ret (made, made_error)
+}
+
+type DateOpen = struct { toggle: widget.Submit, runtime: *widget.Runtime, focus: widget.Key }
+
+fn date_open_fire(ctx: *void) -> err {
+    let o = mem.cast[*DateOpen](ctx)
+    let opened = widget.fire_submit(o.toggle)
+    if opened != ok { ret opened }
+    ret widget.focus_key(o.runtime, o.focus)
 }
 
 // v2 (D959, docs/ux/components/DatePicker, docked): the field is the outlined
@@ -2727,7 +2737,19 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         field_height = t.tokens.sizes.control_xl
         cell = t.tokens.sizes.control_md
     }
-    let (head, head_error) = control.field_head(a, key, t, label, caption, has_value, open, toggle, field_height, .Calendar, .Calendar, true)
+    var trigger = toggle
+    if !open {
+        var focus_day = 1u8
+        if has_value && shown.month >= 1u8 && shown.month <= 12u8 && value.year == shown.year && value.month == shown.month && value.day >= 1u8 && i64(value.day) <= time.days_in_month(i64(shown.year), i64(shown.month)) { focus_day = value.day }
+        let (opens, opens_error) = mem.alloc[DateOpen](a, 1usize)
+        if opens_error != ok { ret (zero, TooLarge) }
+        let (open_actions, open_actions_error) = mem.alloc[widget.Submit](a, 1usize)
+        if open_actions_error != ok { ret (zero, TooLarge) }
+        opens[0usize] = DateOpen { toggle: *toggle, runtime: t.runtime, focus: key + 5u64 + u64(focus_day) }
+        open_actions[0usize] = widget.Submit { ctx: mem.cast[*void](&opens[0usize]), invoke: date_open_fire }
+        trigger = &open_actions[0usize]
+    }
+    let (head, head_error) = control.field_head(a, key, t, label, caption, has_value, open, trigger, field_height, .Calendar, .Calendar, true)
     if head_error != ok { ret (zero, head_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -2767,7 +2789,7 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         if keys_error != ok { ret (zero, TooLarge) }
         var alt: input.Modifiers = zero
         alt.alt = true
-        keys[0usize] = widget.Shortcut { key: 40u32, modifiers: alt, action: *toggle }
+        keys[0usize] = widget.Shortcut { key: 40u32, modifiers: alt, action: *trigger }
         shortcuts = keys[0usize..1usize]
     }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])

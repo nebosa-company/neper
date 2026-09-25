@@ -22970,3 +22970,13 @@ keeps the Down key.
 
 `ui_pickers_v2` holds the closed chord on Windows and Linux. The reviewed
 surface is unchanged.
+
+## D1131 — Date-picker opening targets the selected day
+
+The closed DatePicker and DateRangePicker open action requests focus on the
+selected day when it belongs to the shown month, or day 1 otherwise. The
+runtime carries that request across the caller's rebuild and applies it after
+the modal overlay's default focus.
+
+`ui_pickers_v2` holds the selected-day focus handoff on Windows and Linux. The
+reviewed surface is unchanged.

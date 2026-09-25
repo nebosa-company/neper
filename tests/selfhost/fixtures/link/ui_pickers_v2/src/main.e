@@ -221,6 +221,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var alt: input.Modifiers = zero
     alt.alt = true
     if testing.press_key(&harness, 40u32, alt) != ok || stores[0usize].toggles != 1usize { os.exit(36i32) }
+    let (reopened, reopened_error) = build(&f, &theme, &stores[0usize], true, false)
+    if reopened_error != ok || testing.pump(&harness, reopened, time.Instant { nanos: 4000000000i64 }) != ok || !widget.focus_within(&runtime, 215u64) { os.exit(37i32) }
     try io.print("ui pickers v2 ok\n")
     ret ok
 }
