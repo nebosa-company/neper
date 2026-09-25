@@ -12,6 +12,7 @@ use e.ui.accessibility
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.overlay
 use e.ui.style
 use e.ui.widget
 
@@ -1762,7 +1763,7 @@ fn within(v: usize, a: usize, b: usize) -> bool {
 }
 
 // What `data_grid_of` hands its table: the caller's source, state and change.
-type GridBuild = struct { source: GridSource, t: *const control.Theme, state: GridState, change: widget.Change[GridEvent], holder: widget.Key }
+type GridBuild = struct { source: GridSource, t: *const control.Theme, state: GridState, change: widget.Change[GridEvent], holder: widget.Key, key: widget.Key, columns: usize }
 
 fn grid_count(ctx: *void) -> usize {
     let b = back_of[GridBuild](ctx)
@@ -1784,6 +1785,8 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     let t = b.t
     let s = b.state
     let value = b.source.cell(b.source.ctx, index, at)
+    let cell_key = b.key + 1024u64 + u64(index * b.columns + at)
+    let cell_state = control.control_state(t, cell_key, true, false)
     let ranged = span_of(s.row, s.anchor_row) * span_of(s.column, s.anchor_column) > 1usize && within(index, s.row, s.anchor_row) && within(at, s.column, s.anchor_column)
     let invalid = value.message.len > 0usize
     var ink = style.color(t.tokens, .OnSurface)
@@ -1823,6 +1826,7 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     cell_style.width = style.Length { Percent: 100.0 }
     cell_style.height = style.Length { Percent: 100.0 }
     if ranged { cell_style.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) } }
+    if !ranged && cell_state.hovered { cell_style.background = paint.Brush { Solid: style.layer(style.color(t.tokens, .Surface), style.color(t.tokens, .OnSurface), control.state_opacity(t, cell_state)) } }
     if invalid { cell_style.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Error) } }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
     if lined_error != ok { ret TooLarge }
@@ -1844,7 +1848,7 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
-    tapped[0usize] = widget.region(0u64, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&taps[0usize]), invoke: control.press_tap }, gestures: 1u8, enabled: true, focusable: false }, fill, lined[0usize..1usize])
+    tapped[0usize] = widget.region(cell_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&taps[0usize]), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, fill, lined[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.value = value.text
     if value.read_only {
@@ -1857,7 +1861,21 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
         sem.hint = value.message
     }
     if ranged { sem.states = sem.states | accessibility.STATE_SELECTED }
-    *out = widget.semantics(0u64, sem, fill, tapped[0usize..1usize])
+    let made = widget.semantics(0u64, sem, fill, tapped[0usize..1usize])
+    if !invalid {
+        *out = made
+        ret ok
+    }
+    let active = index == s.row && at == s.column
+    let active_state = control.control_state(t, b.holder, true, false)
+    let shown = overlay.tooltip_wanted(t, cell_key) || (active && active_state.focused)
+    let (tip, tip_error) = overlay.tooltip(a, cell_key + 1000000u64, t, cell_key, value.message, shown)
+    if tip_error != ok { ret tip_error }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret TooLarge }
+    layers[0usize] = made
+    layers[1usize] = tip
+    *out = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
     ret ok
 }
 
@@ -1888,7 +1906,7 @@ fn count_words(a: *mem.Arena, count: usize, one: str, many: str) -> (str, err) {
 // Every change reaches `change` as a `GridEvent` carrying the next state.
 // ponytail: text cells only -- no checkbox, select or date cells; no
 // double-click, Shift+click, pointer row/column selection, clipboard
-// parsing and mutation, hover cell layer, error tooltip, saving
+// parsing and mutation, saving
 // or disabled looks, cross-fade, or touch sheet; the caller keeps the active
 // row in view (the ring is held inside the viewport).
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {
@@ -1898,7 +1916,7 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     let total = source.count(source.ctx)
     let (builds, builds_error) = mem.alloc[GridBuild](a, 1usize)
     if builds_error != ok { ret (zero, TooLarge) }
-    builds[0usize] = GridBuild { source: source, t: t, state: state, change: change, holder: key + 1u64 }
+    builds[0usize] = GridBuild { source: source, t: t, state: state, change: change, holder: key + 1u64, key: key, columns: columns.len }
     let table_source = TableSource { ctx: ctx_of(&builds[0usize]), count: grid_count, key: grid_row_key, cell: grid_cell }
     var none: [1]widget.Key = zero
     let (table_node, table_error) = tabulated(a, key + 16u64, t, label, columns, table_source, none[0usize..0usize], columns.len, false, zero, zero, zero, zero, row_extent, offset, scrolled, height - 40.0, 30u8, true)
