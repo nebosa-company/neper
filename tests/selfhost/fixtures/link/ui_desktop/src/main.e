@@ -2,7 +2,8 @@
 // font picker's family rows, style segments and size stepper each report their
 // choice and the preview stands; a notification list shows the caller's notices
 // with their actions and closes, Mark all read fires, and Up, Down, Home and End
-// move focus between rows (v2, D971, D1174).
+// move focus between rows and Delete dismisses the focused row (v2, D971,
+// D1174–D1175).
 
 use e.gpu
 use e.io
@@ -186,7 +187,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 36u32, zero) != ok || !focused_is(&harness, 102u64) { os.exit(25i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || !focused_is(&harness, 105u64) { os.exit(26i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 102u64) { os.exit(27i32) }
-    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(28i32) }
+    if testing.press_key(&harness, 46u32, zero) != ok || logs[0usize].dismisses != 2usize { os.exit(28i32) }
+    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(29i32) }
     try io.print("ui desktop ok\n")
     ret ok
 }

@@ -7580,7 +7580,8 @@ fn joined(a: *mem.Arena, head: str, tail: str) -> (str, err) {
 // "You're all caught up". A polite group in the tree named `label` with the
 // unread count ("Notifications, 2 unread"); each row a list item named by its
 // title, "Unread, " first when unread.
-// Up, Down, Home and End move focus between rows, skipping day headings.
+// Up, Down, Home and End move focus between rows, skipping day headings; Delete
+// fires that row's existing dismiss action.
 // ponytail: the dismiss button always shows (not on hover alone); no settings
 // button, grouping of repeats, loading rows or insert motion.
 fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
@@ -7592,7 +7593,7 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     if rows_error != ok { ret (zero, TooLarge) }
     let (targets, targets_error) = mem.alloc[FocusTo](a, items.len)
     if targets_error != ok { ret (zero, TooLarge) }
-    let (row_shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize * items.len)
+    let (row_shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 5usize * items.len)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     var target_index = 0usize
     while target_index < items.len {
@@ -7700,11 +7701,12 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
         if i > 0usize { previous = i - 1usize }
         var next = i
         if i + 1usize < items.len { next = i + 1usize }
-        let base = 4usize * i
+        let base = 5usize * i
         row_shortcuts[base] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[previous]), invoke: focus_to_fire } }
         row_shortcuts[base + 1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[next]), invoke: focus_to_fire } }
         row_shortcuts[base + 2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[0usize]), invoke: focus_to_fire } }
         row_shortcuts[base + 3usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[items.len - 1usize]), invoke: focus_to_fire } }
+        row_shortcuts[base + 4usize] = widget.Shortcut { key: 46u32, modifiers: zero, action: item.dismiss }
         let (focused, focused_error) = mem.alloc[widget.Node](a, 1usize)
         if focused_error != ok { ret (zero, TooLarge) }
         var none_gesture: widget.GestureAction = zero
@@ -7712,7 +7714,7 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
         focus_style.radius = t.tokens.radii.sm
         focus_look(t)
         focused[0usize] = widget.region(targets[i].key, widget.Region { gesture: none_gesture, gestures: 0u8, enabled: true, focusable: true }, focus_style, named[0usize..1usize])
-        rows[n] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: row_shortcuts[base..base + 4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focused[0usize..1usize])
+        rows[n] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: row_shortcuts[base..base + 5usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focused[0usize..1usize])
         n += 1usize
         i += 1usize
     }
