@@ -1387,20 +1387,21 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
     ret (widget.semantics(0u64, sem, style.defaults(), row_node[0usize..1usize]), ok)
 }
 
-// A row's tap reporting its key.
-type RowPick = struct { key: widget.Key, pick: widget.Change[widget.Key] }
+// A row's tap reporting its key; a caller may add one double-tap command.
+type RowPick = struct { key: widget.Key, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool }
 
 fn row_pick_gesture(ctx: *void, g: widget.Gesture) -> err {
-    if g.tag != .Tap { ret ok }
     let r = mem.cast[*RowPick](ctx)
-    ret widget.fire_change[widget.Key](r.pick, r.key)
+    if g.tag == .Tap { ret widget.fire_change[widget.Key](r.pick, r.key) }
+    if g.tag == .DoubleTap && r.has_double { ret widget.fire_change[widget.Key](r.double, r.key) }
+    ret ok
 }
 
 // One row of cells `extent` tall: the cells sized by their columns in a row, the
 // row a focusable tap region keyed by the row's key reporting it through `pick`,
 // selected in the selection colour; a row of cells in the tree at `index`.
 fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], role: u8) -> (widget.Node, err) {
-    let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, count, extent, selected, pick, role, cell_padding(t), false, false)
+    let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, count, extent, selected, pick, zero, false, role, cell_padding(t), false, false)
     ret (made, made_error)
 }
 
@@ -1415,7 +1416,7 @@ fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, ce
 // ponytail: no selection checkbox column, disclosure and detail row, hover row
 // actions, disabled, dragged or loading looks; the caller's cells keep their
 // own colours when the row is selected.
-fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], role: u8, pad: f32, grid: bool, owned: bool) -> (widget.Node, err) {
+fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool) -> (widget.Node, err) {
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
     if boxed_error != ok { ret (zero, TooLarge) }
     let sides = style.Length { Px: pad }
@@ -1469,7 +1470,7 @@ fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column,
     }
     let (picks, picks_error) = mem.alloc[RowPick](a, 1usize)
     if picks_error != ok { ret (zero, TooLarge) }
-    picks[0usize] = RowPick { key: row_key, pick: pick }
+    picks[0usize] = RowPick { key: row_key, pick: pick, double: double, has_double: has_double }
     let state = control.control_state(t, row_key, true, selected)
     var fill = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
     if selected { fill = style.layer(style.color(t.tokens, .SecondaryContainer), style.color(t.tokens, .OnSecondaryContainer), control.state_opacity(t, state)) }
@@ -2320,7 +2321,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             c += 1usize
         }
         let lined = index + 1usize < total
-        let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, total, row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0), is_selected(selected, row_key), pick, 13u8, control.if_else(owned, 0.0, pad), grid, owned)
+        let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, total, row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0), is_selected(selected, row_key), pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
@@ -2422,8 +2423,9 @@ fn tree_action(ctx: *void, action: u32) -> err {
 // The rows of a tree or a tree table: each indented by its depth with a
 // disclosure mark (keyed `key + 1 + 2 * position`, a tap reporting the node through
 // `toggle`) before the content, the row itself (keyed by the node) a focusable tap
-// region reporting the node through `pick`, Left and Right on it collapsing and
-// expanding; a tree item in the tree with its level, expanded state and position.
+// region reporting the node through `pick`, a branch's double tap through
+// `toggle`, Left and Right collapsing and expanding; a tree item in the tree
+// with its level, expanded state and position.
 // v2 (D981, docs/ux/components/Tree, Outline, TreeTable): the indent is 20 a
 // level (24 on touch); the twisty an 18 `chevron-right` (`chevron-down` when
 // open) in `on-surface-variant` in a 24 box, an empty 24 box on a leaf, 8
@@ -2479,7 +2481,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         // The twisty, or its blank for a leaf.
         var twisty = widget.box(0u64, control.sized_style(24.0, 24.0), zero)
         if entry.branch {
-            toggles[i] = RowPick { key: entry.key, pick: toggle }
+            toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false }
             var kind: control.GlyphKind = .ChevronRight
             if open { kind = .ChevronDown }
             // The 18 icon (its 1.5 inset kept) centred in the 24 box.
@@ -2520,7 +2522,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         var lead_style = style.defaults()
         lead_style.height = style.Length { Px: tall }
         let first_cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, lead_style, lead[0usize..4usize])
-        picks[i] = RowPick { key: entry.key, pick: pick }
+        picks[i] = RowPick { key: entry.key, pick: pick, double: toggle, has_double: entry.branch }
         var made: widget.Node = zero
         if tabled {
             let (cells, cells_error) = mem.alloc[widget.Node](a, columns.len)
@@ -2534,7 +2536,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
                 cells[c] = extra
                 c += 1usize
             }
-            let (tabled_row, tabled_error) = table_row_of(a, t, columns, cells, entry.key, entry.index, entry.siblings, tall, chosen, pick, 2u8, cell_padding(t), false, false)
+            let (tabled_row, tabled_error) = table_row_of(a, t, columns, cells, entry.key, entry.index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, cell_padding(t), false, false)
             if tabled_error != ok { ret (none, tabled_error) }
             made = tabled_row
         } else {

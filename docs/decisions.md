@@ -22497,3 +22497,14 @@ the twisty and arrow keys; leaves advertise neither action.
 `ui_collections3_v2` inspects the accessibility tree and invokes both actions on
 Windows and Linux. This changes behavior on the reviewed Tree surface, so no
 duplicate screenshot is added.
+
+## D1083 — Tree branch double-click keeps one toggle path
+
+The shared row gesture accepts an optional double-tap callback. Tree and
+TreeTable branch rows supply their existing stable-key toggle while ordinary
+tables and leaves supply none. The runtime still emits the ordinary second Tap
+first, so double-click selects the row and then toggles its branch.
+
+`ui_collections3_v2` holds Tree and TreeTable double-click behavior on Windows
+and Linux. This changes behavior on the reviewed Tree surfaces, so no duplicate
+screenshot is added.
