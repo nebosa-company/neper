@@ -1169,7 +1169,11 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
 // density binds Ctrl+1 through Ctrl+9 directly to the matching destination.
 // (D1266) `destination_bar_with` adds the rail's menu button and FAB and the
 // sidebar's header.
-// ponytail: no hiding on scroll or pill growth; tabs rather than links in a navigation landmark (the spec allows
+// (D1317) A newly active pill fills from its centre outwards over
+// `duration-medium-1` (the fill keyed `key + 1 + index + 1048576`); reduced
+// motion shows it at once.
+// ponytail: the fill eases in-out, not emphasized-decelerate; no hiding on
+// scroll; tabs rather than links in a navigation landmark (the spec allows
 // tabs where the content changes without a URL).
 // (D1266) A destination bar's extras: the rail's `menu` button (firing `menu`,
 // which opens the modal drawer) and its FAB (`fab`, the caller's 56 button), and
@@ -1275,11 +1279,17 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         var pill = control.sized_style(pill_width, 32.0)
         pill.radius = 16.0
         pill.background = paint.Brush { Solid: control.with_alpha(muted, control.state_opacity(t, state)) }
+        // (D1317) The active fill's share of the pill, eased from the centre.
+        var fill_goal: f32 = 0.0
+        if chosen { fill_goal = 1.0 }
+        let grown = control.eased_on(t, tab_key, tab_key + 1048576u64, fill_goal, false, t.tokens.durations.medium1)
         if chosen {
             icon_ink = style.color(t.tokens, .OnSecondaryContainer)
             label_ink = style.color(t.tokens, .OnSurface)
             pill.background = paint.Brush { Solid: style.layer(style.color(t.tokens, .SecondaryContainer), icon_ink, control.state_opacity(t, state)) }
         }
+        let growing = grown > 0.0 && grown < 1.0
+        if growing { pill.background = paint.Brush { Solid: control.with_alpha(muted, control.state_opacity(t, state)) } }
         var caption = control.text_options()
         caption.role = .LabelMedium
         caption.wrap = .None
@@ -1313,6 +1323,18 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
             held[0usize] = label_node
         }
         parts[0usize] = widget.aligned(0u64, .Center, .Center, pill, held[0usize..1usize])
+        if growing {
+            // (D1317) The fill as wide as its share, centred under the icon.
+            var fill = control.sized_style(pill_width * grown, 32.0)
+            fill.radius = 16.0
+            fill.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) }
+            let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+            if layers_error != ok { ret (zero, TooLarge) }
+            layers[2usize] = widget.box(tab_key + 1048576u64, fill, zero)
+            layers[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(pill_width, 32.0), layers[2usize..3usize])
+            layers[1usize] = parts[0usize]
+            parts[0usize] = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
+        }
         var column_style = style.defaults()
         column_style.width = style.Length { Px: cell }
         let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 4.0 }, column_style, parts[0usize..p])
