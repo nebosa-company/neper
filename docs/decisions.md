@@ -24578,3 +24578,18 @@ mode, the ordered variant and removal with Undo remain.
 
 `ui_collections5_v2` holds the masked and plain values, the empty row and its
 edit at index 2 on Windows and Linux; `ui_property` still passes.
+
+## D1260 — Add and visibility glyphs; secrets can be shown
+
+`control.GlyphKind` gains `Add` (a plus), `Visibility` (an almond eye round a
+pupil ring) and `VisibilityOff` (the eye struck through), appended so no
+existing kind moves. The key-value editor uses them. With `reveal` set, each
+secret value has a Show value icon button at its field's end (keyed
+`key + 1048576 + i`), showing `visibility-off` and reporting Checked while
+`shown` marks the value revealed, when the field is a plain text field again.
+The accessibility state set has no Pressed, so a toggle button reports
+Checked. The Add text button now leads with an 18 `add` glyph in `primary`.
+The 30-second reveal limit is left to the caller.
+
+`ui_collections5_v2` holds the toggle's press reporting the pair, the masked
+then plain value, the Checked toggle and the Add button on Windows and Linux.

@@ -51,6 +51,21 @@ fn on_pair_edit(ctx: *void, value: collection.PairEdit) -> err {
     ret ok
 }
 
+// (D1260) A tap on the middle of the element keyed `key`.
+fn tap_bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bool {
+    let (b, found) = bounds(h, runtime, key)
+    if !found { ret false }
+    ret testing.tap(h, b.x + b.width * 0.5, b.y + b.height * 0.5) == ok
+}
+
+// (D1260) The pair whose Show value was pressed.
+fn on_reveal(ctx: *void, value: usize) -> err {
+    let log = mem.cast[*Edits](ctx)
+    log.count += 1usize
+    log.index = value
+    ret ok
+}
+
 fn on_remove(ctx: *void, value: usize) -> err {
     let log = mem.cast[*Log](ctx)
     log.removes += 1usize
@@ -326,6 +341,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_plain_value || !has_secret_value || plain_value.secret || !secret_value.secret { os.exit(38i32) }
     if testing.by_key(&harness, 707u64).count != 1usize || testing.by_key(&harness, 709u64).count != 0usize || testing.by_label(&harness, "Add a name").count == 0usize { os.exit(39i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 707u64).element) != ok || testing.type_text(&harness, "X") != ok || edits.count == 0usize || edits.index != 2usize || edits.value { os.exit(40i32) }
+    // (D1260) With a reveal listener the secret value has its Show value toggle;
+    // pressed, it reports the pair, and once shown the value is plain and the
+    // toggle Checked.
+    var reveal_log: Edits = zero
+    var kv_shown: [2]bool = zero
+    var reveal_step = 0usize
+    while reveal_step < 2usize {
+        kv_shown[1usize] = reveal_step == 1usize
+        kv.shown = kv_shown[..]
+        kv.reveal = widget.Change[usize] { ctx: mem.cast[*void](&reveal_log), invoke: on_reveal }
+        f = mem.arena_from(storage)
+        let (shown_editor, shown_error) = collection.key_value_editor_of(&f, 700u64, &theme, "Secrets", pairs[0usize..2usize], widget.Change[collection.PairEdit] { ctx: mem.cast[*void](&edits), invoke: on_pair_edit }, zero, &adds[0usize], 400.0, kv)
+        let (shown_page, shown_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if shown_error != ok || shown_page_error != ok { os.exit(41i32) }
+        shown_page[0usize] = shown_editor
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(420.0, 700.0), shown_page[0usize..1usize]), time.Instant { nanos: 4100000000i64 + i64(reveal_step) }) != ok { os.exit(42i32) }
+        let (value_now, has_value_now) = widget.summary_at(&runtime, usize(testing.by_key(&harness, 705u64).element.slot))
+        let (eye_tree, eye_tree_error) = testing.semantics(&harness)
+        if eye_tree_error != ok || !has_value_now { os.exit(43i32) }
+        let (eye, has_eye) = find(eye_tree, .Button, "Show value")
+        if !has_eye || testing.by_key(&harness, 1049276u64).count != 0usize { os.exit(44i32) }
+        if reveal_step == 0usize && (!value_now.secret || eye.state.checked || !tap_bounds(&harness, &runtime, 1049277u64) || reveal_log.count != 1usize || reveal_log.index != 1usize) { os.exit(45i32) }
+        if reveal_step == 1usize && (value_now.secret || !eye.state.checked) { os.exit(46i32) }
+        reveal_step += 1usize
+    }
+    if testing.by_label(&harness, "Add variable").count == 0usize { os.exit(47i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui collections5 v2 ok\n")
     ret ok

@@ -2303,7 +2303,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32 }
 
 // An ellipse of four quarter arcs about a centre.
@@ -2478,6 +2478,28 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.55, y: y + h * 0.25 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.8, y: y + h * 0.5 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.55, y: y + h * 0.75 })
+    }
+    if g.kind == .Add {
+        // (D1260) A plus.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.5, y: y + h * 0.2 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.5, y: y + h * 0.8 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.2, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.8, y: y + h * 0.5 })
+    }
+    if g.kind == .Visibility || g.kind == .VisibilityOff {
+        // (D1260) An eye: an almond of two arcs round a pupil ring; struck
+        // through from top start to bottom end when off.
+        let ex = x + w * 0.5
+        let ey = y + h * 0.5
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.1, y: ey })
+        try geometry.cubic_to(&builder, geometry.Point { x: x + w * 0.3, y: y + h * 0.2 }, geometry.Point { x: x + w * 0.7, y: y + h * 0.2 }, geometry.Point { x: x + w * 0.9, y: ey })
+        try geometry.cubic_to(&builder, geometry.Point { x: x + w * 0.7, y: y + h * 0.8 }, geometry.Point { x: x + w * 0.3, y: y + h * 0.8 }, geometry.Point { x: x + w * 0.1, y: ey })
+        try geometry.close_path(&builder)
+        try oval(&builder, ex, ey, w * 0.12, h * 0.12)
+        if g.kind == .VisibilityOff {
+            try geometry.move_to(&builder, geometry.Point { x: x + w * 0.18, y: y + h * 0.18 })
+            try geometry.line_to(&builder, geometry.Point { x: x + w * 0.82, y: y + h * 0.82 })
+        }
     }
     if g.kind == .Refresh {
         // (D982) Three quarters of a ring from the east round to the north, the
