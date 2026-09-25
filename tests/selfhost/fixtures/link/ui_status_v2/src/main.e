@@ -246,6 +246,46 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Small: 4 tall.
     let (row, has_row) = bounds(&harness, &runtime, 451u64)
     if !has_row || !near(row.height, 4.0) || !near(row.width, 80.0) { os.exit(38i32) }
+    // (D1280) A continuous level from 20 to 60 of 100 eases: half way through
+    // its 300 ms its fill passes 60 of 200 but not 110; done, it passes 110.
+    let level_ink = style.color(&tokens, .Primary)
+    var level_step = 0usize
+    while level_step < 5usize {
+        var level_at = 20000000000i64
+        var level_value: f32 = 20.0
+        if level_step == 1usize { level_at = 20016000000i64 }
+        if level_step == 2usize {
+            level_at = 20100000000i64
+            level_value = 60.0
+        }
+        if level_step == 3usize {
+            level_at = 20250000000i64
+            level_value = 60.0
+        }
+        if level_step == 4usize {
+            level_at = 20500000000i64
+            level_value = 60.0
+        }
+        if testing.begin(&harness, time.Instant { nanos: level_at }) != ok { os.exit(41i32) }
+        f = mem.arena_from(frame_storage)
+        let (eased_level, eased_level_error) = control.level_of(&f, 960u64, &theme, "", level_value, 0.0, 100.0, 0.8, 0.95, 200.0, control.level_options())
+        let (level_page, level_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if eased_level_error != ok || level_page_error != ok { os.exit(42i32) }
+        level_page[0usize] = eased_level
+        var level_ground = control.sized_style(640.0, 660.0)
+        level_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.box(0u64, level_ground, level_page[0usize..1usize]), time.Instant { nanos: level_at }) != ok { os.exit(43i32) }
+        if level_step >= 3usize {
+            let (level_box, has_level_box) = bounds(&harness, &runtime, 960u64)
+            let (level_shot, level_shot_error) = testing.snapshot(&harness, a)
+            if !has_level_box || level_shot_error != ok { os.exit(44i32) }
+            let near_lit = is_color(level_shot, at(level_box.x + 60.0, level_box.y + 2.0), level_ink)
+            let far_lit = is_color(level_shot, at(level_box.x + 110.0, level_box.y + 2.0), level_ink)
+            if level_step == 3usize && (!near_lit || far_lit) { os.exit(45i32) }
+            if level_step == 4usize && !far_lit { os.exit(46i32) }
+        }
+        level_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(39i32) }
     try io.print("ui status v2 ok\n")
     ret ok

@@ -7270,11 +7270,14 @@ fn level(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32
 // or `success` as the share rises; bars, four 6 wide bars 6/10/14/18 tall. A
 // progress node named `label` with the value text, the status as its hint, and
 // invalid from `danger`.
-// ponytail: value changes jump (no easing); segmented scales always take the
-// strength colours (no neutral `primary` scale).
+// (D1280) A continuous fill eases to each new value (`eased_share`).
+// ponytail: segmented scales always take the strength colours (no neutral
+// `primary` scale).
 fn level_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, warn: f32, danger: f32, width: f32, options: LevelOptions) -> (widget.Node, err) {
     if high <= low { ret (zero, TooLarge) }
     let share = clamp_share((value - low) / (high - low))
+    // (D1280) A continuous level's fill eases to each new value.
+    let drawn = eased_share(t, key, share, false)
     var tone: style.ColorRole = .Primary
     if share >= warn { tone = .Warning }
     if share >= danger { tone = .Error }
@@ -7339,13 +7342,13 @@ fn level_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
         count += 1usize
     } else {
         let h: f32 = if_else(options.small, 4.0, 8.0)
-        var done = share * width
-        if share > 0.0 && done < 4.0 { done = 4.0 }
+        var done = drawn * width
+        if drawn > 0.0 && done < 4.0 { done = 4.0 }
         let (pieces, pieces_error) = mem.alloc[widget.Node](a, 2usize)
         if pieces_error != ok { ret (zero, TooLarge) }
         var n = 0usize
         var rest = width
-        if share > 0.0 {
+        if drawn > 0.0 {
             pieces[n] = bar_piece(key + 1u64, done, h, style.color(t.tokens, tone), h * 0.5)
             n += 1usize
             rest = width - done - 4.0
