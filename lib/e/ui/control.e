@@ -5012,10 +5012,12 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     // layer; the star 20 (24 on touch), filled `primary`, empty `on-surface-variant`;
     // while the pointer is over a star, the stars up to it preview in `primary` at 60%.
     // (D1166) RTL reverses only the physical cells; logical values and keys stay fixed.
+    // (D1171) Keyboard focus rings the row and layers its current star.
     let cell = t.tokens.metrics.control_height
     var size: f32 = 20.0
     if cell > t.tokens.sizes.control_sm { size = t.tokens.sizes.icon_md }
     let primary = style.color(t.tokens, .Primary)
+    let group_state = control_state(t, key, true, false)
     var hovered = count
     var h = 0usize
     while h < count {
@@ -5041,6 +5043,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
         cell_style.radius = cell * 0.5
         let inset = style.Length { Px: (cell - size) * 0.5 }
         cell_style.padding = style.EdgeLengths { left: inset, top: inset, right: inset, bottom: inset }
+        if group_state.focus_visible && u32(i) + 1u32 == value { cell_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), t.tokens.states.focus) } }
         if i == hovered { cell_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), t.tokens.states.hover) } }
         var slot = i
         if t.tokens.direction == .RightToLeft { slot = count - 1usize - i }
@@ -5082,7 +5085,9 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     var none_gesture: widget.GestureAction = zero
     let (focus, focus_error) = mem.alloc[widget.Node](a, 1usize)
     if focus_error != ok { ret (zero, TooLarge) }
-    focus[0usize] = widget.region(key, widget.Region { gesture: none_gesture, gestures: 0u8, enabled: true, focusable: true }, style.defaults(), row[0usize..1usize])
+    var focus_style = style.defaults()
+    focus_style.radius = cell * 0.5
+    focus[0usize] = widget.region(key, widget.Region { gesture: none_gesture, gestures: 0u8, enabled: true, focusable: true }, focus_style, row[0usize..1usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..shortcut_count], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focus[0usize..1usize])

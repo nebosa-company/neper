@@ -139,6 +139,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if hovered_error != ok { os.exit(19i32) }
     let cell = over(page, style.color(&tokens, .OnSurface), tokens.states.hover)
     if !is_color(hovered, at(fourth.x + 16.0, fourth.y + 16.0), over(cell, primary, 0.6)) { os.exit(20i32) }
+    // Keyboard focus rings the rating group and layers the current star.
+    if testing.hover(&harness, 250.0, 310.0) != ok || testing.tab(&harness, false) != ok { os.exit(22i32) }
+    let (focused, focused_error) = frame(&harness, a, &f, &theme, &stores[0usize], false)
+    if focused_error != ok { os.exit(23i32) }
+    if !is_color(focused, at(second.x + 4.0, second.y + 16.0), over(page, style.color(&tokens, .OnSurface), tokens.states.focus)) { os.exit(24i32) }
     // Recording: the outline 2px `primary`.
     let (live, live_error) = frame(&harness, a, &f, &theme, &stores[0usize], true)
     if live_error != ok { os.exit(21i32) }
