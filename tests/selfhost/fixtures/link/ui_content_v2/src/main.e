@@ -365,6 +365,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(rtl_shot, at(rtl_chevron.x + 10.0, rtl_chevron.y + 12.0), directional) || is_color(rtl_shot, at(rtl_chevron.x + 14.0, rtl_chevron.y + 12.0), directional) { os.exit(55i32) }
     if is_color(shot, at(i5.x + 8.0, i5.y + 10.0), page) || !is_color(shot, at(i5.x + 16.0, i5.y + 10.0), page) { os.exit(56i32) }
     if is_color(rtl_shot, at(rtl_back.x + 16.0, rtl_back.y + 10.0), page) || !is_color(rtl_shot, at(rtl_back.x + 8.0, rtl_back.y + 10.0), page) { os.exit(57i32) }
+    // (D1227) An avatar group: three 32 faces ringed 36 and stepping 28, then "+4",
+    // one Group named for the people; two faces with an open action are a Button.
+    var faces: [3]control.AvatarOptions = zero
+    faces[0usize] = control.avatar_options()
+    faces[0usize].initials = "AL"
+    faces[0usize].label = "Ada"
+    faces[1usize] = control.avatar_options()
+    faces[1usize].initials = "MK"
+    faces[1usize].label = "Mina"
+    faces[2usize] = control.avatar_options()
+    faces[2usize].initials = "JR"
+    faces[2usize].label = "Jon"
+    var no_textures: []const scene.TextureId = zero
+    var no_open: *const widget.Submit = zero
+    fr = mem.arena_from(frame_storage)
+    let (crowd, crowd_error) = control.avatar_group(&fr, 700u64, &theme, faces[..], no_textures, 7usize, 32.0, no_open)
+    if crowd_error != ok || testing.pump(&harness, crowd, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(91i32) }
+    let crowd_box = bounds(&harness, &runtime, 700u64)
+    let (crowd_tree, crowd_tree_error) = testing.semantics(&harness)
+    if crowd_tree_error != ok || crowd_box.width < 119.5 || crowd_box.width > 120.5 || crowd_box.height < 35.5 || crowd_box.height > 36.5 || testing.by_text(&harness, "+4").count == 0usize { os.exit(92i32) }
+    var named_crowd = false
+    var n = 0usize
+    while n < crowd_tree.nodes.len {
+        if crowd_tree.nodes[n].role == .Group && mem.eq[u8](crowd_tree.nodes[n].label, "Ada, Mina, Jon and 4 others") { named_crowd = true }
+        if crowd_tree.nodes[n].role == .Image { os.exit(93i32) }
+        n += 1usize
+    }
+    if !named_crowd { os.exit(94i32) }
+    fr = mem.arena_from(frame_storage)
+    let (pair, pair_error) = control.avatar_group(&fr, 710u64, &theme, faces[0usize..2usize], no_textures, 2usize, 32.0, &s.retry)
+    if pair_error != ok || testing.pump(&harness, pair, time.Instant { nanos: 2100000000i64 }) != ok { os.exit(95i32) }
+    let pair_box = bounds(&harness, &runtime, 710u64)
+    let (pair_tree, pair_tree_error) = testing.semantics(&harness)
+    if pair_tree_error != ok { os.exit(96i32) }
+    var named_pair = false
+    n = 0usize
+    while n < pair_tree.nodes.len {
+        if pair_tree.nodes[n].role == .Button && mem.eq[u8](pair_tree.nodes[n].label, "Ada and Mina") { named_pair = true }
+        n += 1usize
+    }
+    let retries_before = s.retries
+    if !named_pair || testing.tap(&harness, pair_box.x + 10.0, pair_box.y + 18.0) != ok || s.retries != retries_before + 1u32 { os.exit(97i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui content v2 ok\n")
     ret ok

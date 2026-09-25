@@ -24069,3 +24069,17 @@ Windows and Linux; its depth limit rises from 12 to 16 for the icon, badge and
 label face. A sweep of all 103 `ui_*` fixtures passes on both hosts. The
 overflow button, horizontal scrolling, dot badges and the sliding indicator stay
 open.
+
+## D1227 — Avatars group with an overflow count
+
+`control.avatar_group` draws the Avatar spec's group: up to three faces at one
+avatar size, overlapped by a quarter of that size and each ringed 2 in the first
+face's ground, then a neutral "+n" disc (`surface-container-highest` and
+`on-surface-variant`) when more people are counted. The faces are unnamed, so they
+leave the tree, and the group is one node named for the people: "Ada, Mina and
+Jon", or "Ada, Mina, Jon and 4 others". With an `open` action it is a Button that
+opens the full list; without one it is a Group.
+
+`ui_content_v2` holds the 120 x 36 stack of three faces and "+4", the single
+named Group with no face images, and the two-face Button that fires on Windows
+and Linux.

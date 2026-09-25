@@ -775,8 +775,121 @@ fn account_hash(id: str) -> u32 {
 // bottom end, ringed 2 in the ground: online a `success` disc, away a hollow
 // `warning` ring 2.5 wide, busy an `error` disc with an `on-error` bar, offline a
 // hollow `outline` ring 2 wide. The name carries the presence ("Ada, online").
+// (D1227) `avatar_group` overlaps several.
 // ponytail: 32's initials are label-large 14 (the ramp has no 13); no pressable
-// form, no group, no cross-fade from initials to the photo.
+// form of a single avatar, no cross-fade from initials to the photo.
+// (D1227, docs/ux/components/Avatar, group) Up to three of `faces` (pictured
+// by `textures` where given) overlapped by a quarter of their size, each ringed 2
+// in the first face's ground, then, when `total` counts more, a neutral "+n" disc
+// of the same size (`surface-container-highest`, `on-surface-variant`). One node
+// in the tree named for the people -- "Ada, Mina and Jon", "Ada, Mina, Jon and 4
+// others" -- a Button opening the full list when `open` is set, else a Group.
+fn avatar_group(a: *mem.Arena, key: widget.Key, t: *const Theme, faces: []const AvatarOptions, textures: []const scene.TextureId, total: usize, size: f32, open: *const widget.Submit) -> (widget.Node, err) {
+    let side = avatar_size(size)
+    var shown = faces.len
+    if shown > 3usize { shown = 3usize }
+    var everyone = total
+    if everyone < faces.len { everyone = faces.len }
+    let more = everyone - shown
+    var discs = shown
+    if more > 0usize { discs += 1usize }
+    if discs == 0usize { ret (zero, TooLarge) }
+    let ringed = side + 4.0
+    let step = ringed - side * 0.25
+    var ground = style.color(t.tokens, .Background)
+    if shown > 0usize { ground = style.color(t.tokens, faces[0usize].ground) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, discs)
+    if layers_error != ok { ret (zero, TooLarge) }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 2usize * discs)
+    if inner_error != ok { ret (zero, TooLarge) }
+    var none: scene.TextureId = zero
+    var i = 0usize
+    while i < discs {
+        if i < shown {
+            var face = faces[i]
+            face.label = ""
+            face.presence = .None
+            face.size = side
+            var texture = none
+            if i < textures.len { texture = textures[i] }
+            let (made, made_error) = avatar_of(a, 0u64, t, texture, face)
+            if made_error != ok { ret (zero, made_error) }
+            inner[2usize * i] = made
+        } else {
+            var caption = text_options()
+            caption.role = .LabelLarge
+            if side < 28.0 { caption.role = .LabelSmall }
+            caption.wrap = .None
+            let (digits, digits_error) = mem.alloc[u8](a, 24usize)
+            if digits_error != ok { ret (zero, TooLarge) }
+            digits[0usize] = 43u8
+            let n = 1usize + write_i64(digits[1usize..24usize], i64(more))
+            let (said, said_error) = colored_text(a, 0u64, digits[0usize..n], t, caption, style.color(t.tokens, .OnSurfaceVariant))
+            if said_error != ok { ret (zero, said_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = said
+            var neutral = sized_style(side, side)
+            neutral.radius = side * 0.5
+            neutral.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+            inner[2usize * i] = widget.aligned(0u64, .Center, .Center, neutral, held[0usize..1usize])
+        }
+        var ring = sized_style(ringed, ringed)
+        ring.radius = ringed * 0.5
+        ring.background = paint.Brush { Solid: ground }
+        inner[2usize * i + 1usize] = widget.aligned(0u64, .Center, .Center, ring, inner[2usize * i..2usize * i + 1usize])
+        layers[i] = widget.positioned(0u64, f32(i) * step, 0.0, style.defaults(), inner[2usize * i + 1usize..2usize * i + 2usize])
+        i += 1usize
+    }
+    let width = f32(discs - 1usize) * step + ringed
+    let group = widget.stack(0u64, sized_style(width, ringed), layers[0usize..discs])
+    // The name: the shown faces' labels, "and" before the last, or "and N others".
+    var spelled = 32usize
+    i = 0usize
+    while i < shown {
+        spelled += faces[i].label.len + 2usize
+        i += 1usize
+    }
+    let (named, named_error) = mem.alloc[u8](a, spelled)
+    if named_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    i = 0usize
+    while i < shown {
+        if i > 0usize && (i + 1usize < shown || more > 0usize) { at += copy_text(named[at..named.len], ", ") }
+        if i > 0usize && i + 1usize == shown && more == 0usize { at += copy_text(named[at..named.len], " and ") }
+        at += copy_text(named[at..named.len], faces[i].label)
+        i += 1usize
+    }
+    if more > 0usize {
+        at += copy_text(named[at..named.len], " and ")
+        at += write_i64(named[at..named.len], i64(more))
+        if more == 1usize { at += copy_text(named[at..named.len], " other") } else { at += copy_text(named[at..named.len], " others") }
+    }
+    let name = named[0usize..at]
+    if mem.address_of(open) != 0usize {
+        let state = control_state(t, key, true, false)
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = with_alpha(style.color(t.tokens, .OnSurface), state_opacity(t, state))
+        look.border_width = 0.0
+        look.radius = ringed * 0.5
+        look.opacity = 1.0
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_height = ringed
+        look.min_width = width
+        let (pressed, pressed_error) = pressable_states(a, key, t, 3u8, name, look, true, false, 0u32, 0u32, 0u64, open, group)
+        ret (pressed, pressed_error)
+    }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = group
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = name
+    ret (widget.semantics(key, sem, style.defaults(), held[0usize..1usize]), ok)
+}
+
 fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, options: AvatarOptions) -> (widget.Node, err) {
     let size = avatar_size(options.size)
     let pictured = texture.slot != 0u32 || texture.generation != 0u32
