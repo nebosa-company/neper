@@ -1886,7 +1886,9 @@ fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, ce
 // inset where the viewport clips it.
 // (D1246) `check`, when given, is the row's selection cell, first.
 // (D1312) A table's row actions come from `TableOptions.row_actions`.
-// ponytail: no disclosure and detail row, disabled, dragged or loading looks; the caller's cells keep their
+// (D1313) Its disclosure and detail rows from `TableOptions.expandable`.
+// ponytail: an open row's detail is not counted by the virtual range (it scrolls
+// as part of its row); no disabled, dragged or loading looks; the caller's cells keep their
 // own colours when the row is selected.
 // (D1246) `has_check` puts `check` (a selection cell) first.
 fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool) -> (widget.Node, err) {
@@ -1995,7 +1997,18 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // sideways, header and body together.
 // (D1312) `row_actions` are the per-row icon buttons (at most three) shown on a
 // hovered or focused row, reported through `act`.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk] }
+// (D1313) `expandable` leads each row's first cell with a disclosure reporting the
+// row's key through `expand`; a row in `expanded` is followed by its `detail`.
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail }
+
+// (D1313) A table's detail rows: `build` makes row `index`'s detail.
+type TableDetail = struct { ctx: *void, build: fn(*void, *mem.Arena, usize, *widget.Node) -> err }
+type TableExpandPress = struct { key: widget.Key, expand: widget.Change[widget.Key] }
+
+fn table_expand_fire(ctx: *void) -> err {
+    let p = mem.cast[*TableExpandPress](ctx)
+    ret widget.fire_change[widget.Key](p.expand, p.key)
+}
 
 // (D1312) A table row action: its name and glyph; and what a press on one asks:
 // the row (by key and index) and which action.
@@ -3083,6 +3096,9 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     if toggle_presses_error != ok { ret (zero, TooLarge) }
     let (clicks, clicks_error) = mem.alloc[TableClick](a, count)
     if clicks_error != ok { ret (zero, TooLarge) }
+    let (expand_presses, expand_presses_error) = mem.alloc[TableExpandPress](a, count)
+    let (expand_submits, expand_submits_error) = mem.alloc[widget.Submit](a, count)
+    if expand_presses_error != ok || expand_submits_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < count {
         let index = first + i
@@ -3097,6 +3113,30 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             if built_error != ok { ret (zero, built_error) }
             cells[c] = built
             c += 1usize
+        }
+        // (D1313, docs/ux/components/TableRow, expandable) The first cell leads with
+        // a 24 disclosure (keyed `row_key ^ fnv1a64("row-disclose")`): an 18
+        // `chevron-right` in `on-surface-variant`, down while the row is open.
+        if selection.expandable && columns.len > 0usize {
+            let open = is_selected(selection.expanded, row_key)
+            expand_presses[i] = TableExpandPress { key: row_key, expand: selection.expand }
+            expand_submits[i] = widget.Submit { ctx: ctx_of(&expand_presses[i]), invoke: table_expand_fire }
+            var turn: control.GlyphKind = .ChevronRight
+            if t.tokens.direction == .RightToLeft { turn = .ChevronLeft }
+            var twisty_states = 0u32
+            var twisty_actions = accessibility.ACTION_EXPAND
+            if open {
+                turn = .ChevronDown
+                twisty_states = accessibility.STATE_EXPANDED
+                twisty_actions = accessibility.ACTION_COLLAPSE
+            }
+            let (twisty, twisty_error) = control.glyph_action(a, row_key ^ hash.fnv1a64("row-disclose"), t, turn, "Details", &expand_submits[i], 24.0, 18.0, style.color(t.tokens, .OnSurfaceVariant), true, twisty_states, twisty_actions, row_key ^ hash.fnv1a64("row-detail"))
+            if twisty_error != ok { ret (zero, twisty_error) }
+            let (led, led_error) = mem.alloc[widget.Node](a, 2usize)
+            if led_error != ok { ret (zero, TooLarge) }
+            led[0usize] = twisty
+            led[1usize] = cells[0usize]
+            cells[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), led[0usize..2usize])
         }
         // (D1312) Row actions stand in the last cell while the row is hovered or focused.
         if columns.len > 0usize {
@@ -3134,6 +3174,23 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     }
     i = 0usize
     while i < count {
+        // (D1313) An open row's detail follows it: full width on
+        // `surface-container-low`, 12 over and under, 16 at the end, 68 in.
+        if selection.expandable && mem.address_of(selection.detail.ctx) != 0usize && is_selected(selection.expanded, row_keys[i]) {
+            var built: widget.Node = zero
+            let built_error = selection.detail.build(selection.detail.ctx, a, first + i, &built)
+            if built_error != ok { ret (zero, built_error) }
+            let (inner, inner_error) = mem.alloc[widget.Node](a, 3usize)
+            if inner_error != ok { ret (zero, TooLarge) }
+            inner[2usize] = built
+            var detail_style = style.defaults()
+            detail_style.width = style.Length { Percent: 100.0 }
+            detail_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+            detail_style.padding = style.EdgeLengths { left: style.Length { Px: 68.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 12.0 } }
+            inner[0usize] = rows[i]
+            inner[1usize] = widget.box(row_keys[i] ^ hash.fnv1a64("row-detail"), detail_style, inner[2usize..3usize])
+            rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), inner[0usize..2usize])
+        }
         if first + i + 1usize < total {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (zero, TooLarge) }

@@ -25336,3 +25336,21 @@ are still to come.
 shows them, and Download reports that row and action 1. This passes on
 Windows and Linux, and `ui_tabular` and `ui_collections3_v2` still pass on
 both.
+
+## D1313 — Table rows expand into a detail row
+
+`TableOptions` gains `expandable`, `expanded`, `expand` and `detail`
+(`TableDetail`, a builder for row `index`'s detail), following the
+TableRow spec's expandable form. Each row's first cell leads with a 24
+disclosure named "Details", keyed `row_key ^ fnv1a64("row-disclose")`:
+an 18 `chevron-right` in `on-surface-variant` (mirrored in RTL), down and
+expanded while the row is in `expanded`. A press on it reports the row's
+key. An open row is followed by its detail, keyed `row_key ^
+fnv1a64("row-detail")`, full width on `surface-container-low`, 12 over and
+under, 16 at the end and 68 in. The virtual range does not count a detail;
+it scrolls as part of its row.
+
+`ui_collections2_v2` opens Beta: its detail stands under its row and no
+other row has one. Exactly one of the rows' disclosures reads expanded, and
+a press on Gamma's reports Gamma. This passes on Windows and Linux, and
+`ui_tabular` still passes on both.

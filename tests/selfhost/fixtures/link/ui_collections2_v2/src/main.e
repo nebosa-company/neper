@@ -43,6 +43,19 @@ fn on_row_action(ctx: *void, value: collection.TableActionAsk) -> err {
     ret ok
 }
 
+// (D1313) A disclosure's press, kept as a row ask; and a detail row's content.
+fn on_expand(ctx: *void, value: widget.Key) -> err {
+    let log = mem.cast[*ActLog](ctx)
+    log.count += 1usize
+    log.ask.row = value
+    ret ok
+}
+
+fn detail_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err {
+    *out = widget.box(0u64, control.sized_style(40.0, 20.0), zero)
+    ret ok
+}
+
 fn on_sort(ctx: *void, value: usize) -> err {
     let log = mem.cast[*Log](ctx)
     log.sorts += 1usize
@@ -443,6 +456,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         act_step += 1usize
     }
+    // (D1313) Expandable rows: each first cell leads with its disclosure; a press
+    // reports the row; the open row is followed by its detail on
+    // `surface-container-low`, and its disclosure says expanded.
+    var opened_row: [1]widget.Key = zero
+    opened_row[0usize] = 1002u64
+    var expand_log: ActLog = zero
+    var open_options: collection.TableOptions = zero
+    open_options.expandable = true
+    open_options.expanded = opened_row[..]
+    open_options.expand = widget.Change[widget.Key] { ctx: mem.cast[*void](&expand_log), invoke: on_expand }
+    open_options.detail = collection.TableDetail { ctx: mem.cast[*void](&expand_log), build: detail_of }
+    f = mem.arena_from(frame_storage)
+    let open_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+    let (opening, opening_error) = collection.table_with(&f, 8u64, &theme, "Files", columns[0usize..3usize], open_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, open_options)
+    let (opening_page, opening_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if opening_error != ok || opening_page_error != ok { os.exit(92i32) }
+    opening_page[0usize] = opening
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), opening_page[0usize..1usize]), time.Instant { nanos: 5200000000i64 }) != ok { os.exit(93i32) }
+    let (detail_box, has_detail_box) = bounds(&harness, &runtime, 1002u64 ^ hash.fnv1a64("row-detail"))
+    let (open_row, has_open_row) = bounds(&harness, &runtime, 1002u64)
+    if !has_detail_box || !has_open_row || !(detail_box.y >= open_row.y + open_row.height - 0.5) || testing.by_key(&harness, 1001u64 ^ hash.fnv1a64("row-detail")).count != 0usize { os.exit(94i32) }
+    let (open_tree, open_tree_error) = testing.semantics(&harness)
+    if open_tree_error != ok { os.exit(95i32) }
+    var expanded_twisties = 0usize
+    var twisty_count = 0usize
+    var tn = 0usize
+    while tn < open_tree.nodes.len {
+        if same(open_tree.nodes[tn].label, "Details") {
+            twisty_count += 1usize
+            if open_tree.nodes[tn].state.expanded { expanded_twisties += 1usize }
+        }
+        tn += 1usize
+    }
+    if twisty_count < 3usize || expanded_twisties != 1usize { os.exit(96i32) }
+    let (gamma_twisty, has_gamma_twisty) = bounds(&harness, &runtime, 1003u64 ^ hash.fnv1a64("row-disclose"))
+    if !has_gamma_twisty || testing.tap(&harness, gamma_twisty.x + 12.0, gamma_twisty.y + 12.0) != ok || expand_log.count != 1usize || expand_log.ask.row != 1003u64 { os.exit(97i32) }
     // (D1248) With no rows the header stays over the loading state (a busy
     // "Loading" group under an indeterminate progress bar) or the empty state.
     var state_step = 0usize
