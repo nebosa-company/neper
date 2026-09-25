@@ -4991,6 +4991,55 @@ fn clipboard_paste(widget_runtime: *Runtime) -> err {
     ret edit_paste(s, editor)
 }
 
+// (D1228) The same commands on the editor keyed `key` rather than on the focus,
+// for a context menu that holds the focus while it is open; Select all selects
+// the whole value.
+type EditorCommand = enum u8 { Cut, Copy, Paste, SelectAll }
+
+fn editor_element(s: *State, key: Key) -> (usize, bool) {
+    let (found, count) = find_by_key(s, key)
+    if count != 1usize { ret (0usize, false) }
+    let index = usize(found.slot)
+    if !s.elements[index].live || s.elements[index].kind != EDIT_TAG { ret (0usize, false) }
+    ret (index, true)
+}
+
+fn editor_commands(widget_runtime: *Runtime, key: Key) -> ClipboardCommands {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret zero }
+    let (editor, has_editor) = editor_element(s, key)
+    if !has_editor { ret zero }
+    let e = &s.elements[editor]
+    let (lo, hi) = selection_of(e)
+    let selected = hi > lo && !e.secret
+    ret ClipboardCommands { copy: selected, cut: selected && !e.read_only, paste: !e.read_only }
+}
+
+fn editor_command(widget_runtime: *Runtime, key: Key, command: EditorCommand) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (editor, has_editor) = editor_element(s, key)
+    if !has_editor { ret InvalidTree }
+    let e = &s.elements[editor]
+    if command == .SelectAll {
+        e.anchor = 0usize
+        e.caret = e.edit_len
+        e.invalid = true
+        ret ok
+    }
+    if command == .Copy {
+        edit_copy(s, e)
+        ret ok
+    }
+    if e.read_only { ret InvalidTree }
+    if command == .Cut {
+        edit_copy(s, e)
+        let (lo, hi) = selection_of(e)
+        ret edit_replace(s, editor, lo, hi, "", true)
+    }
+    ret edit_paste(s, editor)
+}
+
 fn clipboard_set(widget_runtime: *Runtime, value: str) -> err {
     let (s, state_error) = state_of(widget_runtime)
     if state_error != ok { ret state_error }

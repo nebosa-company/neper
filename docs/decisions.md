@@ -24083,3 +24083,20 @@ opens the full list; without one it is a Group.
 `ui_content_v2` holds the 120 x 36 stack of three faces and "+4", the single
 named Group with no face images, and the two-face Button that fires on Windows
 and Linux.
+
+## D1228 — Text fields get a context menu
+
+The runtime's clipboard commands (D844) act on the focused editor, but an open
+context menu holds the focus. `widget.editor_commands` and `widget.editor_command`
+act on the editor named by its key instead: Cut, Copy, Paste, and Select all,
+which selects the whole value. `overlay.editor_context_menu` builds the menu from
+them, with the four commands and their Ctrl shortcuts, each disabled when it
+cannot act now (no selection, read-only, secret). A command acts on the editor,
+and the menu closes through its dismiss as every menu command does (D998). Callers
+wrap the field in the existing `context_target`, so D1195's secondary press, the
+Menu key and Shift+F10 open it, as does a touch hold.
+
+`ui_overlays_v2` opens the menu with a secondary press on a field, checks Cut
+disabled with no selection, runs Select all, reopens it with Cut enabled, runs
+Copy, and reads "hello" from the clipboard, on Windows and Linux. All 103 `ui_*`
+fixtures pass on both hosts.
