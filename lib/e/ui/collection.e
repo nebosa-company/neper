@@ -2576,7 +2576,7 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // Home and End move among visible rows; Right expands or enters the first child,
 // Left collapses or returns to the parent, and `*` expands siblings.
 // ponytail: at most 512 visible rows, not virtualised; no icon or meta slot,
-// twisty rotation, typeahead, rename,
+// twisty rotation, rename,
 // drag and drop, loading or disabled rows.
 fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key) -> ([]widget.Node, err) {
     var none: []widget.Node = zero

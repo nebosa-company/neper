@@ -3437,12 +3437,30 @@ fn menu_hover_tick(s: *State) -> err {
     ret fired
 }
 
-fn semantic_label_starts(owner: *const Element, prefix: []const u32) -> bool {
+fn semantic_label_element(s: *State, index: usize) -> (usize, bool) {
+    let e = &s.elements[index]
+    if e.text_len > 0usize { ret (index, true) }
+    var child = e.first_child
+    var has_child = e.has_child
+    while has_child {
+        let (found, has_found) = semantic_label_element(s, usize(child))
+        if has_found { ret (found, true) }
+        let next = &s.elements[usize(child)]
+        has_child = next.has_sibling
+        child = next.next_sibling
+    }
+    ret (0usize, false)
+}
+
+fn semantic_label_starts(s: *State, owner: usize, prefix: []const u32) -> bool {
+    let (label_at, has_label) = semantic_label_element(s, owner)
+    if !has_label { ret false }
+    let label = &s.elements[label_at]
     var at = 0usize
     var i = 0usize
     while i < prefix.len {
-        if at >= owner.text_len { ret false }
-        let (scalar, width) = unicode.read_utf8(owner.text[0usize..owner.text_len], at)
+        if at >= label.text_len { ret false }
+        let (scalar, width) = unicode.read_utf8(label.text[0usize..label.text_len], at)
         if unicode.to_lower_simple(scalar) != prefix[i] { ret false }
         at += width
         i += 1usize
@@ -3455,7 +3473,7 @@ fn focus_menu_prefix(s: *State, order: []const u32, count: usize, current: usize
     while step <= count {
         let candidate = usize(order[(current + step) % count])
         let (owner_at, has_owner) = menu_item_owner(s, candidate)
-        if has_owner && semantic_label_starts(&s.elements[owner_at], prefix) {
+        if has_owner && semantic_label_starts(s, owner_at, prefix) {
             s.focus = u32(candidate)
             ret true
         }
@@ -3517,7 +3535,7 @@ fn collection_item_owner(s: *State, index: usize) -> (usize, u8, bool) {
     var at = index
     while true {
         let e = &s.elements[at]
-        if e.has_semantics && (e.sem.role == 11u8 || e.sem.role == 14u8) { ret (at, e.sem.role, true) }
+        if e.has_semantics && (e.sem.role == 11u8 || e.sem.role == 14u8 || e.sem.role == 29u8) { ret (at, e.sem.role, true) }
         if !e.has_parent { ret (0usize, 0u8, false) }
         at = usize(e.parent)
     }
@@ -3529,6 +3547,7 @@ fn collection_root(s: *State, owner: usize, item_role: u8) -> (usize, u8, bool) 
         let e = &s.elements[at]
         if item_role == 11u8 && e.has_semantics && e.sem.role == 10u8 { ret (at, 2u8, true) }
         if item_role == 14u8 && e.has_semantics && e.sem.role == 30u8 { ret (at, 3u8, true) }
+        if item_role == 29u8 && e.has_semantics && e.sem.role == 28u8 { ret (at, 4u8, true) }
         if !e.has_parent { ret (0usize, 0u8, false) }
         at = usize(e.parent)
     }
@@ -3541,7 +3560,7 @@ fn focus_collection_prefix(s: *State, order: []const u32, count: usize, current:
         let (owner, role, has_owner) = collection_item_owner(s, candidate)
         if has_owner && role == item_role {
             let (candidate_root, _, has_root) = collection_root(s, owner, role)
-            if has_root && candidate_root == root && semantic_label_starts(&s.elements[owner], prefix) {
+            if has_root && candidate_root == root && semantic_label_starts(s, owner, prefix) {
                 s.focus = u32(candidate)
                 ret true
             }
@@ -3551,7 +3570,7 @@ fn focus_collection_prefix(s: *State, order: []const u32, count: usize, current:
     ret false
 }
 
-// Buffered typeahead for built List and GridView items. ponytail: only the first
+// Buffered typeahead for built List, GridView and Tree items. ponytail: only the first
 // 256 built focusables participate; virtual sources need a source-level lookup.
 fn collection_typeahead_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     if !s.has_focus || k.modifiers.shift || k.modifiers.control || k.modifiers.alt || k.modifiers.meta { ret false }
