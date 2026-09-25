@@ -324,6 +324,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (busy_finish, has_busy_finish) = find(finishing_tree, .Button, "Create project")
     if !has_busy_finish || !busy_finish.state.busy || focusable(&harness, &runtime, 6207u64) { os.exit(48i32) }
     if !tap_key(&harness, &runtime, 6204u64) || testing.press_key(&harness, 13u32, zero) != ok || testing.press_key(&harness, 66u32, alt) != ok || s.counters[2usize].count != 2usize || s.counters[0usize].count != 2usize { os.exit(49i32) }
+    // (D1233) A secondary press on the notes tab opens its menu: Close to the
+    // right has nothing to close; Close others closes lower.e alone (main.e is
+    // pinned) and shuts the menu.
+    f = mem.arena_from(frame_storage)
+    let (tabs_rest, tabs_rest_error) = build(&f, &theme, s)
+    if tabs_rest_error != ok || testing.pump(&harness, tabs_rest, time.Instant { nanos: 1300000000i64 }) != ok { os.exit(56i32) }
+    let (notes_tab, has_notes_tab) = bounds(&harness, &runtime, 5005u64)
+    if !has_notes_tab { os.exit(57i32) }
+    var tab_press = testing.pointer_at(notes_tab.x + 10.0, notes_tab.y + 10.0)
+    tab_press.buttons = 2u32
+    tab_press.changed = .Secondary
+    if testing.send(&harness, input.Event { PointerDown: tab_press }) != ok { os.exit(58i32) }
+    tab_press.buttons = 0u32
+    if testing.send(&harness, input.Event { PointerUp: tab_press }) != ok { os.exit(59i32) }
+    f = mem.arena_from(frame_storage)
+    let (tabs_menu, tabs_menu_error) = build(&f, &theme, s)
+    if tabs_menu_error != ok || testing.pump(&harness, tabs_menu, time.Instant { nanos: 1310000000i64 }) != ok { os.exit(60i32) }
+    let (tab_tree, tab_tree_error) = testing.semantics(&harness)
+    if tab_tree_error != ok { os.exit(61i32) }
+    let (others, has_others) = find(tab_tree, .MenuItem, "Close others")
+    let (rightward, has_rightward) = find(tab_tree, .MenuItem, "Close to the right")
+    let (saved, has_saved) = find(tab_tree, .MenuItem, "Close saved")
+    if !has_others || !has_rightward || !has_saved || others.state.disabled || !rightward.state.disabled || saved.state.disabled { os.exit(62i32) }
+    let closes_before = s.closes.count
+    if testing.tap(&harness, others.bounds.x + 20.0, others.bounds.y + others.bounds.height * 0.5) != ok || s.closes.count != closes_before + 1usize || s.closes.last != 1usize { os.exit(63i32) }
+    f = mem.arena_from(frame_storage)
+    let (tabs_shut, tabs_shut_error) = build(&f, &theme, s)
+    if tabs_shut_error != ok || testing.pump(&harness, tabs_shut, time.Instant { nanos: 1320000000i64 }) != ok || testing.by_role(&harness, .Menu).count != 0usize { os.exit(64i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(32i32) }
     try io.print("ui navigation5 v2 ok\n")
     ret ok
