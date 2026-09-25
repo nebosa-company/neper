@@ -478,6 +478,58 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (rtl_iconic_box, has_rtl_iconic_box) = bounds(&harness, &runtime, 900u64)
     let (rtl_iconic_body, has_rtl_iconic_body) = bounds(&harness, &runtime, 950u64)
     if !has_rtl_iconic_box || !has_rtl_iconic_body || near(rtl_iconic_body.x - rtl_iconic_box.x, 56.0) { os.exit(74i32) }
+    // (D1282) Opening turns the chevron: mid-turn its square is drawn unlike both
+    // the shut and the open chevron.
+    var turn_sums: [3]u64 = zero
+    var turn_step = 0usize
+    while turn_step < 5usize {
+        var turn_at = 30000000000i64
+        var turn_open = false
+        if turn_step == 1usize { turn_at = 30016000000i64 }
+        if turn_step == 2usize {
+            turn_at = 30100000000i64
+            turn_open = true
+        }
+        if turn_step == 3usize {
+            turn_at = 30175000000i64
+            turn_open = true
+        }
+        if turn_step == 4usize {
+            turn_at = 30400000000i64
+            turn_open = true
+        }
+        if testing.begin(&harness, time.Instant { nanos: turn_at }) != ok { os.exit(75i32) }
+        f = mem.arena_from(frame_storage)
+        let (turning, turning_error) = control.disclosure(&f, 1400u64, &theme, "Turning", turn_open, &stores[0usize].actions[1usize], widget.box(0u64, control.sized_style(20.0, 10.0), zero))
+        let (turn_page, turn_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if turning_error != ok || turn_page_error != ok { os.exit(76i32) }
+        turn_page[0usize] = turning
+        var turn_ground = control.sized_style(300.0, 1250.0)
+        turn_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.box(0u64, turn_ground, turn_page[0usize..1usize]), time.Instant { nanos: turn_at }) != ok { os.exit(77i32) }
+        if turn_step == 1usize || turn_step == 3usize || turn_step == 4usize {
+            let (turn_head, has_turn_head) = bounds(&harness, &runtime, 1400u64)
+            let (turn_shot, turn_shot_error) = testing.snapshot(&harness, a)
+            if !has_turn_head || turn_shot_error != ok { os.exit(78i32) }
+            var sum = 0u64
+            var yy = usize(turn_head.y)
+            while yy < usize(turn_head.y + 40.0) {
+                var xx = usize(turn_head.x)
+                while xx < usize(turn_head.x + 40.0) {
+                    let px = (yy * 300usize + xx) * 4usize
+                    sum += u64(turn_shot.pixels[px]) * u64(xx + 1usize) + u64(turn_shot.pixels[px + 1usize]) * u64(yy + 1usize)
+                    xx += 1usize
+                }
+                yy += 1usize
+            }
+            var slot = 0usize
+            if turn_step == 3usize { slot = 1usize }
+            if turn_step == 4usize { slot = 2usize }
+            turn_sums[slot] = sum
+        }
+        turn_step += 1usize
+    }
+    if turn_sums[1usize] == turn_sums[0usize] || turn_sums[1usize] == turn_sums[2usize] || turn_sums[0usize] == turn_sums[2usize] { os.exit(79i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(33i32) }
     try io.print("ui containers v2 ok\n")
     ret ok

@@ -3202,6 +3202,11 @@ type EaseCell = struct { from: f32, to: f32, since: i64, shown: f32, set: bool }
 // or before the element exists, the target itself. `forward` never eases
 // backwards: a lower target jumps there (work restarted).
 fn eased_share(t: *const Theme, key: widget.Key, goal: f32, forward: bool) -> f32 {
+    ret eased_over(t, key, goal, forward, t.tokens.durations.medium2)
+}
+
+// (D1282) The same over `millis`.
+fn eased_over(t: *const Theme, key: widget.Key, goal: f32, forward: bool, millis: u32) -> f32 {
     if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret goal }
     let (s, state_error) = widget.state_of(t.runtime)
     if state_error != ok { ret goal }
@@ -3230,7 +3235,7 @@ fn eased_share(t: *const Theme, key: widget.Key, goal: f32, forward: bool) -> f3
             ret goal
         }
     }
-    let span = i64(t.tokens.durations.medium2) * 1000000i64
+    let span = i64(millis) * 1000000i64
     var progress: f32 = 1.0
     if span > 0i64 && now >= cell.since { progress = f32(now - cell.since) / f32(span) }
     if progress >= 1.0 {
@@ -4585,8 +4590,8 @@ fn toggle_keys(a: *mem.Arena, expanded: bool, rtl: bool, toggle: *const widget.S
 // 4 below, indented 40, 8 above what follows. Right opens and Left closes a
 // focused header. Disabled, the header's content is `on-surface` 38%, no layer,
 // not focusable.
-// ponytail: the chevron swaps rather than turning and the content does not
-// animate; add the motion with the animation module's tweens.
+// (D1282) The chevron turns (eased) rather than swapping.
+// ponytail: the content does not grow or shrink as it opens and closes.
 fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, options: DisclosureOptions, content: widget.Node) -> (widget.Node, err) {
     let state = control_state(t, key, options.enabled, false)
     var h: f32 = t.tokens.sizes.control_md
@@ -4609,13 +4614,29 @@ fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ex
     look.min_height = h
     look.min_width = h
     var kind: GlyphKind = .ChevronRight
-    if t.tokens.direction == .RightToLeft { kind = .ChevronLeft }
-    if expanded { kind = .ChevronDown }
+    let rtl = t.tokens.direction == .RightToLeft
+    if rtl { kind = .ChevronLeft }
+    // (D1282) The chevron turns a quarter to point down while open, easing over
+    // `duration-short-3`; with reduced motion it swaps to `chevron-down`.
+    if expanded && t.tokens.motion.reduced { kind = .ChevronDown }
     let (head, head_error) = mem.alloc[widget.Node](a, 3usize)
     if head_error != ok { ret (zero, TooLarge) }
     let (chevron, chevron_error) = icon_square(a, muted, kind, t.tokens.sizes.icon_md)
     if chevron_error != ok { ret (zero, chevron_error) }
     head[0usize] = chevron
+    if !t.tokens.motion.reduced {
+        var open_share: f32 = 0.0
+        if expanded { open_share = 1.0 }
+        let turned = eased_over(t, key, open_share, false, t.tokens.durations.short3)
+        if turned != 0.0 {
+            var angle: f32 = 1.5707963 * turned
+            if rtl { angle = 0.0 - angle }
+            let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
+            if turning_error != ok { ret (zero, TooLarge) }
+            turning[0usize] = chevron
+            head[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
+        }
+    }
     var caption = text_options()
     caption.role = .TitleSmall
     caption.wrap = .None
