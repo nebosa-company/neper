@@ -22311,3 +22311,18 @@ the switcher can close its active result. `ui_overlays4_v2` holds filtering,
 ordering, source mapping, geometry and Combobox/Listbox/Option semantics on
 Windows and Linux; `ui_edit` holds ordinary Delete on both. `switcher-filter.png`
 is the Segoe UI visual check.
+
+## D1068 — Hold-to-switch keeps host events in caller-owned state
+
+`SwitcherHold` stores only the chord start and whether the modifier is held.
+`switcher_hold_event` consumes the host's Ctrl+Tab events, selects MRU index one
+on the first chord, wraps repeated Tab and Shift+Tab, commits the current source
+on modifier release, and cancels on Escape or blur. A quick press and release
+therefore commits without ever drawing the overlay.
+
+`window_switcher_grid_held` reuses the closable grid and asks for animation
+frames until 200ms has elapsed, then opens the existing modal. The document
+model, current filtered index and callbacks remain caller-owned.
+`ui_overlays4_v2` holds the delay, animation request, stepping, release, quick
+path and cancellation on Windows and Linux; the already-reviewed grid is the
+visual surface, so this behavioral slice adds no duplicate screenshot.
