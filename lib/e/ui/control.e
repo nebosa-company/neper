@@ -8625,7 +8625,110 @@ fn font_panel(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, famil
 // whether it is unread, the day group it belongs to (a header shows where the
 // group changes; empty for none), an optional action (an empty label for none)
 // and what dismisses it.
-type NotificationItem = struct { title: str, message: str, time: str, severity: Severity, unread: bool, group: str, action_label: str, action: widget.Submit, dismiss: widget.Submit }
+// (D1303) `source` names what a run of notices from one source are, counted
+// ("builds failed" reads "4 builds failed" folded).
+type NotificationItem = struct { title: str, message: str, time: str, severity: Severity, unread: bool, group: str, action_label: str, action: widget.Submit, dismiss: widget.Submit, source: str }
+
+// (D1303) A folded run's row, kept across frames on the row: whether it is open.
+type NotificationFold = struct { open: bool }
+type NotificationFoldAsk = struct { runtime: *widget.Runtime, cell: *NotificationFold, has_cell: bool }
+
+fn notification_fold_fire(ctx: *void) -> err {
+    let ask = mem.cast[*NotificationFoldAsk](ctx)
+    if ask.has_cell { ask.cell.open = !ask.cell.open }
+    if mem.address_of(ask.runtime) != 0usize { widget.request_animation_frame(ask.runtime) }
+    ret ok
+}
+
+// (D1303) The row a run of `count` notices from one source folds into: the first
+// one's well and time under "<count> <source>" in `title-small`, and a chevron,
+// down while shut and up while open; a list item that expands, keyed `key`,
+// pressing to open or shut. Answers whether the run is open.
+fn notification_fold_row(a: *mem.Arena, key: widget.Key, t: *const Theme, first: *const NotificationItem, count: usize, width: f32) -> (widget.Node, bool, err) {
+    let (asks, asks_error) = mem.alloc[NotificationFoldAsk](a, 1usize)
+    if asks_error != ok { ret (zero, false, TooLarge) }
+    var no_cell: *NotificationFold = zero
+    asks[0usize] = NotificationFoldAsk { runtime: t.runtime, cell: no_cell, has_cell: false }
+    if mem.address_of(t.runtime) != 0usize {
+        let (s, state_error) = widget.state_of(t.runtime)
+        if state_error == ok {
+            let (id, found) = widget.find_by_key(s, key)
+            if found == 1usize {
+                var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+                let (kept, _, kept_error) = widget.state[NotificationFold](&build, key, NotificationFold { open: false })
+                if kept_error == ok {
+                    asks[0usize].cell = kept
+                    asks[0usize].has_cell = true
+                }
+            }
+        }
+    }
+    let open = asks[0usize].has_cell && asks[0usize].cell.open
+    let (press, press_error) = mem.alloc[widget.Submit](a, 1usize)
+    if press_error != ok { ret (zero, false, TooLarge) }
+    press[0usize] = widget.Submit { ctx: mem.cast[*void](&asks[0usize]), invoke: notification_fold_fire }
+    let (said, said_error) = mem.alloc[u8](a, 24usize + first.source.len)
+    if said_error != ok { ret (zero, false, TooLarge) }
+    let digits = write_i64(said, i64(count))
+    said[digits] = 32u8
+    let tail = copy_text(said[digits + 1usize..said.len], first.source)
+    let title = said[0usize..digits + 1usize + tail]
+    let (well, well_error) = severity_well(a, t, first.severity, 40.0)
+    if well_error != ok { ret (zero, false, well_error) }
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 2usize)
+    if lines_error != ok { ret (zero, false, TooLarge) }
+    var line_count = 0usize
+    var title_look = text_options()
+    title_look.role = .TitleSmall
+    let (title_node, title_error) = colored_text(a, 0u64, title, t, title_look, style.color(t.tokens, .OnSurface))
+    if title_error != ok { ret (zero, false, title_error) }
+    lines[line_count] = title_node
+    line_count += 1usize
+    if first.time.len != 0usize {
+        var stamp = text_options()
+        stamp.role = .BodySmall
+        stamp.wrap = .None
+        let (when_node, when_error) = colored_text(a, 0u64, first.time, t, stamp, style.color(t.tokens, .OnSurfaceVariant))
+        if when_error != ok { ret (zero, false, when_error) }
+        lines[line_count] = when_node
+        line_count += 1usize
+    }
+    var chevron: GlyphKind = .ChevronDown
+    if open { chevron = .ChevronUp }
+    let (mark, mark_error) = icon_square(a, style.color(t.tokens, .OnSurfaceVariant), chevron, 24.0)
+    if mark_error != ok { ret (zero, false, mark_error) }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+    if cells_error != ok { ret (zero, false, TooLarge) }
+    cells[0usize] = well
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    cells[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, grow, lines[0usize..line_count])
+    cells[2usize] = mark
+    var row_style = style.defaults()
+    row_style.width = style.Length { Px: width }
+    row_style.min_height = style.Length { Px: 72.0 }
+    let edge = style.Length { Px: 12.0 }
+    row_style.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: edge, right: style.Length { Px: 16.0 }, bottom: edge }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, row_style, cells[0usize..3usize])
+    let fold_state = control_state(t, key, true, false)
+    var look = style.resolve(t.tokens, .Plain, fold_state)
+    look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), state_opacity(t, fold_state))
+    look.foreground = style.color(t.tokens, .OnSurface)
+    look.border_width = 0.0
+    look.custom_padding = true
+    look.padding = 0.0
+    look.padding_y = 0.0
+    look.min_height = 72.0
+    look.min_width = width
+    var states = 0u32
+    var actions = accessibility.ACTION_EXPAND
+    if open {
+        states = accessibility.STATE_EXPANDED
+        actions = accessibility.ACTION_COLLAPSE
+    }
+    let (built, built_error) = pressable_states(a, key, t, 11u8, title, look, true, false, states, actions, 0u64, &press[0usize], content)
+    ret (built, open, built_error)
+}
 
 // A notification list of D832's notices: each notice a read item titled by its
 // text, Mark all read (keyed `key + 1`) firing `clear`.
@@ -8688,7 +8791,9 @@ fn joined(a: *mem.Arena, head: str, tail: str) -> (str, err) {
 // space holds its place otherwise); on touch it always shows.
 // (D1302) `notification_list_with` adds the header's settings button, skeleton
 // rows while older notices load, and the failed-load row with Retry.
-// ponytail: no grouping of repeats or insert motion.
+// (D1303) Three or more notices in a row from one `source` in one day fold into
+// one row (keyed `key + 256 + index` of the first) that opens to show them.
+// ponytail: no insert motion; Up and Down aim at a folded row's hidden notices.
 fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
     var options: NotificationListOptions = zero
     let (node, node_error) = notification_list_with(a, key, t, label, items, mark_read, width, height, options)
@@ -8713,7 +8818,7 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let ink = style.color(t.tokens, .OnSurface)
     let inner = max_zero(width - 2.0)
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * items.len + 3usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize * items.len + 3usize)
     if rows_error != ok { ret (zero, TooLarge) }
     let (targets, targets_error) = mem.alloc[FocusTo](a, items.len)
     if targets_error != ok { ret (zero, TooLarge) }
@@ -8742,6 +8847,26 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
             heads[0usize] = group_node
             rows[n] = widget.padded(0u64, 16.0, 8.0, 16.0, 4.0, style.defaults(), heads[0usize..1usize])
             n += 1usize
+        }
+        // (D1303) A run of three or more from one source in a day folds.
+        if item.source.len != 0usize && (i == 0usize || !same_text(item.source, items[i - 1usize].source) || !same_text(item.group, items[i - 1usize].group)) {
+            var run = 1usize
+            while i + run < items.len && same_text(items[i + run].source, item.source) && same_text(items[i + run].group, item.group) { run += 1usize }
+            if run >= 3usize {
+                let (fold, fold_open, fold_error) = notification_fold_row(a, key + 256u64 + u64(i), t, item, run, inner)
+                if fold_error != ok { ret (zero, fold_error) }
+                rows[n] = fold
+                n += 1usize
+                if !fold_open {
+                    var skipped = 1usize
+                    while skipped < run {
+                        if items[i + skipped].unread { unread += 1usize }
+                        skipped += 1usize
+                    }
+                    i += run
+                    continue
+                }
+            }
         }
         let (well, well_error) = severity_well(a, t, item.severity, 40.0)
         if well_error != ok { ret (zero, well_error) }

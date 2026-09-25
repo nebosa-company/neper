@@ -25184,3 +25184,21 @@ come.
 `ui_status5_v2` holds the gear after Mark all read, the loading group, the
 failed row, and Settings and Retry pressing, on Windows and Linux;
 `ui_desktop` and `ui_overlays3_v2` still pass on both.
+
+## D1303 — Notification lists fold repeated notices
+
+`NotificationItem` gains `source`. When three or more notices in a row share
+a source in one day, they fold into one row, as the NotificationList spec's
+grouped state asks. The row reads the count and the source ("4 builds
+failed") in `title-small`, beside the first notice's well and time and a
+chevron: down while shut, up while open. It is a list item that expands,
+keyed `key + 256 + index` of the first notice. A press opens the run to show
+its notices under the row, and another press shuts it; the row keeps that
+across frames. A shut run's unread notices still count in the list's name.
+Up and Down still aim at a folded run's hidden notices; the source is caller
+wording, not localised.
+
+`ui_status5_v2` folds four failed builds into "4 builds failed" with the
+builds hidden and not expanded. A press opens it, expanded, with the builds
+shown, and the following review notice stays its own row. It passes on
+Windows and Linux, and `ui_desktop` still passes on both.
