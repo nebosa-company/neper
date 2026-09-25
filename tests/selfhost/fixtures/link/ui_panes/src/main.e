@@ -233,6 +233,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tree_4_error != ok { os.exit(47i32) }
     let (divider, has_divider) = find(tree_4, .Separator, "Divider")
     if !has_divider { os.exit(48i32) }
+    // (D1310) A collapsible pane 120 wide with a minimum of 80: dragged to 20 it
+    // snaps shut (0); dragged to 60 it stops at the minimum.
+    frame = mem.arena_from(frame_storage)
+    let (folding_body, folding_body_error) = control.text(&frame, 0u64, "Side", &theme, control.text_options())
+    if folding_body_error != ok { os.exit(50i32) }
+    let (folding, folding_error) = control.resizable_pane_with(&frame, 900u64, &theme, "Side", .Horizontal, 120.0, 80.0, 300.0, widget.Change[f32] { ctx: ctx, invoke: on_size }, folding_body, true)
+    let (folding_page, folding_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+    if folding_error != ok || folding_page_error != ok { os.exit(51i32) }
+    folding_page[0usize] = folding
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 200.0), folding_page[0usize..1usize]), now) != ok { os.exit(52i32) }
+    let (fold_grip, has_fold_grip) = centre_of(&harness, &runtime, 902u64)
+    if !has_fold_grip { os.exit(53i32) }
+    if testing.drag(&harness, fold_grip, geometry.Point { x: fold_grip.x - 100.0, y: fold_grip.y }, 2usize) != ok || !near(logs[0usize].last_size, 0.0) { os.exit(54i32) }
+    if testing.drag(&harness, fold_grip, geometry.Point { x: fold_grip.x - 60.0, y: fold_grip.y }, 2usize) != ok || !near(logs[0usize].last_size, 80.0) { os.exit(55i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui panes ok\n")
     ret ok

@@ -25292,3 +25292,17 @@ while it slides. The scrolling bar's edge fade is still to come.
 by its count badge to the plain third. Half way, its width lies strictly
 between the two tabs' widths, on Windows and Linux; `ui_navigation` and
 `ui_navigation5_v2` still pass on both.
+
+## D1310 — Resizable panes snap shut
+
+`control.resizable_pane_with` adds the ResizablePane spec's collapsible
+form. Dragged below half of `low`, the pane reports 0 (shut). Any nudge, a
+drag past `low`, or the sash's double-click (D1212) opens it again. The
+sash's `Handle` carries `collapsible`. `pane_with_reserve` keeps its
+behaviour through the new `pane_with_collapse`. The size readout while
+dragging and the resize cursor stay open: the runtime sets no pointer
+cursor, and the collapse does not animate.
+
+`ui_panes` drags a collapsible pane (120, minimum 80) to 20, where it snaps
+to 0, and to 60, where it stops at 80, on Windows and Linux;
+`ui_containers4_v2` and `ui_containers5_v2` still pass on both.
