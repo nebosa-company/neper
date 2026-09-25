@@ -229,6 +229,13 @@ fn find(tree: accessibility.Tree, role: accessibility.Role, label: str) -> (acce
     ret (zero, false)
 }
 
+fn politely_says(h: *testing.Harness, label: str) -> bool {
+    let (tree, tree_error) = testing.semantics(h)
+    if tree_error != ok { ret false }
+    let (said, has_said) = find(tree, .Status, label)
+    ret has_said && said.live == .Polite
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -407,6 +414,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (list_box, has_list_box) = bounds(&harness, &runtime, 600u64)
     let (grip, has_grip) = bounds(&harness, &runtime, 601u64)
     if !has_list_box || !has_grip || !near(grip.x, list_box.x + 12.0) || !near(grip.width, 32.0) { os.exit(59i32) }
+    let handle_pixel = at(grip.x + 12.0, grip.y + 14.0)
+    if is_color(shot, handle_pixel, style.color(&tokens, .OnSurfaceVariant)) || testing.hover(&harness, grip.x + 16.0, grip.y + 16.0) != ok { os.exit(123i32) }
+    let (root_handle, root_handle_error) = build(&f, &theme, &touch, s)
+    if root_handle_error != ok || testing.pump(&harness, root_handle, now) != ok { os.exit(124i32) }
+    let (shot_handle, shot_handle_error) = testing.snapshot(&harness, a)
+    if shot_handle_error != ok || (shot_handle.pixels[handle_pixel] == shot.pixels[handle_pixel] && shot_handle.pixels[handle_pixel + 1usize] == shot.pixels[handle_pixel + 1usize] && shot_handle.pixels[handle_pixel + 2usize] == shot.pixels[handle_pixel + 2usize]) { os.exit(125i32) }
     if !press(&harness, grip.x + 16.0, grip.y + 16.0) || !move_to(&harness, grip.x + 16.0, grip.y + 40.0) || !move_to(&harness, grip.x + 16.0, grip.y + 76.0) { os.exit(60i32) }
     let (root_10, build_10_error) = build(&f, &theme, &touch, s)
     if build_10_error != ok || testing.pump(&harness, root_10, now) != ok { os.exit(61i32) }
@@ -415,21 +428,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (lifted, has_lifted) = bounds(&harness, &runtime, 611u64)
     let (second, has_second) = bounds(&harness, &runtime, 612u64)
     if !has_lifted || !has_second || !near(lifted.x, list_box.x + 8.0) || !near(lifted.y, list_box.y + 60.0) || !near(lifted.width, 264.0) || !near(second.y, list_box.y) { os.exit(63i32) }
-    if !is_color(shot_10, at(list_box.x + 4.0, list_box.y + 50.0), style.color(&tokens, .SurfaceContainerLow)) || !is_color(shot_10, at(list_box.x + 200.0, list_box.y + 84.0), style.layer(style.color(&tokens, .SurfaceContainerHigh), style.color(&tokens, .OnSurface), 0.16)) { os.exit(64i32) }
+    if !is_color(shot_10, at(list_box.x + 4.0, list_box.y + 50.0), style.color(&tokens, .SurfaceContainerLow)) || !is_color(shot_10, at(list_box.x + 40.0, list_box.y + 48.0), style.color(&tokens, .Primary)) || !is_color(shot_10, at(list_box.x + 200.0, list_box.y + 84.0), style.layer(style.color(&tokens, .SurfaceContainerHigh), style.color(&tokens, .OnSurface), 0.16)) { os.exit(64i32) }
     if !release(&harness, grip.x + 16.0, grip.y + 76.0) || s.moves != 1usize || s.moved.from != 0usize || s.moved.to != 1usize { os.exit(65i32) }
     let (root_11, build_11_error) = build(&f, &theme, &touch, s)
     if build_11_error != ok || testing.pump(&harness, root_11, now) != ok { os.exit(66i32) }
+    if !press(&harness, grip.x + 16.0, grip.y + 16.0) || !move_to(&harness, grip.x + 16.0, list_box.y - 8.0) || !release(&harness, grip.x + 16.0, list_box.y - 8.0) || s.moves != 1usize { os.exit(126i32) }
+    let (root_outside, root_outside_error) = build(&f, &theme, &touch, s)
+    if root_outside_error != ok || testing.pump(&harness, root_outside, now) != ok || !politely_says(&harness, "Move cancelled") { os.exit(127i32) }
+    let beside = list_box.x + list_box.width + 8.0
+    if !press(&harness, grip.x + 16.0, grip.y + 16.0) || !move_to(&harness, beside, grip.y + 76.0) || !release(&harness, beside, grip.y + 76.0) || s.moves != 1usize { os.exit(134i32) }
+    let (root_beside, root_beside_error) = build(&f, &theme, &touch, s)
+    if root_beside_error != ok || testing.pump(&harness, root_beside, now) != ok || !politely_says(&harness, "Move cancelled") { os.exit(135i32) }
     var control_held: input.Modifiers = zero
     control_held.control = true
     if !tab_to(&harness, 612u64) || testing.press_key(&harness, 40u32, control_held) != ok || s.moves != 2usize || s.moved.from != 1usize || s.moved.to != 2usize { os.exit(67i32) }
+    let (root_direct, root_direct_error) = build(&f, &theme, &touch, s)
+    if root_direct_error != ok || testing.pump(&harness, root_direct, now) != ok || !politely_says(&harness, "Second, moved to position 3 of 3") { os.exit(133i32) }
     // Space picks up the focused row without reporting a move. Arrows and the
     // ends move its gap; Space or Enter drops once, while Escape cancels.
     if !tab_to(&harness, 611u64) || testing.press_key(&harness, 32u32, zero) != ok || s.moves != 2usize { os.exit(106i32) }
     let (root_key_pick, root_key_pick_error) = build(&f, &theme, &touch, s)
     if root_key_pick_error != ok || testing.pump(&harness, root_key_pick, now) != ok { os.exit(107i32) }
+    let (shot_key_pick, shot_key_pick_error) = testing.snapshot(&harness, a)
+    if shot_key_pick_error != ok || !is_color(shot_key_pick, at(list_box.x + 200.0, list_box.y + 24.0), style.color(&tokens, .SecondaryContainer)) { os.exit(128i32) }
+    if !politely_says(&harness, "First, picked up, position 1 of 3") { os.exit(132i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || testing.press_key(&harness, 35u32, zero) != ok || s.moves != 2usize { os.exit(108i32) }
     let (root_key_last, root_key_last_error) = build(&f, &theme, &touch, s)
     if root_key_last_error != ok || testing.pump(&harness, root_key_last, now) != ok { os.exit(109i32) }
+    if !politely_says(&harness, "First, moved to position 3 of 3") { os.exit(129i32) }
     let (key_lifted, has_key_lifted) = bounds(&harness, &runtime, 611u64)
     let (key_last, has_key_last) = bounds(&harness, &runtime, 613u64)
     if !has_key_lifted || !has_key_last { os.exit(110i32) }
@@ -439,12 +465,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 32u32, zero) != ok || s.moves != 3usize || s.moved.from != 0usize || s.moved.to != 2usize { os.exit(111i32) }
     let (root_key_dropped, root_key_dropped_error) = build(&f, &theme, &touch, s)
     if root_key_dropped_error != ok || testing.pump(&harness, root_key_dropped, now) != ok { os.exit(112i32) }
+    if !politely_says(&harness, "First, dropped at position 3 of 3") { os.exit(130i32) }
     if !tab_to(&harness, 612u64) || testing.press_key(&harness, 32u32, zero) != ok { os.exit(113i32) }
     let (root_key_second, root_key_second_error) = build(&f, &theme, &touch, s)
     if root_key_second_error != ok || testing.pump(&harness, root_key_second, now) != ok { os.exit(114i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || testing.press_key(&harness, 36u32, zero) != ok || testing.press_key(&harness, 27u32, zero) != ok || s.moves != 3usize { os.exit(115i32) }
     let (root_key_cancelled, root_key_cancelled_error) = build(&f, &theme, &touch, s)
     if root_key_cancelled_error != ok || testing.pump(&harness, root_key_cancelled, now) != ok { os.exit(116i32) }
+    if !politely_says(&harness, "Move cancelled") { os.exit(131i32) }
     if !tab_to(&harness, 612u64) || testing.press_key(&harness, 32u32, zero) != ok { os.exit(117i32) }
     let (root_key_enter, root_key_enter_error) = build(&f, &theme, &touch, s)
     if root_key_enter_error != ok || testing.pump(&harness, root_key_enter, now) != ok { os.exit(118i32) }

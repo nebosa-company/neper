@@ -256,8 +256,10 @@ fn turn_fire(ctx: *void) -> err {
 }
 
 // What a page's swipe keeps across the frames of one drag: whether it turned,
-// and (D982) how far the drag has moved, for a view that follows it.
-type Swipe = struct { turned: bool, moved: f32 }
+// and (D982) how far the drag has moved, for a view that follows it. Reordering
+// also keeps the item and one pending live-region notice in the same cell.
+type ReorderNotice = enum u8 { None, Picked, Moved, Dropped, Cancelled }
+type Swipe = struct { turned: bool, moved: f32, target: usize, item: widget.Key, notice: ReorderNotice }
 
 // A page view's drag: the cell the swipe keeps (none on the view's first frame),
 // where the pages stand, and whom to tell; (D982) settling, the drag only moves
@@ -327,7 +329,7 @@ fn page_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []c
         let (id, found) = widget.find_by_key(s, key)
         if found == 1usize {
             var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
-            let (kept, _, kept_error) = widget.state[Swipe](&build, key, Swipe { turned: false, moved: 0.0 })
+            let (kept, _, kept_error) = widget.state[Swipe](&build, key, Swipe { turned: false, moved: 0.0, target: 0usize, item: 0u64, notice: .None })
             if kept_error == ok {
                 pagings[0usize].cell = kept
                 pagings[0usize].has_cell = true
@@ -959,7 +961,7 @@ fn swipe_cell(t: *const control.Theme, key: widget.Key) -> (*Swipe, bool) {
     let (id, found) = widget.find_by_key(s, key)
     if found != 1usize { ret (none, false) }
     var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
-    let (kept, _, kept_error) = widget.state[Swipe](&build, key, Swipe { turned: false, moved: 0.0 })
+    let (kept, _, kept_error) = widget.state[Swipe](&build, key, Swipe { turned: false, moved: 0.0, target: 0usize, item: 0u64, notice: .None })
     if kept_error != ok { ret (none, false) }
     ret (kept, true)
 }
@@ -971,7 +973,7 @@ type Reorder = struct { from: usize, to: usize }
 // the list is (by key), and whom to tell on the drop.
 // (D982) The cell keeps how far the row has been dragged, so the list can draw
 // it lifted where the pointer holds it.
-type Dragging = struct { runtime: *widget.Runtime, list: widget.Key, index: usize, count: usize, extent: f32, move: widget.Change[Reorder], cell: *Swipe, has_cell: bool }
+type Dragging = struct { runtime: *widget.Runtime, list: widget.Key, item: widget.Key, index: usize, count: usize, extent: f32, move: widget.Change[Reorder], cell: *Swipe, has_cell: bool }
 
 fn reorder_drag(ctx: *void, g: widget.Gesture) -> err {
     let d = mem.cast[*Dragging](ctx)
@@ -980,18 +982,38 @@ fn reorder_drag(ctx: *void, g: widget.Gesture) -> err {
         if d.has_cell {
             d.cell.turned = false
             d.cell.moved = 0.0
+            d.cell.target = d.index
+            d.cell.item = d.item
+            d.cell.notice = .Picked
         }
         ret ok
     case .DragMove as dm:
-        if d.has_cell { d.cell.moved = dm.position.y - dm.start.y }
+        if d.has_cell {
+            d.cell.moved = dm.position.y - dm.start.y
+            var spot = f32(d.index) + d.cell.moved / d.extent
+            if spot < 0.0 { spot = 0.0 }
+            var to = usize(spot + 0.5)
+            if to >= d.count { to = d.count - 1usize }
+            if to != d.cell.target {
+                d.cell.target = to
+                d.cell.notice = .Moved
+            }
+        }
         ret ok
     case .DragEnd as at:
         if d.has_cell { d.cell.moved = 0.0 }
         let (area, has_area) = keyed_bounds_of(d.runtime, d.list)
-        if !has_area || d.extent <= 0.0 { ret ok }
+        if !has_area || d.extent <= 0.0 || at.x < area.x || at.x >= area.x + area.width || at.y < area.y || at.y >= area.y + area.height {
+            if d.has_cell { d.cell.notice = .Cancelled }
+            ret ok
+        }
         var to = 0usize
         if at.y > area.y { to = usize((at.y - area.y) / d.extent) }
         if to >= d.count { to = d.count - 1usize }
+        if d.has_cell {
+            d.cell.target = to
+            d.cell.notice = .Dropped
+        }
         if to == d.index { ret ok }
         ret widget.fire_change[Reorder](d.move, Reorder { from: d.index, to: to })
     default:
@@ -1000,20 +1022,30 @@ fn reorder_drag(ctx: *void, g: widget.Gesture) -> err {
 }
 
 // A keyboard move of a row by one.
-type Nudging = struct { index: usize, count: usize, up: bool, move: widget.Change[Reorder] }
+type Nudging = struct { item: widget.Key, index: usize, count: usize, up: bool, move: widget.Change[Reorder], cell: *Swipe, has_cell: bool }
 
 fn reorder_nudge(ctx: *void) -> err {
     let n = mem.cast[*Nudging](ctx)
     if n.up {
         if n.index == 0usize { ret ok }
+        if n.has_cell {
+            n.cell.item = n.item
+            n.cell.target = n.index - 1usize
+            n.cell.notice = .Moved
+        }
         ret widget.fire_change[Reorder](n.move, Reorder { from: n.index, to: n.index - 1usize })
     }
     if n.index + 1usize >= n.count { ret ok }
+    if n.has_cell {
+        n.cell.item = n.item
+        n.cell.target = n.index + 1usize
+        n.cell.notice = .Moved
+    }
     ret widget.fire_change[Reorder](n.move, Reorder { from: n.index, to: n.index + 1usize })
 }
 
 type ReorderKeyCommand = enum u8 { Toggle, Drop, Cancel, Previous, Next, First, Last }
-type ReorderKeyboard = struct { runtime: *widget.Runtime, index: usize, count: usize, move: widget.Change[Reorder], cell: *Swipe, has_cell: bool, command: ReorderKeyCommand }
+type ReorderKeyboard = struct { runtime: *widget.Runtime, item: widget.Key, index: usize, count: usize, move: widget.Change[Reorder], cell: *Swipe, has_cell: bool, command: ReorderKeyCommand }
 
 fn reorder_keyboard_fire(ctx: *void) -> err {
     let k = mem.cast[*ReorderKeyboard](ctx)
@@ -1021,12 +1053,16 @@ fn reorder_keyboard_fire(ctx: *void) -> err {
     if k.command == .Toggle && !k.cell.turned {
         k.cell.turned = true
         k.cell.moved = f32(k.index)
+        k.cell.target = k.index
+        k.cell.item = k.item
+        k.cell.notice = .Picked
         widget.request_animation_frame(k.runtime)
         ret ok
     }
     if k.command == .Cancel {
         k.cell.turned = false
         k.cell.moved = 0.0
+        k.cell.notice = .Cancelled
         widget.request_animation_frame(k.runtime)
         ret ok
     }
@@ -1036,6 +1072,8 @@ fn reorder_keyboard_fire(ctx: *void) -> err {
         if to >= k.count { to = k.count - 1usize }
         k.cell.turned = false
         k.cell.moved = 0.0
+        k.cell.target = to
+        k.cell.notice = .Dropped
         widget.request_animation_frame(k.runtime)
         if to == k.index { ret ok }
         ret widget.fire_change[Reorder](k.move, Reorder { from: k.index, to: to })
@@ -1047,6 +1085,10 @@ fn reorder_keyboard_fire(ctx: *void) -> err {
     if k.command == .First { to = 0usize }
     if k.command == .Last { to = k.count - 1usize }
     k.cell.moved = f32(to)
+    if to != k.cell.target {
+        k.cell.target = to
+        k.cell.notice = .Moved
+    }
     widget.request_animation_frame(k.runtime)
     ret ok
 }
@@ -1080,9 +1122,9 @@ fn reorderable_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
     var i = 0usize
     while i < items.len {
         var no_cell_yet: *Swipe = zero
-        drags[i] = Dragging { runtime: t.runtime, list: key, index: i, count: items.len, extent: extent, move: move, cell: no_cell_yet, has_cell: false }
-        nudges[2usize * i] = Nudging { index: i, count: items.len, up: true, move: move }
-        nudges[2usize * i + 1usize] = Nudging { index: i, count: items.len, up: false, move: move }
+        drags[i] = Dragging { runtime: t.runtime, list: key, item: keys[i], index: i, count: items.len, extent: extent, move: move, cell: no_cell_yet, has_cell: false }
+        nudges[2usize * i] = Nudging { item: keys[i], index: i, count: items.len, up: true, move: move, cell: no_cell_yet, has_cell: false }
+        nudges[2usize * i + 1usize] = Nudging { item: keys[i], index: i, count: items.len, up: false, move: move, cell: no_cell_yet, has_cell: false }
         shortcuts[2usize * i] = widget.Shortcut { key: 38u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&nudges[2usize * i]), invoke: reorder_nudge } }
         shortcuts[2usize * i + 1usize] = widget.Shortcut { key: 40u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&nudges[2usize * i + 1usize]), invoke: reorder_nudge } }
         let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
@@ -5296,12 +5338,14 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
 // under the `on-surface` layer at 16% (`state-dragged`), elevation 4,
 // `radius-sm`, inset 8 from the sides; the rows between it and where it would
 // land make room, and that gap is `surface-container-low`. The drop reports
-// the move; Alt or Ctrl with Up or Down moves the focused row by one; Up, Down,
-// Home and End move the focus. Each row stands in a holder keyed `key + 1 +
-// count + index`, so the lifted one keeps its elements -- and the drag its
-// handle -- when it moves to the top of the stack. A list named `label`.
-// ponytail: the handle shows at rest rather than only on hover; no drop line,
-// auto-scroll, moving tag, announcements or move actions.
+// the move; a pointer handle appears on row hover or focus and a pointer drag
+// shows the primary drop line. Space picks up a focused row, arrows/Home/End
+// move its gap under a "Moving" tag, Space/Enter drops and Escape cancels. The
+// lifecycle is announced politely; Alt or Ctrl with Up or Down moves directly.
+// Each row stands in a holder keyed `key + 1 + count + index`, so the lifted one
+// keeps its elements -- and the drag its handle -- at the top of the stack. A
+// list named `label`.
+// ponytail: no auto-scroll, context-menu or named accessibility move actions.
 fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, move: widget.Change[Reorder], width: f32) -> (widget.Node, err) {
     if keys.len != items.len || items.len == 0usize { ret (zero, TooLarge) }
     let n = items.len
@@ -5310,6 +5354,7 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     // Who is being dragged, and where it would land.
     var lifted = n
     var moved: f32 = 0.0
+    var noticed: *Swipe = zero
     let (cells, cells_error) = mem.alloc[*Swipe](a, n)
     if cells_error != ok { ret (zero, TooLarge) }
     let (has, has_error) = mem.alloc[bool](a, n)
@@ -5319,6 +5364,7 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         let (kept, has_cell) = swipe_cell(t, key + 1u64 + u64(i))
         cells[i] = kept
         has[i] = has_cell
+        if has_cell && kept.notice != .None { noticed = kept }
         if has_cell && kept.turned {
             lifted = i
             moved = (kept.moved - f32(i)) * tall
@@ -5347,7 +5393,7 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if shortcuts_error != ok { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, n)
     if rows_error != ok { ret (zero, TooLarge) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, n + 1usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, n + 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var alt: input.Modifiers = zero
     alt.alt = true
@@ -5362,31 +5408,57 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             shown[i].trailing = .DragHandle
             shown[i].check = false
         } else {
-            shown[i].has_leading = true
-            shown[i].leading = .DragHandle
+            shown[i].has_leading = false
+            if i == lifted || engaged(t, keys[i]) || engaged(t, key + 1u64 + u64(i)) {
+                shown[i].has_leading = true
+                shown[i].leading = .DragHandle
+            }
         }
         var wide = width
         if i == lifted { wide = control.max_zero(width - 16.0) }
         let (made, made_error) = row_sized(a, keys[i], t, &shown[i], i, n, wide, tall)
         if made_error != ok { ret (zero, made_error) }
         // The handle's target over the glyph.
-        drags[i] = Dragging { runtime: t.runtime, list: key, index: i, count: n, extent: tall, move: move, cell: cells[i], has_cell: has[i] }
+        drags[i] = Dragging { runtime: t.runtime, list: key, item: keys[i], index: i, count: n, extent: tall, move: move, cell: cells[i], has_cell: has[i] }
         var grip_x: f32 = 12.0
         if touch { grip_x = wide - 24.0 - 12.0 - grab }
         let (grip, grip_error) = mem.alloc[widget.Node](a, 1usize)
         if grip_error != ok { ret (zero, TooLarge) }
         grip[0usize] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&drags[i]), invoke: reorder_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: false }, control.sized_style(grab, grab), zero)
-        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 3usize)
         if pair_error != ok { ret (zero, TooLarge) }
         pair[0usize] = made
         pair[1usize] = widget.positioned(0u64, grip_x, (tall - grab) * 0.5, style.defaults(), grip[0usize..1usize])
+        var pair_count = 2usize
+        if has[i] && cells[i].turned {
+            var caption = control.text_options()
+            caption.role = .LabelSmall
+            caption.wrap = .None
+            let tag_ink = style.color(t.tokens, .OnSecondaryContainer)
+            let (words, words_error) = control.colored_text(a, 0u64, "Moving", t, caption, tag_ink)
+            if words_error != ok { ret (zero, words_error) }
+            let (tag_words, tag_words_error) = mem.alloc[widget.Node](a, 1usize)
+            if tag_words_error != ok { ret (zero, TooLarge) }
+            tag_words[0usize] = words
+            var tag_style = control.sized_style(56.0, 24.0)
+            tag_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) }
+            tag_style.radius = t.tokens.radii.xs
+            let tag = widget.aligned(0u64, .Center, .Center, tag_style, tag_words[0usize..1usize])
+            var tag_end: f32 = 24.0
+            if touch { tag_end += grab }
+            let (tagged, tagged_error) = mem.alloc[widget.Node](a, 1usize)
+            if tagged_error != ok { ret (zero, TooLarge) }
+            tagged[0usize] = tag
+            pair[pair_count] = widget.positioned(0u64, wide - tag_end - 56.0, (tall - 24.0) * 0.5, style.defaults(), tagged[0usize..1usize])
+            pair_count += 1usize
+        }
         var row_style = control.sized_style(wide, tall)
         if i == lifted {
             row_style.background = paint.Brush { Solid: style.layer(style.color(t.tokens, .SurfaceContainerHigh), style.color(t.tokens, .OnSurface), 0.16) }
             row_style.radius = t.tokens.radii.sm
             row_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
         }
-        rows[i] = widget.stack(0u64, row_style, pair[0usize..2usize])
+        rows[i] = widget.stack(0u64, row_style, pair[0usize..pair_count])
         if touch && !t.tokens.motion.reduced {
             let (lifted_row, lifted_error) = mem.alloc[widget.Node](a, 1usize)
             if lifted_error != ok { ret (zero, TooLarge) }
@@ -5395,8 +5467,8 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             if i == lifted { lift = widget.VisualTransform { scale: 1.02, rotation: 0.0, offset: geometry.Point { x: 0.0, y: -4.0 } } }
             rows[i] = widget.transformed(0u64, lift, style.defaults(), lifted_row[0usize..1usize])
         }
-        nudges[2usize * i] = Nudging { index: i, count: n, up: true, move: move }
-        nudges[2usize * i + 1usize] = Nudging { index: i, count: n, up: false, move: move }
+        nudges[2usize * i] = Nudging { item: keys[i], index: i, count: n, up: true, move: move, cell: cells[i], has_cell: has[i] }
+        nudges[2usize * i + 1usize] = Nudging { item: keys[i], index: i, count: n, up: false, move: move, cell: cells[i], has_cell: has[i] }
         let up = widget.Submit { ctx: ctx_of(&nudges[2usize * i]), invoke: reorder_nudge }
         let down = widget.Submit { ctx: ctx_of(&nudges[2usize * i + 1usize]), invoke: reorder_nudge }
         let shortcut_base = 11usize * i
@@ -5405,16 +5477,16 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         shortcuts[shortcut_base + 2usize] = widget.Shortcut { key: 38u32, modifiers: ctrl, action: up }
         shortcuts[shortcut_base + 3usize] = widget.Shortcut { key: 40u32, modifiers: ctrl, action: down }
         let key_base = 7usize * i
-        key_moves[key_base] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: has[i], command: .Toggle }
+        key_moves[key_base] = ReorderKeyboard { runtime: t.runtime, item: keys[i], index: i, count: n, move: move, cell: cells[i], has_cell: has[i], command: .Toggle }
         shortcuts[shortcut_base + 4usize] = widget.Shortcut { key: 32u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base]), invoke: reorder_keyboard_fire } }
         var shortcut_count = 5usize
         if has[i] && cells[i].turned {
-            key_moves[key_base + 1usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Drop }
-            key_moves[key_base + 2usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Cancel }
-            key_moves[key_base + 3usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Previous }
-            key_moves[key_base + 4usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Next }
-            key_moves[key_base + 5usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .First }
-            key_moves[key_base + 6usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Last }
+            key_moves[key_base + 1usize] = ReorderKeyboard { runtime: t.runtime, item: keys[i], index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Drop }
+            key_moves[key_base + 2usize] = ReorderKeyboard { runtime: t.runtime, item: keys[i], index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Cancel }
+            key_moves[key_base + 3usize] = ReorderKeyboard { runtime: t.runtime, item: keys[i], index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Previous }
+            key_moves[key_base + 4usize] = ReorderKeyboard { runtime: t.runtime, item: keys[i], index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Next }
+            key_moves[key_base + 5usize] = ReorderKeyboard { runtime: t.runtime, item: keys[i], index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .First }
+            key_moves[key_base + 6usize] = ReorderKeyboard { runtime: t.runtime, item: keys[i], index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Last }
             shortcuts[shortcut_base + 5usize] = widget.Shortcut { key: 13u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base + 1usize]), invoke: reorder_keyboard_fire } }
             shortcuts[shortcut_base + 6usize] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base + 2usize]), invoke: reorder_keyboard_fire } }
             shortcuts[shortcut_base + 7usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base + 3usize]), invoke: reorder_keyboard_fire } }
@@ -5438,6 +5510,18 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         gap.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
         layers[l] = widget.positioned(0u64, 0.0, f32(landing) * tall, gap, zero)
         l += 1usize
+        if !touch && !cells[lifted].turned {
+            var rule = control.sized_style(width - 32.0, 2.0)
+            rule.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+            layers[l] = widget.positioned(0u64, 16.0, f32(landing) * tall - 1.0, rule, zero)
+            l += 1usize
+            var ring = control.sized_style(8.0, 8.0)
+            ring.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+            ring.border = style.Border { width: 2.0, color: style.color(t.tokens, .Primary) }
+            ring.radius = 4.0
+            layers[l] = widget.positioned(0u64, 12.0, f32(landing) * tall - 4.0, ring, zero)
+            l += 1usize
+        }
     }
     i = 0usize
     while i < n {
@@ -5462,6 +5546,38 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         held[0usize] = rows[lifted]
         layers[l] = widget.positioned(key + 1u64 + u64(n + lifted), 8.0, y, style.defaults(), held[0usize..1usize])
         l += 1usize
+    }
+    if mem.address_of(noticed) != 0usize {
+        var item_index = 0usize
+        i = 0usize
+        while i < n {
+            if keys[i] == noticed.item { item_index = i }
+            i += 1usize
+        }
+        let (message, message_error) = mem.alloc[u8](a, items[item_index].headline.len + 56usize)
+        if message_error != ok { ret (zero, TooLarge) }
+        var m = 0usize
+        if noticed.notice == .Cancelled {
+            m = control.copy_text(message, "Move cancelled")
+        } else {
+            m = control.copy_text(message, items[item_index].headline)
+            if noticed.notice == .Picked { m += control.copy_text(message[m..message.len], ", picked up, position ") }
+            if noticed.notice == .Moved { m += control.copy_text(message[m..message.len], ", moved to position ") }
+            if noticed.notice == .Dropped { m += control.copy_text(message[m..message.len], ", dropped at position ") }
+            m += control.write_i64(message[m..message.len], i64(noticed.target + 1usize))
+            m += control.copy_text(message[m..message.len], " of ")
+            m += control.write_i64(message[m..message.len], i64(n))
+        }
+        var live: widget.Semantics = zero
+        live.role = 26u8
+        live.label = message[0usize..m]
+        live.live = 1u8
+        let (quiet, quiet_error) = mem.alloc[widget.Node](a, 1usize)
+        if quiet_error != ok { ret (zero, TooLarge) }
+        quiet[0usize] = widget.box(0u64, control.sized_style(0.0, 0.0), zero)
+        layers[l] = widget.semantics(0u64, live, style.defaults(), quiet[0usize..1usize])
+        l += 1usize
+        noticed.notice = .None
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
