@@ -287,6 +287,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_gamma_node || !gamma_node.state.disabled { os.exit(19i32) }
     let (beta_tile_action, has_beta_tile_action) = find(tree, .Cell, "Beta tile")
     if !has_beta_tile_action || widget.semantic_action(&runtime, beta_node.id, accessibility.ACTION_PRESS) != ok || widget.semantic_action(&runtime, beta_tile_action.id, accessibility.ACTION_PRESS) != ok || s.presses != 2usize { os.exit(83i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 101u64).element) != ok || testing.press_key(&harness, 66u32, zero) != ok || !focused_is(&harness, 102u64) { os.exit(84i32) }
+    if testing.press_key(&harness, 65u32, zero) != ok || !focused_is(&harness, 101u64) { os.exit(85i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 501u64).element) != ok || testing.press_key(&harness, 66u32, zero) != ok || !focused_is(&harness, 502u64) { os.exit(86i32) }
     // A tap runs the row's action; Tab reaches the first row and Down, Home move
     // the focus.
     if !tap_key(&harness, &runtime, 101u64) || s.presses != 3usize { os.exit(20i32) }

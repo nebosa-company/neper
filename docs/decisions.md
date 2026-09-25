@@ -22677,3 +22677,15 @@ non-interactive.
 
 `ui_collections2_v2` and `ui_collections_v2` hold all three collection families
 on Windows and Linux. Their reviewed surfaces are unchanged.
+
+## D1101 — Lists and grids reuse runtime typeahead
+
+The runtime's existing menu typeahead buffer now also recognizes focused
+semantic ListItems and Grid Cells. It case-folds Unicode letters, buffers for
+500 ms, falls back to the latest letter when a prefix misses, wraps, and skips
+disabled items without taking Tab or adding a public input callback.
+
+The scan is deliberately bounded to the first 256 built focusables; virtual
+sources need a source-level lookup for offscreen matches. `ui_collections_v2`
+holds List and GridView behavior and `ui_navigation2_v2` guards menu behavior
+on Windows and Linux. The reviewed surfaces are unchanged.

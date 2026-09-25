@@ -356,6 +356,7 @@ type State = struct {
     menu_typeahead: [16]u32,
     menu_typeahead_len: usize,
     menu_typeahead_at: i64,
+    typeahead_context: u8,
     tooltip_anchor: Key,
     has_tooltip_anchor: bool,
     tooltip_hover_at: i64,
@@ -3096,6 +3097,7 @@ fn menu_alt_key(code: u32) -> bool {
 
 fn leave_menu_mode(s: *State) {
     s.menu_typeahead_len = 0usize
+    s.typeahead_context = 0u8
     if !s.menu_mode { ret }
     if s.has_menu_saved_focus && s.elements[usize(s.menu_saved_focus)].live {
         s.focus = s.menu_saved_focus
@@ -3435,7 +3437,7 @@ fn menu_hover_tick(s: *State) -> err {
     ret fired
 }
 
-fn menu_label_starts(owner: *const Element, prefix: []const u32) -> bool {
+fn semantic_label_starts(owner: *const Element, prefix: []const u32) -> bool {
     var at = 0usize
     var i = 0usize
     while i < prefix.len {
@@ -3453,7 +3455,7 @@ fn focus_menu_prefix(s: *State, order: []const u32, count: usize, current: usize
     while step <= count {
         let candidate = usize(order[(current + step) % count])
         let (owner_at, has_owner) = menu_item_owner(s, candidate)
-        if has_owner && menu_label_starts(&s.elements[owner_at], prefix) {
+        if has_owner && semantic_label_starts(&s.elements[owner_at], prefix) {
             s.focus = u32(candidate)
             ret true
         }
@@ -3486,6 +3488,8 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
         s.focus = order[0usize]
         if code == 35u32 { s.focus = order[count - 1usize] }
     } else {
+        if s.typeahead_context != 1u8 { s.menu_typeahead_len = 0usize }
+        s.typeahead_context = 1u8
         var current = 0usize
         var i = 0usize
         while i < count {
@@ -3504,6 +3508,84 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
             s.menu_typeahead_len = 1usize
             let _ = focus_menu_prefix(s, order[..], count, current, s.menu_typeahead[0usize..1usize])
         }
+    }
+    s.focus_visible = true
+    ret true
+}
+
+fn collection_item_owner(s: *State, index: usize) -> (usize, u8, bool) {
+    var at = index
+    while true {
+        let e = &s.elements[at]
+        if e.has_semantics && (e.sem.role == 11u8 || e.sem.role == 14u8) { ret (at, e.sem.role, true) }
+        if !e.has_parent { ret (0usize, 0u8, false) }
+        at = usize(e.parent)
+    }
+}
+
+fn collection_root(s: *State, owner: usize, item_role: u8) -> (usize, u8, bool) {
+    var at = owner
+    while true {
+        let e = &s.elements[at]
+        if item_role == 11u8 && e.has_semantics && e.sem.role == 10u8 { ret (at, 2u8, true) }
+        if item_role == 14u8 && e.has_semantics && e.sem.role == 30u8 { ret (at, 3u8, true) }
+        if !e.has_parent { ret (0usize, 0u8, false) }
+        at = usize(e.parent)
+    }
+}
+
+fn focus_collection_prefix(s: *State, order: []const u32, count: usize, current: usize, root: usize, item_role: u8, prefix: []const u32) -> bool {
+    var step = 1usize
+    while step <= count {
+        let candidate = usize(order[(current + step) % count])
+        let (owner, role, has_owner) = collection_item_owner(s, candidate)
+        if has_owner && role == item_role {
+            let (candidate_root, _, has_root) = collection_root(s, owner, role)
+            if has_root && candidate_root == root && semantic_label_starts(&s.elements[owner], prefix) {
+                s.focus = u32(candidate)
+                ret true
+            }
+        }
+        step += 1usize
+    }
+    ret false
+}
+
+// Buffered typeahead for built List and GridView items. ponytail: only the first
+// 256 built focusables participate; virtual sources need a source-level lookup.
+fn collection_typeahead_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
+    if !s.has_focus || k.modifiers.shift || k.modifiers.control || k.modifiers.alt || k.modifiers.meta { ret false }
+    let (owner, item_role, has_owner) = collection_item_owner(s, usize(s.focus))
+    if !has_owner { ret false }
+    let (root, context, has_root) = collection_root(s, owner, item_role)
+    if !has_root { ret false }
+    let typed = unicode.to_lower_simple(k.key.logical)
+    if !unicode.is_alphabetic(typed) {
+        s.menu_typeahead_len = 0usize
+        s.typeahead_context = 0u8
+        ret false
+    }
+    var order: [256]u32 = zero
+    let count = collect_focusable(s, root, order[..], 0usize)
+    if count == 0usize { ret true }
+    var current = 0usize
+    var i = 0usize
+    while i < count {
+        if usize(order[i]) == usize(s.focus) { current = i }
+        i += 1usize
+    }
+    let now = s.animation_time.nanos
+    if s.typeahead_context != context || s.menu_typeahead_len == 16usize || now < s.menu_typeahead_at || now - s.menu_typeahead_at >= 500000000i64 {
+        s.menu_typeahead_len = 0usize
+    }
+    s.typeahead_context = context
+    s.menu_typeahead_at = now
+    s.menu_typeahead[s.menu_typeahead_len] = typed
+    s.menu_typeahead_len += 1usize
+    if !focus_collection_prefix(s, order[..], count, current, root, item_role, s.menu_typeahead[0usize..s.menu_typeahead_len]) && s.menu_typeahead_len > 1usize {
+        s.menu_typeahead[0usize] = typed
+        s.menu_typeahead_len = 1usize
+        let _ = focus_collection_prefix(s, order[..], count, current, root, item_role, s.menu_typeahead[0usize..1usize])
     }
     s.focus_visible = true
     ret true
@@ -4077,6 +4159,7 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
         if edited || edit_error != ok { ret (true, edit_error) }
     }
     if menu_key(s, code, k) { ret (true, ok) }
+    if collection_typeahead_key(s, code, k) { ret (true, ok) }
     if s.has_focus && s.elements[usize(s.focus)].live && s.elements[usize(s.focus)].kind == SLIDER_TAG {
         let (slid, slide_error) = slider_key(s, usize(s.focus), code)
         if slid || slide_error != ok { ret (true, slide_error) }
