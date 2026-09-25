@@ -151,7 +151,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 4u32)
     if renderer_error != ok { os.exit(3i32) }
     var renderer = r
-    let tokens = style.reference(.Light)
+    var tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 240usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 20u16, max_commands: 1024usize })
@@ -239,6 +239,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, second.x + 100.0, second.y + 32.0) != ok || stores[0usize].hits[4usize] != 1u32 { os.exit(30i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 65u64) { os.exit(31i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !focused_is(&harness, 61u64) { os.exit(32i32) }
+    // Horizontal start/end insets follow reading direction: the 56px blank
+    // moves from the left edge to the right edge in RTL.
+    tokens.direction = .RightToLeft
+    let (rtl_root, rtl_build_error) = build(&f, &theme, &stores[0usize])
+    if rtl_build_error != ok { os.exit(34i32) }
+    if testing.pump(&harness, rtl_root, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(35i32) }
+    let (rtl_shot, rtl_shot_error) = testing.snapshot(&harness, a)
+    if rtl_shot_error != ok { os.exit(36i32) }
+    let (rtl_inset, has_rtl_inset) = bounds(&harness, &runtime, 11u64)
+    if !has_rtl_inset || !is_color(rtl_shot, at(rtl_inset.x + 30.0, rtl_inset.y + 0.5), edge) || !is_color(rtl_shot, at(rtl_inset.x + 170.0, rtl_inset.y + 0.5), page) { os.exit(37i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(33i32) }
     try io.print("ui containers v2 ok\n")
     ret ok

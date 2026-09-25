@@ -23255,3 +23255,12 @@ does not request mirroring.
 `ui_actions_v2` holds the RTL ActionRow order and unchanged Toolbar order on
 Windows and Linux. The Segoe review is
 `build/ux/action-row-rtl-segoe.png`.
+
+## D1159 — Divider insets follow reading direction
+
+Horizontal Divider start and end insets now resolve against the theme's
+reading direction. Right-to-left themes therefore put a start-only inset on
+the physical right, while vertical dividers keep their top and bottom insets.
+
+`ui_containers_v2` holds both left-to-right and right-to-left pixels on Windows
+and Linux. The Segoe review is `build/ux/divider-rtl-inset-segoe.png`.

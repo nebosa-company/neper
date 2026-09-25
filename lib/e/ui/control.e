@@ -1187,8 +1187,9 @@ fn divider_options() -> DividerOptions {
 // `outline-variant` (`outline` when strong) across the axis, inset by the start
 // and end margins; labelled, the line, the label in `label-medium`
 // `on-surface-variant` 12 from each line, and the line again (a 16 lead line
-// for a start label). Decorative, it is left out of the tree; labelled, it is a
-// Group named by its label.
+// for a start label). Horizontal start/end insets follow reading direction
+// (D1159). Decorative, it is left out of the tree; labelled, it is a Group
+// named by its label.
 fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerOptions) -> (widget.Node, err) {
     var ink = style.color(t.tokens, .OutlineVariant)
     if options.strong { ink = style.color(t.tokens, .Outline) }
@@ -1207,6 +1208,7 @@ fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerO
         line.height = thick
         line.width = style.Length { Flex: 1.0 }
         outer.padding = style.EdgeLengths { left: lead, top: none, right: tail, bottom: none }
+        if t.tokens.direction == .RightToLeft { outer.padding = style.EdgeLengths { left: tail, top: none, right: lead, bottom: none } }
     } else {
         outer.height = span
         line.width = thick
