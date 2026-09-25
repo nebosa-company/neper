@@ -2370,12 +2370,35 @@ fn weekday_of(year: i64, month: i64, day: i64) -> i64 {
     ret w
 }
 
-// A calendar's pick of one day, and a turn to another month.
-type DayPick = struct { day: time.Date, pick: widget.Change[time.Date] }
+// A calendar's pick of one day, and a turn to another month. A nonzero `focus`
+// keeps a clicked day as the grid's roving tab stop.
+type DayPick = struct { day: time.Date, pick: widget.Change[time.Date], runtime: *widget.Runtime, focus: widget.Key }
 
 fn day_fire(ctx: *void) -> err {
     let p = mem.cast[*DayPick](ctx)
-    ret widget.fire_change[time.Date](p.pick, p.day)
+    let picked = widget.fire_change[time.Date](p.pick, p.day)
+    if picked != ok || p.focus == 0u64 { ret picked }
+    ret widget.focus_key(p.runtime, p.focus)
+}
+
+// `control.pressable` owns the common button surface. Calendar changes only its
+// inner region's place in the tab order; pointer and semantic behavior stay shared.
+fn calendar_tab_stop(a: *mem.Arena, node: widget.Node, tabbable: bool) -> (widget.Node, err) {
+    if tabbable || node.children.len != 1usize { ret (node, ok) }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = node.children[0usize]
+    switch inner[0usize].kind {
+    case .Region as region:
+        var untabbed = region
+        untabbed.focusable = false
+        inner[0usize].kind = widget.Kind { Region: untabbed }
+    default:
+        ret (node, ok)
+    }
+    var out = node
+    out.children = inner[0usize..1usize]
+    ret (out, ok)
 }
 
 type DayMove = struct { shown: time.Date, target: time.Date, show: widget.Change[time.Date], runtime: *widget.Runtime, calendar: widget.Key }
@@ -2415,6 +2438,8 @@ fn same_date(a: time.Date, b: time.Date) -> bool {
 // previous and next month through `show`; with Shift, the previous and next year.
 // Left and Right move focus by one day, Up and Down by a week, and Home and End
 // to the Monday and Sunday; movement across a month also reports it through `show`.
+// The selected day (else today, else day 1) is the grid's one tab stop; keyboard
+// movement and clicks carry that roving focus by stable day key.
 // A grid in the tree named `label`, seven columns.
 fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (made, made_error) = calendar_marked(a, key, t, label, shown, selected, has_selected, ranged, from, to, shown, false, show, pick)
@@ -2450,10 +2475,10 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     if shown.month == 1u8 { previous = time.Date { year: shown.year - 1i32, month: 12u8, day: 1u8 } }
     var next = time.Date { year: shown.year, month: shown.month + 1u8, day: 1u8 }
     if shown.month == 12u8 { next = time.Date { year: shown.year + 1i32, month: 1u8, day: 1u8 } }
-    turns[0usize] = DayPick { day: previous, pick: show }
-    turns[1usize] = DayPick { day: next, pick: show }
-    turns[2usize + usize(days)] = DayPick { day: time.Date { year: shown.year - 1i32, month: shown.month, day: 1u8 }, pick: show }
-    turns[3usize + usize(days)] = DayPick { day: time.Date { year: shown.year + 1i32, month: shown.month, day: 1u8 }, pick: show }
+    turns[0usize] = DayPick { day: previous, pick: show, runtime: t.runtime, focus: 0u64 }
+    turns[1usize] = DayPick { day: next, pick: show, runtime: t.runtime, focus: 0u64 }
+    turns[2usize + usize(days)] = DayPick { day: time.Date { year: shown.year - 1i32, month: shown.month, day: 1u8 }, pick: show, runtime: t.runtime, focus: 0u64 }
+    turns[3usize + usize(days)] = DayPick { day: time.Date { year: shown.year + 1i32, month: shown.month, day: 1u8 }, pick: show, runtime: t.runtime, focus: 0u64 }
     actions[0usize] = widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: day_fire }
     actions[1usize] = widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: day_fire }
     actions[2usize + usize(days)] = widget.Submit { ctx: mem.cast[*void](&turns[2usize + usize(days)]), invoke: day_fire }
@@ -2522,6 +2547,17 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     // The days: blanks before the first, then a disc a day, in rows of seven.
     let slots = usize(first_weekday) + usize(days)
     let weeks = (slots + 6usize) / 7usize
+    var tab_day = 1usize
+    if has_selected && selected.year == shown.year && selected.month == shown.month && selected.day >= 1u8 && i64(selected.day) <= days { tab_day = usize(selected.day) }
+    if !has_selected && has_today && today.year == shown.year && today.month == shown.month && today.day >= 1u8 && i64(today.day) <= days { tab_day = usize(today.day) }
+    var focused_day = 1usize
+    while focused_day <= usize(days) {
+        if widget.focus_within(t.runtime, key + 3u64 + u64(focused_day)) {
+            tab_day = focused_day
+            break
+        }
+        focused_day += 1usize
+    }
     let (rows, rows_error) = mem.alloc[widget.Node](a, weeks)
     if rows_error != ok { ret (zero, TooLarge) }
     var week = 0usize
@@ -2535,7 +2571,8 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
             if slot >= usize(first_weekday) && slot < slots {
                 let day = slot - usize(first_weekday) + 1usize
                 let date = time.Date { year: shown.year, month: shown.month, day: u8(day) }
-                turns[1usize + day] = DayPick { day: date, pick: pick }
+                let day_key = key + 3u64 + u64(day)
+                turns[1usize + day] = DayPick { day: date, pick: pick, runtime: t.runtime, focus: day_key }
                 actions[1usize + day] = widget.Submit { ctx: mem.cast[*void](&turns[1usize + day]), invoke: day_fire }
                 var end = has_selected && same_date(date, selected)
                 if ranged { end = has_selected && (same_date(date, from) || same_date(date, to)) }
@@ -2552,7 +2589,6 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
                     digit_color = style.color(t.tokens, .OnPrimary)
                     layer_color = digit_color
                 }
-                let day_key = key + 3u64 + u64(day)
                 let state = control.control_state(t, day_key, true, end)
                 var look = style.resolve(t.tokens, .Plain, state)
                 look.background = style.layer(fill, layer_color, control.state_opacity(t, state))
@@ -2581,7 +2617,9 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
                 let content = widget.aligned(0u64, .Center, .Center, control.sized_style(cell, cell), centred[0usize..1usize])
                 let (pressed, pressed_error) = control.pressable_states(a, day_key, t, 3u8, digits[0usize..digit_count], look, true, end, 0u32, 0u32, 0u64, &actions[1usize + day], content)
                 if pressed_error != ok { ret (zero, pressed_error) }
-                var sized = pressed
+                let (tabbed, tabbed_error) = calendar_tab_stop(a, pressed, day == tab_day)
+                if tabbed_error != ok { ret (zero, tabbed_error) }
+                var sized = tabbed
                 sized.style.width = style.Length { Px: cell }
                 sized.style.height = style.Length { Px: cell }
                 made = sized

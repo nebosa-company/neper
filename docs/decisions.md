@@ -22989,3 +22989,12 @@ through the existing `show` callback before focusing the stable target-day key.
 
 `ui_pickers_v2` holds in-month movement, week boundaries and a previous-month
 crossing on Windows and Linux. The reviewed surface is unchanged.
+
+## D1133 — Calendar days use one roving tab stop
+
+The selected day, else today, else day 1 is the calendar grid's only tabbable
+day. Keyboard movement makes the focused stable day key tabbable on the next
+build, and a pointer pick focuses its day even when that region was untabbed.
+
+`ui_pickers_v2` holds initial, moved and clicked focusability on Windows and
+Linux. The reviewed surface is unchanged.
