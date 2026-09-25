@@ -513,6 +513,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 27u32, zero) != ok || s.moves != 5usize { os.exit(149i32) }
     let (root_key_menu_done, root_key_menu_done_error) = build(&f, &theme, &touch, s)
     if root_key_menu_done_error != ok || testing.pump(&harness, root_key_menu_done, now) != ok || testing.by_role(&harness, .Menu).count != 0usize { os.exit(150i32) }
+    // (D1197) Each row names only the moves it can make; performing one reports
+    // it and announces it, and a move the row does not name is refused.
+    let (named_tree, named_tree_error) = testing.semantics(&harness)
+    if named_tree_error != ok { os.exit(151i32) }
+    let (first_named, has_first_named) = find(named_tree, .ListItem, "First")
+    let (second_named, has_second_named) = find(named_tree, .ListItem, "Second")
+    if !has_first_named || !has_second_named || first_named.names.len != 2usize || !mem.eq[u8](first_named.names[0usize], "Move down") || !mem.eq[u8](first_named.names[1usize], "Move to bottom") || second_named.names.len != 4usize || !mem.eq[u8](second_named.names[2usize], "Move to top") { os.exit(152i32) }
+    if accessibility.perform_named(&runtime, first_named.id, "Move up") == ok || s.moves != 5usize { os.exit(153i32) }
+    if accessibility.perform_named(&runtime, second_named.id, "Move to bottom") != ok || s.moves != 6usize || s.moved.from != 1usize || s.moved.to != 2usize { os.exit(154i32) }
+    let (root_named, root_named_error) = build(&f, &theme, &touch, s)
+    if root_named_error != ok || testing.pump(&harness, root_named, now) != ok || !politely_says(&harness, "Second, moved to position 3 of 3") { os.exit(155i32) }
     // In a right-to-left theme the PageView's physical strip, buttons,
     // chevrons, drag and horizontal keys mirror while page indices stay logical.
     s.page = 1usize

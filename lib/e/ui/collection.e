@@ -1046,8 +1046,17 @@ fn reorder_nudge(ctx: *void) -> err {
 }
 
 // (D1196) A reorderable row's semantic actions: Press is the row's own, and
-// Show menu opens its Move menu in the row's cell.
-type ReorderRow = struct { runtime: *widget.Runtime, action: widget.Submit, cell: *Swipe, has_cell: bool }
+// Show menu opens its Move menu in the row's cell. (D1197) Its named actions
+// are the moves it can make, in Move up, Move down, Move to top, Move to bottom
+// order: the first row names only the downward pair, the last the upward one.
+type ReorderRow = struct { runtime: *widget.Runtime, action: widget.Submit, cell: *Swipe, has_cell: bool, item: widget.Key, index: usize, count: usize, move: widget.Change[Reorder] }
+
+fn reorder_row_names(index: usize, count: usize) -> str {
+    if count < 2usize { ret "" }
+    if index == 0usize { ret "Move down\nMove to bottom" }
+    if index + 1usize == count { ret "Move up\nMove to top" }
+    ret "Move up\nMove down\nMove to top\nMove to bottom"
+}
 
 fn reorder_row_action(ctx: *void, action: u32) -> err {
     let r = back_of[ReorderRow](ctx)
@@ -1055,6 +1064,16 @@ fn reorder_row_action(ctx: *void, action: u32) -> err {
     if action == accessibility.ACTION_SHOW_MENU && r.has_cell {
         r.cell.menu = true
         widget.request_animation_frame(r.runtime)
+    }
+    if action >= widget.ACTION_NAMED && r.has_cell && r.count >= 2usize {
+        var command = usize(action - widget.ACTION_NAMED)
+        if r.index == 0usize { command = 2usize * command + 1usize } else if r.index + 1usize == r.count { command = 2usize * command }
+        var pick = ReorderPick { runtime: r.runtime, cell: r.cell, item: r.item, from: r.index, to: r.index, move: r.move }
+        if command == 0usize { pick.to = r.index - 1usize }
+        if command == 1usize { pick.to = r.index + 1usize }
+        if command == 2usize { pick.to = 0usize }
+        if command == 3usize { pick.to = r.count - 1usize }
+        ret reorder_pick(ctx_of(&pick))
     }
     ret ok
 }
@@ -3752,12 +3771,13 @@ fn row_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const 
 }
 
 fn row_sized(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32, height: f32) -> (widget.Node, err) {
-    let (made, made_error) = row_acting(a, key, t, item, index, count, width, height, accessibility.ACTION_PRESS, widget.Change[u32] { ctx: ctx_of(&item.action), invoke: submit_semantic_action })
+    let (made, made_error) = row_acting(a, key, t, item, index, count, width, height, accessibility.ACTION_PRESS, widget.Change[u32] { ctx: ctx_of(&item.action), invoke: submit_semantic_action }, "")
     ret (made, made_error)
 }
 
-// (D1196) A row whose enabled semantics offer `actions` through `on_action`.
-fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32, height: f32, actions: u32, on_action: widget.Change[u32]) -> (widget.Node, err) {
+// (D1196) A row whose enabled semantics offer `actions` and (D1197) the named
+// actions `names` through `on_action`.
+fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32, height: f32, actions: u32, on_action: widget.Change[u32], names: str) -> (widget.Node, err) {
     let dense = density_of(t) == 0usize
     let lines = row_lines(item)
     let enabled = !item.disabled
@@ -3867,6 +3887,7 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
     if enabled {
         sem.actions = actions
         sem.on_action = on_action
+        sem.names = names
     }
     if item.selected { sem.states = accessibility.STATE_SELECTED }
     if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
@@ -5384,8 +5405,8 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
 // disabled. Each row stands in a holder keyed `key + 1 + count + index`, so the
 // lifted one keeps its elements -- and the drag its handle -- at the top of the
 // stack. A list named `label`.
-// ponytail: no auto-scroll or named accessibility move actions; touch has no
-// long press for the menu.
+// (D1197) The same moves are the row's named accessibility actions.
+// ponytail: no auto-scroll; touch has no long press for the menu.
 fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, move: widget.Change[Reorder], width: f32) -> (widget.Node, err) {
     if keys.len != items.len || items.len == 0usize { ret (zero, TooLarge) }
     let n = items.len
@@ -5458,8 +5479,8 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         }
         var wide = width
         if i == lifted { wide = control.max_zero(width - 16.0) }
-        acting[i] = ReorderRow { runtime: t.runtime, action: items[i].action, cell: cells[i], has_cell: has[i] }
-        let (made, made_error) = row_acting(a, keys[i], t, &shown[i], i, n, wide, tall, accessibility.ACTION_PRESS | accessibility.ACTION_SHOW_MENU, widget.Change[u32] { ctx: ctx_of(&acting[i]), invoke: reorder_row_action })
+        acting[i] = ReorderRow { runtime: t.runtime, action: items[i].action, cell: cells[i], has_cell: has[i], item: keys[i], index: i, count: n, move: move }
+        let (made, made_error) = row_acting(a, keys[i], t, &shown[i], i, n, wide, tall, accessibility.ACTION_PRESS | accessibility.ACTION_SHOW_MENU, widget.Change[u32] { ctx: ctx_of(&acting[i]), invoke: reorder_row_action }, reorder_row_names(i, n))
         if made_error != ok { ret (zero, made_error) }
         // The handle's target over the glyph.
         drags[i] = Dragging { runtime: t.runtime, list: key, item: keys[i], index: i, count: n, extent: tall, move: move, cell: cells[i], has_cell: has[i] }

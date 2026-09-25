@@ -95,7 +95,7 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 // leave the tree. `focus_inset` moves the runtime ring inside an edge-to-edge
 // control; a platform action the element offers reaches `on_action` as its bit;
 // `promote_actions` keeps nested Button/Link descendants beside this control.
-type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, promote_actions: bool, on_action: Change[u32] }
+type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, promote_actions: bool, on_action: Change[u32], names: str }
 // An overlay (D810, widget plan P0-07): its children leave the flow and paint at the
 // root level, last, stacked against the element `anchor` names by key (0: the
 // window) with `placement` and `offset`, kept inside the window. A modal overlay
@@ -156,6 +156,10 @@ error TooLarge
 error StateType
 
 const STATES_PER_ELEMENT: usize = 8usize
+// (D1197) A semantic node's named custom actions are its `names`, one per line,
+// a string that outlives the element; the platform performs the one at index `j`
+// as `on_action(ACTION_NAMED + j)`, above every standard action bit.
+const ACTION_NAMED: u32 = 16777216u32
 const MAX_TEXT: usize = 64usize
 // `Kind`'s tags in declaration order; the one a scroll hit test looks for.
 const SCROLL_TAG: u8 = 7u8
@@ -5031,6 +5035,29 @@ fn semantic_action(widget_runtime: *Runtime, element: ElementId, bit: u32) -> er
     let e = &s.elements[index]
     if !e.has_semantics || (e.sem.actions & bit) == 0u32 { ret InvalidTree }
     ret fire_change[u32](e.sem.on_action, bit)
+}
+
+// (D1197) The named custom action `name` of the element's semantics, performed.
+fn semantic_named(widget_runtime: *Runtime, element: ElementId, name: str) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (index, found) = element_of(s, element)
+    if !found { ret InvalidTree }
+    let e = &s.elements[index]
+    let names = e.sem.names
+    if !e.has_semantics || names.len == 0usize { ret InvalidTree }
+    var start = 0usize
+    var j = 0u32
+    var i = 0usize
+    while i <= names.len {
+        if i == names.len || names[i] == 10u8 {
+            if mem.eq[u8](names[start..i], name) { ret fire_change[u32](e.sem.on_action, ACTION_NAMED + j) }
+            start = i + 1usize
+            j += 1u32
+        }
+        i += 1usize
+    }
+    ret InvalidTree
 }
 
 // An editor's value replaced, and its selection set, by the platform.

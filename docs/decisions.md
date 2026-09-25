@@ -23683,3 +23683,26 @@ The inventory is widget-plan phase P6: nine items and 47 components, marked
 `render_progress.py` leaves phases marked for the next release out of the
 widget KPI, so the current release still reads as complete. Opening the phase
 means resolving `next-release` and dropping the marker.
+
+## D1197 — Named accessibility actions ride on_action
+
+Semantic nodes can now name custom actions. `widget.Semantics.names` is a
+newline-separated string that outlives the element (a literal in practice), so
+the runtime keeps it by value like the rest of the record. The platform
+performs the action at index `j` as `on_action(widget.ACTION_NAMED + j)`, a
+value above every standard action bit, so existing handlers that compare
+against their own bits ignore it. `accessibility.Node.names` exposes the copied
+names in the tree and `accessibility.perform_named` performs one by name.
+
+Reorderable List rows name only the moves they can make, in Move up, Move
+down, Move to top, Move to bottom order: the first row offers the downward
+pair and the last the upward pair. A named move shares D1196's menu command,
+so it reports one `Reorder` and the polite "moved to position" notice. A
+name the row does not offer is refused.
+
+The test harness's fixed tree arena grows from 256 KB to 512 KB because every
+node now carries the slice. `os.AccessibleNode` does not carry names yet; the
+host bridge is still `Unsupported` on both hosts. `ui_collections4_v2` holds
+the names, the refusal, one performed move and its announcement on Windows
+and Linux; a sweep of all 103 `ui_*` fixtures on both hosts shows only the 12
+pre-existing failures recorded in D1195.
