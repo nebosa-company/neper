@@ -408,6 +408,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_9_error != ok || testing.pump(&harness, root_9, now) != ok { os.exit(57i32) }
     let (archive, has_archive) = bounds(&harness, &runtime, 508u64)
     if !has_archive || !near(archive.width, 32.0) || !near(archive.x, row.x + 300.0 - 8.0 - 68.0) || testing.tap(&harness, archive.x + 16.0, archive.y + 16.0) != ok || s.archives != 2usize { os.exit(58i32) }
+    // (D1200) The row names its tiles as accessibility actions; performing one
+    // runs it, and a name the row does not offer is refused.
+    let (swipe_tree, swipe_tree_error) = testing.semantics(&harness)
+    if swipe_tree_error != ok { os.exit(156i32) }
+    var swipe_node: accessibility.Node = zero
+    var swipe_nodes = 0usize
+    var sn = 0usize
+    while sn < swipe_tree.nodes.len {
+        let candidate = swipe_tree.nodes[sn]
+        if candidate.role == .ListItem && candidate.names.len == 2usize && mem.eq[u8](candidate.names[0usize], "Archive") && mem.eq[u8](candidate.names[1usize], "Delete") {
+            swipe_node = candidate
+            swipe_nodes += 1usize
+        }
+        sn += 1usize
+    }
+    if swipe_nodes != 1usize { os.exit(157i32) }
+    if accessibility.perform_named(&runtime, swipe_node.id, "Delete") != ok || s.deletes != 2usize || s.revealed { os.exit(158i32) }
+    if accessibility.perform_named(&runtime, swipe_node.id, "Share") == ok || s.archives != 2usize { os.exit(159i32) }
     // The reorderable list: 48 rows, the handle 12 in; a drag of 60 lifts the
     // first row 8 in over the gap where it would land, the second moving up;
     // the release reports 0 to 1; Ctrl+Down moves the focused row.

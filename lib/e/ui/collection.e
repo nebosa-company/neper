@@ -5201,6 +5201,18 @@ fn swipe_tile_run(ctx: *void) -> err {
     ret widget.fire_change[bool](r.reveal, false)
 }
 
+// (D1200) The row's named actions are its tiles, trailing then leading; one
+// performed runs as its tile would, then closes the row.
+type SwipeNames = struct { runs: []SwipeTileRun }
+
+fn swipe_named_action(ctx: *void, action: u32) -> err {
+    let named = back_of[SwipeNames](ctx)
+    if action < widget.ACTION_NAMED { ret ok }
+    let j = usize(action - widget.ACTION_NAMED)
+    if j >= named.runs.len { ret ok }
+    ret swipe_tile_run(ctx_of(&named.runs[j]))
+}
+
 // One 80 wide action tile (D982), `wide` across: its container and `on-`
 // colour by tone, the 24 glyph 4 above the `label-medium` label, centred.
 fn swipe_tile(a: *mem.Arena, key: widget.Key, t: *const control.Theme, act: *const SwipeAction, wide: f32, tall: f32) -> (widget.Node, err) {
@@ -5255,9 +5267,10 @@ fn swipe_tile(a: *mem.Arena, key: widget.Key, t: *const control.Theme, act: *con
 // or one of them is hovered or focused, the actions are also 32 icon buttons
 // (`key + 8 + index`) in `on-surface-variant` 4 apart at the row's end; Escape
 // closes. Pressing a revealed tile runs it, then closes the row. A list item in
-// the tree, Expanded while revealed.
-// ponytail: no fling velocity, rubber band or settle motion, and no custom
-// accessibility actions; the actions reach the keyboard as the hover buttons.
+// the tree, Expanded while revealed; (D1200) its named accessibility actions
+// are the tiles' labels, trailing then leading.
+// ponytail: no fling velocity, rubber band or settle motion; the actions reach
+// the keyboard as the hover buttons.
 fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, actions: []const SwipeAction, revealed: bool, reveal: widget.Change[bool], options: SwipeOptions) -> (widget.Node, err) {
     if actions.len == 0usize || actions.len > 3usize || options.leading.len > 1usize { ret (zero, TooLarge) }
     let tile_count = actions.len + options.leading.len
@@ -5381,9 +5394,32 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), stacked[0usize..1usize])
+    var spelled = 0usize
+    var n = 0usize
+    while n < tile_count {
+        spelled += shown[n].label.len + 1usize
+        n += 1usize
+    }
+    let (names, names_error) = mem.alloc[u8](a, spelled)
+    if names_error != ok { ret (zero, TooLarge) }
+    var m = 0usize
+    n = 0usize
+    while n < tile_count {
+        if n > 0usize {
+            names[m] = 10u8
+            m += 1usize
+        }
+        m += control.copy_text(names[m..names.len], shown[n].label)
+        n += 1usize
+    }
+    let (named, named_error) = mem.alloc[SwipeNames](a, 1usize)
+    if named_error != ok { ret (zero, TooLarge) }
+    named[0usize] = SwipeNames { runs: tile_runs }
     var sem: widget.Semantics = zero
     sem.role = 11u8
     if revealed { sem.states = accessibility.STATE_EXPANDED }
+    sem.names = names[0usize..m]
+    sem.on_action = widget.Change[u32] { ctx: ctx_of(&named[0usize]), invoke: swipe_named_action }
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
 
