@@ -82,7 +82,18 @@ fn tree_has_children(ctx: *void, key: widget.Key) -> bool {
 }
 
 fn tree_build(ctx: *void, a: *mem.Arena, key: widget.Key, out: *widget.Node) -> err {
-    *out = widget.box(0u64, control.sized_style(40.0, 10.0), zero)
+    var label = "A"
+    if key == 11u64 { label = "A1" }
+    if key == 111u64 { label = "A1a" }
+    if key == 12u64 { label = "A2" }
+    if key == 2u64 { label = "B" }
+    if key == 21u64 { label = "B1" }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret held_error }
+    held[0usize] = widget.box(0u64, control.sized_style(40.0, 10.0), zero)
+    var sem: widget.Semantics = zero
+    sem.label = label
+    *out = widget.semantics(0u64, sem, style.defaults(), held[0usize..1usize])
     ret ok
 }
 
@@ -228,12 +239,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(17i32) }
     var items = 0usize
+    var has_tree_b = false
     var i = 0usize
     while i < tree.nodes.len {
-        if tree.nodes[i].role == .TreeItem { items += 1usize }
+        if tree.nodes[i].role == .TreeItem {
+            items += 1usize
+            if tree.nodes[i].label.len == 1usize && tree.nodes[i].label[0usize] == 66u8 { has_tree_b = true }
+        }
         i += 1usize
     }
     if items != 5usize { os.exit(18i32) }
+    if !has_tree_b || widget.focus(&runtime, testing.by_key(&harness, 1u64).element) != ok || testing.press_key(&harness, 66u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(50i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 1u64).element) != ok { os.exit(51i32) }
     // A tap on the twisty toggles. The row key scope moves linearly and through
     // the hierarchy: Right enters open children, leaves stay put, and Left
     // returns to a parent or collapses it.

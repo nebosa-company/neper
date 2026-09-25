@@ -22689,3 +22689,14 @@ The scan is deliberately bounded to the first 256 built focusables; virtual
 sources need a source-level lookup for offscreen matches. `ui_collections_v2`
 holds List and GridView behavior and `ui_navigation2_v2` guards menu behavior
 on Windows and Linux. The reviewed surfaces are unchanged.
+
+## D1102 — TreeItems inherit labels and join typeahead
+
+A TreeSource still builds arbitrary content. When its outer TreeItem has no
+explicit label, accessibility and runtime typeahead use the first descendant
+semantic or text label. Visible focusable TreeItems then share the same Unicode,
+500 ms buffered matching as List and GridView.
+
+`ui_collections3_v2` holds TreeItem labels and movement, while
+`ui_accessibility` guards the general tree build on Windows and Linux. The
+reviewed Tree surface is unchanged.
