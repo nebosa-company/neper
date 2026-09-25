@@ -23529,8 +23529,8 @@ the primary open action, while Space fires selection; accessibility exposes and
 routes Press and Select independently. A selected pressable Card also stacks its
 check over content instead of letting the extra child enlarge the layout.
 
-The widget runtime now lets an ancestor Space shortcut handle Space before its
-generic focused-region activation; Enter keeps its existing activation order.
+The widget runtime marks Space activation on the focused Card region so its
+selection path stays local; Enter keeps its existing activation order.
 `ui_containers_v2` holds pointer, Space, semantics and unchanged geometry on
 Windows and Linux.
 
@@ -23554,3 +23554,16 @@ state or special-case control code.
 
 `ui_containers_v2` now holds both parent-hover and child-hover pixels on Windows
 and Linux. The Segoe review is `build/ux/card-child-hover-segoe.png`.
+
+## D1191 — Nested Card actions are accessibility siblings
+
+A pressable Card marks its semantic node for action promotion. Accessibility
+tree construction moves descendant Button and Link nodes beside that Card while
+the visual runtime tree remains nested for layout and hit testing. This avoids
+exposing a Button inside a Button without duplicating the slotted controls.
+
+The earlier ancestor Space shortcut is replaced by region-local Space
+activation: Space selects a focused Card, while Space on a focused slotted
+button activates only that button. `ui_containers_v2` holds pointer, keyboard
+and tree-parentage behavior on Windows and Linux; the affected accessibility,
+gesture, widget and action fixtures also pass on both hosts.

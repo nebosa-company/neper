@@ -962,9 +962,8 @@ fn card_options() -> CardOptions {
 // content at 38%, no shadow, not focusable. Loading replaces the content with
 // synchronised media, title (60%) and supporting-line (90%) skeletons, and marks
 // the non-interactive Card busy; the caller owns the 300ms delay and phase.
-// ponytail: slotted action semantics remain descendants rather than siblings.
-// Dragged omits the 1.5-degree tilt and 102% scale until nodes have a visual
-// transform independent of layout.
+// ponytail: dragged omits the 1.5-degree tilt and 102% scale until nodes have
+// a visual transform independent of layout.
 fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, children: []const widget.Node) -> (widget.Node, err) {
     let (made, made_error) = card_render(a, key, t, options, false, children)
     ret (made, made_error)
@@ -975,6 +974,7 @@ type CardCommands = struct { runtime: *widget.Runtime, open: *const widget.Submi
 fn card_gesture(ctx: *void, gesture: widget.Gesture) -> err {
     let commands = mem.cast[*CardCommands](ctx)
     if gesture.tag != .Tap { ret ok }
+    if widget.space_activation(commands.runtime) && mem.address_of(commands.select) != 0usize { ret widget.fire_submit(*commands.select) }
     let held = widget.modifiers(commands.runtime)
     if held.shift && mem.address_of(commands.range_select) != 0usize { ret widget.fire_submit(*commands.range_select) }
     if (held.control || held.meta) && mem.address_of(commands.select) != 0usize { ret widget.fire_submit(*commands.select) }
@@ -988,15 +988,6 @@ fn card_semantic_action(ctx: *void, action: u32) -> err {
     if action == accessibility.ACTION_SELECT && mem.address_of(commands.select) != 0usize { ret widget.fire_submit(*commands.select) }
     if action == accessibility.ACTION_PRESS && mem.address_of(commands.open) != 0usize { ret widget.fire_submit(*commands.open) }
     ret ok
-}
-
-fn card_selection_scope(a: *mem.Arena, selection: *const widget.Submit, card_node: widget.Node) -> (widget.Node, err) {
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 1usize)
-    let (children, children_error) = mem.alloc[widget.Node](a, 1usize)
-    if shortcuts_error != ok || children_error != ok { ret (zero, TooLarge) }
-    shortcuts[0usize] = widget.Shortcut { key: 32u32, modifiers: zero, action: *selection }
-    children[0usize] = card_node
-    ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), children), ok)
 }
 
 fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, flush: bool, children: []const widget.Node) -> (widget.Node, err) {
@@ -1111,19 +1102,15 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
         sem.role = 3u8
         if opens { sem.actions = accessibility.ACTION_PRESS }
         if can_select { sem.actions = sem.actions | accessibility.ACTION_SELECT }
+        sem.promote_actions = true
         sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](&commands[0usize]), invoke: card_semantic_action }
         var press_children = parts[0usize..1usize]
         if count > 1usize {
             holder[1usize] = widget.stack(0u64, style.defaults(), parts[0usize..count])
             press_children = holder[1usize..2usize]
         }
-        holder[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&commands[0usize]), invoke: card_gesture }, gestures: 1u8 | 4u8, enabled: options.enabled, focusable: options.enabled }, s, press_children)
-        let card_node = widget.semantics(0u64, sem, style.defaults(), holder[0usize..1usize])
-        if can_select {
-            let (scoped, scoped_error) = card_selection_scope(a, options.select, card_node)
-            ret (scoped, scoped_error)
-        }
-        ret (card_node, ok)
+        holder[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&commands[0usize]), invoke: card_gesture }, gestures: 1u8 | 4u8 | 16u8, enabled: options.enabled, focusable: options.enabled }, s, press_children)
+        ret (widget.semantics(0u64, sem, style.defaults(), holder[0usize..1usize]), ok)
     }
     if count == 1usize {
         holder[0usize] = widget.box(0u64, s, parts[0usize..1usize])

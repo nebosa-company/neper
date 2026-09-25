@@ -93,8 +93,9 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 // `column` place the element in a collection of `row_count` by `column_count`;
 // `level` is a heading's or a tree item's depth; a hidden element and its subtree
 // leave the tree. `focus_inset` moves the runtime ring inside an edge-to-edge
-// control; a platform action the element offers reaches `on_action` as its bit.
-type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, on_action: Change[u32] }
+// control; a platform action the element offers reaches `on_action` as its bit;
+// `promote_actions` keeps nested Button/Link descendants beside this control.
+type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, promote_actions: bool, on_action: Change[u32] }
 // An overlay (D810, widget plan P0-07): its children leave the flow and paint at the
 // root level, last, stacked against the element `anchor` names by key (0: the
 // window) with `placement` and `offset`, kept inside the window. A modal overlay
@@ -180,6 +181,7 @@ const GESTURE_TAP: u8 = 1u8
 const GESTURE_DRAG: u8 = 2u8
 const GESTURE_HOVER: u8 = 4u8
 const GESTURE_DROP: u8 = 8u8
+const GESTURE_SPACE: u8 = 16u8
 
 type Cell = struct { live: bool, generation: u32, offset: usize, size: usize, align: usize, owner: u32 }
 type Element = struct {
@@ -412,6 +414,7 @@ type State = struct {
     arena_state: Arena,
     has_pointer: bool,
     held_modifiers: input.Modifiers,
+    space_activation: bool,
     last_tap: ElementId,
     has_last_tap: bool,
     last_tap_at: time.Instant,
@@ -4667,23 +4670,17 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             let (accessed, access_error) = menu_bar_access_key(s, k.key.logical)
             if accessed || access_error != ok { ret access_error }
         }
-        // Space may be specialised by an ancestor (for example, selection on a
-        // Card whose ordinary activation opens it). Enter keeps region activation
-        // ahead of a scope's default action.
-        if code == 32u32 {
-            let (space_taken, space_error) = dispatch_key(s, k)
-            if space_taken || space_error != ok { ret space_error }
-        }
         if s.has_focus {
             let f = &s.elements[usize(s.focus)]
             if f.live && f.kind == REGION_TAG && f.enabled && (f.gestures & GESTURE_TAP) != 0u8 && (code == 13u32 || code == 32u32) {
-                ret menu_tap(s, usize(s.focus), geometry.Point { x: f.bounds.x + f.bounds.width * 0.5, y: f.bounds.y + f.bounds.height * 0.5 })
+                s.space_activation = code == 32u32 && (f.gestures & GESTURE_SPACE) != 0u8
+                let activated = menu_tap(s, usize(s.focus), geometry.Point { x: f.bounds.x + f.bounds.width * 0.5, y: f.bounds.y + f.bounds.height * 0.5 })
+                s.space_activation = false
+                ret activated
             }
         }
-        if code != 32u32 {
-            let (taken, key_error) = dispatch_key(s, k)
-            if taken || key_error != ok { ret key_error }
-        }
+        let (taken, key_error) = dispatch_key(s, k)
+        if taken || key_error != ok { ret key_error }
         if s.has_focus && s.elements[usize(s.focus)].has_action {
             let action = s.elements[usize(s.focus)].action
             ret action.invoke(action.ctx, event)
@@ -5195,6 +5192,12 @@ fn modifiers(widget_runtime: *const Runtime) -> input.Modifiers {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize || s.closed { ret zero }
     ret s.held_modifiers
+}
+
+// Whether the current tap callback came from a focused region's Space key.
+fn space_activation(widget_runtime: *const Runtime) -> bool {
+    let s = mem.cast[*State](widget_runtime.state)
+    ret mem.address_of(s) != 0usize && !s.closed && s.space_activation
 }
 
 // ---------------------------------------------------------- the harness's view

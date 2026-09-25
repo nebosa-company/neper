@@ -32,7 +32,7 @@ use e.ui.testing
 use e.ui.widget
 
 type Hit = struct { store: *Store, index: usize }
-type Store = struct { hits: [9]u32, targets: [9]Hit, actions: [9]widget.Submit, words: [3]str, lines: [3]str, open: [3]bool, disclosed: bool, group_open: bool }
+type Store = struct { hits: [10]u32, targets: [10]Hit, actions: [10]widget.Submit, words: [3]str, lines: [3]str, open: [3]bool, disclosed: bool, group_open: bool }
 
 fn on_hit(ctx: *void) -> err {
     let h = mem.cast[*Hit](ctx)
@@ -60,6 +60,34 @@ fn has_action(node: accessibility.Node, action: accessibility.Action) -> bool {
     while i < node.actions.len {
         if node.actions[i] == action { ret true }
         i += 1usize
+    }
+    ret false
+}
+
+fn same_id(a: accessibility.Id, b: accessibility.Id) -> bool {
+    ret a.slot == b.slot && a.generation == b.generation
+}
+
+fn tree_descends(tree: accessibility.Tree, child: accessibility.Id, ancestor: accessibility.Id) -> bool {
+    var current = child
+    while true {
+        var found = false
+        var parent: accessibility.Id = zero
+        var i = 0usize
+        while i < tree.nodes.len {
+            var j = 0usize
+            while j < tree.nodes[i].children.len {
+                if same_id(tree.nodes[i].children[j], current) {
+                    parent = tree.nodes[i].id
+                    found = true
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        if !found { ret false }
+        if same_id(parent, ancestor) { ret true }
+        current = parent
     }
     ret false
 }
@@ -131,7 +159,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     media_style.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) }
     var slot_button_options = control.button_options()
     slot_button_options.variant = .Plain
-    let (slot_action_button, slot_action_error) = control.button(a, 253u64, t, "More", &s.actions[8usize], slot_button_options)
+    let (slot_action_button, slot_action_error) = control.button(a, 253u64, t, "More", &s.actions[9usize], slot_button_options)
     if slot_action_error != ok { ret (zero, slot_action_error) }
     var slots = control.card_slots()
     slots.media = widget.box(250u64, media_style, zero)
@@ -243,7 +271,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var store: Store = zero
     stores[0usize] = store
     var i = 0usize
-    while i < 9usize {
+    while i < 10usize {
         stores[0usize].targets[i] = Hit { store: &stores[0usize], index: i }
         stores[0usize].actions[i] = widget.Submit { ctx: mem.cast[*void](&stores[0usize].targets[i]), invoke: on_hit }
         i += 1usize
@@ -305,6 +333,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if child_hover_error != ok || testing.pump(&harness, child_hover_root, time.Instant { nanos: 1020000000i64 }) != ok { os.exit(65i32) }
     let (child_hover_shot, child_hover_shot_error) = testing.snapshot(&harness, a)
     if child_hover_shot_error != ok || !is_color(child_hover_shot, at(slotted.x + 100.0, slot_header.y + 12.0), page) { os.exit(66i32) }
+    if testing.tap(&harness, slot_action.x + slot_action.width * 0.5, slot_action.y + slot_action.height * 0.5) != ok { os.exit(67i32) }
+    if stores[0usize].hits[9usize] != 1u32 || stores[0usize].hits[0usize] != 1u32 { os.exit(68i32) }
+    if testing.press_key(&harness, 32u32, zero) != ok { os.exit(69i32) }
+    if stores[0usize].hits[9usize] != 2u32 || stores[0usize].hits[7usize] != 0u32 { os.exit(70i32) }
     // The pressable card is a Button named by its title, and fires on a tap.
     if testing.by_label(&harness, "Open").count != 1usize || testing.by_role(&harness, .Button).count == 0usize { os.exit(17i32) }
     if testing.tap(&harness, filled.x + 60.0, filled.y + 21.0) != ok || stores[0usize].hits[0usize] != 2u32 { os.exit(18i32) }
@@ -325,6 +357,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var described_card = false
     var loading_card_busy = false
     var selectable_card = false
+    var card_sem_id: accessibility.Id = zero
+    var action_sem_id: accessibility.Id = zero
     var sem_at = 0usize
     while sem_at < group_tree.nodes.len {
         let node = group_tree.nodes[sem_at]
@@ -336,6 +370,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         if node.role == .Button && same(node.label, "Open") { described_card = same(node.hint, "Build details") }
         if node.role == .Button && same(node.label, "Selected project") { selectable_card = node.state.selected && has_action(node, .Select) }
+        if node.role == .Button && same(node.label, "Release") { card_sem_id = node.id }
+        if node.role == .Button && same(node.label, "More") && near(node.bounds.x, slot_action.x) { action_sem_id = node.id }
         if node.role == .Group && same(node.label, "Loading project") { loading_card_busy = node.state.busy }
         sem_at += 1usize
     }
@@ -355,7 +391,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     f = mem.arena_from(frame_storage)
     let (hold_end, hold_end_error) = build(&f, &theme, &stores[0usize])
     if hold_end_error != ok || testing.pump(&harness, hold_end, time.Instant { nanos: 1700000000i64 }) != ok || testing.send(&harness, input.Event { PointerUp: touch }) != ok || stores[0usize].hits[7usize] != 4u32 { os.exit(60i32) }
-    if !advanced_sem || !invalid_alert || !described_card || !loading_card_busy || !selectable_card || testing.by_label(&harness, "Loading project").count != 1usize || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
+    if !advanced_sem || !invalid_alert || !described_card || !loading_card_busy || !selectable_card || card_sem_id.generation == 0u32 || action_sem_id.generation == 0u32 || tree_descends(group_tree, action_sem_id, card_sem_id) || testing.by_label(&harness, "Loading project").count != 1usize || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[6usize] != 2u32 { os.exit(46i32) }
     // The disclosure: a 40 header, the content 40 in and 4 below; open, the
     // header says expanded, and Left on it (focused by the tap) shuts it.
