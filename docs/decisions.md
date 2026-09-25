@@ -23491,3 +23491,14 @@ or pressable Button hint. The caller still composes the visible content, while
 the control no longer forces assistive technology to infer that relationship.
 
 `ui_containers_v2` holds the pressable Card description on Windows and Linux.
+
+## D1185 — Dragged Cards use the existing state layer and elevation
+
+CardOptions now exposes a caller-owned dragged state. An enabled dragged Card
+uses the shared dragged opacity over its normal container and elevation 4, so
+the renderer supplies the documented lift without parallel interaction state.
+
+The 1.5-degree tilt and 102% scale remain open until nodes have a visual
+transform independent of layout. `ui_containers_v2` holds the dragged pixels
+and shadow on Windows and Linux. The Segoe review is
+`build/ux/card-dragged-segoe.png`.
