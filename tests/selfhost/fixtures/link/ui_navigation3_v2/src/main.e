@@ -340,6 +340,46 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let swipes_before = s.counters[3usize].count
     if testing.drag(&harness, geometry.Point { x: 5.0, y: 100.0 }, geometry.Point { x: 40.0, y: 100.0 }, 4usize) != ok || s.counters[3usize].count != swipes_before { os.exit(70i32) }
     if testing.drag(&harness, geometry.Point { x: 5.0, y: 100.0 }, geometry.Point { x: 120.0, y: 100.0 }, 6usize) != ok || s.counters[3usize].count == swipes_before { os.exit(71i32) }
+    // (D1286) Opening slides the drawer in: half way, 200 in from the edge is
+    // still the page; settled, it is the drawer's surface.
+    let slide_surface = style.color(&tokens, .SurfaceContainerLow)
+    var slide_step = 0usize
+    while slide_step < 4usize {
+        var slide_at = 9000000000i64
+        var slide_open = false
+        if slide_step == 1usize { slide_at = 9016000000i64 }
+        if slide_step == 2usize {
+            slide_at = 9100000000i64
+            slide_open = true
+        }
+        if slide_step == 3usize {
+            slide_at = 9250000000i64
+            slide_open = true
+        }
+        if testing.begin(&harness, time.Instant { nanos: slide_at }) != ok { os.exit(72i32) }
+        f = mem.arena_from(frame_storage)
+        let (slid_drawer, slid_error) = navigation.navigation_drawer_of(&f, 3900u64, &theme, "neper", s.rows[0usize..3usize], 0usize, s.picks[0usize..3usize], slide_open, &s.dismiss, 300.0)
+        let (slide_parts, slide_parts_error) = mem.alloc[widget.Node](&f, 1usize)
+        if slid_error != ok || slide_parts_error != ok { os.exit(73i32) }
+        slide_parts[0usize] = slid_drawer
+        var slide_page = control.sized_style(640.0, 520.0)
+        slide_page.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.box(0u64, slide_page, slide_parts[0usize..1usize]), time.Instant { nanos: slide_at }) != ok { os.exit(74i32) }
+        slide_step += 1usize
+    }
+    let (half_shot, half_shot_error) = testing.snapshot(&harness, a)
+    if half_shot_error != ok || is_color(half_shot, at(200.0, 300.0), slide_surface) { os.exit(75i32) }
+    if testing.begin(&harness, time.Instant { nanos: 9600000000i64 }) != ok { os.exit(76i32) }
+    f = mem.arena_from(frame_storage)
+    let (settled_drawer, settled_error) = navigation.navigation_drawer_of(&f, 3900u64, &theme, "neper", s.rows[0usize..3usize], 0usize, s.picks[0usize..3usize], true, &s.dismiss, 300.0)
+    let (settled_parts, settled_parts_error) = mem.alloc[widget.Node](&f, 1usize)
+    if settled_error != ok || settled_parts_error != ok { os.exit(77i32) }
+    settled_parts[0usize] = settled_drawer
+    var settled_page = control.sized_style(640.0, 520.0)
+    settled_page.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+    if testing.pump(&harness, widget.box(0u64, settled_page, settled_parts[0usize..1usize]), time.Instant { nanos: 9600000000i64 }) != ok { os.exit(78i32) }
+    let (settled_shot, settled_shot_error) = testing.snapshot(&harness, a)
+    if settled_shot_error != ok || !is_color(settled_shot, at(200.0, 300.0), slide_surface) { os.exit(79i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation3 v2 ok\n")
     ret ok

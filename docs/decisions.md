@@ -24941,3 +24941,19 @@ curve here.
 `ui_containers_v2` holds the content still built half way through closing and
 gone once settled on Windows and Linux; the other disclosure fixtures still
 pass.
+
+## D1286 — Modal drawers slide in and out
+
+`navigation_drawer_of` stands in a box keyed `key + 8192` whether open or
+shut, so an `eased_on` slide is remembered across the change. Opening slides
+the sheet in from its edge over `duration-medium-2` with the scrim fading in.
+Closing slides it out over `duration-short-4`, still built while it leaves,
+but no longer modal or trapping, so the keyboard is not held by a leaving
+drawer. The runtime now gives back an overlay's saved focus when it stops
+being modal, as retiring it would. That kept the fixture's focus-return check
+passing: the first run showed the leaving drawer holding the focus. Reduced
+motion jumps.
+
+`ui_navigation3_v2` holds the page still showing 200 in from the edge half way
+through opening, the drawer surface there once settled, and the focus back on
+the opener after closing, on Windows and Linux.

@@ -1395,6 +1395,12 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     case .Overlay as ov:
         e.enabled = true
         e.linked = ov.anchor
+        // (D1286) An overlay that stops being modal (a drawer sliding out) gives
+        // back the focus it took, as retiring would.
+        if e.modal && !ov.modal && e.has_saved && s.has_focus && s.elements[usize(e.saved_focus)].live && descends_from(s, usize(s.focus), index) {
+            s.focus = e.saved_focus
+            e.has_saved = false
+        }
         e.modal = ov.modal
         e.dismiss = ov.dismiss
         if !e.overlay_opened {
