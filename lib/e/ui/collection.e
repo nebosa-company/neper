@@ -6179,8 +6179,8 @@ fn pull_options() -> PullOptions {
 // (32 dense, keyed `key + 1`, named `label`, disabled while refreshing), F5
 // and Ctrl+R refreshing from within, and an indeterminate linear progress
 // under it while refreshing. A group named `label`, busy while refreshing.
-// ponytail: the arc does not spin on its own (the caller's frames would); no
-// new-row tag, outcome snackbar or settle motion.
+// (D1289) The refreshing arc spins from the frame clock.
+// ponytail: no new-row tag, outcome snackbar or settle motion.
 fn pull_to_refresh_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, refreshing: bool, refresh: *const widget.Submit, options: PullOptions) -> (widget.Node, err) {
     let w = options.width
     let h = options.height
@@ -6269,7 +6269,18 @@ fn pull_to_refresh_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, c
             if share > 1.0 { share = 1.0 }
             share = share * 0.8
         }
-        let ring = control.Ring { track: control.with_alpha(arc_ink, 0.0), fill: arc_ink, share: share, thickness: 2.5, arena: a, start: 0.0, sweep: 6.2831855, gap: 0.0, band: zero, band_from: 2.0 }
+        // (D1289) While refreshing the quarter arc spins a turn every 1.333 s from
+        // the frame clock, asking for frames; reduced motion holds it still.
+        var spin: f32 = 0.0
+        if refreshing && mem.address_of(t.runtime) != 0usize && !t.tokens.motion.reduced {
+            let turn_nanos = 1333000000i64
+            let now = widget.frame_time(t.runtime).nanos
+            var into = now % turn_nanos
+            if into < 0i64 { into += turn_nanos }
+            spin = f32(into) / f32(turn_nanos) * 6.2831855
+            widget.request_animation_frame(t.runtime)
+        }
+        let ring = control.Ring { track: control.with_alpha(arc_ink, 0.0), fill: arc_ink, share: share, thickness: 2.5, arena: a, start: spin, sweep: 6.2831855, gap: 0.0, band: zero, band_from: 2.0 }
         let (arc, arc_error) = control.ring_node(a, key + 2u64, ring, 18.5)
         if arc_error != ok { ret (zero, arc_error) }
         let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)

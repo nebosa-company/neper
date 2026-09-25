@@ -24985,3 +24985,14 @@ velocity and the reduced-motion cross-fade are still to come.
 `ui_collections4_v2` holds, half way through turning to the second page, the
 first page still built and the second not yet in place, and once settled the
 second at the view's start with the first gone, on Windows and Linux.
+
+## D1289 — The refreshing arc spins on its own
+
+While `pull_to_refresh_of` is refreshing, its quarter arc starts at an angle
+taken from the frame clock, one turn every 1.333 s, and asks for animation
+frames, so it spins without the caller driving frames. Under reduced motion
+it holds still. The new-row tag, outcome snackbar and settle motion are still
+to come.
+
+`ui_collections4_v2` holds the arc's circle drawn differently a quarter turn
+later, on Windows and Linux.
