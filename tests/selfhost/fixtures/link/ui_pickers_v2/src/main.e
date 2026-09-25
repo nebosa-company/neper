@@ -19,19 +19,23 @@ use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
 
-type Store = struct { press: widget.Submit, picks: [3]widget.Submit, words: [3]str }
+type Store = struct { press: widget.Submit, picks: [3]widget.Submit, words: [3]str, dates: usize, last_date: time.Date }
 
 fn on_press(ctx: *void) -> err {
     ret ok
 }
 
 fn on_date(ctx: *void, value: time.Date) -> err {
+    let s = mem.cast[*Store](ctx)
+    s.dates += 1usize
+    s.last_date = value
     ret ok
 }
 
@@ -185,6 +189,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot, at(field.x + 0.5, field.y + 20.0), primary) || !is_color(shot, at(field.x + 1.5, field.y + 20.0), primary) { os.exit(21i32) }
     let high = style.color(&tokens, .SurfaceContainerHigh)
     if !is_color(shot, at(grid.x - 6.0, grid.y + 100.0), high) || !is_color(shot, at(grid.x + 230.0, grid.y + 100.0), high) || !is_color(shot, at(grid.x + 100.0, grid.y - 4.0), high) { os.exit(22i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 215u64).element) != ok { os.exit(29i32) }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
+    if testing.press_key(&harness, 34u32, zero) != ok || stores[0usize].last_date.month != 4u8 || stores[0usize].last_date.year != 2026i32 { os.exit(30i32) }
+    if testing.press_key(&harness, 33u32, zero) != ok || stores[0usize].last_date.month != 2u8 || stores[0usize].last_date.year != 2026i32 { os.exit(31i32) }
+    if testing.press_key(&harness, 34u32, shifted) != ok || stores[0usize].last_date.month != 3u8 || stores[0usize].last_date.year != 2027i32 { os.exit(32i32) }
+    if testing.press_key(&harness, 33u32, shifted) != ok || stores[0usize].last_date.month != 3u8 || stores[0usize].last_date.year != 2025i32 { os.exit(33i32) }
+    if stores[0usize].dates != 4usize { os.exit(34i32) }
     // The picker's sheet: on the window's bottom edge across its width over the
     // scrim, rows 56 tall, the chosen one's radio dotted in primary, another's ring
     // in on-surface-variant round the sheet.

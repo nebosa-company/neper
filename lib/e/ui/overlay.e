@@ -2395,8 +2395,9 @@ fn same_date(a: time.Date, b: time.Date) -> bool {
 // each reporting the first of the neighbouring month through `show`; then the
 // weekday row and the weeks, Monday first, a day button keyed `key + 3 + day`
 // reporting its date through `pick`, the day of `selected` marked and the days
-// from `from` to `to` (when `ranged`) banded. A grid in the tree named `label`,
-// seven columns.
+// from `from` to `to` (when `ranged`) banded. Page Up and Page Down report the
+// previous and next month through `show`; with Shift, the previous and next year.
+// A grid in the tree named `label`, seven columns.
 fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (made, made_error) = calendar_marked(a, key, t, label, shown, selected, has_selected, ranged, from, to, shown, false, show, pick)
     ret (made, made_error)
@@ -2423,9 +2424,9 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
     let days = time.days_in_month(year, month)
     let first_weekday = weekday_of(year, month, 1i64)
-    let (turns, turns_error) = mem.alloc[DayPick](a, 2usize + usize(days))
+    let (turns, turns_error) = mem.alloc[DayPick](a, 4usize + usize(days))
     if turns_error != ok { ret (zero, TooLarge) }
-    let (actions, actions_error) = mem.alloc[widget.Submit](a, 2usize + usize(days))
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 4usize + usize(days))
     if actions_error != ok { ret (zero, TooLarge) }
     var previous = time.Date { year: shown.year, month: shown.month - 1u8, day: 1u8 }
     if shown.month == 1u8 { previous = time.Date { year: shown.year - 1i32, month: 12u8, day: 1u8 } }
@@ -2433,8 +2434,12 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     if shown.month == 12u8 { next = time.Date { year: shown.year + 1i32, month: 1u8, day: 1u8 } }
     turns[0usize] = DayPick { day: previous, pick: show }
     turns[1usize] = DayPick { day: next, pick: show }
+    turns[2usize + usize(days)] = DayPick { day: time.Date { year: shown.year - 1i32, month: shown.month, day: 1u8 }, pick: show }
+    turns[3usize + usize(days)] = DayPick { day: time.Date { year: shown.year + 1i32, month: shown.month, day: 1u8 }, pick: show }
     actions[0usize] = widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: day_fire }
     actions[1usize] = widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: day_fire }
+    actions[2usize + usize(days)] = widget.Submit { ctx: mem.cast[*void](&turns[2usize + usize(days)]), invoke: day_fire }
+    actions[3usize + usize(days)] = widget.Submit { ctx: mem.cast[*void](&turns[3usize + usize(days)]), invoke: day_fire }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var cell = t.tokens.sizes.control_sm
     var week_gap: f32 = 0.0
@@ -2602,7 +2607,18 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     sem.label = label
     sem.column_count = 7u32
     sem.row_count = u32(weeks)
-    ret (widget.semantics(key, sem, style.defaults(), column_node[0usize..1usize]), ok)
+    let (calendar_node, calendar_node_error) = mem.alloc[widget.Node](a, 1usize)
+    if calendar_node_error != ok { ret (zero, TooLarge) }
+    calendar_node[0usize] = widget.semantics(key, sem, style.defaults(), column_node[0usize..1usize])
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
+    shortcuts[0usize] = widget.Shortcut { key: 33u32, modifiers: zero, action: actions[0usize] }
+    shortcuts[1usize] = widget.Shortcut { key: 34u32, modifiers: zero, action: actions[1usize] }
+    shortcuts[2usize] = widget.Shortcut { key: 33u32, modifiers: shifted, action: actions[2usize + usize(days)] }
+    shortcuts[3usize] = widget.Shortcut { key: 34u32, modifiers: shifted, action: actions[3usize + usize(days)] }
+    ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), calendar_node[0usize..1usize]), ok)
 }
 
 // A calendar's Previous or Next: a round icon button `size` across, its chevron
