@@ -99,6 +99,12 @@ fn tap_key(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bo
     ret testing.tap(h, b.x + b.width * 0.5, b.y + b.height * 0.5) == ok
 }
 
+fn focused_is(h: *testing.Harness, key: widget.Key) -> bool {
+    let (focused, has_focus) = testing.focused(h)
+    let found = testing.by_key(h, key)
+    ret has_focus && found.count == 1usize && focused.slot == found.element.slot && focused.generation == found.element.generation
+}
+
 fn find(tree: accessibility.Tree, role: accessibility.Role, label: str) -> (accessibility.Node, bool) {
     var i = 0usize
     while i < tree.nodes.len {
@@ -140,6 +146,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.bar[1usize].marked = true
     s.bar[1usize].glyph = .Alert
     s.bar[1usize].tone = .Error
+    s.bar[1usize].action = s.press
     s.bar[2usize] = navigation.status_item("Indexing")
     s.bar[2usize].progress = 0.5
     s.bar[3usize] = navigation.status_item("Ln 4, Col 2")
@@ -189,6 +196,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot, at(bar.x + 70.0, bar.y + 12.0), style.color(&tokens, .Primary)) || !is_color(shot, at(bar.x + 100.0, bar.y + 12.0), style.color(&tokens, .SecondaryContainer)) { os.exit(24i32) }
     let (cursor, has_cursor) = bounds(&harness, &runtime, 3004u64)
     if !has_cursor || !near(cursor.x + cursor.width, bar.x + 596.0) || !near(cursor.height, 24.0) || !tap_key(&harness, &runtime, 3004u64) || s.presses != 4usize { os.exit(25i32) }
+    // One roving Tab stop; arrows and edge keys follow visual item order.
+    if widget.focus(&runtime, testing.by_key(&harness, 3002u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 3004u64) { os.exit(29i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !focused_is(&harness, 3002u64) || testing.press_key(&harness, 35u32, zero) != ok || !focused_is(&harness, 3004u64) { os.exit(30i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 3002u64) || testing.tab(&harness, false) != ok || focused_is(&harness, 3004u64) { os.exit(31i32) }
     // The mode variant on `primary-container`.
     let (moded, has_moded) = bounds(&harness, &runtime, 3100u64)
     if !has_moded || !is_color(shot, at(moded.x + 300.0, moded.y + 12.0), style.color(&tokens, .PrimaryContainer)) { os.exit(26i32) }
