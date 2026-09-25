@@ -2438,7 +2438,8 @@ fn slider_share(e: *const Element, value: f32) -> f32 {
 // (between the values of a range) and `track` beyond, each part stopping 6 short of
 // a handle; a handle is a 4-wide bar in `thumb` across the track, as long as the box
 // is deep, 44 at most. The ends stay 8 in (half of D820's thumb), where
-// `slider_at` measures from.
+// `slider_at` measures from. In horizontal RTL (D1165), low starts at the right:
+// track parts, ticks, handles and pointer mapping mirror together.
 fn place_slider(s: *State, a: *mem.Arena, element: usize, sl: Slider, inner: geometry.Rect, b: *scene.Builder) -> err {
     let e = &s.elements[element]
     var inset = inner.height
@@ -2450,22 +2451,27 @@ fn place_slider(s: *State, a: *mem.Arena, element: usize, sl: Slider, inner: geo
     if inset > 16.0 { inset = 16.0 }
     let start = inset * 0.5
     let length = max_f(along - inset, 0.0)
-    let first = slider_share(e, e.slider_value) * length
+    var first = slider_share(e, e.slider_value) * length
+    if sl.rtl && !sl.vertical { first = length - first }
     let clear: f32 = 8.0
     var width = sl.handle
     if !(width > 0.0) { width = 4.0 }
     var near_end: f32 = 0.0
     var far_end = first
     if sl.range {
-        let other = slider_share(e, e.slider_second) * length
+        var other = slider_share(e, e.slider_second) * length
+        if sl.rtl && !sl.vertical { other = length - other }
         near_end = min_f(first, other)
         far_end = max_f(first, other)
         try slider_run(a, b, sl.vertical, inner, start, 0.0, near_end - clear, sl.track)
         try slider_run(a, b, sl.vertical, inner, start, near_end + clear, far_end - clear, sl.fill)
+    } else if sl.rtl && !sl.vertical {
+        try slider_run(a, b, sl.vertical, inner, start, 0.0, first - clear, sl.track)
+        try slider_run(a, b, sl.vertical, inner, start, first + clear, length, sl.fill)
     } else {
         try slider_run(a, b, sl.vertical, inner, start, 0.0, first - clear, sl.fill)
     }
-    try slider_run(a, b, sl.vertical, inner, start, far_end + clear, length, sl.track)
+    if sl.range || !sl.rtl || sl.vertical { try slider_run(a, b, sl.vertical, inner, start, far_end + clear, length, sl.track) }
     // The ticks: a 4 dot at each step, none within the clearance of a handle, and
     // none when the steps would stand closer than 16 apart.
     if sl.step > 0.0 && (sl.tick_on.alpha > 0.0 || sl.tick_off.alpha > 0.0) && sl.high > sl.low {
@@ -2478,15 +2484,20 @@ fn place_slider(s: *State, a: *mem.Arena, element: usize, sl: Slider, inner: geo
                 let off_second = !sl.range || spot < near_end - clear || spot > near_end + clear
                 if off_first && off_second {
                     var color = sl.tick_off
-                    if spot >= near_end && spot <= far_end { color = sl.tick_on }
+                    var active = spot >= near_end && spot <= far_end
+                    if !sl.range && sl.rtl && !sl.vertical { active = spot >= first }
+                    if active { color = sl.tick_on }
                     try slider_run(a, b, sl.vertical, inner, start, spot - 2.0, spot + 2.0, color)
                 }
                 k += 1usize
             }
         }
     }
-    if sl.range { try slider_handle(a, b, sl.vertical, inner, start, near_end, width, sl.halo, sl.thumb) }
-    ret slider_handle(a, b, sl.vertical, inner, start, far_end, width, sl.halo, sl.thumb)
+    if sl.range {
+        try slider_handle(a, b, sl.vertical, inner, start, near_end, width, sl.halo, sl.thumb)
+        ret slider_handle(a, b, sl.vertical, inner, start, far_end, width, sl.halo, sl.thumb)
+    }
+    ret slider_handle(a, b, sl.vertical, inner, start, first, width, sl.halo, sl.thumb)
 }
 
 // A part of the track from `from` to `to` along it (from the bottom when vertical).
@@ -2538,7 +2549,7 @@ fn slider_set(s: *State, element: usize, raw: f32, second: bool) -> err {
     ret fire_change[f32](e.slider_change, value)
 }
 
-// The value under a point on the slider's track.
+// The value under a point on the slider's track, mirrored horizontally in RTL.
 fn slider_at(e: *const Element, p: geometry.Point) -> f32 {
     var thumb = e.bounds.height
     if e.slider_vertical { thumb = e.bounds.width }
@@ -2550,6 +2561,7 @@ fn slider_at(e: *const Element, p: geometry.Point) -> f32 {
     } else {
         let length = max_f(e.bounds.width - thumb, 1.0)
         t = (p.x - e.bounds.x - thumb * 0.5) / length
+        if e.slider_rtl { t = 1.0 - t }
     }
     if t < 0.0 { t = 0.0 }
     if t > 1.0 { t = 1.0 }

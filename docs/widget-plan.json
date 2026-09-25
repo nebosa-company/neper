@@ -1183,7 +1183,7 @@
           "id": "P5-05",
           "name": "Selection to the v2 specification",
           "module": "e.ui.control",
-          "latest_evidence": "D1161 carries theme direction into the runtime Slider key path: Left/Right mirror in RTL, Up/Down remain logical, and Page Up/Down move ten percent through the existing clamp and step snapping. ui_slider holds the behavior on Windows and Linux.",
+          "latest_evidence": "D1161 carries theme direction into the runtime Slider key path: Left/Right mirror in RTL, Up/Down remain logical, and Page Up/Down move ten percent through the existing clamp and step snapping. D1165 mirrors horizontal Slider track, ticks, handles, pointer mapping and the focused value-label anchor while vertical geometry stays unchanged. ui_slider holds both on Windows and Linux.",
           "components": [
             "ChipSpec",
             "ChoiceSpec",
