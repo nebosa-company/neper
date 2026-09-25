@@ -7412,12 +7412,72 @@ fn glyph_action(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // `on-surface-variant`, its action a text button, the same close; 12 in from the
 // top end. A polite status in the tree named by the text. Nothing while the queue
 // is empty.
-// ponytail: the compact (bottom-centre) placement, timeouts, motion, the
+// (D1278) The head notice times out (`notice_timeout`), paused by hover and focus.
+// ponytail: the compact (bottom-centre) placement, motion, the
 // two-line layout and the toast's title and severity well wait on a richer
 // Notice; the toast's stack of three shows the head alone.
+// (D1278) A notice's countdown, kept on its surface across frames: which notice
+// it counts for, how long it has shown unpaused, the last frame's time, and
+// whether it has fired.
+type NoticeTimer = struct { text: u64, shown: i64, last: i64, fired: bool }
+
+// (D1278, docs/ux/components/Snackbar, timeout) The head notice dismisses itself
+// once it has shown for its time -- a snackbar 4 s, 7 s with an action; a
+// toast 6 s, never with an action -- counting only while neither hovered nor
+// holding the focus.
+// ponytail: the host's longer-notification setting and a running screen reader
+// do not yet extend it.
+fn notice_timeout(t: *const Theme, key: widget.Key, head: *const Notice, bottom: bool) -> err {
+    if mem.address_of(t.runtime) == 0usize { ret ok }
+    let has_action = head.action_label.len > 0usize
+    var limit: i64 = 4000000000i64
+    if bottom && has_action { limit = 7000000000i64 }
+    if !bottom {
+        if has_action { ret ok }
+        limit = 6000000000i64
+    }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret ok }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize {
+        widget.request_animation_frame(t.runtime)
+        ret ok
+    }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: NoticeTimer = zero
+    let (timer, _, timer_error) = widget.state[NoticeTimer](&build, key, fresh)
+    if timer_error != ok { ret ok }
+    let now = widget.frame_time(t.runtime).nanos
+    // Which notice: its text, hashed (FNV-1a).
+    var which = 14695981039346656037u64
+    var at = 0usize
+    while at < head.text.len {
+        which = (which ^ u64(head.text[at])) *% 1099511628211u64
+        at += 1usize
+    }
+    if timer.text != which {
+        timer.text = which
+        timer.shown = 0i64
+        timer.last = now
+        timer.fired = false
+    }
+    let paused = widget.focus_within(t.runtime, key) || widget.interaction(t.runtime, key + 1u64).hovered || widget.interaction(t.runtime, key + 2u64).hovered || widget.interaction(t.runtime, key + 3u64).hovered
+    if !paused && now > timer.last { timer.shown += now - timer.last }
+    timer.last = now
+    if timer.fired { ret ok }
+    if timer.shown >= limit {
+        timer.fired = true
+        ret widget.fire_submit(head.dismiss)
+    }
+    widget.request_animation_frame(t.runtime)
+    ret ok
+}
+
 fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32, bottom: bool) -> (widget.Node, err) {
     if notices.len == 0usize { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let head = &notices[0usize]
+    let timed = notice_timeout(t, key, head, bottom)
+    if timed != ok { ret (zero, timed) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var at = 0usize

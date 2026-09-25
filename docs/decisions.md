@@ -24825,3 +24825,22 @@ With no unavailable days, earliest or latest, the check costs nothing.
 
 `ui_pickers_v2` holds Down from the 11th of March 2026 landing on the 25th
 when the week of the 16th is closed, on Windows and Linux.
+
+## D1278 — Snackbars and toasts time out
+
+The head notice of `snackbar` and `toast` dismisses itself through its own
+`dismiss` once it has shown for the Snackbar spec's time: a snackbar 4 s, or
+7 s with an action; a toast 6 s, and never while it offers an action. The
+countdown (`NoticeTimer`) is kept on the surface across frames and counts
+only frames in which the notice is neither hovered nor holding the focus. It
+restarts when the head notice's text changes (FNV-1a over the text), fires
+once, and asks for animation frames while it runs, reading the frame clock
+(`widget.frame_time`). It starts on the notice's first frame after it
+appears, when its retained state first exists. A test must call
+`testing.begin` before building a clocked frame, or the build sees the
+previous pump's time, which is what the first runs of the fixture found.
+The host's longer-notification setting and a running screen reader do not
+yet extend it.
+
+`ui_status4_v2` holds no dismissal at 3 s, one by 4.1 s and none after, on
+Windows and Linux; `ui_feedback` still passes.
