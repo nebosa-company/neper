@@ -22295,3 +22295,19 @@ The shared choice scope owns the single Delete binding, so list and grid forms
 cannot drift. `ui_overlays4_v2` holds both callbacks, hover geometry and the
 Close button name on Windows and Linux. `switcher-grid.png` is the Segoe UI
 hover visual check.
+
+## D1067 — Filtered switchers preserve the caller's MRU identity
+
+`window_switcher_filterable` owns case-folded fuzzy filtering over each
+`SwitcherItem`: name prefix, word and subsequence hits precede the same context
+hits, with source order breaking ties. Its 48px search row sits over 40px rows
+with an 18px document glyph, name and muted inline context/state. The caller
+still owns query bytes and the filtered active index; Enter and Delete map back
+to the original item index.
+
+An editor now yields unmodified Delete only when an ancestor scope explicitly
+binds that key, so the filter retains normal text editing everywhere else while
+the switcher can close its active result. `ui_overlays4_v2` holds filtering,
+ordering, source mapping, geometry and Combobox/Listbox/Option semantics on
+Windows and Linux; `ui_edit` holds ordinary Delete on both. `switcher-filter.png`
+is the Segoe UI visual check.

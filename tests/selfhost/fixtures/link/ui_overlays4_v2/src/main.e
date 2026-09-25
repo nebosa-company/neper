@@ -28,7 +28,7 @@ use e.ui.widget
 
 type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, closes: usize, closed: usize, typed: usize, dismisses: usize }
 
-type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, PaletteCompact, Empty, Switcher, SwitcherGrid }
+type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, PaletteCompact, Empty, Switcher, SwitcherGrid, SwitcherFilter }
 
 fn on_activate(ctx: *void, index: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -127,21 +127,29 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
         palette = made_palette
         e1 = made_palette_error
     } else {
-        let (made_palette, made_palette_error) = navigation.command_palette_mode(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, shown, active, which != .Switcher && which != .SwitcherGrid, activate, run, dismiss, 560.0)
+        let (made_palette, made_palette_error) = navigation.command_palette_mode(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, shown, active, which != .Switcher && which != .SwitcherGrid && which != .SwitcherFilter, activate, run, dismiss, 560.0)
         palette = made_palette
         e1 = made_palette_error
     }
     var switcher: widget.Node = zero
     var e2: err = ok
-    if which == .SwitcherGrid {
+    if which == .SwitcherGrid || which == .SwitcherFilter {
         var windows: [4]navigation.SwitcherItem = zero
         windows[0usize] = navigation.SwitcherItem { name: "main.e", context: "neper/src", state: "", thumbnail: zero }
         windows[1usize] = navigation.SwitcherItem { name: "lower.e", context: "neper/src", state: "unsaved changes", thumbnail: zero }
         windows[2usize] = navigation.SwitcherItem { name: "Build 4128 log", context: "CI", state: "", thumbnail: zero }
         windows[3usize] = navigation.SwitcherItem { name: "Settings", context: "Application", state: "", thumbnail: zero }
-        let (made_switcher, made_switcher_error) = navigation.window_switcher_grid_closable(a, 200u64, t, "Switch window", windows[..], active, true, activate, run, close, dismiss)
-        switcher = made_switcher
-        e2 = made_switcher_error
+        if which == .SwitcherFilter {
+            buffer[0usize] = 108u8
+            buffer[1usize] = 111u8
+            let (made_switcher, made_switcher_error) = navigation.window_switcher_filterable(a, 200u64, t, "Switch window", buffer, 2usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, windows[..], active, true, activate, run, close, dismiss, 480.0)
+            switcher = made_switcher
+            e2 = made_switcher_error
+        } else {
+            let (made_switcher, made_switcher_error) = navigation.window_switcher_grid_closable(a, 200u64, t, "Switch window", windows[..], active, true, activate, run, close, dismiss)
+            switcher = made_switcher
+            e2 = made_switcher_error
+        }
     } else {
         let (made_switcher, made_switcher_error) = navigation.window_switcher_closable(a, 200u64, t, "Windows", names[..], active, which == .Switcher, activate, run, close, dismiss, 480.0)
         switcher = made_switcher
@@ -363,6 +371,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (close_main, has_close_main) = bounds(&harness, &runtime, 1226u64)
     if !has_close_main || !near(close_main.width, 24.0) || !near(close_main.height, 24.0) || !near(close_main.x, grid_first.x + 108.0) || testing.by_label(&harness, "Close main.e").count != 1usize { os.exit(68i32) }
     if testing.tap(&harness, close_main.x + 12.0, close_main.y + 12.0) != ok || logs[0usize].closes != 3usize || logs[0usize].closed != 0usize { os.exit(69i32) }
+    // The list form owns fuzzy filtering: name hits precede context hits, rows
+    // keep inline context, and run/close map back to the caller's source index.
+    var filter_frame = mem.arena_from(frame_storage)
+    let (root_filter, build_filter_error) = build(&filter_frame, &theme, ctx, &subs[0usize], buffer, .SwitcherFilter, 0usize)
+    if build_filter_error != ok || testing.pump(&harness, root_filter, time.Instant { nanos: 1600000000i64 }) != ok { os.exit(70i32) }
+    let (filter_panel, has_filter_panel) = lifted(&harness, 200u64)
+    let (filter_first, has_filter_first) = bounds(&harness, &runtime, 203u64)
+    let (filter_tree, filter_tree_error) = testing.semantics(&harness)
+    if filter_tree_error != ok { os.exit(71i32) }
+    let (filter_combo, has_filter_combo) = find(filter_tree, .Combobox, "Switch window")
+    let (filtered_lower, has_filtered_lower) = find(filter_tree, .Option, "lower.e, neper/src, unsaved changes")
+    let (filtered_log, has_filtered_log) = find(filter_tree, .Option, "Build 4128 log, CI")
+    let (filtered_settings, has_filtered_settings) = find(filter_tree, .Option, "Settings, Application")
+    if !has_filter_panel || !near(filter_panel.x, 80.0) || !near(filter_panel.y, 64.0) || !has_filter_first || !near(filter_first.y, filter_panel.y + 53.0) || !near(filter_first.height, 40.0) || !has_filter_combo || !filter_combo.state.expanded || !has_filtered_lower || !filtered_lower.state.selected || !has_filtered_log || filtered_log.position.row != 2u32 || !has_filtered_settings || filtered_settings.position.row != 3u32 { os.exit(72i32) }
+    if testing.by_text(&harness, "lower.e").count != 1usize { os.exit(73i32) }
+    if testing.by_text(&harness, "neper/src, unsaved changes").count != 1usize { os.exit(76i32) }
+    if testing.by_text(&harness, "Settings").count != 1usize || testing.by_text(&harness, "main.e").count != 0usize { os.exit(77i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok { os.exit(74i32) }
+    if logs[0usize].runs != 3usize || logs[0usize].ran != 1usize { os.exit(78i32) }
+    if testing.press_key(&harness, 46u32, zero) != ok { os.exit(79i32) }
+    if logs[0usize].closes != 4usize { os.exit(80i32) }
+    if logs[0usize].closed != 1usize { os.exit(81i32) }
+    if testing.type_text(&harness, "w") != ok || logs[0usize].typed != 3usize || logs[0usize].active != 0usize { os.exit(75i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(36i32) }
     try io.print("ui overlays4 v2 ok\n")
     ret ok
