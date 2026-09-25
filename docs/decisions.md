@@ -24971,3 +24971,17 @@ reduced motion shows it at once.
 `ui_status4_v2` holds the surface not yet fully `inverse-surface` half way
 through the entry and fully so once settled, on Windows and Linux; its
 timeout checks still pass.
+
+## D1288 — Page views settle to the new page
+
+A page view keeps a `PageSettle` across frames. When its current page
+changes, by a swipe's release, a key, a button or the caller, the strip
+starts where the old page stood (a page's width per step, mirrored right to
+left) and eases to the new page over `duration-medium-2`, building its
+neighbours while it moves and asking for frames until it lands. A drag in
+progress takes precedence over the settle. Reduced motion jumps. Fling
+velocity and the reduced-motion cross-fade are still to come.
+
+`ui_collections4_v2` holds, half way through turning to the second page, the
+first page still built and the second not yet in place, and once settled the
+second at the view's start with the first gone, on Windows and Linux.
