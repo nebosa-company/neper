@@ -22593,3 +22593,13 @@ after, clipped to the full source, while stable row keys drive reconciliation.
 
 `ui_collections2_v2` holds the start, middle and end build windows on Windows
 and Linux. The visible Table surface is unchanged.
+
+## D1092 — Table's first row moves into its header
+
+The shared vertical-row helper accepts one optional focus target before source
+row zero. Table supplies its first column-header key, while VirtualList supplies
+none and retains its boundary behavior; no new input or focus abstraction is
+introduced.
+
+`ui_collections2_v2` holds Up from the first source row into the header on
+Windows and Linux. This is behavior-only on the reviewed Table surface.
