@@ -3980,10 +3980,11 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
     ret (rows[0usize..names.len], ok)
 }
 
-// The Up and Down shortcuts moving `active` through `activate`, and Enter
-// picking it, for a switcher or a palette; v2 (D978), wrapping at the ends.
-fn choice_scope(a: *mem.Arena, key: widget.Key, count: usize, active: usize, runnable: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
-    let (moves, moves_error) = mem.alloc[IndexPick](a, 3usize)
+// The Up and Down shortcuts moving `active` through `activate`, Enter picking
+// it and, when `close` is set, Delete closing it; v2 (D978), wrapping at the
+// ends.
+fn choice_scope(a: *mem.Arena, key: widget.Key, count: usize, active: usize, runnable: bool, activate: widget.Change[usize], pick: widget.Change[usize], close: widget.Change[usize], dismiss: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
+    let (moves, moves_error) = mem.alloc[IndexPick](a, 4usize)
     if moves_error != ok { ret (zero, TooLarge) }
     var previous = active
     if active > 0usize { previous = active - 1usize }
@@ -3993,16 +3994,22 @@ fn choice_scope(a: *mem.Arena, key: widget.Key, count: usize, active: usize, run
     moves[0usize] = IndexPick { index: previous, pick: activate }
     moves[1usize] = IndexPick { index: next, pick: activate }
     moves[2usize] = IndexPick { index: active, pick: pick }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 3usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     shortcuts[0usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: index_pick_fire } }
     shortcuts[1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: index_pick_fire } }
+    var shortcut_count = 2usize
+    if active < count && widget.change_set[usize](close.invoke) {
+        moves[3usize] = IndexPick { index: active, pick: close }
+        shortcuts[2usize] = widget.Shortcut { key: 46u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[3usize]), invoke: index_pick_fire } }
+        shortcut_count = 3usize
+    }
     var default_action: widget.Submit = zero
     if count > 0usize && runnable { default_action = widget.Submit { ctx: mem.cast[*void](&moves[2usize]), invoke: index_pick_fire } }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = content
-    ret (widget.scope(key, widget.Scope { traps_focus: true, shortcuts: shortcuts[0usize..2usize], default_action: default_action, cancel_action: *dismiss, keys: zero }, style.defaults(), body[0usize..1usize]), ok)
+    ret (widget.scope(key, widget.Scope { traps_focus: true, shortcuts: shortcuts[0usize..shortcut_count], default_action: default_action, cancel_action: *dismiss, keys: zero }, style.defaults(), body[0usize..1usize]), ok)
 }
 
 // A modal panel holding `content` (keyed `key`), Escape and a press outside
@@ -4066,8 +4073,13 @@ fn compact_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // whatever chord its host lets it hear.
 // v2 (D978, docs/ux/components/WindowSwitcher, list form): the panel of
 // `centred_modal`, no scrim, the rows 4 above and below and 8 at the sides.
-// ponytail: no hold-to-switch, type-to-filter, or Close on hover/Delete.
+// ponytail: no hold-to-switch or type-to-filter.
 fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = window_switcher_closable(a, key, t, label, names, active, open, activate, pick, zero, dismiss, width)
+    ret (made, made_error)
+}
+
+fn window_switcher_closable(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], close: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var no_categories: []const str = zero
     var no_shortcuts: []const str = zero
@@ -4086,7 +4098,7 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     list_sem.row_count = u32(names.len)
     if active < names.len { list_sem.active = key + 2u64 + u64(active) }
     let list = widget.semantics(0u64, list_sem, style.defaults(), list_body[0usize..1usize])
-    let (scoped, scoped_error) = choice_scope(a, key + 1u64, names.len, active, true, activate, pick, dismiss, list)
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, names.len, active, true, activate, pick, close, dismiss, list)
     if scoped_error != ok { ret (zero, scoped_error) }
     let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width, false)
     ret (made, made_error)
@@ -4113,7 +4125,7 @@ fn switcher_item_label(a: *mem.Arena, item: SwitcherItem) -> (str, err) {
     ret (label, ok)
 }
 
-fn switcher_grid_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, items: []const SwitcherItem, active: usize, pick: widget.Change[usize]) -> ([]widget.Node, err) {
+fn switcher_grid_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, items: []const SwitcherItem, active: usize, pick: widget.Change[usize], close: widget.Change[usize]) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
     let (tiles, tiles_error) = mem.alloc[widget.Node](a, items.len)
     if tiles_error != ok { ret (none, TooLarge) }
@@ -4121,11 +4133,17 @@ fn switcher_grid_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme,
     if picks_error != ok { ret (none, TooLarge) }
     let (actions, actions_error) = mem.alloc[widget.Submit](a, items.len)
     if actions_error != ok { ret (none, TooLarge) }
+    let (closes, closes_error) = mem.alloc[TabClose](a, items.len)
+    if closes_error != ok { ret (none, TooLarge) }
+    let (close_actions, close_actions_error) = mem.alloc[widget.Submit](a, items.len)
+    if close_actions_error != ok { ret (none, TooLarge) }
+    let closable = widget.change_set[usize](close.invoke)
     var i = 0usize
     while i < items.len {
         picks[i] = IndexPick { index: i, pick: pick }
         actions[i] = widget.Submit { ctx: mem.cast[*void](&picks[i]), invoke: index_pick_fire }
         let row_key = first + u64(i)
+        let close_key = first + 1024u64 + u64(i)
         var ink = style.color(t.tokens, .OnSurface)
         var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
         if i == active {
@@ -4184,9 +4202,43 @@ fn switcher_grid_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme,
         if semantic_label_error != ok { ret (none, semantic_label_error) }
         let (pressed, pressed_error) = control.pressable(a, row_key, t, 3u8, semantic_label, look, true, false, &actions[i], face)
         if pressed_error != ok { ret (none, pressed_error) }
+        var tile = pressed
+        if closable {
+            let state = control.control_state(t, row_key, true, false)
+            let close_state = control.control_state(t, close_key, true, false)
+            if state.hovered || close_state.hovered || close_state.focus_visible {
+                closes[i] = TabClose { index: i, close: close }
+                close_actions[i] = widget.Submit { ctx: mem.cast[*void](&closes[i]), invoke: tab_close_fire }
+                let (close_name, close_name_error) = joined(a, "Close ", items[i].name)
+                if close_name_error != ok { ret (none, close_name_error) }
+                let close_ink = style.color(t.tokens, .OnSurface)
+                let (close_icon, close_icon_error) = control.icon_square(a, close_ink, .Cross, 14.0)
+                if close_icon_error != ok { ret (none, close_icon_error) }
+                var close_look = style.resolve(t.tokens, .Plain, close_state)
+                close_look.background = style.layer(style.color(t.tokens, .SurfaceContainerHighest), close_ink, control.state_opacity(t, close_state))
+                close_look.foreground = close_ink
+                close_look.border_width = 0.0
+                close_look.radius = 12.0
+                close_look.custom_padding = true
+                close_look.padding = 5.0
+                close_look.padding_y = 5.0
+                close_look.min_width = 24.0
+                close_look.min_height = 24.0
+                let (button, button_error) = control.pressable(a, close_key, t, 3u8, close_name, close_look, true, false, &close_actions[i], close_icon)
+                if button_error != ok { ret (none, button_error) }
+                let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+                if layers_error != ok { ret (none, TooLarge) }
+                layers[0usize] = pressed
+                let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+                if held_error != ok { ret (none, TooLarge) }
+                held[0usize] = button
+                layers[1usize] = widget.positioned(0u64, 108.0, 4.0, style.defaults(), held[0usize..1usize])
+                tile = widget.stack(0u64, control.sized_style(136.0, 120.0), layers[0usize..2usize])
+            }
+        }
         let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
         if wrapped_error != ok { ret (none, TooLarge) }
-        wrapped[0usize] = pressed
+        wrapped[0usize] = tile
         var sem: widget.Semantics = zero
         sem.role = accessibility.ROLE_OPTION
         sem.label = semantic_label
@@ -4200,8 +4252,13 @@ fn switcher_grid_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme,
 }
 
 fn window_switcher_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const SwitcherItem, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = window_switcher_grid_closable(a, key, t, label, items, active, open, activate, pick, zero, dismiss)
+    ret (made, made_error)
+}
+
+fn window_switcher_grid_closable(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const SwitcherItem, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], close: widget.Change[usize], dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open || items.len <= 1usize { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (tiles, tiles_error) = switcher_grid_rows(a, key + 2u64, t, items, active, pick)
+    let (tiles, tiles_error) = switcher_grid_rows(a, key + 2u64, t, items, active, pick, close)
     if tiles_error != ok { ret (zero, tiles_error) }
     var columns = items.len
     if columns > 6usize { columns = 6usize }
@@ -4262,7 +4319,7 @@ fn window_switcher_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     panel.radius = t.tokens.radii.xl
     panel.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 3.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[3usize]) }
     let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 12.0 }, panel, parts[0usize..part_count])
-    let (scoped, scoped_error) = choice_scope(a, key + 1u64, items.len, active, true, activate, pick, dismiss, content)
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, items.len, active, true, activate, pick, close, dismiss, content)
     if scoped_error != ok { ret (zero, scoped_error) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
@@ -4764,7 +4821,7 @@ fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
     }
     let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
     let runnable = active < commands.len && (unavailable.len != commands.len || unavailable[active].len == 0usize)
-    let (scoped, scoped_error) = choice_scope(a, key + 1u64, commands.len, active, runnable, activate, run, dismiss, column)
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, commands.len, active, runnable, activate, run, zero, dismiss, column)
     if scoped_error != ok { ret (zero, scoped_error) }
     if compact {
         let (made, made_error) = compact_modal(a, key, t, label, scoped, dismiss)

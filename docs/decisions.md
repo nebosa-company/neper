@@ -22281,3 +22281,17 @@ The Option accessible name joins all three text fields while its index and
 activation stay in source order; decorative thumbnails stay out of the tree.
 `ui_overlays4_v2` holds geometry, modal/Listbox/Option semantics and selected
 detail on Windows and Linux. `switcher-grid.png` is the Segoe UI visual check.
+
+## D1066 — Switcher close actions stay index-addressed
+
+The source-compatible switcher entry points keep close unset. Their new
+`closable` forms add one caller-owned source-index channel: Delete closes the
+active item in either form, while a pointer over a grid tile reveals its 24px
+surface-container-highest Close button 4px from the top-end. The button uses a
+14px Cross glyph and sits above the tile press target without changing the
+parent Option name or selection.
+
+The shared choice scope owns the single Delete binding, so list and grid forms
+cannot drift. `ui_overlays4_v2` holds both callbacks, hover geometry and the
+Close button name on Windows and Linux. `switcher-grid.png` is the Segoe UI
+hover visual check.
