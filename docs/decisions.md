@@ -22220,3 +22220,13 @@ the same reason as its accessibility hint. An empty value remains runnable.
 
 `ui_overlays4_v2` holds the visual word, disabled semantics and suppressed Enter
 on Windows and Linux. `palette-unavailable.png` is the Segoe UI visual check.
+
+## D1061 — Palette loading reuses the shared progress clock
+
+`command_palette_grouped_busy` replaces the field divider with a full-width 2px
+window onto the existing full-bleed indeterminate ProgressBar. That keeps its
+two-second shared clock, reduced-motion fallback, theme colours and Busy
+semantics without a second loading renderer; the ordinary wrapper passes false.
+
+`ui_overlays4_v2` holds the extra pixel of geometry and Busy Progress on Windows
+and Linux. `palette-busy.png` is the Segoe UI visual check.
