@@ -5,7 +5,7 @@
 // End, Ctrl+Home, Ctrl+End, Page Up and Page Down moving the active cell; Tab
 // wrapping, Ctrl+A selecting all cells, Shift+Space selecting a row,
 // Ctrl+Space selecting a column, F8 finding the next invalid cell, TSV Copy,
-// and caller-owned Paste, Clear, Undo and Fill Down commands;
+// typing to replace, and caller-owned Paste, Clear, Undo and Fill Down commands;
 // Shift+Down extending a `primary-container` range and "2 cells selected";
 // Escape dropping it; F2 editing in a `surface-container-highest` editor in a
 // 2px `primary` outline over the cell, which takes the focus; typing, Enter or
@@ -72,6 +72,14 @@ fn on_change(ctx: *void, event: collection.GridEvent) -> err {
             i += 1usize
         }
         store.state.len = value.len
+    }
+    if event.kind == .Replace {
+        var i = 0usize
+        while i < event.text.len && i < store.draft.len {
+            store.draft[i] = event.text[i]
+            i += 1usize
+        }
+        store.state.len = i
     }
     if event.kind == .Commit {
         store.committed = store.state.len
@@ -317,6 +325,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 90u32, ctrl) != ok || store.last.kind != .Undo { os.exit(86i32) }
     if testing.press_key(&harness, 68u32, ctrl) != ok || store.last.kind != .FillDown { os.exit(87i32) }
     if testing.press_key(&harness, 13u32, ctrl) != ok || store.last.kind != .FillDown { os.exit(88i32) }
+    // Text input in navigation mode replaces the active value and opens its editor.
+    if testing.type_text(&harness, "z") != ok || store.last.kind != .Replace || !store.state.editing || store.state.len != 1usize || store.draft[0usize] != 122u8 { os.exit(91i32) }
+    let (root_23, build_23_error) = build(&f, &theme, ctx, store)
+    if build_23_error != ok || testing.pump(&harness, root_23, now) != ok || !focus_on(&harness, 3u64) { os.exit(92i32) }
+    if testing.press_key(&harness, 27u32, plain) != ok || store.last.kind != .Cancel || store.state.editing { os.exit(93i32) }
+    let (root_24, build_24_error) = build(&f, &theme, ctx, store)
+    if build_24_error != ok || testing.pump(&harness, root_24, now) != ok || !focus_on(&harness, 2u64) { os.exit(94i32) }
     // The grid in the tree, named, 5 by 2.
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(52i32) }

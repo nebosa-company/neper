@@ -1213,6 +1213,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.action = b.action
         e.has_action = true
         e.enabled = b.enabled
+        e.focusable = b.enabled
     case .Text as t:
         var n = t.value.len
         if n > MAX_TEXT { n = MAX_TEXT }

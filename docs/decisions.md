@@ -22355,3 +22355,16 @@ Shift+Space and Ctrl/Meta+Space select the active row and column through the
 existing rectangular range state. `ui_collections6_v2` holds selection, TSV
 Copy, Paste text, and all mutation commands on Windows and Linux. This changes
 behavior on the reviewed DataGrid surface, so no duplicate screenshot is added.
+
+## D1071 — Navigation-mode typing consumes text, not physical keys
+
+An enabled raw `widget.Button` now participates in focus traversal. DataGrid uses
+one as its active-cell holder, preserving the existing key scope while letting
+the runtime deliver a real `Text` event to that focused cell. The grid emits one
+`Replace` event with the UTF-8 text and enters edit mode; the caller replaces its
+draft. Physical key codes never stand in for text.
+
+`ui_collections6_v2` holds typing-to-replace on Windows and Linux. `ui_widget`,
+`ui_testing`, and `ui_accessibility` hold the shared primitive change on both
+hosts. This changes behavior on the reviewed DataGrid surface, so no duplicate
+screenshot is added.
