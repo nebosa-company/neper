@@ -22762,3 +22762,12 @@ adding a header-reference bridge that the hosts do not yet carry.
 Row naming and TreeGrid typeahead skip the Cell's header label and continue from
 its content. `ui_collections2_v2`, `ui_collections3_v2` and `ui_accessibility`
 hold both paths on Windows and Linux. The reviewed surfaces are unchanged.
+
+## D1109 — Flat accessibility records preserve every state
+
+The Windows and Linux AccessibleNode flag field is widened from 8 to 16 bits.
+Its encoder now preserves all thirteen semantic states instead of dropping Mixed,
+Busy, Invalid, Required, ReadOnly, Modal and Current after the tree was flattened.
+
+`ui_accessibility` holds the complete 8191 mask on Windows and Linux. The change
+is semantic only; reviewed surfaces are unchanged.
