@@ -4796,6 +4796,13 @@ fn section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, s
 // (D1221) The same header with, when `has_icon`, a 24 `leading` glyph in
 // `on-surface-variant` 16 before the title.
 fn section_header_icon(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, supporting: str, expanded: bool, enabled: bool, toggle: *const widget.Submit, width: f32, h: f32, title_role: style.TextRole, line_role: style.TextRole, has_icon: bool, leading: GlyphKind) -> (widget.Node, err) {
+    let (made, made_error) = section_header_marked(a, key, t, title, supporting, expanded, enabled, toggle, width, h, title_role, line_role, has_icon, leading, false)
+    ret (made, made_error)
+}
+
+// (D1321) The same with, when `line_error`, the supporting line in `error` led
+// by a 16 `alert` glyph: a shut section's error summary.
+fn section_header_marked(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, supporting: str, expanded: bool, enabled: bool, toggle: *const widget.Submit, width: f32, h: f32, title_role: style.TextRole, line_role: style.TextRole, has_icon: bool, leading: GlyphKind, line_error: bool) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
     var fade: f32 = 1.0
     if !enabled { fade = t.tokens.states.disabled_content }
@@ -4828,9 +4835,20 @@ fn section_header_icon(a: *mem.Arena, key: widget.Key, t: *const Theme, title: s
         var said = text_options()
         said.role = line_role
         said.wrap = .None
-        let (line_node, line_error) = colored_text(a, 0u64, supporting, t, said, muted)
-        if line_error != ok { ret (zero, line_error) }
+        var line_ink = muted
+        if line_error { line_ink = style.color(t.tokens, .Error) }
+        let (line_node, line_node_error) = colored_text(a, 0u64, supporting, t, said, line_ink)
+        if line_node_error != ok { ret (zero, line_node_error) }
         words[1usize] = line_node
+        if line_error {
+            let (warn, warn_error) = icon_square(a, line_ink, .Alert, 16.0)
+            if warn_error != ok { ret (zero, warn_error) }
+            let (flagged, flagged_error) = mem.alloc[widget.Node](a, 2usize)
+            if flagged_error != ok { ret (zero, TooLarge) }
+            flagged[0usize] = warn
+            flagged[1usize] = line_node
+            words[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), flagged[0usize..2usize])
+        }
         word_count = 2usize
     }
     let (row, row_error) = mem.alloc[widget.Node](a, 3usize)
@@ -8356,7 +8374,9 @@ fn accordion(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels
 // An accordion's options (D965): outlined rather than filled, the supporting
 // line under each title (empty, or one per section), which sections are enabled
 // (empty: all), and its width (0: its widest header's).
-type AccordionOptions = struct { outlined: bool, supporting: []const str, enabled: []const bool, width: f32 }
+// (D1321) `icons` leads each header with its glyph (the content then 56 in);
+// `errors` puts a shut section's error summary in its supporting line.
+type AccordionOptions = struct { outlined: bool, supporting: []const str, enabled: []const bool, width: f32, icons: []const GlyphKind, errors: []const str }
 
 fn accordion_options() -> AccordionOptions {
     var out: AccordionOptions = zero
@@ -8386,7 +8406,8 @@ fn focus_to_fire(ctx: *void) -> err {
 // says which are open, so one index or a set; each header fires its own toggle.
 // Up and Down move focus between headers, Home and End to the first and last.
 // A Group named `label`.
-// ponytail: no motion, no leading icons and no error summary in a shut header.
+// (D1321) Leading icons, a shut section's error summary (`AccordionOptions`), and
+// the expander's motion: the chevron turns and the content grows and shrinks.
 fn accordion_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, contents: []const widget.Node, open: []const bool, toggles: []const widget.Submit, options: AccordionOptions) -> (widget.Node, err) {
     let n = labels.len
     if contents.len != n || toggles.len != n || open.len != n { ret (zero, TooLarge) }
@@ -8424,7 +8445,12 @@ fn accordion_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lab
             items[count] = widget.box(0u64, line, zero)
             count += 1usize
         }
-        let (header, header_error) = section_header(a, header_key, t, labels[i], supporting, open[i], enabled, &toggles[i], options.width, h, title_role, line_role)
+        let iconed = options.icons.len == n
+        var leading: GlyphKind = .ChevronDown
+        if iconed { leading = options.icons[i] }
+        let flagged = options.errors.len == n && options.errors[i].len != 0usize && !open[i]
+        if flagged { supporting = options.errors[i] }
+        let (header, header_error) = section_header_marked(a, header_key, t, labels[i], supporting, open[i], enabled, &toggles[i], options.width, h, title_role, line_role, iconed, leading, flagged)
         if header_error != ok { ret (zero, header_error) }
         // Up, Down, Home and End from this header.
         let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
@@ -8442,10 +8468,19 @@ fn accordion_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lab
         held[0usize] = header
         items[count] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize])
         count += 1usize
-        if open[i] {
-            let (inner, inner_error) = section_body(a, header_key + 1u64, header_key, contents[i])
+        // (D1321) The content grows open and shrinks shut, built while it closes.
+        var open_goal: f32 = 0.0
+        if open[i] { open_goal = 1.0 }
+        let reveal = eased_on(t, header_key, header_key + 1048576u64, open_goal, false, t.tokens.durations.medium2)
+        if open[i] || reveal > 0.0 {
+            var body_left: f32 = 16.0
+            var body_right: f32 = 16.0
+            if iconed && t.tokens.direction == .RightToLeft { body_right = 56.0 } else if iconed { body_left = 56.0 }
+            let (inner, inner_error) = section_body_from(a, header_key + 1u64, header_key, contents[i], body_left, body_right)
             if inner_error != ok { ret (zero, inner_error) }
-            items[count] = inner
+            let (grown, grown_error) = reveal_window(a, t, header_key + 1u64, reveal, inner)
+            if grown_error != ok { ret (zero, grown_error) }
+            items[count] = grown
             count += 1usize
         }
         i += 1usize

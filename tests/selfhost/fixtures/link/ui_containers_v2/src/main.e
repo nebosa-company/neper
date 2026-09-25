@@ -584,6 +584,61 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if fold_step == 4usize && fold_count != 0usize { os.exit(89i32) }
         fold_step += 1usize
     }
+    // (D1321) An accordion with icons and an error: the shut second section says
+    // its error, the open first's content stands 56 in, and shutting the first
+    // keeps its content half way.
+    tokens.direction = .LeftToRight
+    var marked_words: [2]str = zero
+    marked_words[0usize] = "Account"
+    marked_words[1usize] = "Billing"
+    var marked_icons: [2]control.GlyphKind = zero
+    marked_icons[0usize] = .Person
+    marked_icons[1usize] = .Info
+    var marked_errors: [2]str = zero
+    marked_errors[1usize] = "1 field needs attention"
+    var marked_options = control.accordion_options()
+    marked_options.width = 300.0
+    marked_options.icons = marked_icons[..]
+    marked_options.errors = marked_errors[..]
+    var marked_open: [2]bool = zero
+    var marked_step = 0usize
+    while marked_step < 5usize {
+        var marked_at = 34000000000i64
+        marked_open[0usize] = true
+        if marked_step == 1usize { marked_at = 34016000000i64 }
+        if marked_step == 2usize {
+            marked_at = 34100000000i64
+            marked_open[0usize] = false
+        }
+        if marked_step == 3usize {
+            marked_at = 34250000000i64
+            marked_open[0usize] = false
+        }
+        if marked_step == 4usize {
+            marked_at = 35000000000i64
+            marked_open[0usize] = false
+        }
+        if testing.begin(&harness, time.Instant { nanos: marked_at }) != ok { os.exit(90i32) }
+        f = mem.arena_from(frame_storage)
+        var marked_contents: [2]widget.Node = zero
+        marked_contents[0usize] = widget.box(1650u64, control.sized_style(20.0, 10.0), zero)
+        marked_contents[1usize] = widget.box(0u64, control.sized_style(20.0, 10.0), zero)
+        let (marked_acc, marked_acc_error) = control.accordion_of(&f, 1600u64, &theme, "Settings", marked_words[..], marked_contents[..], marked_open[..], stores[0usize].actions[3usize..5usize], marked_options)
+        let (marked_page, marked_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if marked_acc_error != ok || marked_page_error != ok { os.exit(91i32) }
+        marked_page[0usize] = marked_acc
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 1250.0), marked_page[0usize..1usize]), time.Instant { nanos: marked_at }) != ok { os.exit(92i32) }
+        if marked_step == 0usize {
+            let (marked_head, has_marked_head) = bounds(&harness, &runtime, 1601u64)
+            let (marked_body, has_marked_body) = bounds(&harness, &runtime, 1650u64)
+            if !has_marked_head || !has_marked_body { os.exit(96i32) }
+            if !near(marked_body.x - marked_head.x, 56.0) { os.exit(93i32) }
+            if testing.by_text(&harness, "1 field needs attention").count != 1usize { os.exit(97i32) }
+        }
+        if marked_step == 3usize && testing.by_key(&harness, 1602u64).count != 1usize { os.exit(94i32) }
+        if marked_step == 4usize && testing.by_key(&harness, 1602u64).count != 0usize { os.exit(95i32) }
+        marked_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(33i32) }
     try io.print("ui containers v2 ok\n")
     ret ok

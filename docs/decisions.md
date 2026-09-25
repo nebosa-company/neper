@@ -25480,3 +25480,22 @@ enter and leave. Reduced motion shows and hides it at once.
 is lower than its own height (over 40); hidden again, its content leaves
 the tree. This passes on Windows and Linux, and `ui_feedback` still passes
 on both.
+
+## D1321 — Accordions gain icons, error summaries and motion
+
+`AccordionOptions` gains `icons` and `errors`, covering the Accordion spec's
+leading icon, error summary and motion.
+
+- **Icons.** With `icons`, each header leads with its glyph and the open
+  content stands 56 in (at the end in RTL).
+- **Error summary.** With `errors`, a shut section whose entry is not empty
+  says it in its supporting line, in `error` and led by a 16 `alert` glyph
+  (`section_header_marked`), so a closed section still reports it.
+- **Motion.** As in the expander (D1305), the chevron turns and the content
+  grows and shrinks over `duration-medium-2` (`reveal_window`), built while
+  it closes.
+
+`ui_containers_v2`, left to right, holds the open first section's content
+56 in and the shut second section's "1 field needs attention". Shutting the
+first keeps its content half way and drops it once settled. This passes on
+Windows and Linux, and `ui_feedback` and `ui_panes` still pass on both.
