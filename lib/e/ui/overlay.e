@@ -4112,6 +4112,105 @@ fn same_color(x: paint.Color, y: paint.Color) -> bool {
 
 // A painted tint `w` x `h`: a Custom node over `tints[at]`, a slider region keyed
 // `key` in the tree named `label` with `value` when it takes the pointer.
+// (D1232, docs/ux/components/ColorPicker) One keyboard step of a tinted region:
+// saturation and brightness moved (the spectrum), the hue moved in degrees, or the
+// opacity moved; `to` sets the moved part outright (Home and End) when `set`.
+type TintStep = struct { tint: *Tint, ds: f32, dv: f32, dh: f32, da: f32, set: bool, to: f32 }
+
+fn tint_step_fire(ctx: *void) -> err {
+    let st = mem.cast[*TintStep](ctx)
+    let k = st.tint
+    var saturation = k.saturation + st.ds
+    var bright = k.bright + st.dv
+    var hue = k.hue + st.dh
+    var alpha = k.alpha + st.da
+    if st.set && k.kind == 1u8 { hue = st.to }
+    if st.set && k.kind == 2u8 { alpha = st.to }
+    if saturation < 0.0 { saturation = 0.0 }
+    if saturation > 1.0 { saturation = 1.0 }
+    if bright < 0.0 { bright = 0.0 }
+    if bright > 1.0 { bright = 1.0 }
+    if hue < 0.0 { hue = 0.0 }
+    if hue > 359.0 { hue = 359.0 }
+    if alpha < 0.0 { alpha = 0.0 }
+    if alpha > 1.0 { alpha = 1.0 }
+    var next = hsv_color(hue, saturation, bright, k.alpha)
+    if k.kind == 2u8 { next = control.with_alpha(k.color, alpha) }
+    ret widget.fire_change[paint.Color](k.change, next)
+}
+
+fn tint_keys(a: *mem.Arena, tint: *Tint, held: []widget.Node) -> (widget.Node, err) {
+    let (steps, steps_error) = mem.alloc[TintStep](a, 8usize)
+    if steps_error != ok { ret (zero, TooLarge) }
+    let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 8usize)
+    if keys_error != ok { ret (zero, TooLarge) }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
+    var codes: [8]u32 = zero
+    var mods: [8]input.Modifiers = zero
+    var i = 0usize
+    while i < 8usize {
+        steps[i] = TintStep { tint: tint, ds: 0.0, dv: 0.0, dh: 0.0, da: 0.0, set: false, to: 0.0 }
+        i += 1usize
+    }
+    if tint.kind == 0u8 {
+        // Left/Right saturation, Up/Down brightness, 1% or 10% with Shift.
+        codes[0usize] = 37u32
+        codes[1usize] = 39u32
+        codes[2usize] = 38u32
+        codes[3usize] = 40u32
+        steps[0usize].ds = -0.01
+        steps[1usize].ds = 0.01
+        steps[2usize].dv = 0.01
+        steps[3usize].dv = -0.01
+        i = 0usize
+        while i < 4usize {
+            codes[4usize + i] = codes[i]
+            mods[4usize + i] = shifted
+            steps[4usize + i].ds = steps[i].ds * 10.0
+            steps[4usize + i].dv = steps[i].dv * 10.0
+            i += 1usize
+        }
+    } else {
+        // A strip: arrows by one unit, Page Up/Down by ten, Home and End to the ends.
+        var unit: f32 = 1.0
+        var last: f32 = 359.0
+        if tint.kind == 2u8 {
+            unit = 0.01
+            last = 1.0
+        }
+        codes[0usize] = 37u32
+        codes[1usize] = 40u32
+        codes[2usize] = 39u32
+        codes[3usize] = 38u32
+        codes[4usize] = 34u32
+        codes[5usize] = 33u32
+        codes[6usize] = 36u32
+        codes[7usize] = 35u32
+        var deltas: [6]f32 = zero
+        deltas[0usize] = 0.0 - unit
+        deltas[1usize] = 0.0 - unit
+        deltas[2usize] = unit
+        deltas[3usize] = unit
+        deltas[4usize] = 0.0 - unit * 10.0
+        deltas[5usize] = unit * 10.0
+        i = 0usize
+        while i < 6usize {
+            if tint.kind == 1u8 { steps[i].dh = deltas[i] } else { steps[i].da = deltas[i] }
+            i += 1usize
+        }
+        steps[6usize].set = true
+        steps[7usize].set = true
+        steps[7usize].to = last
+    }
+    i = 0usize
+    while i < 8usize {
+        keys[i] = widget.Shortcut { key: codes[i], modifiers: mods[i], action: widget.Submit { ctx: mem.cast[*void](&steps[i]), invoke: tint_step_fire } }
+        i += 1usize
+    }
+    ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: keys[0usize..8usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held), ok)
+}
+
 fn tinted(a: *mem.Arena, key: widget.Key, tint: *Tint, w: f32, h: f32, label: str, value: str) -> (widget.Node, err) {
     var none: []const widget.Node = zero
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
@@ -4120,12 +4219,17 @@ fn tinted(a: *mem.Arena, key: widget.Key, tint: *Tint, w: f32, h: f32, label: st
     let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
     if hit_error != ok { ret (zero, TooLarge) }
     hit[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tint), invoke: tint_gesture }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: true }, control.sized_style(w, h), body[0usize..1usize])
+    let (keyed, keyed_error) = tint_keys(a, tint, hit[0usize..1usize])
+    if keyed_error != ok { ret (zero, keyed_error) }
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = keyed
     var sem: widget.Semantics = zero
     sem.role = 15u8
     sem.label = label
     sem.value = value
     sem.actions = accessibility.ACTION_SET_VALUE
-    ret (widget.semantics(0u64, sem, style.defaults(), hit[0usize..1usize]), ok)
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
 
 fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
@@ -4152,7 +4256,7 @@ fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
 // on touch); the channel fields 32 tall (48 on touch), 8 apart; the section label
 // in `label-medium` `on-surface-variant`; the swatches 32 (40 on touch) in 40
 // cells, so 8 apart, the chosen one in a 2px `on-surface` ring 2 outside it.
-// ponytail: the hue comes from the colour, so it resets to red at a grey; hex only (no RGB/HSL select), the readout is not typed, no recent colours, no keyboard on the area or strips, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
+// ponytail: the hue comes from the colour, so it resets to red at a grey; hex only (no RGB/HSL select), the readout is not typed, no recent colours, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
 fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     if swatches.len > 64usize { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
