@@ -4397,7 +4397,8 @@ fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 // A tile of a grid (D979, docs/ux/components/GridView): its name and meta, its
 // media (or none, for the placeholder), whether it is selected or disabled, and
 // its action.
-type Tile = struct { name: str, meta: str, media: widget.Node, has_media: bool, selected: bool, disabled: bool, action: widget.Submit }
+// (D1237) With `has_icon` the tile is an icon tile of `icon`.
+type Tile = struct { name: str, meta: str, media: widget.Node, has_media: bool, selected: bool, disabled: bool, action: widget.Submit, icon: control.GlyphKind, has_icon: bool }
 
 fn tile_of_name(name: str) -> Tile {
     var out: Tile = zero
@@ -4419,7 +4420,8 @@ fn tile_of_name(name: str) -> Tile {
 // on the tile. Disabled, content at 38% and media at 38% opacity, out of the Tab
 // order. A cell in the tree named by the name, described by the meta.
 // ponytail: the state layer lies under the media, not over it; the check's tick
-// strokes 2 rather than 2.5; no drag, drop look or icon tile.
+// strokes 2 rather than 2.5; no drag or drop look. (D1237) An icon tile (`has_icon`)
+// is a 64 icon area and a centred name with no container until hovered.
 fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const Tile, row_index: usize, column_index: usize, side: f32, photo: bool, selecting: bool) -> (widget.Node, err) {
     let enabled = !item.disabled
     let state = control.control_state(t, key, enabled, item.selected)
@@ -4428,6 +4430,9 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
     var muted = style.color(t.tokens, .OnSurfaceVariant)
     var base = style.color(t.tokens, .SurfaceContainerLow)
     if photo { base = control.with_alpha(surface_ink, 0.0) }
+    // (D1237, docs/ux/components/GridView, icon tile) No container until hovered.
+    let iconic = item.has_icon && !photo
+    if iconic && !state.hovered { base = control.with_alpha(surface_ink, 0.0) }
     if item.selected {
         base = style.color(t.tokens, .SecondaryContainer)
         ink = style.color(t.tokens, .OnSecondaryContainer)
@@ -4442,9 +4447,14 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
     if photo { tile_radius = t.tokens.radii.sm }
     var inset: f32 = 0.0
     if item.selected { inset = 8.0 }
-    let media_width = control.max_zero(side - 2.0 * inset)
+    var media_width = control.max_zero(side - 2.0 * inset)
     var media_height = media_width * 0.75
     if photo { media_height = media_width }
+    if iconic {
+        media_width = 64.0
+        media_height = 64.0
+        inset = 8.0
+    }
     var media_style = control.sized_style(media_width, media_height)
     media_style.overflow = .Clip
     if item.selected { media_style.radius = t.tokens.radii.xs } else if photo { media_style.radius = tile_radius }
@@ -4452,7 +4462,11 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
     if !enabled { media_style.opacity = t.tokens.states.disabled_content }
     let (shown, shown_error) = mem.alloc[widget.Node](a, 1usize)
     if shown_error != ok { ret (zero, TooLarge) }
-    if item.has_media {
+    if iconic {
+        let (glyph, glyph_error) = control.icon_square(a, muted, item.icon, t.tokens.sizes.icon_lg)
+        if glyph_error != ok { ret (zero, glyph_error) }
+        shown[0usize] = glyph
+    } else if item.has_media {
         shown[0usize] = item.media
     } else {
         media_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
@@ -4472,11 +4486,15 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
         caption.max_lines = 1u32
         caption.ellipsis = "…"
         caption.role = .TitleSmall
+        if iconic {
+            caption.role = .BodyMedium
+            caption.align = .Center
+        }
         let (named, named_error) = control.colored_text(a, 0u64, item.name, t, caption, ink)
         if named_error != ok { ret (zero, named_error) }
         words[0usize] = named
         var w = 1usize
-        if item.meta.len > 0usize {
+        if item.meta.len > 0usize && !iconic {
             caption.role = .BodySmall
             let (meta_node, meta_error) = control.colored_text(a, 0u64, item.meta, t, caption, muted)
             if meta_error != ok { ret (zero, meta_error) }
@@ -4485,12 +4503,24 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
         }
         var caption_style = style.defaults()
         caption_style.padding = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 12.0 } }
-        column_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, caption_style, words[0usize..w])
+        var caption_cross: ui_layout.CrossAlign = .Start
+        if iconic {
+            caption_cross = .Center
+            caption_style.width = style.Length { Px: side }
+            caption_style.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
+        }
+        column_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: caption_cross, gap: 0.0 }, caption_style, words[0usize..w])
         c = 2usize
     }
     let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
     if stacked_error != ok { ret (zero, TooLarge) }
-    stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), column_parts[0usize..c])
+    var column_cross: ui_layout.CrossAlign = .Start
+    var column_style = style.defaults()
+    if iconic {
+        column_cross = .Center
+        column_style.width = style.Length { Px: side }
+    }
+    stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: column_cross, gap: 0.0 }, column_style, column_parts[0usize..c])
     var s_count = 1usize
     if item.selected || selecting {
         var mark = control.sized_style(24.0, 24.0)

@@ -24228,3 +24228,16 @@ from `row_of` gets this, since it goes through `row_sized`.
 `ui_collections_v2` opens Alpha's menu with a secondary press, runs Rename and
 sees the menu close on Windows and Linux. All 103 `ui_*` fixtures pass on both
 hosts.
+
+## D1237 — Grid views have icon tiles
+
+`Tile.has_icon` and `Tile.icon` make a tile the GridView spec's icon tile, as in
+a desktop file view. It is a 64 icon area holding the `icon-lg` glyph in
+`on-surface-variant` over its name, which is centred in `body-medium` on one line
+with an ellipsis and has no meta line. The tile draws no container at rest and
+takes the `surface-container-low` fill under the pointer. Selection, press,
+focus and naming stay the tile's existing ones.
+
+`ui_collections_v2` holds the page showing at an icon tile's corner beside a
+plain tile's container, the fill under the pointer and the tile's name on
+Windows and Linux. All 103 `ui_*` fixtures pass on both hosts.
