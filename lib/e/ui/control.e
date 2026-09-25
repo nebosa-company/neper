@@ -5414,7 +5414,8 @@ fn tab_view(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str
 // (D1212) The sash keeps, across frames, the size it was first built at (what a
 // double-click restores) and the size a drag began at, whether a drag is under
 // way, and whether Escape cancelled it (its later moves are ignored).
-type Handle = struct { runtime: *widget.Runtime, pane: widget.Key, bound: widget.Key, vertical: bool, size: f32, thick: f32, low: f32, high: f32, reserve: f32, change: widget.Change[f32], cell: *SashCell, has_cell: bool }
+// (D1310) `collapsible`: a wish below half of `low` reports 0, the pane shut.
+type Handle = struct { runtime: *widget.Runtime, pane: widget.Key, bound: widget.Key, vertical: bool, size: f32, thick: f32, low: f32, high: f32, reserve: f32, change: widget.Change[f32], cell: *SashCell, has_cell: bool, collapsible: bool }
 type Nudge = struct { handle: *Handle, amount: f32 }
 type SashCell = struct { initial: f32, start: f32, dragging: bool, cancelled: bool }
 
@@ -5449,6 +5450,7 @@ fn keyed_bounds(runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bo
 }
 
 fn handle_report(h: *const Handle, wanted: f32) -> err {
+    if h.collapsible && wanted < h.low * 0.5 { ret widget.fire_change[f32](h.change, 0.0) }
     var value = wanted
     if h.high > 0.0 {
         if value > h.high { value = h.high }
@@ -5558,6 +5560,25 @@ fn sash_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // ponytail: no snap-to-close, size readout or resize cursor; the default size is
 // the first built one, not a separate caller value.
 fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node, bar: bool) -> (widget.Node, err) {
+    let (made, made_error) = pane_with_collapse(a, key, t, label, axis, size, low, high, bound, reserve, change, content, bar, false)
+    ret (made, made_error)
+}
+
+// (D1310, docs/ux/components/ResizablePane, collapsible) A resizable pane that
+// snaps shut: dragged below half of `low` it reports 0; any nudge, drag past
+// `low` or the sash's double-click opens it again.
+// ponytail: no size readout while dragging and no resize cursor (the runtime
+// sets no pointer cursor); the collapse does not animate.
+fn resizable_pane_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node, collapsible: bool) -> (widget.Node, err) {
+    let (named, named_error) = mem.alloc[u8](a, label.len + 7usize)
+    if named_error != ok { ret (zero, TooLarge) }
+    var n = copy_text(named, "Resize ")
+    n += copy_text(named[n..named.len], label)
+    let (made, made_error) = pane_with_collapse(a, key, t, named[0usize..n], axis, size, low, high, 0u64, 0.0, change, content, false, collapsible)
+    ret (made, made_error)
+}
+
+fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node, bar: bool, collapsible: bool) -> (widget.Node, err) {
     let vertical = axis == .Vertical
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var hit: f32 = 8.0
@@ -5565,7 +5586,7 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let (handles, handles_error) = mem.alloc[Handle](a, 1usize)
     if handles_error != ok { ret (zero, TooLarge) }
     let (kept, has_kept) = sash_cell(t.runtime, key + 2u64, size)
-    handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: hit, low: low, high: high, reserve: reserve, change: change, cell: kept, has_cell: has_kept }
+    handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: hit, low: low, high: high, reserve: reserve, change: change, cell: kept, has_cell: has_kept, collapsible: collapsible }
     let (nudges, nudges_error) = mem.alloc[Nudge](a, 6usize)
     if nudges_error != ok { ret (zero, TooLarge) }
     nudges[0usize] = Nudge { handle: &handles[0usize], amount: -8.0 }
