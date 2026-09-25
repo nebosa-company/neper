@@ -23121,3 +23121,14 @@ state.
 `ui_navigation5_v2` holds Busy semantics and the inert pointer, Enter, Alt+B
 and Back paths on Windows and Linux. The Segoe review is
 `build/ux/wizard-finishing-segoe.png`.
+
+## D1146 — Dirty wizards confirm discard
+
+WizardOptions keeps dirty and alert-open state caller-owned. Cancel, Escape
+and compact Close route through the caller's discard request; while open, the
+shared alert dialog asks "Discard <title>?", Escape keeps editing and the
+destructive action fires the original Cancel.
+
+`ui_navigation5_v2` holds request, modal semantics, Keep editing and Discard
+on Windows and Linux. The Segoe review is
+`build/ux/wizard-discard-segoe.png`.

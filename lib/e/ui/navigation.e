@@ -3653,7 +3653,9 @@ type WizardForm = enum u8 { Horizontal, Vertical, Compact }
 // path. With `pressable_steps`, completed and current steps can be revisited;
 // `nonlinear` also makes upcoming steps reachable; `finishing` replaces the
 // last action's label with its progress ring and disables competing actions.
-type WizardOptions = struct { form: WizardForm, dialog: bool, finish_label: str, pressable_steps: bool, nonlinear: bool, step: widget.Change[usize], finishing: bool }
+// A dirty wizard routes Cancel through `request_discard`; `discard_open` shows
+// the standard alert, whose Keep editing and Discard actions stay caller-owned.
+type WizardOptions = struct { form: WizardForm, dialog: bool, finish_label: str, pressable_steps: bool, nonlinear: bool, step: widget.Change[usize], finishing: bool, dirty: bool, discard_open: bool, request_discard: widget.Submit, keep_editing: widget.Submit }
 
 fn wizard_options() -> WizardOptions {
     var out: WizardOptions = zero
@@ -3848,10 +3850,10 @@ fn wizard_step(a: *mem.Arena, key: widget.Key, t: *const control.Theme, step: *c
 // At pointer density Alt+B and Alt+N invoke those same backward and forward
 // paths. On the last step `finishing` keeps the primary button's width while an
 // indeterminate 18 ring replaces its label and disables Back, Cancel, access
-// keys, step picks and repeated Finish activation.
+// keys, step picks and repeated Finish activation. Cancel, Escape and compact
+// Close ask before discarding a dirty wizard.
 // `legacy` keeps D853's contract: Back stays (disabled) on the first step and
 // Next and Finish follow `can_advance`.
-// ponytail: no discard confirmation.
 fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, steps: []const WizardStep, current: usize, content: widget.Node, can_advance: bool, legacy: bool, back: *const widget.Submit, next: *const widget.Submit, finish: *const widget.Submit, cancel: *const widget.Submit, options: WizardOptions, width: f32, height: f32) -> (widget.Node, err) {
     if steps.len == 0usize || current >= steps.len { ret (zero, TooLarge) }
     let last = current + 1usize == steps.len
@@ -3861,13 +3863,16 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     let finishing = options.finishing && last
     let (moves, moves_error) = mem.alloc[WizardMove](a, 2usize)
     if moves_error != ok { ret (zero, TooLarge) }
-    let (move_actions, move_actions_error) = mem.alloc[widget.Submit](a, 3usize)
+    let (move_actions, move_actions_error) = mem.alloc[widget.Submit](a, 4usize)
     if move_actions_error != ok { ret (zero, TooLarge) }
     moves[0usize] = WizardMove { action: *back, runtime: t.runtime, focus: key + 5u64 }
     moves[1usize] = WizardMove { action: *next, runtime: t.runtime, focus: key + 5u64 }
     move_actions[0usize] = widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: wizard_move_fire }
     move_actions[1usize] = widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: wizard_move_fire }
     move_actions[2usize] = widget.Submit { ctx: zero, invoke: zero }
+    move_actions[3usize] = *cancel
+    if options.dirty { move_actions[3usize] = options.request_discard }
+    if finishing { move_actions[3usize] = move_actions[2usize] }
     var pressable_count = 0usize
     if options.pressable_steps {
         pressable_count = current + 1usize
@@ -4043,7 +4048,7 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         var plain = control.button_options()
         plain.variant = .Plain
         plain.enabled = !finishing
-        let (cancel_button, cancel_error) = control.button(a, key + 1u64, t, "Cancel", cancel, plain)
+        let (cancel_button, cancel_error) = control.button(a, key + 1u64, t, "Cancel", &move_actions[3usize], plain)
         if cancel_error != ok { ret (zero, cancel_error) }
         foot[0usize] = cancel_button
         foot[1usize] = widget.spacer(0u64, 1.0)
@@ -4079,7 +4084,7 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     if compact {
         var bar_options = app_bar_options()
         bar_options.back_label = "Close"
-        bar_options.back = *cancel
+        bar_options.back = move_actions[3usize]
         bar_options.closing = true
         if current > 0usize {
             bar_options.back_label = "Back"
@@ -4197,13 +4202,29 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     }
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..shortcut_count], default_action: default_action, cancel_action: *cancel, keys: zero }, style.defaults(), column[0usize..1usize])
+    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..shortcut_count], default_action: default_action, cancel_action: move_actions[3usize], keys: zero }, style.defaults(), column[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = title
     sem.row = u32(current + 1usize)
     sem.row_count = u32(steps.len)
-    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+    let wizard_node = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    if !options.dirty || !options.discard_open || finishing { ret (wizard_node, ok) }
+    let (question, question_error) = joined(a, "Discard ", title)
+    if question_error != ok { ret (zero, question_error) }
+    let (prompt, prompt_error) = joined(a, question, "?")
+    if prompt_error != ok { ret (zero, prompt_error) }
+    let (buttons, buttons_error) = mem.alloc[overlay.DialogButton](a, 2usize)
+    if buttons_error != ok { ret (zero, TooLarge) }
+    buttons[0usize] = overlay.DialogButton { label: "Keep editing", action: options.keep_editing, kind: .Cancel }
+    buttons[1usize] = overlay.DialogButton { label: "Discard", action: *cancel, kind: .Destructive }
+    let (alert, alert_error) = overlay.alert_dialog(a, key + 10u64, t, prompt, "Your changes will be lost.", buttons[0usize..2usize], true)
+    if alert_error != ok { ret (zero, alert_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = wizard_node
+    layers[1usize] = alert
+    ret (widget.box(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
 // A pick of an index through a change, for a row.
