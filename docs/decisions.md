@@ -22342,6 +22342,18 @@ Shift+Enter commits upward. `ui_collections6_v2`, `ui_navigation2_v2`, and
 and Linux. This is behavior on the reviewed DataGrid surface, so no duplicate
 screenshot is added.
 
+## D1072 — DataGrid error help reuses the shared tooltip lifecycle
+
+Each cell receives one stable key derived from the grid key and its row-major
+position. That key feeds the existing interaction state: an unselected hovered
+cell paints the shared on-surface hover layer, and an invalid cell anchors the
+existing plain tooltip. Hover therefore keeps the runtime's 500 ms delay and
+keyboard focus shows the active cell's message immediately.
+
+`ui_collections6_v2` holds the hover layer, delay, focus path and error message
+on Windows and Linux. `datagrid-error-tooltip.png` is the Segoe UI visual check;
+the grid does not duplicate tooltip timing, placement or styling.
+
 ## D1070 — DataGrid clipboard commands keep the source caller-owned
 
 The grid serializes its current rectangle as tab-separated columns and

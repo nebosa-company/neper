@@ -187,7 +187,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, 33554432usize)
     if storage_error != ok { os.exit(9i32) }
     var f = mem.arena_from(storage)
-    let now = time.Instant { nanos: 1000000000i64 }
+    var now = time.Instant { nanos: 1000000000i64 }
     let (root, build_error) = build(&f, &theme, ctx, store)
     if build_error != ok || testing.pump(&harness, root, now) != ok { os.exit(10i32) }
     let (shot, shot_error) = testing.snapshot(&harness, a)
@@ -201,6 +201,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Port of beta is invalid: its 2px error outline, and the status bar's count.
     let port_x = grid.x + 160.0
     if !is_color(shot, at(port_x + 1.0, grid.y + 72.0 + 15.0), style.color(&tokens, .Error)) || testing.by_text(&harness, "1 error").count != 1usize { os.exit(14i32) }
+    // The invalid cell takes the hover state layer immediately and shows its
+    // standard tooltip after the shared 500 ms delay.
+    let invalid_y = grid.y + 72.0 + 15.0
+    if testing.hover(&harness, port_x + 50.0, invalid_y) != ok || testing.begin(&harness, now) != ok { os.exit(95i32) }
+    let (hover_wait, hover_wait_error) = build(&f, &theme, ctx, store)
+    if hover_wait_error != ok || testing.pump(&harness, hover_wait, now) != ok || !widget.interaction(&runtime, 1028u64).hovered || testing.by_key(&harness, 1001028u64).count != 0usize { os.exit(96i32) }
+    let hover_due = time.Instant { nanos: 1500000000i64 }
+    if testing.begin(&harness, hover_due) != ok { os.exit(97i32) }
+    let (hover_shown, hover_shown_error) = build(&f, &theme, ctx, store)
+    if hover_shown_error != ok || testing.pump(&harness, hover_shown, hover_due) != ok { os.exit(98i32) }
+    if testing.by_key(&harness, 1001028u64).count != 1usize { os.exit(103i32) }
+    if testing.by_text(&harness, "Port must be a number").count == 0usize { os.exit(104i32) }
+    let (hover_shot, hover_shot_error) = testing.snapshot(&harness, a)
+    let hover_fill = style.layer(style.color(&tokens, .Surface), style.color(&tokens, .OnSurface), tokens.states.hover)
+    if hover_shot_error != ok || !is_color(hover_shot, at(port_x + 50.0, invalid_y), hover_fill) { os.exit(99i32) }
+    if testing.hover(&harness, 410.0, 390.0) != ok { os.exit(100i32) }
+    let hover_done = time.Instant { nanos: 1600000000i64 }
+    if testing.begin(&harness, hover_done) != ok { os.exit(101i32) }
+    let (hover_clear, hover_clear_error) = build(&f, &theme, ctx, store)
+    if hover_clear_error != ok || testing.pump(&harness, hover_clear, hover_done) != ok || testing.by_key(&harness, 1001028u64).count != 0usize { os.exit(102i32) }
+    now = hover_done
     // Host of gamma is dirty: the 2 wide primary bar at its start.
     if !is_color(shot, at(grid.x + 41.0, grid.y + 104.0 + 15.0), style.color(&tokens, .Primary)) || is_color(shot, at(grid.x + 41.0, grid.y + 72.0 + 15.0), style.color(&tokens, .Primary)) { os.exit(15i32) }
     // A tap on Port of alpha moves the active cell there and takes the focus.
@@ -260,7 +281,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_11c_error != ok || testing.pump(&harness, root_11c, now) != ok { os.exit(61i32) }
     if testing.press_key(&harness, 65477u32, plain) != ok || !at_cell(store, 1usize, 1usize) { os.exit(62i32) }
     let (root_11d, build_11d_error) = build(&f, &theme, ctx, store)
-    if build_11d_error != ok || testing.pump(&harness, root_11d, now) != ok { os.exit(63i32) }
+    if build_11d_error != ok || testing.pump(&harness, root_11d, now) != ok || testing.by_key(&harness, 1001028u64).count != 1usize { os.exit(63i32) }
     if testing.press_key(&harness, 65u32, ctrl) != ok || store.last.kind != .Extend || store.state.row != 4usize || store.state.column != 1usize || store.state.anchor_row != 0usize || store.state.anchor_column != 0usize { os.exit(64i32) }
     let (root_11e, build_11e_error) = build(&f, &theme, ctx, store)
     if build_11e_error != ok || testing.pump(&harness, root_11e, now) != ok || testing.by_text(&harness, "10 cells selected").count != 1usize { os.exit(65i32) }
