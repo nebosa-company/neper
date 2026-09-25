@@ -24,6 +24,7 @@ use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
+use e.algo.hash as hash
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -31,6 +32,16 @@ use e.ui.widget
 const W: usize = 400usize
 
 type Log = struct { theme: *const control.Theme, sorts: usize, picks: usize, resizes: usize, reorders: usize, from: usize, to: usize, width: f32, offset: f32 }
+
+// (D1312) A row action's report: counted, the last ask kept.
+type ActLog = struct { count: usize, ask: collection.TableActionAsk }
+
+fn on_row_action(ctx: *void, value: collection.TableActionAsk) -> err {
+    let log = mem.cast[*ActLog](ctx)
+    log.count += 1usize
+    log.ask = value
+    ret ok
+}
 
 fn on_sort(ctx: *void, value: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -395,6 +406,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if testing.tap(&harness, select_all.bounds.x + select_all.bounds.width * 0.5, select_all.bounds.y + select_all.bounds.height * 0.5) != ok || chose.kind != .All { os.exit(72i32) }
         }
         sel_step += 1usize
+    }
+    // (D1312) Row actions: none on a resting row; hovered, Rerun and Download stand
+    // in its last cell, and a press on Download reports the row and the action.
+    var act_log: ActLog = zero
+    var action_specs: [2]collection.TableAction = zero
+    action_specs[0usize] = collection.TableAction { label: "Rerun", glyph: .Refresh }
+    action_specs[1usize] = collection.TableAction { label: "Download", glyph: .ArrowDown }
+    var act_options: collection.TableOptions = zero
+    act_options.row_actions = action_specs[..]
+    act_options.act = widget.Change[collection.TableActionAsk] { ctx: mem.cast[*void](&act_log), invoke: on_row_action }
+    if testing.hover(&harness, 395.0, 355.0) != ok { os.exit(89i32) }
+    var act_step = 0usize
+    while act_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let act_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        let (acting, acting_error) = collection.table_with(&f, 7u64, &theme, "Files", columns[0usize..3usize], act_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, act_options)
+        let (acting_page, acting_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if acting_error != ok || acting_page_error != ok { os.exit(84i32) }
+        acting_page[0usize] = acting
+        var acting_ground = control.sized_style(400.0, 360.0)
+        acting_ground.background = paint.Brush { Solid: background }
+        if testing.pump(&harness, widget.box(0u64, acting_ground, acting_page[0usize..1usize]), time.Instant { nanos: 5100000000i64 + i64(act_step) }) != ok { os.exit(85i32) }
+        let actions_shown = testing.by_key(&harness, (1003u64 ^ hash.fnv1a64("row-action")) + 1u64).count
+        if act_step == 0usize {
+            let (act_row, has_act_row) = bounds(&harness, &runtime, 1003u64)
+            if !has_act_row { os.exit(90i32) }
+            if actions_shown != 0usize { os.exit(91i32) }
+            if testing.hover(&harness, act_row.x + 20.0, act_row.y + act_row.height * 0.5) != ok { os.exit(86i32) }
+        }
+        if act_step == 1usize {
+            if actions_shown != 1usize { os.exit(87i32) }
+            let download_key = 1003u64 ^ hash.fnv1a64("row-action")
+            let (download, has_download) = bounds(&harness, &runtime, download_key + 1u64)
+            if !has_download || testing.tap(&harness, download.x + 16.0, download.y + 16.0) != ok || act_log.count != 1usize || act_log.ask.row != 1003u64 || act_log.ask.action != 1usize { os.exit(88i32) }
+        }
+        act_step += 1usize
     }
     // (D1248) With no rows the header stays over the loading state (a busy
     // "Loading" group under an indeterminate progress bar) or the empty state.

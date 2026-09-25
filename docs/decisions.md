@@ -25319,3 +25319,20 @@ slide are still to come.
 `ui_pickers_v2` opens a sheet of twelve options in a 720 tall window: its
 rows stand in a viewport 352 tall, on Windows and Linux. `ui_entry`'s
 three-option sheet is unchanged and still passes on both.
+
+## D1312 — Table rows show their actions on hover
+
+`TableOptions` gains `row_actions` (up to three `TableAction`s, each a label
+and a glyph) and `act`. With a pointer, while a row, or one of its actions,
+is hovered or focused, the actions stand end-aligned in place of the last
+cell. They are 32 icon buttons with 18 glyphs, 4 apart and 8 from the end,
+keyed `row_key ^ fnv1a64("row-action") + i`. A press reports a
+`TableActionAsk`: the row's key and index and which action. This follows
+the TableRow spec. On touch no row shows them (the spec's Android form).
+The disclosure and detail row, and the disabled, dragged and loading looks,
+are still to come.
+
+`ui_collections2_v2` finds no actions on a resting row. Hovered, the row
+shows them, and Download reports that row and action 1. This passes on
+Windows and Linux, and `ui_tabular` and `ui_collections3_v2` still pass on
+both.
