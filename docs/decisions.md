@@ -24911,3 +24911,18 @@ and its seam shadow are still to come.
 
 `ui_collections2_v2` holds a 200 viewport over 300 of columns on Windows and
 Linux.
+
+## D1284 — Data grids read pasted text
+
+A grid's Ctrl+V reports `GridEvent.Paste` with the clipboard's raw text.
+`grid_paste_size` and `grid_paste_cell` now read it as spreadsheets write it:
+rows end at LF or CRLF (a trailing one ends nothing), cells split at tabs, and
+a cell that starts with a quote runs to its closing quote, holding tabs and
+line ends, with a doubled quote standing for one. The size is the rows and the
+widest row's cells; a cell comes back unquoted into the caller's buffer, or
+false past the text. Applying the block to the model, and undoing it, stay
+the caller's, since the grid owns no values.
+
+`ui_collections6_v2` holds a 2 x 3 paste with CRLF, a trailing LF, a quoted
+cell holding a tab and a doubled quote, an empty cell and a missing one on
+Windows and Linux.
