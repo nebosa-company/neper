@@ -23365,3 +23365,13 @@ RangeSlider stays unchanged until it can publish the specified pair of child
 sliders instead of misrepresenting two handles as one value.
 
 `ui_slider` holds the named value on Windows and Linux.
+
+## D1171 — Rating focus is visible at both levels
+
+Keyboard focus now gives Rating's single focus target a capsule radius, so the
+shared runtime draws the ring around the whole row, and applies the focus state
+layer to the current star cell. Pointer hover still takes precedence on the
+cell under the pointer.
+
+`ui_inputs3_v2` holds the current-star focus layer on Windows and Linux. The
+Segoe review is `build/ux/rating-focus-segoe.png`.
