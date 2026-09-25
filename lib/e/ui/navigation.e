@@ -78,7 +78,7 @@ type AppBarSize = enum u8 { Small, Center, Medium, Large }
 // toggles it; Back's name (set, an `arrow-back` action firing `back` leads;
 // `closing`, a `close` one, D974); and
 // a node standing in place of the title (`headed`), the bar still named by it.
-type AppBarOptions = struct { size: AppBarSize, scrolled: bool, contextual: str, clear: widget.Submit, more_open: bool, more: widget.Submit, back_label: str, back: widget.Submit, closing: bool, heading: widget.Node, headed: bool }
+type AppBarOptions = struct { size: AppBarSize, scrolled: bool, contextual: str, clear: widget.Submit, more_open: bool, more: widget.Submit, back_label: str, back: widget.Submit, back_disabled: bool, closing: bool, heading: widget.Node, headed: bool }
 
 fn app_bar_options() -> AppBarOptions {
     var out: AppBarOptions = zero
@@ -179,7 +179,7 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         if backed {
             var kind: control.GlyphKind = .ArrowBack
             if options.closing { kind = .Cross }
-            let (going, going_error) = control.glyph_action(a, key + 1u64, t, kind, options.back_label, &held[2usize], side, glyph, ink, true, 0u32, 0u32, 0u64)
+            let (going, going_error) = control.glyph_action(a, key + 1u64, t, kind, options.back_label, &held[2usize], side, glyph, ink, !options.back_disabled, 0u32, 0u32, 0u64)
             if going_error != ok { ret (zero, going_error) }
             fronts[0usize] = going
         } else {
@@ -3651,8 +3651,9 @@ type WizardForm = enum u8 { Horizontal, Vertical, Compact }
 // A wizard's options (D974): its form, whether it stands in a dialog, the last
 // step's action ("Create project"; empty: "Finish"), and an optional step-pick
 // path. With `pressable_steps`, completed and current steps can be revisited;
-// `nonlinear` also makes upcoming steps reachable.
-type WizardOptions = struct { form: WizardForm, dialog: bool, finish_label: str, pressable_steps: bool, nonlinear: bool, step: widget.Change[usize] }
+// `nonlinear` also makes upcoming steps reachable; `finishing` replaces the
+// last action's label with its progress ring and disables competing actions.
+type WizardOptions = struct { form: WizardForm, dialog: bool, finish_label: str, pressable_steps: bool, nonlinear: bool, step: widget.Change[usize], finishing: bool }
 
 fn wizard_options() -> WizardOptions {
     var out: WizardOptions = zero
@@ -3845,29 +3846,34 @@ fn wizard_step(a: *mem.Arena, key: widget.Key, t: *const control.Theme, step: *c
 // and the current one Current. The content exposes its step name as a level-2
 // heading keyed `key + 5`; successful Back and Next request it across rebuilds.
 // At pointer density Alt+B and Alt+N invoke those same backward and forward
-// paths.
+// paths. On the last step `finishing` keeps the primary button's width while an
+// indeterminate 18 ring replaces its label and disables Back, Cancel, access
+// keys, step picks and repeated Finish activation.
 // `legacy` keeps D853's contract: Back stays (disabled) on the first step and
 // Next and Finish follow `can_advance`.
-// ponytail: no Finish progress ring or discard confirmation.
+// ponytail: no discard confirmation.
 fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, steps: []const WizardStep, current: usize, content: widget.Node, can_advance: bool, legacy: bool, back: *const widget.Submit, next: *const widget.Submit, finish: *const widget.Submit, cancel: *const widget.Submit, options: WizardOptions, width: f32, height: f32) -> (widget.Node, err) {
     if steps.len == 0usize || current >= steps.len { ret (zero, TooLarge) }
     let last = current + 1usize == steps.len
     let compact = options.form == .Compact
     let vertical = options.form == .Vertical
     let advancing = !legacy || can_advance
+    let finishing = options.finishing && last
     let (moves, moves_error) = mem.alloc[WizardMove](a, 2usize)
     if moves_error != ok { ret (zero, TooLarge) }
-    let (move_actions, move_actions_error) = mem.alloc[widget.Submit](a, 2usize)
+    let (move_actions, move_actions_error) = mem.alloc[widget.Submit](a, 3usize)
     if move_actions_error != ok { ret (zero, TooLarge) }
     moves[0usize] = WizardMove { action: *back, runtime: t.runtime, focus: key + 5u64 }
     moves[1usize] = WizardMove { action: *next, runtime: t.runtime, focus: key + 5u64 }
     move_actions[0usize] = widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: wizard_move_fire }
     move_actions[1usize] = widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: wizard_move_fire }
+    move_actions[2usize] = widget.Submit { ctx: zero, invoke: zero }
     var pressable_count = 0usize
     if options.pressable_steps {
         pressable_count = current + 1usize
         if options.nonlinear { pressable_count = steps.len }
     }
+    if finishing { pressable_count = 0usize }
     var step_tab_stop = current
     var focused_step = 0usize
     while focused_step < pressable_count {
@@ -3987,7 +3993,7 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         forward_key = key + 4u64
         forward_label = finish_label
     }
-    if advancing { default_action = *forward }
+    if advancing && !finishing { default_action = *forward }
     let (foot, foot_error) = mem.alloc[widget.Node](a, 4usize)
     if foot_error != ok { ret (zero, TooLarge) }
     var f = 0usize
@@ -4002,15 +4008,33 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         var caption = control.text_options()
         caption.role = .LabelLarge
         caption.wrap = .None
-        let (said, said_error) = control.colored_text(a, 0u64, forward_label, t, caption, look.foreground)
+        var label_ink = look.foreground
+        if finishing { label_ink.alpha = 0.0 }
+        let (said, said_error) = control.colored_text(a, 0u64, forward_label, t, caption, label_ink)
         if said_error != ok { ret (zero, said_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = said
         var centre = style.defaults()
         centre.min_width = style.Length { Px: control.max_zero(width - 32.0 - 2.0 * look.padding) }
-        let label_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, centre, held[0usize..1usize])
-        let (going, going_error) = control.pressable(a, forward_key, t, 3u8, forward_label, look, advancing, false, forward, label_node)
+        var label_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, centre, held[0usize..1usize])
+        if finishing {
+            var inked = control.progress_options()
+            inked.content = look.foreground
+            let (ring, ring_error) = control.progress_ring_of(a, 0u64, t, forward_label, 0.0, true, t.tokens.sizes.icon_sm, inked)
+            if ring_error != ok { ret (zero, ring_error) }
+            let (loading, loading_error) = mem.alloc[widget.Node](a, 3usize)
+            if loading_error != ok { ret (zero, TooLarge) }
+            loading[0usize] = ring
+            loading[1usize] = label_node
+            loading[2usize] = widget.aligned(0u64, .Center, .Center, style.defaults(), loading[0usize..1usize])
+            label_node = widget.stack(0u64, style.defaults(), loading[1usize..3usize])
+        }
+        var forward_action = forward
+        if finishing { forward_action = &move_actions[2usize] }
+        var forward_states = 0u32
+        if finishing { forward_states = accessibility.STATE_BUSY }
+        let (going, going_error) = control.pressable_states(a, forward_key, t, 3u8, forward_label, look, advancing, false, forward_states, 0u32, 0u64, forward_action, label_node)
         if going_error != ok { ret (zero, going_error) }
         foot[0usize] = going
         f = 1usize
@@ -4018,6 +4042,7 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     } else {
         var plain = control.button_options()
         plain.variant = .Plain
+        plain.enabled = !finishing
         let (cancel_button, cancel_error) = control.button(a, key + 1u64, t, "Cancel", cancel, plain)
         if cancel_error != ok { ret (zero, cancel_error) }
         foot[0usize] = cancel_button
@@ -4026,7 +4051,7 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         if legacy || current > 0usize {
             var outlined = control.button_options()
             outlined.variant = .Outlined
-            outlined.enabled = current > 0usize
+            outlined.enabled = current > 0usize && !finishing
             let (back_button, back_error) = control.button(a, key + 2u64, t, "Back", &move_actions[0usize], outlined)
             if back_error != ok { ret (zero, back_error) }
             foot[f] = back_button
@@ -4034,7 +4059,10 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         }
         var filled = control.button_options()
         filled.enabled = advancing
-        let (next_button, next_error) = control.button(a, forward_key, t, forward_label, forward, filled)
+        filled.loading = finishing
+        var forward_action = forward
+        if finishing { forward_action = &move_actions[2usize] }
+        let (next_button, next_error) = control.button(a, forward_key, t, forward_label, forward_action, filled)
         if next_error != ok { ret (zero, next_error) }
         foot[f] = next_button
         f += 1usize
@@ -4057,6 +4085,10 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
             bar_options.back_label = "Back"
             bar_options.back = move_actions[0usize]
             bar_options.closing = false
+        }
+        if finishing {
+            bar_options.back = move_actions[2usize]
+            bar_options.back_disabled = true
         }
         var nothing: []const Action = zero
         let (bar, bar_error) = app_bar_of(a, key + 6u64, t, title, nothing, nothing, bar_options, width)
@@ -4154,11 +4186,11 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     if t.tokens.metrics.control_height <= t.tokens.sizes.control_sm {
         var alt: input.Modifiers = zero
         alt.alt = true
-        if current > 0usize {
+        if current > 0usize && !finishing {
             shortcuts[shortcut_count] = widget.Shortcut { key: 66u32, modifiers: alt, action: move_actions[0usize] }
             shortcut_count += 1usize
         }
-        if advancing {
+        if advancing && !finishing {
             shortcuts[shortcut_count] = widget.Shortcut { key: 78u32, modifiers: alt, action: *forward }
             shortcut_count += 1usize
         }

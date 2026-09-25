@@ -35,7 +35,7 @@ type Turned = struct { count: usize, last: usize }
 type Moved = struct { count: usize, from: usize, to: usize }
 
 // The counters: 0 back, 1 next, 2 finish, 3 cancel.
-type Store = struct { counters: [4]Counter, subs: [4]widget.Submit, picks: Turned, closes: Turned, step_picks: Turned, moves: Moved, documents: [3]navigation.Document, steps: [3]navigation.WizardStep }
+type Store = struct { counters: [4]Counter, subs: [4]widget.Submit, picks: Turned, closes: Turned, step_picks: Turned, moves: Moved, documents: [3]navigation.Document, steps: [3]navigation.WizardStep, finishing: bool }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -97,6 +97,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     var small = navigation.wizard_options()
     small.form = .Compact
     small.finish_label = "Create project"
+    small.finishing = s.finishing
     let (phone, e5) = navigation.wizard_of(a, 6200u64, t, "New project", s.steps[0usize..3usize], 2usize, page, &s.subs[0usize], &s.subs[1usize], &s.subs[2usize], &s.subs[3usize], small, 360.0, 300.0)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (zero, e1) }
     let (lefts, lefts_error) = mem.alloc[widget.Node](a, 3usize)
@@ -288,6 +289,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (create_node, has_create_node) = find(tree, .Button, "Create project")
     if !has_create || !has_create_node || !near(create.width, 328.0) || !tap_key(&harness, &runtime, 6204u64) || s.counters[2usize].count != 1usize { os.exit(30i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || s.counters[2usize].count != 2usize || !tap_key(&harness, &runtime, 6207u64) || s.counters[0usize].count != 2usize { os.exit(31i32) }
+    s.finishing = true
+    let (finishing, finishing_error) = build(&f, &theme, s)
+    if finishing_error != ok || testing.pump(&harness, finishing, time.Instant { nanos: 1300000000i64 }) != ok { os.exit(46i32) }
+    let (finishing_tree, finishing_tree_error) = testing.semantics(&harness)
+    if finishing_tree_error != ok { os.exit(47i32) }
+    let (busy_finish, has_busy_finish) = find(finishing_tree, .Button, "Create project")
+    if !has_busy_finish || !busy_finish.state.busy || focusable(&harness, &runtime, 6207u64) { os.exit(48i32) }
+    if !tap_key(&harness, &runtime, 6204u64) || testing.press_key(&harness, 13u32, zero) != ok || testing.press_key(&harness, 66u32, alt) != ok || s.counters[2usize].count != 2usize || s.counters[0usize].count != 2usize { os.exit(49i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(32i32) }
     try io.print("ui navigation5 v2 ok\n")
     ret ok
