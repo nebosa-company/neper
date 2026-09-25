@@ -1,7 +1,7 @@
 // `e.ui.navigation` (D828, widget plan P1-15) under the light theme: an app bar
 // names its page with a heading between its leading and trailing actions; a
 // toolbar and a status bar are what they say in the tree; a navigation stack shows
-// its top page under a back button that pops, as Escape does; the destination bar
+// its top page under a back button that pops, as Escape and mouse Back do; the destination bar
 // is a row at compact width and a column when expanded, its tabs picking.
 
 use e.gpu
@@ -212,6 +212,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var alt: input.Modifiers = zero
     alt.alt = true
     if testing.press_key(&harness, 37u32, alt) != ok || logs[0usize].pops != 3usize { os.exit(38i32) }
+    var mouse_back: input.Pointer = zero
+    mouse_back.kind = .Mouse
+    mouse_back.changed = .Back
+    if testing.send(&harness, input.Event { PointerDown: mouse_back }) != ok || logs[0usize].pops != 4usize { os.exit(39i32) }
     let (mail_2, has_mail_2) = find(tree_2, .Tab, "Mail")
     let (calendar_2, has_calendar_2) = find(tree_2, .Tab, "Calendar")
     if !has_mail_2 || !has_calendar_2 || calendar_2.bounds.y <= mail_2.bounds.y || calendar_2.bounds.x != mail_2.bounds.x { os.exit(35i32) }

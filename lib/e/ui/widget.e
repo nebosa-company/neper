@@ -4288,6 +4288,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     if !s.has_root { ret ok }
     switch event {
     case .PointerDown as p:
+        if p.changed == .Back { ret dispatch(widget_runtime, input.Event { Back: p.window }) }
         s.has_pointer = true
         s.arena_state.last = p.position
         s.has_tooltip_touch = false
