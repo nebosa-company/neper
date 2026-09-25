@@ -209,6 +209,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (second_group, has_second_group) = bounds(&harness, &runtime, 4201u64)
     if !has_first_group || !has_second_group || !near(first_group.width, 200.0) || !near(second_group.width, 393.0) { os.exit(33i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 4001u64 + 195u64 + 2u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok || s.last.kind != .Resize || s.last.group != 0usize || !near(s.last.size, 208.0) { os.exit(34i32) }
+    // (D1299) Four groups in a 601 x 401 grid: each 300 x 200, the second beside
+    // the first and the third below it.
+    var four_groups: [4]navigation.EditorGroup = zero
+    four_groups[0usize] = s.groups[0usize]
+    four_groups[1usize] = s.groups[1usize]
+    four_groups[2usize] = s.groups[0usize]
+    four_groups[3usize] = s.groups[1usize]
+    var grid_options = navigation.workspace_options()
+    grid_options.grid = true
+    f = mem.arena_from(frame_storage)
+    let (grid_views, grid_views_error) = mem.alloc[widget.Node](&f, 4usize)
+    if grid_views_error != ok { os.exit(35i32) }
+    var gv = 0usize
+    while gv < 4usize {
+        grid_views[gv] = blank(10.0, 10.0)
+        gv += 1usize
+    }
+    let (gridded, gridded_error) = navigation.multi_document_workspace_of(&f, 5000u64, &theme, "Grid", four_groups[..], grid_views[0usize..4usize], grid_options, sized_change, 601.0, 401.0)
+    if gridded_error != ok || testing.pump(&harness, gridded, time.Instant { nanos: 6100000000i64 }) != ok { os.exit(36i32) }
+    let (cell_a, has_a) = bounds(&harness, &runtime, 5001u64)
+    let (cell_b, has_b) = bounds(&harness, &runtime, 5201u64)
+    let (cell_c, has_c) = bounds(&harness, &runtime, 5401u64)
+    if !has_a || !has_b || !has_c || !near(cell_a.width, 300.0) || !near(cell_a.height, 200.0) || !near(cell_b.x, cell_a.x + 301.0) || !near(cell_c.y, cell_a.y + 201.0) { os.exit(37i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(30i32) }
     try io.print("ui containers5 v2 ok\n")
     ret ok

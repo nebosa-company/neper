@@ -25133,3 +25133,16 @@ to come.
 `ui_containers4_v2` floats the palette again, drags its header by (40, 20),
 and holds its rectangle moved on Windows and Linux; the fixture's earlier
 Move literal gained the new field.
+
+## D1299 — Workspaces set four groups in a grid
+
+`WorkspaceOptions.grid` sets four editor groups two by two, as the
+MultiDocumentWorkspace spec's 2 x 2 layout: each group takes a quarter of
+the area between 1px `outline-variant` lines, one between the groups of a
+row and one between the rows. The grid ignores `sizes` and sashes. With
+other than four groups the option is ignored. The dock layout's marker also
+drops a stale claim: its sashes already restore on a double press through
+D1212. Dragging documents between groups is still to come.
+
+`ui_containers5_v2` holds four groups at 300 x 200 in a 601 x 401 workspace,
+the second beside the first and the third below it, on Windows and Linux.
