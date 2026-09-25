@@ -313,7 +313,7 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 let (child, has_child) = widget.summary_at(runtime, usize(summary.first_child.slot))
                 if has_child && child.kind == KIND_TEXT { label = child.text }
             }
-            if label.len == 0usize && node.role == .TreeItem {
+            if label.len == 0usize && (node.role == .TreeItem || (node.role == .Row && node.position.row > 0u32)) {
                 let (nested, has_nested) = descendant_label(runtime, slot)
                 if has_nested { label = nested }
             }

@@ -22741,3 +22741,13 @@ typeahead context, so the semantic correction does not regress keyboard use.
 `ui_collections3_v2` holds the role, counts, row levels and typeahead on Windows
 and Linux. `ui_accessibility` guards the general role path. The reviewed surface
 is unchanged.
+
+## D1107 — Data rows inherit their first text label
+
+An unnamed Row with a non-zero row position inherits the first descendant text,
+using the same accessibility-tree walk as TreeItem. Header rows remain unnamed;
+explicit labels still win. This gives Table, DataGrid and TreeTable rows the
+record name their visual first cell already presents.
+
+`ui_collections2_v2`, `ui_collections3_v2` and `ui_accessibility` hold the shared
+path on Windows and Linux. The reviewed surfaces are unchanged.
