@@ -1885,8 +1885,8 @@ fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, ce
 // 1px `outline-variant` line after every cell. The focus ring is the runtime's,
 // inset where the viewport clips it.
 // (D1246) `check`, when given, is the row's selection cell, first.
-// ponytail: no disclosure and detail row, hover row
-// actions, disabled, dragged or loading looks; the caller's cells keep their
+// (D1312) A table's row actions come from `TableOptions.row_actions`.
+// ponytail: no disclosure and detail row, disabled, dragged or loading looks; the caller's cells keep their
 // own colours when the row is selected.
 // (D1246) `has_check` puts `check` (a selection cell) first.
 fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool) -> (widget.Node, err) {
@@ -1993,7 +1993,57 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // empty state's words for a table with no rows.
 // (D1283) `view_width`, when narrower than the columns, scrolls the table
 // sideways, header and body together.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32 }
+// (D1312) `row_actions` are the per-row icon buttons (at most three) shown on a
+// hovered or focused row, reported through `act`.
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk] }
+
+// (D1312) A table row action: its name and glyph; and what a press on one asks:
+// the row (by key and index) and which action.
+type TableAction = struct { label: str, glyph: control.GlyphKind }
+type TableActionAsk = struct { row: widget.Key, index: usize, action: usize }
+type TableActionPress = struct { ask: TableActionAsk, act: widget.Change[TableActionAsk] }
+
+fn table_action_fire(ctx: *void) -> err {
+    let p = mem.cast[*TableActionPress](ctx)
+    ret widget.fire_change[TableActionAsk](p.act, p.ask)
+}
+
+// (D1312, docs/ux/components/TableRow, row actions) While the row keyed
+// `row_key` or one of its actions is hovered or focused, with a pointer, its
+// actions as 32 icon buttons with 18 glyphs 4 apart and 8 from the end (keyed
+// `row_key ^ fnv1a64("row-action") + i`), end-aligned in place of the last
+// cell; else nothing (the cell keeps its content).
+fn row_actions_cell(a: *mem.Arena, t: *const control.Theme, row_key: widget.Key, index: usize, actions: []const TableAction, act: widget.Change[TableActionAsk]) -> (widget.Node, bool, err) {
+    if actions.len == 0usize || density_of(t) == 2usize || mem.address_of(t.runtime) == 0usize { ret (zero, false, ok) }
+    let base = row_key ^ hash.fnv1a64("row-action")
+    var shown = control.control_state(t, row_key, true, false).hovered || widget.focus_within(t.runtime, row_key)
+    var j = 0usize
+    while j < actions.len && j < 3usize {
+        let button_state = control.control_state(t, base + u64(j), true, false)
+        if button_state.hovered || button_state.focused { shown = true }
+        j += 1usize
+    }
+    if !shown { ret (zero, false, ok) }
+    var n = actions.len
+    if n > 3usize { n = 3usize }
+    let (presses, presses_error) = mem.alloc[TableActionPress](a, n)
+    let (submits, submits_error) = mem.alloc[widget.Submit](a, n)
+    let (buttons, buttons_error) = mem.alloc[widget.Node](a, n)
+    if presses_error != ok || submits_error != ok || buttons_error != ok { ret (zero, false, TooLarge) }
+    j = 0usize
+    while j < n {
+        presses[j] = TableActionPress { ask: TableActionAsk { row: row_key, index: index, action: j }, act: act }
+        submits[j] = widget.Submit { ctx: mem.cast[*void](&presses[j]), invoke: table_action_fire }
+        let (button, button_error) = control.glyph_button(a, base + u64(j), t, actions[j].glyph, actions[j].label, &submits[j], 32.0, 18.0)
+        if button_error != ok { ret (zero, false, button_error) }
+        buttons[j] = button
+        j += 1usize
+    }
+    var line = style.defaults()
+    line.width = style.Length { Percent: 100.0 }
+    line.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 4.0 }, line, buttons[0usize..n]), true, ok)
+}
 
 // (D1246, docs/ux/components/Table, TableRow, HeaderRow) `table` made selectable
 // by `selection`: a 52 first column (40 dense) holds each row's checkbox in its
@@ -3047,6 +3097,12 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             if built_error != ok { ret (zero, built_error) }
             cells[c] = built
             c += 1usize
+        }
+        // (D1312) Row actions stand in the last cell while the row is hovered or focused.
+        if columns.len > 0usize {
+            let (acted, has_acted, acted_error) = row_actions_cell(a, t, row_key, index, selection.row_actions, selection.act)
+            if acted_error != ok { ret (zero, acted_error) }
+            if has_acted { cells[columns.len - 1usize] = acted }
         }
         let lined = index + 1usize < total
         let row_tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
