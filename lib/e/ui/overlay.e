@@ -5,6 +5,7 @@
 // caller keeps `shown` and `open` the way it keeps every other value (D807) -- and
 // keyed so the harness and the tree can find it.
 
+use e.math
 use e.mem
 use e.time
 use e.gfx.geometry
@@ -3976,6 +3977,276 @@ fn starts_folded(word: str, text: str) -> bool {
     ret true
 }
 
+// (D1294) What a modal time picker's parts ask: set the hour or minute to
+// `value`, choose AM (0) or PM (1), or make the hour or minute box the active one.
+type TimeChoiceKind = enum u8 { Hour, Minute, Period, EditHour, EditMinute }
+type TimeChoice = struct { kind: TimeChoiceKind, value: u8 }
+type TimeChoosing = struct { choice: TimeChoice, change: widget.Change[TimeChoice] }
+
+fn time_choice_fire(ctx: *void) -> err {
+    let c = mem.cast[*TimeChoosing](ctx)
+    ret widget.fire_change[TimeChoice](c.change, c.choice)
+}
+
+// (D1294) A time picker's box: 80 by 64, `radius-sm`, its two digits in
+// `display-small`, `primary-container` when active and else
+// `surface-container-highest`; a button named `name` that makes it active.
+fn time_box(a: *mem.Arena, key: widget.Key, t: *const control.Theme, digits: str, name: str, active: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, active)
+    var fill = style.color(t.tokens, .SurfaceContainerHighest)
+    var ink = style.color(t.tokens, .OnSurface)
+    if active {
+        fill = style.color(t.tokens, .PrimaryContainer)
+        ink = style.color(t.tokens, .OnPrimaryContainer)
+    }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = style.layer(fill, ink, control.state_opacity(t, state))
+    look.foreground = ink
+    look.border_width = 0.0
+    look.radius = t.tokens.radii.sm
+    look.custom_padding = true
+    look.padding = 0.0
+    look.padding_start = 0.0
+    look.padding_y = 0.0
+    look.min_width = 80.0
+    look.min_height = 64.0
+    var big = control.text_options()
+    big.role = .DisplaySmall
+    big.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, digits, t, big, ink)
+    if said_error != ok { ret (zero, said_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = said
+    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(80.0, 64.0), held[0usize..1usize])
+    let (made, made_error) = control.pressable_states(a, key, t, 3u8, name, look, true, active, 0u32, 0u32, 0u64, action, centred)
+    ret (made, made_error)
+}
+
+fn two_digits(a: *mem.Arena, value: u8) -> str {
+    let (out, out_error) = mem.alloc[u8](a, 2usize)
+    if out_error != ok { ret "" }
+    out[0usize] = 48u8 + value / 10u8
+    out[1usize] = 48u8 + value % 10u8
+    ret out[0usize..2usize]
+}
+
+// (D1294, docs/ux/components/TimePicker, modal dial) The touch time picker, a
+// modal dialog (keyed `key`) titled "Select time": the hour box (`key + 1`, its
+// hour in the clock `twelve` asks for) and the minute box (`key + 2`) with a
+// `display-small` ":" between; with `twelve`, the AM/PM selector -- two stacked
+// 48 by 64 segments (`key + 3`, `key + 4`), the chosen one
+// `tertiary-container`; then the 224 dial on `surface-container-highest` with
+// twelve 48 numbers round it (`key + 10 + i`) -- the hours 12, 1..11 (0..11 on
+// a 24-hour clock), or the minutes in fives while the minute box is active --
+// the chosen one on a 44 `primary` knob in `on-primary`, a 2 wide `primary`
+// hand from an 8 centre dot to it. Presses report `TimeChoice`s through
+// `change`; Cancel fires `cancel`, OK `confirm`.
+// ponytail: no input mode (typed boxes), no inner 13-23 ring, no drag round the
+// dial; a minute off the fives puts the knob on no number.
+fn time_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, minute: u8, editing_minute: bool, twelve: bool, open: bool, change: widget.Change[TimeChoice], cancel: *const widget.Submit, confirm: *const widget.Submit) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (choices, choices_error) = mem.alloc[TimeChoosing](a, 16usize)
+    if choices_error != ok { ret (zero, TooLarge) }
+    let (presses, presses_error) = mem.alloc[widget.Submit](a, 16usize)
+    if presses_error != ok { ret (zero, TooLarge) }
+    var c = 0usize
+    while c < 16usize {
+        presses[c] = widget.Submit { ctx: mem.cast[*void](&choices[c]), invoke: time_choice_fire }
+        c += 1usize
+    }
+    choices[0usize] = TimeChoosing { choice: TimeChoice { kind: .EditHour, value: 0u8 }, change: change }
+    choices[1usize] = TimeChoosing { choice: TimeChoice { kind: .EditMinute, value: 0u8 }, change: change }
+    choices[2usize] = TimeChoosing { choice: TimeChoice { kind: .Period, value: 0u8 }, change: change }
+    choices[3usize] = TimeChoosing { choice: TimeChoice { kind: .Period, value: 1u8 }, change: change }
+    var shown_hour = hour % 24u8
+    let pm = shown_hour >= 12u8
+    if twelve {
+        shown_hour = shown_hour % 12u8
+        if shown_hour == 0u8 { shown_hour = 12u8 }
+    }
+    let (hour_box, hour_error) = time_box(a, key + 1u64, t, two_digits(a, shown_hour), "Hour", !editing_minute, &presses[0usize])
+    if hour_error != ok { ret (zero, hour_error) }
+    let (minute_box, minute_error) = time_box(a, key + 2u64, t, two_digits(a, minute % 60u8), "Minute", editing_minute, &presses[1usize])
+    if minute_error != ok { ret (zero, minute_error) }
+    var big = control.text_options()
+    big.role = .DisplaySmall
+    big.wrap = .None
+    let (colon, colon_error) = control.colored_text(a, 0u64, ":", t, big, style.color(t.tokens, .OnSurface))
+    if colon_error != ok { ret (zero, colon_error) }
+    let (row_parts, row_parts_error) = mem.alloc[widget.Node](a, 7usize)
+    if row_parts_error != ok { ret (zero, TooLarge) }
+    row_parts[0usize] = hour_box
+    row_parts[4usize] = colon
+    row_parts[1usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(16.0, 64.0), row_parts[4usize..5usize])
+    row_parts[2usize] = minute_box
+    var row_count = 3usize
+    if twelve {
+        let (am, am_error) = period_segment(a, key + 3u64, t, "AM", !pm, &presses[2usize])
+        let (pm_node, pm_error) = period_segment(a, key + 4u64, t, "PM", pm, &presses[3usize])
+        if am_error != ok || pm_error != ok { ret (zero, TooLarge) }
+        row_parts[5usize] = am
+        row_parts[6usize] = pm_node
+        row_parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), row_parts[5usize..7usize])
+        row_count = 4usize
+    }
+    let (dial_node, dial_error) = time_dial(a, key, t, hour, minute, editing_minute, twelve, change, choices[4usize..16usize], presses[4usize..16usize])
+    if dial_error != ok { ret (zero, dial_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), row_parts[0usize..row_count])
+    parts[1usize] = dial_node
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 24.0 }, style.defaults(), parts[0usize..2usize])
+    let (buttons, buttons_error) = mem.alloc[DialogButton](a, 2usize)
+    if buttons_error != ok { ret (zero, TooLarge) }
+    buttons[0usize] = DialogButton { label: "Cancel", action: *cancel, kind: .Cancel }
+    buttons[1usize] = DialogButton { label: "OK", action: *confirm, kind: .Default }
+    let (made, made_error) = dialog_dismissable(a, key, t, "Select time", content, buttons[0usize..2usize], true, false, false, cancel)
+    ret (made, made_error)
+}
+
+// (D1294) An AM or PM segment: 48 by 64 with a 1px `outline` edge, the chosen
+// one `tertiary-container`; a radio named by its word.
+fn period_segment(a: *mem.Arena, key: widget.Key, t: *const control.Theme, word: str, chosen: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, chosen)
+    var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var ink = style.color(t.tokens, .OnSurfaceVariant)
+    if chosen {
+        fill = style.color(t.tokens, .TertiaryContainer)
+        ink = style.color(t.tokens, .OnTertiaryContainer)
+    }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = style.layer(fill, ink, control.state_opacity(t, state))
+    look.foreground = ink
+    look.border = style.color(t.tokens, .Outline)
+    look.border_width = t.tokens.sizes.divider
+    look.radius = t.tokens.radii.sm
+    look.custom_padding = true
+    look.padding = 0.0
+    look.padding_start = 0.0
+    look.padding_y = 0.0
+    look.min_width = 48.0
+    look.min_height = 32.0
+    var caption = control.text_options()
+    caption.role = .LabelLarge
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, word, t, caption, ink)
+    if said_error != ok { ret (zero, said_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = said
+    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(48.0, 32.0), held[0usize..1usize])
+    var states = 0u32
+    if chosen { states = accessibility.STATE_CHECKED }
+    let (made, made_error) = control.pressable_states(a, key, t, 5u8, word, look, true, false, states, 0u32, 0u64, action, centred)
+    ret (made, made_error)
+}
+
+// (D1294) The dial: twelve numbers round a 224 circle, the knob on the chosen.
+fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, minute: u8, editing_minute: bool, twelve: bool, change: widget.Change[TimeChoice], choices: []TimeChoosing, presses: []widget.Submit) -> (widget.Node, err) {
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 40usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var face = control.sized_style(224.0, 224.0)
+    face.radius = 112.0
+    face.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+    layers[n] = widget.box(0u64, face, zero)
+    n += 1usize
+    // Which place the knob stands on: 0 at the top, clockwise.
+    var place = usize(hour % 12u8)
+    if editing_minute { place = usize(minute % 60u8) / 5usize }
+    let on_number = !editing_minute || minute % 5u8 == 0u8
+    let primary = style.color(t.tokens, .Primary)
+    let angle = f32(place) * 0.5235988
+    let knob_x = 112.0 + 88.0 * math.sin[f32](angle)
+    let knob_y = 112.0 - 88.0 * math.cos[f32](angle)
+    // The hand: a 2 wide bar from the centre to the knob, turned by the angle.
+    var hand = control.sized_style(2.0, 88.0)
+    hand.background = paint.Brush { Solid: primary }
+    let (hands, hands_error) = mem.alloc[widget.Node](a, 2usize)
+    if hands_error != ok { ret (zero, TooLarge) }
+    hands[0usize] = widget.box(0u64, hand, zero)
+    // Turned about its own centre, set half way from the dot to the knob.
+    hands[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, offset: zero }, style.defaults(), hands[0usize..1usize])
+    layers[n] = widget.positioned(0u64, 111.0 + 44.0 * math.sin[f32](angle), 68.0 - 44.0 * math.cos[f32](angle), style.defaults(), hands[1usize..2usize])
+    n += 1usize
+    var dot = control.sized_style(8.0, 8.0)
+    dot.radius = 4.0
+    dot.background = paint.Brush { Solid: primary }
+    layers[n] = widget.positioned(0u64, 108.0, 108.0, dot, zero)
+    n += 1usize
+    if on_number {
+        var knob = control.sized_style(44.0, 44.0)
+        knob.radius = 22.0
+        knob.background = paint.Brush { Solid: primary }
+        layers[n] = widget.positioned(0u64, knob_x - 22.0, knob_y - 22.0, knob, zero)
+        n += 1usize
+    }
+    var i = 0usize
+    while i < 12usize {
+        var value = u8(i)
+        var label_value = value
+        if editing_minute {
+            value = u8(i * 5usize)
+            label_value = value
+        } else if twelve {
+            label_value = value
+            if label_value == 0u8 { label_value = 12u8 }
+            if hour >= 12u8 { value = value + 12u8 }
+        } else if hour >= 12u8 {
+            value = value + 12u8
+            label_value = value
+        }
+        var kind: TimeChoiceKind = .Hour
+        if editing_minute { kind = .Minute }
+        choices[i] = TimeChoosing { choice: TimeChoice { kind: kind, value: value }, change: change }
+        let chosen = on_number && i == place
+        var ink = style.color(t.tokens, .OnSurface)
+        if chosen { ink = style.color(t.tokens, .OnPrimary) }
+        var caption = control.text_options()
+        caption.role = .BodyLarge
+        caption.wrap = .None
+        var digits = two_digits(a, label_value)
+        if !editing_minute && label_value < 10u8 { digits = digits[1usize..2usize] }
+        let (said, said_error) = control.colored_text(a, 0u64, digits, t, caption, ink)
+        if said_error != ok { ret (zero, said_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = said
+        let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(48.0, 48.0), held[0usize..1usize])
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 1usize)
+        if cells_error != ok { ret (zero, TooLarge) }
+        cells[0usize] = widget.region(key + 10u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&presses[i]), invoke: control.press_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(48.0, 48.0), held[0usize..0usize])
+        let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+        if both_error != ok { ret (zero, TooLarge) }
+        both[0usize] = centred
+        both[1usize] = cells[0usize]
+        let a_i = f32(i) * 0.5235988
+        let x = 112.0 + 88.0 * math.sin[f32](a_i) - 24.0
+        let y = 112.0 - 88.0 * math.cos[f32](a_i) - 24.0
+        var number_sem: widget.Semantics = zero
+        number_sem.role = 5u8
+        number_sem.label = digits
+        number_sem.actions = accessibility.ACTION_PRESS
+        if chosen { number_sem.states = accessibility.STATE_CHECKED }
+        let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
+        if stacked_error != ok { ret (zero, TooLarge) }
+        stacked[0usize] = widget.stack(0u64, control.sized_style(48.0, 48.0), both[0usize..2usize])
+        stacked[1usize] = widget.semantics(0u64, number_sem, style.defaults(), stacked[0usize..1usize])
+        layers[n] = widget.positioned(0u64, x, y, style.defaults(), stacked[1usize..2usize])
+        n += 1usize
+        i += 1usize
+    }
+    var dial_sem: widget.Semantics = zero
+    dial_sem.role = 2u8
+    dial_sem.label = "Hours"
+    if editing_minute { dial_sem.label = "Minutes" }
+    let (dial, dial_error) = mem.alloc[widget.Node](a, 1usize)
+    if dial_error != ok { ret (zero, TooLarge) }
+    dial[0usize] = widget.stack(key + 5u64, control.sized_style(224.0, 224.0), layers[0usize..n])
+    ret (widget.semantics(0u64, dial_sem, style.defaults(), dial[0usize..1usize]), ok)
+}
+
 // A time field (D960): the clocked field (editor `key`, clock `key + 1`, frame
 // `key + 2`) whose clock fires `toggle`; while `open`, the time list below it (the
 // overlay keyed `key + 3`, its viewport `key + 4`, rows `key + 5 + index`), each
@@ -3990,8 +4261,8 @@ fn starts_folded(word: str, text: str) -> bool {
 // (D1230) Callers write rows and the value with `write_clock_in` for the
 // theme language's 12- or 24-hour clock and read typed text with `parse_clock`.
 // (D1275) Typing filters the list to the times the text starts.
-// ponytail: no dial, input mode, AM/PM selector or wheels for touch, and there
-// is no error icon; the caller's text and picks
+// (D1294) `time_picker_modal` is the touch dial form.
+// ponytail: no input mode or wheels for touch, and there is no error icon; the caller's text and picks
 // carry the value.
 fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, times: []const str, offsets: []const str, selected: usize, picks: []const widget.Submit, note: str, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != times.len || offsets.len != times.len { ret (zero, TooLarge) }
