@@ -532,17 +532,21 @@ fn navigation_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     ret (made, made_error)
 }
 
-// A backable scope: Escape and Alt+Left share the caller-owned action.
+// A backable scope: Escape, Alt+Left and Command+[ share the caller-owned action.
 fn back_scope(a: *mem.Arena, key: widget.Key, content: widget.Node, back: widget.Submit) -> (widget.Node, err) {
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = content
-    let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 1usize)
+    let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 3usize)
     if keys_error != ok { ret (zero, TooLarge) }
     var alt: input.Modifiers = zero
     alt.alt = true
     keys[0usize] = widget.Shortcut { key: 37u32, modifiers: alt, action: back }
-    ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: keys[0usize..1usize], default_action: zero, cancel_action: back, keys: zero }, style.defaults(), held[0usize..1usize]), ok)
+    var command: input.Modifiers = zero
+    command.meta = true
+    keys[1usize] = widget.Shortcut { key: 219u32, modifiers: command, action: back }
+    keys[2usize] = widget.Shortcut { key: 91u32, modifiers: command, action: back }
+    ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: keys[0usize..3usize], default_action: zero, cancel_action: back, keys: zero }, style.defaults(), held[0usize..1usize]), ok)
 }
 
 // v2 (D972, docs/ux/components/NavigationStack): the top page fills on `surface`
@@ -552,7 +556,7 @@ fn back_scope(a: *mem.Arena, key: widget.Key, content: widget.Node, back: widget
 // With `jumps` (one a level) on a pointer host three or more levels deep,
 // breadcrumbs (keyed `key + 4`, the ancestors jumping to their levels) stand in
 // the bar in place of the title.
-// Alt+Left shares Back and Escape's pop action.
+// Alt+Left and Command+[ share Back and Escape's pop action.
 // ponytail: no push or pop transitions, predictive back, focus moves or discard
 // guard; the page beneath is not kept in the tree.
 fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, jumps: []const widget.Submit, width: f32) -> (widget.Node, err) {
