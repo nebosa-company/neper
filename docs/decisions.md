@@ -24181,3 +24181,19 @@ hooks this API does not carry yet and stay open. At rest the tree is unchanged.
 `ui_navigation5_v2` opens the menu on a tab with a secondary press, checks the
 disabled Close to the right, closes the one unpinned other tab and sees the menu
 shut, on Windows and Linux. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1234 — The menu bar folds into one menu button
+
+`navigation.menu_bar_collapsed` is the MenuBar spec's collapsed form for a
+window narrower than the titles or a custom title bar: one `menu` icon button
+(32 with an 18 glyph, 40 and 24 on touch) named by the bar's label. While it is
+open, its menu hangs below it with one row per title, and each row cascades that
+title's commands to its right through the menu bar's existing submenu path
+(`bar_menu`), so commands, checks, shortcuts and nested submenus behave as they
+do in the open bar. The caller keeps which row is open and gives each row its
+own toggle, as it does for the titles; the bar does not measure its titles, so
+the caller chooses when to fold.
+
+`ui_navigation2_v2` holds the shut button, the open menu with File's cascade
+(two menus, File Expanded) and a press on Edit firing its own toggle on Windows
+and Linux; `ui_navigation5_v2` and `ui_adaptive` pass on both hosts.

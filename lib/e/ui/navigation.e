@@ -1202,7 +1202,8 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // A command can open a submenu to its right, overlapping by 4 and aligned 8
 // above the row; cascades repeat that rule, Right opens one level, Left closes
 // it, and a leaf closes the full chain.
-// ponytail: no collapsed form.
+// (D1234) `menu_bar_collapsed` is the folded form.
+// ponytail: the caller picks the collapsed form; the bar does not measure its titles.
 // Command dismissal and focus return are shared by the widget runtime.
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
@@ -1264,6 +1265,41 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 
 // A menu bar's menu (D972): a modal overlay 2 below `anchor` while `open`, the
 // commands keyed `key + 1 + index`; a press outside it or Escape fires `dismiss`.
+// (D1234, docs/ux/components/MenuBar, collapsed) The same menus folded into one
+// `menu` icon button (keyed `key + 1`, named `label`, firing `toggle`, 32 with an
+// 18 glyph, 40 and 24 on touch). While `open`, its menu (keyed `key + 2`) hangs 2
+// below it with one row per title; each row cascades the title's commands to its
+// right as a submenu, the row at `opened` open (an index past the end for none),
+// each row firing its own `title_toggles` entry. For a window narrower than the
+// titles or a custom title bar; the caller chooses the form.
+fn menu_bar_collapsed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: bool, toggle: *const widget.Submit, opened: usize, title_toggles: []const widget.Submit) -> (widget.Node, err) {
+    if title_toggles.len != menus.len || menus.len > 14usize { ret (zero, TooLarge) }
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let (button, button_error) = control.glyph_button(a, key + 1u64, t, .Menu, label, toggle, control.if_else(touch, 40.0, 32.0), control.if_else(touch, 24.0, 18.0))
+    if button_error != ok { ret (zero, button_error) }
+    if !open { ret (button, ok) }
+    let (titles, titles_error) = mem.alloc[BarCommand](a, menus.len)
+    if titles_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < menus.len {
+        var row: BarCommand = zero
+        row.label = menus[i].label
+        row.enabled = true
+        row.submenu = menus[i].commands
+        row.submenu_open = i == opened
+        row.submenu_toggle = title_toggles[i]
+        titles[i] = row
+        i += 1usize
+    }
+    let (menu, menu_error) = bar_menu(a, key + 2u64, t, key + 1u64, label, titles[0usize..menus.len], true, toggle)
+    if menu_error != ok { ret (zero, menu_error) }
+    let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+    if both_error != ok { ret (zero, TooLarge) }
+    both[0usize] = button
+    both[1usize] = menu
+    ret (widget.box(0u64, style.defaults(), both[0usize..2usize]), ok)
+}
+
 fn bar_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     let (made, made_error) = bar_menu_at(a, key, t, anchor, label, commands, open, dismiss, .Below, geometry.Point { x: 0.0, y: 2.0 }, 0u8)
     ret (made, made_error)
