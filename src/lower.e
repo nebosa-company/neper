@@ -93,7 +93,9 @@ fn bind_value(c: *check.Checker, g: *graph.Graph, module_index: usize, token: le
     if aggregate_value(c, ty) {
         let (info, info_error) = layout.type_info(c, ty)
         if info_error != ok { ret info_error }
-        var slots = (info.size + 7usize) / 8usize
+        let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+        if slots_error != ok { ret slots_error }
+        var slots = slots_aligned / 8usize
         if slots == 0usize { slots = 1usize }
         let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, ty, true, slots, token)
         if stack_error != ok { ret stack_error }
@@ -156,7 +158,9 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
     if (token.kind == .KwZero || token.kind == .KwNil) && aggregate_value(c, expected) {
         let (info, info_error) = layout.type_info(c, expected)
         if info_error != ok { ret (0usize, info_error) }
-        var slots = (info.size + 7usize) / 8usize
+        let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+        if slots_error != ok { ret (0usize, slots_error) }
+        var slots = slots_aligned / 8usize
         if slots == 0usize { slots = 1usize }
         let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, expected, true, slots, token)
         if stack_error != ok { ret (0usize, stack_error) }
@@ -646,7 +650,9 @@ fn lower_bitcast(c: *check.Checker, source: usize, source_type: check.Type, into
     if target_is_place {
         // Read as an aggregate, the scalar needs somewhere to be read from: it is
         // spilled to a slot of its own and the slot is the result.
-        var slots = (target_info.size + 7usize) / 8usize
+        let (slots_aligned, slots_error) = layout.align_up(target_info.size, 8usize)
+        if slots_error != ok { ret (0usize, slots_error) }
+        var slots = slots_aligned / 8usize
         if slots == 0usize { slots = 1usize }
         let (stack_instruction, slot, stack_error) = nir.emit(builder, .Stack, into, true, slots, token)
         if stack_error != ok { ret (0usize, stack_error) }
@@ -2038,7 +2044,9 @@ fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argu
         let wrapper = check.atomic_wrapper_type(c, element, call.function.module_index)
         let (info, info_error) = layout.type_info(c, wrapper)
         if info_error != ok { ret info_error }
-        var slots = (info.size + 7usize) / 8usize
+        let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+        if slots_error != ok { ret slots_error }
+        var slots = slots_aligned / 8usize
         if slots == 0usize { slots = 1usize }
         let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, wrapper, true, slots, token)
         if stack_error != ok { ret stack_error }
@@ -2524,7 +2532,9 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
             let (info, info_error) = layout.type_info(c, result_type)
             if info_error != ok { ret info_error }
             slot_size = info.size
-            var slots = (info.size + 7usize) / 8usize
+            let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+            if slots_error != ok { ret slots_error }
+            var slots = slots_aligned / 8usize
             if slots == 0usize { slots = 1usize }
             let (slot_instruction, slot_value, slot_error) = nir.emit(builder, .Stack, result_type, true, slots, token)
             if slot_error != ok { ret slot_error }
@@ -2719,7 +2729,9 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
     }
     var slot = 0usize
     if return_layout.via_slot && results.count != 0usize {
-        var slots = (return_layout.size + 7usize) / 8usize
+        let (slots_aligned, slots_error) = layout.align_up(return_layout.size, 8usize)
+        if slots_error != ok { ret slots_error }
+        var slots = slots_aligned / 8usize
         if slots == 0usize { slots = 1usize }
         let slot_type = check.make_type(.Other, "return-slot", call.function.module_index)
         let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, slot_type, true, slots, token)
@@ -2901,7 +2913,9 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
                 if snapshot && aggregate_value(c, parameter_type) {
                     let (info, info_error) = layout.type_info(c, parameter_type)
                     if info_error != ok { ret info_error }
-                    var slots = (info.size + 7usize) / 8usize
+                    let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+                    if slots_error != ok { ret slots_error }
+                    var slots = slots_aligned / 8usize
                     if slots == 0usize { slots = 1usize }
                     let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, parameter_type, true, slots, c.tokens[usize(node.token_start)])
                     if stack_error != ok { ret stack_error }
@@ -3291,7 +3305,9 @@ fn lower_member(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
                 if aggregate.kind == .TaggedUnion && result_type.kind == .Named {
                     let (info, info_error) = layout.type_info(c, result_type)
                     if info_error != ok { ret (0usize, result_type, info_error) }
-                    var slots = (info.size + 7usize) / 8usize
+                    let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+                    if slots_error != ok { ret (0usize, result_type, slots_error) }
+                    var slots = slots_aligned / 8usize
                     if slots == 0usize { slots = 1usize }
                     let token = c.tokens[usize(node.token_start)]
                     let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, result_type, true, slots, token)
@@ -3410,7 +3426,9 @@ fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree
     if result_type_error != ok { ret (0usize, result_type, result_type_error) }
     let (info, info_error) = layout.type_info(c, result_type)
     if info_error != ok { ret (0usize, result_type, info_error) }
-    var slots = (info.size + 7usize) / 8usize
+    let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+    if slots_error != ok { ret (0usize, result_type, slots_error) }
+    var slots = slots_aligned / 8usize
     if slots == 0usize { slots = 1usize }
     let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, result_type, true, slots, c.tokens[usize(node.token_start)])
     if stack_error != ok { ret (0usize, result_type, stack_error) }
@@ -4085,7 +4103,9 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if aggregate_value(c, declared) {
             let (info, info_error) = layout.type_info(c, declared)
             if info_error != ok { ret info_error }
-            var slots = (info.size + 7usize) / 8usize
+            let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+            if slots_error != ok { ret slots_error }
+            var slots = slots_aligned / 8usize
             if slots == 0usize { slots = 1usize }
             let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, declared, true, slots, c.tokens[usize(node.token_start)])
             if stack_error != ok { ret stack_error }
@@ -5558,7 +5578,9 @@ fn lower_vector_not(c: *check.Checker, node: syntax.Node, operand: usize, result
 fn vector_slot(c: *check.Checker, ty: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     let (info, info_error) = layout.type_info(c, ty)
     if info_error != ok { ret (0usize, info_error) }
-    var slots = (info.size + 7usize) / 8usize
+    let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+    if slots_error != ok { ret (0usize, slots_error) }
+    var slots = slots_aligned / 8usize
     if slots == 0usize { slots = 1usize }
     let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, ty, true, slots, token)
     ret (stack, stack_error)
@@ -6486,7 +6508,9 @@ fn lower_shared_vars(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
                             if info_error != ok { ret (0usize, info_error) }
                             var alignment = info.alignment
                             if alignment < 1usize { alignment = 1usize }
-                            let offset = (total + alignment - 1usize) / alignment * alignment
+                            let (offset, offset_error) = layout.align_up(total, alignment)
+                            if offset_error != ok { ret (0usize, offset_error) }
+                            if offset > 18446744073709551615usize - info.size { ret (0usize, layout.Overflow) }
                             total = offset + info.size
                             let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, declared, true, offset, c.tokens[usize(statement.token_start)])
                             if address_error != ok { ret (0usize, address_error) }

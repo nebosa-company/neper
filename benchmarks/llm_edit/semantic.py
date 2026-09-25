@@ -221,11 +221,13 @@ def run_case(command_template: str, language: str, task: str,
         prompt_file = workspace / "prompt.txt"
         prompt = task_prompt(language, task, context_files, context_lines)
         prompt_file.write_text(prompt, encoding="utf-8")
-        command = command_template.format(workspace=str(workspace), prompt=prompt, prompt_file=str(prompt_file))
+        command = command_template.format(workspace=str(workspace), prompt_file=str(prompt_file))
+        argv = shlex.split(command) if os.name != "nt" else [
+            part.strip('"') for part in shlex.split(command, posix=False)]
         started = time.perf_counter()
-        proc = subprocess.run(command if os.name == "nt" else shlex.split(command), cwd=workspace,
+        proc = subprocess.run(argv, cwd=workspace,
                               capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              shell=os.name == "nt")
+                              shell=False)
         elapsed = time.perf_counter() - started
         passed, detail = evaluate(language, task, workspace, before_lines)
         if proc.returncode:

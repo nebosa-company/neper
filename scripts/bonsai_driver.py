@@ -112,12 +112,15 @@ def _inside(path):
     p, rel = _repo_path(path)
     if any(rel == x.rstrip("/") or rel.startswith(x) for x in PROTECTED):
         raise ValueError("protected path: " + rel)
-    return p
+    return p, rel
 
 
 def read_lines(path: str, start: int = 1, end: int = 120) -> str:
     """Read lines start..end (1-based, inclusive, at most 400) of a repository file."""
-    p, _ = _repo_path(path)
+    try:
+        p, _ = _inside(path)
+    except ValueError as e:
+        return "Error: " + str(e)
     lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
     end = min(end, start + 399, len(lines))
     return "\n".join("%d\t%s" % (i, lines[i - 1]) for i in range(max(1, start), end + 1)) or "(empty range; file has %d lines)" % len(lines)
@@ -125,7 +128,10 @@ def read_lines(path: str, start: int = 1, end: int = 120) -> str:
 
 def search(pattern: str, path: str = ".", fixed: bool = True) -> str:
     """git grep -n for a pattern under a path (fixed string by default); at most 60 hits."""
-    _, rel = _repo_path(path)
+    try:
+        _, rel = _inside(path)
+    except ValueError as e:
+        return "Error: " + str(e)
     args = ["grep", "-n", "-I"] + (["-F"] if fixed else ["-E"]) + ["-e", pattern, "--", rel]
     _, out = git(*args)
     hits = out.splitlines()
@@ -135,7 +141,7 @@ def search(pattern: str, path: str = ".", fixed: bool = True) -> str:
 def edit(path: str, old: str, new: str) -> str:
     """Replace one exact, unique occurrence of `old` with `new` in a file; creates the file when old is empty and it does not exist."""
     try:
-        p = _inside(path)
+        p, _ = _inside(path)
     except ValueError as e:
         return "Error: " + str(e)
     if old == "":
@@ -167,12 +173,15 @@ def run(command: str, timeout_seconds: int = 900) -> str:
 
 
 # ---------------------------------------------------------------- one session
-def prompt_for(task_file, unsafe_compatibility=False):
+def prompt_for(task_file, unsafe_compatibility=False, allow_shell=False):
     readme = (TASKS / "README.md").read_text(encoding="utf-8")
     card = (ROOT / "docs" / "llm-neper-card.md").read_text(encoding="utf-8")
-    shell_note = (" An unrestricted `run` shell and automatic host verification are enabled by the operator."
-                  if unsafe_compatibility else
-                  " No command or network tool is available; finish the edit for operator review and verification.")
+    if allow_shell:
+        shell_note = " An unrestricted `run` shell and automatic host verification are enabled by the operator."
+    elif unsafe_compatibility:
+        shell_note = " Automatic host verification is enabled; no command tool is available."
+    else:
+        shell_note = " No command or network tool is available; finish the edit for operator review and verification."
     completion = ("Reply with a line starting DONE when the task file's fixture passes on this host with the self-hosted compiler"
                   if unsafe_compatibility else
                   "Reply with a line starting DONE when the requested edit and fixture are ready for operator verification")
@@ -204,10 +213,10 @@ RUN_TOOL_SCHEMA = {"type": "function", "function": {"name": "run", "description"
     "command": {"type": "string"}, "timeout_seconds": {"type": "integer"}}, "required": ["command"]}}}
 
 
-def exposed_tools(unsafe_compatibility=False):
+def exposed_tools(unsafe_compatibility=False, allow_shell=False):
     tools = dict(SAFE_TOOLS)
     schemas = list(SAFE_TOOL_SCHEMAS)
-    if unsafe_compatibility:
+    if unsafe_compatibility and allow_shell:
         tools["run"] = run
         schemas.append(RUN_TOOL_SCHEMA)
     return tools, schemas
@@ -244,8 +253,8 @@ def restart_server(args, log):
 def session_openai(task_file, args, log):
     """The same session over an OpenAI-compatible /v1/chat/completions (llama-server, LM Studio's server)."""
     import urllib.request
-    system, user = prompt_for(task_file, args.unsafe_compatibility)
-    tools, tool_schemas = exposed_tools(args.unsafe_compatibility)
+    system, user = prompt_for(task_file, args.unsafe_compatibility, args.allow_shell)
+    tools, tool_schemas = exposed_tools(args.unsafe_compatibility, args.allow_shell)
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     deadline = time.time() + args.session_minutes * 60
     restarts = {}
@@ -324,8 +333,8 @@ def session_openai(task_file, args, log):
 def session(model, task_id, task_file, args, log):
     if args.endpoint:
         return session_openai(task_file, args, log)
-    system, user = prompt_for(task_file, args.unsafe_compatibility)
-    tools, _ = exposed_tools(args.unsafe_compatibility)
+    system, user = prompt_for(task_file, args.unsafe_compatibility, args.allow_shell)
+    tools, _ = exposed_tools(args.unsafe_compatibility, args.allow_shell)
     chat = lms.Chat(system)
     chat.add_user_message(user)
     deadline = time.time() + args.session_minutes * 60
@@ -405,12 +414,18 @@ def main():
     ap.add_argument("--skip-linux", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="print the next task and exit")
     ap.add_argument("--unsafe-compatibility", action="store_true",
-                    help="DANGEROUS: restore the unrestricted shell and execute model-modified code on the host")
+                    help="DANGEROUS: run the model-modified suite and commit it on the host")
+    ap.add_argument("--allow-shell", action="store_true",
+                    help="DANGEROUS: expose the unrestricted run shell to the model (requires --unsafe-compatibility)")
     args = ap.parse_args()
     if args.endpoint and not endpoint_allowed(args.endpoint):
         ap.error("--endpoint must use HTTPS, or HTTP on localhost/loopback")
+    if args.allow_shell and not args.unsafe_compatibility:
+        ap.error("--allow-shell requires --unsafe-compatibility")
     if args.unsafe_compatibility:
-        print("WARNING: --unsafe-compatibility gives model output unrestricted host command execution", file=sys.stderr)
+        print("WARNING: --unsafe-compatibility executes and commits model-modified code on the host", file=sys.stderr)
+    if args.allow_shell:
+        print("WARNING: --allow-shell gives model output unrestricted host command execution", file=sys.stderr)
 
     LOGS.mkdir(parents=True, exist_ok=True)
     state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {"failures": {}, "done": []}

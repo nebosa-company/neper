@@ -12234,6 +12234,9 @@ fn pointer_leaf_count(c: *Checker, ty: Type, depth: usize) -> (usize, bool) {
         if !ty.has_element || !ty.has_length || ty.element >= c.type_count { ret (0usize, false) }
         let (elements, known) = pointer_leaf_count(c, c.types[ty.element], depth + 1usize)
         if !known { ret (0usize, false) }
+        // A wrapped product could collide with a valid `found` count in the borrow
+        // check; report unknown instead of a bogus count.
+        if elements != 0usize && ty.array_length > 18446744073709551615usize / elements { ret (0usize, false) }
         ret (elements * ty.array_length, true)
     }
     if ty.kind != .Named { ret (0usize, ty.kind != .TypeParameter) }
@@ -15210,6 +15213,9 @@ fn resource_init_fields(c: *Checker, local_index: usize, state: u8) -> err {
     if local_type.kind == .Array && local_type.has_element && local_type.element < c.type_count {
         let kind = affine_kind(c, c.types[local_type.element], 0usize)
         if kind != 0u8 {
+            // A resource-array length of usize::MAX would wrap `+ 1usize` to zero,
+            // under-sizing the tracking buffers below and then writing past them.
+            if local_type.array_length == 18446744073709551615usize { ret Capacity }
             let (elements, elements_error) = mem.alloc[u8](c.arena, local_type.array_length + 1usize)
             if elements_error != ok { ret elements_error }
             let (acquired, acquired_error) = mem.alloc[usize](c.arena, local_type.array_length + 1usize)

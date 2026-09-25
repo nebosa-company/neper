@@ -868,7 +868,8 @@ fn front_modules(a: *mem.Arena, g: *Graph, modules: []const usize) -> err {
     ret ok
 }
 
-fn visit(g: *Graph, module_index: usize) -> err {
+fn visit(g: *Graph, module_index: usize, depth: usize) -> err {
+    if depth >= 1024usize { ret Capacity }
     g.modules[module_index].visit_state = 1u8
     let end = g.modules[module_index].first_import + g.modules[module_index].import_count
     var i = g.modules[module_index].first_import
@@ -881,7 +882,7 @@ fn visit(g: *Graph, module_index: usize) -> err {
             ret ImportCycle
         }
         if g.modules[target_module].visit_state == 0u8 {
-            let visit_error = visit(g, target_module)
+            let visit_error = visit(g, target_module, depth + 1usize)
             if visit_error != ok { ret visit_error }
         }
         i += 1usize
@@ -1022,7 +1023,7 @@ fn finish(g: *Graph) -> err {
     var i = 0usize
     while i < g.count {
         if g.modules[i].visit_state == 0u8 {
-            let cycle_error = visit(g, i)
+            let cycle_error = visit(g, i, 0usize)
             if cycle_error != ok { ret cycle_error }
         }
         i += 1usize

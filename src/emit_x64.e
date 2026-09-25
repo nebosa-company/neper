@@ -554,11 +554,13 @@ fn jump_condition_short(buffer: *Buffer, condition: usize) -> (usize, err) {
 // A short jump's one byte, forward only and within reach.
 fn patch_relative8(buffer: *Buffer, displacement_at: usize, destination: usize) -> err {
     if destination < displacement_at + 1usize || destination - (displacement_at + 1usize) > 127usize { ret InvalidByte }
+    if displacement_at >= buffer.count { ret Capacity }
     buffer.bytes[displacement_at] = u8(destination - (displacement_at + 1usize))
     ret ok
 }
 
 fn frame_size(stack_slots: usize) -> usize {
+    if stack_slots > 536870910usize { ret 4294967280usize }
     let bytes = stack_slots * 8usize
     let rounded = bytes + 15usize
     ret rounded / 16usize * 16usize
@@ -602,6 +604,7 @@ fn function_epilogue(buffer: *Buffer) -> err {
 }
 
 fn stack_displacement(slot: usize) -> usize {
+    if slot > 536870910usize { ret 8usize }
     let next = slot + 1usize
     let magnitude = next * 8usize
     ret 4294967296usize - magnitude
@@ -980,9 +983,11 @@ fn patch_relative32(buffer: *Buffer, displacement_at: usize, destination: usize)
     let following = displacement_at + 4usize
     var displacement = 0usize
     if destination >= following {
+        if destination - following > 2147483647usize { ret InvalidByte }
         displacement = destination - following
     } else {
         let magnitude = following - destination
+        if magnitude > 2147483647usize { ret InvalidByte }
         displacement = 4294967296usize - magnitude
     }
     ret patch_little_u32(buffer, displacement_at, displacement)

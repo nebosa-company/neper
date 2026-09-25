@@ -633,6 +633,9 @@ fn parse_certificate_message(a: *mem.Arena, message: []const u8) -> (Certificate
 }
 
 fn verify_certificate_set(a: *mem.Arena, set: CertificateSet, config: ClientConfig) -> err {
+    // A client must verify the peer's identity against the name it dialed; an
+    // empty server_name would otherwise skip hostname validation entirely.
+    if config.server_name.len == 0usize { ret InvalidCertificate }
     let (roots, roots_error) = parse_der_certificates(a, config.trust_roots)
     if roots_error != ok || roots.len == 0usize { ret InvalidCertificate }
     var options: x509.VerifyOptions = zero

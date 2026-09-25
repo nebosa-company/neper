@@ -66,13 +66,14 @@ def run_trial(command: str, source: Path, task: dict) -> dict:
         prompt_file = workspace / "prompt.txt"
         prompt_file.write_text(prompt, encoding="utf-8")
         rendered = command.format(
-            workspace=str(workspace), file=str(target), prompt=prompt,
+            workspace=str(workspace), file=str(target),
             prompt_file=str(prompt_file),
         )
+        argv = shlex.split(rendered) if os.name != "nt" else [
+            part.strip('"') for part in shlex.split(rendered, posix=False)]
         started = time.perf_counter()
         proc = subprocess.run(
-            rendered if os.name == "nt" else shlex.split(rendered),
-            cwd=workspace, capture_output=True, text=True, shell=os.name == "nt",
+            argv, cwd=workspace, capture_output=True, text=True, shell=False,
         )
         elapsed = time.perf_counter() - started
         after = target.read_text(encoding="utf-8")

@@ -163,7 +163,7 @@ fn decode(a: *mem.Arena, raw: []const u8) -> (str, err) {
                 scalar = dec
                 parse_error = dec_error
             }
-            if parse_error != ok || scalar > 1114111u64 || scalar == 0u64 { ret ("", Invalid) }
+            if parse_error != ok || scalar > 1114111u64 || scalar == 0u64 || (scalar >= 55296u64 && scalar <= 57343u64) { ret ("", Invalid) }
             used = push_scalar(out, used, u32(scalar))
         } else {
             ret ("", Unsupported)

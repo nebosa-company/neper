@@ -897,6 +897,7 @@ neper_os_open:
     je .Los_open_5
     or edx,0x400
 .Los_open_5:
+    or edx,0x80000
     mov eax,0x101
     mov edi,0xffffff9c
     mov rsi,r8

@@ -493,9 +493,11 @@ void neper_os_readdir(void *result, NpArena *arena, const unsigned char *path, s
             (item.cFileName[0] == L'.' && item.cFileName[1] == L'.' && item.cFileName[2] == 0)) continue;
         if (count == capacity) {
             NpDirEntry *grown;
+            if (capacity > SIZE_MAX / 2) goto oom;
             capacity *= 2;
             grown = (NpDirEntry *)np_arena_alloc(arena, capacity * sizeof(NpDirEntry), 8);
             if (!grown) goto oom;
+            if (count > SIZE_MAX / sizeof(NpDirEntry)) goto oom;
             np_copy(grown, entries, count * sizeof(NpDirEntry)); entries = grown;
         }
         name = np_utf8_arena(arena, item.cFileName, &len);
@@ -858,8 +860,10 @@ void neper_os_readdir(void *result, NpArena *arena, const unsigned char *path, s
             (item->d_name[0] == '.' && item->d_name[1] == '.' && item->d_name[2] == 0)) continue;
         while (item->d_name[len]) ++len;
         if (count == capacity) {
+            if (capacity > SIZE_MAX / 2) goto oom;
             capacity *= 2; grown = (NpDirEntry *)np_arena_alloc(arena, capacity * sizeof(NpDirEntry), 8);
             if (!grown) goto oom;
+            if (count > SIZE_MAX / sizeof(NpDirEntry)) goto oom;
             np_copy(grown, entries, count * sizeof(NpDirEntry)); entries = grown;
         }
         bytes = (unsigned char *)np_arena_alloc(arena, len, 1); if (!bytes && len) goto oom;

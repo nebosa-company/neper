@@ -4807,9 +4807,29 @@ fn apply_plan_refused(report: *Sink, code: str, message: str) -> err {
 
 // A record's source -- the first `"root"`/`"path"` pair of the line, the span's on
 // an edit -- under the directory its root names.
+// A plan `path` must stay inside its source root: not empty, not absolute, no
+// drive or alternate-data-stream colon, and no `..` component on either separator.
+fn plan_path_safe(path: str) -> bool {
+    if path.len == 0usize { ret false }
+    if path[0usize] == 47u8 || path[0usize] == 92u8 { ret false }
+    var i = 0usize
+    while i < path.len {
+        if path[i] == 58u8 { ret false }
+        if path[i] == 46u8 && i + 1usize < path.len && path[i + 1usize] == 46u8 {
+            var component_start = i == 0usize || path[i - 1usize] == 47u8 || path[i - 1usize] == 92u8
+            var component_end = i + 2usize
+            var at_end = component_end == path.len || path[component_end] == 47u8 || path[component_end] == 92u8
+            if component_start && at_end { ret false }
+        }
+        i += 1usize
+    }
+    ret true
+}
+
 fn plan_source_path(a: *mem.Arena, line: str, root: str, project_src: str) -> (str, err) {
     let source_root = json_str_after(line, "\"root\":\"")
     let path = json_str_after(line, "\"path\":\"")
+    if !plan_path_safe(path) { ret ("", os.Unsupported) }
     var dir = root
     if same(source_root, "project-src") { dir = project_src }
     if !same(source_root, "operand") && !same(source_root, "project-src") { ret ("", os.Unsupported) }

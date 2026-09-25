@@ -1,7 +1,7 @@
 // Browser authentication over caller storage: PKCE for OAuth 2.0 (RFC 7636)
 // and WebAuthn assertion verification (Web Authentication Level 2, section
-// 7.2). `pkce_verifier` draws 43 to 128 unreserved characters from a caller
-// `Pcg64`, `pkce_challenge` is `base64url(SHA-256(verifier))` without
+// 7.2). `pkce_verifier` draws 43 to 128 unreserved characters from the system
+// CSPRNG (`os.random`), `pkce_challenge` is `base64url(SHA-256(verifier))` without
 // padding (the `S256` method), and `pkce` does both. `webauthn_verify` takes
 // the assertion's `authenticatorData`, `clientDataJSON` and `signature`,
 // checks the relying party id hash, the user-presence flag, the client data's
@@ -15,6 +15,7 @@ use e.crypto.hash as hash
 use e.crypto.sign as sign
 use e.fmt.jwt as jwt
 use e.mem
+use e.os
 use e.str
 
 type Key = union enum u8 { P256: sign.P256PublicKey, Ed25519: sign.Ed25519PublicKey }
@@ -34,8 +35,22 @@ fn unreserved(index: u64) -> u8 {
 }
 
 // A code verifier filling `dst`, whose length must be 43 to 128; each
-// character is one `pcg64_bounded(66)` draw.
-fn pkce_verifier(rng: *rand.Pcg64, dst: []u8) -> (str, err) {
+// character is one unreserved draw from the system CSPRNG (`os.random`).
+fn pkce_verifier(dst: []u8) -> (str, err) {
+    if dst.len < 43usize || dst.len > 128usize { ret ("", Invalid) }
+    let random_error = os.random(dst)
+    if random_error != ok { ret ("", random_error) }
+    var i = 0usize
+    while i < dst.len {
+        dst[i] = unreserved(u64(dst[i]) % 66u64)
+        i += 1usize
+    }
+    ret (dst, ok)
+}
+
+// The deterministic test-only variant: each character is one `pcg64_bounded(66)`
+// draw, so a fixture can replay the exact verifier.
+fn pkce_verifier_seeded(rng: *rand.Pcg64, dst: []u8) -> (str, err) {
     if dst.len < 43usize || dst.len > 128usize { ret ("", Invalid) }
     var i = 0usize
     while i < dst.len {
@@ -55,8 +70,8 @@ fn pkce_challenge(verifier: str, dst: []u8) -> (str, err) {
 }
 
 // A fresh verifier into `verifier_dst` and its challenge into `challenge_dst`.
-fn pkce(rng: *rand.Pcg64, verifier_dst: []u8, challenge_dst: []u8) -> (str, str, err) {
-    let (verifier, verifier_error) = pkce_verifier(rng, verifier_dst)
+fn pkce(verifier_dst: []u8, challenge_dst: []u8) -> (str, str, err) {
+    let (verifier, verifier_error) = pkce_verifier(verifier_dst)
     if verifier_error != ok { ret ("", "", verifier_error) }
     let (challenge, challenge_error) = pkce_challenge(verifier, challenge_dst)
     if challenge_error != ok { ret ("", "", challenge_error) }

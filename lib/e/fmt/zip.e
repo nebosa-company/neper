@@ -59,6 +59,7 @@ fn le64(data: []const u8, at: usize) -> u64 {
 }
 
 fn read_at(s: *State, offset: u64, dst: []u8) -> err {
+    if offset > 9223372036854775807u64 { ret Invalid }
     let (position, seek_error) = io.seek(&s.seeker, i64(offset), .Start)
     if seek_error != ok { ret seek_error }
     let exact_error = io.read_exact(&s.source, dst)
@@ -131,7 +132,7 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
         directory_offset = le64(record[0..], 48usize)
     }
     if count > u64(limits.entries) { ret (zero, TooLarge) }
-    if directory_size > DIRECTORY_LIMIT || directory_offset + directory_size > size { ret (zero, TooLarge) }
+    if directory_size > DIRECTORY_LIMIT || directory_offset > size || directory_size > size - directory_offset { ret (zero, TooLarge) }
     let (directory, directory_error) = mem.alloc[u8](a, usize(directory_size))
     if directory_error != ok { ret (zero, directory_error) }
     let read_error_136 = read_at(s, directory_offset, directory)

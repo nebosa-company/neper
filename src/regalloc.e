@@ -653,13 +653,14 @@ fn heap_pop(heaps: []usize, counts: []usize, capacity: usize, register: usize) {
 // the length of the call.
 fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize, ranges: []LiveRange, allocations: []Allocation, a: *mem.Arena) -> (usize, err) {
     if register_count == 0usize { ret (0usize, NoRegisters) }
-    if register_count > 16usize { ret (0usize, Capacity) }
+    if register_count > 10usize { ret (0usize, Capacity) }
     if function_index >= builder.function_count { ret (0usize, InvalidIR) }
     let function = builder.functions[function_index]
     if function.value_count > allocations.len { ret (0usize, Capacity) }
     let capacity = function.value_count
     // The heaps live only as long as this call: taken from the arena and given back.
     let mark = mem.mark(a)
+    if capacity > 18446744073709551614usize / (register_count * 2usize) { ret (0usize, Capacity) }
     let (heaps, heaps_error) = mem.alloc[usize](a, register_count * capacity * 2usize + 1usize)
     if heaps_error != ok { ret (0usize, heaps_error) }
     let (slots, allocate_error) = allocate_with(builder, function, register_count, ranges, allocations, heaps, capacity)

@@ -56,6 +56,7 @@
 #define MAX_TRAP_SITES 16384
 #define MAX_PATH_LEN 4096
 #define MAX_LOOP_DEPTH 64
+#define MAX_NESTING 1024
 #define MAX_ARRAY_ELEMENTS 4096
 #define MAX_FIELDS 160
 #define MAX_FIELD_PATH 32
@@ -564,6 +565,7 @@ typedef struct Compiler {
     int current;
     int errors;
     int checking_defer;
+    int nesting_depth;
     Diagnostic diagnostics[MAX_DIAGNOSTICS];
     Program program;
     char executable_dir[MAX_PATH_LEN];
@@ -711,6 +713,10 @@ static void add_token(Compiler *c, TokenKind kind, size_t start, size_t end,
     int end_line = line, end_column = column, end_utf16 = column_utf16;
     if (c->token_count >= MAX_TOKENS) {
         fprintf(stderr, "%s: error[E-TOOL-9999]: token limit exceeded\n", c->source_path);
+        exit(2);
+    }
+    if (end - start > (size_t)INT_MAX) {
+        fprintf(stderr, "%s: error[E-LEX-9999]: token length limit exceeded\n", c->source_path);
         exit(2);
     }
     token = &c->tokens[c->token_count++];
@@ -1221,8 +1227,21 @@ static Type sequence_element_type(Type sequence) {
 }
 
 static Expr *parse_expression(Compiler *c);
+static Type parse_type(Compiler *c);
+static Expr *parse_unary(Compiler *c);
 
-static Type parse_type(Compiler *c) {
+static int nesting_enter(Compiler *c, Token *token) {
+    if (c->nesting_depth >= MAX_NESTING) {
+        diagnostic_at(c, token, "E-TOOL-9999", "nesting limit exceeded");
+        return 0;
+    }
+    c->nesting_depth++;
+    return 1;
+}
+
+static void nesting_leave(Compiler *c) { c->nesting_depth--; }
+
+static Type parse_type_inner(Compiler *c) {
     Type t;
     if (match(c, TK_STAR)) {
         int is_const = match(c, TK_CONST);
@@ -1307,6 +1326,14 @@ static Type parse_type(Compiler *c) {
             strcmp(name, "isize") == 0 || strcmp(name, "usize") == 0) return type_make(TY_INT, name);
         return type_make(TY_NAMED, name);
     }
+}
+
+static Type parse_type(Compiler *c) {
+    Type result;
+    if (!nesting_enter(c, peek(c))) return type_make(TY_INVALID, 0);
+    result = parse_type_inner(c);
+    nesting_leave(c);
+    return result;
 }
 
 static Expr *new_expr(ExprKind kind, Token token) {
@@ -1691,7 +1718,7 @@ static Expr *parse_primary(Compiler *c) {
     return new_expr(EX_INTEGER, *token);
 }
 
-static Expr *parse_unary(Compiler *c) {
+static Expr *parse_unary_inner(Compiler *c) {
     Token *token = peek(c);
     if (match(c, TK_MINUS) || match(c, TK_BANG) ||
         match(c, TK_TILDE) || match(c, TK_AMP) || match(c, TK_STAR)) {
@@ -1701,6 +1728,14 @@ static Expr *parse_unary(Compiler *c) {
         return e;
     }
     return parse_primary(c);
+}
+
+static Expr *parse_unary(Compiler *c) {
+    Expr *result;
+    if (!nesting_enter(c, peek(c))) return new_expr(EX_INTEGER, *peek(c));
+    result = parse_unary_inner(c);
+    nesting_leave(c);
+    return result;
 }
 
 static Expr *parse_factor(Compiler *c) {
@@ -1784,7 +1819,7 @@ static Expr *parse_logical_and(Compiler *c) {
     return e;
 }
 
-static Expr *parse_expression(Compiler *c) {
+static Expr *parse_expression_inner(Compiler *c) {
     Expr *e = parse_logical_and(c);
     while (check(c, TK_OR)) {
         Token *op = peek(c); c->current++;
@@ -1794,11 +1829,19 @@ static Expr *parse_expression(Compiler *c) {
     return e;
 }
 
+static Expr *parse_expression(Compiler *c) {
+    Expr *result;
+    if (!nesting_enter(c, peek(c))) return new_expr(EX_INTEGER, *peek(c));
+    result = parse_expression_inner(c);
+    nesting_leave(c);
+    return result;
+}
+
 static Stmt *parse_block(Compiler *c);
 static Stmt *parse_statement(Compiler *c);
 static Stmt *parse_switch_statement(Compiler *c, Token token);
 
-static Stmt *parse_statement(Compiler *c) {
+static Stmt *parse_statement_inner(Compiler *c) {
     Token *token = peek(c);
     if (match(c, TK_LET) || match(c, TK_VAR)) {
         int is_mutable = token->kind == TK_VAR;
@@ -1992,6 +2035,18 @@ static Stmt *parse_statement(Compiler *c) {
     }
 }
 
+static Stmt *parse_statement(Compiler *c) {
+    Stmt *result;
+    if (!nesting_enter(c, peek(c))) {
+        Stmt *placeholder = new_stmt(ST_EXPR, *peek(c));
+        placeholder->as.expr = new_expr(EX_INTEGER, *peek(c));
+        return placeholder;
+    }
+    result = parse_statement_inner(c);
+    nesting_leave(c);
+    return result;
+}
+
 static Stmt *parse_case_body(Compiler *c) {
     Stmt *head = 0, **tail = &head;
     skip_newlines(c);
@@ -2041,7 +2096,7 @@ static Stmt *parse_switch_statement(Compiler *c, Token token) {
     return s;
 }
 
-static Stmt *parse_block(Compiler *c) {
+static Stmt *parse_block_inner(Compiler *c) {
     Stmt *head = 0, **tail = &head;
     expect(c, TK_LBRACE, "expected `{`");
     skip_newlines(c);
@@ -2053,6 +2108,14 @@ static Stmt *parse_block(Compiler *c) {
     }
     expect(c, TK_RBRACE, "expected `}`");
     return head;
+}
+
+static Stmt *parse_block(Compiler *c) {
+    Stmt *result;
+    if (!nesting_enter(c, peek(c))) return 0;
+    result = parse_block_inner(c);
+    nesting_leave(c);
+    return result;
 }
 
 static void qualify_decl_name(Compiler *c, char *out, size_t capacity,
@@ -2573,7 +2636,11 @@ static size_t align_up_size(size_t value, size_t alignment) {
 
 static int layout_struct(Compiler *c, StructDecl *decl);
 
-static int type_layout(Compiler *c, Type type, size_t *size, size_t *alignment) {
+static int type_layout_depth(Compiler *c, Type type, size_t *size, size_t *alignment, int depth) {
+    if (depth >= MAX_NESTING) {
+        diagnostic_at(c, &c->root_token, "E-TOOL-9999", "nesting limit exceeded");
+        return 0;
+    }
     if (type.kind == TY_VOID || type.kind == TY_INVALID || type.kind == TY_UNTYPED_INT) return 0;
     if (type.kind == TY_BOOL) { *size = 1; *alignment = 1; return 1; }
     if (type.kind == TY_ERR) { *size = 4; *alignment = 4; return 1; }
@@ -2590,7 +2657,7 @@ static int type_layout(Compiler *c, Type type, size_t *size, size_t *alignment) 
     if (type.kind == TY_ARRAY) {
         Type element = array_element_type(type);
         size_t element_size, element_alignment;
-        if (!type_layout(c, element, &element_size, &element_alignment)) return 0;
+        if (!type_layout_depth(c, element, &element_size, &element_alignment, depth + 1)) return 0;
         if (element_size != 0 && type.array_length > SIZE_MAX / element_size) return 0;
         *size = type.array_length * element_size;
         *alignment = element_alignment;
@@ -2601,12 +2668,16 @@ static int type_layout(Compiler *c, Type type, size_t *size, size_t *alignment) 
         if (!decl) decl = find_tag_owner(c, type.name);
         if (!decl || !layout_struct(c, decl)) return 0;
         if (find_tag_owner(c, type.name)) {
-            return type_layout(c, decl->backing_type, size, alignment);
+            return type_layout_depth(c, decl->backing_type, size, alignment, depth + 1);
         }
         *size = decl->size; *alignment = decl->alignment;
         return 1;
     }
     return 0;
+}
+
+static int type_layout(Compiler *c, Type type, size_t *size, size_t *alignment) {
+    return type_layout_depth(c, type, size, alignment, 0);
 }
 
 static int layout_struct(Compiler *c, StructDecl *decl) {
@@ -3515,7 +3586,7 @@ static Type scalar_cast_type(const char *name) {
     return type_make(TY_INVALID, 0);
 }
 
-static Type check_expr(Compiler *c, Function *fn, Expr *e) {
+static Type check_expr_inner(Compiler *c, Function *fn, Expr *e) {
     int i;
     switch (e->kind) {
         case EX_INTEGER: return e->type;
@@ -3893,6 +3964,14 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             return e->type;
     }
     return type_make(TY_INVALID, 0);
+}
+
+static Type check_expr(Compiler *c, Function *fn, Expr *e) {
+    Type result;
+    if (!nesting_enter(c, &e->token)) return type_make(TY_INVALID, 0);
+    result = check_expr_inner(c, fn, e);
+    nesting_leave(c);
+    return result;
 }
 
 static void prepare_deferred_call(Compiler *c, Function *fn, Stmt *defer,
@@ -7572,13 +7651,25 @@ static int run_argv(char *const argv[]) { (void)argv; return -1; }
 #endif
 
 static void quote_arg(char *dst, size_t cap, const char *arg) {
-    size_t n = 0; const char *p;
+    size_t n = 0, slashes = 0, k; const char *p;
     if (cap == 0) return;
     dst[n++] = '"';
-    for (p = arg; *p && n + 2 < cap; ++p) {
-        if (*p == '"') dst[n++] = '\\';
-        dst[n++] = *p;
+    for (p = arg; *p; ++p) {
+        if (*p == '\\') {
+            if (n + 1 < cap) dst[n++] = '\\';
+            ++slashes;
+        } else if (*p == '"') {
+            for (k = 0; k < slashes + 1; ++k)
+                if (n + 1 < cap) dst[n++] = '\\';
+            if (n + 1 < cap) dst[n++] = '"';
+            slashes = 0;
+        } else {
+            if (n + 1 < cap) dst[n++] = *p;
+            slashes = 0;
+        }
     }
+    for (k = 0; k < slashes; ++k)
+        if (n + 1 < cap) dst[n++] = '\\';
     if (n + 1 < cap) dst[n++] = '"';
     dst[n] = 0;
 }
@@ -7607,14 +7698,19 @@ static wchar_t *wide_from_utf8(const char *source) {
 }
 
 static wchar_t *quote_wide_arg(const wchar_t *source) {
-    size_t n = wcslen(source), i, out = 0;
+    size_t n = wcslen(source), i, out = 0, slashes = 0, k;
     wchar_t *result = (wchar_t *)malloc((n * 2 + 3) * sizeof(wchar_t));
     if (!result) return 0;
     result[out++] = L'"';
     for (i = 0; i < n; ++i) {
-        if (source[i] == L'"') result[out++] = L'\\';
-        result[out++] = source[i];
+        if (source[i] == L'\\') { result[out++] = L'\\'; ++slashes; continue; }
+        if (source[i] == L'"') {
+            for (k = 0; k < slashes + 1; ++k) result[out++] = L'\\';
+            result[out++] = L'"';
+        } else result[out++] = source[i];
+        slashes = 0;
     }
+    for (k = 0; k < slashes; ++k) result[out++] = L'\\';
     result[out++] = L'"'; result[out] = 0;
     return result;
 }
