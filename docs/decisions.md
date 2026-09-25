@@ -23865,3 +23865,76 @@ and the Disabled state on Windows and Linux. A sweep of all 103 `ui_*`
 fixtures on both hosts shows only the 12 pre-existing failures recorded in
 D1195, with unchanged exit codes (`ui_navigation2_v2` holds the other tab bars
 and is one of them).
+
+## D1214 — The motion table is the authority where no README exists
+
+Every proposed row in `docs/animation-controls.md` is accepted. For the
+controls without a design spec (Checkbox, Radio, RadioGroup, AlertDialog,
+BottomSheet, Expander, RangeSlider, TabView, DateRangePicker, NavigationRail,
+BottomNavigation, AdaptiveDestinationBar, Toast, InfoBar, MenuButton, Sidebar,
+PasswordField, SearchField, TextArea, Panel and Surface) and for the six
+behaviours no spec covered (scrollbar fade and widen, scroll physics and
+wheel smoothing, ZoomView, drag lift and cancel, drop target, keyboard
+avoiding), the table's rows are the design, and no new README is written. The
+foundation rows hold too: StateLayer fades over `duration-short-2`,
+PressRipple spreads over `duration-medium-2` with no ripple under reduced
+motion, and a FocusRing is never animated. Where a component README exists,
+it stays the authority and the table follows it.
+
+## D1215 — A component's reduced-motion value wins
+
+Spec §10.2's "colour and opacity changes are unchanged under reduced motion"
+becomes the default, not a rule. A component's own `Reduced` value, which is
+data in its `Transition`, overrides it. So Link, RichText, MultiSelectList,
+Avatar, Text, Form messages, DataGrid, Table and IconButton go Instant under
+reduced motion as their READMEs say, while EmptyState, ListBox and StatusBar
+keep their fades. `check_motion_spec.py` compares each constant with its README
+line, not with the default.
+
+## D1216 — Opacity-only pulses survive reduced motion at 10 fps
+
+This amends spec §10.2. Under reduced motion, a loop that changes nothing but
+opacity may keep running, paced at 10 frames per second through a scope frame
+budget, so indeterminate progress still reads as working. This covers
+ProgressBar and ProgressRing (38–100% every 2 s). Every other loop (spins,
+sweeps, shimmers, caret blink, autoplay) stays `Static` and requests no
+frames. The idle check (spec §12.3) exempts a visible indeterminate progress
+control and asserts the 10 fps ceiling instead.
+
+## D1217 — One shimmer, Skeleton's
+
+Placeholder and Skeleton share one region-wide shimmer: a 1.5 s sweep with
+`ease-linear`, a 0.5 s pause, and every shape in step. Under reduced motion
+both are `Static`: no sweep and no pulse. Placeholder's own Std-eased sweep
+and its "pulse or still" reduced option are withdrawn. The iOS note (pulse
+rather than sweep) remains a platform look, and is also `Static` under
+reduced motion.
+
+## D1218 — The design language's motion gaps are filled
+
+The §6 gaps of `docs/animation-controls.md` are closed in the component
+READMEs:
+
+- Row cross-fades selection and state changes over `duration-short-2` under
+  reduced motion (its "changes it at once" is withdrawn).
+- Button has no ripple under reduced motion, like IconButton. FieldMessage and
+  FormattedField keep their fades.
+- The chevrons of Disclosure, Accordion and GroupBox turn over
+  `duration-short-3` with `ease-standard`, as Tree's twisty does.
+- Card's lift and hover rise take `duration-short-3` with `ease-standard`.
+- The Fab hides and shows over `duration-short-4` (`ease-emphasized-decelerate`
+  in, `ease-emphasized-accelerate` out).
+- The Slider's track-press glide takes `duration-short-3` with `ease-standard`.
+- Autocomplete and ComboBox close with `ease-emphasized-accelerate`.
+- Canvas transitions between data take `duration-medium-2` with
+  `ease-standard`.
+- SelectableText's toolbar and AppBar's contextual bar fade with a 4 px drop.
+- Table inserts rows as List does.
+- VirtualList's programmatic jumps scroll over `duration-medium-2` with
+  `ease-standard`.
+- Fab and SpeedDial cite `duration-stagger` (30 ms), not a literal.
+- `docs/ux/components/Cover` is the catalog's cover page, not a component, and
+  motion checks skip it.
+- Hover and show delays, minimum display times, close-after-pick and drop-hold
+  times are timers on the frame clock, not motion, and reduced motion never
+  changes them.
