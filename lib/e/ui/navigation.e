@@ -416,8 +416,8 @@ fn status_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, sections:
 // status named by its text. Pressable items share one roving Tab stop, with
 // Left/Right and Home/End moving in visual order.
 // (D1238) Narrower than its items, it drops end items by `drop_order` and the
-// message ends in an ellipsis.
-// ponytail: the message's full text is not yet its tooltip.
+// message ends in an ellipsis; (D1243) hovered, it shows its full text as a
+// tooltip.
 type StatusMove = struct { runtime: *widget.Runtime, keys: []const widget.Key, backward: bool, edge: bool }
 
 fn status_move_fire(ctx: *void) -> err {
@@ -620,6 +620,22 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
                 live.label = item.text
                 live.live = 1u8
                 made = widget.semantics(0u64, live, style.defaults(), lives[0usize..1usize])
+            }
+            // (D1243) A squeezed message hovers (keyed `key + 1 + i`) and shows its
+            // full text as a tooltip.
+            if squeezed {
+                let tip_key = key + 1u64 + u64(i)
+                let (hovers, hovers_error) = mem.alloc[widget.Node](a, 1usize)
+                if hovers_error != ok { ret (zero, TooLarge) }
+                hovers[0usize] = made
+                let hovering = widget.region(tip_key, widget.Region { gesture: zero, gestures: widget.GESTURE_HOVER, enabled: true, focusable: false }, style.defaults(), hovers[0usize..1usize])
+                let (tip, tip_error) = overlay.tooltip(a, key + 1000000u64 + u64(i), t, tip_key, item.text, overlay.tooltip_wanted(t, tip_key))
+                if tip_error != ok { ret (zero, tip_error) }
+                let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+                if layers_error != ok { ret (zero, TooLarge) }
+                layers[0usize] = hovering
+                layers[1usize] = tip
+                made = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
             }
         }
         if item.end {
