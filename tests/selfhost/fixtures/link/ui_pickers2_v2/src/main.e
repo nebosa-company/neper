@@ -54,6 +54,17 @@ fn close_to(value: u8, expected: f32) -> bool {
     ret v - e < 4.0 && e - v < 4.0
 }
 
+// (D1294) The last choice a modal time picker reported.
+type Chose = struct { count: usize, kind: overlay.TimeChoiceKind, value: u8 }
+
+fn on_time(ctx: *void, value: overlay.TimeChoice) -> err {
+    let c = mem.cast[*Chose](ctx)
+    c.count += 1usize
+    c.kind = value.kind
+    c.value = value.value
+    ret ok
+}
+
 fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, open: bool) -> (widget.Node, err) {
     let typed = widget.Change[str] { ctx: mem.cast[*void](s), invoke: on_text }
     var options = control.field_options()
@@ -260,6 +271,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
         filter_step += 1usize
     }
     if testing.by_key(&harness, 909u64).count != 1usize || testing.by_key(&harness, 910u64).count != 1usize || testing.by_key(&harness, 905u64).count != 0usize || testing.by_key(&harness, 908u64).count != 0usize { os.exit(52i32) }
+    // (D1294) The dial picker at 14:30 on a 12-hour clock: the hour box says 02
+    // and PM is chosen; the dial's 3 sets 15, the minute box asks to be edited,
+    // and on the minute dial the sixth number sets 30.
+    var chose: Chose = zero
+    let time_change = widget.Change[overlay.TimeChoice] { ctx: mem.cast[*void](&chose), invoke: on_time }
+    var dial_step = 0usize
+    while dial_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (dial_modal, dial_modal_error) = overlay.time_picker_modal(&f, 1300u64, &theme, 14u8, 30u8, dial_step == 1usize, true, true, time_change, &s.press, &s.press)
+        let (dial_page, dial_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if dial_modal_error != ok || dial_page_error != ok { os.exit(59i32) }
+        dial_page[0usize] = dial_modal
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), dial_page[0usize..1usize]), time.Instant { nanos: 6100000000i64 + i64(dial_step) }) != ok { os.exit(54i32) }
+        if dial_step == 0usize {
+            if testing.by_text(&harness, "02").count == 0usize || testing.by_text(&harness, "30").count == 0usize { os.exit(55i32) }
+            let (three, has_three) = bounds(&harness, &runtime, 1313u64)
+            if !has_three || testing.tap(&harness, three.x + 24.0, three.y + 24.0) != ok || chose.kind != .Hour || chose.value != 15u8 { os.exit(56i32) }
+            let (minute_box, has_minute_box) = bounds(&harness, &runtime, 1302u64)
+            if !has_minute_box || testing.tap(&harness, minute_box.x + 40.0, minute_box.y + 32.0) != ok || chose.kind != .EditMinute { os.exit(57i32) }
+        }
+        if dial_step == 1usize {
+            let (thirty, has_thirty) = bounds(&harness, &runtime, 1316u64)
+            if !has_thirty || testing.tap(&harness, thirty.x + 24.0, thirty.y + 24.0) != ok || chose.kind != .Minute || chose.value != 30u8 { os.exit(58i32) }
+        }
+        dial_step += 1usize
+    }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }

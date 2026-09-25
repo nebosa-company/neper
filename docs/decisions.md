@@ -25064,3 +25064,22 @@ form is still to come.
 `ui_pickers_v2` holds the title and date line, a day press picking the 20th,
 OK confirming, and input mode showing the field in the calendar's place, on
 Windows and Linux.
+
+## D1294 — The time picker has its touch dial
+
+`overlay.time_picker_modal` is the TimePicker spec's modal dial form, a
+dialog titled "Select time". The hour and minute boxes (80 by 64,
+`display-small` digits, the active one `primary-container`) stand with a
+":" between them. On a 12-hour clock the AM/PM selector follows: two stacked
+48-wide segments, the chosen one `tertiary-container`. Below them is the 224
+dial on `surface-container-highest`, with twelve 48 numbers round it (hours,
+or minutes in fives while the minute box is active), the chosen one on a 44
+`primary` knob, and a 2-wide `primary` hand from an 8 centre dot. Every press
+reports a `TimeChoice` (Hour, Minute, Period, EditHour, EditMinute); the
+caller keeps the time and which box is active. Cancel and OK fire the
+caller's actions. Input mode, the inner 13-23 ring, dragging round the dial
+and iOS wheels are still to come.
+
+`ui_pickers2_v2` holds 14:30 shown as 02 and 30 with PM, the dial's 3 setting
+15, the minute box asking to be edited, and the minute dial's sixth number
+setting 30, on Windows and Linux.
