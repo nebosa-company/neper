@@ -422,6 +422,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var control_held: input.Modifiers = zero
     control_held.control = true
     if !tab_to(&harness, 612u64) || testing.press_key(&harness, 40u32, control_held) != ok || s.moves != 2usize || s.moved.from != 1usize || s.moved.to != 2usize { os.exit(67i32) }
+    // Space picks up the focused row without reporting a move. Arrows and the
+    // ends move its gap; Space or Enter drops once, while Escape cancels.
+    if !tab_to(&harness, 611u64) || testing.press_key(&harness, 32u32, zero) != ok || s.moves != 2usize { os.exit(106i32) }
+    let (root_key_pick, root_key_pick_error) = build(&f, &theme, &touch, s)
+    if root_key_pick_error != ok || testing.pump(&harness, root_key_pick, now) != ok { os.exit(107i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || testing.press_key(&harness, 35u32, zero) != ok || s.moves != 2usize { os.exit(108i32) }
+    let (root_key_last, root_key_last_error) = build(&f, &theme, &touch, s)
+    if root_key_last_error != ok || testing.pump(&harness, root_key_last, now) != ok { os.exit(109i32) }
+    let (key_lifted, has_key_lifted) = bounds(&harness, &runtime, 611u64)
+    let (key_last, has_key_last) = bounds(&harness, &runtime, 613u64)
+    if !has_key_lifted || !has_key_last { os.exit(110i32) }
+    if !near(key_lifted.x, list_box.x + 8.0) { os.exit(120i32) }
+    if !near(key_lifted.y, list_box.y + 96.0) { os.exit(121i32) }
+    if !near(key_last.y, list_box.y + 48.0) { os.exit(122i32) }
+    if testing.press_key(&harness, 32u32, zero) != ok || s.moves != 3usize || s.moved.from != 0usize || s.moved.to != 2usize { os.exit(111i32) }
+    let (root_key_dropped, root_key_dropped_error) = build(&f, &theme, &touch, s)
+    if root_key_dropped_error != ok || testing.pump(&harness, root_key_dropped, now) != ok { os.exit(112i32) }
+    if !tab_to(&harness, 612u64) || testing.press_key(&harness, 32u32, zero) != ok { os.exit(113i32) }
+    let (root_key_second, root_key_second_error) = build(&f, &theme, &touch, s)
+    if root_key_second_error != ok || testing.pump(&harness, root_key_second, now) != ok { os.exit(114i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || testing.press_key(&harness, 36u32, zero) != ok || testing.press_key(&harness, 27u32, zero) != ok || s.moves != 3usize { os.exit(115i32) }
+    let (root_key_cancelled, root_key_cancelled_error) = build(&f, &theme, &touch, s)
+    if root_key_cancelled_error != ok || testing.pump(&harness, root_key_cancelled, now) != ok { os.exit(116i32) }
+    if !tab_to(&harness, 612u64) || testing.press_key(&harness, 32u32, zero) != ok { os.exit(117i32) }
+    let (root_key_enter, root_key_enter_error) = build(&f, &theme, &touch, s)
+    if root_key_enter_error != ok || testing.pump(&harness, root_key_enter, now) != ok { os.exit(118i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.moves != 4usize || s.moved.from != 1usize || s.moved.to != 0usize { os.exit(119i32) }
     // In a right-to-left theme the PageView's physical strip, buttons,
     // chevrons, drag and horizontal keys mirror while page indices stay logical.
     s.page = 1usize
