@@ -4299,6 +4299,23 @@ fn same_modifiers(a: input.Modifiers, b: input.Modifiers) -> bool {
     ret a.shift == b.shift && a.control == b.control && a.alt == b.alt && a.meta == b.meta
 }
 
+fn has_scoped_shortcut(s: *State, from: usize, code: u32, held: input.Modifiers) -> bool {
+    var at = from
+    while true {
+        let e = &s.elements[at]
+        if e.kind == SCOPE_TAG {
+            var i = 0usize
+            while i < e.shortcut_count {
+                if key_code(e.shortcuts[i].key) == code && same_modifiers(e.shortcuts[i].modifiers, held) { ret true }
+                i += 1usize
+            }
+        }
+        if !e.has_parent { break }
+        at = usize(e.parent)
+    }
+    ret false
+}
+
 // A key down walks the scopes from the focused element up: a matching shortcut
 // fires, Enter is the default action, Escape the cancel one; Tab moves focus first
 // -- plain or with Shift only (D969): Ctrl+Tab is a shortcut, a workspace's
@@ -4708,6 +4725,10 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if s.has_focus {
             let f = &s.elements[usize(s.focus)]
             if f.live && f.kind == REGION_TAG && f.enabled && (f.gestures & GESTURE_TAP) != 0u8 && (code == 13u32 || code == 32u32) {
+                if has_scoped_shortcut(s, usize(s.focus), code, k.modifiers) {
+                    let (taken, key_error) = dispatch_key(s, k)
+                    if taken || key_error != ok { ret key_error }
+                }
                 s.space_activation = code == 32u32 && (f.gestures & GESTURE_SPACE) != 0u8
                 let activated = menu_tap(s, usize(s.focus), geometry.Point { x: f.bounds.x + f.bounds.width * 0.5, y: f.bounds.y + f.bounds.height * 0.5 })
                 s.space_activation = false

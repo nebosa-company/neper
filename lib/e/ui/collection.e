@@ -977,7 +977,10 @@ fn reorder_drag(ctx: *void, g: widget.Gesture) -> err {
     let d = mem.cast[*Dragging](ctx)
     switch g {
     case .DragStart as at:
-        if d.has_cell { d.cell.moved = 0.0 }
+        if d.has_cell {
+            d.cell.turned = false
+            d.cell.moved = 0.0
+        }
         ret ok
     case .DragMove as dm:
         if d.has_cell { d.cell.moved = dm.position.y - dm.start.y }
@@ -1007,6 +1010,45 @@ fn reorder_nudge(ctx: *void) -> err {
     }
     if n.index + 1usize >= n.count { ret ok }
     ret widget.fire_change[Reorder](n.move, Reorder { from: n.index, to: n.index + 1usize })
+}
+
+type ReorderKeyCommand = enum u8 { Toggle, Drop, Cancel, Previous, Next, First, Last }
+type ReorderKeyboard = struct { runtime: *widget.Runtime, index: usize, count: usize, move: widget.Change[Reorder], cell: *Swipe, has_cell: bool, command: ReorderKeyCommand }
+
+fn reorder_keyboard_fire(ctx: *void) -> err {
+    let k = mem.cast[*ReorderKeyboard](ctx)
+    if !k.has_cell { ret ok }
+    if k.command == .Toggle && !k.cell.turned {
+        k.cell.turned = true
+        k.cell.moved = f32(k.index)
+        widget.request_animation_frame(k.runtime)
+        ret ok
+    }
+    if k.command == .Cancel {
+        k.cell.turned = false
+        k.cell.moved = 0.0
+        widget.request_animation_frame(k.runtime)
+        ret ok
+    }
+    if k.command == .Drop || k.command == .Toggle {
+        if !k.cell.turned { ret ok }
+        var to = usize(k.cell.moved)
+        if to >= k.count { to = k.count - 1usize }
+        k.cell.turned = false
+        k.cell.moved = 0.0
+        widget.request_animation_frame(k.runtime)
+        if to == k.index { ret ok }
+        ret widget.fire_change[Reorder](k.move, Reorder { from: k.index, to: to })
+    }
+    if !k.cell.turned { ret ok }
+    var to = usize(k.cell.moved)
+    if k.command == .Previous && to > 0usize { to -= 1usize }
+    if k.command == .Next && to + 1usize < k.count { to += 1usize }
+    if k.command == .First { to = 0usize }
+    if k.command == .Last { to = k.count - 1usize }
+    k.cell.moved = f32(to)
+    widget.request_animation_frame(k.runtime)
+    ret ok
 }
 
 fn keyed_bounds_of(runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
@@ -5259,7 +5301,7 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
 // count + index`, so the lifted one keeps its elements -- and the drag its
 // handle -- when it moves to the top of the stack. A list named `label`.
 // ponytail: the handle shows at rest rather than only on hover; no drop line,
-// auto-scroll, keyboard pick-up (Space) or move actions.
+// auto-scroll, moving tag, announcements or move actions.
 fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, move: widget.Change[Reorder], width: f32) -> (widget.Node, err) {
     if keys.len != items.len || items.len == 0usize { ret (zero, TooLarge) }
     let n = items.len
@@ -5277,7 +5319,10 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         let (kept, has_cell) = swipe_cell(t, key + 1u64 + u64(i))
         cells[i] = kept
         has[i] = has_cell
-        if has_cell && kept.moved != 0.0 {
+        if has_cell && kept.turned {
+            lifted = i
+            moved = (kept.moved - f32(i)) * tall
+        } else if has_cell && kept.moved != 0.0 {
             lifted = i
             moved = kept.moved
         }
@@ -5296,7 +5341,9 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if drags_error != ok { ret (zero, TooLarge) }
     let (nudges, nudges_error) = mem.alloc[Nudging](a, 2usize * n)
     if nudges_error != ok { ret (zero, TooLarge) }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize * n)
+    let (key_moves, key_moves_error) = mem.alloc[ReorderKeyboard](a, 7usize * n)
+    if key_moves_error != ok { ret (zero, TooLarge) }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 11usize * n)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, n)
     if rows_error != ok { ret (zero, TooLarge) }
@@ -5352,14 +5399,34 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         nudges[2usize * i + 1usize] = Nudging { index: i, count: n, up: false, move: move }
         let up = widget.Submit { ctx: ctx_of(&nudges[2usize * i]), invoke: reorder_nudge }
         let down = widget.Submit { ctx: ctx_of(&nudges[2usize * i + 1usize]), invoke: reorder_nudge }
-        shortcuts[4usize * i] = widget.Shortcut { key: 38u32, modifiers: alt, action: up }
-        shortcuts[4usize * i + 1usize] = widget.Shortcut { key: 40u32, modifiers: alt, action: down }
-        shortcuts[4usize * i + 2usize] = widget.Shortcut { key: 38u32, modifiers: ctrl, action: up }
-        shortcuts[4usize * i + 3usize] = widget.Shortcut { key: 40u32, modifiers: ctrl, action: down }
+        let shortcut_base = 11usize * i
+        shortcuts[shortcut_base] = widget.Shortcut { key: 38u32, modifiers: alt, action: up }
+        shortcuts[shortcut_base + 1usize] = widget.Shortcut { key: 40u32, modifiers: alt, action: down }
+        shortcuts[shortcut_base + 2usize] = widget.Shortcut { key: 38u32, modifiers: ctrl, action: up }
+        shortcuts[shortcut_base + 3usize] = widget.Shortcut { key: 40u32, modifiers: ctrl, action: down }
+        let key_base = 7usize * i
+        key_moves[key_base] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: has[i], command: .Toggle }
+        shortcuts[shortcut_base + 4usize] = widget.Shortcut { key: 32u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base]), invoke: reorder_keyboard_fire } }
+        var shortcut_count = 5usize
+        if has[i] && cells[i].turned {
+            key_moves[key_base + 1usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Drop }
+            key_moves[key_base + 2usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Cancel }
+            key_moves[key_base + 3usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Previous }
+            key_moves[key_base + 4usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Next }
+            key_moves[key_base + 5usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .First }
+            key_moves[key_base + 6usize] = ReorderKeyboard { runtime: t.runtime, index: i, count: n, move: move, cell: cells[i], has_cell: true, command: .Last }
+            shortcuts[shortcut_base + 5usize] = widget.Shortcut { key: 13u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base + 1usize]), invoke: reorder_keyboard_fire } }
+            shortcuts[shortcut_base + 6usize] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base + 2usize]), invoke: reorder_keyboard_fire } }
+            shortcuts[shortcut_base + 7usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base + 3usize]), invoke: reorder_keyboard_fire } }
+            shortcuts[shortcut_base + 8usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base + 4usize]), invoke: reorder_keyboard_fire } }
+            shortcuts[shortcut_base + 9usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base + 5usize]), invoke: reorder_keyboard_fire } }
+            shortcuts[shortcut_base + 10usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&key_moves[key_base + 6usize]), invoke: reorder_keyboard_fire } }
+            shortcut_count = 11usize
+        }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = rows[i]
-        rows[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[4usize * i..4usize * i + 4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize])
+        rows[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[shortcut_base..shortcut_base + shortcut_count], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize])
         i += 1usize
     }
     let rove_error = roving(a, t, rows, keys, 1usize)

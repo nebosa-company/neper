@@ -23585,3 +23585,20 @@ promotion flags only when a promoting node exists, preserving arena headroom.
 `ui_widget`, `ui_containers_v2`, `ui_collections3_v2`,
 `ui_collections4_v2` and `ui_status2_v2` hold the paths on Windows and Linux.
 The Segoe review is `build/ux/ui-transform-batch-segoe.png`.
+
+## D1193 — Keyboard reorder stays pending until drop
+
+Reorderable List reuses each handle's retained drag cell for keyboard pickup.
+Space marks the focused row as lifted; Up, Down, Home and End move only its
+prospective gap. Space or Enter clears the cell and reports one caller-owned
+`Reorder`, while Escape clears it without reporting a move. The existing direct
+Ctrl/Alt arrow commands remain immediate.
+
+Focused tap regions now consult an exact enclosing shortcut before their normal
+Enter/Space activation. This lets the picked-up row own Space without changing
+ordinary Button, Card or Wizard activation and avoids a second keyboard router.
+
+`ui_collections4_v2` holds pickup, both arrow directions, both ends, both drop
+keys, cancellation, the lifted geometry and the single final callback on Windows
+and Linux. Button, Card and Wizard activation regressions pass on both hosts.
+The Segoe review is `build/ux/ui-reorder-keyboard-segoe.png`.
