@@ -4041,9 +4041,11 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // a 24-hour clock), or the minutes in fives while the minute box is active --
 // the chosen one on a 44 `primary` knob in `on-primary`, a 2 wide `primary`
 // hand from an 8 centre dot to it. Presses report `TimeChoice`s through
-// `change`; Cancel fires `cancel`, OK `confirm`.
-// ponytail: no input mode (typed boxes), no inner 13-23 ring, no drag round the
-// dial; a minute off the fives puts the knob on no number.
+// `change`; Cancel fires `cancel`, OK `confirm`. (D1306) The dial takes the
+// focus (`key + 7`): Up and Right move the knob on an hour or a minute, Down and
+// Left back, and Page Up and Page Down five minutes on the minute dial.
+// ponytail: no drag round the dial; a minute off the fives puts the knob on no
+// number.
 fn time_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, minute: u8, editing_minute: bool, twelve: bool, open: bool, change: widget.Change[TimeChoice], cancel: *const widget.Submit, confirm: *const widget.Submit) -> (widget.Node, err) {
     var dial_only: TimeModalOptions = zero
     let (made, made_error) = time_picker_modal_with(a, key, t, hour, minute, editing_minute, twelve, open, change, cancel, confirm, dial_only)
@@ -4313,7 +4315,46 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     let (dial, dial_error) = mem.alloc[widget.Node](a, 1usize)
     if dial_error != ok { ret (zero, TooLarge) }
     dial[0usize] = widget.stack(key + 5u64, control.sized_style(224.0, 224.0), layers[0usize..n])
-    ret (widget.semantics(0u64, dial_sem, style.defaults(), dial[0usize..1usize]), ok)
+    // (D1306) The keys: on and back a step, and five minutes with the page keys.
+    var kind: TimeChoiceKind = .Hour
+    var up = (hour + 1u8) % 24u8
+    var down = (hour + 23u8) % 24u8
+    var far_up = up
+    var far_down = down
+    if editing_minute {
+        kind = .Minute
+        up = (minute + 1u8) % 60u8
+        down = (minute + 59u8) % 60u8
+        far_up = (minute + 5u8) % 60u8
+        far_down = (minute + 55u8) % 60u8
+    }
+    let (steps, steps_error) = mem.alloc[TimeChoosing](a, 4usize)
+    let (step_presses, step_presses_error) = mem.alloc[widget.Submit](a, 4usize)
+    let (dial_keys, dial_keys_error) = mem.alloc[widget.Shortcut](a, 6usize)
+    let (focused, focused_error) = mem.alloc[widget.Node](a, 2usize)
+    if steps_error != ok || step_presses_error != ok || dial_keys_error != ok || focused_error != ok { ret (zero, TooLarge) }
+    steps[0usize] = TimeChoosing { choice: TimeChoice { kind: kind, value: up }, change: change }
+    steps[1usize] = TimeChoosing { choice: TimeChoice { kind: kind, value: down }, change: change }
+    steps[2usize] = TimeChoosing { choice: TimeChoice { kind: kind, value: far_up }, change: change }
+    steps[3usize] = TimeChoosing { choice: TimeChoice { kind: kind, value: far_down }, change: change }
+    var s_i = 0usize
+    while s_i < 4usize {
+        step_presses[s_i] = widget.Submit { ctx: mem.cast[*void](&steps[s_i]), invoke: time_choice_fire }
+        s_i += 1usize
+    }
+    dial_keys[0usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: step_presses[0usize] }
+    dial_keys[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: step_presses[0usize] }
+    dial_keys[2usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: step_presses[1usize] }
+    dial_keys[3usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: step_presses[1usize] }
+    dial_keys[4usize] = widget.Shortcut { key: 33u32, modifiers: zero, action: step_presses[2usize] }
+    dial_keys[5usize] = widget.Shortcut { key: 34u32, modifiers: zero, action: step_presses[3usize] }
+    focused[0usize] = widget.semantics(0u64, dial_sem, style.defaults(), dial[0usize..1usize])
+    var none_gesture: widget.GestureAction = zero
+    var dial_ring = style.defaults()
+    dial_ring.radius = 112.0
+    control.focus_look(t)
+    focused[1usize] = widget.region(key + 7u64, widget.Region { gesture: none_gesture, gestures: 4u8, enabled: true, focusable: true }, dial_ring, focused[0usize..1usize])
+    ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: dial_keys[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focused[1usize..2usize]), ok)
 }
 
 // A time field (D960): the clocked field (editor `key`, clock `key + 1`, frame
