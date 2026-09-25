@@ -22780,3 +22780,12 @@ and totals, hierarchy level, and text selection offsets.
 
 `ui_accessibility` directly holds the conversion on Windows and Linux. The change
 is semantic only; reviewed surfaces are unchanged.
+
+## D1111 — Flat records retain semantic relationships
+
+AccessibleNode carries the target slot for LabelledBy, DescribedBy, ErrorBy,
+Controls and Active plus a five-bit presence mask. The mask distinguishes no
+relationship from a valid element at slot zero without five separate booleans.
+
+`ui_accessibility` holds both ordinary and slot-zero targets on Windows and Linux.
+The change is semantic only; reviewed surfaces are unchanged.

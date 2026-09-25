@@ -119,8 +119,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     sample.level = 5u8
     sample.selection_start = 7usize
     sample.selection_end = 11usize
+    sample.relations.labelled_by = accessibility.Id { slot: 0u32, generation: 1u32 }
+    sample.relations.described_by = accessibility.Id { slot: 9u32, generation: 2u32 }
     let flat = accessibility.flat_node(&sample)
-    if flat.role != 7u8 || flat.live != 2u8 || flat.row != 2u32 || flat.column != 3u32 || flat.row_count != 20u32 || flat.column_count != 4u32 || flat.level != 5u8 || flat.selection_start != 7usize || flat.selection_end != 11usize { os.exit(23i32) }
+    if flat.role != 7u8 || flat.live != 2u8 || flat.row != 2u32 || flat.column != 3u32 || flat.row_count != 20u32 || flat.column_count != 4u32 || flat.level != 5u8 || flat.selection_start != 7usize || flat.selection_end != 11usize || flat.labelled_by != 0u32 || flat.described_by != 9u32 || flat.relation_flags != 3u8 { os.exit(23i32) }
     if widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui accessibility ok\n")
     ret ok
