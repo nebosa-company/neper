@@ -448,6 +448,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let rtl_muted = style.color(&rtl_tokens, .OnSurfaceVariant)
     let separator_x = rtl_root.x + rtl_root.width
     if rtl_shot_error != ok || !has_rtl_root || !has_rtl_parent || !is_color(rtl_shot, at(separator_x + 9.0, rtl_root.y + 13.0), rtl_muted) || is_color(rtl_shot, at(separator_x + 6.0, rtl_root.y + 13.0), rtl_muted) || !is_color(rtl_shot, at(rtl_parent.x + 15.0, rtl_parent.y + 21.0), rtl_muted) || is_color(rtl_shot, at(rtl_parent.x + 18.0, rtl_parent.y + 21.0), rtl_muted) { os.exit(86i32) }
+    // (D1234) The collapsed menu bar: shut, one 32 Menu button and no menu; open
+    // with File's row open, a menu of the titles with File's commands cascading
+    // beside it; with no row open, a press on the Edit row fires its own toggle.
+    var folded_toggles: [2]widget.Submit = zero
+    folded_toggles[0usize] = s.subs[12usize]
+    folded_toggles[1usize] = s.subs[13usize]
+    var fold_step = 0usize
+    while fold_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        var opened_row = 9usize
+        if fold_step == 1usize { opened_row = 0usize }
+        let (folded_bar, folded_bar_error) = navigation.menu_bar_collapsed(&f, 9000u64, &theme, "Menu", s.menus[0usize..2usize], fold_step > 0usize, &s.subs[11usize], opened_row, folded_toggles[..])
+        if folded_bar_error != ok { os.exit(87i32) }
+        let (fold_page, fold_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if fold_page_error != ok { os.exit(87i32) }
+        fold_page[0usize] = folded_bar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 520.0), fold_page[0usize..1usize]), time.Instant { nanos: 1500000000i64 + i64(fold_step) }) != ok { os.exit(94i32) }
+        let (fold_button, has_fold_button) = bounds(&harness, &runtime, 9001u64)
+        if !has_fold_button || !near(fold_button.width, 32.0) { os.exit(88i32) }
+        let (fold_tree, fold_tree_error) = testing.semantics(&harness)
+        if fold_tree_error != ok { os.exit(89i32) }
+        let (_, has_fold_named) = find(fold_tree, .Button, "Menu")
+        if !has_fold_named { os.exit(90i32) }
+        if fold_step == 0usize && testing.by_role(&harness, .Menu).count != 0usize { os.exit(91i32) }
+        if fold_step == 1usize {
+            let (file_row, has_file_row) = find(fold_tree, .MenuItem, "File")
+            let (edit_row, has_edit_row) = find(fold_tree, .MenuItem, "Edit")
+            let (_, has_new) = find(fold_tree, .MenuItem, "New")
+            if !has_file_row || !has_edit_row || !has_new || !file_row.state.expanded || testing.by_role(&harness, .Menu).count != 2usize { os.exit(92i32) }
+        }
+        if fold_step == 2usize {
+            let (edit_row, has_edit_row) = find(fold_tree, .MenuItem, "Edit")
+            if !has_edit_row || testing.by_role(&harness, .Menu).count != 1usize { os.exit(95i32) }
+            let edit_before = s.counters[13usize].count
+            if testing.tap(&harness, edit_row.bounds.x + 20.0, edit_row.bounds.y + edit_row.bounds.height * 0.5) != ok || s.counters[13usize].count != edit_before + 1usize { os.exit(93i32) }
+        }
+        fold_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui navigation2 v2 ok\n")
     ret ok
