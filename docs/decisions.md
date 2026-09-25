@@ -24859,3 +24859,13 @@ eases the same way, but its digits change at once, as the Gauge spec asks.
 `ui_progress` holds a bar from 0.2 to 0.8 lit at 35 but not at 70 of its 100
 half way through the ease, and lit at 70 once done, on Windows and Linux;
 `ui_status_v2` still passes.
+
+## D1280 — Level indicators ease to new values
+
+A continuous `level_of` draws its fill at `eased_share` (D1279) of the value,
+so the fill eases over `duration-medium-2` from wherever it stood, while its
+readout, tone and limit mark follow the true value at once. Segmented and bar
+scales still step, since they light whole segments. Reduced motion jumps.
+
+`ui_status_v2` holds a level from 20 to 60 of 100 lit past 60 but not 110 of
+its 200 half way through, and past 110 once done, on Windows and Linux.
