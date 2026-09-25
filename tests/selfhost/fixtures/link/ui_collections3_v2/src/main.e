@@ -9,6 +9,7 @@
 // with Collapse all; a tree table under the
 // v2 header with 40 tall full-width rows over dividers.
 
+use e.algo.hash as hash
 use e.gpu
 use e.io
 use e.mem
@@ -367,6 +368,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if named_tree_grid_cells != 1usize { os.exit(55i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 1u64).element) != ok || testing.press_key(&harness, 66u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(56i32) }
     if testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || logs[0usize].picks != 5usize || logs[0usize].toggles != 9usize || logs[0usize].toggled != 1u64 { os.exit(47i32) }
+    // (D1330) A2 disabled and B loading: A2 takes no pick, B's children wait
+    // under a Loading row, and the tree says A2 disabled and B busy.
+    var with_open: [2]widget.Key = zero
+    with_open[0usize] = 1u64
+    with_open[1usize] = 2u64
+    var no_chosen: [1]widget.Key = zero
+    var off_keys: [1]widget.Key = zero
+    off_keys[0usize] = 12u64
+    var loading_keys: [1]widget.Key = zero
+    loading_keys[0usize] = 2u64
+    var states: collection.TreeOptions = zero
+    states.disabled = off_keys[..]
+    states.loading = loading_keys[..]
+    f = mem.arena_from(frame_storage)
+    let states_source = collection.TreeSource { ctx: ctx, count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
+    let (stated_tree, stated_tree_error) = collection.tree_with(&f, 500u64, &theme, "States", states_source, with_open[..], no_chosen[0usize..0usize], widget.Change[widget.Key] { ctx: ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, 240.0, states)
+    let (stated_page, stated_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if stated_tree_error != ok || stated_page_error != ok { os.exit(57i32) }
+    stated_page[0usize] = stated_tree
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 360.0), stated_page[0usize..1usize]), time.Instant { nanos: 1400000000i64 }) != ok { os.exit(58i32) }
+    if testing.by_key(&harness, 2u64 ^ hash.fnv1a64("tree-loading")).count != 1usize { os.exit(59i32) }
+    let (off_row, has_off_row) = bounds(&harness, &runtime, 12u64)
+    let picks_before_off = logs[0usize].picks
+    if !has_off_row || testing.tap(&harness, off_row.x + off_row.width * 0.5, off_row.y + off_row.height * 0.5) != ok || logs[0usize].picks != picks_before_off { os.exit(60i32) }
+    let (stated_semantics, stated_semantics_error) = testing.semantics(&harness)
+    if stated_semantics_error != ok { os.exit(61i32) }
+    var disabled_items = 0usize
+    var busy_items = 0usize
+    var sn = 0usize
+    while sn < stated_semantics.nodes.len {
+        if stated_semantics.nodes[sn].state.disabled { disabled_items += 1usize }
+        if stated_semantics.nodes[sn].state.busy { busy_items += 1usize }
+        sn += 1usize
+    }
+    if disabled_items != 1usize || busy_items == 0usize { os.exit(62i32) }
     logs[0usize].large = true
     let (large_rt, large_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 6000usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 16384usize })
     if large_runtime_error != ok { os.exit(53i32) }
