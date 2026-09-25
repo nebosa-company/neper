@@ -25466,3 +25466,17 @@ come.
 the block is not yet at its place, and settled it is. This passes on
 Windows and Linux, the stack's focus moves (D1271) still hold, and
 `ui_navigation` still passes on both.
+
+## D1320 — Banners grow in and shrink out
+
+A banner now stands in a box keyed `key + 8192` that eases its height over
+`duration-medium-2` as `BannerOptions.hidden` changes, using D1285's
+`reveal_window` round the banner. A caller that first builds a banner
+hidden sees it grow in when shown. Hiding it shrinks it shut, built
+throughout, until it leaves the tree. This follows the Banner spec's
+enter and leave. Reduced motion shows and hides it at once.
+
+`ui_status3_v2` builds a banner hidden (0 tall), then shows it. Part way it
+is lower than its own height (over 40); hidden again, its content leaves
+the tree. This passes on Windows and Linux, and `ui_feedback` still passes
+on both.

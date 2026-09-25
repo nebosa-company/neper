@@ -7937,7 +7937,9 @@ fn severity_name(severity: Severity) -> str {
 // A banner's layout (D971): the optional title, the standard form (message
 // block, actions in a row below) rather than the inline one-line form, and
 // full-bleed (square, under a bar).
-type BannerOptions = struct { title: str, standard: bool, full_bleed: bool }
+// (D1320) `hidden` collapses the banner: built on while it closes, it grows
+// open and shrinks shut.
+type BannerOptions = struct { title: str, standard: bool, full_bleed: bool, hidden: bool }
 
 fn banner_options() -> BannerOptions {
     var out: BannerOptions = zero
@@ -8007,7 +8009,9 @@ fn severity_well(a: *mem.Arena, t: *const Theme, severity: Severity, side: f32) 
 // close is a 40 `close` icon button in `on-surface-variant` named "Dismiss"
 // (keyed `key + 1`). A polite status for info, success and warning, an assertive
 // alert for an error, named by the title or the message.
-// ponytail: no height animation on enter and leave.
+// (D1320) The banner stands in a box keyed `key + 8192` that eases its height
+// over `duration-medium-2` as `hidden` changes: a caller that builds it hidden
+// first sees it grow in, and hiding it shrinks it out of the tree.
 fn noted(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity, message: str, labels: []const str, actions: []const widget.Submit, width: f32, dismiss: widget.Submit, options: BannerOptions) -> (widget.Node, err) {
     if labels.len != actions.len { ret (zero, TooLarge) }
     let closable = widget.submit_set(dismiss.invoke)
@@ -8111,7 +8115,17 @@ fn noted(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity, me
     }
     sem.label = message
     if options.title.len != 0usize { sem.label = options.title }
-    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
+    // (D1320) The height eases as `hidden` changes, on a box that stays built.
+    var open_goal: f32 = 1.0
+    if options.hidden { open_goal = 0.0 }
+    let opened = eased_on(t, key + 8192u64, key + 8192u64, open_goal, false, t.tokens.durations.medium2)
+    let (kept, kept_error) = mem.alloc[widget.Node](a, 1usize)
+    if kept_error != ok { ret (zero, TooLarge) }
+    if options.hidden && !(opened > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), kept[0usize..0usize]), ok) }
+    let (grown, grown_error) = reveal_window(a, t, key, opened, widget.semantics(key, sem, style.defaults(), column[0usize..1usize]))
+    if grown_error != ok { ret (zero, grown_error) }
+    kept[0usize] = grown
+    ret (widget.box(key + 8192u64, style.defaults(), kept[0usize..1usize]), ok)
 }
 
 // A skeleton block's shape (D970): a text line, a circle, a rectangle with the
