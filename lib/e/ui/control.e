@@ -966,6 +966,11 @@ fn card_options() -> CardOptions {
 // Dragged omits the 1.5-degree tilt and 102%
 // scale until nodes have a visual transform independent of layout.
 fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, children: []const widget.Node) -> (widget.Node, err) {
+    let (made, made_error) = card_render(a, key, t, options, false, children)
+    ret (made, made_error)
+}
+
+fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, flush: bool, children: []const widget.Node) -> (widget.Node, err) {
     let pressed = mem.address_of(options.action) != 0usize && !options.loading
     let state = control_state(t, key, options.enabled && pressed, options.selected)
     var ground = style.color(t.tokens, .SurfaceContainerLow)
@@ -998,6 +1003,7 @@ fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions
     }
     var pad_px: f32 = 16.0
     if options.dense { pad_px = 12.0 }
+    if flush { pad_px = 0.0 }
     let pad = style.Length { Px: pad_px }
     s.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
     s.overflow = .Clip
@@ -1075,6 +1081,58 @@ fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions
         holder[0usize] = widget.stack(0u64, s, parts[0usize..count])
     }
     ret (widget.semantics(key, sem, style.defaults(), holder[0usize..1usize]), ok)
+}
+
+// A Card's standard content slots: optional full-bleed media, an optional
+// header, caller-composed supporting/meta content, and end-aligned actions.
+type CardSlots = struct { media: widget.Node, has_media: bool, header: widget.Node, has_header: bool, content: []const widget.Node, actions: []const widget.Node }
+
+fn card_slots() -> CardSlots {
+    var out: CardSlots = zero
+    ret out
+}
+
+// The slot layout keeps media flush with the clipped top corners, then pads the
+// header/content/actions by 16 (12 dense); actions share an 8-pixel end row.
+fn card_with_slots(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, slots: CardSlots) -> (widget.Node, err) {
+    var count = slots.content.len
+    if slots.has_header { count += 1usize }
+    if slots.actions.len != 0usize { count += 1usize }
+    let (body_parts, body_parts_error) = mem.alloc[widget.Node](a, count)
+    if body_parts_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    if slots.has_header {
+        body_parts[at] = slots.header
+        at += 1usize
+    }
+    var i = 0usize
+    while i < slots.content.len {
+        body_parts[at] = slots.content[i]
+        at += 1usize
+        i += 1usize
+    }
+    if slots.actions.len != 0usize {
+        var action_style = style.defaults()
+        action_style.width = style.Length { Percent: 100.0 }
+        body_parts[at] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, action_style, slots.actions)
+    }
+    var body_style = style.defaults()
+    body_style.width = style.Length { Percent: 100.0 }
+    var pad_px: f32 = 16.0
+    if options.dense { pad_px = 12.0 }
+    let pad = style.Length { Px: pad_px }
+    body_style.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    let (root_parts, root_parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if root_parts_error != ok { ret (zero, TooLarge) }
+    var root_count = 0usize
+    if slots.has_media {
+        root_parts[root_count] = slots.media
+        root_count += 1usize
+    }
+    root_parts[root_count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, body_style, body_parts)
+    root_count += 1usize
+    let (made, made_error) = card_render(a, key, t, options, true, root_parts[0usize..root_count])
+    ret (made, made_error)
 }
 
 // A group box: the outlined group box of D965 below.
