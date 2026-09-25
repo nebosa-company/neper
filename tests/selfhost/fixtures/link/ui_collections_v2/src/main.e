@@ -566,6 +566,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, has_calm_bar) = bounds(&harness, &runtime, bar_key)
     if has_calm_bar { os.exit(133i32) }
     s.files[1usize].selected = true
+    // (D1245) A multi-select grid: Space toggles, Shift+Right and Shift+Left extend
+    // in reading order and move, Ctrl+A selects all, Escape clears, and a
+    // Ctrl-click toggles the tile under it.
+    var grid_chosen: Selected = zero
+    var multi_grid = collection.grid_options()
+    multi_grid.width = 600.0
+    multi_grid.select = widget.Change[collection.ListSelect] { ctx: mem.cast[*void](&grid_chosen), invoke: on_select }
+    var grid_keys: [3]widget.Key = zero
+    grid_keys[0usize] = 951u64
+    grid_keys[1usize] = 952u64
+    grid_keys[2usize] = 953u64
+    f = mem.arena_from(frame_storage)
+    let (multi_tiles, multi_tiles_error) = collection.grid_view_of(&f, 950u64, &theme, "Pick tiles", s.tiles[0usize..3usize], grid_keys[..], multi_grid)
+    let (grid_page, grid_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if multi_tiles_error != ok || grid_page_error != ok { os.exit(134i32) }
+    grid_page[0usize] = multi_tiles
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), grid_page[0usize..1usize]), now) != ok { os.exit(135i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 951u64).element) != ok || testing.press_key(&harness, 32u32, zero) != ok || grid_chosen.kind != .Toggle || grid_chosen.index != 0usize { os.exit(136i32) }
+    if testing.press_key(&harness, 39u32, shift_only) != ok || grid_chosen.kind != .Extend || grid_chosen.index != 1usize || !focused_is(&harness, 952u64) { os.exit(137i32) }
+    if testing.press_key(&harness, 37u32, shift_only) != ok || grid_chosen.kind != .Extend || grid_chosen.index != 0usize || !focused_is(&harness, 951u64) { os.exit(138i32) }
+    if testing.press_key(&harness, 65u32, control_only) != ok || grid_chosen.kind != .All || testing.press_key(&harness, 27u32, zero) != ok || grid_chosen.kind != .Clear { os.exit(139i32) }
+    let (gamma_tile, has_gamma_tile) = bounds(&harness, &runtime, 953u64)
+    if !has_gamma_tile || widget.dispatch(&runtime, input.Event { KeyDown: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: control_only, repeat: false } }) != ok { os.exit(140i32) }
+    if testing.tap(&harness, gamma_tile.x + gamma_tile.width * 0.5, gamma_tile.y + gamma_tile.height * 0.5) != ok || grid_chosen.kind != .Toggle || grid_chosen.index != 2usize { os.exit(141i32) }
+    if widget.dispatch(&runtime, input.Event { KeyUp: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(142i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok
