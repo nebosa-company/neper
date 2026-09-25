@@ -419,6 +419,10 @@ type State = struct {
     // asked the application to keep presenting frames.
     animation_time: time.Instant,
     animation_due: bool,
+    // (D1334) The pointer cursor this frame's build asked for (0 the arrow), and
+    // what the last reconciled frame settled on.
+    cursor_wanted: u8,
+    cursor_frame: u8,
     clip_rect: geometry.Rect,
     has_clip: bool,
     frame: u64,
@@ -764,6 +768,22 @@ fn menu_access_keys_visible(widget_runtime: *Runtime) -> bool {
 fn request_animation_frame(widget_runtime: *Runtime) {
     let (s, state_error) = state_of(widget_runtime)
     if state_error == ok { s.animation_due = true }
+}
+
+// (D1334) Ask, while building, for the pointer cursor over the window this frame:
+// window.Cursor's order -- 0 arrow, 1 text, 2 hand, 3 crosshair, 4 resize across,
+// 5 resize up and down. The last ask of a build wins; a build that asks nothing
+// leaves the arrow.
+fn request_cursor(widget_runtime: *Runtime, shape: u8) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error == ok { s.cursor_wanted = shape }
+}
+
+// (D1334) The cursor the last reconciled frame asked for.
+fn cursor_of(widget_runtime: *const Runtime) -> u8 {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret 0u8 }
+    ret s.cursor_frame
 }
 
 fn animation_frame_requested(widget_runtime: *Runtime) -> bool {
@@ -2876,6 +2896,9 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     if state_error != ok { ret (zero, state_error) }
     let hover_error = menu_hover_tick(s)
     if hover_error != ok { ret (zero, hover_error) }
+    // (D1334) The build that made `root` has asked for its cursor by now.
+    s.cursor_frame = s.cursor_wanted
+    s.cursor_wanted = 0u8
     s.frame += 1u64
     // The whole tree is unvisited, then the root matched against the previous root.
     var old_roots: [1]u32 = zero

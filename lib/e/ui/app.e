@@ -45,6 +45,8 @@ type State = struct {
     trampoline: fn(*void, usize, *widget.BuildContext) -> (widget.Node, err),
     frame_due: bool,
     echo: bool,
+    // (D1334) The pointer cursor set on the window, as widget.cursor_of counts.
+    cursor_shown: u8,
     stopped: bool,
     closed: bool,
     frames: u64,
@@ -164,6 +166,17 @@ fn present_frame(s: *State) -> err {
     let limits = ui_layout.Constraints { min_width: 0.0, max_width: metrics.logical_size.width, min_height: 0.0, max_height: metrics.logical_size.height }
     let (compiled, reconcile_error) = widget.reconcile(&s.runtime, &frame, tree, limits)
     if reconcile_error != ok { ret reconcile_error }
+    // (D1334) The pointer cursor the frame asked for, set when it changes.
+    let wanted = widget.cursor_of(&s.runtime)
+    if wanted != s.cursor_shown {
+        var shape: window.Cursor = .Arrow
+        if wanted == 1u8 { shape = .Text }
+        if wanted == 2u8 { shape = .Hand }
+        if wanted == 3u8 { shape = .Crosshair }
+        if wanted == 4u8 { shape = .ResizeHorizontal }
+        if wanted == 5u8 { shape = .ResizeVertical }
+        if window.cursor(&s.win, shape) == ok { s.cursor_shown = wanted }
+    }
     let (canvas, canvas_error) = window.draw_target(&s.win)
     if canvas_error != ok { ret Failed }
     let render_error = scene.render_scaled(&s.renderer, compiled, canvas, metrics.logical_size, metrics.scale)

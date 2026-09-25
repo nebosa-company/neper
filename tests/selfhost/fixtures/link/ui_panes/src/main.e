@@ -273,6 +273,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if held_step == 3usize && tipped != 0usize { os.exit(62i32) }
         held_step += 1usize
     }
+    // (D1334) Over the sash the frame asks for the resize-across cursor; away, the arrow.
+    var cursor_step = 0usize
+    while cursor_step < 3usize {
+        frame = mem.arena_from(frame_storage)
+        let (cursor_body, cursor_body_error) = control.text(&frame, 0u64, "Side", &theme, control.text_options())
+        if cursor_body_error != ok { os.exit(63i32) }
+        let (cursor_pane, cursor_pane_error) = control.resizable_pane_with(&frame, 980u64, &theme, "Side", .Horizontal, 120.0, 80.0, 300.0, widget.Change[f32] { ctx: ctx, invoke: on_size }, cursor_body, false)
+        let (cursor_page, cursor_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if cursor_pane_error != ok || cursor_page_error != ok { os.exit(64i32) }
+        cursor_page[0usize] = cursor_pane
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 200.0), cursor_page[0usize..1usize]), now) != ok { os.exit(65i32) }
+        let (cursor_grip, has_cursor_grip) = centre_of(&harness, &runtime, 982u64)
+        if !has_cursor_grip { os.exit(66i32) }
+        if cursor_step == 0usize && (widget.cursor_of(&runtime) != 0u8 || testing.hover(&harness, cursor_grip.x, cursor_grip.y) != ok) { os.exit(67i32) }
+        if cursor_step == 1usize && (widget.cursor_of(&runtime) != 4u8 || testing.hover(&harness, 390.0, 190.0) != ok) { os.exit(68i32) }
+        if cursor_step == 2usize && widget.cursor_of(&runtime) != 0u8 { os.exit(69i32) }
+        cursor_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui panes ok\n")
     ret ok
