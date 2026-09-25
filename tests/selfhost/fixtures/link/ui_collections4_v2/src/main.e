@@ -378,6 +378,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if shot_7_error != ok { os.exit(51i32) }
     let (slid, has_slid) = bounds(&harness, &runtime, 500u64)
     if !has_slid || !near(slid.x, row.x - 160.0) || !is_color(shot_7, at(row.x + 290.0, row.y + 5.0), style.color(&tokens, .Error)) || !is_color(shot_7, at(row.x + 150.0, row.y + 5.0), style.color(&tokens, .SecondaryContainer)) { os.exit(52i32) }
+    // A revealed tile runs and closes the row.
+    if testing.tap(&harness, row.x + 180.0, row.y + 28.0) != ok || s.archives != 1usize || s.revealed { os.exit(78i32) }
+    let (root_tile_closed, root_tile_closed_error) = build(&f, &theme, &touch, s)
+    if root_tile_closed_error != ok || testing.pump(&harness, root_tile_closed, now) != ok { os.exit(79i32) }
+    if !press(&harness, row.x + 250.0, row.y + 50.0) || !move_to(&harness, row.x + 200.0, row.y + 50.0) || !move_to(&harness, row.x + 150.0, row.y + 50.0) || !release(&harness, row.x + 150.0, row.y + 50.0) || !s.revealed { os.exit(80i32) }
+    let (root_tile_open, root_tile_open_error) = build(&f, &theme, &touch, s)
+    if root_tile_open_error != ok || testing.pump(&harness, root_tile_open, now) != ok { os.exit(81i32) }
     if !tab_to(&harness, 500u64) || testing.press_key(&harness, 27u32, zero) != ok || s.revealed { os.exit(53i32) }
     let (root_8, build_8_error) = build(&f, &theme, &touch, s)
     if build_8_error != ok || testing.pump(&harness, root_8, now) != ok { os.exit(54i32) }
@@ -387,7 +394,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_9, build_9_error) = build(&f, &theme, &touch, s)
     if build_9_error != ok || testing.pump(&harness, root_9, now) != ok { os.exit(57i32) }
     let (archive, has_archive) = bounds(&harness, &runtime, 508u64)
-    if !has_archive || !near(archive.width, 32.0) || !near(archive.x, row.x + 300.0 - 8.0 - 68.0) || testing.tap(&harness, archive.x + 16.0, archive.y + 16.0) != ok || s.archives != 1usize { os.exit(58i32) }
+    if !has_archive || !near(archive.width, 32.0) || !near(archive.x, row.x + 300.0 - 8.0 - 68.0) || testing.tap(&harness, archive.x + 16.0, archive.y + 16.0) != ok || s.archives != 2usize { os.exit(58i32) }
     // The reorderable list: 48 rows, the handle 12 in; a drag of 60 lifts the
     // first row 8 in over the gap where it would land, the second moving up;
     // the release reports 0 to 1; Ctrl+Down moves the focused row.
