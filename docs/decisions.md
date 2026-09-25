@@ -23529,6 +23529,18 @@ the primary open action, while Space fires selection; accessibility exposes and
 routes Press and Select independently. A selected pressable Card also stacks its
 check over content instead of letting the extra child enlarge the layout.
 
-The widget runtime now lets an ancestor shortcut handle a key before its generic
-focused-region activation. `ui_containers_v2` holds pointer, Space, semantics and
-unchanged geometry on Windows and Linux.
+The widget runtime now lets an ancestor Space shortcut handle Space before its
+generic focused-region activation; Enter keeps its existing activation order.
+`ui_containers_v2` holds pointer, Space, semantics and unchanged geometry on
+Windows and Linux.
+
+## D1189 — Card selection follows modifier and touch conventions
+
+A Card with selection callbacks now uses Ctrl/Meta-click for toggle selection,
+Shift-click for the caller's range action, and the shared 500-millisecond touch
+hold for selection. Ordinary pointer taps still open the Card, and a successful
+touch hold consumes release so opening does not follow selection.
+
+The gesture arena now remembers pointer kind and offers a touch-only wrapper
+around its existing long-press clock and feedback. `ui_containers_v2` holds all
+three selection paths on Windows and Linux.
