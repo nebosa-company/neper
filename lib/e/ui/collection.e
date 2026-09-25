@@ -1234,7 +1234,17 @@ fn reorder_key(ctx: *void) -> err {
     ret widget.fire_change[Reorder](r.reorder, r.value)
 }
 
-type Resizing = struct { runtime: *widget.Runtime, header: widget.Key, column: usize, low: f32, resize: widget.Change[ColumnResize] }
+type Resizing = struct { runtime: *widget.Runtime, header: widget.Key, column: usize, width: f32, low: f32, resize: widget.Change[ColumnResize] }
+
+fn resize_action(ctx: *void, action: u32) -> err {
+    let r = mem.cast[*Resizing](ctx)
+    var width = r.width
+    if action == accessibility.ACTION_INCREMENT { width += 16.0 } else if action == accessibility.ACTION_DECREMENT {
+        width -= 16.0
+        if width < r.low { width = r.low }
+    } else { ret ok }
+    ret widget.fire_change[ColumnResize](r.resize, ColumnResize { column: r.column, width: width })
+}
 
 type ResizeKey = struct { value: ColumnResize, resize: widget.Change[ColumnResize] }
 
@@ -1298,8 +1308,7 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // `outline-variant` line inset 12 top and bottom (8 when `height` is 40), a
 // full-height 3px `primary` bar while hovered or dragged.
 // ponytail: no numeric (end-aligned) columns, filter mark, select-all
-// checkbox, grouped tier, reorder lift or aria-sort; the
-// handles keep their `key + 64 + index` keys.
+// checkbox, grouped tier, reorder lift or aria-sort.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
@@ -1329,9 +1338,9 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
     }
     var i = 0usize
     while i < columns.len {
-        let header_key = key + 1u64 + u64(i)
+        let header_key = key + 1u64 + 2u64 * u64(i)
         drags[i] = HeaderDrag { runtime: t.runtime, column: i, sort: sort, reorder: reorder }
-        resizes[i] = Resizing { runtime: t.runtime, header: header_key, column: i, low: 2.0 * t.tokens.spacing.lg, resize: resize }
+        resizes[i] = Resizing { runtime: t.runtime, header: header_key, column: i, width: columns[i].width, low: 2.0 * t.tokens.spacing.lg, resize: resize }
         let state = control.control_state(t, header_key, true, false)
         let sorted = i == sort_column
         var caption = control.text_options()
@@ -1378,8 +1387,8 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         var next = i
         if next + 1usize < columns.len { next += 1usize }
         let shortcut = 8usize * i
-        bind_move(moves, header_keys, shortcut, t.runtime, key + 1u64 + u64(previous), 37u32)
-        bind_move(moves, header_keys, shortcut + 1usize, t.runtime, key + 1u64 + u64(next), 39u32)
+        bind_move(moves, header_keys, shortcut, t.runtime, key + 1u64 + 2u64 * u64(previous), 37u32)
+        bind_move(moves, header_keys, shortcut + 1usize, t.runtime, key + 1u64 + 2u64 * u64(next), 39u32)
         var bound = shortcut + 2usize
         if below != 0u64 {
             bind_move(moves, header_keys, bound, t.runtime, below, 40u32)
@@ -1426,7 +1435,7 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         n += 1usize
         // The resize handle: a 1px line, or the 3px `primary` bar while hovered
         // or dragged.
-        let grip_key = key + 64u64 + u64(i)
+        let grip_key = key + 2u64 + 2u64 * u64(i)
         let grip_state = control.control_state(t, grip_key, true, false)
         let active = grip_state.hovered || grip_state.pressed
         var mark = control.sized_style(1.0, control.max_zero(inner - 2.0 * inset))
@@ -1440,7 +1449,25 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)
         if drawn_error != ok { ret (zero, TooLarge) }
         drawn[0usize] = widget.box(0u64, mark, zero)
-        cells[n] = widget.region(grip_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&resizes[i]), invoke: resize_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: false }, control.sized_style(grip, inner), drawn[0usize..1usize])
+        let (grip_node, grip_node_error) = mem.alloc[widget.Node](a, 1usize)
+        if grip_node_error != ok { ret (zero, TooLarge) }
+        grip_node[0usize] = widget.region(grip_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&resizes[i]), invoke: resize_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: false }, control.sized_style(grip, inner), drawn[0usize..1usize])
+        let (grip_label, grip_label_error) = mem.alloc[u8](a, columns[i].title.len + 7usize)
+        if grip_label_error != ok { ret (zero, TooLarge) }
+        var grip_label_len = control.copy_text(grip_label, "Resize ")
+        grip_label_len += control.copy_text(grip_label[grip_label_len..], columns[i].title)
+        let (grip_value, grip_value_error) = mem.alloc[u8](a, 24usize)
+        if grip_value_error != ok { ret (zero, TooLarge) }
+        var grip_value_len = control.write_i64(grip_value, i64(columns[i].width))
+        grip_value_len += control.copy_text(grip_value[grip_value_len..24usize], " px")
+        var grip_sem: widget.Semantics = zero
+        grip_sem.role = accessibility.ROLE_SEPARATOR
+        grip_sem.label = grip_label[0usize..grip_label_len]
+        grip_sem.value = grip_value[0usize..grip_value_len]
+        grip_sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
+        grip_sem.controls = header_key
+        grip_sem.on_action = widget.Change[u32] { ctx: ctx_of(&resizes[i]), invoke: resize_action }
+        cells[n] = widget.semantics(0u64, grip_sem, style.defaults(), grip_node[0usize..1usize])
         n += 1usize
         i += 1usize
     }
