@@ -219,6 +219,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // The mode variant on `primary-container`.
     let (moded, has_moded) = bounds(&harness, &runtime, 3100u64)
     if !has_moded || !is_color(shot, at(moded.x + 300.0, moded.y + 12.0), style.color(&tokens, .PrimaryContainer)) { os.exit(26i32) }
+    // (D1238) Narrowing: with no font every item is its 16 of padding, so a bar of
+    // 8 + 4 x 16 = 72 sheds the line endings (drop 3) at 70, then the encoding
+    // (drop 2) at 40, and never the position (drop 0); the message stays.
+    var narrow_items: [4]navigation.StatusItem = zero
+    narrow_items[0usize] = navigation.status_item("Ready")
+    narrow_items[1usize] = navigation.status_item("UTF-8")
+    narrow_items[1usize].end = true
+    narrow_items[1usize].drop_order = 2u8
+    narrow_items[2usize] = navigation.status_item("CRLF")
+    narrow_items[2usize].end = true
+    narrow_items[2usize].drop_order = 3u8
+    narrow_items[3usize] = navigation.status_item("Ln 4")
+    narrow_items[3usize].end = true
+    var narrow_widths: [3]f32 = zero
+    narrow_widths[0usize] = 80.0
+    narrow_widths[1usize] = 70.0
+    narrow_widths[2usize] = 40.0
+    var narrow_step = 0usize
+    while narrow_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        let (narrow_bar, narrow_bar_error) = navigation.status_bar_of(&f, 3200u64, &theme, narrow_items[..], false, narrow_widths[narrow_step])
+        if narrow_bar_error != ok { os.exit(42i32) }
+        let (narrow_page, narrow_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if narrow_page_error != ok { os.exit(42i32) }
+        narrow_page[0usize] = narrow_bar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 200.0), narrow_page[0usize..1usize]), time.Instant { nanos: 2000000000i64 + i64(narrow_step) }) != ok { os.exit(43i32) }
+        let has_crlf = testing.by_text(&harness, "CRLF").count > 0usize
+        let has_utf = testing.by_text(&harness, "UTF-8").count > 0usize
+        let has_line = testing.by_text(&harness, "Ln 4").count > 0usize
+        let narrow_ready = testing.by_text(&harness, "Ready").count > 0usize
+        if !has_line || !narrow_ready { os.exit(44i32) }
+        if narrow_step == 0usize && (!has_crlf || !has_utf) { os.exit(45i32) }
+        if narrow_step == 1usize && (has_crlf || !has_utf) { os.exit(46i32) }
+        if narrow_step == 2usize && (has_crlf || has_utf) { os.exit(47i32) }
+        narrow_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(27i32) }
     try io.print("ui status5 v2 ok\n")
     ret ok

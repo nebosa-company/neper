@@ -24241,3 +24241,18 @@ focus and naming stay the tile's existing ones.
 `ui_collections_v2` holds the page showing at an icon tile's corner beside a
 plain tile's container, the fill under the pointer and the tile's name on
 Windows and Linux. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1238 — The status bar narrows by dropping end items
+
+`StatusItem.drop_order` ranks an end item for the StatusBar spec's narrowing:
+0 never drops, and higher drops first (line endings before encoding). The bar
+estimates each item's width from its 16 of padding, its measured words, and a
+16 glyph or the 48 meter with the 4 between. While the total is wider than
+`width`, the droppable end item with the highest rank leaves, and a dropped item
+is out of the tree and of the keyboard roving. If the bar is still too wide, the
+message's words are bounded to the space left and end in an ellipsis.
+
+The message's full text is not yet its tooltip. `ui_status5_v2` holds all four
+items at 80, the line endings gone at 70 and the encoding too at 40 with the
+position and message kept, on Windows and Linux; `ui_desktop` and
+`ui_status4_v2` pass on both hosts.
