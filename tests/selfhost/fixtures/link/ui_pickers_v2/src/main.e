@@ -399,6 +399,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 1114u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok { os.exit(105i32) }
     let (skip_focus, has_skip_focus) = testing.focused(&harness)
     if !has_skip_focus || skip_focus.slot != testing.by_key(&harness, 1128u64).element.slot { os.exit(106i32) }
+    // (D1332) Opened, the sheet slides up: part way its surface is not yet at the
+    // window's foot, then it is.
+    var rise_step = 0usize
+    while rise_step < 4usize {
+        var rise_at = 3700000000i64
+        var rise_open = false
+        if rise_step == 1usize { rise_at = 3716000000i64 }
+        if rise_step == 2usize {
+            rise_at = 3800000000i64
+            rise_open = true
+        }
+        if rise_step == 3usize {
+            rise_at = 4300000000i64
+            rise_open = true
+        }
+        if testing.begin(&harness, time.Instant { nanos: rise_at }) != ok { os.exit(125i32) }
+        f = mem.arena_from(frame_storage)
+        let (rising, rising_error) = control.picker(&f, 1400u64, &theme, "Kind", stores[0usize].words[0usize..3usize], 0usize, rise_open, &stores[0usize].press, stores[0usize].picks[0usize..3usize], .Sheet)
+        let (rise_page, rise_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if rising_error != ok || rise_page_error != ok { os.exit(126i32) }
+        rise_page[0usize] = rising
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), rise_page[0usize..1usize]), time.Instant { nanos: rise_at }) != ok { os.exit(127i32) }
+        if rise_step >= 2usize {
+            let (rise_shot, rise_shot_error) = testing.snapshot(&harness, a)
+            if rise_shot_error != ok { os.exit(128i32) }
+            let at_foot = is_color(rise_shot, at(300.0, 715.0), style.color(&tokens, .SurfaceContainerLow))
+            if rise_step == 2usize && at_foot { os.exit(129i32) }
+            if rise_step == 3usize && !at_foot { os.exit(130i32) }
+        }
+        rise_step += 1usize
+    }
     // (D1311) A sheet of twelve options in a 720 window scrolls past 60%: its rows
     // stand in a viewport 352 tall (432 less the 80 above and below).
     var many_words: [12]str = zero

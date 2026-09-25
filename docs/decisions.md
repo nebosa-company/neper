@@ -25674,3 +25674,17 @@ movement.
 160 down. Changing its title, part way the filled action is not yet drawn,
 and later it is. This passes on Windows and Linux, and `ui_feedback` and
 `ui_status5_v2` still pass on both.
+
+## D1332 — Picker sheets slide up
+
+A picker's bottom sheet now slides up from the window's foot as it opens,
+over `duration-medium-2`, as the Picker spec's sheet motion asks. The picker
+eases how far its sheet has risen on the field (so the ease tracks the shut
+state too), and while the sheet is still rising it stands that share of the
+window's height below its place, a paint-only offset leaving layout, hit
+testing and the tree alone. Reduced motion shows it at once. Dragging to
+expand is still to come, and closing is at once.
+
+`ui_pickers_v2` opens a sheet: part way its `surface-container-low` has not
+reached the window's foot, and settled it has. This passes on Windows and
+Linux, and `ui_entry`'s sheet still passes on both.
