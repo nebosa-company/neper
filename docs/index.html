@@ -524,7 +524,7 @@ Hello, Neper</code></pre>
         const group = document.createElement(collapsible ? "details" : "section")
         group.className = "catalog-dialog-group"
         const heading = document.createElement(collapsible ? "summary" : "h3")
-        heading.textContent = dialog.id === "control-catalog" ? category : `${category} (${items.length})`
+        heading.textContent = dialog.id === "algorithm-catalog" ? `${category} (${items.length})` : category
         const grid = document.createElement("div")
         grid.className = "catalog-entry-grid"
         for (const item of items) {
