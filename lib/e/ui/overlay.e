@@ -5186,6 +5186,24 @@ fn read_color(text: str, format: ColorFormat) -> (paint.Color, bool) {
     ret (hsl_color(f32(values[0usize] % 360i64), f32(values[1usize]) / 100.0, f32(values[2usize]) / 100.0, 1.0), true)
 }
 
+// (D1323) A colour field's memory of the last hue and saturation a chromatic
+// colour had, kept on the field so a grey or black does not reset them.
+type HueMemo = struct { hue: f32, saturation: f32, set: bool }
+
+fn hue_memo(t: *const control.Theme, key: widget.Key) -> (*HueMemo, bool) {
+    var none: *HueMemo = zero
+    if mem.address_of(t.runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: HueMemo = zero
+    let (kept, _, kept_error) = widget.state[HueMemo](&build, key + 2097152u64, fresh)
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
 // (D1322) A format segment's press.
 type FormatPick = struct { format: ColorFormat, pick: widget.Change[ColorFormat] }
 
@@ -5523,7 +5541,9 @@ fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
 // (D1274) `color_field_with` adds the Recent swatches.
 // (D1322) `color_field_format` adds the Hex / RGB / HSL select (`write_color`,
 // `read_color`).
-// ponytail: the hue comes from the colour, so it resets to red at a grey; the readout is not typed, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
+// (D1323) A grey keeps the last chromatic colour's hue (`HueMemo`), black its
+// saturation too.
+// ponytail: the readout is not typed, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
 fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     var no_recent: []const paint.Color = zero
     let (made, made_error) = color_field_with(a, key, t, label, value, with_alpha, change, open, toggle, swatches, no_recent, hex, hex_len, typed, width)
@@ -5552,7 +5572,21 @@ fn color_field_format(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
     if recent.len > 8usize { recent = recent_colors[0usize..8usize] }
     let spots = swatches.len + recent.len
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
-    let (hue, saturation, bright) = hsv_of(value)
+    let (raw_hue, raw_saturation, bright) = hsv_of(value)
+    // (D1323) A grey keeps the last hue, and black the last saturation too.
+    var hue = raw_hue
+    var saturation = raw_saturation
+    let (memo, has_memo) = hue_memo(t, key)
+    if has_memo {
+        if raw_saturation > 0.0 && bright > 0.0 {
+            memo.hue = raw_hue
+            memo.saturation = raw_saturation
+            memo.set = true
+        } else if memo.set {
+            hue = memo.hue
+            if bright <= 0.0 { saturation = memo.saturation }
+        }
+    }
     let light = style.color(t.tokens, .SurfaceContainerLowest)
     let dark = style.color(t.tokens, .OutlineVariant)
     let ink = style.color(t.tokens, .OnSurface)

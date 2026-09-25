@@ -25518,3 +25518,15 @@ The typed opacity readout and the touch mode switch are still to come.
 50%". It reads "rgb(0, 128, 255)" and "120 100% 50%" and refuses "300,
 0, 0" as RGB. The RGB segment reports RGB. This passes on Windows and
 Linux.
+
+## D1323 — Colour fields keep the hue through a grey
+
+A colour field's hue came from the colour alone, so a grey (no saturation)
+reset the hue strip to red, and black lost the saturation too. The field
+now keeps a `HueMemo` across frames: the last chromatic colour's hue and
+saturation. A grey shows that hue, and black that saturation as well, so
+dragging in the spectrum from a grey keeps the chosen hue, as the
+ColorPicker spec expects.
+
+`ui_pickers3_v2` shows a blue, then a grey: the hue strip still says "210
+degrees", on Windows and Linux.
