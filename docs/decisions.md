@@ -23849,3 +23849,19 @@ pane was built at. Snap-to-close, the size readout and the resize cursor stay
 open. `ui_containers2_v2` holds the cancel, the ignored later move and the
 double-click reset on Windows and Linux. A sweep of all 103 `ui_*` fixtures on
 both hosts shows only the 12 pre-existing failures recorded in D1195.
+
+## D1213 — Tabs can be disabled
+
+`TabsOptions.disabled` marks tabs by index; a shorter slice leaves the rest
+enabled, so existing callers are unchanged. A disabled tab's label is
+`on-surface` at 38% with no state layer, and it is built through the shared
+pressable with `enabled` false, so it is neither pressed nor focused and the tree
+reports it Disabled. The bar's Left, Right, Home and End shortcuts now bind the
+nearest enabled neighbours and the first and last enabled tabs, so the keys skip
+disabled tabs as the Tabs spec asks, in either reading direction.
+
+`ui_tabs_rtl` holds Right and End skipping the disabled tab, an ignored press
+and the Disabled state on Windows and Linux. A sweep of all 103 `ui_*`
+fixtures on both hosts shows only the 12 pre-existing failures recorded in
+D1195, with unchanged exit codes (`ui_navigation2_v2` holds the other tab bars
+and is one of them).
