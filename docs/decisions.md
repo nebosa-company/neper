@@ -23420,3 +23420,11 @@ Build 4128 failed”. The status well is no longer the only severity signal.
 
 `ui_status5_v2` holds unread/error ordering and an info row, while `ui_desktop`
 holds the legacy Notice wrapper, on Windows and Linux.
+
+## D1177 — Notification List is a named region
+
+The Notification List's existing accessible name, unread count and polite live
+mode now sit on the Region role required by the UX contract instead of a generic
+Group. Row semantics and focus ownership are unchanged.
+
+`ui_status5_v2` and `ui_desktop` hold the Region landmark on Windows and Linux.

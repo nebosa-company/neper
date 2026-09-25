@@ -168,7 +168,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_plus || testing.tap(&harness, plus_at.x, plus_at.y) != ok || logs[0usize].sizes != 1usize || logs[0usize].size != 13i64 { os.exit(16i32) }
     // The notification list: two list items in a polite group; Undo fires the
     // first's action; the second's close fires its dismiss; Mark all read fires.
-    let (notifications, has_notifications) = find(tree, .Group, "Notifications")
+    let (notifications, has_notifications) = find(tree, .Region, "Notifications")
     if !has_notifications || notifications.live != .Polite || notifications.position.row_count != 2u32 { os.exit(17i32) }
     let (deleted, has_deleted) = find(tree, .ListItem, "info, Deleted 3 files")
     let (backup, has_backup) = find(tree, .ListItem, "info, Backup done")

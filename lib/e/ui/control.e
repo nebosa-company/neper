@@ -7780,7 +7780,7 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, stack[0usize..3usize])
     var sem: widget.Semantics = zero
-    sem.role = 2u8
+    sem.role = accessibility.ROLE_REGION
     sem.label = label
     if unread > 0usize {
         let (counted, counted_error) = mem.alloc[u8](a, 24usize)

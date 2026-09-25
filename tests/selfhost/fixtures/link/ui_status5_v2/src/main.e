@@ -163,7 +163,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_panel || !has_mark || !is_color(shot, at(mark.x - 60.0, mark.y + 2.0), style.color(&tokens, .SurfaceContainerLow)) { os.exit(13i32) }
     let (row, has_row) = bounds(&harness, &runtime, 1002u64)
     if !has_row || row.height < 72.0 || !is_color(shot, at(row.x + 100.0, panel.y - 0.5), style.color(&tokens, .OutlineVariant)) { os.exit(14i32) }
-    let (region, has_region) = find(tree, .Group, "Notifications, 1 unread")
+    let (region, has_region) = find(tree, .Region, "Notifications, 1 unread")
     if !has_region || region.live != .Polite { os.exit(15i32) }
     // Group headers where the day changes; the unread row named so, with its
     // well in `error-container` and the `primary` dot.
