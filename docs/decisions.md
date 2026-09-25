@@ -24271,3 +24271,18 @@ keeps the first record, the page size and the select's open state.
 
 `ui_navigation4_v2` holds the 48 row, both ranges, both turns, the disabled
 Previous on the first page and the resize rule on Windows and Linux.
+
+## D1240 — Lists have a multi-select gesture model
+
+`ListOptions.select`, when set, makes `collection.list_of` multi-select. The
+list reports each selection gesture as a `ListSelect` (`Toggle`, `Extend`, `All`
+or `Clear` with the row's index) and the caller keeps the selected set and
+sets each row's `selected` from it, as before. Ctrl-click (or Meta-click)
+toggles a row and Shift-click extends to it through the runtime's held
+modifiers; a plain click is still the row's own action. Each row sits in a
+shortcut scope of its own: Space toggles, Shift+Up and Shift+Down extend to the
+neighbour and move the focus there, Ctrl+A selects all and Escape clears.
+
+`ui_collections_v2` holds every gesture, and the plain click that selects
+nothing, on Windows and Linux. A disabled row takes no click, so the test
+taps an enabled one.

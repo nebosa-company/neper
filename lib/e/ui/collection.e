@@ -4293,7 +4293,35 @@ fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []
 // bleed; dividers between rows inset by `inset` (16 when grouped and 0); a
 // subheader over the rows; a group title above and a footnote below (grouped);
 // the width (0: the parent's); and the empty state's statement and suggestion.
-type ListOptions = struct { grouped: bool, dividers: bool, inset: f32, subheader: str, title: str, footnote: str, width: f32, empty_title: str, empty_message: str }
+// (D1240) `select`, when set, makes the list multi-select: it hears each
+// selection gesture as a `ListSelect` and the caller keeps the selected set.
+type ListOptions = struct { grouped: bool, dividers: bool, inset: f32, subheader: str, title: str, footnote: str, width: f32, empty_title: str, empty_message: str, select: widget.Change[ListSelect] }
+
+// (D1240) A multi-select list's selection gesture: toggle the row at `index`,
+// extend the selection from the anchor to it, select all, or clear.
+type ListSelectKind = enum u8 { Toggle, Extend, All, Clear }
+type ListSelect = struct { kind: ListSelectKind, index: usize }
+
+// A selection gesture bound to a key, moving the focus to `focus` when set.
+type ListPick = struct { runtime: *widget.Runtime, select: widget.Change[ListSelect], kind: ListSelectKind, index: usize, focus: widget.Key, has_focus: bool }
+
+fn list_pick_fire(ctx: *void) -> err {
+    let p = back_of[ListPick](ctx)
+    if p.has_focus { try widget.focus_key(p.runtime, p.focus) }
+    ret widget.fire_change[ListSelect](p.select, ListSelect { kind: p.kind, index: p.index })
+}
+
+// A row press in a multi-select list: Ctrl (or Meta) toggles it and Shift
+// extends to it; a plain press is the row's own action.
+type ListClick = struct { runtime: *widget.Runtime, select: widget.Change[ListSelect], index: usize, action: widget.Submit }
+
+fn list_click_fire(ctx: *void) -> err {
+    let c = back_of[ListClick](ctx)
+    let held = widget.modifiers(c.runtime)
+    if held.control || held.meta { ret widget.fire_change[ListSelect](c.select, ListSelect { kind: .Toggle, index: c.index }) }
+    if held.shift { ret widget.fire_change[ListSelect](c.select, ListSelect { kind: .Extend, index: c.index }) }
+    ret widget.fire_submit(c.action)
+}
 
 fn list_options() -> ListOptions {
     var out: ListOptions = zero
@@ -4309,8 +4337,10 @@ fn list_options() -> ListOptions {
 // row with Up, Down, Home and End moving the focus, and (D1211) Page Up and
 // Page Down moving it by the window's height in rows. With no rows and an
 // `empty_title`, the compact empty state stands in their place. A list named
-// `label` with its count.
-// ponytail: no selection model (the caller sets `selected`), no selection bar,
+// `label` with its count. (D1240) With `options.select` set the list is
+// multi-select: Ctrl-click or Space toggles a row, Shift-click or Shift+Up/Down
+// extends to it, Ctrl+A selects all and Escape clears; the caller keeps the set.
+// ponytail: the caller sets `selected` from the gestures; no selection bar,
 // sticky subheader, loading rows or insert motion; a page is the window's
 // height over the first row's, not the enclosing viewport's.
 fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, options: ListOptions) -> (widget.Node, err) {
@@ -4318,9 +4348,19 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     let (rows, rows_error) = mem.alloc[widget.Node](a, items.len)
     if rows_error != ok { ret (zero, TooLarge) }
     var width = options.width
+    let selecting = widget.change_set[ListSelect](options.select.invoke) && mem.address_of(t.runtime) != 0usize
+    let (shown, shown_error) = mem.alloc[RowItem](a, items.len)
+    if shown_error != ok { ret (zero, TooLarge) }
+    let (clicks, clicks_error) = mem.alloc[ListClick](a, items.len)
+    if clicks_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < items.len {
-        let (made, made_error) = row_of(a, keys[i], t, &items[i], i, items.len, width)
+        shown[i] = items[i]
+        if selecting {
+            clicks[i] = ListClick { runtime: t.runtime, select: options.select, index: i, action: items[i].action }
+            shown[i].action = widget.Submit { ctx: ctx_of(&clicks[i]), invoke: list_click_fire }
+        }
+        let (made, made_error) = row_of(a, keys[i], t, &shown[i], i, items.len, width)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
@@ -4335,6 +4375,42 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     }
     let rove_error = roving(a, t, rows, keys, 1usize, page)
     if rove_error != ok { ret (zero, rove_error) }
+    // (D1240) A multi-select row's keys, in a scope of their own round the roving
+    // one: Space toggles it, Shift+Up and Shift+Down extend to the neighbour and
+    // move there, Ctrl+A selects all and Escape clears.
+    if selecting && items.len > 0usize {
+        let (picks, picks_error) = mem.alloc[ListPick](a, 5usize * items.len)
+        if picks_error != ok { ret (zero, TooLarge) }
+        let (keyed, keyed_error) = mem.alloc[widget.Shortcut](a, 5usize * items.len)
+        if keyed_error != ok { ret (zero, TooLarge) }
+        let (held, held_error) = mem.alloc[widget.Node](a, items.len)
+        if held_error != ok { ret (zero, TooLarge) }
+        var shifted: input.Modifiers = zero
+        shifted.shift = true
+        var controlled: input.Modifiers = zero
+        controlled.control = true
+        i = 0usize
+        while i < items.len {
+            let b = 5usize * i
+            var up = i
+            if i > 0usize { up = i - 1usize }
+            var down = i
+            if i + 1usize < items.len { down = i + 1usize }
+            picks[b] = ListPick { runtime: t.runtime, select: options.select, kind: .Toggle, index: i, focus: 0u64, has_focus: false }
+            picks[b + 1usize] = ListPick { runtime: t.runtime, select: options.select, kind: .Extend, index: up, focus: keys[up], has_focus: true }
+            picks[b + 2usize] = ListPick { runtime: t.runtime, select: options.select, kind: .Extend, index: down, focus: keys[down], has_focus: true }
+            picks[b + 3usize] = ListPick { runtime: t.runtime, select: options.select, kind: .All, index: i, focus: 0u64, has_focus: false }
+            picks[b + 4usize] = ListPick { runtime: t.runtime, select: options.select, kind: .Clear, index: i, focus: 0u64, has_focus: false }
+            keyed[b] = widget.Shortcut { key: 32u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&picks[b]), invoke: list_pick_fire } }
+            keyed[b + 1usize] = widget.Shortcut { key: 38u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 1usize]), invoke: list_pick_fire } }
+            keyed[b + 2usize] = widget.Shortcut { key: 40u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 2usize]), invoke: list_pick_fire } }
+            keyed[b + 3usize] = widget.Shortcut { key: 65u32, modifiers: controlled, action: widget.Submit { ctx: ctx_of(&picks[b + 3usize]), invoke: list_pick_fire } }
+            keyed[b + 4usize] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&picks[b + 4usize]), invoke: list_pick_fire } }
+            held[i] = rows[i]
+            rows[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: keyed[b..b + 5usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
+            i += 1usize
+        }
+    }
     var inset = options.inset
     if options.grouped && !(inset > 0.0) { inset = 16.0 }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize * items.len + 2usize)
