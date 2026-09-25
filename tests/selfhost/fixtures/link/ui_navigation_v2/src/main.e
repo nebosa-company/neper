@@ -241,6 +241,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // scroll: 32 scrolled leaves 80, and past 64 it is the 48 small bar.
     var no_actions: [1]navigation.Action = zero
     var collapse_step = 0usize
+    var projects_at_rest = 0usize
     while collapse_step < 3usize {
         var collapsing = navigation.app_bar_options()
         collapsing.size = .Medium
@@ -257,6 +258,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if collapse_step == 1usize { expected = 80.0 }
         if collapse_step == 2usize { expected = 48.0 }
         if !has_collapsed_box || !near(collapsed_box.height, expected) { os.exit(34i32) }
+        // (D1318) Mid-collapse the row's title stands beside the headline: one more
+        // "Projects" than at rest.
+        let projects_now = testing.by_text(&harness, "Projects").count
+        if collapse_step == 0usize { projects_at_rest = projects_now }
+        if collapse_step == 1usize && projects_now != projects_at_rest + 1usize { os.exit(49i32) }
         collapse_step += 1usize
     }
     // (D1268) A hiding bar stands its shown share: half of 48 is 24; hidden, 0.

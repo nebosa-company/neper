@@ -128,8 +128,10 @@ fn bar_group(items: []const widget.Node) -> widget.Node {
 // (D1267) `options.offset` (the content's scroll) tints the bar and collapses a
 // medium or large one to the small row as the page scrolls.
 // (D1268) With `hides` it stands `shown` of its height, sliding away on scroll.
-// ponytail: no title cross-fade into the row before the
-// collapse ends, no contextual motion; worded actions stay
+// (D1318) While a medium or large bar collapses, its headline cross-fades into
+// the row's small title over the first 40 of travel (the row title out of the
+// tree).
+// ponytail: no contextual motion; worded actions stay
 // text buttons; a disabled action is dimmed rather than hidden.
 fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, options: AppBarOptions, width: f32) -> (widget.Node, err) {
     if leading.len > 8usize || trailing.len > 8usize { ret (zero, TooLarge) }
@@ -178,7 +180,11 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
             if options.offset >= span { share = 1.0 }
         }
         height = height - span * share
-        fade = 1.0 - share
+        // (D1318) The headline gives way over the first 40 of travel.
+        var crossed: f32 = options.offset / 40.0
+        if crossed > 1.0 { crossed = 1.0 }
+        if t.tokens.motion.reduced { crossed = share }
+        fade = 1.0 - crossed
         if share >= 1.0 {
             tall = false
             role = row_role
@@ -301,6 +307,26 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
     if row_error != ok { ret (zero, TooLarge) }
     if tall {
         parts[1usize] = widget.spacer(0u64, 1.0)
+        if fade < 1.0 {
+            // (D1318) The row's small title, fading in as the headline fades out.
+            var small = control.text_options()
+            small.role = row_role
+            small.wrap = .None
+            small.ellipsis = "..."
+            small.max_lines = 1u32
+            let (small_node, small_error) = control.colored_text(a, 0u64, named, t, small, ink)
+            if small_error != ok { ret (zero, small_error) }
+            let (smalls, smalls_error) = mem.alloc[widget.Node](a, 1usize)
+            if smalls_error != ok { ret (zero, TooLarge) }
+            smalls[0usize] = small_node
+            var small_style = style.defaults()
+            small_style.width = style.Length { Flex: 1.0 }
+            small_style.opacity = 1.0 - fade
+            small_style.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: flat, right: style.Length { Px: end_inset }, bottom: flat }
+            var quiet: widget.Semantics = zero
+            quiet.hidden = true
+            parts[1usize] = widget.semantics(0u64, quiet, small_style, smalls[0usize..1usize])
+        }
         var top_style = style.defaults()
         top_style.height = style.Length { Px: row_height }
         let (lines, lines_error) = mem.alloc[widget.Node](a, 3usize)
