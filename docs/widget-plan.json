@@ -1142,7 +1142,7 @@
           "id": "P5-04",
           "name": "Inputs to the v2 specification",
           "module": "e.ui.control",
-          "latest_evidence": "D1162 completes Rating keyboard navigation: Left/Right mirror in RTL, Down/Up remain decrement/increment, and Home/End select zero/maximum through the existing change channel. D1166 reverses physical Rating cells in RTL while preserving logical values and keys, so fill and pointer selection start at the right. ui_actions holds every path on Windows and Linux.",
+          "latest_evidence": "D1162 completes Rating keyboard navigation: Left/Right mirror in RTL, Down/Up remain decrement/increment, and Home/End select zero/maximum through the existing change channel. D1166 reverses physical Rating cells in RTL while preserving logical values and keys, so fill and pointer selection start at the right. D1167 clears Rating to zero when its current star is tapped again. ui_actions holds every path on Windows and Linux.",
           "components": [
             "AutocompleteSpec",
             "DialSpec",

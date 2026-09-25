@@ -4966,13 +4966,15 @@ fn rate_step(ctx: *void) -> err {
     ret widget.fire_change[u32](r.change, next)
 }
 
-// A tap on the star `index` sets the rating to it.
-type Rated = struct { value: u32, change: widget.Change[u32] }
+// A tap on star `index` sets it, or clears an already-current value (D1167).
+type Rated = struct { value: u32, current: u32, change: widget.Change[u32] }
 
 fn rate_tap(ctx: *void, g: widget.Gesture) -> err {
     if g.tag != .Tap { ret ok }
     let r = mem.cast[*Rated](ctx)
-    ret widget.fire_change[u32](r.change, r.value)
+    var next = r.value
+    if r.current == next { next = 0u32 }
+    ret widget.fire_change[u32](r.change, next)
 }
 
 // A rating: `max` stars in a row, the first `value` filled, each a tap region
@@ -5014,7 +5016,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
             filled = true
         }
         stars[i] = Star { color: ink, filled: filled, arena: a }
-        rated[i] = Rated { value: u32(i) + 1u32, change: change }
+        rated[i] = Rated { value: u32(i) + 1u32, current: value, change: change }
         let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&stars[i]), measure: mark_measure, paint: star_paint, state: widget.bytes_of[Star](&stars[i]) } }, style: sized_style(size, size), children: none }
