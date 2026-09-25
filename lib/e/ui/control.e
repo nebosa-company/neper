@@ -5585,15 +5585,51 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 // (D1310, docs/ux/components/ResizablePane, collapsible) A resizable pane that
 // snaps shut: dragged below half of `low` it reports 0; any nudge, drag past
 // `low` or the sash's double-click opens it again.
-// ponytail: no size readout while dragging and no resize cursor (the runtime
-// sets no pointer cursor); the collapse does not animate.
+// (D1333) While its sash is dragged it shows its size in a plain tooltip.
+// ponytail: no resize cursor (the runtime sets no pointer cursor); the collapse
+// does not animate.
 fn resizable_pane_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node, collapsible: bool) -> (widget.Node, err) {
     let (named, named_error) = mem.alloc[u8](a, label.len + 7usize)
     if named_error != ok { ret (zero, TooLarge) }
     var n = copy_text(named, "Resize ")
     n += copy_text(named[n..named.len], label)
     let (made, made_error) = pane_with_collapse(a, key, t, named[0usize..n], axis, size, low, high, 0u64, 0.0, change, content, false, collapsible)
-    ret (made, made_error)
+    if made_error != ok { ret (zero, made_error) }
+    // (D1333, docs/ux/components/ResizablePane, readout) While the sash is
+    // dragged, a plain tooltip over the pane says its size ("240 px"): `body-small`
+    // `inverse-on-surface` on `inverse-surface`, `radius-xs`, 4 by 8 in, 8 from the
+    // top just past the sash (keyed `key + 1048577`), out of the tree.
+    let (kept, has_kept) = sash_cell(t.runtime, key + 2u64, size)
+    if !has_kept || !kept.dragging || kept.cancelled { ret (made, ok) }
+    let (said, said_error) = mem.alloc[u8](a, 24usize)
+    if said_error != ok { ret (zero, TooLarge) }
+    var said_len = write_i64(said, i64(size))
+    said_len += copy_text(said[said_len..24usize], " px")
+    var small = text_options()
+    small.role = .BodySmall
+    small.wrap = .None
+    let (words, words_error) = colored_text(a, 0u64, said[0usize..said_len], t, small, style.color(t.tokens, .InverseOnSurface))
+    if words_error != ok { ret (zero, words_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[4usize] = words
+    var tip = style.defaults()
+    tip.background = paint.Brush { Solid: style.color(t.tokens, .InverseSurface) }
+    tip.radius = t.tokens.radii.xs
+    tip.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 4.0 } }
+    var quiet: widget.Semantics = zero
+    quiet.hidden = true
+    parts[3usize] = widget.semantics(0u64, quiet, style.defaults(), parts[4usize..5usize])
+    parts[2usize] = widget.box(key + 1048577u64, tip, parts[3usize..4usize])
+    var tip_x = size + 12.0
+    var tip_y: f32 = 8.0
+    if axis == .Vertical {
+        tip_x = 8.0
+        tip_y = size + 12.0
+    }
+    parts[1usize] = widget.positioned(0u64, tip_x, tip_y, style.defaults(), parts[2usize..3usize])
+    parts[0usize] = made
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..2usize]), ok)
 }
 
 fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node, bar: bool, collapsible: bool) -> (widget.Node, err) {

@@ -247,6 +247,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_fold_grip { os.exit(53i32) }
     if testing.drag(&harness, fold_grip, geometry.Point { x: fold_grip.x - 100.0, y: fold_grip.y }, 2usize) != ok || !near(logs[0usize].last_size, 0.0) { os.exit(54i32) }
     if testing.drag(&harness, fold_grip, geometry.Point { x: fold_grip.x - 60.0, y: fold_grip.y }, 2usize) != ok || !near(logs[0usize].last_size, 80.0) { os.exit(55i32) }
+    // (D1333) Held mid-drag, the pane shows its size in a tooltip; released, not.
+    var held_step = 0usize
+    var held_size: f32 = 120.0
+    while held_step < 4usize {
+        frame = mem.arena_from(frame_storage)
+        let (held_body, held_body_error) = control.text(&frame, 0u64, "Side", &theme, control.text_options())
+        if held_body_error != ok { os.exit(56i32) }
+        let (held_pane, held_pane_error) = control.resizable_pane_with(&frame, 950u64, &theme, "Side", .Horizontal, held_size, 80.0, 300.0, widget.Change[f32] { ctx: ctx, invoke: on_size }, held_body, false)
+        let (held_page, held_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if held_pane_error != ok || held_page_error != ok { os.exit(57i32) }
+        held_page[0usize] = held_pane
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 200.0), held_page[0usize..1usize]), now) != ok { os.exit(58i32) }
+        let tipped = testing.by_key(&harness, 950u64 + 1048577u64).count
+        let (held_grip, has_held_grip) = centre_of(&harness, &runtime, 952u64)
+        if !has_held_grip { os.exit(59i32) }
+        if held_step == 1usize {
+            if tipped != 0usize || testing.send(&harness, input.Event { PointerDown: testing.pointer_at(held_grip.x, held_grip.y) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(held_grip.x + 15.0, held_grip.y) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(held_grip.x + 30.0, held_grip.y) }) != ok { os.exit(60i32) }
+            held_size = logs[0usize].last_size
+        }
+        if held_step == 2usize {
+            if tipped != 1usize || testing.by_text(&harness, "150 px").count == 0usize { os.exit(61i32) }
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(held_grip.x, held_grip.y) }) != ok { os.exit(61i32) }
+        }
+        if held_step == 3usize && tipped != 0usize { os.exit(62i32) }
+        held_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui panes ok\n")
     ret ok
