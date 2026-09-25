@@ -2118,8 +2118,9 @@ fn sheet_row_with_icon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // and 8 below; the actions `sheet_row`s in `on-surface`, a destructive one in
 // `error` after a 1px `outline-variant` divider with 8 around; Cancel last after
 // another divider. Escape, the scrim and Cancel fire `dismiss`.
-// ponytail: no leading icons, grouped iOS cards or pointer-host menu form, and
-// no host locale service -- callers provide translated copy when needed.
+// Leading icons are `action_sheet_android_with_icons` (D1046), grouped iOS cards
+// `action_sheet_ios` (D1048) and the pointer-host menu `action_sheet_menu` (D1047).
+// ponytail: no host locale service -- callers provide translated copy when needed.
 fn action_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     let (made, made_error) = action_sheet_localized(a, key, t, title, buttons, "Cancel", open, dismiss)
     ret (made, made_error)

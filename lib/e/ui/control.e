@@ -5121,9 +5121,9 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
 // `min_second` of each and is a separator named `label` with the first pane's size
 // as its value. The pane is keyed `key + 1` (its content `key + 2`, its sash
 // `key + 3`); a group in the tree.
+// Its sash resets on double-click and cancels a drag on Escape (D1212).
 // ponytail: no stacking below the breakpoint, snap points, ratio across window
-// resizes, double-click reset, F6 cycling or empty-detail slot; add them with a
-// window-size input.
+// resizes, F6 cycling or empty-detail slot; add them with a window-size input.
 fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
