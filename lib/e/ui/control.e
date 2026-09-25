@@ -4346,14 +4346,20 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, bar, bar_parts[0usize..2usize])
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
+    var back = 37u32
+    var forward = 39u32
+    if t.tokens.direction == .RightToLeft {
+        back = 39u32
+        forward = 37u32
+    }
     var bound = 0usize
     if selected > 0usize && selected < labels.len {
-        shortcuts[bound] = widget.Shortcut { key: 37u32, modifiers: zero, action: picks[selected - 1usize] }
+        shortcuts[bound] = widget.Shortcut { key: back, modifiers: zero, action: picks[selected - 1usize] }
         shortcuts[bound + 1usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: picks[0usize] }
         bound += 2usize
     }
     if selected + 1usize < labels.len {
-        shortcuts[bound] = widget.Shortcut { key: 39u32, modifiers: zero, action: picks[selected + 1usize] }
+        shortcuts[bound] = widget.Shortcut { key: forward, modifiers: zero, action: picks[selected + 1usize] }
         shortcuts[bound + 1usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: picks[labels.len - 1usize] }
         bound += 2usize
     }
