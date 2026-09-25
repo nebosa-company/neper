@@ -255,6 +255,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_4, root_4_error) = build(&f, &theme, ctx, columns[0usize..3usize])
     if root_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok || !focused_is(&harness, 1000u64) { os.exit(39i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(43i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 3u64) { os.exit(46i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(47i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].sorts != 1usize { os.exit(44i32) }
     if testing.press_key(&harness, 32u32, zero) != ok || logs[0usize].sorts != 2usize { os.exit(45i32) }
     // The data grid: a 40 header, 32 rows, the row numbers on
