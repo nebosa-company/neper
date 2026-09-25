@@ -23244,3 +23244,14 @@ The legacy PageView shares the same normalized drag and key path.
 `ui_collections4_v2` holds button placement and pixels, both horizontal keys,
 the live strip and release result on Windows and Linux. The Segoe review is
 `build/ux/page-view-rtl-segoe.png`.
+
+## D1158 — ActionRow mirrors without changing Toolbar
+
+ActionRow now reverses its physical children in right-to-left themes while
+keeping every caller-supplied action, key and callback paired. The shared
+Toolbar path explicitly retains its existing order because its specification
+does not request mirroring.
+
+`ui_actions_v2` holds the RTL ActionRow order and unchanged Toolbar order on
+Windows and Linux. The Segoe review is
+`build/ux/action-row-rtl-segoe.png`.
