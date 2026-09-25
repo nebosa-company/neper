@@ -6442,6 +6442,9 @@ fn artifact_content_verified(a: *mem.Arena, old: []const u8, recorded: usize, re
     let (sha, sha_error) = artifact_hash.sha256_hex(a, old)
     if sha_error != ok { ret (checksum, "", false) }
     if !recorded_known || checksum != recorded || !same(sha, recorded_sha) { ret (checksum, sha, false) }
+    // (D1325) A kept artifact's Interface must read back whole, declarations and
+    // types, so the declarations can come from it rather than a lexed tree.
+    if em.interface_payloads_read(old) != ok { ret (checksum, sha, false) }
     ret (checksum, sha, true)
 }
 

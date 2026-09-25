@@ -25548,3 +25548,36 @@ the first header is pinned at the top; at rest there is no copy; and with
 row 50 arriving 24 into the pin, the pin stands 24 up. This passes on
 Windows and Linux, and `ui_collection` and `ui_algorithms` still pass on
 both.
+
+## D1325 — The Interface reads back whole
+
+C036's remaining line is declarations from the Interface instead of a lexed tree.
+The Interface section already carries every declaration's typed payload -- a
+function's borrow source, no-escape positions, comptime parameters, parameters and
+returns; an aggregate's kind, comptime parameters, backing type and fields; an
+alias's resolved type; a constant's type and value; an error's qualified value --
+through `write_type_indexed`, but nothing read past the name and the two hashes: the
+payload was skipped by its length. Before the declaration pass can take a kept
+module's declarations from it, the payload has to be readable.
+
+`em.interface_payload_end` is the reader's grammar: it walks a record of each kind
+field by field, and `interface_type_end` walks one encoded type -- the 20-byte head,
+then a pointer's, slice's or array's element when flag 2 says it has one, or a
+function type's parameters and returns -- refusing a kind or flag the writer never
+uses, a record cut short, or a nesting deeper than 64. `interface_payloads_read`
+requires every record to end exactly where its length says, and
+`artifact_content_verified` now asks it of every artifact it would keep: one whose
+Interface does not read back is rebuilt as `invalid-artifact`. Nothing that builds
+today changes; the point is that every warm build in both suites now reads every kept
+module's Interface through the grammar, so the reader and the writer cannot drift
+apart unnoticed.
+
+Checked directly on both hosts with a compiler built from this source: the incremental
+fixture's hot block of `tests/selfhost/run.ps1` (every warm decision and image as
+before), and a cold then warm incremental build of the compiler's own 37 modules in
+debug and release -- all `stable`, the warm image the cold one, Windows and Linux. A
+reader forced to refuse turned the hot block's first warm build from `kept:stable` to
+rebuilt, so the check is live. The full suites were not rerun for this row (the
+snapshot goldens await a decision). Still to come: decoding the payload into the
+checker's records, so a kept import's declarations come from here and not a header
+tree.
