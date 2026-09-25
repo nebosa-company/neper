@@ -60,7 +60,7 @@
             "ActionGestureRegion",
             "GestureArena"
           ],
-          "evidence": "lib/e/ui/widget.e (D806): Change[T] and Submit with fire_change/fire_submit as no-ops when unset; Region with a gesture mask and GestureAction; the runtime arena settling tap, drag start/move/end and hover enter/leave from raw pointer events with an 8 px slop; tests/selfhost/fixtures/link/ui_gesture on both hosts"
+          "evidence": "lib/e/ui/widget.e (D806): Change[T] and Submit with fire_change/fire_submit as no-ops when unset; Region with a gesture mask and GestureAction; the runtime arena settling tap, drag start/move/end and hover enter/leave from raw pointer events with an 8 px slop; tests/selfhost/fixtures/link/ui_gesture on both hosts (D1116) Action, region, scroll, zoom and general hit testing traverse every sibling in paint order without a 64-child scratch cap; ui_algorithms holds the 300th overlapping child and ui_gesture guards dispatch on Windows and Linux."
         },
         {
           "id": "P0-03",

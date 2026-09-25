@@ -67,9 +67,12 @@ fn build(a: *mem.Arena, t: *const control.Theme, press: *const widget.Submit) ->
     if regions_error != ok { ret (zero, regions_error) }
     let (focusable, focusable_error) = mem.alloc[widget.Node](a, 300usize)
     if focusable_error != ok { ret (zero, focusable_error) }
+    var hit_style = style.defaults()
+    hit_style.width = style.Length { Px: 4.0 }
+    hit_style.height = style.Length { Px: 4.0 }
     i = 0usize
     while i < 300usize {
-        regions[i] = widget.region(10000u64 + u64(i), widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, style.defaults(), zero)
+        regions[i] = widget.region(10000u64 + u64(i), widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, hit_style, zero)
         var item_sem: widget.Semantics = zero
         item_sem.role = 11u8
         item_sem.label = "Alpha"
@@ -204,6 +207,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_first || first_bounds.x < button_bounds.x || first_bounds.y < button_bounds.y || first_bounds.y + first_bounds.height > button_bounds.y + button_bounds.height + 0.5 { os.exit(44i32) }
     let last_focusable = testing.by_key(&harness, 10299u64)
     if last_focusable.count != 1usize || order[order.len - 1usize].slot != last_focusable.element.slot || order[order.len - 1usize].generation != last_focusable.element.generation { os.exit(45i32) }
+    let (last_bounds, has_last_bounds) = widget.bounds_of(&runtime, last_focusable.element)
+    let (front_hit, has_front_hit) = widget.hit_test(&runtime, geometry.Point { x: last_bounds.x + 1.0, y: last_bounds.y + 1.0 })
+    if !has_last_bounds || !has_front_hit || front_hit.slot != last_focusable.element.slot || front_hit.generation != last_focusable.element.generation { os.exit(49i32) }
     let before_limit = testing.by_key(&harness, 10255u64)
     let after_limit = testing.by_key(&harness, 10256u64)
     if widget.focus(&runtime, before_limit.element) != ok || testing.tab(&harness, false) != ok { os.exit(47i32) }

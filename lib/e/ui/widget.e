@@ -2675,22 +2675,21 @@ fn place_zoom(s: *State, a: *mem.Arena, node: *const Node, element: usize, inner
 fn hit_zoom(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
     let e = &s.elements[index]
     if !e.live || !geometry.contains(e.bounds, p) { ret (0usize, false) }
-    var order: [64]u32 = zero
-    var count = 0usize
+    var found = 0usize
+    var has_found = false
     var at = e.first_child
     var has = e.has_child
-    while has && count < 64usize {
-        order[count] = at
-        count += 1usize
+    while has {
+        let (candidate, has_candidate) = hit_zoom(s, usize(at), p)
+        if has_candidate {
+            found = candidate
+            has_found = true
+        }
         let child = &s.elements[usize(at)]
         has = child.has_sibling
         at = child.next_sibling
     }
-    while count > 0usize {
-        count = count - 1usize
-        let (found, has_found) = hit_zoom(s, usize(order[count]), p)
-        if has_found { ret (found, true) }
-    }
+    if has_found { ret (found, true) }
     if e.kind == ZOOM_TAG { ret (index, true) }
     ret (0usize, false)
 }
@@ -2841,22 +2840,21 @@ fn hit_action(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
     let e = &s.elements[index]
     if !e.live || !geometry.contains(e.bounds, p) { ret (0usize, false) }
     // Children after their siblings are in front; the last is tried first.
-    var order: [64]u32 = zero
-    var count = 0usize
+    var found = 0usize
+    var has_found = false
     var at = e.first_child
     var has = e.has_child
-    while has && count < 64usize {
-        order[count] = at
-        count += 1usize
+    while has {
+        let (candidate, has_candidate) = hit_action(s, usize(at), p)
+        if has_candidate {
+            found = candidate
+            has_found = true
+        }
         let child = &s.elements[usize(at)]
         has = child.has_sibling
         at = child.next_sibling
     }
-    while count > 0usize {
-        count = count - 1usize
-        let (found, has_found) = hit_action(s, usize(order[count]), p)
-        if has_found { ret (found, true) }
-    }
+    if has_found { ret (found, true) }
     if e.has_action && e.enabled { ret (index, true) }
     ret (0usize, false)
 }
@@ -2865,22 +2863,21 @@ fn hit_action(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
 fn hit_scroll(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
     let e = &s.elements[index]
     if !e.live || !geometry.contains(e.bounds, p) { ret (0usize, false) }
-    var order: [64]u32 = zero
-    var count = 0usize
+    var found = 0usize
+    var has_found = false
     var at = e.first_child
     var has = e.has_child
-    while has && count < 64usize {
-        order[count] = at
-        count += 1usize
+    while has {
+        let (candidate, has_candidate) = hit_scroll(s, usize(at), p)
+        if has_candidate {
+            found = candidate
+            has_found = true
+        }
         let child = &s.elements[usize(at)]
         has = child.has_sibling
         at = child.next_sibling
     }
-    while count > 0usize {
-        count = count - 1usize
-        let (found, has_found) = hit_scroll(s, usize(order[count]), p)
-        if has_found { ret (found, true) }
-    }
+    if has_found { ret (found, true) }
     if e.kind == SCROLL_TAG { ret (index, true) }
     ret (0usize, false)
 }
@@ -2889,22 +2886,21 @@ fn hit_scroll(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
 fn hit_region(s: *State, index: usize, p: geometry.Point, wanted: u8) -> (usize, bool) {
     let e = &s.elements[index]
     if !e.live || !geometry.contains(e.bounds, p) { ret (0usize, false) }
-    var order: [64]u32 = zero
-    var count = 0usize
+    var found = 0usize
+    var has_found = false
     var at = e.first_child
     var has = e.has_child
-    while has && count < 64usize {
-        order[count] = at
-        count += 1usize
+    while has {
+        let (candidate, has_candidate) = hit_region(s, usize(at), p, wanted)
+        if has_candidate {
+            found = candidate
+            has_found = true
+        }
         let child = &s.elements[usize(at)]
         has = child.has_sibling
         at = child.next_sibling
     }
-    while count > 0usize {
-        count = count - 1usize
-        let (found, has_found) = hit_region(s, usize(order[count]), p, wanted)
-        if has_found { ret (found, true) }
-    }
+    if has_found { ret (found, true) }
     if (e.kind == REGION_TAG || e.kind == EDIT_TAG || e.kind == SCROLLBAR_TAG || e.kind == SLIDER_TAG) && e.enabled && (e.gestures & wanted) != 0u8 { ret (index, true) }
     ret (0usize, false)
 }
@@ -5248,22 +5244,21 @@ fn surface_size(widget_runtime: *const Runtime) -> geometry.Size {
 fn hit_deepest(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
     let e = &s.elements[index]
     if !e.live || !geometry.contains(e.bounds, p) { ret (0usize, false) }
-    var order: [64]u32 = zero
-    var count = 0usize
+    var found = 0usize
+    var has_found = false
     var at = e.first_child
     var has = e.has_child
-    while has && count < 64usize {
-        order[count] = at
-        count += 1usize
+    while has {
+        let (candidate, has_candidate) = hit_deepest(s, usize(at), p)
+        if has_candidate {
+            found = candidate
+            has_found = true
+        }
         let child = &s.elements[usize(at)]
         has = child.has_sibling
         at = child.next_sibling
     }
-    while count > 0usize {
-        count = count - 1usize
-        let (found, has_found) = hit_deepest(s, usize(order[count]), p)
-        if has_found { ret (found, true) }
-    }
+    if has_found { ret (found, true) }
     ret (index, true)
 }
 
