@@ -1956,6 +1956,15 @@ fn tab_pick_fire(ctx: *void) -> err {
     ret widget.focus_key(p.runtime, p.focus)
 }
 
+type TabMove = struct { move: widget.Change[DocumentMove], from: usize, to: usize, runtime: *widget.Runtime, focus: widget.Key }
+
+fn tab_move_fire(ctx: *void) -> err {
+    let m = mem.cast[*TabMove](ctx)
+    let moved = widget.fire_change[DocumentMove](m.move, DocumentMove { from: m.from, to: m.to })
+    if moved != ok { ret moved }
+    ret widget.focus_key(m.runtime, m.focus)
+}
+
 // A shared pressable remains pointer-accessible while excluded from a roving
 // Tab order.
 fn untab_pressable(a: *mem.Arena, node: widget.Node) -> (widget.Node, err) {
@@ -2004,7 +2013,8 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // pinned tab has no close. A tab is named with its state ("lower.e, unsaved
 // changes", "neper.json, pinned"), its position and Selected; Home and End pick
 // the ends and Delete closes the current tab, beside Left and Right. Ctrl+PageUp
-// and Ctrl+PageDown select the previous or next tab in strip order, wrapping.
+// and Ctrl+PageDown select the previous or next tab in strip order, wrapping;
+// adding Shift moves the current tab one place without wrapping.
 // The current or focused tab is the strip's one tab stop; close buttons remain
 // pointer-only.
 // ponytail: no file-type icons (a pinned tab keeps its title), preview tabs,
@@ -2039,6 +2049,8 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     if actions_error != ok { ret (zero, TooLarge) }
     let (picks, picks_error) = mem.alloc[TabPick](a, 6usize)
     if picks_error != ok { ret (zero, TooLarge) }
+    let (moves, moves_error) = mem.alloc[TabMove](a, 2usize)
+    if moves_error != ok { ret (zero, TooLarge) }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     var tab_stop = current
     if tab_stop >= documents.len { tab_stop = 0usize }
@@ -2168,7 +2180,10 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     // ends; Delete closes it.
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 7usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
+    let (move_shortcuts, move_shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if move_shortcuts_error != ok { ret (zero, TooLarge) }
     var bound = 0usize
+    var move_bound = 0usize
     if current > 0usize && current < documents.len {
         picks[0usize] = TabPick { index: current - 1usize, pick: pick, runtime: t.runtime, focus: key + 1u64 + 2u64 * u64(current - 1usize) }
         shortcuts[bound] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[0usize]), invoke: tab_pick_fire } }
@@ -2199,6 +2214,17 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         shortcuts[bound] = widget.Shortcut { key: 33u32, modifiers: ctrl, action: widget.Submit { ctx: mem.cast[*void](&picks[4usize]), invoke: tab_pick_fire } }
         shortcuts[bound + 1usize] = widget.Shortcut { key: 34u32, modifiers: ctrl, action: widget.Submit { ctx: mem.cast[*void](&picks[5usize]), invoke: tab_pick_fire } }
         bound += 2usize
+        ctrl.shift = true
+        if current > 0usize {
+            moves[0usize] = TabMove { move: move, from: current, to: current - 1usize, runtime: t.runtime, focus: key + 1u64 + 2u64 * u64(current - 1usize) }
+            move_shortcuts[move_bound] = widget.Shortcut { key: 33u32, modifiers: ctrl, action: widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: tab_move_fire } }
+            move_bound += 1usize
+        }
+        if current + 1usize < documents.len {
+            moves[1usize] = TabMove { move: move, from: current, to: current + 1usize, runtime: t.runtime, focus: key + 1u64 + 2u64 * u64(current + 1usize) }
+            move_shortcuts[move_bound] = widget.Shortcut { key: 34u32, modifiers: ctrl, action: widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: tab_move_fire } }
+            move_bound += 1usize
+        }
     }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
@@ -2209,9 +2235,15 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     let flat = style.Length { Px: 0.0 }
     strip.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 2.0 }, strip, tabs[0usize..documents.len])
+    let (moving, moving_error) = mem.alloc[widget.Node](a, 1usize)
+    if moving_error != ok { ret (zero, TooLarge) }
+    moving[0usize] = row[0usize]
+    if move_bound > 0usize {
+        moving[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: move_shortcuts[0usize..move_bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), row[0usize..1usize])
+    }
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), row[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), moving[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 20u8
     sem.label = label
