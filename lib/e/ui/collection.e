@@ -5667,8 +5667,8 @@ fn tile_of_name(name: str) -> Tile {
 // `on-surface-variant` ring 8 from the corner. The `on-surface` state layer lies
 // on the tile. Disabled, content at 38% and media at 38% opacity, out of the Tab
 // order. A cell in the tree named by the name, described by the meta.
-// ponytail: the state layer lies under the media, not over it; the check's tick
-// strokes 2 rather than 2.5; no drag or drop look. (D1237) An icon tile (`has_icon`)
+// (D1316) The state layer lies over the media, and the check's tick strokes 2.5.
+// ponytail: no drag or drop look. (D1237) An icon tile (`has_icon`)
 // is a 64 icon area and a centred name with no container until hovered.
 fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const Tile, row_index: usize, column_index: usize, side: f32, photo: bool, selecting: bool) -> (widget.Node, err) {
     let enabled = !item.disabled
@@ -5690,7 +5690,8 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
         ink = control.with_alpha(surface_ink, t.tokens.states.disabled_content)
         muted = ink
     }
-    let fill = style.layer(base, ink, control.state_opacity(t, state))
+    let layer_share = control.state_opacity(t, state)
+    let fill = style.layer(base, ink, layer_share)
     var tile_radius = t.tokens.radii.md
     if photo { tile_radius = t.tokens.radii.sm }
     var inset: f32 = 0.0
@@ -5725,6 +5726,21 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
     let (column_parts, column_error) = mem.alloc[widget.Node](a, 2usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_parts[0usize] = widget.aligned(0u64, .Center, .Center, media_style, shown[0usize..1usize])
+    if layer_share > 0.0 && !iconic {
+        // (D1316) The state layer lies over the media too, in its shape.
+        let (veiled, veiled_error) = mem.alloc[widget.Node](a, 2usize)
+        if veiled_error != ok { ret (zero, TooLarge) }
+        var bare = media_style
+        bare.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        veiled[0usize] = widget.aligned(0u64, .Center, .Center, bare, shown[0usize..1usize])
+        var veil = control.sized_style(media_width, media_height)
+        veil.radius = media_style.radius
+        veil.background = paint.Brush { Solid: control.with_alpha(ink, layer_share) }
+        veiled[1usize] = widget.box(0u64, veil, zero)
+        var held_media = style.defaults()
+        held_media.margin = media_style.margin
+        column_parts[0usize] = widget.stack(0u64, held_media, veiled[0usize..2usize])
+    }
     var c = 1usize
     if !photo {
         let (words, words_error) = mem.alloc[widget.Node](a, 2usize)
@@ -5760,7 +5776,7 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
         column_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: caption_cross, gap: 0.0 }, caption_style, words[0usize..w])
         c = 2usize
     }
-    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
+    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 3usize)
     if stacked_error != ok { ret (zero, TooLarge) }
     var column_cross: ui_layout.CrossAlign = .Start
     var column_style = style.defaults()
@@ -5780,7 +5796,7 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
         if item.selected {
             corner = 12.0
             mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
-            let (drawn, drawn_error) = control.mark_glyph(a, style.color(t.tokens, .OnPrimary), .Check, 16.0)
+            let (drawn, drawn_error) = control.stroked_glyph(a, style.color(t.tokens, .OnPrimary), .Check, 16.0, 2.5)
             if drawn_error != ok { ret (zero, drawn_error) }
             tick[0usize] = drawn
             ticks = 1usize

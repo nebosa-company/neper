@@ -142,11 +142,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (full, full_ok) = frame(a, &f, &harness, &runtime, &touch, s, 1.0)
     if !full_ok || !is_color(full, at(row.x + 290.0, row.y + 28.0), twice) || !is_color(full, at(row.x + 290.0, row.y + 2.0), twice) { os.exit(13i32) }
     if !release(&harness, row.x + 30.0, row.y + 28.0) || s.presses != 1usize { os.exit(14i32) }
-    // A rounded tile clips the disc to its corners.
+    // A rounded tile clips the disc to its corners; (D1316) the pressed layer lies
+    // over the media under the disc, as a row's does.
     let (tile, has_tile) = bounds(&harness, &runtime, 31u64)
     if !has_tile || !press(&harness, tile.x + 100.0, tile.y + 60.0) { os.exit(15i32) }
     let (clipped, clipped_ok) = frame(a, &f, &harness, &runtime, &touch, s, 1.0)
-    if !clipped_ok || !is_color(clipped, at(tile.x + 0.5, tile.y + 0.5), background) || !is_color(clipped, at(tile.x + 20.0, tile.y + 20.0), style.mix(style.color(&tokens, .SurfaceContainerHighest), ink, pressed)) { os.exit(16i32) }
+    if !clipped_ok { os.exit(94i32) }
+    if !is_color(clipped, at(tile.x + 0.5, tile.y + 0.5), background) { os.exit(95i32) }
+    if !is_color(clipped, at(tile.x + 20.0, tile.y + 20.0), style.mix(style.mix(style.color(&tokens, .SurfaceContainerHighest), ink, pressed), ink, pressed)) { os.exit(16i32) }
     if !release(&harness, tile.x + 100.0, tile.y + 60.0) || s.presses != 2usize { os.exit(17i32) }
     // A pointer theme has no ripple: the pressed layer alone at phase 1.
     let (desk, desk_ok) = frame(a, &f, &harness, &runtime, &pointer, s, 0.0)

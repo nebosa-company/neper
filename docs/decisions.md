@@ -25403,3 +25403,19 @@ loading cap, the cap stands at the viewport's foot with the last row above
 it and no row text shown. With a failed cap, Retry presses. This passes on
 Windows and Linux, and `ui_algorithms` and `ui_collection` still pass on
 both.
+
+## D1316 — Grid tiles layer their media and stroke the tick at 2.5
+
+Two corrections from the GridView spec. A hovered, pressed or focused
+tile's `on-surface` state layer now lies over its media as well: a veil
+of the media's size and radius, not only the tile's container. A selected
+tile's tick strokes 2.5 (`stroked_glyph`), not the glyph default of 2. The
+icon tile keeps its hover container (D1237). The drag and drop look is
+still to come.
+
+`ui_collections_v2` hovers a placeholder tile and finds its media
+`surface-container-highest` under the hover layer. `ui_ripple_v2`'s pressed
+tile now shows the pressed layer and the ripple over the media, as its
+rows already do, and keeps its rounded corner clear. This passes on
+Windows and Linux, and `ui_collection` and `ui_containers5_v2` still pass
+on both.
