@@ -11,6 +11,7 @@
 // `secondary-container` tile with its `primary` check; a virtual grid of 1:1
 // photo tiles 12 in and 4 apart.
 
+use e.algo.hash as hash
 use e.gpu
 use e.io
 use e.mem
@@ -537,6 +538,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let plain_before = s.presses
     let select_before = chosen.count
     if testing.tap(&harness, second.x + second.width * 0.5, second.y + second.height * 0.5) != ok || chosen.count != select_before || s.presses != plain_before + 1usize { os.exit(125i32) }
+    // (D1241) Beta is selected, so the list is in selection mode: the bar reads
+    // "1 selected" at 48 over rows led by checkboxes (Beta's checked), its Clear
+    // clears and its Delete runs; with nothing selected the bar is gone.
+    var bulk_commands: [1]overlay.MenuCommand = zero
+    bulk_commands[0usize] = overlay.menu_command("Delete", s.press)
+    bulk_commands[0usize].glyph = .Cross
+    multi.bulk = bulk_commands[..]
+    let bar_key = 900u64 ^ hash.fnv1a64("selection-bar")
+    f = mem.arena_from(frame_storage)
+    let (mode_list, mode_list_error) = collection.list_of(&f, 900u64, &theme, "Pick", s.files[0usize..3usize], multi_keys[..], multi)
+    if mode_list_error != ok || testing.pump(&harness, mode_list, now) != ok { os.exit(126i32) }
+    let (bar_box, has_bar_box) = bounds(&harness, &runtime, bar_key)
+    if !has_bar_box || !near(bar_box.height, 48.0) || testing.by_text(&harness, "1 selected").count == 0usize { os.exit(127i32) }
+    let (mode_tree, mode_tree_error) = testing.semantics(&harness)
+    if mode_tree_error != ok { os.exit(128i32) }
+    let (beta_item, has_beta_item) = find(mode_tree, .ListItem, "Beta")
+    let (alpha_item, has_alpha_item) = find(mode_tree, .ListItem, "Alpha")
+    if !has_beta_item || !has_alpha_item || !beta_item.state.checked || alpha_item.state.checked { os.exit(129i32) }
+    if !tap_key(&harness, &runtime, bar_key + 1u64) || chosen.kind != .Clear { os.exit(130i32) }
+    let bulk_before = s.presses
+    if !tap_key(&harness, &runtime, bar_key + 2u64) || s.presses != bulk_before + 1usize { os.exit(131i32) }
+    s.files[1usize].selected = false
+    f = mem.arena_from(frame_storage)
+    let (calm_list, calm_list_error) = collection.list_of(&f, 900u64, &theme, "Pick", s.files[0usize..3usize], multi_keys[..], multi)
+    if calm_list_error != ok || testing.pump(&harness, calm_list, now) != ok { os.exit(132i32) }
+    let (_, has_calm_bar) = bounds(&harness, &runtime, bar_key)
+    if has_calm_bar { os.exit(133i32) }
+    s.files[1usize].selected = true
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok
