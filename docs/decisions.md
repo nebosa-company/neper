@@ -25107,3 +25107,16 @@ come.
 
 `ui_pickers2_v2` holds the third of three presets on a row below the first in
 a 70-wide field on Windows and Linux.
+
+## D1297 — Floating dock panels move by their header
+
+`DockPanelOptions.move` makes a floating panel's header a drag region (keyed
+`key + 4096`, clear of the panel tabs' `key + 4 + index`) that reports each
+move's distance, so the caller can place the panel. The same header still
+turns a double press into Maximise; its gestures now live in a small
+`DockHeader` that holds both. Docked panels do not drag this way, since
+docking and tearing off stay the dock layout's. There is no snapping to the
+window's edges.
+
+`ui_containers2_v2` holds a (30, 10) drag of a floating panel's header
+reporting a move of that size, less the drag threshold, on Windows and Linux.
