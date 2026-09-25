@@ -24550,3 +24550,16 @@ minimum and maximum messages are still to come.
 
 `ui_pickers_v2` holds the hint, the Enter commit of "9/25/2026" in en-US and
 the error for "13/45/2026" on Windows and Linux.
+
+## D1258 — The docked date picker has Today and Clear
+
+`overlay.date_picker_with` is `date_picker` with a `DateFooter`: under the
+days, Today and Clear text buttons 32 tall, spread to the calendar's ends. Today
+picks `footer.today` through `pick`, as a press on its day would, and Clear
+fires `footer.clear`. The buttons are keyed `key + 64` and `key + 65`: the
+calendar under `key + 2` already uses `key + 3` and `key + 4` for its month
+turns, which is what the first fixture run found. `date_picker` and the range
+picker pass no footer and are unchanged.
+
+`ui_pickers_v2` holds the spread, Today's commit and Clear on Windows and
+Linux; the other date fixtures still pass.
