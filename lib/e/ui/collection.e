@@ -1990,7 +1990,9 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // (D1246) A table's options: whom to tell of each selection gesture, and the
 // selection bar's actions; (D1248) whether the first page is loading, and the
 // empty state's words for a table with no rows.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str }
+// (D1283) `view_width`, when narrower than the columns, scrolls the table
+// sideways, header and body together.
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32 }
 
 // (D1246, docs/ux/components/Table, TableRow, HeaderRow) `table` made selectable
 // by `selection`: a 52 first column (40 dense) holds each row's checkbox in its
@@ -2876,8 +2878,8 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
 // hold their cells unpadded: the cells draw their own looks.
 // (D1246) `selection` (from `table_with`) adds the check column and bar;
 // (D1248) with no rows, its loading or empty state (`table_state`).
-// ponytail: no toolbar, footer, pinned column, horizontal scroll or error
-// state; `data_grid` keeps the caller's cells
+// (D1283) `view_width` scrolls a wide table sideways.
+// ponytail: no toolbar, footer, pinned column or error state; `data_grid` keeps the caller's cells
 // as its editors -- `data_grid_of` is the one with the DataGrid's core.
 fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, role: u8, owned: bool, selection: TableOptions) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
@@ -3023,6 +3025,17 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, parts[0usize..p])
+    // (D1283) Wider than its view, the table scrolls sideways (keyed
+    // `key + 2097152`), its overlay thumb under the body.
+    if selection.view_width > 0.0 && width > selection.view_width {
+        let (wide, wide_error) = mem.alloc[widget.Node](a, 1usize)
+        if wide_error != ok { ret (zero, TooLarge) }
+        wide[0usize] = column_node[0usize]
+        var view = style.defaults()
+        view.width = style.Length { Px: selection.view_width }
+        view.overflow = .Clip
+        column_node[0usize] = widget.scroll(key + 2097152u64, widget.Scroll { axis: .Horizontal, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view, wide[0usize..1usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = role
     sem.label = label

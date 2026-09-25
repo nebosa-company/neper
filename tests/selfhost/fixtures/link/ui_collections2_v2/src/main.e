@@ -409,6 +409,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if state_step == 1usize && (has_loading_group || testing.by_text(&harness, "No builds yet").count == 0usize) { os.exit(78i32) }
         state_step += 1usize
     }
+    // (D1283) The 300 wide columns in a 200 view scroll sideways: the viewport is
+    // 200 over 300 of content.
+    var narrow_options: collection.TableOptions = zero
+    narrow_options.view_width = 200.0
+    f = mem.arena_from(frame_storage)
+    let narrow_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+    let (narrow_table, narrow_error) = collection.table_with(&f, 1u64, &theme, "Files", columns[0usize..3usize], narrow_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, narrow_options)
+    let (narrow_page, narrow_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if narrow_error != ok || narrow_page_error != ok { os.exit(79i32) }
+    narrow_page[0usize] = narrow_table
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), narrow_page[0usize..1usize]), time.Instant { nanos: 5200000000i64 }) != ok { os.exit(80i32) }
+    let (side_view, has_side_view) = bounds(&harness, &runtime, 1u64 + 2097152u64)
+    if !has_side_view || !near(side_view.width, 200.0) { os.exit(81i32) }
+    let (_, has_side_extents) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 1u64 + 2097152u64).element)
+    let (side_content, side_shown, has_side) = widget.scroll_extents(&runtime, testing.by_key(&harness, 1u64 + 2097152u64).element)
+    if !has_side_extents || !has_side || !near(side_content, 300.0) || !near(side_shown, 200.0) { os.exit(82i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui collections2 v2 ok\n")
     ret ok
