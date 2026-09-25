@@ -24013,3 +24013,14 @@ rectangle stays put by design. `ui_pickers` needs a depth of 24 for the v2 date
 picker, and `ui_transient` no longer uses one exit code twice.
 
 All 103 `ui_*` fixtures pass on Windows and Linux.
+
+## D1223 — Security helpers join their module fences
+
+The security commits eb55d772 and 4fcc944e added helper functions to `e.net.idna`
+(the IDNA 2008 contextual, bidi and table checks), `e.fmt.cbor` (`skip_depth`)
+and `e.fmt.jwt` (`escape_hex`) without fencing them. The language has no private
+declarations, so each helper is a public symbol, and the compiler-resolved
+surface gate at the head of both suites refused the tree. The 20 signatures are
+now fenced in `docs/module-apis.md` as written in source, so all three modules
+keep an exact `source` surface. The gate reports 220 exact surfaces and 13
+partial catalogues matching.
