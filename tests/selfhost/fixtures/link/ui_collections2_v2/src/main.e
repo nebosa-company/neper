@@ -21,6 +21,7 @@ use e.text.shape
 use e.ui.accessibility
 use e.ui.collection
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.testing
@@ -28,7 +29,7 @@ use e.ui.widget
 
 const W: usize = 400usize
 
-type Log = struct { theme: *const control.Theme, sorts: usize, picks: usize, offset: f32 }
+type Log = struct { theme: *const control.Theme, sorts: usize, picks: usize, resizes: usize, width: f32, offset: f32 }
 
 fn on_sort(ctx: *void, value: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -41,6 +42,9 @@ fn on_reorder(ctx: *void, value: collection.Reorder) -> err {
 }
 
 fn on_resize(ctx: *void, value: collection.ColumnResize) -> err {
+    let log = mem.cast[*Log](ctx)
+    log.resizes += 1usize
+    log.width = value.width
     ret ok
 }
 
@@ -259,6 +263,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(47i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].sorts != 1usize { os.exit(44i32) }
     if testing.press_key(&harness, 32u32, zero) != ok || logs[0usize].sorts != 2usize { os.exit(45i32) }
+    var alt: input.Modifiers = zero
+    alt.alt = true
+    if testing.press_key(&harness, 39u32, alt) != ok || logs[0usize].resizes != 1usize || !near(logs[0usize].width, 136.0) { os.exit(49i32) }
+    if testing.press_key(&harness, 37u32, alt) != ok || logs[0usize].resizes != 2usize || !near(logs[0usize].width, 104.0) { os.exit(50i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 1000u64) { os.exit(48i32) }
     // The data grid: a 40 header, 32 rows, the row numbers on
     // `surface-container-low` and a grid line after each cell.

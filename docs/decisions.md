@@ -22630,3 +22630,12 @@ an empty source binds none.
 
 `ui_collections2_v2` holds the header-to-row return on Windows and Linux. This
 is behavior-only on the reviewed Table surface.
+
+## D1096 — Header keys resize through the existing callback
+
+Focused header cells bind Alt+Left and Alt+Right to the same caller-owned
+ColumnResize path as pointer drags. Each move is 16 pixels and shrinking clamps
+at the pointer handle's existing minimum.
+
+`ui_collections2_v2` holds both directions and their requested widths on
+Windows and Linux. This is behavior-only on the reviewed HeaderRow surface.

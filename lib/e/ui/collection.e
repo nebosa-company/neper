@@ -1224,6 +1224,13 @@ fn header_sort(ctx: *void) -> err {
 
 type Resizing = struct { runtime: *widget.Runtime, header: widget.Key, column: usize, low: f32, resize: widget.Change[ColumnResize] }
 
+type ResizeKey = struct { value: ColumnResize, resize: widget.Change[ColumnResize] }
+
+fn resize_key(ctx: *void) -> err {
+    let r = mem.cast[*ResizeKey](ctx)
+    ret widget.fire_change[ColumnResize](r.resize, r.value)
+}
+
 fn resize_drag(ctx: *void, g: widget.Gesture) -> err {
     let r = mem.cast[*Resizing](ctx)
     switch g {
@@ -1279,7 +1286,7 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // `outline-variant` line inset 12 top and bottom (8 when `height` is 40), a
 // full-height 3px `primary` bar while hovered or dragged.
 // ponytail: no numeric (end-aligned) columns, filter mark, select-all
-// checkbox, grouped tier, keyboard resizing, reorder lift or aria-sort; the
+// checkbox, grouped tier, reorder lift or aria-sort; the
 // handles keep their `key + 64 + index` keys.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
@@ -1288,9 +1295,11 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
     if drags_error != ok { ret (zero, TooLarge) }
     let (resizes, resizes_error) = mem.alloc[Resizing](a, columns.len)
     if resizes_error != ok { ret (zero, TooLarge) }
-    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 4usize * columns.len)
+    let (resize_keys, resize_keys_error) = mem.alloc[ResizeKey](a, 2usize * columns.len)
+    if resize_keys_error != ok { ret (zero, TooLarge) }
+    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 6usize * columns.len)
     if moves_error != ok { ret (zero, TooLarge) }
-    let (header_keys, header_keys_error) = mem.alloc[widget.Shortcut](a, 4usize * columns.len)
+    let (header_keys, header_keys_error) = mem.alloc[widget.Shortcut](a, 6usize * columns.len)
     if header_keys_error != ok { ret (zero, TooLarge) }
     let grip: f32 = 8.0
     let inner = height - t.tokens.sizes.divider
@@ -1354,7 +1363,7 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         if previous > 0usize { previous -= 1usize }
         var next = i
         if next + 1usize < columns.len { next += 1usize }
-        let shortcut = 4usize * i
+        let shortcut = 6usize * i
         bind_move(moves, header_keys, shortcut, t.runtime, key + 1u64 + u64(previous), 37u32)
         bind_move(moves, header_keys, shortcut + 1usize, t.runtime, key + 1u64 + u64(next), 39u32)
         var bound = shortcut + 2usize
@@ -1364,6 +1373,16 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         }
         header_keys[bound] = widget.Shortcut { key: 32u32, modifiers: zero, action: sort_action }
         bound += 1usize
+        var narrower = columns[i].width - 16.0
+        if narrower < resizes[i].low { narrower = resizes[i].low }
+        let resize_at = 2usize * i
+        resize_keys[resize_at] = ResizeKey { value: ColumnResize { column: i, width: narrower }, resize: resize }
+        resize_keys[resize_at + 1usize] = ResizeKey { value: ColumnResize { column: i, width: columns[i].width + 16.0 }, resize: resize }
+        var alt: input.Modifiers = zero
+        alt.alt = true
+        header_keys[bound] = widget.Shortcut { key: 37u32, modifiers: alt, action: widget.Submit { ctx: ctx_of(&resize_keys[resize_at]), invoke: resize_key } }
+        header_keys[bound + 1usize] = widget.Shortcut { key: 39u32, modifiers: alt, action: widget.Submit { ctx: ctx_of(&resize_keys[resize_at + 1usize]), invoke: resize_key } }
+        bound += 2usize
         let (keyboard, keyboard_error) = mem.alloc[widget.Node](a, 1usize)
         if keyboard_error != ok { ret (zero, TooLarge) }
         keyboard[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: header_keys[shortcut..bound], default_action: sort_action, cancel_action: zero, keys: zero }, style.defaults(), tapped[0usize..1usize])
