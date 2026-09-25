@@ -3538,6 +3538,81 @@ fn date_entry(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), parts[0usize..2usize]), ok)
 }
 
+// (D1293) A modal date picker's state beyond the date: whether it is in input
+// mode and what toggles it, the typed text's buffer and length and whom it tells,
+// and today (for typed words like "tomorrow").
+type DateModalOptions = struct { typing: bool, toggle_mode: *const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], today: time.Date }
+
+// (D1293, docs/ux/components/DatePicker, modal) The touch picker, a modal dialog
+// (keyed `key`) titled "Select date": the pending date in `headline-large`
+// ("Tue, Sep 15", "Select a date" with none) beside a 40 mode toggle
+// (`key + 30`; "Switch to input" with an `edit` pencil, "Switch to calendar"
+// with the calendar) over a divider, then the calendar (`key + 40`) of the
+// month `shown` or, typing, `date_entry` (`key + 32`); Cancel fires `cancel`, OK
+// `confirm`, and a pick in either mode reaches `pick` as the pending date.
+// ponytail: the title is the dialog's `headline-small`, not the spec's
+// `label-medium` over a `headline-large` date line; no full-screen range form.
+fn date_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pending: time.Date, has_pending: bool, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date], open: bool, cancel: *const widget.Submit, confirm: *const widget.Submit, options: DateModalOptions) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (said, said_error) = mem.alloc[u8](a, 24usize)
+    if said_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if has_pending && pending.month >= 1u8 && pending.month <= 12u8 {
+        let weekday = weekday_full(usize(weekday_of(i64(pending.year), i64(pending.month), i64(pending.day))))
+        n = control.copy_text(said, weekday[0usize..3usize])
+        n += control.copy_text(said[n..24usize], ", ")
+        let month = month_name(i64(pending.month))
+        n += control.copy_text(said[n..24usize], month[0usize..3usize])
+        n += control.copy_text(said[n..24usize], " ")
+        n += control.write_i64(said[n..24usize], i64(pending.day))
+    } else {
+        n = control.copy_text(said, "Select a date")
+    }
+    var big = control.text_options()
+    big.role = .HeadlineLarge
+    big.wrap = .None
+    let (date_line, date_line_error) = control.colored_text(a, 0u64, said[0usize..n], t, big, style.color(t.tokens, .OnSurface))
+    if date_line_error != ok { ret (zero, date_line_error) }
+    var toggle_glyph: control.GlyphKind = .Edit
+    var toggle_name = "Switch to input"
+    if options.typing {
+        toggle_glyph = .Calendar
+        toggle_name = "Switch to calendar"
+    }
+    let (mode_button, mode_error) = control.glyph_action(a, key + 30u64, t, toggle_glyph, toggle_name, options.toggle_mode, 40.0, t.tokens.sizes.icon_md, style.color(t.tokens, .OnSurfaceVariant), mem.address_of(options.toggle_mode) != 0usize, 0u32, 0u32, 0u64)
+    if mode_error != ok { ret (zero, mode_error) }
+    let (head, head_error) = mem.alloc[widget.Node](a, 3usize)
+    if head_error != ok { ret (zero, TooLarge) }
+    var grow = date_line
+    grow.style.width = style.Length { Flex: 1.0 }
+    head[0usize] = grow
+    head[1usize] = mode_button
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var head_style = style.defaults()
+    head_style.width = style.Length { Px: 7.0 * 40.0 }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, head_style, head[0usize..2usize])
+    var rule = control.sized_style(7.0 * 40.0, t.tokens.sizes.divider)
+    rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+    parts[1usize] = widget.box(0u64, rule, zero)
+    if options.typing {
+        let (entry, entry_error) = date_entry(a, key + 32u64, t, "Date", options.buffer, options.len, options.typed, pick, options.today, 7.0 * 40.0)
+        if entry_error != ok { ret (zero, entry_error) }
+        parts[2usize] = entry
+    } else {
+        let (month, month_error) = calendar(a, key + 40u64, t, "Date", shown, pending, has_pending, false, pending, pending, show, pick)
+        if month_error != ok { ret (zero, month_error) }
+        parts[2usize] = month
+    }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, style.defaults(), parts[0usize..3usize])
+    let (buttons, buttons_error) = mem.alloc[DialogButton](a, 2usize)
+    if buttons_error != ok { ret (zero, TooLarge) }
+    buttons[0usize] = DialogButton { label: "Cancel", action: *cancel, kind: .Cancel }
+    buttons[1usize] = DialogButton { label: "OK", action: *confirm, kind: .Default }
+    let (made, made_error) = dialog_dismissable(a, key, t, "Select date", content, buttons[0usize..2usize], true, false, false, cancel)
+    ret (made, made_error)
+}
+
 type DateOpen = struct { toggle: widget.Submit, runtime: *widget.Runtime, focus: widget.Key }
 
 fn date_open_fire(ctx: *void) -> err {
@@ -3559,7 +3634,8 @@ fn date_open_fire(ctx: *void) -> err {
 // `date_format_hint` names the form.
 // (D1257) `date_entry` is the typed form (input mode) with its inline error.
 // (D1258) `date_picker_with` adds the Today and Clear footer.
-// ponytail: this docked field stays read-only; no modal touch form.
+// (D1293) `date_picker_modal` is the touch form.
+// ponytail: this docked field stays read-only.
 fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, ranged: bool, from: time.Date, to: time.Date, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date], footer: DateFooter) -> (widget.Node, err) {
     let (text_bytes, text_error) = mem.alloc[u8](a, 32usize)
     if text_error != ok { ret (zero, TooLarge) }

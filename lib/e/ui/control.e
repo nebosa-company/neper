@@ -2303,7 +2303,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32 }
 
 // An ellipse of four quarter arcs about a centre.
@@ -2478,6 +2478,18 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.55, y: y + h * 0.25 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.8, y: y + h * 0.5 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.55, y: y + h * 0.75 })
+    }
+    if g.kind == .Edit {
+        // (D1293) A pencil: its body from the bottom start up to the top end, the
+        // tip closed at the bottom, a line across near the top.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.2, y: y + h * 0.8 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.2, y: y + h * 0.65 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.68, y: y + h * 0.17 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.83, y: y + h * 0.32 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.35, y: y + h * 0.8 })
+        try geometry.close_path(&builder)
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.6, y: y + h * 0.25 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.75, y: y + h * 0.4 })
     }
     if g.kind == .Add {
         // (D1260) A plus.

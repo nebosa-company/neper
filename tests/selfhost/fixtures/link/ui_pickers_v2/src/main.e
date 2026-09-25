@@ -380,6 +380,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 1114u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok { os.exit(105i32) }
     let (skip_focus, has_skip_focus) = testing.focused(&harness)
     if !has_skip_focus || skip_focus.slot != testing.by_key(&harness, 1128u64).element.slot { os.exit(106i32) }
+    // (D1293) The touch picker: a dialog titled "Select date" saying "Tue, Sep 15",
+    // a day press picking, OK confirming; in input mode its typed field stands in
+    // the calendar's place.
+    let modal_date = time.Date { year: 2026i32, month: 9u8, day: 15u8 }
+    let (modal_bytes, modal_bytes_error) = mem.alloc[u8](a, 16usize)
+    if modal_bytes_error != ok { os.exit(107i32) }
+    var modal_step = 0usize
+    while modal_step < 2usize {
+        var modal_options: overlay.DateModalOptions = zero
+        modal_options.typing = modal_step == 1usize
+        modal_options.toggle_mode = &stores[0usize].press
+        modal_options.buffer = modal_bytes
+        modal_options.today = modal_date
+        f = mem.arena_from(frame_storage)
+        let (modal, modal_error) = overlay.date_picker_modal(&f, 1200u64, &theme, modal_date, true, modal_date, no_dates, picked_dates, true, &stores[0usize].press, &stores[0usize].press, modal_options)
+        let (modal_page, modal_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if modal_error != ok || modal_page_error != ok { os.exit(108i32) }
+        modal_page[0usize] = modal
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), modal_page[0usize..1usize]), time.Instant { nanos: 3500000000i64 + i64(modal_step) }) != ok { os.exit(109i32) }
+        if modal_step == 0usize {
+            if testing.by_text(&harness, "Tue, Sep 15").count == 0usize || testing.by_text(&harness, "Select date").count == 0usize { os.exit(110i32) }
+            var no_day: time.Date = zero
+            stores[0usize].last_date = no_day
+            let (twentieth, has_twentieth) = bounds(&harness, &runtime, 1240u64 + 3u64 + 20u64)
+            if !has_twentieth || testing.tap(&harness, twentieth.x + twentieth.width * 0.5, twentieth.y + twentieth.height * 0.5) != ok || stores[0usize].last_date.day != 20u8 { os.exit(111i32) }
+            let (modal_tree, modal_tree_error) = testing.semantics(&harness)
+            if modal_tree_error != ok { os.exit(112i32) }
+            var ok_at = modal_tree.nodes.len
+            var node_at = 0usize
+            while node_at < modal_tree.nodes.len {
+                if modal_tree.nodes[node_at].role == .Button && mem.eq[u8](modal_tree.nodes[node_at].label, "OK") { ok_at = node_at }
+                node_at += 1usize
+            }
+            let confirms_before = stores[0usize].toggles
+            if ok_at == modal_tree.nodes.len { os.exit(113i32) }
+            let ok_box = modal_tree.nodes[ok_at].bounds
+            if testing.tap(&harness, ok_box.x + ok_box.width * 0.5, ok_box.y + ok_box.height * 0.5) != ok || stores[0usize].toggles != confirms_before + 1usize { os.exit(113i32) }
+        }
+        if modal_step == 1usize && (testing.by_key(&harness, 1232u64).count != 1usize || testing.by_key(&harness, 1243u64).count != 0usize) { os.exit(114i32) }
+        modal_step += 1usize
+    }
     // (D1230) Times in the locale's clock, and typed times in any common form.
     let (clock_bytes, clock_bytes_error) = mem.alloc[u8](a, 16usize)
     if clock_bytes_error != ok { os.exit(50i32) }

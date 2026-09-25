@@ -25045,3 +25045,22 @@ than the font's missing-glyph box.
 
 `ui_edit` reconciles and paints an editor holding an emoji between two a's on
 Windows and Linux; the full UI sweep passes 103/103 on both hosts.
+
+## D1293 — The date picker has its modal touch form
+
+`overlay.date_picker_modal` is the DatePicker spec's touch form: a modal
+dialog titled "Select date" whose header line says the pending date in
+`headline-large` ("Tue, Sep 15", or "Select a date" with none) beside a 40
+mode toggle keyed `key + 30`. The toggle reads "Switch to input" with a new
+`edit` pencil glyph, or "Switch to calendar" with the calendar. Under a
+divider stands the calendar of the shown month (`key + 40`) or, in input
+mode, D1257's `date_entry` (`key + 32`). A day press or a typed Enter reaches
+`pick` as the pending date; OK fires `confirm`, and Cancel, Escape or a press
+outside fire `cancel`. The caller keeps the pending date, the mode and the
+typed text (`DateModalOptions`). The title uses the dialog's own type rather
+than the spec's small label over the large date, and the full-screen range
+form is still to come.
+
+`ui_pickers_v2` holds the title and date line, a day press picking the 20th,
+OK confirming, and input mode showing the field in the calendar's place, on
+Windows and Linux.
