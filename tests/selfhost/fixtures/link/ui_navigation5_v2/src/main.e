@@ -49,6 +49,14 @@ fn on_discard(ctx: *void) -> err {
     ret ok
 }
 
+// (D1337) A tab command, kept as the tab times ten plus the command.
+fn on_command(ctx: *void, value: navigation.TabCommand) -> err {
+    let c = mem.cast[*Turned](ctx)
+    c.count += 1usize
+    c.last = value.index * 10usize + value.command
+    ret ok
+}
+
 fn on_turn(ctx: *void, value: usize) -> err {
     let c = mem.cast[*Turned](ctx)
     c.count += 1usize
@@ -376,6 +384,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, has_preview) = find(extra_tree, .Tab, "lower.e, unsaved changes, preview")
     if !has_locked || !has_preview { os.exit(68i32) }
     if testing.by_text(&harness, "main.e").count != 0usize || testing.by_text(&harness, "notes").count == 0usize { os.exit(69i32) }
+    // (D1337) The tab menu's further commands: a secondary press on notes, then
+    // Copy path reports notes (2) and command 1.
+    var more_words: [2]str = zero
+    more_words[0usize] = "Pin"
+    more_words[1usize] = "Copy path"
+    var more_log: Turned = zero
+    var more_step = 0usize
+    while more_step < 3usize {
+        var more_options: navigation.DocumentTabsOptions = zero
+        more_options.more = more_words[..]
+        more_options.more_pick = widget.Change[navigation.TabCommand] { ctx: mem.cast[*void](&more_log), invoke: on_command }
+        f = mem.arena_from(frame_storage)
+        let (more_strip, more_strip_error) = navigation.document_tabs_with(&f, 5800u64, &theme, "Open files", s.documents[0usize..3usize], 1usize, zero, zero, zero, more_options)
+        let (more_page, more_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if more_strip_error != ok || more_page_error != ok { os.exit(75i32) }
+        more_page[0usize] = more_strip
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), more_page[0usize..1usize]), time.Instant { nanos: 9200000000i64 + i64(more_step) }) != ok { os.exit(76i32) }
+        if more_step == 1usize {
+            let (more_notes, has_more_notes) = bounds(&harness, &runtime, 5805u64)
+            if !has_more_notes { os.exit(77i32) }
+            var more_press = testing.pointer_at(more_notes.x + 10.0, more_notes.y + 10.0)
+            more_press.buttons = 2u32
+            more_press.changed = .Secondary
+            if testing.send(&harness, input.Event { PointerDown: more_press }) != ok { os.exit(78i32) }
+            more_press.buttons = 0u32
+            if testing.send(&harness, input.Event { PointerUp: more_press }) != ok { os.exit(79i32) }
+        }
+        if more_step == 2usize {
+            let (more_tree, more_tree_error) = testing.semantics(&harness)
+            let (copy_row, has_copy_row) = find(more_tree, .MenuItem, "Copy path")
+            if more_tree_error != ok || !has_copy_row { os.exit(80i32) }
+            if testing.tap(&harness, copy_row.bounds.x + 20.0, copy_row.bounds.y + copy_row.bounds.height * 0.5) != ok || more_log.count != 1usize || more_log.last != 21usize { os.exit(80i32) }
+        }
+        more_step += 1usize
+    }
     // (D1336) In 200 the strip scrolls and ends in Show all open files; open, its
     // menu lists every document and a row picks it.
     var narrow_step = 0usize
