@@ -3805,7 +3805,7 @@ fn list_options() -> ListOptions {
 // `empty_title`, the compact empty state stands in their place. A list named
 // `label` with its count.
 // ponytail: no selection model (the caller sets `selected`), no Page keys,
-// typeahead, selection bar, sticky subheader, loading rows or insert motion.
+// selection bar, sticky subheader, loading rows or insert motion.
 fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, options: ListOptions) -> (widget.Node, err) {
     if keys.len != items.len { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, items.len)
@@ -4163,7 +4163,7 @@ fn grid_options() -> GridOptions {
 // stretched to fill the width; arrows move the focus in two dimensions (Down
 // clamps into a short last row), Home and End to the row ends, and Ctrl+Home and
 // Ctrl+End to the set ends. A grid named `label` with its counts.
-// ponytail: no selection model, typeahead, Page keys, rubber band, reflow
+// ponytail: no selection model, Page keys, rubber band, reflow
 // motion, loading or empty state; the caller keeps the page margins.
 fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, tiles: []const Tile, keys: []const widget.Key, options: GridOptions) -> (widget.Node, err) {
     if keys.len != tiles.len { ret (zero, TooLarge) }
