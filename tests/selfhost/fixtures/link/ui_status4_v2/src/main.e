@@ -168,6 +168,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if timed_step >= 3usize && s.presses != dismissed_at + 1usize { os.exit(25i32) }
         timed_step += 1usize
     }
+    // (D1287) A snackbar enters fading in: half way its surface is not yet the
+    // full `inverse-surface`; settled, it is.
+    let full_ink = style.color(&tokens, .InverseSurface)
+    var enter_step = 0usize
+    while enter_step < 5usize {
+        var enter_at = 40000000000i64
+        var enter_count = 0usize
+        if enter_step == 1usize { enter_at = 40016000000i64 }
+        if enter_step == 2usize {
+            enter_at = 40100000000i64
+            enter_count = 1usize
+        }
+        if enter_step == 3usize {
+            enter_at = 40225000000i64
+            enter_count = 1usize
+        }
+        if enter_step == 4usize {
+            enter_at = 40500000000i64
+            enter_count = 1usize
+        }
+        if testing.begin(&harness, time.Instant { nanos: enter_at }) != ok { os.exit(28i32) }
+        f = mem.arena_from(frame_storage)
+        let (entering, entering_error) = control.snackbar(&f, 770u64, &theme, s.notices[0usize..enter_count], 320.0)
+        let (enter_page, enter_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if entering_error != ok || enter_page_error != ok { os.exit(29i32) }
+        enter_page[0usize] = entering
+        var enter_ground = control.sized_style(640.0, 400.0)
+        enter_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.box(0u64, enter_ground, enter_page[0usize..1usize]), time.Instant { nanos: enter_at }) != ok { os.exit(30i32) }
+        if enter_step >= 3usize {
+            let (enter_box, has_enter_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 771u64).element)
+            let (enter_shot, enter_shot_error) = testing.snapshot(&harness, a)
+            if !has_enter_box || enter_shot_error != ok { os.exit(31i32) }
+            let solid = is_color(enter_shot, at(enter_box.x - 20.0, enter_box.y + enter_box.height * 0.5), full_ink)
+            if enter_step == 3usize && solid { os.exit(32i32) }
+            if enter_step == 4usize && !solid { os.exit(33i32) }
+        }
+        enter_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui status4 v2 ok\n")
     ret ok
