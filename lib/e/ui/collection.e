@@ -3858,7 +3858,17 @@ fn key_value_editor(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
 // (D1259) `secret` marks pairs whose values are masked; `empty_row` adds the
 // trailing empty row over the caller's `spare` buffers; `empty_hint` stands
 // above an empty list.
-type KeyValueOptions = struct { name_label: str, value_label: str, add_label: str, remove_label: str, duplicate_message: str, secret: []const bool, empty_row: bool, spare: Pair, empty_name: str, empty_hint: str }
+// (D1260) `shown` marks the secret values revealed, and `reveal` hears a pair's
+// Show value toggle.
+type KeyValueOptions = struct { name_label: str, value_label: str, add_label: str, remove_label: str, duplicate_message: str, secret: []const bool, empty_row: bool, spare: Pair, empty_name: str, empty_hint: str, shown: []const bool, reveal: widget.Change[usize] }
+
+// (D1260) A pair's Show value press.
+type PairReveal = struct { index: usize, reveal: widget.Change[usize] }
+
+fn pair_reveal_fire(ctx: *void) -> err {
+    let r = back_of[PairReveal](ctx)
+    ret widget.fire_change[usize](r.reveal, r.index)
+}
 
 fn key_value_options() -> KeyValueOptions {
     var out: KeyValueOptions = zero
@@ -3906,9 +3916,9 @@ fn joined(a: *mem.Arena, first: str, second: str, third: []const u8) -> (str, er
 // `label`, its rows Rows of Cells.
 // (D1259) Secret values are masked, an empty row adds pairs, and an empty
 // list can carry a hint.
-// ponytail: no Show value toggle (no `visibility` glyph), text mode, ordered
-// variant, removal with Undo, `code` names, or the touch list form; the Add
-// button has no `add` glyph.
+// (D1260) A secret value has its Show value toggle and the Add button its glyph.
+// ponytail: no text mode, ordered variant, removal with Undo, `code` names,
+// the 30 s reveal limit or the touch list form.
 fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
     if pairs.len > 128usize { ret (zero, TooLarge) }
     let dense = density_of(t) == 0usize
@@ -3927,6 +3937,10 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if removes_error != ok { ret (zero, TooLarge) }
     let (actions, actions_error) = mem.alloc[widget.Submit](a, pairs.len)
     if actions_error != ok { ret (zero, TooLarge) }
+    let (reveals, reveals_error) = mem.alloc[PairReveal](a, pairs.len)
+    if reveals_error != ok { ret (zero, TooLarge) }
+    let (reveal_presses, reveal_presses_error) = mem.alloc[widget.Submit](a, pairs.len)
+    if reveal_presses_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     // The column labels, once.
     var caption = control.text_options()
@@ -3972,7 +3986,11 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         field.placeholder = options.value_label
         field.invalid = false
         var value_field: widget.Node = zero
-        if i < options.secret.len && options.secret[i] {
+        let secret = i < options.secret.len && options.secret[i]
+        let revealed = secret && i < options.shown.len && options.shown[i]
+        let toggled = secret && widget.change_set[usize](options.reveal.invoke)
+        if toggled { field.width = control.max_zero(value_w - field_h) }
+        if secret && !revealed {
             // (D1259) A secret value is a password field, shown as bullets.
             let (masked, masked_error) = control.password_field(a, key + 2u64 + 3u64 * u64(i), t, value_name, pairs[i].value, pairs[i].value_len, widget.Change[str] { ctx: ctx_of(&changes[2usize * i + 1usize]), invoke: pair_change_fire }, zero, field)
             if masked_error != ok { ret (zero, masked_error) }
@@ -3986,6 +4004,31 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         if remove_name_error != ok { ret (zero, remove_name_error) }
         let (gone, gone_error) = glyph_in(a, key + 3u64 + 3u64 * u64(i), t, .Cross, remove_name, &actions[i], remove_w, control.if_else(dense, t.tokens.sizes.icon_sm, t.tokens.sizes.icon_md), control.with_alpha(style.color(t.tokens, .OnSurface), 0.0), muted, false, true)
         if gone_error != ok { ret (zero, gone_error) }
+        // (D1260) A secret value's Show value toggle, a `visibility` icon button at
+        // the field's end (keyed `key + 1048576 + i`), `visibility-off` while shown;
+        // a toggle button reporting Checked while shown.
+        if toggled {
+            reveals[i] = PairReveal { index: i, reveal: options.reveal }
+            reveal_presses[i] = widget.Submit { ctx: ctx_of(&reveals[i]), invoke: pair_reveal_fire }
+            var eye: control.GlyphKind = .Visibility
+            if revealed { eye = .VisibilityOff }
+            let (shower, shower_error) = glyph_in(a, key + 1048576u64 + u64(i), t, eye, "Show value", &reveal_presses[i], field_h, control.if_else(dense, t.tokens.sizes.icon_sm, t.tokens.sizes.icon_md), control.with_alpha(style.color(t.tokens, .OnSurface), 0.0), muted, false, true)
+            if shower_error != ok { ret (zero, shower_error) }
+            var pressed_shower = shower
+            switch pressed_shower.kind {
+            case .Semantics as shower_sem:
+                var marked_sem = shower_sem
+                if revealed { marked_sem.states = marked_sem.states | accessibility.STATE_CHECKED }
+                pressed_shower.kind = widget.Kind { Semantics: marked_sem }
+            default:
+                pressed_shower = shower
+            }
+            let (valued, valued_error) = mem.alloc[widget.Node](a, 2usize)
+            if valued_error != ok { ret (zero, TooLarge) }
+            valued[0usize] = value_field
+            valued[1usize] = pressed_shower
+            value_field = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), valued[0usize..2usize])
+        }
         cells[0usize] = name_field
         cells[1usize] = value_field
         cells[2usize] = gone
@@ -4059,9 +4102,24 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, style.defaults(), blanks[0usize..2usize])
         n += 1usize
     }
-    var plain = control.button_options()
-    plain.variant = .Plain
-    let (more, more_error) = control.button(a, key + 3u64 * u64(pairs.len) + 4u64, t, options.add_label, add, plain)
+    // (D1260) The Add text button leads with an 18 `add` glyph in `primary`.
+    let add_key = key + 3u64 * u64(pairs.len) + 4u64
+    let add_state = control.control_state(t, add_key, true, false)
+    var add_look = style.resolve(t.tokens, .Plain, add_state)
+    let add_ink = style.color(t.tokens, .Primary)
+    let (plus, plus_error) = control.icon_square(a, add_ink, .Add, t.tokens.sizes.icon_sm)
+    if plus_error != ok { ret (zero, plus_error) }
+    var add_caption = control.text_options()
+    add_caption.role = .LabelLarge
+    add_caption.wrap = .None
+    let (add_words, add_words_error) = control.colored_text(a, 0u64, options.add_label, t, add_caption, add_ink)
+    if add_words_error != ok { ret (zero, add_words_error) }
+    let (add_parts, add_parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if add_parts_error != ok { ret (zero, TooLarge) }
+    add_parts[0usize] = plus
+    add_parts[1usize] = add_words
+    let add_content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), add_parts[0usize..2usize])
+    let (more, more_error) = control.pressable(a, add_key, t, 3u8, options.add_label, add_look, true, false, add, add_content)
     if more_error != ok { ret (zero, more_error) }
     rows[n] = more
     n += 1usize
