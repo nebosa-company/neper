@@ -135,10 +135,10 @@ dtot += algos_missing
 widget_plan, widget_errors = validate_widget_plan(Path('.'))
 if widget_errors:
     raise SystemExit('\n'.join(widget_errors))
-wgot = sum(len(item['delivered'])
-           for phase in widget_plan['phases'] for item in phase['items'])
-wtot = sum(len(item['components'])
-           for phase in widget_plan['phases'] for item in phase['items'])
+# A phase marked for the next release is planned, not owed by this one.
+current_phases = [phase for phase in widget_plan['phases'] if phase.get('release') != 'next']
+wgot = sum(len(item['delivered']) for phase in current_phases for item in phase['items'])
+wtot = sum(len(item['components']) for phase in current_phases for item in phase['items'])
 
 c_sum = sum(score for group in compiler.values() for _, score, _ in group)
 c_n = sum(len(group) for group in compiler.values())

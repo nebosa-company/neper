@@ -23664,3 +23664,22 @@ keyboard menu, disabled ends and Escape on Windows and Linux; every collection
 fixture and `ui_overlays_v2` pass on both hosts. The Segoe review is
 `build/ux/ui-reorder-menu-segoe.png`. Touch has no long press for this menu
 yet.
+
+## D1196 — The motion framework is planned for the next release
+
+`docs/animation-plan.md` plans a motion framework at Flutter's level for e.ui:
+curves (cubic Bézier, the named catalog, intervals), generic tweens over
+`T.lerp`, a controller with status, velocity, ticker scopes and time dilation,
+spring, friction and gravity simulations, implicit animations, explicit
+transitions on `OpacityLayer` and `VisualTransform` (D1192), staggered and
+list choreography, hero and Material route transitions, and a fake-clock test
+harness with a reduced-motion policy. It keeps D800's pull model: widgets read
+values at the frame instant, and status changes are edges detected by the
+caller, not callbacks.
+
+The inventory is widget-plan phase P6: nine items and 47 components, marked
+`"release": "next"` and blocked by the external blocker `next-release`.
+`check_widget_plan.py --next` reports `BLOCKED: P6 by next-release`, and
+`render_progress.py` leaves phases marked for the next release out of the
+widget KPI, so the current release still reads as complete. Opening the phase
+means resolving `next-release` and dropping the marker.
