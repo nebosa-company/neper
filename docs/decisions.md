@@ -22564,3 +22564,13 @@ after, clips the range to the source, and still keys each tile from its source.
 
 `ui_collections_v2` holds the five-row middle build window around a one-row
 viewport on Windows and Linux. The visible VirtualGrid surface is unchanged.
+
+## D1089 — GridView Home and End respect rows
+
+The shared roving helper uses its existing column count to distinguish grids
+from lists. In a grid, Home and End move to the focused row's ends, Ctrl+Home
+and Ctrl+End reach the full set, and Down into a short final row clamps to its
+nearest tile. One-column lists retain their existing set-wide Home and End.
+
+`ui_collections_v2` holds row-local, set-wide, short-row and ordinary arrow
+movement on Windows and Linux. This is behavior-only on the reviewed GridView.
