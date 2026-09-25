@@ -24789,3 +24789,16 @@ with the chosen one ringed and Checked. A press picks a swatch through
 
 `ui_pickers3_v2` holds the Theme and Recent labels, the recent swatch keys and
 a press picking a recent colour on Windows and Linux.
+
+## D1275 — Typing filters a time field's list
+
+While a time field has the focus and its text is not the selected time,
+its open list keeps only the times the text starts, ignoring case: "15" keeps
+15:00 and 15:30. The rows keep their index keys, so picks and scrolling by
+index still hold, and the list scrolls to its first remaining row. With no
+time left the list closes rather than showing an empty box. Unfocused, the
+list is whole: a field whose text is not a typed query (the first fixture
+left its buffer zeroed) does not filter. The error icon is still to come.
+
+`ui_pickers2_v2` holds the whole list unfocused and the two rows kept for
+"15" once focused on Windows and Linux; its earlier checks still pass.
