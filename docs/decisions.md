@@ -23047,3 +23047,13 @@ NavigationDrawer rows remain searchable while preserving one Tab stop.
 
 `ui_navigation3_v2` holds match, prefix fallback and structural-row skipping on
 Windows and Linux. The reviewed surface is unchanged.
+
+## D1139 — Modal drawer picks dismiss after success
+
+NavigationDrawer's modal form wraps every destination action so a successful
+pointer, Enter or Space activation then fires the caller-owned dismiss action.
+A failed destination action returns immediately and leaves the drawer open;
+the standard in-layout form remains persistent.
+
+`ui_navigation3_v2` holds keyboard, pointer, Escape and focus-return paths on
+Windows and Linux. The reviewed surface is unchanged.

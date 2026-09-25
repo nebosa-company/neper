@@ -240,7 +240,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (drawer_focus, has_drawer_focus) = testing.focused(&harness)
     if !has_drawer_focus || drawer_focus.slot != testing.by_key(&harness, 3402u64).element.slot { os.exit(32i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !widget.focus_within(&runtime, 3403u64) || testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 3404u64) { os.exit(51i32) }
-    if testing.press_key(&harness, 13u32, zero) != ok || s.counters[2usize].count != 2usize || testing.press_key(&harness, 36u32, zero) != ok || !widget.focus_within(&runtime, 3402u64) { os.exit(52i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok || s.counters[2usize].count != 2usize || s.counters[3usize].count != 1usize || testing.press_key(&harness, 36u32, zero) != ok || !widget.focus_within(&runtime, 3402u64) { os.exit(52i32) }
     if testing.press_key(&harness, 83u32, zero) != ok || !widget.focus_within(&runtime, 3403u64) || testing.press_key(&harness, 68u32, zero) != ok || !widget.focus_within(&runtime, 3404u64) { os.exit(53i32) }
     if testing.press_key(&harness, 73u32, zero) != ok || !widget.focus_within(&runtime, 3402u64) { os.exit(54i32) }
     let (shot_2, shot_2_error) = testing.snapshot(&harness, a)
@@ -258,7 +258,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot_2, at(630.0, 510.0), dimmed) { os.exit(28i32) }
     let (sent_row, has_sent_row) = bounds(&harness, &runtime, 3403u64)
     if !has_sent_row || !near(sent_row.height, 56.0) || !near(sent_row.width, 276.0) || testing.by_text(&harness, "neper").count != 1usize { os.exit(29i32) }
-    if !tap_key(&harness, &runtime, 3403u64) || s.counters[1usize].count != 2usize || testing.press_key(&harness, 27u32, zero) != ok || s.counters[3usize].count != 1usize { os.exit(30i32) }
+    if !tap_key(&harness, &runtime, 3403u64) || s.counters[1usize].count != 2usize || s.counters[3usize].count != 2usize || testing.press_key(&harness, 27u32, zero) != ok || s.counters[3usize].count != 3usize { os.exit(30i32) }
     let (root_3, build_3_error) = build(&f, &theme, s, false)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(33i32) }
     let (returned_focus, has_returned_focus) = testing.focused(&harness)

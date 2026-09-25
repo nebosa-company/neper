@@ -1572,20 +1572,40 @@ fn drawer_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header:
     ret (made, made_error)
 }
 
+type DrawerPick = struct { pick: widget.Submit, dismiss: widget.Submit }
+
+fn drawer_pick_fire(ctx: *void) -> err {
+    let p = mem.cast[*DrawerPick](ctx)
+    let picked = widget.fire_submit(p.pick)
+    if picked != ok { ret picked }
+    ret widget.fire_submit(p.dismiss)
+}
+
 // v2 (D973, docs/ux/components/NavigationDrawer, modal): 256 to 360 wide and the
 // window's height on `surface-container-low`, its end corners `radius-lg`,
 // elevation 1, 12 in, over a `scrim` at 32% across the window; the header in
 // `title-small` `on-surface-variant` 16 in, 16 above and 12 below; the rows of
 // `destination_rows` 56 tall, 16 in and 24 at the end, sections with their
 // headings and dividers. A modal dialog named "Navigation" round the list; a
-// press on the scrim or Escape fires `dismiss`.
+// successful destination pick, press on the scrim or Escape fires `dismiss`.
 // ponytail: no edge swipe, open/close motion or right-to-left mirroring.
 fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    if picks.len != items.len { ret (zero, TooLarge) }
+    let (pick_contexts, pick_contexts_error) = mem.alloc[DrawerPick](a, picks.len)
+    if pick_contexts_error != ok { ret (zero, TooLarge) }
+    let (closing_picks, closing_picks_error) = mem.alloc[widget.Submit](a, picks.len)
+    if closing_picks_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < picks.len {
+        pick_contexts[i] = DrawerPick { pick: picks[i], dismiss: *dismiss }
+        closing_picks[i] = widget.Submit { ctx: mem.cast[*void](&pick_contexts[i]), invoke: drawer_pick_fire }
+        i += 1usize
+    }
     var wide = width
     if wide < 256.0 { wide = 256.0 }
     if wide > 360.0 { wide = 360.0 }
-    let (sheet_node, sheet_error) = drawer_sheet(a, key + 1u64, t, header, items, selected, picks, 56.0, 16.0, 24.0, 12.0, 16.0, 12.0, wide)
+    let (sheet_node, sheet_error) = drawer_sheet(a, key + 1u64, t, header, items, selected, closing_picks[0usize..picks.len], 56.0, 16.0, 24.0, 12.0, 16.0, 12.0, wide)
     if sheet_error != ok { ret (zero, sheet_error) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
