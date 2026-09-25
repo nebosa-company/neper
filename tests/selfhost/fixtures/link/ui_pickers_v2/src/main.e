@@ -361,6 +361,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, today_box.x + today_box.width * 0.5, today_box.y + today_box.height * 0.5) != ok || stores[0usize].last_date.day != 25u8 || stores[0usize].last_date.month != 9u8 { os.exit(101i32) }
     let toggles_before_clear = stores[0usize].toggles
     if testing.tap(&harness, clear_box.x + clear_box.width * 0.5, clear_box.y + clear_box.height * 0.5) != ok || stores[0usize].toggles != toggles_before_clear + 1usize { os.exit(102i32) }
+    // (D1277) With the week of the 16th to the 22nd unavailable, Down from the
+    // 11th goes to the 25th.
+    var closed_week: [7]time.Date = zero
+    var cw = 0usize
+    while cw < 7usize {
+        closed_week[cw] = time.Date { year: 2026i32, month: 3u8, day: u8(16usize + cw) }
+        cw += 1usize
+    }
+    var week_marks: overlay.CalendarMarks = zero
+    week_marks.unavailable = closed_week[..]
+    f = mem.arena_from(frame_storage)
+    let (skipping, skipping_error) = overlay.calendar_with(&f, 1100u64, &theme, "March", first_of_march, first_of_march, false, false, first_of_march, first_of_march, first_of_march, false, picked_dates, picked_dates, week_marks)
+    let (skipping_page, skipping_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if skipping_error != ok || skipping_page_error != ok { os.exit(103i32) }
+    skipping_page[0usize] = skipping
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), skipping_page[0usize..1usize]), time.Instant { nanos: 3400000000i64 }) != ok { os.exit(104i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 1114u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok { os.exit(105i32) }
+    let (skip_focus, has_skip_focus) = testing.focused(&harness)
+    if !has_skip_focus || skip_focus.slot != testing.by_key(&harness, 1128u64).element.slot { os.exit(106i32) }
     // (D1230) Times in the locale's clock, and typed times in any common form.
     let (clock_bytes, clock_bytes_error) = mem.alloc[u8](a, 16usize)
     if clock_bytes_error != ok { os.exit(50i32) }

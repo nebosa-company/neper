@@ -24814,3 +24814,14 @@ the full name, or count only the day's text.
 
 `ui_pickers` finds the selected day by its full date, and `ui_pickers_v2` and
 the other calendar fixtures still pass, on Windows and Linux.
+
+## D1277 — Calendar arrows skip wholly unavailable weeks
+
+Up and Down in `calendar_with` pass over a calendar row whose every day is
+unavailable (`week_unavailable`, from the row's first day in the theme's
+week order), up to six rows, as the Calendar spec asks. Left and Right still
+land on single unavailable days, which stay focusable so they can be read.
+With no unavailable days, earliest or latest, the check costs nothing.
+
+`ui_pickers_v2` holds Down from the 11th of March 2026 landing on the 25th
+when the week of the 16th is closed, on Windows and Linux.

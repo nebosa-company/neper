@@ -3035,6 +3035,20 @@ fn date_unavailable(marks: *const CalendarMarks, d: time.Date) -> bool {
     ret date_listed(marks.unavailable, d)
 }
 
+// (D1277) Whether every day of the calendar row holding `d` is unavailable.
+fn week_unavailable(marks: *const CalendarMarks, d: time.Date, week_start: usize) -> bool {
+    if marks.unavailable.len == 0usize && !marks.has_earliest && !marks.has_latest { ret false }
+    let column = (weekday_of(i64(d.year), i64(d.month), i64(d.day)) + 7i64 - i64(week_start)) % 7i64
+    var day = moved_date(d, 0i64 - column)
+    var k = 0usize
+    while k < 7usize {
+        if !date_unavailable(marks, day) { ret false }
+        day = moved_date(day, 1i64)
+        k += 1usize
+    }
+    ret true
+}
+
 // The ISO 8601 week of the day `count` days from 1970-01-01: the week holding the
 // year's first Thursday is week 1.
 fn iso_week_of(count: i64) -> i64 {
@@ -3052,7 +3066,8 @@ fn iso_week_of(count: i64) -> i64 {
 // are `on-surface` at 38% under no state layer, a press does nothing and the tree
 // calls it disabled, though arrow keys still reach it.
 // (D1276) A day's name is its full date ("Tuesday, 10 March 2026").
-// ponytail: arrows do not skip a wholly unavailable week; English names only.
+// (D1277) Up and Down skip a week whose every day is unavailable.
+// ponytail: English names only.
 fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], marks: CalendarMarks) -> (widget.Node, err) {
     let year = i64(shown.year)
     let month = i64(shown.month)
@@ -3295,8 +3310,21 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 let column_day = (weekday_of(i64(date.year), i64(date.month), i64(date.day)) + 7i64 - i64(week_start)) % 7i64
                 moves[0usize] = DayMove { shown: shown, target: moved_date(date, -1i64), show: show, runtime: t.runtime, calendar: key }
                 moves[1usize] = DayMove { shown: shown, target: moved_date(date, 1i64), show: show, runtime: t.runtime, calendar: key }
-                moves[2usize] = DayMove { shown: shown, target: moved_date(date, -7i64), show: show, runtime: t.runtime, calendar: key }
-                moves[3usize] = DayMove { shown: shown, target: moved_date(date, 7i64), show: show, runtime: t.runtime, calendar: key }
+                // (D1277) Up and Down pass over a week whose every day is unavailable.
+                var up_target = moved_date(date, -7i64)
+                var down_target = moved_date(date, 7i64)
+                var hops = 0usize
+                while hops < 6usize && week_unavailable(&marks, up_target, week_start) {
+                    up_target = moved_date(up_target, -7i64)
+                    hops += 1usize
+                }
+                hops = 0usize
+                while hops < 6usize && week_unavailable(&marks, down_target, week_start) {
+                    down_target = moved_date(down_target, 7i64)
+                    hops += 1usize
+                }
+                moves[2usize] = DayMove { shown: shown, target: up_target, show: show, runtime: t.runtime, calendar: key }
+                moves[3usize] = DayMove { shown: shown, target: down_target, show: show, runtime: t.runtime, calendar: key }
                 moves[4usize] = DayMove { shown: shown, target: moved_date(date, -column_day), show: show, runtime: t.runtime, calendar: key }
                 moves[5usize] = DayMove { shown: shown, target: moved_date(date, 6i64 - column_day), show: show, runtime: t.runtime, calendar: key }
                 var move_index = 0usize
