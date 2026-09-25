@@ -5586,8 +5586,8 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 // snaps shut: dragged below half of `low` it reports 0; any nudge, drag past
 // `low` or the sash's double-click opens it again.
 // (D1333) While its sash is dragged it shows its size in a plain tooltip.
-// ponytail: no resize cursor (the runtime sets no pointer cursor); the collapse
-// does not animate.
+// (D1334) Over or dragging its sash, the pointer is the resize cursor.
+// ponytail: the collapse does not animate.
 fn resizable_pane_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node, collapsible: bool) -> (widget.Node, err) {
     let (named, named_error) = mem.alloc[u8](a, label.len + 7usize)
     if named_error != ok { ret (zero, TooLarge) }
@@ -5672,6 +5672,12 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     parts[0usize] = widget.box(key + 1u64, pane_style, body[0usize..1usize])
     // The sash's look in its state.
     let state = control_state(t, key + 2u64, true, false)
+    // (D1334) Over or dragging the sash, the resize cursor.
+    if (state.hovered || state.pressed) && mem.address_of(t.runtime) != 0usize {
+        var cursor_shape = 4u8
+        if vertical { cursor_shape = 5u8 }
+        widget.request_cursor(t.runtime, cursor_shape)
+    }
     var sashes_line = style.color(t.tokens, .OutlineVariant)
     var line_width: f32 = 1.0
     var grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)

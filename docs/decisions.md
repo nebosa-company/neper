@@ -25701,3 +25701,19 @@ setting a pointer cursor.
 
 `ui_panes` holds a sash mid-drag: the tooltip stands saying "150 px"; released,
 it is gone, on Windows and Linux; `ui_containers4_v2` still passes on both.
+
+## D1334 — Widgets ask for the pointer cursor; sashes show the resize cursor
+
+The runtime had no way for a widget to set the pointer cursor, though the
+window could (`window.cursor`). Now a build asks with
+`widget.request_cursor(runtime, shape)` in `window.Cursor`'s order (0
+arrow, 1 text, 2 hand, 3 crosshair, 4 resize across, 5 resize up and down);
+the last ask wins and a build that asks nothing leaves the arrow.
+`reconcile` latches the ask as the frame's (`widget.cursor_of`), and
+`app`'s frame sets it on the window whenever it changes. A resizable pane's
+sash asks for the resize cursor across its axis while hovered or dragged, as
+the ResizablePane spec says. Text fields and links do not ask yet.
+
+`ui_panes` finds the arrow at rest, the resize-across cursor with the pointer
+over a sash, and the arrow again once it leaves, on Windows and Linux;
+`ui_app`, `ui_lifecycle` and `ui_drag_drop` still pass on both.
