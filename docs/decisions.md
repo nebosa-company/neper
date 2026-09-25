@@ -24885,3 +24885,17 @@ new tab's width while it slides.
 
 `ui_tabs_rtl` holds the indicator under the middle tab half way from the
 first to the third, and gone from it once settled, on Windows and Linux.
+
+## D1282 — Disclosure chevrons turn
+
+A disclosure's chevron no longer swaps glyphs: it stays `chevron-right`
+(`chevron-left` in right-to-left) and turns a quarter to point down while
+open, easing over `duration-short-3` with the standard curve, as the
+Disclosure spec asks. It uses `eased_over`, the new duration-taking form of
+D1279's `eased_share`. Under reduced motion it still swaps to
+`chevron-down`. The content's height change on opening and closing is still
+to come.
+
+`ui_containers_v2` holds the chevron's square drawn three different ways,
+shut, mid-turn and open, on Windows and Linux; the other disclosure fixtures
+still pass.
