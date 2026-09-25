@@ -23740,3 +23740,68 @@ does not offer is refused.
 performs Delete and refuses an unknown name on Windows and Linux;
 `ui_collections_v2`, `ui_collection` and `ui_accessibility` pass on both hosts.
 The host bridge still does not publish names (D1197).
+
+## D1201 — Implicit animation state is runtime-keyed
+
+Implicit animations (`animated_opacity`, `animated[T]`, …) keep their from, to
+and controller state in the widget runtime under the element's stable key,
+derived as `key ^ fnv1a64("anim")`, the way drag cells and hover state are
+kept. The caller writes only the target. Capacity is `widget.Limits.animations`.
+On overflow the animation snaps to its target and is counted in
+`AnimationFrameStats`; it never fails. Explicit `Controller`s stay caller-owned
+data. (docs/animation-spec.md §2 P3; widget-plan P6-05.)
+
+## D1202 — D800's quadratic curves are renamed and aliased
+
+The D800 `Curve` members `EaseIn`, `EaseOut` and `EaseInOut` are quadratic,
+while Flutter's and CSS's curves of those names are cubic Béziers. The
+quadratic shapes are kept under `QuadIn`, `QuadOut` and `QuadInOut`, and the old
+members stay as deprecated aliases of those shapes, so no caller's motion
+changes silently. The new `CurveName` catalog uses Flutter's names and numbers.
+(§4.1; P6-01.)
+
+## D1203 — Colours interpolate in premultiplied linear light
+
+`paint.Color` lerps premultiplied in linear light and converts back to sRGB.
+This avoids muddy midpoints and matches how the renderer blends. Oklab was
+rejected: it handles hue changes better but costs more and would disagree
+with the renderer's blending. (§4.2; P6-02.)
+
+## D1204 — Physics lives inside e.ui.animation
+
+Springs, friction, gravity, clamped simulations and the velocity tracker are a
+`sim` section of `e.ui.animation`, not a new module. They have no consumer
+outside UI motion, and `modules.json` gains no row. (§5; P6-04.)
+
+## D1205 — Implicit animations opt into an entrance with `appear`
+
+On its first build, an implicit animation starts at its target and does not
+animate. `MotionSpec.appear` (with a start value) opts into an entrance, which
+replaces Flutter's `TweenAnimationBuilder` wrapping idiom. (§6; P6-05.)
+
+## D1206 — Opacity is a node kind, Faded
+
+`widget.Kind` gains `Faded: f32`, which maps to `scene.OpacityLayer`, rather
+than an opacity field on `style.Style`. Reconcile can then recognise an
+opacity-only change without diffing every style field and patch the retained
+scene. `Faded` is paint-only, like `Transformed` (D1192): layout, hit testing
+and semantics ignore it. (§7.1; P6-06.)
+
+## D1207 — Stagger is capped at 8 steps
+
+`stagger` offsets item `i` by `min(i, 7) × Durations.stagger`, so items past the
+eighth enter together with it and long lists never wait. This is the Material
+guidance. (§8.1; P6-07.)
+
+## D1208 — No custom hero shuttles in v1
+
+A hero flight always flies the destination subtree, built into the overlay
+layer, with a cross-fade from the source snapshot when the shapes differ.
+There is no equivalent of `HeroFlightShuttleBuilder` in v1. (§9.3, §15; P6-08.)
+
+## D1209 — Route transitions absorb pointer input on both routes
+
+While a route transition runs, pointer input to both the outgoing and the
+incoming route is absorbed, and keyboard focus is already in the incoming
+route (on pop, it returns to the element that pushed). A predictive-back
+gesture is the only input that drives a transition. (§9.1; P6-08.)
