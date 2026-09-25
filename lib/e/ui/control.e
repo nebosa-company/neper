@@ -5054,7 +5054,9 @@ fn tab_strip_extents(runtime: *widget.Runtime, strip_key: widget.Key) -> (f32, f
 // (D1281) A tab bar's indicator slide, kept on the bar across frames: the tab
 // selected last frame, the offset the slide began at and when, and where the
 // new tab stands in the bar (last frame's layout).
-type TabSlide = struct { last: usize, from: f32, since: i64, set: bool, at: f32, wide: f32 }
+// (D1309) `old_wide` is the old tab's width and `left` the share of the slide
+// still to run, so the indicator's width eases too.
+type TabSlide = struct { last: usize, from: f32, since: i64, set: bool, at: f32, wide: f32, old_wide: f32, left: f32 }
 
 // (D1281) How far the chosen tab's indicator stands from its tab this frame: on
 // a change of tab it starts at the old tab's place (last frame's bounds) and
@@ -5096,6 +5098,7 @@ fn tab_slide_of(t: *const Theme, key: widget.Key, selected: usize, tab_key: widg
                 cell.from = old_box.x - new_box.x
                 cell.at = new_box.x - bar_box.x
                 cell.wide = new_box.width
+                cell.old_wide = old_box.width
             }
         }
         cell.since = now
@@ -5110,7 +5113,8 @@ fn tab_slide_of(t: *const Theme, key: widget.Key, selected: usize, tab_key: widg
         ret (0.0, none)
     }
     widget.request_animation_frame(t.runtime)
-    ret (cell.from * (1.0 - animation.ease(.EaseInOut, progress)), cell)
+    cell.left = 1.0 - animation.ease(.EaseInOut, progress)
+    ret (cell.from * cell.left, cell)
 }
 
 fn tab_enabled(options: *const TabsOptions, i: usize) -> bool {
@@ -5140,7 +5144,8 @@ fn tabs_options() -> TabsOptions {
 // focused selected tab in view.
 // (D1255) On a pointer host its chevrons page it.
 // (D1281) The indicator slides between tabs (`tab_slide`).
-// ponytail: no edge fade; the indicator keeps its own width while it slides.
+// (D1309) The sliding indicator (keyed `key + 1048574`) eases its width as well.
+// ponytail: no edge fade.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -5355,11 +5360,13 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         var glide = style.defaults()
         glide.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
         var slide_x = slide_cell.at + slide
-        var slide_w = slide_cell.wide
+        // (D1309) The width eases from the old tab's to the new one's with it.
+        let eased_wide = slide_cell.wide + (slide_cell.old_wide - slide_cell.wide) * slide_cell.left
+        var slide_w = eased_wide
         var slide_h: f32 = 2.0
         if !options.secondary {
             slide_x += 16.0
-            slide_w = max_zero(slide_cell.wide - 32.0)
+            slide_w = max_zero(eased_wide - 32.0)
             slide_h = 3.0
             glide.corners = style.Corners { top_left: 3.0, top_right: 3.0, bottom_right: 0.0, bottom_left: 0.0 }
         }
@@ -5368,7 +5375,7 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         let (slid, slid_error) = mem.alloc[widget.Node](a, 3usize)
         if slid_error != ok { ret (zero, TooLarge) }
         slid[0usize] = scoped[0usize]
-        slid[2usize] = widget.box(0u64, glide, zero)
+        slid[2usize] = widget.box(key + 1048574u64, glide, zero)
         slid[1usize] = widget.positioned(0u64, slide_x, h - slide_h, style.defaults(), slid[2usize..3usize])
         scoped[0usize] = widget.stack(0u64, style.defaults(), slid[0usize..2usize])
     }

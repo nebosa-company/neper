@@ -294,6 +294,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         slide_step += 1usize
     }
+    // (D1309) From a wider first tab (its count badge) to the plain third, the
+    // secondary indicator's width eases: half way it is between the two tabs'.
+    var badge_counts: [3]str = zero
+    badge_counts[0usize] = "12"
+    var wide_options = control.tabs_options()
+    wide_options.secondary = true
+    wide_options.badges = badge_counts[..]
+    var wide_step = 0usize
+    while wide_step < 4usize {
+        var wide_at = 12000000000i64
+        var wide_pick = 0usize
+        if wide_step == 1usize { wide_at = 12016000000i64 }
+        if wide_step == 2usize {
+            wide_at = 12100000000i64
+            wide_pick = 2usize
+        }
+        if wide_step == 3usize {
+            wide_at = 12250000000i64
+            wide_pick = 2usize
+        }
+        if testing.begin(&harness, time.Instant { nanos: wide_at }) != ok { os.exit(53i32) }
+        frame = mem.arena_from(frame_bytes)
+        let (widening, widening_error) = control.tabs_of(&frame, 700u64, &theme, slide_labels[..], wide_pick, many_picks[0usize..3usize], wide_options)
+        let (widening_page, widening_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if widening_error != ok || widening_page_error != ok { os.exit(54i32) }
+        widening_page[0usize] = widening
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 80.0), widening_page[0usize..1usize]), time.Instant { nanos: wide_at }) != ok { os.exit(55i32) }
+        if wide_step == 3usize {
+            let (first_wide, has_first_wide) = widget.bounds_of(&runtime, testing.by_key(&harness, 701u64).element)
+            let (third_wide, has_third_wide) = widget.bounds_of(&runtime, testing.by_key(&harness, 703u64).element)
+            let (glider, has_glider) = widget.bounds_of(&runtime, testing.by_key(&harness, 700u64 + 1048574u64).element)
+            if !has_first_wide || !has_third_wide || !has_glider || !(first_wide.width > third_wide.width + 1.0) { os.exit(56i32) }
+            if !(glider.width < first_wide.width - 0.5) || !(glider.width > third_wide.width + 0.5) { os.exit(57i32) }
+        }
+        wide_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui tabs rtl ok\n")
     ret ok
