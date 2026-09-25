@@ -57,7 +57,7 @@ Top alignment: in a three-line row the leading and trailing slots align to the t
 - Control rows: the whole row toggles its checkbox, radio or switch; Space toggles from the keyboard.
 - Enter opens the row; Space selects or toggles it. Shift+F10 or the Menu key opens the row's context menu, as does a secondary click or a long press (touch, 500ms, with a haptic tick on Android and iOS).
 - Text never wraps into a taller row than the variant: the headline ellipsises at the end, supporting text clamps and ellipsises. File names ellipsise in the middle ("release-notes-…-final.md") so the extension stays visible.
-- Selection changes animate the fill in `duration-short-3` with `ease-standard`; reduced motion changes it at once.
+- Selection changes animate the fill in `duration-short-3` with `ease-standard`.
 
 ## Platform adaptation
 | Host | What changes |

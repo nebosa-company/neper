@@ -47,7 +47,7 @@ Use a Combo box when the full list should also open on demand, a Select when onl
 - Tab or Right (inline completion) accepts the completion; Escape closes the list, a second Escape clears the text.
 - Pointer: click a row to pick it. Touch: tap; the list scrolls independently and the keyboard stays up.
 - Picking fills the field with the value and closes the list; focus stays in the field.
-- The list opens with `duration-medium-1` and `ease-emphasized-decelerate` (fade and 4px drop), closes with `duration-short-2`. Rows do not animate as they filter.
+- The list opens with `duration-medium-1` and `ease-emphasized-decelerate` (fade and 4px drop), closes with `duration-short-2` and `ease-emphasized-accelerate`. Rows do not animate as they filter.
 
 ## Platform adaptation
 | Host | What changes |

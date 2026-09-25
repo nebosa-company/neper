@@ -56,6 +56,7 @@ Use a Text field or Spin box when the reader must enter an exact value most of t
 - Touch: the same, with the track as a 48 tall target. A vertical drag starting on the slider scrolls the page instead unless the slider already has the gesture.
 - Keyboard: Left and Down decrease by one step (1% when continuous), Right and Up increase, Page Up and Page Down move by 10%, Home and End go to the minimum and maximum. In a range, Tab moves from the lower handle to the upper one. Right-to-left layouts mirror Left and Right.
 - The value label appears on focus or drag over `duration-short-2` (`ease-standard`) and hides `duration-short-4` after release.
+- A press on the track glides the handle to the new value over `duration-short-3` with `ease-standard`; dragging follows the pointer without easing.
 - The value box and the slider stay in sync. Typing commits on Enter or blur and clamps to the scale, with a Field message when the value is clamped ("Maximum is 16").
 - With reduced motion the handle jumps on a track press instead of gliding, and the value label cross-fades.
 

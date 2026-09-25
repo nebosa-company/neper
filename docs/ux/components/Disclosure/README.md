@@ -41,7 +41,7 @@ For several sections where one is open at a time use Accordion. For peer views u
 ## Behaviour
 - A press anywhere on the header toggles it. The content is never a press target for closing.
 - Enter and Space toggle a focused header. Right opens and Left closes (mirrored in right-to-left), matching tree conventions.
-- Opening expands the content height over `duration-medium-2` with `ease-emphasized-decelerate` while the chevron turns with `ease-standard`; closing uses `duration-short-4` with `ease-emphasized-accelerate`. Content below moves, it is never covered.
+- Opening expands the content height over `duration-medium-2` with `ease-emphasized-decelerate` while the chevron turns over `duration-short-3` with `ease-standard`; closing uses `duration-short-4` with `ease-emphasized-accelerate`. Content below moves, it is never covered.
 - Opening scrolls the header into view only if the content would fall off screen; focus stays on the header.
 - The app remembers open state per section key across sessions in settings pages.
 

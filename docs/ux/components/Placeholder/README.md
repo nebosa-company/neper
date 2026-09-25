@@ -34,7 +34,7 @@ Loading is the only state. When content arrives, the placeholders cross-fade to 
 
 ## Behaviour
 - Show placeholders only after 300 ms, so fast loads show no flash. Once shown, keep them at least 500 ms.
-- The sweep crosses the region every 1.5 s with `ease-standard`, all shapes in step (one band over the region, not one per shape). With reduced motion there is no sweep: the fill pulses between 100% and 60% opacity every 2 s, or stays still.
+- The sweep crosses the region every 1.5 s with `ease-linear` and a 0.5 s pause (the same shimmer as Skeleton), all shapes in step (one band over the region, not one per shape). With reduced motion there is no sweep and no pulse: the fill stays still.
 - Content replaces the placeholders with a `duration-short-4` cross-fade (`ease-standard`). Rows that arrive in order fill in top to bottom.
 - Placeholders are not interactive: no hover, no focus, no press. The region's real controls (a toolbar, a search) stay usable.
 
@@ -60,7 +60,7 @@ Placeholders carry no text. The region's accessible name says what is loading, i
 ## e.ui today
 `control.placeholder` is a `width` by `height` block in `surface-variant` with `radius-sm` corners, in a node with the Busy state and no role or label. It does not animate. To reach this design:
 - Fill with `surface-container-highest`, and add the text-line (12 and round), circle, and content-radius shapes.
-- Add the region-wide sweep, with a pulse or a still fill under reduced motion.
+- Add the region-wide sweep, with a still fill under reduced motion.
 - Move Busy and a name to a region wrapper (`placeholder_region(label, children)`), and hide the individual shapes from the tree. Today each block is an unnamed busy node, so a reader hears only "busy" once per block.
 - Add the 300 ms show delay, the 500 ms minimum and the cross-fade to content.
 - Document composing placeholders in the real component's slots, which is what Skeleton builds on.

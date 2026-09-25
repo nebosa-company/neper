@@ -50,6 +50,7 @@ Use Image when the picture already exists as a file or texture. Use the Progress
 - Touch: a tap selects the nearest point (48 search radius); a horizontal drag scrubs; a vertical drag scrolls the page.
 - Resize repaints at the new size; charts re-flow ticks, never stretch.
 - Animated paint (a series drawing in) runs `duration-long-2` with `ease-emphasized-decelerate` once, on first data only; reduced motion shows the final frame.
+- Transitions between data (a new value, a changed series) take `duration-medium-2` with `ease-standard`; reduced motion shows the new data at once.
 
 ## Platform adaptation
 | Host | What changes |

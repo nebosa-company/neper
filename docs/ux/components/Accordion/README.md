@@ -5,7 +5,7 @@ An accordion is a stack of expander headers in one container where opening a sec
 ## Anatomy
 1. Container: `surface-container-low` (filled) or `surface` with 1px `outline-variant` (outlined), `radius-md`, clipped.
 2. Section header: a full-width row, 56 min (72 with a supporting line): optional leading icon, title, supporting line, trailing chevron.
-3. Chevron: `chevron-down` 24 in `on-surface-variant`; turns 180° while open.
+3. Chevron: `chevron-down` 24 in `on-surface-variant`; turns 180° while open, over `duration-short-3` with `ease-standard`.
 4. Divider: 1px `outline-variant` between sections, full width.
 5. Section content: below its header, 16 sides and bottom.
 6. State layer and inset focus ring on the header.

@@ -42,7 +42,7 @@ Use Text when nothing on screen needs copying (labels, headings, button text nev
 ## Behaviour
 - Pointer: press and drag selects characters; double-click a word (an identifier with `_` and `.` counts as one word for `code`); triple-click a line or paragraph. Shift+click extends.
 - Keyboard: Tab reaches a block and an inline value with a copy button (the button is the stop); arrows move the caret, Shift+arrows extend, Ctrl/Cmd+Shift+arrows by word, Home and End to the line, Ctrl/Cmd+A selects all of this text only, Ctrl/Cmd+C copies, Escape clears the selection.
-- Touch: long press selects the word under the finger and shows handles and the toolbar; drag a handle to extend with a magnifier; a tap elsewhere dismisses. The toolbar enters with `duration-short-4`, `ease-emphasized-decelerate`.
+- Touch: long press selects the word under the finger and shows handles and the toolbar; drag a handle to extend with a magnifier; a tap elsewhere dismisses. The toolbar fades in with a 4px drop over `duration-short-4`, `ease-emphasized-decelerate`.
 - Selection never crosses into neighbouring controls; a view that needs cross-paragraph selection makes the whole region one selectable text.
 - The context menu replaces the host's default only by adding to it: Copy and Select all always first.
 

@@ -39,7 +39,7 @@ Use a single FAB when there is one creation action, an extended FAB or a Split b
 ## Behaviour
 - Pressing the FAB opens; pressing the close button, the scrim, Escape or system back closes and returns focus to the FAB. Picking an item runs it and closes.
 - Opening moves focus to the first item (the one nearest the FAB); Up/Down move between items and the close button, Home/End jump, Tab cycles inside while open.
-- Items enter from the FAB, staggered 30ms apart bottom to top, each over `duration-medium-1` with `ease-emphasized-decelerate`; the FAB morphs to the circle over `duration-medium-2` with `ease-standard`. Closing reverses with `ease-emphasized-accelerate` in `duration-short-4`.
+- Items enter from the FAB, staggered `duration-stagger` (30 ms) apart bottom to top, each over `duration-medium-1` with `ease-emphasized-decelerate`; the FAB morphs to the circle over `duration-medium-2` with `ease-standard`. Closing reverses with `ease-emphasized-accelerate` in `duration-short-4`.
 - The FAB hides on scroll down and returns on scroll up (compact only); an open speed dial closes on scroll.
 
 ## Platform adaptation

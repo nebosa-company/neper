@@ -48,7 +48,7 @@ Use List for fewer than about 200 rows the app can build at once. Use Virtual gr
 - Paging: the next page is requested when the viewport is within one screen of the loaded end.
 - Reverse lists stay pinned to the end while the person is at the end; if they have scrolled up, new rows show a "12 new messages" chip that scrolls to the end.
 - The thumb: pressing the track pages; dragging the thumb scrolls proportionally; on touch, the fast-scroll handle appears only when the content is more than 4 screens long.
-- Motion: sticky headers push each other off rather than overlap. Reduced motion keeps scroll animation instant on programmatic jumps (Home, End, "Jump to latest").
+- Motion: sticky headers push each other off rather than overlap. Programmatic jumps (Home, End, "Jump to latest") scroll over `duration-medium-2` with `ease-standard`. Reduced motion keeps scroll animation instant on programmatic jumps (Home, End, "Jump to latest").
 
 ## Platform adaptation
 | Host | What changes |

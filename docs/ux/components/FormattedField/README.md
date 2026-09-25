@@ -44,7 +44,7 @@ Use a Date picker or Time picker when people pick rather than type; a Spin box f
 - Characters that can never fit are ignored silently; for a masked field, the keyboard type follows the slot (numeric for digits).
 - Backspace deletes the character before the caret and any separator it passes; the caret never lands inside a separator.
 - Paste accepts loose input and normalises it (strip spaces, uppercase keys) before checking.
-- Leaving the field (blur or Enter) validates and, for normalised fields, rewrites the text to canonical form. The rewrite is instant; the error appears with a `duration-short-2` fade.
+- Leaving the field (blur or Enter) validates and, for normalised fields, rewrites the text to canonical form. The rewrite is instant; the error appears with a `duration-short-2` fade, which stays with reduced motion (it is not movement).
 - Undo restores the text as typed, before normalisation.
 
 ## Platform adaptation

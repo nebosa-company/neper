@@ -44,7 +44,7 @@ Use a Select (Picker) when typing is not allowed, an Autocomplete when there is 
 - With the list closed, Up/Down step to the previous or next preset (Windows and Linux convention).
 - Pointer: clicking the field places the caret, it does not open the list (clicking the chevron does). Touch: tapping the chevron opens; tapping the field opens the keyboard.
 - Commit on Enter or blur; the typed text is the value in editable mode.
-- The list opens with `duration-medium-1` and `ease-emphasized-decelerate`; the chevron turns with `ease-standard` `duration-short-3`; closing takes `duration-short-2`.
+- The list opens with `duration-medium-1` and `ease-emphasized-decelerate`; the chevron turns with `ease-standard` `duration-short-3`; closing takes `duration-short-2` with `ease-emphasized-accelerate`.
 
 ## Platform adaptation
 | Host | What changes |

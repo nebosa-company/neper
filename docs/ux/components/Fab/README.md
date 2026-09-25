@@ -47,10 +47,10 @@ One FAB per screen. Use Button (filled) when the action belongs to a form or a d
 - Focus: `state-focus` layer and the focus ring 3 px `focus-ring`, 2 px outside.
 - Pressed: `state-pressed` layer, `elevation-3`; ripple on touch.
 - Lowered: `elevation-1` when docked in a bottom app bar.
-- Open (menu): the FAB morphs to a `primary` circle with `close`; items enter bottom-up, staggered 30 ms, over `duration-medium-1` with `ease-emphasized-decelerate`; they leave top-down with `ease-emphasized-accelerate` over `duration-short-4`.
+- Open (menu): the FAB morphs to a `primary` circle with `close`; items enter bottom-up, staggered by `duration-stagger` (30 ms), over `duration-medium-1` with `ease-emphasized-decelerate`; they leave top-down with `ease-emphasized-accelerate` over `duration-short-4`.
 - Extended collapse: the label fades and the width shrinks to 56 over `duration-medium-1` with `ease-emphasized-decelerate` when scrolling down 1 screen; expands on scroll up.
 - Disabled: not used. If the action is unavailable, hide the FAB (scale out over `duration-short-4`) and explain in the content.
-- Hidden: scales out to 0 over `duration-short-4` while a snackbar, sheet or keyboard would cover it; comes back with `ease-emphasized-decelerate`.
+- Hidden: scales out to 0 over `duration-short-4` with `ease-emphasized-accelerate` while a snackbar, sheet or keyboard would cover it; comes back over `duration-short-4` with `ease-emphasized-decelerate`.
 
 ## Behaviour
 - Pressing a plain FAB runs its action at once, usually opening a new item's view with a container transform from the FAB over `duration-long-2`.

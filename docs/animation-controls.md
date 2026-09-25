@@ -12,10 +12,10 @@ This is the companion to [`animation-spec.md`](animation-spec.md) (§7.3,
 - Rows for the 112 components with a design spec are taken from their
   `docs/ux/components/<Name>/README.md`. That README is the authority, and a
   row that disagrees with it is a bug in this table.
-- Rows marked **proposed** fill a gap where no README says anything (§4, §5).
-  They need a line in the design language before implementation.
-- §6 lists the places where the design language contradicts itself or the
-  spec.
+- For controls and behaviours with no README (§4, §5), this table is the
+  design (D1214).
+- §6 records how the conflicts and gaps in the design language were resolved
+  (D1214–D1218). The READMEs now carry the fixes.
 
 `scripts/check_motion_spec.py` (spec §12.8) will parse this table against
 the READMEs and against the `Transition` constants in code.
@@ -76,7 +76,7 @@ These have no README. Their rows come from how the controls below use them.
 |---|---|---|---|---|---|
 | StateLayer | hover, focus and press layers | XFade | S2 Std | S2 Std | Same |
 | PressRipple | a press on touch hosts (Button, Row) | Ripple | M2 Std | S2 Std | Instant: layer only, no ripple (per IconButton) |
-| FocusRing | focus moves | — (proposed: focus is never animated) | — | — | — |
+| FocusRing | focus moves | — (never animated, D1214) | — | — | — |
 
 ### 3.2 Actions (`e.ui.control`, P5-03)
 
@@ -84,11 +84,11 @@ These have no README. Their rows come from how the controls below use them.
 |---|---|---|---|---|---|
 | ActionRow | More's menu | MenuGrow | M1 EmD | S3 EmA | XFade |
 | ActionRow | restacking when the width crosses a threshold | — | — | — | — |
-| Button | press | Ripple | M2 Std | S2 Std | Instant *(not stated; see §6.5)* |
+| Button | press | Ripple | M2 Std | S2 Std | Instant (no ripple, D1218) |
 | Fab | the menu opens: the FAB morphs to a circle with `close` | Morph | M1 EmD | S4 EmA | XFade |
 | Fab | menu items enter bottom-up and leave top-down | DropFade + Stagger 30 ms | M1 EmD | S4 EmA | Fade, no stagger |
 | Fab | the extended label collapses and expands on scroll | Morph (width + label fade) | M1 EmD | M1 EmD | Fade |
-| Fab | hide and show (under a snackbar, sheet or keyboard) | FadeScale from 0 | EmD *(duration not stated)* | S4 | Fade |
+| Fab | hide and show (under a snackbar, sheet or keyboard) | FadeScale from 0 | S4 EmD | S4 EmA | Fade |
 | Fab | a press opens the new item's view | ContainerTransform | L2 EmD | — | XFade |
 | IconButton | a toggle's icon morph | XFade | S3 Std | S3 Std | Instant |
 | IconButton | press | Ripple | M2 Std | S2 Std | Instant |
@@ -104,23 +104,23 @@ These have no README. Their rows come from how the controls below use them.
 
 | Component | Motion | Pattern | In | Out | Reduced |
 |---|---|---|---|---|---|
-| Autocomplete | the list opens | DropFade 4 px | M1 EmD | S2 *(easing not stated)* | Fade, no drop |
+| Autocomplete | the list opens | DropFade 4 px | M1 EmD | S2 EmA | Fade, no drop |
 | Autocomplete | rows while filtering | — | — | — | — |
 | Dial | a key step moves the arc | ValueEase | S3 Std | — | Instant |
 | Dial | dragging the handle | FollowGesture | 1:1 | — | Same |
 | FieldLabel | the help button's rich tooltip or popover | see Tooltip, Popover | | | |
-| FieldMessage | the message changes | XFade | S2 Std | S2 Std | Same *(not stated)* |
+| FieldMessage | the message changes | XFade | S2 Std | S2 Std | Same |
 | FieldMessage | the height change | — (no animation, to avoid wobble) | — | — | — |
 | Form | a failed submit scrolls to the summary | ScrollTo | M2 Std | — | Instant |
 | Form | messages appear | XFade | S2 Std | — | Instant |
 | Form | reflow between 1 and 2 columns at 840 | — | — | — | — |
 | FormField | messages | XFade | S2 Std | S2 Std | Same |
-| FormattedField | the error appears | XFade | S2 | — | Same *(not stated)* |
+| FormattedField | the error appears | XFade | S2 | — | Same |
 | Rating | the chosen star pulses | Pulse (scale 1 → 1.15 → 1) | S3 Std | — | Instant |
 | SearchBar | compact: the bar grows into the full-screen view | ContainerTransform | M4 EmD | S4 EmA | XFade |
 | SearchBar | docked: the view grows from the bar | MenuGrow (fade + grow) | M1 EmD | S4 EmA | XFade |
 | ShortcutRecorder | entering recording | — (explicitly none) | — | — | — |
-| SpinBox | the value changes | *(not specified; proposed: none, as Stepper)* | — | — | — |
+| SpinBox | the value changes | — (none, as Stepper; D1214) | — | — | — |
 | Stepper | the value changes | — (explicitly none) | — | — | — |
 | TextField | the label floats and sinks | Morph (position + size) | S4 Std | S4 Std | XFade between the positions |
 | TextField | the caret blinks | Loop | — | — | Static (no blink) |
@@ -138,7 +138,7 @@ These have no README. Their rows come from how the controls below use them.
 | Chip | a removed input chip collapses its space | Collapse | — | S4 EmA | Instant |
 | Choice | the checkbox fills and the tick draws | Stroke | S2 Std | S2 Std | XFade |
 | Choice | the radio dot scales from 0 | FadeScale from 0 | S3 Std | S3 Std | XFade |
-| ComboBox | the list opens | MenuGrow | M1 EmD | S2 | Fade |
+| ComboBox | the list opens | MenuGrow | M1 EmD | S2 EmA | Fade |
 | ComboBox | the chevron turns | Rotate | S3 Std | S3 Std | Instant swap |
 | ListBox | the selection fill and checkbox | XFade | S2 Std | S2 Std | Same |
 | MultiSelectList | the tick | Stroke | S2 | S2 | Instant |
@@ -149,7 +149,7 @@ These have no README. Their rows come from how the controls below use them.
 | Select | the menu scales down from the field in Y | MenuGrow | M1 EmD | S4 EmA | XFade |
 | Select | the sheet on touch | EdgeSlide | M4 *(easing as Sheet)* | as Sheet | XFade |
 | Slider | the value label on focus or drag | XFade | S2 Std | S2 *(after an S4 delay)* | XFade |
-| Slider | a track press glides the handle | ValueEase | *(not stated; proposed S3 Std)* | — | Instant |
+| Slider | a track press glides the handle | ValueEase | S3 Std | — | Instant |
 | Slider | dragging | FollowGesture | 1:1 | — | Same |
 | Switch | the thumb slides and resizes | Indicator + Morph | S3 Std | S3 Std | Instant |
 | Switch | the track colour and the icon | XFade | S3 Std | S3 Std | Same |
@@ -180,12 +180,12 @@ These have no README. Their rows come from how the controls below use them.
 | Avatar | the photo replaces the initials once decoded | XFade | S3 | — | Instant |
 | Avatar | a presence change | XFade | S3 | S3 | Instant |
 | Canvas | a series draws in (first data only) | Stroke | L2 EmD | — | Static (the final frame) |
-| Canvas | transitions between data | ValueEase *(not stated)* | — | — | Instant |
+| Canvas | transitions between data | ValueEase | M2 Std | M2 Std | Instant |
 | Icon | a morph between two forms | XFade | S3 Std | S3 Std | Instant |
 | Image | fades in once decoded | XFade | S4 Std | — | Instant |
 | Image | an animated image plays once, then stops on its first frame | Loop (count 1) | — | — | Static, no autoplay |
 | RichText | hover wash | XFade | S2 Std | S2 Std | Instant |
-| SelectableText | the touch toolbar enters | DropFade *(effect not stated)* | S4 EmD | — | Instant |
+| SelectableText | the touch toolbar enters | DropFade 4 px | S4 EmD | — | Instant |
 | SelectableText | the caret blinks | Loop | — | — | Static |
 | Text | an in-place value change (a counter, a status) | XFade | S3 Std | S3 Std | Instant |
 
@@ -194,14 +194,14 @@ These have no README. Their rows come from how the controls below use them.
 | Component | Motion | Pattern | In | Out | Reduced |
 |---|---|---|---|---|---|
 | Accordion | open and close; the page keeps the header in place | Expand | M2 EmD | S4 EmA | XFade 100 |
-| Accordion | the chevron | Rotate | *(as Disclosure)* | | Instant swap |
-| Card | drag lift: 102% scale, 1.5° tilt (D1192) | Morph | *(not stated)* | | Instant, no tilt |
+| Accordion | the chevron | Rotate | S3 Std | S3 Std | Instant swap |
+| Card | drag lift: 102% scale, 1.5° tilt (D1192) | Morph | S3 Std | S3 Std | Instant, no tilt |
 | Card | Escape returns a dragged card | Reflow | M1 Std | — | Instant |
 | Card | open into the detail view | ContainerTransform | L2 EmD | — | XFade |
-| Card | the rise on hover | Morph (elevation) | *(not stated)* | | Instant |
+| Card | the rise on hover | Morph (elevation) | S3 Std | S3 Std | Instant |
 | Disclosure | open and close | Expand | M2 EmD | S4 EmA | XFade 100 |
-| Disclosure | the chevron turns | Rotate | Std *(duration not stated; proposed S3)* | | Instant swap |
-| Divider | — | *(not specified; proposed: none)* | — | — | — |
+| Disclosure | the chevron turns | Rotate | S3 Std | S3 Std | Instant swap |
+| Divider | — | — (none; D1214) | — | — | — |
 | DockLayout | the guide and the preview | XFade | S3 Std | S3 Std | Same |
 | DockLayout | the preview slides between targets | Indicator | S4 | — | Instant |
 | DockLayout | docking snaps | Reflow | M1 EmD | — | Instant |
@@ -210,7 +210,7 @@ These have no README. Their rows come from how the controls below use them.
 | DockPanel | a torn-off panel follows the pointer | FollowGesture | 1:1 | — | Same |
 | DockPanel | docking snaps | Reflow | M1 EmD | — | Instant |
 | GroupBox | expand and collapse | Expand | M2 EmD | EmA | Instant |
-| GroupBox | the chevron turns 180° | Rotate | Std *(duration not stated)* | | Instant |
+| GroupBox | the chevron turns 180° | Rotate | S3 Std | S3 Std | Instant |
 | MultiDocumentWorkspace | switching documents | — (instant, to hide typing latency) | — | — | — |
 | MultiDocumentWorkspace | a new split opens | Expand (width) | M1 EmD | — | Instant |
 | ResizablePane | the grip on sash hover | XFade | S2 | S2 | Instant |
@@ -232,14 +232,14 @@ These have no README. Their rows come from how the controls below use them.
 | Level | segmented: fills segment by segment, never backwards | ValueEase | S3 each | — | Instant |
 | NotificationList | a new notice slides in at the top | Reflow (insert) | M1 EmD | — | Instant |
 | NotificationList | the flyout | MenuGrow | M1 | S4 | Fade |
-| Placeholder | the region-wide sweep, every 1.5 s | Loop | Std | — | a pulse from 100% to 60% every 2 s, or Static *(see §6.3)* |
+| Placeholder | the region-wide sweep, every 1.5 s | Loop (Lin, 0.5 s pause; Skeleton's, D1217) | — | — | Static |
 | Placeholder | content replaces it | XFade | S4 Std | — | Same |
 | ProgressBar | determinate: eases to each value, never backwards | ValueEase | M2 Std | — | Instant |
-| ProgressBar | indeterminate: two segments on a 2 s loop | Loop (Lin position, Std width) | — | — | a pulse from 38% to 100% every 2 s *(see §6.2)* |
+| ProgressBar | indeterminate: two segments on a 2 s loop | Loop (Lin position, Std width) | — | — | opacity pulse 38–100% every 2 s at 10 fps (D1216) |
 | ProgressBar | done: holds 2 s, then leaves (300 ms show delay, 500 ms minimum) | XFade | — | S4 EmA | Same |
 | ProgressRing | determinate | ValueEase | M2 Std | — | Instant |
-| ProgressRing | indeterminate: a 1.5 s spin while the length grows and shrinks | Loop (Lin spin, Std length) | — | — | a 75% arc pulsing 38–100% *(see §6.2)* |
-| Skeleton | the shimmer: 1.5 s sweep + 0.5 s pause, in sync | Loop (Lin) | — | — | Static *(see §6.3)* |
+| ProgressRing | indeterminate: a 1.5 s spin while the length grows and shrinks | Loop (Lin spin, Std length) | — | — | a 75% arc pulsing 38–100% at 10 fps (D1216) |
+| Skeleton | the shimmer: 1.5 s sweep + 0.5 s pause, in sync | Loop (Lin) | — | — | Static (D1217) |
 | Skeleton | content replaces blocks one by one | XFade | S4 Std | — | Same |
 | Snackbar | enters: fades and rises 8 | DropFade | M1 EmD | S4 EmA | Fade 100, no rise |
 | Snackbar | a replacement waits for the current one to leave | sequence | | | |
@@ -251,7 +251,7 @@ These have no README. Their rows come from how the controls below use them.
 |---|---|---|---|---|---|
 | AppBar | the scrolled container colour | XFade | S4 Std | S4 Std | Same |
 | AppBar | medium and large collapse with the scroll; the headline cross-fades over 40 px | ScrollLinked | 1:1 | 1:1 | Instant snap at the collapse point |
-| AppBar | the contextual bar | DropFade *(effect not stated)* | M2 EmD | S4 EmA | XFade S3 |
+| AppBar | the contextual bar | DropFade 4 px | M2 EmD | S4 EmA | XFade S3 |
 | Breadcrumbs | navigation | — (explicitly none) | — | — | — |
 | Breadcrumbs | the edit field | XFade | S3 Std | S3 Std | Same |
 | DestinationBar | the active pill fills from the centre | Indicator (grow) | M1 EmD | — | Instant (no growth) |
@@ -325,11 +325,11 @@ These have no README. Their rows come from how the controls below use them.
 | ReorderableList | the other rows move out of the way | Reflow | S4 Std | — | Instant |
 | ReorderableList | the drop settles into the gap | Reflow | S4 EmD | — | Instant |
 | Row | press on touch | Ripple | M2 Std | S2 | Instant |
-| Row | the selection fill | XFade | S3 Std | S3 Std | *(contradictory; see §6.4)* |
+| Row | the selection fill | XFade | S3 Std | S3 Std | XFade S2 (D1218) |
 | SwipeActions | settle open or closed | FollowGesture + settle | M1 EmD | Std | XFade S2 |
 | SwipeActions | a destructive commit slides the row out and collapses it | EdgeSlide + Collapse | — | S4 EmA | Fade |
 | Table | a live update to a cell | XFade | S4 | — | Instant |
-| Table | new rows insert without moving the row under the pointer | Expand | *(not stated)* | — | Instant |
+| Table | new rows insert without moving the row under the pointer | Expand | M1 EmD | — | Instant |
 | TableRow | the detail row expands and collapses | Expand | M2 EmD | M2 EmA | Instant |
 | TableRow | the chevron | Rotate | S3 | S3 | Instant |
 | Tree | children grow and fade | Expand | M2 EmD | S4 EmA | Instant |
@@ -339,15 +339,15 @@ These have no README. Their rows come from how the controls below use them.
 | VirtualGrid | images once decoded | XFade | S4 Std | — | Instant |
 | VirtualList | the overlay thumb fades out after 1.5 s idle | XFade | — | M1 Std | Same |
 | VirtualList | sticky headers push each other off | ScrollLinked | 1:1 | | Same |
-| VirtualList | programmatic jumps (Home, End, "Jump to latest") | ScrollTo | *(not stated)* | | Instant |
+| VirtualList | programmatic jumps (Home, End, "Jump to latest") | ScrollTo | M2 Std | | Instant |
 
 The remaining `P5-12` specs (ListSpec, TableSpec, TableRowSpec, HeaderRowSpec,
 RowSpec, …) are the rows above.
 
-## 4. Controls without a design spec (proposed)
+## 4. Controls without a design spec (D1214)
 
-These are in the widget plan but have no README. Each row is **proposed** by
-analogy and needs a design-language line before its P6 fixture is written.
+These are in the widget plan but have no README. Each row follows the
+nearest specified control, and the row is the design (D1214).
 
 | Component | Follows | Motion | Pattern | In | Out | Reduced |
 |---|---|---|---|---|---|---|
@@ -375,7 +375,7 @@ Responsive, SafeArea) have no motion of their own. Their values can be driven
 by `animated[T]`. Infrastructure (FocusScope, GestureArena, OverlayPortal,
 SemanticsNode, …) has none either.
 
-## 5. Behaviours no spec covers (proposed)
+## 5. Behaviours no spec covers (D1214)
 
 | Behaviour | Motion | Pattern | In | Out | Reduced |
 |---|---|---|---|---|---|
@@ -386,50 +386,16 @@ SemanticsNode, …) has none either.
 | DropTarget | the accept highlight; an accepted drop settles | XFade; Reflow | S2 Std; S4 EmD | | Same; Instant |
 | KeyboardAvoiding | content follows the on-screen keyboard, using the host's reported curve and duration, else M2 EmD | ValueEase | host / M2 EmD | host / S4 EmA | Instant |
 
-## 6. Conflicts and gaps for the design language
+## 6. Resolved conflicts and gaps
 
-1. **Reduced motion for colour and opacity.** The general rule (UX README:
-   "replace movement with a 100 ms cross-fade") and spec §10.2 keep
-   colour and opacity changes under reduced motion. EmptyState ("the
-   cross-fade stays"), ListBox and StatusBar agree. But Link, RichText,
-   MultiSelectList, Avatar, Text, Form messages, DataGrid, Table and IconButton
-   ask for Instant. **Proposed:** a component's own `Reduced` value wins (it
-   is data in its `Transition`), and §10.2's "Same" becomes the default rather
-   than a rule. The table keeps what each README says.
-2. **Indeterminate progress under reduced motion.** ProgressBar and ProgressRing
-   want an opacity pulse from 38% to 100% every 2 s, so the control still
-   reads as working. Spec §10.2 says loops show a Static frame and request no
-   frames. **Proposed:** an opacity-only pulse is allowed, paced at 10 frames
-   a second (a 2 s pulse needs no more), and every other loop stays Static.
-   This needs a D row that amends §10.2.
-3. **Two shimmers.** Placeholder sweeps every 1.5 s with Std easing and, under
-   reduced motion, pulses 100–60% *or* stays still. Skeleton sweeps 1.5 s
-   with Lin easing plus a 0.5 s pause and, under reduced motion, is Static
-   ("no pulsing either"). **Proposed:** one shared shimmer (Skeleton's), and
-   Static for both under reduced motion.
-4. **Row contradicts itself** under reduced motion: "reduced motion changes it
-   at once" and "selection and state changes cross-fade in `duration-short-2`".
-   **Proposed:** XFade S2, which matches ListBox.
-5. **Missing reduced lines:** Button, FieldMessage and FormattedField. Button
-   should follow IconButton (no ripple); the other two are colour only (Same).
-6. **Missing durations or easings:** the chevrons of Disclosure, Accordion and
-   GroupBox (proposed S3 Std, as Tree); Card's lift and hover rise
-   (proposed S3 Std); Fab hide/show (proposed S4 EmD in, S4 EmA out); the
-   Slider track glide (proposed S3 Std); the exit easings of Autocomplete and
-   ComboBox (proposed EmA); Canvas data transitions (proposed M2 Std); the
-   effect of SelectableText's toolbar and AppBar's contextual bar (proposed
-   DropFade 4 px); Table row insertion (proposed as List); VirtualList
-   programmatic jumps (proposed M2 Std, as Form).
-7. **The stagger step is a literal.** Fab and SpeedDial say 30 ms, but the
-   framework takes `Durations.stagger` (D1207). **Proposed:** make the token
-   30 ms, or have the READMEs cite the token.
-8. **Empty folder:** `docs/ux/components/Cover` has no README.
-9. **Timers are not motion.** Hover delays (Tooltip S4, TableRow M1, Toolbar
-   L2, MenuBar submenu M4, DockLayout sash M4), WindowSwitcher's S4 show delay,
-   ProgressBar's 300 ms show delay and 500 ms minimum, Select/Picker's close
-   after a pick, and Breadcrumbs' L2 drop hold are timers. They run on the
-   same frame clock (a `Controller` with a linear curve that nothing reads
-   except its `settled`), but they are not animations and are never reduced.
-
-Each proposal in §4–§6 needs the user's decision before its P6 fixture is
-written. Accepted ones become D rows and lines in the component READMEs.
+| # | Issue | Resolution | Row |
+|---|---|---|---|
+| 1 | Nine components ask for Instant colour changes under reduced motion, while the general rule keeps them | A component's own `Reduced` value wins; "Same" is only the default | D1215 |
+| 2 | Indeterminate progress wants an opacity pulse under reduced motion; spec §10.2 wanted Static | An opacity-only loop may run at 10 fps under reduced motion; every other loop is Static (amends §10.2) | D1216 |
+| 3 | Placeholder and Skeleton had two different shimmers | One shimmer (1.5 s Lin + 0.5 s pause), Static under reduced motion for both; the Placeholder README is updated | D1217 |
+| 4 | Row contradicted itself under reduced motion | XFade S2; "changes it at once" is withdrawn from the README | D1218 |
+| 5 | Button, FieldMessage and FormattedField had no reduced line | Button: no ripple. The other two keep their fades (Same). The READMEs are updated | D1218 |
+| 6 | Missing durations and easings | chevrons S3 Std; Card lift and rise S3 Std; Fab hide/show S4 EmD / S4 EmA; Slider glide S3 Std; Autocomplete and ComboBox exits EmA; Canvas data M2 Std; SelectableText toolbar and AppBar contextual bar fade with a 4 px drop; Table inserts as List; VirtualList jumps M2 Std. All are written into the READMEs | D1218 |
+| 7 | Stagger was a literal 30 ms | Fab and SpeedDial cite `duration-stagger` (30 ms) | D1218 |
+| 8 | `docs/ux/components/Cover` has no README | It is the catalog's cover page, not a component; motion checks skip it | D1218 |
+| 9 | Timers mixed in with motion | Hover and show delays, minimum display times, close-after-pick and drop-hold times are frame-clock timers, never reduced | D1218 |
