@@ -24957,3 +24957,17 @@ motion jumps.
 `ui_navigation3_v2` holds the page still showing 200 in from the edge half way
 through opening, the drawer surface there once settled, and the focus back on
 the opener after closing, on Windows and Linux.
+
+## D1287 — Snackbars and toasts enter with motion
+
+A snackbar or toast now enters fading in and rising 8 from its edge (a toast
+drops 8 from the top) over `duration-medium-1`, as the Snackbar spec asks.
+The surface stands in a box keyed `key + 8192` whether or not the queue
+holds notices, so an `eased_on` entry is remembered from the empty frame to
+the first notice. The ease runs forward only, so emptying the queue removes
+it at once. Exit motion and the reduced-motion 100 ms fade are still to come;
+reduced motion shows it at once.
+
+`ui_status4_v2` holds the surface not yet fully `inverse-surface` half way
+through the entry and fully so once settled, on Windows and Linux; its
+timeout checks still pass.

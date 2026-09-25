@@ -7614,7 +7614,8 @@ fn glyph_action(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // top end. A polite status in the tree named by the text. Nothing while the queue
 // is empty.
 // (D1278) The head notice times out (`notice_timeout`), paused by hover and focus.
-// ponytail: the compact (bottom-centre) placement, motion, the
+// (D1287) It enters fading in and rising 8.
+// ponytail: the compact (bottom-centre) placement, exit motion, the
 // two-line layout and the toast's title and severity well wait on a richer
 // Notice; the toast's stack of three shows the head alone.
 // (D1278) A notice's countdown, kept on its surface across frames: which notice
@@ -7675,7 +7676,14 @@ fn notice_timeout(t: *const Theme, key: widget.Key, head: *const Notice, bottom:
 }
 
 fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32, bottom: bool) -> (widget.Node, err) {
-    if notices.len == 0usize { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    // (D1287) A notice enters fading in and rising 8 from its edge over
+    // `duration-medium-1`; the surface stands in a box keyed `key + 8192` that is
+    // there with or without notices, so the entry is remembered. Reduced motion
+    // shows it at once.
+    var entry_goal: f32 = 0.0
+    if notices.len > 0usize { entry_goal = 1.0 }
+    let entered = eased_on(t, key + 8192u64, key + 8193u64, entry_goal, true, t.tokens.durations.medium1)
+    if notices.len == 0usize { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let head = &notices[0usize]
     let timed = notice_timeout(t, key, head, bottom)
     if timed != ok { ret (zero, timed) }
@@ -7753,7 +7761,21 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
     }
     var placement: widget.Placement = .Right
     if bottom { placement = .Below }
-    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: geometry.Point { x: 0.0, y: 0.0 }, modal: false, dismiss: zero }, style.defaults(), kept[0usize..1usize]), ok)
+    if entered < 1.0 {
+        var rise: f32 = 8.0 * (1.0 - entered)
+        if !bottom { rise = 0.0 - rise }
+        let (entering, entering_error) = mem.alloc[widget.Node](a, 2usize)
+        if entering_error != ok { ret (zero, TooLarge) }
+        entering[0usize] = kept[0usize]
+        entering[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: rise } }, style.defaults(), entering[0usize..1usize])
+        var faded = style.defaults()
+        faded.opacity = entered
+        kept[0usize] = widget.box(0u64, faded, entering[1usize..2usize])
+    }
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: geometry.Point { x: 0.0, y: 0.0 }, modal: false, dismiss: zero }, style.defaults(), kept[0usize..1usize])
+    ret (widget.box(key + 8192u64, style.defaults(), framed[0usize..1usize]), ok)
 }
 
 // A snackbar: the queue's head along the bottom of the window.
