@@ -758,6 +758,42 @@ fn back_scope(a: *mem.Arena, key: widget.Key, content: widget.Node, back: widget
     ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: keys[0usize..3usize], default_action: zero, cancel_action: back, keys: zero }, style.defaults(), held[0usize..1usize]), ok)
 }
 
+// (D1272) A stack page's discard guard: while `dirty`, Back, Escape and Alt+Left
+// ask through `request_discard`; `discard_open` shows the question.
+type StackGuard = struct { dirty: bool, discard_open: bool, request_discard: widget.Submit, keep_editing: widget.Submit }
+
+// (D1272, docs/ux/components/NavigationStack, discard) `navigation_stack_of` with
+// the top page's guard: while it is dirty every pop asks instead, and while the
+// question is open the shared alert (keyed `key + 16`) says "Discard changes
+// to <page>?" with Keep editing (`keep_editing`) and Discard, destructive, which
+// pops.
+fn navigation_stack_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, jumps: []const widget.Submit, width: f32, guard: StackGuard) -> (widget.Node, err) {
+    if !guard.dirty || titles.len < 2usize {
+        let (plain, plain_error) = navigation_stack_of(a, key, t, titles, pages, pop, jumps, width)
+        ret (plain, plain_error)
+    }
+    let (asks, asks_error) = mem.alloc[widget.Submit](a, 1usize)
+    if asks_error != ok { ret (zero, TooLarge) }
+    asks[0usize] = guard.request_discard
+    let (stack, stack_error) = navigation_stack_of(a, key, t, titles, pages, &asks[0usize], jumps, width)
+    if stack_error != ok || !guard.discard_open { ret (stack, stack_error) }
+    let (front, front_error) = joined(a, "Discard changes to ", titles[titles.len - 1usize])
+    if front_error != ok { ret (zero, front_error) }
+    let (prompt, prompt_error) = joined(a, front, "?")
+    if prompt_error != ok { ret (zero, prompt_error) }
+    let (buttons, buttons_error) = mem.alloc[overlay.DialogButton](a, 2usize)
+    if buttons_error != ok { ret (zero, TooLarge) }
+    buttons[0usize] = overlay.DialogButton { label: "Keep editing", action: guard.keep_editing, kind: .Cancel }
+    buttons[1usize] = overlay.DialogButton { label: "Discard", action: *pop, kind: .Destructive }
+    let (alert, alert_error) = overlay.alert_dialog(a, key + 16u64, t, prompt, "Your changes will be lost.", buttons[0usize..2usize], true)
+    if alert_error != ok { ret (zero, alert_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = stack
+    layers[1usize] = alert
+    ret (widget.box(0u64, style.defaults(), layers[0usize..2usize]), ok)
+}
+
 // (D1271) A stack's memory: its depth last frame and who pushed each level.
 type StackCell = struct { depth: usize, pushers: [16]widget.Key }
 
@@ -787,8 +823,9 @@ fn stack_cell(t: *const control.Theme, key: widget.Key) -> (*StackCell, bool) {
 // focus when each page was pushed: on a push the focus moves to the new page's
 // Back (keyed `key + 2`; its heading is not focusable), and on a pop it returns
 // to the element that pushed the page.
-// ponytail: no push or pop transitions, predictive back or discard guard; the
-// page beneath is not kept in the tree, so its scroll is the caller's.
+// (D1272) `navigation_stack_with` guards a dirty page's pop.
+// ponytail: no push or pop transitions or predictive back; the page beneath is
+// not kept in the tree, so its scroll is the caller's.
 fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, jumps: []const widget.Submit, width: f32) -> (widget.Node, err) {
     if titles.len != pages.len || titles.len == 0usize { ret (zero, TooLarge) }
     let top = titles.len - 1usize

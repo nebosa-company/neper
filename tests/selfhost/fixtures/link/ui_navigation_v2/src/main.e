@@ -303,6 +303,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if stack_step == 3usize && (!has_focus_now || focus_now.slot != testing.by_key(&harness, 2600u64).element.slot) { os.exit(42i32) }
         stack_step += 1usize
     }
+    // (D1272) A dirty page's Back asks instead of popping; the open question's
+    // Discard pops.
+    var guarded: navigation.StackGuard = zero
+    guarded.dirty = true
+    guarded.request_discard = s.subs[6usize]
+    guarded.keep_editing = s.subs[7usize]
+    var guard_pages: [2]widget.Node = zero
+    guard_pages[0usize] = widget.box(0u64, control.sized_style(100.0, 100.0), zero)
+    guard_pages[1usize] = widget.box(0u64, control.sized_style(100.0, 100.0), zero)
+    var guard_step = 0usize
+    while guard_step < 2usize {
+        guarded.discard_open = guard_step == 1usize
+        f = mem.arena_from(frame_storage)
+        let (guarded_stack, guarded_error) = navigation.navigation_stack_with(&f, 2700u64, &theme, stack_titles[0usize..2usize], guard_pages[0usize..2usize], &s.subs[3usize], no_jumps(), 600.0, guarded)
+        if guarded_error != ok || testing.pump(&harness, guarded_stack, time.Instant { nanos: 7300000000i64 + i64(guard_step) }) != ok { os.exit(43i32) }
+        if guard_step == 0usize {
+            let asks_before = s.counters[6usize].count
+            let pops_before = s.counters[3usize].count
+            if !tap_key(&harness, &runtime, 2702u64) || s.counters[6usize].count != asks_before + 1usize || s.counters[3usize].count != pops_before { os.exit(44i32) }
+        }
+        if guard_step == 1usize {
+            let (guard_tree, guard_tree_error) = testing.semantics(&harness)
+            let (_, has_question) = find(guard_tree, .AlertDialog, "Discard changes to neper?")
+            let (discard_button, has_discard_button) = find(guard_tree, .Button, "Discard")
+            let pops_before = s.counters[3usize].count
+            if guard_tree_error != ok || !has_question || !has_discard_button { os.exit(45i32) }
+            if testing.tap(&harness, discard_button.bounds.x + 10.0, discard_button.bounds.y + discard_button.bounds.height * 0.5) != ok || s.counters[3usize].count != pops_before + 1usize { os.exit(46i32) }
+        }
+        guard_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation v2 ok\n")
     ret ok

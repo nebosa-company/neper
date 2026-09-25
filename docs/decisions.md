@@ -24747,3 +24747,16 @@ beneath is still not kept in the tree, so its scroll is the caller's.
 
 `ui_navigation_v2` holds the focus on Back after a push from a focused row and
 back on the row after the pop on Windows and Linux.
+
+## D1272 — The navigation stack guards a dirty page
+
+`navigation.navigation_stack_with` takes a `StackGuard`. While the top page is
+`dirty`, every pop (Back, Escape, Alt+Left, Command+[) fires
+`request_discard` instead. While `discard_open` holds, the shared alert dialog
+(keyed `key + 16`) asks "Discard changes to <page>?" with Keep editing
+(`keep_editing`) and a destructive Discard that runs the real pop, as the
+wizard's guard already does. A clean page, or a stack one level deep, is
+`navigation_stack_of` unchanged.
+
+`ui_navigation_v2` holds Back asking rather than popping and the question's
+Discard popping on Windows and Linux.
