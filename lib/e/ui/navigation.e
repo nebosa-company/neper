@@ -1271,9 +1271,26 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // A command can open a submenu to its right, overlapping by 4 and aligned 8
 // above the row; cascades repeat that rule, Right opens one level, Left closes
 // it, and a leaf closes the full chain.
-// (D1234) `menu_bar_collapsed` is the folded form.
-// ponytail: the caller picks the collapsed form; the bar does not measure its titles.
+// (D1234) `menu_bar_collapsed` is the folded form; (D1251) `menu_bar_fits`
+// says, from the measured titles, whether the full bar fits a width.
 // Command dismissal and focus return are shared by the widget runtime.
+// (D1251) Whether the full menu bar fits `width`: 4 at each end and each title's
+// measured label plus its 8 at each side.
+fn menu_bar_fits(a: *mem.Arena, t: *const control.Theme, menus: []const BarMenu, width: f32) -> bool {
+    var total: f32 = 8.0
+    var caption = control.text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    var i = 0usize
+    while i < menus.len {
+        let (said, said_error) = control.colored_text(a, 0u64, menus[i].label, t, caption, style.color(t.tokens, .OnSurface))
+        if said_error != ok { ret true }
+        total += widget.text_width(a, said) + 16.0
+        i += 1usize
+    }
+    ret total <= width
+}
+
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
     let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len)

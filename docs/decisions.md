@@ -24445,3 +24445,14 @@ same helper is the way in for centred segments and the other truncation gaps.
 `ui_content2_v2`, the fixture with a real (synthetic) font, holds the doubling
 width and the 0, 1 and 2 collapses on Windows and Linux; the breadcrumb
 fixtures still pass.
+
+## D1251 — Menu bars measure whether they fit
+
+`navigation.menu_bar_fits` says, from each title's measured label
+(`widget.text_width`, D1250), whether the full menu bar fits a width: 4 at
+each end, plus each title's label and its 8 at each side. The caller then
+builds `menu_bar_of`, or `menu_bar_collapsed` (D1234) when it does not fit.
+The bar no longer needs the caller to guess its titles' widths.
+
+`ui_content2_v2` holds the exact fit and the pixel short of it on Windows and
+Linux.
