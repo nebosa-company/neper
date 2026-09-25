@@ -23193,3 +23193,13 @@ the component contract.
 
 `ui_navigation` holds both physical-key forms on Windows and Linux. The same
 fixture continues to hold Back, Escape, Alt+Left and mouse Back.
+
+## D1153 — Modal navigation drawers follow the start edge
+
+NavigationDrawer now reads the theme direction: left-to-right themes keep the
+modal sheet on the physical left with rounded right corners, while
+right-to-left themes place it on the physical right and round its left corners.
+The scrim, focus trap and dismissal path are unchanged.
+
+`ui_navigation3_v2` holds both placements and corner pairs on Windows and
+Linux. The Segoe review is `build/ux/navigation-drawer-rtl-segoe.png`.

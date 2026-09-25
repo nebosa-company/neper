@@ -1592,7 +1592,7 @@ fn drawer_pick_fire(ctx: *void) -> err {
 // `destination_rows` 56 tall, 16 in and 24 at the end, sections with their
 // headings and dividers. A modal dialog named "Navigation" round the list; a
 // successful destination pick, press on the scrim or Escape fires `dismiss`.
-// ponytail: no edge swipe, open/close motion or right-to-left mirroring.
+// ponytail: no edge swipe or open/close motion.
 fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if picks.len != items.len { ret (zero, TooLarge) }
@@ -1624,6 +1624,8 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     sheet_style.height = style.Length { Percent: 100.0 }
     let lg = t.tokens.radii.lg
     sheet_style.corners = style.Corners { top_left: 0.0, top_right: lg, bottom_right: lg, bottom_left: 0.0 }
+    let rtl = t.tokens.direction == .RightToLeft
+    if rtl { sheet_style.corners = style.Corners { top_left: lg, top_right: 0.0, bottom_right: 0.0, bottom_left: lg } }
     let (panel, panel_error) = mem.alloc[widget.Node](a, 1usize)
     if panel_error != ok { ret (zero, TooLarge) }
     panel[0usize] = widget.box(0u64, sheet_style, body[0usize..1usize])
@@ -1650,7 +1652,9 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = widget.overlay(0u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: false, dismiss: zero }, style.defaults(), dims[0usize..1usize])
-    layers[1usize] = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Left, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), drawer[0usize..1usize])
+    var placement: widget.Placement = .Left
+    if rtl { placement = .Right }
+    layers[1usize] = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), drawer[0usize..1usize])
     ret (widget.box(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 

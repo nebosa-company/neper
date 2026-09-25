@@ -263,6 +263,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(33i32) }
     let (returned_focus, has_returned_focus) = testing.focused(&harness)
     if !has_returned_focus || returned_focus.slot != testing.by_key(&harness, 3002u64).element.slot { os.exit(34i32) }
+    // In a right-to-left theme the modal drawer moves to the physical right and
+    // rounds only its open, left corners.
+    var rtl_tokens = style.reference(.Light)
+    rtl_tokens.direction = .RightToLeft
+    let rtl_theme = control.Theme { tokens: &rtl_tokens, fonts: fonts, language: "", runtime: &runtime }
+    let (root_4, build_4_error) = build(&f, &rtl_theme, s, true)
+    if build_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok { os.exit(55i32) }
+    let (shot_4, shot_4_error) = testing.snapshot(&harness, a)
+    let (rtl_drawer, has_rtl_drawer) = testing.overlay_of(&harness, testing.by_key(&harness, 3400u64).element)
+    if shot_4_error != ok || !has_rtl_drawer || !near(rtl_drawer.x, 340.0) || !near(rtl_drawer.width, 300.0) { os.exit(56i32) }
+    if !is_color(shot_4, at(rtl_drawer.x + rtl_drawer.width - 4.0, rtl_drawer.y + 300.0), low) || is_color(shot_4, at(rtl_drawer.x + 1.5, rtl_drawer.y + 1.5), low) { os.exit(57i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation3 v2 ok\n")
     ret ok
