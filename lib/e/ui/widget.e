@@ -406,6 +406,7 @@ type State = struct {
     closed: bool,
     arena_state: Arena,
     has_pointer: bool,
+    held_modifiers: input.Modifiers,
     last_tap: ElementId,
     has_last_tap: bool,
     last_tap_at: time.Instant,
@@ -3682,8 +3683,19 @@ fn key_code(physical: u32) -> u32 {
     if physical == 65293u32 || physical == 65421u32 { ret 13u32 }
     if physical == 65307u32 { ret 27u32 }
     if physical == 65289u32 { ret 9u32 }
+    if physical == 65505u32 || physical == 65506u32 { ret 16u32 }
+    if physical == 65507u32 || physical == 65508u32 { ret 17u32 }
+    if physical == 65513u32 || physical == 65514u32 { ret 18u32 }
+    if physical == 65515u32 || physical == 65516u32 { ret 91u32 }
     if physical >= 65470u32 && physical <= 65493u32 { ret physical - 65358u32 }
     ret physical
+}
+
+fn hold_modifier(s: *State, code: u32, down: bool) {
+    if code == 16u32 { s.held_modifiers.shift = down }
+    if code == 17u32 { s.held_modifiers.control = down }
+    if code == 18u32 { s.held_modifiers.alt = down }
+    if code == 91u32 || code == 92u32 { s.held_modifiers.meta = down }
 }
 
 fn selection_of(e: *const Element) -> (usize, usize) {
@@ -4421,6 +4433,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .KeyDown as k:
         // Enter or Space on a focused tap region is a tap at its centre.
         let code = key_code(k.key.physical)
+        hold_modifier(s, code, true)
         if code == 27u32 && s.has_rich_tooltip {
             s.rich_dismissed_key = s.rich_anchor_key
             s.has_rich_dismissed = true
@@ -4455,6 +4468,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         }
     case .KeyUp as k:
         let code = key_code(k.key.physical)
+        hold_modifier(s, code, false)
         if menu_alt_key(code) {
             let enter = s.menu_alt_down && !s.menu_alt_used
             s.menu_alt_down = false
@@ -4493,6 +4507,10 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .Focus as w:
         ret ok
     case .Blur as w:
+        s.held_modifiers.shift = false
+        s.held_modifiers.control = false
+        s.held_modifiers.alt = false
+        s.held_modifiers.meta = false
         s.has_long_press = false
         s.long_press_fired = false
         s.has_tooltip_touch = false
@@ -4939,6 +4957,14 @@ fn focused(widget_runtime: *const Runtime) -> (ElementId, bool) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize || !s.has_focus { ret (zero, false) }
     ret (ElementId { slot: s.focus, generation: s.elements[usize(s.focus)].generation }, true)
+}
+
+// Modifier keys currently held by the host, for pointer gestures whose compact
+// event payload is only a position.
+fn modifiers(widget_runtime: *const Runtime) -> input.Modifiers {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret zero }
+    ret s.held_modifiers
 }
 
 // ---------------------------------------------------------- the harness's view

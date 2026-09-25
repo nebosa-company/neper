@@ -86,6 +86,10 @@ fn key(code: u32, shift: bool, control: bool) -> input.Event {
     ret input.Event { KeyDown: input.KeyEvent { window: window.Id { slot: 0u32, generation: 0u32 }, key: input.Key { physical: code, logical: code }, modifiers: input.Modifiers { shift: shift, control: control, alt: false, meta: false, caps_lock: false, num_lock: false }, repeat: false } }
 }
 
+fn key_up(code: u32) -> input.Event {
+    ret input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: code, logical: code }, modifiers: zero, repeat: false } }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -122,6 +126,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var frame = mem.arena_from(frame_storage)
     let (compiled, reconcile_error) = widget.reconcile(&runtime, &frame, root, ui_layout.Constraints { min_width: 0.0, max_width: 64.0, min_height: 0.0, max_height: 100.0 })
     if reconcile_error != ok { os.exit(9i32) }
+    // Physical modifier transitions are shared with pointer gesture callbacks;
+    // X keysyms normalize to the same held state as Windows virtual keys.
+    if widget.dispatch(&runtime, key(65505u32, false, false)) != ok || !widget.modifiers(&runtime).shift { os.exit(49i32) }
+    if widget.dispatch(&runtime, key_up(65505u32)) != ok || widget.modifiers(&runtime).shift { os.exit(50i32) }
     // A tap: down and up inside the first region; it takes the focus.
     if widget.dispatch(&runtime, input.Event { PointerDown: pointer(10.0, 10.0) }) != ok { os.exit(10i32) }
     if widget.dispatch(&runtime, input.Event { PointerUp: pointer(12.0, 11.0) }) != ok { os.exit(11i32) }

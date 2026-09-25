@@ -1535,7 +1535,7 @@ type GridEvent = struct { kind: GridEventKind, row: usize, column: usize, next: 
 // takes the grid's focus with it).
 type GridFire = struct { event: GridEvent, change: widget.Change[GridEvent], to: control.FocusTo }
 
-type GridPress = struct { move: GridFire, edit: GridFire, editable: bool }
+type GridPress = struct { move: GridFire, extend: GridFire, edit: GridFire, editable: bool }
 
 fn grid_fire(ctx: *void) -> err {
     let f = back_of[GridFire](ctx)
@@ -1548,6 +1548,7 @@ fn grid_press(ctx: *void, gesture: widget.Gesture) -> err {
     let p = back_of[GridPress](ctx)
     switch gesture {
     case .Tap as at:
+        if widget.modifiers(p.move.to.runtime).shift { ret grid_fire(ctx_of(&p.extend)) }
         ret grid_fire(ctx_of(&p.move))
     case .DoubleTap as at:
         if p.editable { ret grid_fire(ctx_of(&p.edit)) }
@@ -1869,9 +1870,14 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     if presses_error != ok { ret TooLarge }
     var editing = next
     editing.editing = true
+    var extended = s
+    extended.row = index
+    extended.column = at
+    extended.editing = false
     let focus = control.FocusTo { runtime: t.runtime, key: b.holder }
     presses[0usize] = GridPress {
         move: GridFire { event: GridEvent { kind: .Move, row: s.row, column: s.column, next: next, text: "" }, change: b.change, to: focus },
+        extend: GridFire { event: GridEvent { kind: .Extend, row: s.row, column: s.column, next: extended, text: "" }, change: b.change, to: focus },
         edit: GridFire { event: GridEvent { kind: .Edit, row: index, column: at, next: editing, text: "" }, change: b.change, to: focus },
         editable: !value.read_only && !s.disabled
     }
@@ -1948,7 +1954,7 @@ fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
 // and, for a range, "N cells selected" in `body-medium` `on-surface-variant`.
 // Every change reaches `change` as a `GridEvent` carrying the next state.
 // ponytail: text cells only -- no checkbox, select or date cells; no
-// Shift+click, pointer row/column selection, clipboard
+// pointer row/column selection, clipboard
 // parsing and mutation, cross-fade, or touch sheet; the caller keeps the active
 // row in view (the ring is held inside the viewport).
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {

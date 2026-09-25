@@ -22404,3 +22404,16 @@ the active cell and the additional gesture emits the existing caller-owned
 `Edit` state. `ui_gesture` and `ui_collections6_v2` hold the runtime and grid
 paths on Windows and Linux. This changes behavior on the reviewed DataGrid
 surface, so no duplicate screenshot is added.
+
+## D1075 — Pointer range selection reads shared held modifiers
+
+The widget runtime tracks only physical modifier key transitions and clears
+them on blur. It normalizes the X Shift, Control, Alt and Super keysyms beside
+their Windows codes, then exposes the held state to pointer gesture callbacks.
+This avoids widening every pointer and gesture payload.
+
+DataGrid uses held Shift to emit its existing `Extend` event from the caller's
+anchor to the tapped cell; an ordinary tap still emits `Move`. `ui_gesture` and
+`ui_collections6_v2` hold the shared state and range selection on Windows and
+Linux. This changes behavior on the reviewed DataGrid surface, so no
+duplicate screenshot is added.
