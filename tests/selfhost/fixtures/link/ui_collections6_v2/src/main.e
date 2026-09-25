@@ -376,6 +376,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 27u32, plain) != ok || store.last.kind != .Cancel || store.state.editing { os.exit(93i32) }
     let (root_24, build_24_error) = build(&f, &theme, ctx, store)
     if build_24_error != ok || testing.pump(&harness, root_24, now) != ok || !focus_on(&harness, 2u64) { os.exit(94i32) }
+    // A row-number click selects every column in that row and keeps grid focus.
+    if testing.tap(&harness, grid.x + 20.0, grid.y + 152.0) != ok || store.last.kind != .Extend || store.state.row != 3usize || store.state.column != 1usize || store.state.anchor_row != 3usize || store.state.anchor_column != 0usize { os.exit(113i32) }
+    let (root_24r, build_24r_error) = build(&f, &theme, ctx, store)
+    if build_24r_error != ok || testing.pump(&harness, root_24r, now) != ok || testing.by_text(&harness, "2 cells selected").count != 1usize || !focus_on(&harness, 2u64) { os.exit(114i32) }
     // Bulk saving disables every edit path, reports the count, and gives each
     // saving cell the shared 16px indeterminate ring.
     store.saving = true

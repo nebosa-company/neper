@@ -1954,7 +1954,7 @@ fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
 // and, for a range, "N cells selected" in `body-medium` `on-surface-variant`.
 // Every change reaches `change` as a `GridEvent` carrying the next state.
 // ponytail: text cells only -- no checkbox, select or date cells; no
-// pointer row/column selection, clipboard
+// column-menu selection, clipboard
 // parsing and mutation, cross-fade, or touch sheet; the caller keeps the active
 // row in view (the ring is held inside the viewport).
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {
@@ -2001,11 +2001,45 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     let (ringed, ringed_error) = mem.alloc[widget.Node](a, 1usize)
     if ringed_error != ok { ret (zero, TooLarge) }
     ringed[0usize] = widget.box(0u64, ring, held[0usize..1usize])
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = table_node
     layers[1usize] = widget.positioned(0u64, x, y, style.defaults(), ringed[0usize..1usize])
-    var layer_count = 2usize
+    // Row numbers are direct selection targets. Keep their hit layer clipped to
+    // the scrolling body so a partial first row never covers the sticky header.
+    let body_height = control.max_zero(grid_height - 40.0)
+    let (first_row, visible_rows) = widget.visible_range(offset, body_height, total, row_extent)
+    let (row_fires, row_fires_error) = mem.alloc[GridFire](a, visible_rows)
+    if row_fires_error != ok { ret (zero, TooLarge) }
+    let (row_taps, row_taps_error) = mem.alloc[widget.Submit](a, visible_rows)
+    if row_taps_error != ok { ret (zero, TooLarge) }
+    let (row_regions, row_regions_error) = mem.alloc[widget.Node](a, visible_rows)
+    if row_regions_error != ok { ret (zero, TooLarge) }
+    let (row_hits, row_hits_error) = mem.alloc[widget.Node](a, visible_rows)
+    if row_hits_error != ok { ret (zero, TooLarge) }
+    var visible = 0usize
+    while visible < visible_rows {
+        let row_index = first_row + visible
+        var selected = state
+        selected.row = row_index
+        selected.column = columns.len - 1usize
+        selected.anchor_row = row_index
+        selected.anchor_column = 0usize
+        selected.editing = false
+        row_fires[visible] = GridFire { event: GridEvent { kind: .Extend, row: state.row, column: state.column, next: selected, text: "" }, change: change, to: control.FocusTo { runtime: t.runtime, key: key + 1u64 } }
+        row_taps[visible] = widget.Submit { ctx: ctx_of(&row_fires[visible]), invoke: grid_fire }
+        var hit_style = control.sized_style(40.0, row_extent)
+        row_regions[visible] = widget.region(0u64, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&row_taps[visible]), invoke: control.press_tap }, gestures: 1u8, enabled: !state.disabled, focusable: false }, hit_style, zero)
+        row_hits[visible] = widget.positioned(0u64, 0.0, f32(row_index) * row_extent - offset, style.defaults(), row_regions[visible..visible + 1usize])
+        visible += 1usize
+    }
+    var row_hit_style = control.sized_style(40.0, body_height)
+    row_hit_style.overflow = .Clip
+    let (row_hit_stack, row_hit_stack_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_hit_stack_error != ok { ret (zero, TooLarge) }
+    row_hit_stack[0usize] = widget.stack(0u64, row_hit_style, row_hits)
+    layers[2usize] = widget.positioned(0u64, 0.0, 40.0, style.defaults(), row_hit_stack[0usize..1usize])
+    var layer_count = 3usize
     if state.editing && !state.disabled {
         let (fires, fires_error) = mem.alloc[GridFire](a, 2usize)
         if fires_error != ok { ret (zero, TooLarge) }
@@ -2029,8 +2063,8 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         let (edits, edits_error) = mem.alloc[widget.Node](a, 1usize)
         if edits_error != ok { ret (zero, TooLarge) }
         edits[0usize] = widget.edit(key + 2u64, widget.Edit { buffer: draft, len: state.len, style: look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: widget.Change[str] { ctx: ctx_of(&fires[1usize]), invoke: grid_typed }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: style.color(t.tokens, .Primary), untabbed: false, ringed: false }, editor_style)
-        layers[2usize] = widget.overlay(0u64, widget.Overlay { anchor: key + 1u64, placement: .TopCenter, offset: zero, modal: true, dismiss: widget.Submit { ctx: ctx_of(&fires[0usize]), invoke: grid_fire } }, style.defaults(), edits[0usize..1usize])
-        layer_count = 3usize
+        layers[3usize] = widget.overlay(0u64, widget.Overlay { anchor: key + 1u64, placement: .TopCenter, offset: zero, modal: true, dismiss: widget.Submit { ctx: ctx_of(&fires[0usize]), invoke: grid_fire } }, style.defaults(), edits[0usize..1usize])
+        layer_count = 4usize
     }
     var stack_style = control.sized_style(width, grid_height)
     stack_style.overflow = .Clip
