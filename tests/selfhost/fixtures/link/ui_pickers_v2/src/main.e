@@ -119,6 +119,13 @@ fn bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> (ge
     ret (b, found)
 }
 
+fn focusable(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bool {
+    let match = testing.by_key(h, key)
+    if match.count != 1usize { ret false }
+    let (summary, found) = widget.summary_at(runtime, usize(match.element.slot))
+    ret found && summary.focusable
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -222,12 +229,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     alt.alt = true
     if testing.press_key(&harness, 40u32, alt) != ok || stores[0usize].toggles != 1usize { os.exit(36i32) }
     let (reopened, reopened_error) = build(&f, &theme, &stores[0usize], true, false)
-    if reopened_error != ok || testing.pump(&harness, reopened, time.Instant { nanos: 4000000000i64 }) != ok || !widget.focus_within(&runtime, 215u64) { os.exit(37i32) }
+    if reopened_error != ok || testing.pump(&harness, reopened, time.Instant { nanos: 4000000000i64 }) != ok || !widget.focus_within(&runtime, 215u64) || !focusable(&harness, &runtime, 215u64) || focusable(&harness, &runtime, 214u64) || focusable(&harness, &runtime, 216u64) { os.exit(37i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || !widget.focus_within(&runtime, 216u64) { os.exit(38i32) }
+    let (moved, moved_error) = build(&f, &theme, &stores[0usize], true, false)
+    if moved_error != ok || testing.pump(&harness, moved, time.Instant { nanos: 4100000000i64 }) != ok || !focusable(&harness, &runtime, 216u64) || focusable(&harness, &runtime, 215u64) { os.exit(43i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !widget.focus_within(&runtime, 223u64) { os.exit(39i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !widget.focus_within(&runtime, 221u64) { os.exit(40i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 227u64) { os.exit(41i32) }
-    if widget.focus(&runtime, testing.by_key(&harness, 206u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || stores[0usize].last_date.year != 2026i32 || stores[0usize].last_date.month != 2u8 || stores[0usize].last_date.day != 1u8 || stores[0usize].dates != 5usize || !widget.focus_within(&runtime, 233u64) { os.exit(42i32) }
+    let (clicked, has_clicked) = bounds(&harness, &runtime, 217u64)
+    if !has_clicked || testing.tap(&harness, clicked.x + 16.0, clicked.y + 16.0) != ok || !widget.focus_within(&runtime, 217u64) { os.exit(44i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 206u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || stores[0usize].last_date.year != 2026i32 || stores[0usize].last_date.month != 2u8 || stores[0usize].last_date.day != 1u8 || stores[0usize].dates != 6usize || !widget.focus_within(&runtime, 233u64) { os.exit(42i32) }
     try io.print("ui pickers v2 ok\n")
     ret ok
 }
