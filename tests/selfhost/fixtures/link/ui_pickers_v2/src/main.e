@@ -239,6 +239,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (clicked, has_clicked) = bounds(&harness, &runtime, 217u64)
     if !has_clicked || testing.tap(&harness, clicked.x + 16.0, clicked.y + 16.0) != ok || !widget.focus_within(&runtime, 217u64) { os.exit(44i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 206u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || stores[0usize].last_date.year != 2026i32 || stores[0usize].last_date.month != 2u8 || stores[0usize].last_date.day != 1u8 || stores[0usize].dates != 6usize || !widget.focus_within(&runtime, 233u64) { os.exit(42i32) }
+    // (D1229) The theme's language picks the week's first day: in "en-US" the 1st of
+    // March 2026 (a Sunday) opens the first column under "Su", the 8th right below
+    // it; in "ar-EG" (Saturday first) the same Sunday stands one column further in.
+    let us_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "en-US", runtime: &runtime }
+    let eg_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "ar-EG", runtime: &runtime }
+    let first_of_march = time.Date { year: 2026i32, month: 3u8, day: 1u8 }
+    let no_dates: widget.Change[time.Date] = zero
+    var us_first_x: f32 = 0.0
+    var locale_step = 0usize
+    while locale_step < 2usize {
+        var locale_theme = us_theme
+        if locale_step == 1usize { locale_theme = eg_theme }
+        f = mem.arena_from(frame_storage)
+        let (week_cal, week_cal_error) = overlay.calendar(&f, 900u64, &locale_theme, "March", first_of_march, first_of_march, false, false, first_of_march, first_of_march, no_dates, no_dates)
+        if week_cal_error != ok || testing.pump(&harness, week_cal, time.Instant { nanos: 3000000000i64 + i64(locale_step) }) != ok { os.exit(45i32) }
+        let (day_one, has_day_one) = bounds(&harness, &runtime, 904u64)
+        let (day_eight, has_day_eight) = bounds(&harness, &runtime, 911u64)
+        if !has_day_one || !has_day_eight || !near(day_eight.y - day_one.y, 32.0) || !near(day_eight.x, day_one.x) { os.exit(46i32) }
+        if locale_step == 0usize {
+            let (day_two, has_day_two) = bounds(&harness, &runtime, 905u64)
+            if !has_day_two || !near(day_two.x - day_one.x, 32.0) || !near(day_two.y, day_one.y) || testing.by_text(&harness, "Su").count == 0usize { os.exit(47i32) }
+            us_first_x = day_one.x
+        }
+        if locale_step == 1usize && !near(day_one.x, us_first_x + 32.0) { os.exit(48i32) }
+        locale_step += 1usize
+    }
     try io.print("ui pickers v2 ok\n")
     ret ok
 }

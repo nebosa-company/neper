@@ -2414,6 +2414,46 @@ fn weekday_of(year: i64, month: i64, day: i64) -> i64 {
     ret w
 }
 
+// (D1229) The first day of the week for a BCP 47 `language` tag, as a weekday
+// from Monday (0): Sunday (6) where the region -- or, with none, the language --
+// starts weeks on Sunday by CLDR, Saturday (5) for the Saturday regions, and
+// Monday otherwise, including an empty tag.
+fn week_start_of(language: str) -> usize {
+    var region = ""
+    var at = 0usize
+    while at < language.len {
+        if (language[at] == 45u8 || language[at] == 95u8) && at + 3usize <= language.len {
+            let a = language[at + 1usize]
+            let b = language[at + 2usize]
+            if a >= 65u8 && a <= 90u8 && b >= 65u8 && b <= 90u8 && (at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8) {
+                region = language[at + 1usize..at + 3usize]
+            }
+        }
+        at += 1usize
+    }
+    let sunday = "US CA MX BR JP KR TW HK MO IL PH IN ZA SA PE CO VE GT HN NI PA PR DO SV BZ JM TT BS KE ET ZW PK TH ID"
+    let saturday = "AE AF BH DJ DZ EG IQ IR JO KW LY OM QA SD SY"
+    if region.len == 2usize {
+        if week_region_in(sunday, region) { ret 6usize }
+        if week_region_in(saturday, region) { ret 5usize }
+        ret 0usize
+    }
+    var lang_end = 0usize
+    while lang_end < language.len && language[lang_end] != 45u8 && language[lang_end] != 95u8 { lang_end += 1usize }
+    let lang = language[0usize..lang_end]
+    if lang.len == 2usize && ((lang[0usize] == 106u8 && lang[1usize] == 97u8) || (lang[0usize] == 107u8 && lang[1usize] == 111u8) || (lang[0usize] == 104u8 && lang[1usize] == 101u8)) { ret 6usize }
+    ret 0usize
+}
+
+fn week_region_in(list: str, region: str) -> bool {
+    var at = 0usize
+    while at + 2usize <= list.len {
+        if list[at] == region[0usize] && list[at + 1usize] == region[1usize] { ret true }
+        at += 3usize
+    }
+    ret false
+}
+
 // A calendar's pick of one day, and a turn to another month. A nonzero `focus`
 // keeps a clicked day as the grid's roving tab stop.
 type DayPick = struct { day: time.Date, pick: widget.Change[time.Date], runtime: *widget.Runtime, focus: widget.Key }
@@ -2504,13 +2544,16 @@ fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // over today); between the ends a `primary-container` band, reaching half a cell
 // under each end's disc, with `on-primary-container` digits. Days of the
 // neighbouring months stay empty cells.
-// ponytail: Monday first and English names; the locale's first day and month names, the year view, week numbers, event dots and unavailable days are still to come.
+// (D1229) The week starts on the theme language's first day (`week_start_of`):
+// Monday by default, Sunday for "en-US", Saturday for "ar-EG".
+// ponytail: English month and weekday names; the year view, week numbers, event dots and unavailable days are still to come.
 fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let year = i64(shown.year)
     let month = i64(shown.month)
     if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
     let days = time.days_in_month(year, month)
-    let first_weekday = weekday_of(year, month, 1i64)
+    let week_start = week_start_of(t.language)
+    let first_weekday = (weekday_of(year, month, 1i64) + 7i64 - i64(week_start)) % 7i64
     let (turns, turns_error) = mem.alloc[DayPick](a, 4usize + usize(days))
     if turns_error != ok { ret (zero, TooLarge) }
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 4usize + usize(days))
@@ -2580,7 +2623,7 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         var caption = control.text_options()
         caption.role = .LabelMedium
         caption.wrap = .None
-        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_name(weekday, touch), t, caption, muted)
+        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_name((week_start + weekday) % 7usize, touch), t, caption, muted)
         if name_error != ok { ret (zero, name_error) }
         let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
         if named_error != ok { ret (zero, TooLarge) }
@@ -2689,7 +2732,7 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
                 if moves_error != ok { ret (zero, TooLarge) }
                 let (move_actions, move_actions_error) = mem.alloc[widget.Submit](a, 6usize)
                 if move_actions_error != ok { ret (zero, TooLarge) }
-                let column_day = weekday_of(i64(date.year), i64(date.month), i64(date.day))
+                let column_day = (weekday_of(i64(date.year), i64(date.month), i64(date.day)) + 7i64 - i64(week_start)) % 7i64
                 moves[0usize] = DayMove { shown: shown, target: moved_date(date, -1i64), show: show, runtime: t.runtime, calendar: key }
                 moves[1usize] = DayMove { shown: shown, target: moved_date(date, 1i64), show: show, runtime: t.runtime, calendar: key }
                 moves[2usize] = DayMove { shown: shown, target: moved_date(date, -7i64), show: show, runtime: t.runtime, calendar: key }

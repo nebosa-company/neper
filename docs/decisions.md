@@ -24100,3 +24100,18 @@ Menu key and Shift+F10 open it, as does a touch hold.
 disabled with no selection, runs Select all, reopens it with Cut enabled, runs
 Copy, and reads "hello" from the clipboard, on Windows and Linux. All 103 `ui_*`
 fixtures pass on both hosts.
+
+## D1229 — The calendar's week starts on the locale's first day
+
+`overlay.week_start_of` reads the theme's BCP 47 `language` tag. A region
+that starts weeks on Sunday by CLDR (US, Canada, Mexico, Brazil, Japan, Korea,
+Israel, India and the rest of that list) gives Sunday, the Saturday regions
+(Egypt, the Gulf states and neighbours) give Saturday, and every other region
+gives Monday. A tag without a region falls back to its language (Japanese,
+Korean and Hebrew start on Sunday), and an empty tag keeps today's Monday. The
+calendar shifts its blank lead-in, its weekday headers and the Home/End week
+bounds by that start.
+
+Month and weekday names stay English. `ui_pickers_v2` holds "en-US" (the 1st of
+March 2026, a Sunday, in the first column under "Su") and "ar-EG" (the same
+day one column in) on Windows and Linux; `ui_pickers` passes on both hosts.
