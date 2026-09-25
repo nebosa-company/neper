@@ -521,7 +521,13 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
     let ends_pad = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
     bar.padding = style.EdgeLengths { left: ends_pad, top: flat, right: ends_pad, bottom: flat }
-    ret (widget.flex(key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, groups[0usize..3usize]), ok)
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
+    if boxed_error != ok { ret (zero, TooLarge) }
+    boxed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, groups[0usize..3usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = "Status bar"
+    ret (widget.semantics(key, sem, style.defaults(), boxed[0usize..1usize]), ok)
 }
 
 // A navigation stack: the top of `titles` and `pages` (the same length, the last
