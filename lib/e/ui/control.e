@@ -3739,6 +3739,64 @@ fn password_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     ret (node, node_error)
 }
 
+// (D1261, docs/ux/components/TextField, password) A password field with its
+// reveal toggle: while `revealed` the value is plain text, else bullets (never
+// copied). A round `visibility` icon button (keyed `key + 1`) stands inside the
+// field's end -- `primary` and `visibility-off` while revealed -- a toggle
+// button named "Show password" reporting Checked while revealed; it takes no
+// Tab stop, so the focus stays in the field. Masking again on blur or submit is
+// the caller's, through `revealed`.
+// (D1261) A toggle's Press from the tree fires its Submit.
+fn reveal_semantic_action(ctx: *void, action: u32) -> err {
+    if action != accessibility.ACTION_PRESS { ret ok }
+    ret widget.fire_submit(*mem.cast[*const widget.Submit](ctx))
+}
+
+fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, revealed: bool, reveal: *const widget.Submit) -> (widget.Node, err) {
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var side = t.tokens.sizes.control_sm
+    var glyph = t.tokens.sizes.icon_sm
+    if touch {
+        side = t.tokens.sizes.control_md
+        glyph = t.tokens.sizes.icon_md
+    }
+    var roomy = options
+    roomy.rows = 1u32
+    roomy.end_space = max_zero(side - 8.0)
+    let (editor, editor_error) = field(a, key, t, label, buffer, len, change, submit, roomy, !revealed)
+    if editor_error != ok { ret (zero, editor_error) }
+    let state = control_state(t, key + 1u64, true, revealed)
+    var ink = style.color(t.tokens, .OnSurfaceVariant)
+    var eye: GlyphKind = .Visibility
+    if revealed {
+        ink = style.color(t.tokens, .Primary)
+        eye = .VisibilityOff
+    }
+    let (mark, mark_error) = icon_square(a, ink, eye, glyph)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 4usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = mark
+    var disc = sized_style(side, side)
+    disc.radius = side * 0.5
+    disc.background = paint.Brush { Solid: with_alpha(ink, state_opacity(t, state)) }
+    held[1usize] = widget.aligned(0u64, .Center, .Center, disc, held[0usize..1usize])
+    held[2usize] = widget.region(key + 1u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](reveal), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, style.defaults(), held[1usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 3u8
+    sem.label = "Show password"
+    sem.actions = accessibility.ACTION_PRESS
+    sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](reveal), invoke: reveal_semantic_action }
+    if revealed { sem.states = accessibility.STATE_CHECKED }
+    held[3usize] = widget.semantics(0u64, sem, style.defaults(), held[2usize..3usize])
+    let h = t.tokens.metrics.control_height + 16.0
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = editor
+    layers[1usize] = widget.positioned(0u64, options.width - 4.0 - side, max_zero((h - side) * 0.5), style.defaults(), held[3usize..4usize])
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+}
+
 // A search field: a single line whose Enter is the search (`submit`), with a clear
 // button (keyed `key + 1`, the caller's `clear` action) beside it while it holds
 // anything, and "Search" for a placeholder when none is given.
