@@ -257,9 +257,10 @@ fn turn_fire(ctx: *void) -> err {
 
 // What a page's swipe keeps across the frames of one drag: whether it turned,
 // and (D982) how far the drag has moved, for a view that follows it. Reordering
-// also keeps the item and one pending live-region notice in the same cell.
+// also keeps the item and one pending live-region notice in the same cell, and
+// (D1196) whether the row's Move menu is open.
 type ReorderNotice = enum u8 { None, Picked, Moved, Dropped, Cancelled }
-type Swipe = struct { turned: bool, moved: f32, target: usize, item: widget.Key, notice: ReorderNotice }
+type Swipe = struct { turned: bool, moved: f32, target: usize, item: widget.Key, notice: ReorderNotice, menu: bool }
 
 // A page view's drag: the cell the swipe keeps (none on the view's first frame),
 // where the pages stand, and whom to tell; (D982) settling, the drag only moves
@@ -329,7 +330,7 @@ fn page_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []c
         let (id, found) = widget.find_by_key(s, key)
         if found == 1usize {
             var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
-            let (kept, _, kept_error) = widget.state[Swipe](&build, key, Swipe { turned: false, moved: 0.0, target: 0usize, item: 0u64, notice: .None })
+            let (kept, _, kept_error) = widget.state[Swipe](&build, key, Swipe { turned: false, moved: 0.0, target: 0usize, item: 0u64, notice: .None, menu: false })
             if kept_error == ok {
                 pagings[0usize].cell = kept
                 pagings[0usize].has_cell = true
@@ -961,7 +962,7 @@ fn swipe_cell(t: *const control.Theme, key: widget.Key) -> (*Swipe, bool) {
     let (id, found) = widget.find_by_key(s, key)
     if found != 1usize { ret (none, false) }
     var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
-    let (kept, _, kept_error) = widget.state[Swipe](&build, key, Swipe { turned: false, moved: 0.0, target: 0usize, item: 0u64, notice: .None })
+    let (kept, _, kept_error) = widget.state[Swipe](&build, key, Swipe { turned: false, moved: 0.0, target: 0usize, item: 0u64, notice: .None, menu: false })
     if kept_error != ok { ret (none, false) }
     ret (kept, true)
 }
@@ -1042,6 +1043,35 @@ fn reorder_nudge(ctx: *void) -> err {
         n.cell.notice = .Moved
     }
     ret widget.fire_change[Reorder](n.move, Reorder { from: n.index, to: n.index + 1usize })
+}
+
+// (D1196) A reorderable row's semantic actions: Press is the row's own, and
+// Show menu opens its Move menu in the row's cell.
+type ReorderRow = struct { runtime: *widget.Runtime, action: widget.Submit, cell: *Swipe, has_cell: bool }
+
+fn reorder_row_action(ctx: *void, action: u32) -> err {
+    let r = back_of[ReorderRow](ctx)
+    if action == accessibility.ACTION_PRESS { ret widget.fire_submit(r.action) }
+    if action == accessibility.ACTION_SHOW_MENU && r.has_cell {
+        r.cell.menu = true
+        widget.request_animation_frame(r.runtime)
+    }
+    ret ok
+}
+
+// (D1196) A Move menu command: it closes the menu and reports the move unless
+// it lands where it started, which is also how the menu is dismissed.
+type ReorderPick = struct { runtime: *widget.Runtime, cell: *Swipe, item: widget.Key, from: usize, to: usize, move: widget.Change[Reorder] }
+
+fn reorder_pick(ctx: *void) -> err {
+    let p = back_of[ReorderPick](ctx)
+    p.cell.menu = false
+    widget.request_animation_frame(p.runtime)
+    if p.to == p.from { ret ok }
+    p.cell.item = p.item
+    p.cell.target = p.to
+    p.cell.notice = .Moved
+    ret widget.fire_change[Reorder](p.move, Reorder { from: p.from, to: p.to })
 }
 
 type ReorderKeyCommand = enum u8 { Toggle, Drop, Cancel, Previous, Next, First, Last }
@@ -3722,6 +3752,12 @@ fn row_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const 
 }
 
 fn row_sized(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32, height: f32) -> (widget.Node, err) {
+    let (made, made_error) = row_acting(a, key, t, item, index, count, width, height, accessibility.ACTION_PRESS, widget.Change[u32] { ctx: ctx_of(&item.action), invoke: submit_semantic_action })
+    ret (made, made_error)
+}
+
+// (D1196) A row whose enabled semantics offer `actions` through `on_action`.
+fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32, height: f32, actions: u32, on_action: widget.Change[u32]) -> (widget.Node, err) {
     let dense = density_of(t) == 0usize
     let lines = row_lines(item)
     let enabled = !item.disabled
@@ -3829,8 +3865,8 @@ fn row_sized(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
     sem.row = u32(index + 1usize)
     sem.row_count = u32(count)
     if enabled {
-        sem.actions = accessibility.ACTION_PRESS
-        sem.on_action = widget.Change[u32] { ctx: ctx_of(&item.action), invoke: submit_semantic_action }
+        sem.actions = actions
+        sem.on_action = on_action
     }
     if item.selected { sem.states = accessibility.STATE_SELECTED }
     if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
@@ -5342,10 +5378,14 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
 // shows the primary drop line. Space picks up a focused row, arrows/Home/End
 // move its gap under a "Moving" tag, Space/Enter drops and Escape cancels. The
 // lifecycle is announced politely; Alt or Ctrl with Up or Down moves directly.
-// Each row stands in a holder keyed `key + 1 + count + index`, so the lifted one
-// keeps its elements -- and the drag its handle -- at the top of the stack. A
-// list named `label`.
-// ponytail: no auto-scroll, context-menu or named accessibility move actions.
+// (D1196) Every row offers Show menu: a secondary press, the Menu key or
+// Shift+F10 opens its context menu (keyed `key ^ fnv1a64("reorder-menu")`) of
+// Move up, Move down, Move to top and Move to bottom, the impossible ones
+// disabled. Each row stands in a holder keyed `key + 1 + count + index`, so the
+// lifted one keeps its elements -- and the drag its handle -- at the top of the
+// stack. A list named `label`.
+// ponytail: no auto-scroll or named accessibility move actions; touch has no
+// long press for the menu.
 fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, move: widget.Change[Reorder], width: f32) -> (widget.Node, err) {
     if keys.len != items.len || items.len == 0usize { ret (zero, TooLarge) }
     let n = items.len
@@ -5393,8 +5433,10 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if shortcuts_error != ok { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, n)
     if rows_error != ok { ret (zero, TooLarge) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, n + 4usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, n + 5usize)
     if layers_error != ok { ret (zero, TooLarge) }
+    let (acting, acting_error) = mem.alloc[ReorderRow](a, n)
+    if acting_error != ok { ret (zero, TooLarge) }
     var alt: input.Modifiers = zero
     alt.alt = true
     var ctrl: input.Modifiers = zero
@@ -5416,7 +5458,8 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         }
         var wide = width
         if i == lifted { wide = control.max_zero(width - 16.0) }
-        let (made, made_error) = row_sized(a, keys[i], t, &shown[i], i, n, wide, tall)
+        acting[i] = ReorderRow { runtime: t.runtime, action: items[i].action, cell: cells[i], has_cell: has[i] }
+        let (made, made_error) = row_acting(a, keys[i], t, &shown[i], i, n, wide, tall, accessibility.ACTION_PRESS | accessibility.ACTION_SHOW_MENU, widget.Change[u32] { ctx: ctx_of(&acting[i]), invoke: reorder_row_action })
         if made_error != ok { ret (zero, made_error) }
         // The handle's target over the glyph.
         drags[i] = Dragging { runtime: t.runtime, list: key, item: keys[i], index: i, count: n, extent: tall, move: move, cell: cells[i], has_cell: has[i] }
@@ -5545,6 +5588,44 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = rows[lifted]
         layers[l] = widget.positioned(key + 1u64 + u64(n + lifted), 8.0, y, style.defaults(), held[0usize..1usize])
+        l += 1usize
+    }
+    // (D1196) The open Move menu, at the pointer or below its row.
+    var menu_row = n
+    i = 0usize
+    while i < n {
+        if has[i] && cells[i].menu { menu_row = i }
+        i += 1usize
+    }
+    if menu_row < n {
+        let (picks, picks_error) = mem.alloc[ReorderPick](a, 5usize)
+        if picks_error != ok { ret (zero, TooLarge) }
+        let (commands, commands_error) = mem.alloc[overlay.MenuCommand](a, 4usize)
+        if commands_error != ok { ret (zero, TooLarge) }
+        let (closer, closer_error) = mem.alloc[widget.Submit](a, 1usize)
+        if closer_error != ok { ret (zero, TooLarge) }
+        var p = 0usize
+        while p < 5usize {
+            picks[p] = ReorderPick { runtime: t.runtime, cell: cells[menu_row], item: keys[menu_row], from: menu_row, to: menu_row, move: move }
+            p += 1usize
+        }
+        if menu_row > 0usize { picks[0usize].to = menu_row - 1usize }
+        if menu_row + 1usize < n { picks[1usize].to = menu_row + 1usize }
+        picks[2usize].to = 0usize
+        picks[3usize].to = n - 1usize
+        commands[0usize] = overlay.menu_command("Move up", widget.Submit { ctx: ctx_of(&picks[0usize]), invoke: reorder_pick })
+        commands[1usize] = overlay.menu_command("Move down", widget.Submit { ctx: ctx_of(&picks[1usize]), invoke: reorder_pick })
+        commands[2usize] = overlay.menu_command("Move to top", widget.Submit { ctx: ctx_of(&picks[2usize]), invoke: reorder_pick })
+        commands[3usize] = overlay.menu_command("Move to bottom", widget.Submit { ctx: ctx_of(&picks[3usize]), invoke: reorder_pick })
+        commands[0usize].enabled = menu_row > 0usize
+        commands[2usize].enabled = menu_row > 0usize
+        commands[1usize].enabled = menu_row + 1usize < n
+        commands[3usize].enabled = menu_row + 1usize < n
+        closer[0usize] = widget.Submit { ctx: ctx_of(&picks[4usize]), invoke: reorder_pick }
+        let (at, pointed) = widget.context_point(t.runtime)
+        let (menu, menu_error) = overlay.context_menu_of(a, key ^ hash.fnv1a64("reorder-menu"), t, keys[menu_row], items[menu_row].headline, commands[0usize..4usize], true, &closer[0usize], at, pointed)
+        if menu_error != ok { ret (zero, menu_error) }
+        layers[l] = menu
         l += 1usize
     }
     if mem.address_of(noticed) != 0usize {

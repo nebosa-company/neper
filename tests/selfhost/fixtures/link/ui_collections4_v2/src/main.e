@@ -477,6 +477,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_key_enter, root_key_enter_error) = build(&f, &theme, &touch, s)
     if root_key_enter_error != ok || testing.pump(&harness, root_key_enter, now) != ok { os.exit(118i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.moves != 4usize || s.moved.from != 1usize || s.moved.to != 0usize { os.exit(119i32) }
+    // (D1196) A secondary press on a row opens its Move menu at the pointer; a
+    // command reports one move and closes it. Shift+F10 opens the focused row's
+    // menu with the impossible moves disabled, and Escape closes it unmoved.
+    let (root_menu_rest, root_menu_rest_error) = build(&f, &theme, &touch, s)
+    if root_menu_rest_error != ok || testing.pump(&harness, root_menu_rest, now) != ok { os.exit(136i32) }
+    let (second_row, has_second_row) = bounds(&harness, &runtime, 612u64)
+    if !has_second_row { os.exit(137i32) }
+    var secondary = testing.pointer_at(second_row.x + 120.0, second_row.y + 20.0)
+    secondary.buttons = 2u32
+    secondary.changed = .Secondary
+    if testing.send(&harness, input.Event { PointerDown: secondary }) != ok { os.exit(138i32) }
+    secondary.buttons = 0u32
+    if testing.send(&harness, input.Event { PointerUp: secondary }) != ok || s.moves != 4usize { os.exit(139i32) }
+    let (root_menu, root_menu_error) = build(&f, &theme, &touch, s)
+    if root_menu_error != ok || testing.pump(&harness, root_menu, now) != ok { os.exit(140i32) }
+    let (menu_tree, menu_tree_error) = testing.semantics(&harness)
+    if menu_tree_error != ok { os.exit(141i32) }
+    let (to_top, has_to_top) = find(menu_tree, .MenuItem, "Move to top")
+    let (down_item, has_down_item) = find(menu_tree, .MenuItem, "Move down")
+    if !has_to_top || !has_down_item || to_top.state.disabled || down_item.state.disabled || !near(to_top.bounds.x, second_row.x + 122.0) { os.exit(142i32) }
+    if testing.tap(&harness, to_top.bounds.x + 20.0, to_top.bounds.y + to_top.bounds.height * 0.5) != ok || s.moves != 5usize || s.moved.from != 1usize || s.moved.to != 0usize { os.exit(143i32) }
+    let (root_menu_done, root_menu_done_error) = build(&f, &theme, &touch, s)
+    if root_menu_done_error != ok || testing.pump(&harness, root_menu_done, now) != ok || testing.by_role(&harness, .Menu).count != 0usize || !politely_says(&harness, "Second, moved to position 1 of 3") { os.exit(144i32) }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
+    if !tab_to(&harness, 611u64) || testing.press_key(&harness, 65479u32, shifted) != ok { os.exit(145i32) }
+    let (root_key_menu, root_key_menu_error) = build(&f, &theme, &touch, s)
+    if root_key_menu_error != ok || testing.pump(&harness, root_key_menu, now) != ok { os.exit(146i32) }
+    let (key_menu_tree, key_menu_tree_error) = testing.semantics(&harness)
+    if key_menu_tree_error != ok { os.exit(147i32) }
+    let (up_item, has_up_item) = find(key_menu_tree, .MenuItem, "Move up")
+    let (top_item, has_top_item) = find(key_menu_tree, .MenuItem, "Move to top")
+    if !has_up_item || !has_top_item || !up_item.state.disabled || !top_item.state.disabled { os.exit(148i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || s.moves != 5usize { os.exit(149i32) }
+    let (root_key_menu_done, root_key_menu_done_error) = build(&f, &theme, &touch, s)
+    if root_key_menu_done_error != ok || testing.pump(&harness, root_key_menu_done, now) != ok || testing.by_role(&harness, .Menu).count != 0usize { os.exit(150i32) }
     // In a right-to-left theme the PageView's physical strip, buttons,
     // chevrons, drag and horizontal keys mirror while page indices stay logical.
     s.page = 1usize
