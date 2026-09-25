@@ -23403,3 +23403,11 @@ headings are skipped and nested action buttons retain ordinary Tab order.
 
 `ui_desktop` holds row focusability and all four moves on Windows and Linux. The
 Segoe review is `build/ux/notification-list-keyboard-segoe.png`.
+
+## D1175 — Notification Delete reuses row dismissal
+
+A focused Notification List row now binds the normalised Delete key directly to
+that notice's existing dismiss callback. Pointer close and keyboard dismissal
+therefore share caller-owned mutation and Undo policy.
+
+`ui_desktop` holds Delete dismissal on Windows and Linux.
