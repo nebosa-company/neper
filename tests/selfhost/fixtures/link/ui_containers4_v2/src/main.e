@@ -217,8 +217,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let grip = geometry.Point { x: sash.x + 4.0, y: sash.y + 200.0 }
     if testing.drag(&harness, grip, geometry.Point { x: grip.x + 20.0, y: grip.y }, 4usize) != ok || !near(s.model.sizes.left, 220.0) { os.exit(28i32) }
     // A Move the caller sends puts Inspector in the bottom slot.
-    navigation.dock_apply(&s.model, s.placements[0usize..6usize], navigation.DockEvent { kind: .Move, panel: 2usize, slot: .Bottom, sizes: zero })
+    navigation.dock_apply(&s.model, s.placements[0usize..6usize], navigation.DockEvent { kind: .Move, panel: 2usize, slot: .Bottom, sizes: zero, offset: zero })
     if !frame(&harness, &f, &theme, s) || testing.by_label(&harness, "Close Inspector panel").count != 1usize || s.placements[2usize].home != .Bottom { os.exit(29i32) }
+    // (D1298) Floated again, the palette drags by its header: its rectangle moves.
+    navigation.dock_apply(&s.model, s.placements[0usize..6usize], navigation.DockEvent { kind: .Move, panel: 5usize, slot: .Floating, sizes: zero, offset: zero })
+    if !frame(&harness, &f, &theme, s) { os.exit(48i32) }
+    let start_x = s.placements[5usize].x
+    let start_y = s.placements[5usize].y
+    let (palette_head, has_palette_head) = bounds(&harness, &runtime, 380u64 + 4096u64)
+    if !has_palette_head { os.exit(49i32) }
+    let grab = geometry.Point { x: palette_head.x + 100.0, y: palette_head.y + palette_head.height * 0.5 }
+    if testing.drag(&harness, grab, geometry.Point { x: grab.x + 40.0, y: grab.y + 20.0 }, 5usize) != ok { os.exit(50i32) }
+    if !(s.placements[5usize].x > start_x + 10.0) || !(s.placements[5usize].y > start_y) { os.exit(51i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(30i32) }
     try io.print("ui containers4 v2 ok\n")
     ret ok

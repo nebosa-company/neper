@@ -25120,3 +25120,16 @@ window's edges.
 
 `ui_containers2_v2` holds a (30, 10) drag of a floating panel's header
 reporting a move of that size, less the drag threshold, on Windows and Linux.
+
+## D1298 — Dock layouts move floating panels
+
+The dock layout wires D1297's header drag into its model. A floating
+panel's header now reports each move as a `DockEvent` of the new kind
+`Drag`, carrying the move in the event's new `offset`, and `dock_apply`
+moves that panel's rectangle. Tearing a docked panel off is still the
+caller's `Move`, and the drag ghost, dock guides and drop preview are still
+to come.
+
+`ui_containers4_v2` floats the palette again, drags its header by (40, 20),
+and holds its rectangle moved on Windows and Linux; the fixture's earlier
+Move literal gained the new field.
