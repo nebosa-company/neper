@@ -1915,7 +1915,10 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
         let (said, said_error) = control.colored_text(a, 0u64, names[parent], t, caption, ink)
         if said_error != ok { ret (zero, said_error) }
         bits[1usize] = said
-        let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), bits[0usize..2usize])
+        // The row stands the target's full 48, so the chevron and name centre in it.
+        var row_style = style.defaults()
+        row_style.height = style.Length { Px: 48.0 }
+        let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, row_style, bits[0usize..2usize])
         let (made, made_error) = control.pressable_states(a, parent_key, t, 9u8, names[parent], look, true, false, 0u32, 0u32, 0u64, &picks[parent], content)
         if made_error != ok { ret (zero, made_error) }
         parts[0usize] = made

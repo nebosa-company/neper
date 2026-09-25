@@ -113,15 +113,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, actions: *const Actions, log: *
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, column, items[0usize..2usize]), ok)
 }
 
-fn selected_label(h: *const testing.Harness, role: accessibility.Role) -> (str, bool) {
+// Whether a node of `role` named `label` is selected (D985: the select's popup
+// and the list box are both a Listbox of Options).
+fn selected_is(h: *const testing.Harness, role: accessibility.Role, label: str) -> bool {
     let (tree, tree_error) = testing.semantics(h)
-    if tree_error != ok { ret ("", false) }
+    if tree_error != ok { ret false }
     var i = 0usize
     while i < tree.nodes.len {
-        if tree.nodes[i].role == role && tree.nodes[i].state.selected { ret (tree.nodes[i].label, true) }
+        if tree.nodes[i].role == role && tree.nodes[i].state.selected && same(tree.nodes[i].label, label) { ret true }
         i += 1usize
     }
-    ret ("", false)
+    ret false
 }
 
 fn same(a: str, b: str) -> bool {
@@ -176,18 +178,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root, build_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
     if build_error != ok { os.exit(10i32) }
     if testing.pump(&harness, root, now) != ok { os.exit(11i32) }
-    // Closed: the select shows Red and no menu items exist.
-    if testing.by_label(&harness, "Red").count == 0usize || testing.by_role(&harness, .MenuItem).count != 0usize { os.exit(12i32) }
-    // A tap on the select asks to open; open, three menu items, Red selected.
+    // Closed: the select shows Red and only the list box's four options exist.
+    if testing.by_label(&harness, "Red").count == 0usize || testing.by_role(&harness, .Option).count != 4usize { os.exit(12i32) }
+    // A tap on the select asks to open; open, a second listbox of three options,
+    // Red selected.
     let head = testing.by_key(&harness, 1u64).element
     let (head_bounds, has_head) = widget.bounds_of(&runtime, head)
     if !has_head || testing.tap(&harness, head_bounds.x + 4.0, head_bounds.y + 4.0) != ok || logs[0usize].toggles != 1usize || !logs[0usize].open { os.exit(13i32) }
     let (root_2, build_2_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
     if build_2_error != ok { os.exit(14i32) }
     if testing.pump(&harness, root_2, now) != ok { os.exit(15i32) }
-    if testing.by_role(&harness, .MenuItem).count != 3usize || testing.by_role(&harness, .Menu).count != 1usize { os.exit(16i32) }
-    let (chosen, has_chosen) = selected_label(&harness, .MenuItem)
-    if !has_chosen || !same(chosen, "Red") { os.exit(17i32) }
+    if testing.by_role(&harness, .Option).count != 7usize || testing.by_role(&harness, .Listbox).count != 2usize { os.exit(16i32) }
+    if !selected_is(&harness, .Option, "Red") { os.exit(17i32) }
     let (popup_bounds, has_popup) = testing.overlay_of(&harness, testing.by_key(&harness, 2u64).element)
     if !has_popup || !(popup_bounds.y >= head_bounds.y + head_bounds.height) { os.exit(18i32) }
     // A tap on Green picks it and closes; the next frame shows Green.
@@ -198,7 +200,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_3, build_3_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
     if build_3_error != ok { os.exit(21i32) }
     if testing.pump(&harness, root_3, now) != ok { os.exit(22i32) }
-    if testing.by_label(&harness, "Green").count == 0usize || testing.by_role(&harness, .MenuItem).count != 0usize { os.exit(23i32) }
+    if testing.by_label(&harness, "Green").count == 0usize || testing.by_role(&harness, .Option).count != 4usize { os.exit(23i32) }
     // Open again, a press far outside asks to close through the modal's dismiss.
     if testing.tap(&harness, head_bounds.x + 4.0, head_bounds.y + 4.0) != ok || !logs[0usize].open { os.exit(24i32) }
     let (root_4, build_4_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
@@ -210,9 +212,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, root_5, now) != ok { os.exit(29i32) }
     // The list box: four items in a two-row viewport, Apple selected; a tap on
     // Pear picks it; the wheel brings Plum and Fig into view.
-    if testing.by_role(&harness, .List).count != 1usize || testing.by_role(&harness, .ListItem).count != 4usize { os.exit(30i32) }
-    let (first_choice, has_first) = selected_label(&harness, .ListItem)
-    if !has_first || !same(first_choice, "Apple") { os.exit(31i32) }
+    if testing.by_role(&harness, .Listbox).count != 1usize || testing.by_role(&harness, .Option).count != 4usize { os.exit(30i32) }
+    if !selected_is(&harness, .Option, "Apple") { os.exit(31i32) }
     let pear = testing.by_key(&harness, 12u64).element
     let (pear_bounds, has_pear) = widget.bounds_of(&runtime, pear)
     if !has_pear || !testing.visible(&harness, pear) || testing.visible(&harness, testing.by_key(&harness, 14u64).element) { os.exit(32i32) }
@@ -220,8 +221,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_6, build_6_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
     if build_6_error != ok { os.exit(34i32) }
     if testing.pump(&harness, root_6, now) != ok { os.exit(35i32) }
-    let (second_choice, has_second) = selected_label(&harness, .ListItem)
-    if !has_second || !same(second_choice, "Pear") { os.exit(36i32) }
+    if !selected_is(&harness, .Option, "Pear") || selected_is(&harness, .Option, "Apple") { os.exit(36i32) }
     let (view_bounds, has_view) = widget.bounds_of(&runtime, testing.by_key(&harness, 10u64).element)
     if !has_view || testing.wheel(&harness, view_bounds.x + 10.0, view_bounds.y + 10.0, -2i32) != ok { os.exit(37i32) }
     let (root_7, build_7_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])

@@ -217,9 +217,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tree_4, tree_4_error) = testing.semantics(&harness)
     if tree_4_error != ok { os.exit(28i32) }
     let (windows_node, has_windows) = find(tree_4, .Dialog, "Windows")
-    // The wizard's three steps are list items too.
-    let (inbox_row, has_inbox) = find(tree_4, .ListItem, "Inbox")
-    if !has_windows || !windows_node.state.modal || !has_inbox || testing.by_role(&harness, .ListItem).count != 6usize { os.exit(29i32) }
+    // The switcher's rows are options (D985); the wizard's three steps stay list items.
+    let (inbox_row, has_inbox) = find(tree_4, .Option, "Inbox")
+    if !has_windows || !windows_node.state.modal || !has_inbox || testing.by_role(&harness, .ListItem).count != 3usize || testing.by_role(&harness, .Option).count != 3usize { os.exit(29i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].activations != 1usize || logs[0usize].active != 1usize { os.exit(30i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].picks != 1usize || logs[0usize].picked != 0usize { os.exit(31i32) }
     let (third_at, has_third) = centre_of(&harness, &runtime, 24u64)

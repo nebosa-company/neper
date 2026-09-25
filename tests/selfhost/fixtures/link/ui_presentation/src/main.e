@@ -213,7 +213,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_5, build_5_error) = build(&frame, &theme, ctx, &subs[0usize], &subs[1usize], dialog_buttons[0usize..2usize], sheet_buttons[0usize..2usize], .Sheet)
     if build_5_error != ok || testing.pump(&harness, root_5, now) != ok { os.exit(28i32) }
     let (sheet_bounds, has_sheet) = testing.overlay_of(&harness, testing.by_key(&harness, 50u64).element)
-    if !has_sheet || sheet_bounds.x + sheet_bounds.width != 480.0 || sheet_bounds.width != 120.0 || sheet_bounds.height < 300.0 { os.exit(29i32) }
+    // A 120 request is held to the modal side sheet's least width, 256 (D1040).
+    if !has_sheet || sheet_bounds.x + sheet_bounds.width != 480.0 || sheet_bounds.width != 256.0 || sheet_bounds.height < 300.0 { os.exit(29i32) }
     let (tree_5, tree_5_error) = testing.semantics(&harness)
     if tree_5_error != ok { os.exit(30i32) }
     let (filters, has_filters) = find(tree_5, .Dialog, "Filters")
