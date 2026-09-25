@@ -35,11 +35,17 @@ type Turned = struct { count: usize, last: usize }
 type Moved = struct { count: usize, from: usize, to: usize }
 
 // The counters: 0 back, 1 next, 2 finish, 3 cancel.
-type Store = struct { counters: [4]Counter, subs: [4]widget.Submit, picks: Turned, closes: Turned, step_picks: Turned, moves: Moved, documents: [3]navigation.Document, steps: [3]navigation.WizardStep, finishing: bool }
+type Store = struct { counters: [4]Counter, subs: [4]widget.Submit, picks: Turned, closes: Turned, step_picks: Turned, moves: Moved, documents: [3]navigation.Document, steps: [3]navigation.WizardStep, finishing: bool, dirty: bool, discard_open: bool }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
     c.count += 1usize
+    ret ok
+}
+
+fn on_discard(ctx: *void) -> err {
+    let s = mem.cast[*Store](ctx)
+    s.discard_open = !s.discard_open
     ret ok
 }
 
@@ -98,6 +104,10 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     small.form = .Compact
     small.finish_label = "Create project"
     small.finishing = s.finishing
+    small.dirty = s.dirty
+    small.discard_open = s.discard_open
+    small.request_discard = widget.Submit { ctx: mem.cast[*void](s), invoke: on_discard }
+    small.keep_editing = small.request_discard
     let (phone, e5) = navigation.wizard_of(a, 6200u64, t, "New project", s.steps[0usize..3usize], 2usize, page, &s.subs[0usize], &s.subs[1usize], &s.subs[2usize], &s.subs[3usize], small, 360.0, 300.0)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (zero, e1) }
     let (lefts, lefts_error) = mem.alloc[widget.Node](a, 3usize)
@@ -289,6 +299,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (create_node, has_create_node) = find(tree, .Button, "Create project")
     if !has_create || !has_create_node || !near(create.width, 328.0) || !tap_key(&harness, &runtime, 6204u64) || s.counters[2usize].count != 1usize { os.exit(30i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || s.counters[2usize].count != 2usize || !tap_key(&harness, &runtime, 6207u64) || s.counters[0usize].count != 2usize { os.exit(31i32) }
+    // A dirty wizard routes Escape through its discard request. The standard
+    // alert keeps editing on Escape or performs the original Cancel on Discard.
+    s.dirty = true
+    let (dirty, dirty_error) = build(&f, &theme, s)
+    if dirty_error != ok || testing.pump(&harness, dirty, time.Instant { nanos: 1250000000i64 }) != ok || testing.press_key(&harness, 27u32, zero) != ok || !s.discard_open || s.counters[3usize].count != 0usize { os.exit(50i32) }
+    let (asking, asking_error) = build(&f, &theme, s)
+    if asking_error != ok || testing.pump(&harness, asking, time.Instant { nanos: 1260000000i64 }) != ok { os.exit(51i32) }
+    let (asking_tree, asking_tree_error) = testing.semantics(&harness)
+    let (discard_dialog, has_discard_dialog) = find(asking_tree, .AlertDialog, "Discard New project?")
+    if asking_tree_error != ok || !has_discard_dialog || !discard_dialog.state.modal || testing.by_text(&harness, "Your changes will be lost.").count != 1usize || testing.press_key(&harness, 27u32, zero) != ok || s.discard_open { os.exit(52i32) }
+    let (kept, kept_error) = build(&f, &theme, s)
+    if kept_error != ok || testing.pump(&harness, kept, time.Instant { nanos: 1270000000i64 }) != ok || testing.press_key(&harness, 27u32, zero) != ok || !s.discard_open { os.exit(53i32) }
+    let (asked_again, asked_again_error) = build(&f, &theme, s)
+    if asked_again_error != ok || testing.pump(&harness, asked_again, time.Instant { nanos: 1280000000i64 }) != ok || !tap_key(&harness, &runtime, 6214u64) || s.counters[3usize].count != 1usize { os.exit(54i32) }
+    s.discard_open = false
     s.finishing = true
     let (finishing, finishing_error) = build(&f, &theme, s)
     if finishing_error != ok || testing.pump(&harness, finishing, time.Instant { nanos: 1300000000i64 }) != ok { os.exit(46i32) }
