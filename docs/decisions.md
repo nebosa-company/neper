@@ -22729,3 +22729,15 @@ caller's descending flag.
 `ui_collections2_v2` holds one ascending and one descending ColumnHeader and
 `ui_accessibility` guards the general tree on Windows and Linux. The reviewed
 surface is unchanged.
+
+## D1106 — TreeTable publishes a treegrid
+
+TreeGrid is an explicit accessibility role carried through widget semantics and
+the flat host role code. TreeTable uses it with visible row and column counts;
+its hierarchical items are Rows carrying their existing level, sibling position,
+state and actions. The runtime recognises those rows as the same buffered
+typeahead context, so the semantic correction does not regress keyboard use.
+
+`ui_collections3_v2` holds the role, counts, row levels and typeahead on Windows
+and Linux. `ui_accessibility` guards the general role path. The reviewed surface
+is unchanged.

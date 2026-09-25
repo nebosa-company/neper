@@ -2765,6 +2765,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         scoped[0usize] = made
         var item_sem: widget.Semantics = zero
         item_sem.role = 29u8
+        if tabled { item_sem.role = 13u8 }
         item_sem.level = u8(entry.depth + 1usize)
         item_sem.row = u32(entry.index + 1usize)
         item_sem.row_count = u32(entry.siblings)
@@ -2884,8 +2885,7 @@ fn treed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, so
 // sorting, reordering and resizing as a table's; a tree in the tree named `label`
 // whose items are rows of cells. v2 (D981, docs/ux/components/TreeTable): the
 // v2 header row over table rows with full-width dividers on `surface`.
-// ponytail: no viewport or virtualisation, treegrid role, footer or per-parent
-// sort.
+// ponytail: no viewport or virtualisation, footer or per-parent sort.
 fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TreeSource, cells_of: CellSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], extent: f32) -> (widget.Node, err) {
     if columns.len == 0usize { ret (zero, TooLarge) }
     let (head, head_error) = header_row(a, key, t, columns, sort_column, descending, sort, reorder, resize)
@@ -2913,8 +2913,9 @@ fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..rows.len + 1usize])
     var sem: widget.Semantics = zero
-    sem.role = 28u8
+    sem.role = accessibility.ROLE_TREE_GRID
     sem.label = label
+    sem.row_count = u32(rows.len)
     sem.column_count = u32(columns.len)
     ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
 }

@@ -3535,7 +3535,7 @@ fn collection_item_owner(s: *State, index: usize) -> (usize, u8, bool) {
     var at = index
     while true {
         let e = &s.elements[at]
-        if e.has_semantics && (e.sem.role == 11u8 || e.sem.role == 14u8 || e.sem.role == 29u8) { ret (at, e.sem.role, true) }
+        if e.has_semantics && (e.sem.role == 11u8 || (e.sem.role == 13u8 && e.sem.level > 0u8) || e.sem.role == 14u8 || e.sem.role == 29u8) { ret (at, e.sem.role, true) }
         if !e.has_parent { ret (0usize, 0u8, false) }
         at = usize(e.parent)
     }
@@ -3548,6 +3548,7 @@ fn collection_root(s: *State, owner: usize, item_role: u8) -> (usize, u8, bool) 
         if item_role == 11u8 && e.has_semantics && e.sem.role == 10u8 { ret (at, 2u8, true) }
         if item_role == 14u8 && e.has_semantics && e.sem.role == 30u8 { ret (at, 3u8, true) }
         if item_role == 29u8 && e.has_semantics && e.sem.role == 28u8 { ret (at, 4u8, true) }
+        if item_role == 13u8 && e.has_semantics && e.sem.role == 43u8 { ret (at, 4u8, true) }
         if !e.has_parent { ret (0usize, 0u8, false) }
         at = usize(e.parent)
     }
