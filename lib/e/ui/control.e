@@ -4928,17 +4928,21 @@ fn star_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: path, brush: paint.Brush { Solid: star.color }, stroke: paint.Stroke { width: 1.75, cap: .Round, join: .Round, miter_limit: 4.0 } } })
 }
 
-// A rating's keyboard: Left and Right move the value by one within `0..max`.
-type Rate = struct { value: u32, max: u32, up: bool, change: widget.Change[u32] }
+// A rating's keyboard move within `0..max` (D1162).
+type RateMove = enum u8 { Less, More, First, Last }
+type Rate = struct { value: u32, max: u32, move: RateMove, change: widget.Change[u32] }
 
 fn rate_step(ctx: *void) -> err {
     let r = mem.cast[*Rate](ctx)
     var next = r.value
-    if r.up {
+    if r.move == .More {
         if next < r.max { next += 1u32 }
-    } else {
+    }
+    if r.move == .Less {
         if next > 0u32 { next = next - 1u32 }
     }
+    if r.move == .First { next = 0u32 }
+    if r.move == .Last { next = r.max }
     ret widget.fire_change[u32](r.change, next)
 }
 
@@ -4953,8 +4957,8 @@ fn rate_tap(ctx: *void, g: widget.Gesture) -> err {
 
 // A rating: `max` stars in a row, the first `value` filled, each a tap region
 // keyed `key + 1 + index` setting the value to its number; the row a focus
-// target whose Left and Right step the value; a slider in the tree named `label`
-// with the value as digits.
+// target whose arrows step the value and whose Home/End reach its bounds; a
+// slider in the tree named `label` with the value as digits.
 fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u32, max: u32, change: widget.Change[u32]) -> (widget.Node, err) {
     if max == 0u32 || max > 32u32 { ret (zero, TooLarge) }
     let count = usize(max)
@@ -5001,14 +5005,26 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
         items[i] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, cell_style, body[0usize..1usize])
         i += 1usize
     }
-    let (steps, steps_error) = mem.alloc[Rate](a, 2usize)
+    let (steps, steps_error) = mem.alloc[Rate](a, 4usize)
     if steps_error != ok { ret (zero, TooLarge) }
-    steps[0usize] = Rate { value: value, max: max, up: false, change: change }
-    steps[1usize] = Rate { value: value, max: max, up: true, change: change }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    steps[0usize] = Rate { value: value, max: max, move: .Less, change: change }
+    steps[1usize] = Rate { value: value, max: max, move: .More, change: change }
+    steps[2usize] = Rate { value: value, max: max, move: .First, change: change }
+    steps[3usize] = Rate { value: value, max: max, move: .Last, change: change }
+    let less = widget.Submit { ctx: mem.cast[*void](&steps[0usize]), invoke: rate_step }
+    let more = widget.Submit { ctx: mem.cast[*void](&steps[1usize]), invoke: rate_step }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
-    shortcuts[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[0usize]), invoke: rate_step } }
-    shortcuts[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[1usize]), invoke: rate_step } }
+    shortcuts[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: less }
+    shortcuts[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: more }
+    if t.tokens.direction == .RightToLeft {
+        shortcuts[0usize].action = more
+        shortcuts[1usize].action = less
+    }
+    shortcuts[2usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: less }
+    shortcuts[3usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: more }
+    shortcuts[4usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[2usize]), invoke: rate_step } }
+    shortcuts[5usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[3usize]), invoke: rate_step } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), items[0usize..count])
@@ -5020,7 +5036,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     focus[0usize] = widget.region(key, widget.Region { gesture: none_gesture, gestures: 0u8, enabled: true, focusable: true }, style.defaults(), row[0usize..1usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focus[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focus[0usize..1usize])
     let (digits, digits_error) = mem.alloc[u8](a, 2usize)
     if digits_error != ok { ret (zero, TooLarge) }
     var digit_count = 0usize
