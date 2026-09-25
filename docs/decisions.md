@@ -24212,3 +24212,19 @@ the whole grid.
 `ui_collections_v2` holds Page Down to the tile below, its stop at the last row
 and Page Up back on Windows and Linux. All 103 `ui_*` fixtures pass on both
 hosts.
+
+## D1236 — Rows carry a context menu
+
+`RowItem.commands` gives a row its context menu (empty keeps today's row
+exactly). A row with commands offers Show menu beside Press, so D1195's secondary
+press, the Menu key and Shift+F10 open it, and on touch it also asks the shared
+runtime for the 500 ms hold. The open state lives in a small cell retained on the
+row's key, and while it is open the row stands beside `overlay.context_menu_of`
+(at the pointer or below the row) or, on touch, `context_menu_touch_of`. Its key
+is `key ^ fnv1a64("row-menu")`. The commands are the caller's `MenuCommand`s; a
+chosen one runs and the menu closes through its dismiss (D998). Every list built
+from `row_of` gets this, since it goes through `row_sized`.
+
+`ui_collections_v2` opens Alpha's menu with a secondary press, runs Rename and
+sees the menu close on Windows and Linux. All 103 `ui_*` fixtures pass on both
+hosts.
