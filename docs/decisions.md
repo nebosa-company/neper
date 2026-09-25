@@ -24286,3 +24286,20 @@ neighbour and move the focus there, Ctrl+A selects all and Escape clears.
 `ui_collections_v2` holds every gesture, and the plain click that selects
 nothing, on Windows and Linux. A disabled row takes no click, so the test
 taps an enabled one.
+
+## D1241 — Multi-select lists have selection mode and a selection bar
+
+A multi-select list (`ListOptions.select`) is in selection mode while any
+row is selected. Every row then leads with its checkbox (`RowItem.has_checkbox`:
+the checkbox mark in its 40 circle, checked when selected, the start padding
+dropping to 4), and `selection_bar` stands where the header was: a
+`surface-container` bar 48 tall (64 on touch) holding a Clear button that
+fires `Clear`, "N selected" in `title-medium`, and `ListOptions.bulk` as icon
+buttons named by their labels. The bar is keyed
+`key ^ fnv1a64("selection-bar")`, because `key + 2` is already a row key in
+any list whose caller numbers rows from its own key. On touch a hold toggles a
+row, and in selection mode a plain tap toggles too. A row in the tree is
+checked as well as selected while it shows its checkbox.
+
+`ui_collections_v2` holds the bar, its count, Clear, a bulk action, the checked
+state and the bar's absence with nothing selected on Windows and Linux.

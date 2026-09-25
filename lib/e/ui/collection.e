@@ -3841,7 +3841,7 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // and a trailing glyph, whether it is selected (and then marked with a trailing
 // check, for a single-select list), disabled, and its primary action. (D1236)
 // `commands` (empty for none) are the row's context menu.
-type RowItem = struct { headline: str, supporting: str, overline: str, meta: str, leading: control.GlyphKind, has_leading: bool, trailing: control.GlyphKind, has_trailing: bool, selected: bool, check: bool, disabled: bool, action: widget.Submit, commands: []const overlay.MenuCommand }
+type RowItem = struct { headline: str, supporting: str, overline: str, meta: str, leading: control.GlyphKind, has_leading: bool, trailing: control.GlyphKind, has_trailing: bool, selected: bool, check: bool, disabled: bool, action: widget.Submit, commands: []const overlay.MenuCommand, has_checkbox: bool }
 
 // (D1236) A row's context menu, kept across frames on the row: whether it is open.
 type RowMenu = struct { open: bool }
@@ -3929,7 +3929,9 @@ fn row_lines(item: *const RowItem) -> usize {
 // the supporting line, at `index` of `count`.
 // (D1236) With `commands` the row has a context menu (a secondary press, the Menu
 // key, Shift+F10, or a touch hold).
-// ponytail: no avatar, thumbnail or control leading slot, or selection
+// (D1241) `has_checkbox` leads with a checkbox in its circle (checked when
+// selected) and the start padding drops to 4.
+// ponytail: no avatar, thumbnail, radio or switch leading slot, or selection
 // animation; the focus ring is the runtime's, inset where the list clips it.
 fn row_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32) -> (widget.Node, err) {
     let (made, made_error) = row_sized(a, key, t, item, index, count, width, row_height(t, row_lines(item)))
@@ -4003,7 +4005,12 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
     let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var p = 0usize
-    if item.has_leading {
+    if item.has_checkbox {
+        let (mark, mark_error) = control.choice_mark(a, t, state, item.selected, false, false, enabled)
+        if mark_error != ok { ret (zero, mark_error) }
+        parts[p] = mark
+        p += 1usize
+    } else if item.has_leading {
         let (lead, lead_error) = control.icon_square(a, muted, item.leading, glyph_side)
         if lead_error != ok { ret (zero, lead_error) }
         parts[p] = lead
@@ -4076,7 +4083,7 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
     row_style.height = style.Length { Px: height }
     row_style.background = paint.Brush { Solid: fill }
     let side = style.Length { Px: control.if_else(dense, 0.0, 8.0) }
-    row_style.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: side, right: style.Length { Px: control.if_else(dense, 12.0, 24.0) }, bottom: side }
+    row_style.padding = style.EdgeLengths { left: style.Length { Px: control.if_else(item.has_checkbox, 4.0, 16.0) }, top: side, right: style.Length { Px: control.if_else(dense, 12.0, 24.0) }, bottom: side }
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
     control.focus_look(t)
@@ -4093,6 +4100,7 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
         sem.names = names
     }
     if item.selected { sem.states = accessibility.STATE_SELECTED }
+    if item.has_checkbox && item.selected { sem.states = sem.states | accessibility.STATE_CHECKED }
     if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
 }
@@ -4295,7 +4303,8 @@ fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []
 // the width (0: the parent's); and the empty state's statement and suggestion.
 // (D1240) `select`, when set, makes the list multi-select: it hears each
 // selection gesture as a `ListSelect` and the caller keeps the selected set.
-type ListOptions = struct { grouped: bool, dividers: bool, inset: f32, subheader: str, title: str, footnote: str, width: f32, empty_title: str, empty_message: str, select: widget.Change[ListSelect] }
+// (D1241) `bulk` are the selection bar's actions.
+type ListOptions = struct { grouped: bool, dividers: bool, inset: f32, subheader: str, title: str, footnote: str, width: f32, empty_title: str, empty_message: str, select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand }
 
 // (D1240) A multi-select list's selection gesture: toggle the row at `index`,
 // extend the selection from the anchor to it, select all, or clear.
@@ -4313,12 +4322,13 @@ fn list_pick_fire(ctx: *void) -> err {
 
 // A row press in a multi-select list: Ctrl (or Meta) toggles it and Shift
 // extends to it; a plain press is the row's own action.
-type ListClick = struct { runtime: *widget.Runtime, select: widget.Change[ListSelect], index: usize, action: widget.Submit }
+// (D1241) On touch in selection mode a plain tap toggles too.
+type ListClick = struct { runtime: *widget.Runtime, select: widget.Change[ListSelect], index: usize, action: widget.Submit, toggles: bool }
 
 fn list_click_fire(ctx: *void) -> err {
     let c = back_of[ListClick](ctx)
     let held = widget.modifiers(c.runtime)
-    if held.control || held.meta { ret widget.fire_change[ListSelect](c.select, ListSelect { kind: .Toggle, index: c.index }) }
+    if c.toggles || held.control || held.meta { ret widget.fire_change[ListSelect](c.select, ListSelect { kind: .Toggle, index: c.index }) }
     if held.shift { ret widget.fire_change[ListSelect](c.select, ListSelect { kind: .Extend, index: c.index }) }
     ret widget.fire_submit(c.action)
 }
@@ -4340,7 +4350,10 @@ fn list_options() -> ListOptions {
 // `label` with its count. (D1240) With `options.select` set the list is
 // multi-select: Ctrl-click or Space toggles a row, Shift-click or Shift+Up/Down
 // extends to it, Ctrl+A selects all and Escape clears; the caller keeps the set.
-// ponytail: the caller sets `selected` from the gestures; no selection bar,
+// (D1241) While any row is selected every row leads with its checkbox and the
+// `selection_bar` stands above the rows; on touch a hold or, once in the mode,
+// a tap toggles.
+// ponytail: the caller sets `selected` from the gestures; no
 // sticky subheader, loading rows or insert motion; a page is the window's
 // height over the first row's, not the enclosing viewport's.
 fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, options: ListOptions) -> (widget.Node, err) {
@@ -4349,6 +4362,20 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     if rows_error != ok { ret (zero, TooLarge) }
     var width = options.width
     let selecting = widget.change_set[ListSelect](options.select.invoke) && mem.address_of(t.runtime) != 0usize
+    // (D1241) Selection mode: while any row is selected every row leads with its
+    // checkbox and the selection bar stands above the rows.
+    var chosen_count = 0usize
+    var c = 0usize
+    while c < items.len {
+        if items[c].selected { chosen_count += 1usize }
+        c += 1usize
+    }
+    let touch = density_of(t) == 2usize
+    let in_mode = selecting && chosen_count > 0usize
+    let (holds, holds_error) = mem.alloc[ListPick](a, items.len)
+    if holds_error != ok { ret (zero, TooLarge) }
+    let (hold_fires, hold_fires_error) = mem.alloc[widget.Submit](a, items.len)
+    if hold_fires_error != ok { ret (zero, TooLarge) }
     let (shown, shown_error) = mem.alloc[RowItem](a, items.len)
     if shown_error != ok { ret (zero, TooLarge) }
     let (clicks, clicks_error) = mem.alloc[ListClick](a, items.len)
@@ -4357,12 +4384,19 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     while i < items.len {
         shown[i] = items[i]
         if selecting {
-            clicks[i] = ListClick { runtime: t.runtime, select: options.select, index: i, action: items[i].action }
+            clicks[i] = ListClick { runtime: t.runtime, select: options.select, index: i, action: items[i].action, toggles: in_mode && touch }
             shown[i].action = widget.Submit { ctx: ctx_of(&clicks[i]), invoke: list_click_fire }
+            shown[i].has_checkbox = in_mode
         }
         let (made, made_error) = row_of(a, keys[i], t, &shown[i], i, items.len, width)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
+        if selecting && touch && items[i].commands.len == 0usize && !items[i].disabled {
+            holds[i] = ListPick { runtime: t.runtime, select: options.select, kind: .Toggle, index: i, focus: 0u64, has_focus: false }
+            hold_fires[i] = widget.Submit { ctx: ctx_of(&holds[i]), invoke: list_pick_fire }
+            let hold_error = widget.long_press(t.runtime, keys[i], &hold_fires[i])
+            if hold_error != ok { ret (zero, hold_error) }
+        }
         i += 1usize
     }
     var page = 0usize
@@ -4470,7 +4504,12 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     var note = control.text_options()
     note.wrap = .None
     let muted = style.color(t.tokens, .OnSurfaceVariant)
-    if options.grouped && options.title.len > 0usize {
+    if in_mode {
+        let (bar, bar_error) = selection_bar(a, key ^ hash.fnv1a64("selection-bar"), t, chosen_count, options.select, options.bulk, width)
+        if bar_error != ok { ret (zero, bar_error) }
+        outer[o] = bar
+        o += 1usize
+    } else if options.grouped && options.title.len > 0usize {
         note.role = .LabelMedium
         let (said, said_error) = control.colored_text(a, 0u64, options.title, t, note, muted)
         if said_error != ok { ret (zero, said_error) }
@@ -4497,6 +4536,68 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     sem.label = label
     sem.row_count = u32(items.len)
     ret (widget.semantics(0u64, sem, style.defaults(), outer[0usize..o]), ok)
+}
+
+// (D1241, docs/ux/components/List, selection bar) In place of the list's header
+// while rows are selected (a list keys it `key ^ fnv1a64("selection-bar")`): a
+// `surface-container` bar `control-lg` 48 tall (64 on touch), 4 in at the start
+// and 8 at the end: a Clear button (keyed `key + 1`) firing `Clear`, "`count`
+// selected" in `title-medium` `on-surface`, and each of `bulk` as an icon button
+// named by its label (`key + 2 + i`). A group in the tree named by the count.
+fn selection_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, width: f32) -> (widget.Node, err) {
+    let touch = density_of(t) == 2usize
+    let ink = style.color(t.tokens, .OnSurface)
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var side = t.tokens.sizes.control_md
+    if touch { side = t.tokens.sizes.target_touch }
+    let glyph = t.tokens.sizes.icon_md
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize + bulk.len)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (picks, picks_error) = mem.alloc[ListPick](a, 1usize)
+    if picks_error != ok { ret (zero, TooLarge) }
+    let (clear, clear_error) = mem.alloc[widget.Submit](a, 1usize)
+    if clear_error != ok { ret (zero, TooLarge) }
+    picks[0usize] = ListPick { runtime: t.runtime, select: select, kind: .Clear, index: 0usize, focus: 0u64, has_focus: false }
+    clear[0usize] = widget.Submit { ctx: ctx_of(&picks[0usize]), invoke: list_pick_fire }
+    let (clear_button, clear_button_error) = control.glyph_action(a, key + 1u64, t, .Cross, "Clear selection", &clear[0usize], side, glyph, muted, true, 0u32, 0u32, 0u64)
+    if clear_button_error != ok { ret (zero, clear_button_error) }
+    parts[0usize] = clear_button
+    let (said_bytes, said_bytes_error) = mem.alloc[u8](a, 40usize)
+    if said_bytes_error != ok { ret (zero, TooLarge) }
+    var n = control.write_i64(said_bytes, i64(count))
+    n += control.copy_text(said_bytes[n..40usize], " selected")
+    var caption = control.text_options()
+    caption.role = .TitleMedium
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, said_bytes[0usize..n], t, caption, ink)
+    if said_error != ok { ret (zero, said_error) }
+    let (said_held, said_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if said_held_error != ok { ret (zero, TooLarge) }
+    said_held[0usize] = said
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    parts[1usize] = widget.box(0u64, grow, said_held[0usize..1usize])
+    var b = 0usize
+    while b < bulk.len {
+        let (acted, acted_error) = control.glyph_action(a, key + 2u64 + u64(b), t, bulk[b].glyph, bulk[b].label, &bulk[b].action, side, glyph, muted, bulk[b].enabled, 0u32, 0u32, 0u64)
+        if acted_error != ok { ret (zero, acted_error) }
+        parts[2usize + b] = acted
+        b += 1usize
+    }
+    var height = t.tokens.sizes.control_lg
+    if touch { height = 64.0 }
+    var bar_style = control.sized_style(width, height)
+    if width <= 0.0 { bar_style.width = style.Length { Percent: 100.0 } }
+    bar_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+    let none = style.Length { Px: 0.0 }
+    bar_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: none, right: style.Length { Px: 8.0 }, bottom: none }
+    let (row_node, row_node_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_node_error != ok { ret (zero, TooLarge) }
+    row_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, bar_style, parts[0usize..2usize + bulk.len])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = said_bytes[0usize..n]
+    ret (widget.semantics(key, sem, style.defaults(), row_node[0usize..1usize]), ok)
 }
 
 // A source of rows (D979): the count, a row's stable key and its content.
