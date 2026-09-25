@@ -1661,7 +1661,7 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         // that holds that line.
         let (single, has_single) = measured_single(s, text_key, inner.max_width)
         if has_single { ret (single, ok) }
-        let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.max_width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis })
+        let (laid, layout_error) = lay_text(a, t.value, t.style, layout.Options { width: inner.max_width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis })
         if layout_error != ok { ret (zero, InvalidTree) }
         var remembered = text_limits
         if laid.lines.len <= 1usize { remembered.min_height = 1.0 }
@@ -1898,7 +1898,7 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
             }
         }
         if !reused {
-            let (fresh, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis })
+            let (fresh, layout_error) = lay_text(a, t.value, t.style, layout.Options { width: inner.width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis })
             if layout_error != ok { ret InvalidTree }
             laid = fresh
         }
@@ -3056,14 +3056,52 @@ fn gesture_slop() -> f32 {
     ret 8.0
 }
 
+// (D1291) A text node's layout that survives characters no font maps: the text
+// (and its ellipsis) is laid out again without them, rather than failing the
+// frame the way `layout.MissingGlyph` would -- one emoji in a label must not
+// blank the window.
+// ponytail: dropped rather than drawn as the font's missing-glyph box.
+fn lay_text(a: *mem.Arena, words: str, text_style: layout.Style, options: layout.Options) -> (layout.Layout, err) {
+    let (laid, laid_error) = layout.layout(a, words, text_style, options)
+    if laid_error != layout.MissingGlyph { ret (laid, laid_error) }
+    var kept = options
+    kept.ellipsis = mappable(a, options.ellipsis, text_style)
+    let (again, again_error) = layout.layout(a, mappable(a, words, text_style), text_style, kept)
+    ret (again, again_error)
+}
+
+// `words` without the characters no font of `text_style` maps.
+fn mappable(a: *mem.Arena, words: str, text_style: layout.Style) -> str {
+    let (out, out_error) = mem.alloc[u8](a, words.len)
+    if out_error != ok { ret "" }
+    var n = 0usize
+    var at = 0usize
+    while at < words.len {
+        let (scalar, width) = unicode.read_utf8(words, at)
+        var step = width
+        if step == 0usize { step = 1usize }
+        let (font, font_error) = layout.font_for(a, text_style, scalar)
+        if font_error == ok && font != layout.NONE {
+            var k = 0usize
+            while k < step && at + k < words.len {
+                out[n] = words[at + k]
+                n += 1usize
+                k += 1usize
+            }
+        }
+        at += step
+    }
+    ret out[0usize..n]
+}
+
 // (D1250) The one-line width a Text node lays out to with no limit -- what the
 // runtime's measure gives it unconstrained -- so a builder can fit its content
-// before layout; 0 for any other node or a text with no fonts.
+// before layout; 0 for any other node or a words with no fonts.
 fn text_width(a: *mem.Arena, node: Node) -> f32 {
     switch node.kind {
     case .Text as t:
         if t.style.fonts.len == 0usize { ret 0.0 }
-        let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: 3.0e38, max_lines: 1u32, align: t.align, wrap: t.wrap, ellipsis: "" })
+        let (laid, layout_error) = lay_text(a, t.value, t.style, layout.Options { width: 3.0e38, max_lines: 1u32, align: t.align, wrap: t.wrap, ellipsis: "" })
         if layout_error != ok { ret 0.0 }
         ret laid.bounds.width
     default:

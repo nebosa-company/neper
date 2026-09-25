@@ -25011,3 +25011,22 @@ still to come.
 
 `ui_content2_v2` holds forty a's cut to equal ends round "..." and a short
 name kept whole on Windows and Linux; the breadcrumb fixtures still pass.
+
+## D1291 — Cut crumbs show their name in a tooltip; unmappable characters no longer fail a frame
+
+A breadcrumb whose name `middle_cut` shortened shows the whole name as a
+tooltip (keyed `key + 1000000`) on hover or keyboard focus. Rendering the
+first cut crumb found a runtime fault: `layout.layout` answers `MissingGlyph`
+for a character no font maps, and the runtime turned that into a failed
+frame, so one emoji, or "..." in a font without a full stop, blanked the
+whole window. Text nodes now lay out through `lay_text`, which on
+`MissingGlyph` lays the text (and its ellipsis) out again without those
+characters (`mappable`, using `layout.font_for`). The text layout's own
+contract is unchanged, and so is its fixture. Editors keep the old path,
+since dropping characters would move their caret offsets. Missing characters
+are dropped, not drawn as the font's missing-glyph box.
+
+`ui_content2_v2` renders a trail whose cut crumb holds dots its font lacks and
+shows the whole name in the tooltip after the delay, on Windows and Linux;
+the full UI sweep passes 103/103 on both hosts and `text_layout` still
+passes.

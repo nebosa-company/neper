@@ -2258,22 +2258,28 @@ fn middle_cut(a: *mem.Arena, t: *const control.Theme, text: str, caption: contro
     let (dots, dots_error) = control.colored_text(a, 0u64, "...", t, caption, ink)
     if dots_error != ok { ret text }
     let dots_width = widget.text_width(a, dots)
-    var keep = chars
-    while keep > 0usize {
-        keep -= 1usize
+    // The most characters that fit, found by halving (the width grows with them).
+    var low = 0usize
+    var high = chars - 1usize
+    while low < high {
+        let keep = (low + high + 1usize) / 2usize
         let head = (keep + 1usize) / 2usize
         let tail = keep - head
         let (front, front_error) = control.colored_text(a, 0u64, text[0usize..starts[head]], t, caption, ink)
         let (back, back_error) = control.colored_text(a, 0u64, text[starts[chars - tail]..text.len], t, caption, ink)
         if front_error != ok || back_error != ok { ret text }
         if widget.text_width(a, front) + dots_width + widget.text_width(a, back) <= room {
-            var n = control.copy_text(out, text[0usize..starts[head]])
-            n += control.copy_text(out[n..out.len], "...")
-            n += control.copy_text(out[n..out.len], text[starts[chars - tail]..text.len])
-            ret out[0usize..n]
+            low = keep
+        } else {
+            high = keep - 1usize
         }
     }
-    ret "..."
+    let head = (low + 1usize) / 2usize
+    let tail = low - head
+    var n = control.copy_text(out, text[0usize..starts[head]])
+    n += control.copy_text(out[n..out.len], "...")
+    n += control.copy_text(out[n..out.len], text[starts[chars - tail]..text.len])
+    ret out[0usize..n]
 }
 
 fn trail_crumb(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, action: *const widget.Submit, height: f32, widest: f32) -> (widget.Node, err) {
@@ -2292,6 +2298,17 @@ fn trail_crumb(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     if made_error != ok { ret (zero, made_error) }
     var capped = made
     capped.style.max_width = style.Length { Px: widest }
+    // (D1291) A cut name shows whole in a tooltip (keyed `key + 1000000`) on
+    // hover or keyboard focus.
+    if shown.len != label.len {
+        let (tip, tip_error) = overlay.tooltip(a, key + 1000000u64, t, key, label, overlay.tooltip_wanted(t, key))
+        if tip_error != ok { ret (zero, tip_error) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = capped
+        layers[1usize] = tip
+        ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+    }
     ret (capped, ok)
 }
 
@@ -2363,8 +2380,8 @@ fn breadcrumbs_fit(a: *mem.Arena, t: *const control.Theme, names: []const str, w
 // (D1250) With `options.width` the trail measures its crumbs and collapses the
 // fewest levels that let it fit.
 // (D1290) A long crumb is cut in its middle (`middle_cut`).
-// ponytail: no tooltip with the whole name, root icon, drop targets, sibling
-// menus or editable path.
+// (D1291) A cut crumb's whole name is its tooltip.
+// ponytail: no root icon, drop targets, sibling menus or editable path.
 fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit, given: BreadcrumbsOptions) -> (widget.Node, err) {
     if picks.len != names.len || names.len == 0usize { ret (zero, TooLarge) }
     var options = given
