@@ -22532,3 +22532,14 @@ the caller's next rebuild.
 ends, offset ownership and deferred focus on Windows and Linux. This changes
 behavior on the reviewed VirtualList surface, so no duplicate screenshot is
 added.
+
+## D1086 — VirtualList overscans one viewport each way
+
+VirtualList computes its own exact build range instead of changing the shared
+legacy range helper used by tables and grids. The range covers every row that
+intersects the visible viewport plus one viewport before and after it, clipped
+at the source ends; stable source keys continue to drive reconciliation.
+
+`ui_collections_v2` holds the six-row start, nine-row middle and six-row end
+windows for a three-row viewport on Windows and Linux. The visible surface is
+unchanged, so no duplicate screenshot is added.

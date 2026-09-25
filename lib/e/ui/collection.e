@@ -3742,20 +3742,38 @@ fn bind_virtual_list_move(moves: []VirtualListMove, shortcuts: []widget.Shortcut
     shortcuts[at] = widget.Shortcut { key: code, modifiers: zero, action: widget.Submit { ctx: ctx_of(&moves[at]), invoke: virtual_list_move } }
 }
 
+// Visible rows plus one viewport before and after, clipped to the source.
+fn virtual_list_range(offset: f32, viewport: f32, total: usize, extent: f32) -> (usize, usize) {
+    if total == 0usize || extent <= 0.0 || viewport <= 0.0 {
+        let (first, count) = widget.visible_range(offset, viewport, total, extent)
+        ret (first, count)
+    }
+    var shown = offset
+    if shown < 0.0 { shown = 0.0 }
+    var start = shown - viewport
+    if start < 0.0 { start = 0.0 }
+    let first = usize(start / extent)
+    let finish = shown + 2.0 * viewport
+    var end = usize(finish / extent)
+    if f32(end) * extent < finish { end += 1usize }
+    if end > total { end = total }
+    if first >= end { ret (first, 0usize) }
+    ret (first, end - first)
+}
+
 // v2 (D979, docs/ux/components/VirtualList): the source's rows as `row_of`
 // rows of one height for `lines` in a clipped viewport (keyed `key`) on
-// `surface`, only those in view built (one above, two below) and keyed by the
+// `surface`, those in view plus one viewport above and below built and keyed by the
 // source; a 1px `outline-variant` divider inset `inset` under every row but the
 // last; the runtime's rounded thumb in `on-surface-variant` at 50%; Up, Down,
 // Page Up, Page Down, Home and End moving the focus by stable key and requesting
 // the minimum caller-owned offset that reveals it. A list named `label` with the
 // full count, each row at its true position.
-// ponytail: overscan is not a screen each way; no sticky headers, placeholders,
-// end cap, paging or end-anchored mode.
+// ponytail: no sticky headers, placeholders, end cap, paging or end-anchored mode.
 fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: RowSource, options: VirtualListOptions) -> (widget.Node, err) {
     let extent = row_height(t, options.lines)
     let total = source.count(source.ctx)
-    let (first, count) = widget.visible_range(options.offset, options.height, total, extent)
+    let (first, count) = virtual_list_range(options.offset, options.height, total, extent)
     let (items, items_error) = mem.alloc[RowItem](a, count)
     if items_error != ok { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)

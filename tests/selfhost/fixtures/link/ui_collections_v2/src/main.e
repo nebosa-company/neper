@@ -300,7 +300,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // The virtual list: 48 rows, only those in view built; a list of 100 in the
     // tree; the thumb 4 wide 2 from the edge in `on-surface-variant` at 50%.
     let (view, has_view) = bounds(&harness, &runtime, 400u64)
-    if !has_view || !near(view.height, 144.0) || testing.by_key(&harness, 4000u64).count != 1usize || testing.by_key(&harness, 4050u64).count != 0usize { os.exit(29i32) }
+    if !has_view || !near(view.height, 144.0) || testing.by_key(&harness, 4000u64).count != 1usize || testing.by_key(&harness, 4005u64).count != 1usize || testing.by_key(&harness, 4006u64).count != 0usize || testing.by_key(&harness, 4050u64).count != 0usize { os.exit(29i32) }
     let (numbers, has_numbers) = find(tree, .List, "Numbers")
     if !has_numbers || numbers.position.row_count != 100u32 { os.exit(30i32) }
     let (first_row, has_first_row) = bounds(&harness, &runtime, 4000u64)
@@ -315,11 +315,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     f = mem.arena_from(frame_storage)
     let (root_2, build_2_error) = build(&f, &theme, s)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(48i32) }
+    if testing.by_key(&harness, 4006u64).count != 1usize || testing.by_key(&harness, 4007u64).count != 0usize { os.exit(56i32) }
     if testing.press_key(&harness, 33u32, zero) != ok || !focused_is(&harness, 4001u64) { os.exit(49i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || !near(s.offset, 4656.0) || focused_is(&harness, 4099u64) { os.exit(50i32) }
     f = mem.arena_from(frame_storage)
     let (root_3, build_3_error) = build(&f, &theme, s)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok || !focused_is(&harness, 4099u64) { os.exit(51i32) }
+    if testing.by_key(&harness, 4094u64).count != 1usize || testing.by_key(&harness, 4093u64).count != 0usize { os.exit(57i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 4098u64) { os.exit(52i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !near(s.offset, 0.0) || focused_is(&harness, 4000u64) { os.exit(53i32) }
     f = mem.arena_from(frame_storage)
