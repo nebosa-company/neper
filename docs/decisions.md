@@ -23474,3 +23474,12 @@ or hidden child controls remain in the tree.
 `ui_containers_v2` holds both states, pointer and directional-key toggles, the
 summary and body presence on Windows and Linux. The Segoe review is
 `build/ux/group-box-collapsed-segoe.png`.
+
+## D1183 — Group validation is one assertive Alert
+
+The visible GroupBox validation row now also publishes one invalid Alert with
+assertive live mode. The outer Group keeps the same invalid state and message
+hint, so navigation and the change announcement carry the same correction text.
+
+`ui_containers_v2` holds the Alert role, invalid state and live mode on Windows
+and Linux.

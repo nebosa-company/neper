@@ -6,7 +6,7 @@
 // `primary` check disc 8 in from the top end, and a pressable card is a Button
 // firing its action; a group box sets its rows 48 tall on `surface` in a 1px
 // `outline-variant` edge with a divider between them, 8 under the title, and an
-// invalid one wears a 2px `error` edge; a collapsible box has an inset-ring title
+// invalid one wears a 2px `error` edge and asserts its Alert; a collapsible box has an inset-ring title
 // Button, summary, trailing chevron and caller-owned body; a disclosure's header
 // is 40 tall with the content 40 in and 4 below, Left shutting it; an expander is a 56 header in a
 // 1px `outline-variant` edge; an accordion is `surface-container-low` with 48
@@ -251,15 +251,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (group_tree, group_tree_error) = testing.semantics(&harness)
     if group_tree_error != ok { os.exit(44i32) }
     var advanced_sem = false
+    var invalid_alert = false
     var sem_at = 0usize
     while sem_at < group_tree.nodes.len {
         let node = group_tree.nodes[sem_at]
         if node.role == .Button && same(node.label, "Advanced") {
             advanced_sem = !node.state.expanded && has_action(node, .Expand)
         }
+        if node.role == .Alert && same(node.label, "Choose one") {
+            invalid_alert = node.state.invalid && node.live == .Assertive
+        }
         sem_at += 1usize
     }
-    if !advanced_sem || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
+    if !advanced_sem || !invalid_alert || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[6usize] != 2u32 { os.exit(46i32) }
     // The disclosure: a 40 header, the content 40 in and 4 below; open, the
     // header says expanded, and Left on it (focused by the tap) shuts it.
