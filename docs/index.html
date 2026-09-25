@@ -169,7 +169,7 @@
     .catalog-dialog-frame { display: flex; max-height: 84vh; flex-direction: column; }
     .catalog-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-6); padding: var(--space-6); border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); }
     .catalog-dialog-header h2 { margin: 0; font-size: clamp(24px, 4vw, 36px); line-height: 44px; }
-    .catalog-dialog-close { min-width: 40px; min-height: 40px; border: 1px solid var(--outline-variant); border-radius: var(--radius-full); background: var(--surface-container); color: inherit; font: 600 20px/1 var(--font-sans); cursor: pointer; }
+    .catalog-dialog-close { display: grid; width: 40px; height: 40px; padding: 0; place-items: center; border: 1px solid var(--outline-variant); border-radius: var(--radius-full); background: var(--surface-container); color: inherit; font: 600 20px/1 var(--font-sans); cursor: pointer; }
     .catalog-dialog-body { overflow: auto; padding: var(--space-6); }
     .catalog-dialog-status { margin: 0 0 var(--space-6); color: var(--muted); }
     .catalog-dialog-groups { display: grid; gap: var(--space-8); }
