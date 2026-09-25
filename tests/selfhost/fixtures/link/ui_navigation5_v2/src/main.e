@@ -376,6 +376,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, has_preview) = find(extra_tree, .Tab, "lower.e, unsaved changes, preview")
     if !has_locked || !has_preview { os.exit(68i32) }
     if testing.by_text(&harness, "main.e").count != 0usize || testing.by_text(&harness, "notes").count == 0usize { os.exit(69i32) }
+    // (D1336) In 200 the strip scrolls and ends in Show all open files; open, its
+    // menu lists every document and a row picks it.
+    var narrow_step = 0usize
+    while narrow_step < 2usize {
+        var narrow_extras: navigation.DocumentTabsOptions = zero
+        narrow_extras.width = 200.0
+        narrow_extras.toggle_all = s.subs[0usize]
+        narrow_extras.all_open = narrow_step == 1usize
+        f = mem.arena_from(frame_storage)
+        let (narrow_strip, narrow_strip_error) = navigation.document_tabs_with(&f, 5700u64, &theme, "Open files", s.documents[0usize..3usize], 1usize, widget.Change[usize] { ctx: mem.cast[*void](&s.picks), invoke: on_turn }, zero, zero, narrow_extras)
+        let (narrow_page, narrow_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if narrow_strip_error != ok || narrow_page_error != ok { os.exit(70i32) }
+        narrow_page[0usize] = narrow_strip
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), narrow_page[0usize..1usize]), time.Instant { nanos: 9100000000i64 + i64(narrow_step) }) != ok { os.exit(71i32) }
+        let (all_button, has_all_button) = bounds(&harness, &runtime, 5828u64)
+        let (narrow_view, has_narrow_view) = bounds(&harness, &runtime, 5700u64 + 1048576u64)
+        if !has_all_button || !has_narrow_view || !(narrow_view.width < 170.0) { os.exit(72i32) }
+        if narrow_step == 0usize {
+            let toggles_before = s.counters[0usize].count
+            if testing.tap(&harness, all_button.x + 16.0, all_button.y + 16.0) != ok || s.counters[0usize].count != toggles_before + 1usize { os.exit(73i32) }
+        }
+        if narrow_step == 1usize {
+            let (all_tree, all_tree_error) = testing.semantics(&harness)
+            let (notes_row, has_notes_row) = find(all_tree, .MenuItem, "notes")
+            let picks_before = s.picks.count
+            if all_tree_error != ok || !has_notes_row || testing.tap(&harness, notes_row.bounds.x + 10.0, notes_row.bounds.y + notes_row.bounds.height * 0.5) != ok || s.picks.count != picks_before + 1usize || s.picks.last != 2usize { os.exit(74i32) }
+        }
+        narrow_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(32i32) }
     try io.print("ui navigation5 v2 ok\n")
     ret ok

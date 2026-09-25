@@ -25730,3 +25730,17 @@ itself.
 `ui_panes` finds the text cursor with the pointer over a text field and the
 hand over a link, on Windows and Linux; `ui_field`, `ui_edit`,
 `ui_inputs_v2` and `ui_app` still pass on both.
+
+## D1336 — Document strips scroll and show all open files
+
+The DocumentTabs spec's overflow. With `DocumentTabsOptions.width`, the
+strip scrolls sideways within the width less 36, keeping the focused
+current tab in view (D1254's `tab_strip_offset`). It ends in a 32 "Show all
+open files" `chevron-down` button (keyed `key + 128`) firing `toggle_all`.
+With `all_open`, the button is expanded and its menu (keyed `key + 129`) lists
+every open document, a row picking it through the strip's `pick`. The
+dragged lift and the fuller tab menu are still to come.
+
+`ui_navigation5_v2` gives a three-document strip 200: its view is under 170
+wide, the button toggles, and open, the menu's notes row picks document 2.
+This passes on Windows and Linux, and `ui_workspace` still passes on both.

@@ -2826,9 +2826,9 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // Close saved over its unpinned tabs.
 // (D1329) `document_tabs_with` adds file-type icons, the read-only mark and the
 // preview tab's name.
+// (D1336) With `width`, overflow scrolling and Show all open files.
 // ponytail: a preview tab's title is upright (no italic face); no dragged lift or
-// drop line, overflow scrolling, Show all open files, Pin, Copy path, Reveal or
-// Split in the menu.
+// drop line, Pin, Copy path, Reveal or Split in the menu.
 // (D1233) A document strip's tab menu, kept across frames on the strip: whether
 // it is open and for which tab.
 type TabMenu = struct { open: bool, index: usize }
@@ -2938,7 +2938,11 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
 // the icon alone), `read_only` a 16 `visibility` mark after the title with "read
 // only" in the tab's name, and `preview` (the index plus one, 0 for none) the
 // preview tab, named so.
-type DocumentTabsOptions = struct { icons: []const control.GlyphKind, read_only: []const bool, preview: usize }
+// (D1336) With `width` the strip scrolls sideways within it, keeping the
+// focused tab in view, and ends in a 32 "Show all open files" button (keyed
+// `key + 128`) firing `toggle_all`; `all_open` stands its menu of every document
+// (keyed `key + 129`), a row picking that document.
+type DocumentTabsOptions = struct { icons: []const control.GlyphKind, read_only: []const bool, preview: usize, width: f32, all_open: bool, toggle_all: widget.Submit }
 
 // (D1329) `document_tabs` with those extras.
 fn document_tabs_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], options: DocumentTabsOptions) -> (widget.Node, err) {
@@ -3205,6 +3209,53 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     let flat = style.Length { Px: 0.0 }
     strip.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 2.0 }, strip, tabs[0usize..documents.len])
+    // (D1336) Past its width the strip scrolls, and ends in Show all open files.
+    var all_menu: widget.Node = zero
+    var has_all_menu = false
+    if options.width > 0.0 {
+        let (overflow, overflow_error) = mem.alloc[widget.Node](a, 4usize)
+        let (all_picks, all_picks_error) = mem.alloc[TabPick](a, documents.len)
+        let (all_items, all_items_error) = mem.alloc[overlay.MenuItem](a, documents.len)
+        let (all_presses, all_presses_error) = mem.alloc[widget.Submit](a, 1usize)
+        if overflow_error != ok || all_picks_error != ok || all_items_error != ok || all_presses_error != ok { ret (zero, TooLarge) }
+        all_presses[0usize] = options.toggle_all
+        let strip_key = key + 1048576u64
+        var focused_tab: widget.Key = 0u64
+        var has_focused_tab = false
+        if current < documents.len {
+            focused_tab = key + 1u64 + 2u64 * u64(current)
+            has_focused_tab = true
+        }
+        let offset = control.tab_strip_offset(t.runtime, strip_key, focused_tab, has_focused_tab, 0.0)
+        var view = style.defaults()
+        view.width = style.Length { Px: control.max_zero(options.width - 36.0) }
+        view.overflow = .Clip
+        view.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+        overflow[3usize] = row[0usize]
+        overflow[0usize] = widget.scroll(strip_key, widget.Scroll { axis: .Horizontal, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view, overflow[3usize..4usize])
+        var states = 0u32
+        if options.all_open { states = accessibility.STATE_EXPANDED }
+        let (all_button, all_button_error) = control.glyph_action(a, key + 128u64, t, .ChevronDown, "Show all open files", &all_presses[0usize], 32.0, 18.0, muted, true, states, accessibility.ACTION_SHOW_MENU, key + 129u64)
+        if all_button_error != ok { ret (zero, all_button_error) }
+        overflow[1usize] = all_button
+        var ended = style.defaults()
+        ended.width = style.Length { Px: options.width }
+        ended.height = style.Length { Px: strip_height }
+        ended.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+        row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 4.0 }, ended, overflow[0usize..2usize])
+        if options.all_open {
+            var d_at = 0usize
+            while d_at < documents.len {
+                all_picks[d_at] = TabPick { index: d_at, pick: pick, runtime: t.runtime, focus: key + 1u64 + 2u64 * u64(d_at) }
+                all_items[d_at] = overlay.MenuItem { label: documents[d_at].title, action: widget.Submit { ctx: mem.cast[*void](&all_picks[d_at]), invoke: tab_pick_fire }, enabled: true }
+                d_at += 1usize
+            }
+            let (menu_node, menu_error) = overlay.menu(a, key + 129u64, t, key + 128u64, "Open files", all_items[0usize..documents.len], true, &all_presses[0usize])
+            if menu_error != ok { ret (zero, menu_error) }
+            all_menu = menu_node
+            has_all_menu = true
+        }
+    }
     let (moving, moving_error) = mem.alloc[widget.Node](a, 1usize)
     if moving_error != ok { ret (zero, TooLarge) }
     moving[0usize] = row[0usize]
@@ -3218,7 +3269,14 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     sem.role = 20u8
     sem.label = label
     sem.column_count = u32(documents.len)
-    let strip_node = widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize])
+    var strip_node = widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize])
+    if has_all_menu {
+        let (with_menu, with_menu_error) = mem.alloc[widget.Node](a, 2usize)
+        if with_menu_error != ok { ret (zero, TooLarge) }
+        with_menu[0usize] = strip_node
+        with_menu[1usize] = all_menu
+        strip_node = widget.box(0u64, style.defaults(), with_menu[0usize..2usize])
+    }
     // (D1233) The open tab menu stands beside the strip.
     if has_menu_cell && menu_cell.open && menu_cell.index < documents.len {
         let (menu, menu_error) = tab_menu(a, key + 130u64, t, documents, menu_cell.index, menu_cell, close)
