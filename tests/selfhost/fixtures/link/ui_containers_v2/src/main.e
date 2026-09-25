@@ -530,6 +530,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
         turn_step += 1usize
     }
     if turn_sums[1usize] == turn_sums[0usize] || turn_sums[1usize] == turn_sums[2usize] || turn_sums[0usize] == turn_sums[2usize] { os.exit(79i32) }
+    // (D1285) Shutting it keeps the content while it shrinks: half way the
+    // content is still built; settled, it is gone.
+    var shut_step = 0usize
+    while shut_step < 3usize {
+        var shut_at = 30500000000i64
+        if shut_step == 1usize { shut_at = 30650000000i64 }
+        if shut_step == 2usize { shut_at = 31000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: shut_at }) != ok { os.exit(80i32) }
+        f = mem.arena_from(frame_storage)
+        let (shutting, shutting_error) = control.disclosure(&f, 1400u64, &theme, "Turning", false, &stores[0usize].actions[1usize], widget.box(0u64, control.sized_style(20.0, 10.0), zero))
+        let (shut_page, shut_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if shutting_error != ok || shut_page_error != ok { os.exit(81i32) }
+        shut_page[0usize] = shutting
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 1250.0), shut_page[0usize..1usize]), time.Instant { nanos: shut_at }) != ok { os.exit(82i32) }
+        let (shut_head, has_shut_head) = bounds(&harness, &runtime, 1400u64)
+        let shut_count = testing.by_key(&harness, 1401u64).count
+        if shut_step == 1usize {
+            let (shut_body, has_shut_body) = bounds(&harness, &runtime, 1401u64)
+            if shut_count != 1usize || !has_shut_body || !has_shut_head { os.exit(83i32) }
+        }
+        if shut_step == 2usize && shut_count != 0usize { os.exit(84i32) }
+        shut_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(33i32) }
     try io.print("ui containers v2 ok\n")
     ret ok

@@ -24926,3 +24926,18 @@ the caller's, since the grid owns no values.
 `ui_collections6_v2` holds a 2 x 3 paste with CRLF, a trailing LF, a quoted
 cell holding a tab and a doubled quote, an empty cell and a missing one on
 Windows and Linux.
+
+## D1285 — Disclosure content grows and shrinks
+
+A disclosure's content now opens and closes over `duration-medium-2`. Its
+region stands in a clip window whose height is the eased share of its own
+height (last frame's), and it is still built while it closes, so shutting
+shrinks it rather than cutting it. Under reduced motion it shows or hides at
+once. The ease lives under its own slot on the header (`eased_on`, the
+slot-taking form of `eased_over`), beside the chevron's turn (D1282) on the
+same element. The spec's separate open and close curves both use the standard
+curve here.
+
+`ui_containers_v2` holds the content still built half way through closing and
+gone once settled on Windows and Linux; the other disclosure fixtures still
+pass.
