@@ -720,6 +720,8 @@ fn pagination_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     if back.len == 0usize { back = "Previous page" }
     var forward = options.next_label
     if forward.len == 0usize { forward = "Next page" }
+    if options.compact && options.previous_label.len == 0usize { back = "Previous" }
+    if options.compact && options.next_label.len == 0usize { forward = "Next" }
     let (made, made_error) = paged(a, key, t, label, count, current, slots[0usize..shown], turn, back, forward, true, options.compact)
     ret (made, made_error)
 }
@@ -735,8 +737,8 @@ fn pagination_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // `count`) is "…" 20 wide (24 touch) out of the tree. Compact, "Page 12 of 24" in
 // `label-large` stands between the buttons. A group named `label` saying the
 // current page of the count.
-// ponytail: no table-footer variant (range and rows per page); compact keeps the
-// icon buttons rather than text buttons; the focus ring is the runtime's.
+// ponytail: no table-footer variant (range and rows per page); the focus ring is
+// the runtime's.
 fn paged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, count: usize, current: usize, slots: []const usize, turn: widget.Change[usize], previous_label: str, next_label: str, named: bool, compact: bool) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var side = t.tokens.sizes.control_sm
@@ -763,9 +765,18 @@ fn paged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
     turns[1usize] = Turn { index: next, turn: turn }
     actions[0usize] = widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: turn_fire }
     actions[1usize] = widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: turn_fire }
-    let (back_button, back_error) = control.glyph_action(a, key + 1u64, t, .ChevronLeft, previous_label, &actions[0usize], side, glyph, muted, current > 0usize, 0u32, 0u32, 0u64)
-    if back_error != ok { ret (zero, back_error) }
-    parts[0usize] = back_button
+    if compact {
+        var button_options = control.button_options()
+        button_options.variant = .Plain
+        button_options.enabled = current > 0usize
+        let (back_button, back_error) = control.button(a, key + 1u64, t, previous_label, &actions[0usize], button_options)
+        if back_error != ok { ret (zero, back_error) }
+        parts[0usize] = back_button
+    } else {
+        let (back_button, back_error) = control.glyph_action(a, key + 1u64, t, .ChevronLeft, previous_label, &actions[0usize], side, glyph, muted, current > 0usize, 0u32, 0u32, 0u64)
+        if back_error != ok { ret (zero, back_error) }
+        parts[0usize] = back_button
+    }
     var n = 1usize
     var caption = control.text_options()
     caption.role = .LabelLarge
@@ -854,9 +865,18 @@ fn paged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
             i += 1usize
         }
     }
-    let (next_button, next_error) = control.glyph_action(a, key + 2u64, t, .ChevronRight, next_label, &actions[1usize], side, glyph, muted, current + 1usize < count, 0u32, 0u32, 0u64)
-    if next_error != ok { ret (zero, next_error) }
-    parts[n] = next_button
+    if compact {
+        var button_options = control.button_options()
+        button_options.variant = .Plain
+        button_options.enabled = current + 1usize < count
+        let (next_button, next_error) = control.button(a, key + 2u64, t, next_label, &actions[1usize], button_options)
+        if next_error != ok { ret (zero, next_error) }
+        parts[n] = next_button
+    } else {
+        let (next_button, next_error) = control.glyph_action(a, key + 2u64, t, .ChevronRight, next_label, &actions[1usize], side, glyph, muted, current + 1usize < count, 0u32, 0u32, 0u64)
+        if next_error != ok { ret (zero, next_error) }
+        parts[n] = next_button
+    }
     n += 1usize
     let (row_node, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }

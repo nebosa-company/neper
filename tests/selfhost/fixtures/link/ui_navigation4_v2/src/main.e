@@ -8,7 +8,7 @@
 // either side of it and the keys stepping and jumping, a slider saying "Page 6 of
 // 12"; the on-media pill; seven fixed pagination slots with two ellipses, round
 // 32 pages named "Page 10", the current `secondary-container`, Previous and Next
-// icon buttons, and the compact form disabled at the start.
+// icon buttons, and the compact text-button form disabled at the start.
 
 use e.gpu
 use e.io
@@ -232,18 +232,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (previous, has_previous) = find(tree, .Button, "Previous page")
     if !has_previous || previous.state.disabled || !tap_key(&harness, &runtime, 4502u64) || s.pages.last != 10usize || !tap_key(&harness, &runtime, 4513u64) || s.pages.last != 10usize || s.pages.count != 2usize { os.exit(27i32) }
     if !tap_key(&harness, &runtime, 4512u64) || s.pages.count != 2usize { os.exit(28i32) }
-    // Compact at the first page: "Page 1 of 5" between the buttons, Previous
-    // disabled.
+    // Compact at the first page: "Page 1 of 5" between the Previous and Next
+    // text buttons, with Previous disabled.
     let (compact_node, has_compact) = find(tree, .Group, "Pages")
-    if !has_compact || testing.by_text(&harness, "Page 1 of 5").count != 1usize { os.exit(29i32) }
+    let (compact_previous, has_compact_previous) = find(tree, .Button, "Previous")
+    let (compact_next, has_compact_next) = find(tree, .Button, "Next")
+    if !has_compact || !has_compact_previous || !compact_previous.state.disabled || !has_compact_next || compact_next.state.disabled || testing.by_text(&harness, "Previous").count != 1usize || testing.by_text(&harness, "Page 1 of 5").count != 1usize || testing.by_text(&harness, "Next").count != 1usize { os.exit(29i32) }
     let (first_back, has_first_back) = bounds(&harness, &runtime, 4601u64)
-    var disabled_back = false
-    var i = 0usize
-    while i < tree.nodes.len {
-        if same(tree.nodes[i].label, "Previous page") && tree.nodes[i].state.disabled { disabled_back = true }
-        i += 1usize
-    }
-    if !has_first_back || !disabled_back { os.exit(30i32) }
+    if !has_first_back || !tap_key(&harness, &runtime, 4602u64) || s.pages.count != 3usize || s.pages.last != 1usize { os.exit(30i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation4 v2 ok\n")
     ret ok

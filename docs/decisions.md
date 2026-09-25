@@ -23203,3 +23203,14 @@ The scrim, focus trap and dismissal path are unchanged.
 
 `ui_navigation3_v2` holds both placements and corner pairs on Windows and
 Linux. The Segoe review is `build/ux/navigation-drawer-rtl-segoe.png`.
+
+## D1154 — Compact pagination uses text actions
+
+Compact Pagination now reuses the shared Plain button for its visible
+"Previous" and "Next" actions instead of retaining the numbered form's icon
+buttons. Caller-supplied labels still provide localisation, and the disabled
+end and page-change callbacks are unchanged.
+
+`ui_navigation4_v2` holds the visible labels, disabled first action and next
+page callback on Windows and Linux. The Segoe review is
+`build/ux/pagination-compact-text-segoe.png`.
