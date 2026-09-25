@@ -244,7 +244,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         row_at += 1usize
     }
-    if !has_first_row_node || widget.semantic_action(&runtime, first_row_node.id, accessibility.ACTION_PRESS) != ok || logs[0usize].picks != 1usize { os.exit(56i32) }
+    if !has_first_row_node || !same(first_row_node.label, "x") || widget.semantic_action(&runtime, first_row_node.id, accessibility.ACTION_PRESS) != ok || logs[0usize].picks != 1usize { os.exit(56i32) }
     // The rows: 40 each (39 over the divider) on `surface`, 48 under the
     // header's top; Beta (1001) `secondary-container`.
     let (first, has_first) = bounds(&harness, &runtime, 1000u64)
