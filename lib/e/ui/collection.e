@@ -4764,12 +4764,14 @@ fn carousel_item_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
     ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
 }
 
-// A pull to refresh's form (D982): the refresh command's name and the size.
-type PullOptions = struct { label: str, width: f32, height: f32 }
+// A pull to refresh's form (D982): the refresh command's name and the size;
+// `at_top` says whether its caller-owned scroll is at its leading edge.
+type PullOptions = struct { label: str, width: f32, height: f32, at_top: bool }
 
 fn pull_options() -> PullOptions {
     var out: PullOptions = zero
     out.label = "Refresh"
+    out.at_top = true
     ret out
 }
 
@@ -4785,9 +4787,8 @@ fn pull_options() -> PullOptions {
 // (32 dense, keyed `key + 1`, named `label`, disabled while refreshing), F5
 // and Ctrl+R refreshing from within, and an indeterminate linear progress
 // under it while refreshing. A group named `label`, busy while refreshing.
-// ponytail: the pull starts anywhere, not only at the top of a scroll; the
-// arc does not spin on its own (the caller's frames would); no new-row tag,
-// outcome snackbar or settle motion.
+// ponytail: the arc does not spin on its own (the caller's frames would); no
+// new-row tag, outcome snackbar or settle motion.
 fn pull_to_refresh_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, refreshing: bool, refresh: *const widget.Submit, options: PullOptions) -> (widget.Node, err) {
     let w = options.width
     let h = options.height
@@ -4846,7 +4847,7 @@ fn pull_to_refresh_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, c
     }
     let (kept, has_cell) = swipe_cell(t, key)
     var pulled: f32 = 0.0
-    if has_cell && !refreshing { pulled = kept.moved }
+    if has_cell && !refreshing && options.at_top { pulled = kept.moved }
     let (pulls, pulls_error) = mem.alloc[Pulling](a, 1usize)
     if pulls_error != ok { ret (zero, TooLarge) }
     var quiet: widget.Submit = zero
@@ -4899,7 +4900,7 @@ fn pull_to_refresh_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, c
     view_style.overflow = .Clip
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
-    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&pulls[0usize]), invoke: pull_drag }, gestures: 2u8, enabled: true, focusable: false }, view_style, stacked[0usize..1usize])
+    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&pulls[0usize]), invoke: pull_drag }, gestures: 2u8, enabled: options.at_top && !refreshing, focusable: false }, view_style, stacked[0usize..1usize])
     ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
 }
 

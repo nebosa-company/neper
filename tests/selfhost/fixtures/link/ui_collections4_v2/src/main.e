@@ -33,7 +33,7 @@ use e.ui.widget
 
 const W: usize = 900usize
 
-type Store = struct { page: usize, slide: usize, refreshing: bool, refreshes: usize, revealed: bool, archives: usize, deletes: usize, presses: usize, moves: usize, moved: collection.Reorder, refresh: widget.Submit, press: widget.Submit, slides: [5]collection.CarouselItem, actions: [2]collection.SwipeAction, rows: [3]collection.RowItem }
+type Store = struct { page: usize, slide: usize, refreshing: bool, at_top: bool, refreshes: usize, revealed: bool, archives: usize, deletes: usize, presses: usize, moves: usize, moved: collection.Reorder, refresh: widget.Submit, press: widget.Submit, slides: [5]collection.CarouselItem, actions: [2]collection.SwipeAction, rows: [3]collection.RowItem }
 
 fn on_page(ctx: *void, value: usize) -> err {
     let s = mem.cast[*Store](ctx)
@@ -129,6 +129,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, touch: *const control.Theme, s:
     pulling.height = 120.0
     let (desk, e3) = collection.pull_to_refresh_of(a, 300u64, t, tinted(t, .SecondaryContainer, 240.0, 200.0), s.refreshing, &s.refresh, pulling)
     pulling.height = 160.0
+    pulling.at_top = s.at_top
     let (phone, e4) = collection.pull_to_refresh_of(a, 400u64, touch, tinted(t, .TertiaryContainer, 240.0, 200.0), s.refreshing, &s.refresh, pulling)
     var swiping = collection.swipe_options()
     swiping.width = 300.0
@@ -250,6 +251,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let ctx = mem.cast[*void](s)
     s.refresh = widget.Submit { ctx: ctx, invoke: on_refresh }
     s.press = widget.Submit { ctx: ctx, invoke: on_press }
+    s.at_top = true
     s.slides[0usize] = collection.carousel_item("Builds")
     s.slides[0usize].tone = .Primary
     s.slides[1usize] = collection.carousel_item("Tests")
@@ -358,6 +360,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (busy, has_busy) = find(tree_6, .Button, "Refresh builds")
     if !has_busy || !busy.state.disabled { os.exit(47i32) }
     s.refreshing = false
+    s.at_top = false
+    let (root_not_top, root_not_top_error) = build(&f, &theme, &touch, s)
+    if root_not_top_error != ok || testing.pump(&harness, root_not_top, now) != ok { os.exit(76i32) }
+    let (not_top, has_not_top) = bounds(&harness, &runtime, 400u64)
+    if !has_not_top || testing.drag(&harness, geometry.Point { x: not_top.x + 120.0, y: not_top.y + 20.0 }, geometry.Point { x: not_top.x + 120.0, y: not_top.y + 170.0 }, 4usize) != ok || s.refreshes != 3usize { os.exit(77i32) }
+    s.at_top = true
     // Swipe actions: nothing behind a closed row; a drag past 40% of 160 opens
     // it, the tiles 80 wide in `secondary-container` and `error`; Escape closes;
     // a full swipe runs Delete.
