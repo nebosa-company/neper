@@ -347,6 +347,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(head.height, 47.0) || !near(table_a.y, head.y + 48.0) || !near(table_a.height, 39.0) || !near(table_a.width, 280.0) || !near(table_b.height, 40.0) { os.exit(34i32) }
     if !is_color(shot_3, at(table_a.x + 2.0, table_a.y + 39.5), rule) || !is_color(shot_3, at(table_a.x + 150.0, table_a.y + 20.0), background) || !is_color(shot_3, at(table_b.x + 150.0, table_b.y + 20.0), style.color(&tokens, .SecondaryContainer)) { os.exit(35i32) }
     if !near(table_twisty.x, table_a.x + 16.0) || !near(table_twisty_a1.x, table_twisty.x + 20.0) { os.exit(36i32) }
+    let (tree_3, tree_3_error) = testing.semantics(&harness)
+    if tree_3_error != ok { os.exit(54i32) }
+    var tree_grids = 0usize
+    var tree_grid_rows = 0usize
+    i = 0usize
+    while i < tree_3.nodes.len {
+        if tree_3.nodes[i].role == .TreeGrid && tree_3.nodes[i].position.row_count == 5u32 && tree_3.nodes[i].position.column_count == 2u32 { tree_grids += 1usize }
+        if tree_3.nodes[i].role == .Row && tree_3.nodes[i].level > 0u8 { tree_grid_rows += 1usize }
+        i += 1usize
+    }
+    if tree_grids != 1usize || tree_grid_rows != 5usize || widget.focus(&runtime, testing.by_key(&harness, 1u64).element) != ok || testing.press_key(&harness, 66u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(54i32) }
     if testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || logs[0usize].picks != 5usize || logs[0usize].toggles != 9usize || logs[0usize].toggled != 1u64 { os.exit(47i32) }
     logs[0usize].large = true
     let (large_rt, large_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 6000usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 16384usize })
