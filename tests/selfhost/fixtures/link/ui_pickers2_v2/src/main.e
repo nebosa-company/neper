@@ -290,10 +290,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if !has_three || testing.tap(&harness, three.x + 24.0, three.y + 24.0) != ok || chose.kind != .Hour || chose.value != 15u8 { os.exit(56i32) }
             let (minute_box, has_minute_box) = bounds(&harness, &runtime, 1302u64)
             if !has_minute_box || testing.tap(&harness, minute_box.x + 40.0, minute_box.y + 32.0) != ok || chose.kind != .EditMinute { os.exit(57i32) }
+            // (D1306) Focused, the dial's Up sets 15 and Down 13.
+            if widget.focus(&runtime, testing.by_key(&harness, 1307u64).element) != ok || testing.press_key(&harness, 38u32, zero) != ok || chose.kind != .Hour || chose.value != 15u8 { os.exit(67i32) }
+            if testing.press_key(&harness, 40u32, zero) != ok || chose.value != 13u8 { os.exit(68i32) }
         }
         if dial_step == 1usize {
             let (thirty, has_thirty) = bounds(&harness, &runtime, 1316u64)
             if !has_thirty || testing.tap(&harness, thirty.x + 24.0, thirty.y + 24.0) != ok || chose.kind != .Minute || chose.value != 30u8 { os.exit(58i32) }
+            // (D1306) On the minute dial Page Up sets 35 and Left 29.
+            if widget.focus(&runtime, testing.by_key(&harness, 1307u64).element) != ok || testing.press_key(&harness, 33u32, zero) != ok || chose.kind != .Minute || chose.value != 35u8 { os.exit(69i32) }
+            if testing.press_key(&harness, 37u32, zero) != ok || chose.value != 29u8 { os.exit(70i32) }
         }
         dial_step += 1usize
     }

@@ -25228,3 +25228,17 @@ expander.
 `ui_containers_v2` shuts an open expander: half way its content is still
 built, and once settled it is gone. It passes on Windows and Linux, and
 `ui_panes` and `ui_feedback` still pass on both.
+
+## D1306 — The time dial takes the keyboard
+
+The modal time picker's dial now takes the focus, keyed `key + 7` and
+ringed round its face. On it, Up and Right move the knob on an hour (or a
+minute on the minute dial), and Down and Left move it back. Page Up and Page
+Down move the minute knob by five minutes, as the TimePicker spec's dial
+behaviour asks. Each key reports a `TimeChoice`, as a press on a number
+does, and the values wrap round the clock. The marker's stale claim of no
+input mode is gone (D1295 added it); dragging round the dial is still to
+come.
+
+`ui_pickers2_v2` focuses the dial at 14:30: Up reports 15 and Down 13, and
+on the minute dial Page Up reports 35 and Left 29, on Windows and Linux.
