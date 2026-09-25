@@ -190,6 +190,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_rtl_first || !has_rtl_last || !(rtl_first.x > rtl_last.x) { os.exit(54i32) }
     if testing.tap(&harness, rtl_last.x, rtl_last.y) != ok || logs[0usize].rating != 5u32 { os.exit(55i32) }
     if testing.tap(&harness, rtl_first.x, rtl_first.y) != ok || logs[0usize].rating != 1u32 { os.exit(56i32) }
+    if testing.drag(&harness, rtl_first, rtl_last, 3usize) != ok || logs[0usize].rating != 5u32 { os.exit(62i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || logs[0usize].rating != 3u32 { os.exit(48i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || logs[0usize].rating != 1u32 { os.exit(49i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].rating != 3u32 { os.exit(50i32) }

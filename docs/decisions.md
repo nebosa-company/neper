@@ -23385,3 +23385,12 @@ selection timing.
 
 `ui_inputs3_v2` holds the pressed pixel on Windows and Linux. The Segoe review
 is `build/ux/rating-pressed-segoe.png`.
+
+## D1173 — Rating drag scrubs logical values
+
+Rating star regions now join the existing drag arena. Drag positions are mapped
+through the focused row's measured bounds and cell width, clamped to one through
+the maximum, and mirrored in RTL before reporting through the same change
+channel as taps and keys.
+
+`ui_actions` holds an RTL edge-to-edge scrub on Windows and Linux.
