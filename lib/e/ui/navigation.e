@@ -2024,6 +2024,15 @@ fn dock_panel_options() -> DockPanelOptions {
     ret out
 }
 
+fn dock_header_gesture(ctx: *void, g: widget.Gesture) -> err {
+    switch g {
+    case .DoubleTap as at:
+        ret widget.fire_submit(*mem.cast[*const widget.Submit](ctx))
+    default:
+        ret ok
+    }
+}
+
 // A panel tab (D967): `label-medium`, 12 each side, 32 tall under the
 // `on-surface` state layer; the current one `on-surface` over a 2px `primary`
 // line as wide as its label, the others `on-surface-variant`; a count badge on
@@ -2093,7 +2102,8 @@ fn panel_tab(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 // and Close (keyed `key + 1`), named "Close <title> panel". Floating, the panel is
 // `surface-container`, `radius-md`, `elevation-3`, at least 240 x 160, its
 // header 40 with a drag handle leading and a Dock button (`key + 3`, `dock-left`)
-// before Maximise, the title `on-surface` and no focus line. Busy, a 2px
+// before Maximise, the title `on-surface` and no focus line. Double-clicking the
+// header fires that same Maximise action. Busy, a 2px
 // `primary` bar sweeps under the header (centred and pulsing with reduced motion);
 // with an empty sentence the body is that sentence in `body-small`
 // `on-surface-variant`, 12 in and 8 down. A region in the tree named by the title,
@@ -2209,6 +2219,13 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
         header.width = style.Length { Percent: 100.0 }
         header.height = style.Length { Px: h }
         parts[0usize] = widget.stack(0u64, header, parts[3usize..5usize])
+    }
+    if mem.address_of(options.maximise) != 0usize {
+        let (header_child, header_child_error) = mem.alloc[widget.Node](a, 1usize)
+        if header_child_error != ok { ret (zero, TooLarge) }
+        header_child[0usize] = parts[0usize]
+        let gesture = widget.GestureAction { ctx: mem.cast[*void](options.maximise), invoke: dock_header_gesture }
+        parts[0usize] = widget.region(0u64, widget.Region { gesture: gesture, gestures: 1u8, enabled: true, focusable: false }, style.defaults(), header_child[0usize..1usize])
     }
     var count = 1usize
     if options.busy {
@@ -2691,7 +2708,7 @@ fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: Doc
 // `dock_apply` turns into the caller's next model and placements. A group in the
 // tree.
 // ponytail: moving and tearing off are the caller's (a Move event through
-// dock_apply); no drag ghost, dock guide or drop preview or double-click.
+// dock_apply); no drag ghost, dock guide, drop preview or sash double-click reset.
 fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: DockModel, placements: []const DockPlacement, contents: []const widget.Node, centre: widget.Node, change: widget.Change[DockEvent], width: f32, height: f32) -> (widget.Node, err) {
     if contents.len != placements.len { ret (zero, TooLarge) }
     let (main_child, main_child_error) = mem.alloc[widget.Node](a, 1usize)
