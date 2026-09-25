@@ -33,18 +33,19 @@ use e.ui.widget
 
 const W: usize = 420usize
 
-type Store = struct { state: collection.GridState, draft: []u8, events: usize, last: collection.GridEvent, committed: usize, committed_row: usize, committed_column: usize, saving: bool }
+type Store = struct { state: collection.GridState, draft: []u8, events: usize, last: collection.GridEvent, committed: usize, committed_row: usize, committed_column: usize, saving: bool, checked: bool, opened: usize }
 
 fn cell_text(row: usize, column: usize) -> str {
     if column == 1usize {
         if row == 1usize { ret "22a" }
+        if row == 4usize { ret "2026-09-25" }
         ret "22"
     }
     if row == 0usize { ret "alpha" }
     if row == 1usize { ret "beta" }
     if row == 2usize { ret "gamma" }
-    if row == 3usize { ret "delta" }
-    ret "omega"
+    if row == 3usize { ret "staging" }
+    ret "Enabled"
 }
 
 fn grid_count(ctx: *void) -> usize {
@@ -53,9 +54,15 @@ fn grid_count(ctx: *void) -> usize {
 
 fn grid_cell(ctx: *void, row: usize, column: usize) -> collection.GridCell {
     let store = mem.cast[*Store](ctx)
-    var c = collection.GridCell { text: cell_text(row, column), message: "", dirty: false, read_only: false, saving: store.saving && row == 2usize && column == 0usize }
+    var c = collection.GridCell { text: cell_text(row, column), message: "", kind: .Text, checked: false, dirty: false, read_only: false, saving: store.saving && row == 2usize && column == 0usize }
     if row == 1usize && column == 1usize { c.message = "Port must be a number" }
     if row == 2usize && column == 0usize { c.dirty = true }
+    if row == 3usize && column == 0usize { c.kind = .Select }
+    if row == 4usize && column == 0usize {
+        c.kind = .Checkbox
+        c.checked = store.checked
+    }
+    if row == 4usize && column == 1usize { c.kind = .Date }
     if row == 3usize && column == 1usize { c.read_only = true }
     ret c
 }
@@ -87,6 +94,8 @@ fn on_change(ctx: *void, event: collection.GridEvent) -> err {
         store.committed_row = event.row
         store.committed_column = event.column
     }
+    if event.kind == .Toggle { store.checked = !store.checked }
+    if event.kind == .Open { store.opened += 1usize }
     ret ok
 }
 
@@ -238,6 +247,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     shift.shift = true
     var ctrl: input.Modifiers = zero
     ctrl.control = true
+    var alt: input.Modifiers = zero
+    alt.alt = true
     // A tap on Port of alpha moves the active cell there and takes the focus.
     if testing.tap(&harness, port_x + 50.0, grid.y + 55.0) != ok || !at_cell(store, 0usize, 1usize) { os.exit(16i32) }
     let (root_2, build_2_error) = build(&f, &theme, ctx, store)
@@ -363,12 +374,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_22_error != ok || testing.pump(&harness, root_22, now) != ok || testing.by_text(&harness, "5 cells selected").count != 1usize { os.exit(81i32) }
     if testing.press_key(&harness, 67u32, ctrl) != ok { os.exit(82i32) }
     let (copied, copied_error) = widget.clipboard_get(&runtime, &f)
-    if copied_error != ok || !same_text(copied, "22\n22a\n22\n22\n22") { os.exit(83i32) }
+    if copied_error != ok || !same_text(copied, "22\n22a\n22\n22\n2026-09-25") { os.exit(83i32) }
     if widget.clipboard_set(&runtime, "7\t8") != ok || testing.press_key(&harness, 86u32, ctrl) != ok || store.last.kind != .Paste || !same_text(store.last.text, "7\t8") { os.exit(84i32) }
     if testing.press_key(&harness, 46u32, plain) != ok || store.last.kind != .Clear { os.exit(85i32) }
     if testing.press_key(&harness, 90u32, ctrl) != ok || store.last.kind != .Undo { os.exit(86i32) }
     if testing.press_key(&harness, 68u32, ctrl) != ok || store.last.kind != .FillDown { os.exit(87i32) }
     if testing.press_key(&harness, 13u32, ctrl) != ok || store.last.kind != .FillDown { os.exit(88i32) }
+    // Non-text cells keep their values caller-owned: date/select open through
+    // Alt+Down, while click and Space toggle a checkbox.
+    if testing.press_key(&harness, 40u32, alt) != ok || store.last.kind != .Open || store.opened != 1usize { os.exit(115i32) }
+    if testing.tap(&harness, grid.x + 100.0, grid.y + 184.0) != ok || store.last.kind != .Toggle || !store.checked || !at_cell(store, 4usize, 0usize) { os.exit(116i32) }
+    let (root_22a, build_22a_error) = build(&f, &theme, ctx, store)
+    if build_22a_error != ok || testing.pump(&harness, root_22a, now) != ok || testing.press_key(&harness, 32u32, plain) != ok || store.last.kind != .Toggle || store.checked { os.exit(117i32) }
+    if testing.tap(&harness, grid.x + 100.0, grid.y + 152.0) != ok || !at_cell(store, 3usize, 0usize) { os.exit(118i32) }
+    let (root_22b, build_22b_error) = build(&f, &theme, ctx, store)
+    if build_22b_error != ok || testing.pump(&harness, root_22b, now) != ok || testing.press_key(&harness, 40u32, alt) != ok || store.last.kind != .Open || store.opened != 2usize { os.exit(119i32) }
+    if testing.press_key(&harness, 36u32, ctrl) != ok || !at_cell(store, 0usize, 0usize) { os.exit(120i32) }
+    let (root_22c, build_22c_error) = build(&f, &theme, ctx, store)
+    if build_22c_error != ok || testing.pump(&harness, root_22c, now) != ok { os.exit(121i32) }
     // Text input in navigation mode replaces the active value and opens its editor.
     if testing.type_text(&harness, "z") != ok || store.last.kind != .Replace || !store.state.editing || store.state.len != 1usize || store.draft[0usize] != 122u8 { os.exit(91i32) }
     let (root_23, build_23_error) = build(&f, &theme, ctx, store)
