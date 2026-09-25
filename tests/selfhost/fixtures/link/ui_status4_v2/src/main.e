@@ -145,6 +145,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot, at(308.0, 40.0), style.color(&tokens, .PrimaryContainer)) { os.exit(19i32) }
     let (finished, has_finished) = find(tree, .Status, "Build 4128 finished")
     if !has_finished || testing.by_key(&harness, 801u64).count != 0usize || testing.by_label(&harness, "Dismiss").count != 2usize { os.exit(20i32) }
+    // (D1278) A text-only snackbar dismisses itself once it has shown 4 s, counted
+    // from its first frame after appearing: not at 3 s, once by 4.1 s, not again.
+    if testing.hover(&harness, 590.0, 5.0) != ok { os.exit(26i32) }
+    var timed_step = 0usize
+    var dismissed_at = s.presses
+    while timed_step < 5usize {
+        var at_nanos = 10000000000i64
+        if timed_step == 1usize { at_nanos = 10016000000i64 }
+        if timed_step == 2usize { at_nanos = 13000000000i64 }
+        if timed_step == 3usize { at_nanos = 14100000000i64 }
+        if timed_step == 4usize { at_nanos = 16000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: at_nanos }) != ok { os.exit(27i32) }
+        f = mem.arena_from(frame_storage)
+        let (timed, timed_error) = control.snackbar(&f, 750u64, &theme, s.notices[1usize..2usize], 320.0)
+        let (timed_page, timed_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if timed_error != ok || timed_page_error != ok { os.exit(22i32) }
+        timed_page[0usize] = timed
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), timed_page[0usize..1usize]), time.Instant { nanos: at_nanos }) != ok { os.exit(23i32) }
+        if timed_step == 0usize { dismissed_at = s.presses }
+        if timed_step >= 1usize && timed_step <= 2usize && s.presses != dismissed_at { os.exit(24i32) }
+        if timed_step >= 3usize && s.presses != dismissed_at + 1usize { os.exit(25i32) }
+        timed_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui status4 v2 ok\n")
     ret ok
