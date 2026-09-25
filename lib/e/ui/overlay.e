@@ -3195,9 +3195,11 @@ fn time_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, clock_text:
 // menu at pointer density on `surface-container`, 8 corners, elevation 2, 8 above
 // and below the rows, 4 below the field and as wide; 6 rows show and it scrolls
 // to put the selected one first.
-// ponytail: no dial, input mode or wheels for touch, no 12-hour clock, typing
-// does not filter the list, and there is no error icon; the caller's text and
-// picks carry the value.
+// (D1230) Callers write rows and the value with `write_clock_in` for the
+// theme language's 12- or 24-hour clock and read typed text with `parse_clock`.
+// ponytail: no dial, input mode, AM/PM selector or wheels for touch, typing does
+// not filter the list, and there is no error icon; the caller's text and picks
+// carry the value.
 fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, times: []const str, offsets: []const str, selected: usize, picks: []const widget.Submit, note: str, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != times.len || offsets.len != times.len { ret (zero, TooLarge) }
     let (boxed, boxed_error) = clocked_field(a, key, t, label, buffer, len, typed, note, true, open, toggle, options)
@@ -3339,6 +3341,144 @@ fn duration_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
 }
 
 // A time of day as zero-padded `HH:MM` into `out`; the length (0 when it does not fit).
+// (D1230) Whether the `language` tag's region reads the time on a 12-hour
+// clock by CLDR (the US, Canada, Australia, New Zealand, India, the Philippines,
+// Pakistan, Bangladesh, Egypt, Saudi Arabia, Mexico, Colombia, Korea, Taiwan);
+// an empty tag or any other region reads 24 hours.
+fn uses_12_hour(language: str) -> bool {
+    let twelve = "US CA AU NZ IN PH PK BD EG SA MX CO KR TW"
+    var at = 0usize
+    while at + 3usize <= language.len {
+        if language[at] == 45u8 || language[at] == 95u8 {
+            let a = language[at + 1usize]
+            let b = language[at + 2usize]
+            if (at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8) && week_region_in(twelve, language[at + 1usize..at + 3usize]) && a >= 65u8 && b >= 65u8 { ret true }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+// (D1230) A time of day in the locale's clock: "14:30" on a 24-hour clock, or
+// "2:30 PM" (midnight "12:05 AM") on a 12-hour one; the length (0 when `out` is
+// shorter than 8).
+fn write_clock_in(out: []u8, value: time.Time, language: str) -> usize {
+    if out.len < 8usize { ret 0usize }
+    if !uses_12_hour(language) { ret write_clock(out, value) }
+    var hour = i64(value.hour) % 12i64
+    if hour == 0i64 { hour = 12i64 }
+    var at = control.write_i64(out, hour)
+    out[at] = 58u8
+    at = write_two(out, at + 1usize, i64(value.minute))
+    if value.hour < 12u8 { at += control.copy_text(out[at..out.len], " AM") } else { at += control.copy_text(out[at..out.len], " PM") }
+    ret at
+}
+
+// (D1230, docs/ux/components/TimePicker) A typed time in any common form --
+// "1430", "930", "14:30", "14.30", "9", "2:30 pm", "2pm", "12 am", "noon",
+// "midnight" -- as a time of day; false when it is none.
+fn parse_clock(text: str) -> (time.Time, bool) {
+    var none: time.Time = zero
+    var start = 0usize
+    var end = text.len
+    while start < end && text[start] == 32u8 { start += 1usize }
+    while end > start && text[end - 1usize] == 32u8 { end -= 1usize }
+    let word = text[start..end]
+    if clock_word(word, "noon") { ret (time.Time { hour: 12u8, minute: 0u8, second: 0u8, nanos: 0u32 }, true) }
+    if clock_word(word, "midnight") { ret (none, true) }
+    // An am/pm suffix, with or without a space or dots.
+    var body_end = word.len
+    var period = 0u8
+    var k = word.len
+    var letters = 0usize
+    while k > 0usize && (clock_letter(word[k - 1usize]) || word[k - 1usize] == 46u8) {
+        if clock_letter(word[k - 1usize]) { letters += 1usize }
+        k -= 1usize
+    }
+    if letters > 0usize {
+        let suffix = word[k..word.len]
+        let first = suffix[0usize] | 32u8
+        if letters > 2usize || (first != 97u8 && first != 112u8) { ret (none, false) }
+        if letters == 2usize {
+            var m_seen = false
+            var j = 0usize
+            while j < suffix.len {
+                if (suffix[j] | 32u8) == 109u8 { m_seen = true }
+                j += 1usize
+            }
+            if !m_seen { ret (none, false) }
+        }
+        period = 1u8
+        if first == 112u8 { period = 2u8 }
+        body_end = k
+        while body_end > 0usize && word[body_end - 1usize] == 32u8 { body_end -= 1usize }
+    }
+    let body = word[0usize..body_end]
+    if body.len == 0usize { ret (none, false) }
+    // Digits with one optional ':' or '.' separator, or a run of 1 to 4 digits.
+    var hour = 0i64
+    var minute = 0i64
+    var split = body.len
+    var i = 0usize
+    while i < body.len {
+        let c = body[i]
+        if c == 58u8 || c == 46u8 {
+            if split != body.len { ret (none, false) }
+            split = i
+        } else if c < 48u8 || c > 57u8 {
+            ret (none, false)
+        }
+        i += 1usize
+    }
+    if split != body.len {
+        let left = body[0usize..split]
+        let right = body[split + 1usize..body.len]
+        if left.len == 0usize || left.len > 2usize || right.len != 2usize { ret (none, false) }
+        hour = clock_digits(left)
+        minute = clock_digits(right)
+    } else {
+        if body.len > 4usize { ret (none, false) }
+        if body.len <= 2usize {
+            hour = clock_digits(body)
+        } else {
+            hour = clock_digits(body[0usize..body.len - 2usize])
+            minute = clock_digits(body[body.len - 2usize..body.len])
+        }
+    }
+    if minute > 59i64 { ret (none, false) }
+    if period != 0u8 {
+        if hour < 1i64 || hour > 12i64 { ret (none, false) }
+        if hour == 12i64 { hour = 0i64 }
+        if period == 2u8 { hour += 12i64 }
+    }
+    if hour > 23i64 { ret (none, false) }
+    ret (time.Time { hour: u8(hour), minute: u8(minute), second: 0u8, nanos: 0u32 }, true)
+}
+
+fn clock_letter(c: u8) -> bool {
+    ret (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8)
+}
+
+fn clock_word(text: str, word: str) -> bool {
+    if text.len != word.len { ret false }
+    var i = 0usize
+    while i < text.len {
+        if (text[i] | 32u8) != word[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn clock_digits(text: str) -> i64 {
+    var n = 0i64
+    var i = 0usize
+    while i < text.len {
+        n = n * 10i64 + i64(text[i] - 48u8)
+        i += 1usize
+    }
+    ret n
+}
+
 fn write_clock(out: []u8, value: time.Time) -> usize {
     if out.len < 5usize { ret 0usize }
     let at = write_two(out, 0usize, i64(value.hour))

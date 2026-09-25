@@ -24115,3 +24115,17 @@ bounds by that start.
 Month and weekday names stay English. `ui_pickers_v2` holds "en-US" (the 1st of
 March 2026, a Sunday, in the first column under "Su") and "ar-EG" (the same
 day one column in) on Windows and Linux; `ui_pickers` passes on both hosts.
+
+## D1230 — Times follow the locale's clock and typed times parse
+
+`overlay.uses_12_hour` reads the theme language's region: the US, Canada,
+Australia, New Zealand, India, the Philippines, Pakistan, Bangladesh, Egypt, Saudi
+Arabia, Mexico, Colombia, Korea and Taiwan read a 12-hour clock by CLDR, and
+everything else, including an empty tag, reads 24 hours. `write_clock_in` writes a
+time in that clock ("2:30 PM", "12:05 AM", or "14:30"). `parse_clock` accepts the
+TimePicker spec's typed forms ("1430", "14:30", "14.30", "9", "2:30 pm", "2pm",
+"2:30 p.m.", "noon", "midnight") and refuses out-of-range hours and minutes, a
+PM hour above 12 and words, so a caller's time field can reformat on blur.
+
+AM and PM stay English, and the dial, wheels, input mode and AM/PM selector stay
+open. `ui_pickers_v2` holds the written and parsed forms on Windows and Linux.
