@@ -23163,3 +23163,13 @@ goes back, matching the mirrored arrow keys.
 `ui_navigation4_v2` holds the drawn pill, both tap sides and both arrow keys on
 Windows and Linux. The Segoe review is
 `build/ux/page-indicator-rtl-segoe.png`.
+
+## D1150 — Page indicators scrub through every crossed page
+
+PageIndicator's existing track gesture now maps drag positions to the nearest
+visible dot. It reports every logical page crossed between pointer samples,
+works in both reading directions, and keeps taps as one-step actions.
+
+`ui_navigation4_v2` holds multi-page left-to-right and right-to-left drags on
+Windows and Linux. Host haptic ticks remain a consumer of those per-page
+changes when touch hosts expose haptics.
