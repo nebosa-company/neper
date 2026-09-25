@@ -25279,3 +25279,16 @@ Drop targets, sibling menus and folder-name completion are still to come.
 Ctrl+L and the empty-space press each asking to edit. Editing, the field
 replaces the crumbs, Enter goes and Escape cancels. This passes on Windows
 and Linux, and `ui_content2_v2` still passes on both.
+
+## D1309 — The tab indicator eases its width as it slides
+
+D1281's sliding tab indicator kept the new tab's width all the way. It now
+eases from the old tab's width to the new one's, over the same
+`duration-medium-2` ease as its place. The slide cell remembers the old
+width and the share still to run. The indicator is keyed `key + 1048574`
+while it slides. The scrolling bar's edge fade is still to come.
+
+`ui_tabs_rtl` slides a secondary bar's indicator from a first tab widened
+by its count badge to the plain third. Half way, its width lies strictly
+between the two tabs' widths, on Windows and Linux; `ui_navigation` and
+`ui_navigation5_v2` still pass on both.
