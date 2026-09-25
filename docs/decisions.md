@@ -23394,3 +23394,12 @@ the maximum, and mirrored in RTL before reporting through the same change
 channel as taps and keys.
 
 `ui_actions` holds an RTL edge-to-edge scrub on Windows and Linux.
+
+## D1174 — Notification rows own keyboard focus
+
+Each Notification List row is now one focusable region. Its local scope binds
+Up and Down to adjacent rows and Home and End to the list bounds, so day group
+headings are skipped and nested action buttons retain ordinary Tab order.
+
+`ui_desktop` holds row focusability and all four moves on Windows and Linux. The
+Segoe review is `build/ux/notification-list-keyboard-segoe.png`.
