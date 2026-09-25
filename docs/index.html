@@ -163,7 +163,7 @@
     .catalog-dialog::backdrop { background: rgb(4 7 12 / 88%); backdrop-filter: blur(6px); }
     html:has(.catalog-dialog[open]) { overflow: hidden; }
     .catalog-dialog-frame { display: flex; max-height: 84vh; flex-direction: column; }
-    .catalog-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); padding: var(--space-6); border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); }
+    .catalog-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); padding: var(--space-6); border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); cursor: default; }
     .catalog-dialog-header h2 { margin: 0; font-size: clamp(24px, 4vw, 36px); line-height: 44px; }
     .catalog-dialog-close { display: grid; width: 40px; height: 40px; padding: 0; place-items: center; border: 1px solid var(--outline-variant); border-radius: var(--radius-full); background: var(--surface-container); color: inherit; font: 600 20px/1 var(--font-sans); cursor: pointer; }
     body.nu-page .catalog-dialog-close, body.nu-page .catalog-explore { cursor: pointer; }
