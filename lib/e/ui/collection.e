@@ -5429,7 +5429,90 @@ type RowSource = struct { ctx: *void, count: fn(*void) -> usize, key: fn(*void, 
 
 // A virtual list's form (D979): the rows' line count (one height a list),
 // dividers and their inset, the viewport's size, the offset and whom to tell.
-type VirtualListOptions = struct { lines: usize, dividers: bool, inset: f32, width: f32, height: f32, offset: f32, change: widget.Change[f32] }
+// (D1315) `pending_from` (with `has_pending`): rows from that index show as
+// placeholders; `cap` is the end cap after the last row (`cap_text` its words,
+// `retry` its Retry); `anchored` keeps the list at its end, `offset` and
+// `change` then measuring up from the end.
+type VirtualListOptions = struct { lines: usize, dividers: bool, inset: f32, width: f32, height: f32, offset: f32, change: widget.Change[f32], pending_from: usize, has_pending: bool, cap: EndCap, cap_text: str, retry: widget.Submit, anchored: bool }
+
+// (D1315) A virtual list's end cap: none, loading the next page, the count at the
+// true end, or a failed page.
+type EndCap = enum u8 { None, Loading, Count, Failed }
+
+// (D1315) An anchored list's scroll: the runtime's top offset back to a distance
+// from the end.
+type AnchorChange = struct { end: f32, change: widget.Change[f32] }
+
+fn anchor_change_fire(ctx: *void, value: f32) -> err {
+    let c = mem.cast[*AnchorChange](ctx)
+    var from_end = c.end - value
+    if from_end < 0.0 { from_end = 0.0 }
+    ret widget.fire_change[f32](c.change, from_end)
+}
+
+// (D1315, docs/ux/components/VirtualList, placeholder row) A row whose data has
+// not arrived: two skeleton lines 12 and 10 tall, 70% and 30% of the text's
+// width, 16 in, keyed `key`, `height` tall, out of the tree.
+fn placeholder_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, width: f32, height: f32) -> (widget.Node, err) {
+    let text_width = control.max_zero(width - 32.0)
+    let (sweep, sweep_error) = control.placeholder_sweep(a, t, 0.0, width, 0.4)
+    if sweep_error != ok { ret (zero, sweep_error) }
+    var line = control.skeleton_options()
+    line.shape = .Line
+    line.sweep = sweep
+    let (first, e1) = control.skeleton_of(a, 0u64, t, text_width * 0.7, 12.0, line)
+    let (second, e2) = control.skeleton_of(a, 0u64, t, text_width * 0.3, 10.0, line)
+    if e1 != ok || e2 != ok { ret (zero, TooLarge) }
+    let (bars, bars_error) = mem.alloc[widget.Node](a, 2usize)
+    if bars_error != ok { ret (zero, TooLarge) }
+    bars[0usize] = first
+    bars[1usize] = second
+    var row_style = control.sized_style(width, height)
+    let side = style.Length { Px: 16.0 }
+    let flat = style.Length { Px: 0.0 }
+    row_style.padding = style.EdgeLengths { left: side, top: flat, right: side, bottom: flat }
+    ret (widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 8.0 }, row_style, bars[0usize..2usize]), ok)
+}
+
+// (D1315, docs/ux/components/VirtualList, end cap) The row after the last:
+// loading, a 24 ring before `text`; the count, `text` alone; failed, `text` and a
+// Retry text button (`key ^ fnv1a64("end-retry")`); `body-medium`
+// `on-surface-variant`, centred, `height` tall, keyed `key ^ fnv1a64("end-cap")`,
+// a polite status.
+fn end_cap_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, cap: EndCap, text: str, retry: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 3usize)
+    if bits_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if cap == .Loading {
+        let (ring, ring_error) = control.progress_ring(a, 0u64, t, text, 0.0, true, 24.0)
+        if ring_error != ok { ret (zero, ring_error) }
+        bits[n] = ring
+        n += 1usize
+    }
+    var said_look = control.text_options()
+    said_look.role = .BodyMedium
+    said_look.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, text, t, said_look, style.color(t.tokens, .OnSurfaceVariant))
+    if said_error != ok { ret (zero, said_error) }
+    bits[n] = said
+    n += 1usize
+    if cap == .Failed {
+        var plain = control.button_options()
+        plain.variant = .Plain
+        let (again, again_error) = control.button(a, key ^ hash.fnv1a64("end-retry"), t, "Retry", retry, plain)
+        if again_error != ok { ret (zero, again_error) }
+        bits[n] = again
+        n += 1usize
+    }
+    let (cap_line, cap_line_error) = mem.alloc[widget.Node](a, 1usize)
+    if cap_line_error != ok { ret (zero, TooLarge) }
+    cap_line[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 12.0 }, control.sized_style(width, height), bits[0usize..n])
+    var sem: widget.Semantics = zero
+    sem.role = 26u8
+    sem.label = text
+    sem.live = 1u8
+    ret (widget.semantics(key ^ hash.fnv1a64("end-cap"), sem, style.defaults(), cap_line[0usize..1usize]), ok)
+}
 
 fn virtual_list_options() -> VirtualListOptions {
     var out: VirtualListOptions = zero
@@ -5464,29 +5547,72 @@ fn virtual_range(offset: f32, viewport: f32, total: usize, extent: f32) -> (usiz
 // Page Up, Page Down, Home and End moving the focus by stable key and requesting
 // the minimum caller-owned offset that reveals it. A list named `label` with the
 // full count, each row at its true position.
-// ponytail: no sticky headers, placeholders, end cap, paging or end-anchored mode.
+// (D1315) Placeholder rows, the end cap and the end-anchored mode
+// (`VirtualListOptions`); the cap is a row of the list's height counted after the
+// last, so paging is the caller's from the offset it keeps.
+// ponytail: no sticky headers.
 fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: RowSource, options: VirtualListOptions) -> (widget.Node, err) {
     let extent = row_height(t, options.lines)
     let total = source.count(source.ctx)
-    let (first, count) = virtual_range(options.offset, options.height, total, extent)
+    var capped = 0usize
+    if options.cap != .None { capped = 1usize }
+    let places = total + capped
+    // (D1315) Anchored, the offset counts up from the end.
+    var offset = options.offset
+    var change = options.change
+    if options.anchored {
+        var end = f32(places) * extent - options.height
+        if end < 0.0 { end = 0.0 }
+        offset = end - options.offset
+        if offset < 0.0 { offset = 0.0 }
+        let (anchors, anchors_error) = mem.alloc[AnchorChange](a, 1usize)
+        if anchors_error != ok { ret (zero, TooLarge) }
+        anchors[0usize] = AnchorChange { end: end, change: options.change }
+        change = widget.Change[f32] { ctx: mem.cast[*void](&anchors[0usize]), invoke: anchor_change_fire }
+    }
+    let (first, count) = virtual_range(offset, options.height, places, extent)
     let (items, items_error) = mem.alloc[RowItem](a, count)
     if items_error != ok { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (zero, TooLarge) }
+    let (retries, retries_error) = mem.alloc[widget.Submit](a, 1usize)
+    if retries_error != ok { ret (zero, TooLarge) }
+    retries[0usize] = options.retry
     var i = 0usize
     while i < count {
         let index = first + i
-        items[i] = source.item(source.ctx, index)
+        if index >= total {
+            let (cap_node, cap_error) = end_cap_row(a, key, t, options.cap, options.cap_text, &retries[0usize], options.width, extent)
+            if cap_error != ok { ret (zero, cap_error) }
+            rows[i] = cap_node
+            i += 1usize
+            continue
+        }
         let row_key = source.key(source.ctx, index)
         let lined = options.dividers && index + 1usize < total
-        let (made, made_error) = row_sized(a, row_key, t, &items[i], index, total, options.width, extent - control.if_else(lined, t.tokens.sizes.divider, 0.0))
+        let row_extent = extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
+        if options.has_pending && index >= options.pending_from {
+            let (held, held_error) = placeholder_row(a, row_key, t, options.width, row_extent)
+            if held_error != ok { ret (zero, held_error) }
+            rows[i] = held
+            i += 1usize
+            continue
+        }
+        items[i] = source.item(source.ctx, index)
+        let (made, made_error) = row_sized(a, row_key, t, &items[i], index, total, options.width, row_extent)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
     }
     var page = usize(options.height / extent)
     if page > 1usize { page -= 1usize } else { page = 1usize }
-    let rove_error = virtual_roving(a, t, rows, KeySource { ctx: source.ctx, key: source.key }, first, total, page, options.offset, options.height, extent, options.change, 0u64)
+    var roved = count
+    if first >= total {
+        roved = 0usize
+    } else if first + count > total {
+        roved = total - first
+    }
+    let rove_error = virtual_roving(a, t, rows[0usize..roved], KeySource { ctx: source.ctx, key: source.key }, first, total, page, offset, options.height, extent, change, 0u64)
     if rove_error != ok { ret (zero, rove_error) }
     i = 0usize
     while i < count {
@@ -5508,7 +5634,7 @@ fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.change, virtual_first: first, virtual_count: total, virtual_extent: extent }, view_style, rows[0usize..count])
+    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: places, virtual_extent: extent }, view_style, rows[0usize..count])
     var sem: widget.Semantics = zero
     sem.role = 10u8
     sem.label = label
