@@ -22429,3 +22429,15 @@ width, emits the existing `Extend` event and returns focus to the grid.
 on Windows and Linux. The column action remains in the header menu as specified;
 this changes behavior on the reviewed DataGrid surface, so no duplicate
 screenshot is added.
+
+## D1077 — Non-text grid cells remain caller-owned commands
+
+`GridCellKind` adds Checkbox, Select and Date beside Text. The checkbox draws
+the specified 18px mark and select/date cells keep their text with a trailing
+chevron. A click or Space emits `Toggle`; Enter, F2 or Alt+Down on select/date
+emits `Open`. Text replacement and double-click editing remain text-only, and
+read-only cells reject every edit entry path.
+
+The caller still owns the checked value and the menu or picker. The focused
+`ui_collections6_v2` behavior passes on Windows and Linux;
+`datagrid-cell-types.png` is the Segoe UI visual check.

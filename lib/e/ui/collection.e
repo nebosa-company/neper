@@ -1512,10 +1512,11 @@ fn data_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 }
 
 // v2 (D984, docs/ux/components/DataGrid): the editable grid's core over
-// caller-owned state. A cell is what the source says of it: its text, an error
-// message (invalid when not empty), whether it is edited and unsaved (dirty),
-// read only, or currently saving.
-type GridCell = struct { text: str, message: str, dirty: bool, read_only: bool, saving: bool }
+// caller-owned state. A cell is what the source says of it: its display kind
+// and value, an error message (invalid when not empty), whether it is edited and
+// unsaved (dirty), read only, or currently saving.
+type GridCellKind = enum u8 { Text, Checkbox, Select, Date }
+type GridCell = struct { text: str, message: str, kind: GridCellKind, checked: bool, dirty: bool, read_only: bool, saving: bool }
 type GridSource = struct { ctx: *void, count: fn(*void) -> usize, cell: fn(*void, usize, usize) -> GridCell }
 
 // The grid's state, which the caller keeps: the active cell, the range's anchor
@@ -1524,11 +1525,10 @@ type GridSource = struct { ctx: *void, count: fn(*void) -> usize, cell: fn(*void
 // buffer.
 type GridState = struct { row: usize, column: usize, anchor_row: usize, anchor_column: usize, editing: bool, disabled: bool, saving: usize, len: usize }
 
-// What a key, a tap or the editor asks: Move and Extend (the range from the
-// anchor) to a cell, Edit (the caller puts the value in the draft and its length
-// in `next.len`), Type (the draft is `text` now), Commit (the draft is the value
-// of the cell at `row`, `column`) and Cancel. `next` is the caller's next state.
-type GridEventKind = enum u8 { Move, Extend, Edit, Replace, Type, Commit, Cancel, Paste, Clear, Undo, FillDown }
+// What a key, tap or editor asks: Move and Extend select, Edit/Type/Commit/Cancel
+// drive text, Toggle changes a checkbox and Open presents a select or date. The
+// caller owns every value; `next` is its next interaction state.
+type GridEventKind = enum u8 { Move, Extend, Edit, Replace, Type, Commit, Cancel, Toggle, Open, Paste, Clear, Undo, FillDown }
 type GridEvent = struct { kind: GridEventKind, row: usize, column: usize, next: GridState, text: str }
 
 // An event fired, then the focus to the element keyed `to.key` (a tapped cell
@@ -1566,7 +1566,7 @@ fn grid_typed(ctx: *void, value: str) -> err {
     ret widget.fire_change[GridEvent](f.change, event)
 }
 
-type GridInput = struct { state: GridState, change: widget.Change[GridEvent] }
+type GridInput = struct { state: GridState, source: GridSource, change: widget.Change[GridEvent] }
 
 fn grid_input(ctx: *void, event: input.Event) -> err {
     let g = back_of[GridInput](ctx)
@@ -1574,6 +1574,8 @@ fn grid_input(ctx: *void, event: input.Event) -> err {
     switch event {
     case .Text as t:
         if t.text.len == 0usize { ret ok }
+        let value = g.source.cell(g.source.ctx, g.state.row, g.state.column)
+        if value.kind != .Text || value.read_only { ret ok }
         var next = g.state
         next.editing = true
         next.len = t.text.len
@@ -1676,6 +1678,7 @@ fn grid_key(ctx: *void, k: input.KeyEvent) -> err {
         ret widget.fire_change[GridEvent](g.change, GridEvent { kind: kind, row: s.row, column: s.column, next: next, text: "" })
     }
     let command = k.modifiers.control || k.modifiers.meta
+    let value = g.source.cell(g.source.ctx, s.row, s.column)
     if command && code == 67u32 {
         let (text, text_error) = grid_copy_text(g.arena, g.source, s)
         if text_error != ok { ret text_error }
@@ -1690,6 +1693,9 @@ fn grid_key(ctx: *void, k: input.KeyEvent) -> err {
     if command && (code == 68u32 || code == 13u32) { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .FillDown, row: s.row, column: s.column, next: next, text: "" }) }
     if code == 46u32 { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Clear, row: s.row, column: s.column, next: next, text: "" }) }
     if code == 13u32 || code == 113u32 {
+        if value.read_only { ret ok }
+        if value.kind == .Select || value.kind == .Date { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Open, row: s.row, column: s.column, next: next, text: "" }) }
+        if value.kind != .Text { ret ok }
         next.editing = true
         ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Edit, row: s.row, column: s.column, next: next, text: "" })
     }
@@ -1721,6 +1727,8 @@ fn grid_key(ctx: *void, k: input.KeyEvent) -> err {
         next.anchor_column = s.column
         ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Extend, row: s.row, column: s.column, next: next, text: "" })
     }
+    if code == 32u32 && value.kind == .Checkbox && !value.read_only { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Toggle, row: s.row, column: s.column, next: next, text: "" }) }
+    if code == 40u32 && k.modifiers.alt && (value.kind == .Select || value.kind == .Date) && !value.read_only { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Open, row: s.row, column: s.column, next: next, text: "" }) }
     if code == 119u32 {
         let count = g.rows * g.columns
         var i = 1usize
@@ -1811,7 +1819,7 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     if value.read_only { ink = style.color(t.tokens, .OnSurfaceVariant) }
     if ranged { ink = style.color(t.tokens, .OnPrimaryContainer) }
     if s.disabled { ink = control.with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
-    let (inner, inner_error) = mem.alloc[widget.Node](a, 4usize)
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 6usize)
     if inner_error != ok { ret TooLarge }
     var n = 0usize
     if invalid {
@@ -1823,13 +1831,46 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
         inner[n] = icon
         n += 1usize
     }
-    var caption = control.text_options()
-    caption.role = .BodyMedium
-    caption.wrap = .None
-    let (said, said_error) = control.colored_text(a, 0u64, value.text, t, caption, ink)
-    if said_error != ok { ret said_error }
-    inner[n] = said
-    n += 1usize
+    if value.kind == .Checkbox {
+        var box_style = control.sized_style(18.0, 18.0)
+        box_style.radius = 2.0
+        var edge = style.color(t.tokens, .OnSurfaceVariant)
+        if value.checked { edge = style.color(t.tokens, .Primary) }
+        if s.disabled || value.read_only { edge = control.with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
+        box_style.border = style.Border { width: 2.0, color: edge }
+        let (ticks, ticks_error) = mem.alloc[widget.Node](a, 1usize)
+        if ticks_error != ok { ret TooLarge }
+        var tick_count = 0usize
+        if value.checked {
+            box_style.background = paint.Brush { Solid: edge }
+            var tick_ink = style.color(t.tokens, .OnPrimary)
+            if s.disabled || value.read_only { tick_ink = style.color(t.tokens, .Background) }
+            let (mark, mark_error) = control.mark_glyph(a, tick_ink, .Check, 14.0)
+            if mark_error != ok { ret mark_error }
+            ticks[0usize] = mark
+            tick_count = 1usize
+        }
+        inner[n] = widget.aligned(0u64, .Center, .Center, box_style, ticks[0usize..tick_count])
+        n += 1usize
+    } else {
+        var caption = control.text_options()
+        caption.role = .BodyMedium
+        caption.wrap = .None
+        let (said, said_error) = control.colored_text(a, 0u64, value.text, t, caption, ink)
+        if said_error != ok { ret said_error }
+        inner[n] = said
+        n += 1usize
+        if value.kind == .Select || value.kind == .Date {
+            var spacer = style.defaults()
+            spacer.width = style.Length { Flex: 1.0 }
+            inner[n] = widget.box(0u64, spacer, zero)
+            n += 1usize
+            let (icon, icon_error) = control.icon_square(a, ink, .ChevronDown, 16.0)
+            if icon_error != ok { ret icon_error }
+            inner[n] = icon
+            n += 1usize
+        }
+    }
     if value.saving {
         var spacer = style.defaults()
         spacer.width = style.Length { Flex: 1.0 }
@@ -1844,13 +1885,15 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     var body_style = style.defaults()
     body_style.width = style.Length { Flex: 1.0 }
     body_style.padding = style.EdgeLengths { left: style.Length { Px: 10.0 }, top: flat, right: style.Length { Px: 12.0 }, bottom: flat }
+    var body_main: ui_layout.MainAlign = .Start
+    if value.kind == .Checkbox { body_main = .Center }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret TooLarge }
     var bar = style.defaults()
     bar.width = style.Length { Px: t.tokens.sizes.outline_focused }
     if value.dirty { bar.background = paint.Brush { Solid: style.color(t.tokens, .Primary) } }
     parts[0usize] = widget.box(0u64, bar, zero)
-    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, body_style, inner[0usize..n])
+    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: body_main, cross: .Center, gap: 4.0 }, body_style, inner[0usize..n])
     var cell_style = style.defaults()
     cell_style.width = style.Length { Percent: 100.0 }
     cell_style.height = style.Length { Percent: 100.0 }
@@ -1875,11 +1918,13 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     extended.column = at
     extended.editing = false
     let focus = control.FocusTo { runtime: t.runtime, key: b.holder }
+    var tap_kind: GridEventKind = .Move
+    if value.kind == .Checkbox && !value.read_only { tap_kind = .Toggle }
     presses[0usize] = GridPress {
-        move: GridFire { event: GridEvent { kind: .Move, row: s.row, column: s.column, next: next, text: "" }, change: b.change, to: focus },
+        move: GridFire { event: GridEvent { kind: tap_kind, row: index, column: at, next: next, text: "" }, change: b.change, to: focus },
         extend: GridFire { event: GridEvent { kind: .Extend, row: s.row, column: s.column, next: extended, text: "" }, change: b.change, to: focus },
         edit: GridFire { event: GridEvent { kind: .Edit, row: index, column: at, next: editing, text: "" }, change: b.change, to: focus },
-        editable: !value.read_only && !s.disabled
+        editable: value.kind == .Text && !value.read_only && !s.disabled
     }
     let (tapped, tapped_error) = mem.alloc[widget.Node](a, 1usize)
     if tapped_error != ok { ret TooLarge }
@@ -1889,6 +1934,14 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     tapped[0usize] = widget.region(cell_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&presses[0usize]), invoke: grid_press }, gestures: 1u8 | 4u8, enabled: !s.disabled, focusable: false }, fill, lined[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.value = value.text
+    if value.kind == .Checkbox {
+        sem.role = 4u8
+        sem.actions = accessibility.ACTION_PRESS
+        if value.checked {
+            sem.states = sem.states | accessibility.STATE_CHECKED
+            sem.value = "Checked"
+        } else { sem.value = "Not checked" }
+    }
     if value.read_only {
         sem.states = accessibility.STATE_READ_ONLY
         sem.hint = "Read only"
@@ -1953,8 +2006,7 @@ fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
 // status bar, 12 in, says the error count in `error` after an 18 `error` icon
 // and, for a range, "N cells selected" in `body-medium` `on-surface-variant`.
 // Every change reaches `change` as a `GridEvent` carrying the next state.
-// ponytail: text cells only -- no checkbox, select or date cells; no
-// column-menu selection, clipboard
+// ponytail: no column-menu selection, clipboard
 // parsing and mutation, cross-fade, or touch sheet; the caller keeps the active
 // row in view (the ring is held inside the viewport).
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {
@@ -1993,7 +2045,7 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     control.focus_look(t)
     let (inputs, inputs_error) = mem.alloc[GridInput](a, 1usize)
     if inputs_error != ok { ret (zero, TooLarge) }
-    inputs[0usize] = GridInput { state: state, change: change }
+    inputs[0usize] = GridInput { state: state, source: source, change: change }
     held[0usize] = widget.button(key + 1u64, widget.Button { action: widget.Action { ctx: ctx_of(&inputs[0usize]), invoke: grid_input }, enabled: !state.disabled }, fill, zero)
     var ring = control.sized_style(active_w, active_h)
     ring.overflow = .Clip
