@@ -380,6 +380,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, widget.box(0u64, settled_page, settled_parts[0usize..1usize]), time.Instant { nanos: 9600000000i64 }) != ok { os.exit(78i32) }
     let (settled_shot, settled_shot_error) = testing.snapshot(&harness, a)
     if settled_shot_error != ok || !is_color(settled_shot, at(200.0, 300.0), slide_surface) { os.exit(79i32) }
+    // (D1317) Choosing People fills its pill from the centre: part way through
+    // `duration-medium-1` the fill is narrower than the 64 pill; done, no fill
+    // stands apart from the pill.
+    var pill_step = 0usize
+    while pill_step < 5usize {
+        var pill_at = 11000000000i64
+        var pill_pick = 0usize
+        if pill_step == 1usize { pill_at = 11016000000i64 }
+        if pill_step == 2usize {
+            pill_at = 11100000000i64
+            pill_pick = 1usize
+        }
+        if pill_step == 3usize {
+            pill_at = 11200000000i64
+            pill_pick = 1usize
+        }
+        if pill_step == 4usize {
+            pill_at = 11500000000i64
+            pill_pick = 1usize
+        }
+        if testing.begin(&harness, time.Instant { nanos: pill_at }) != ok { os.exit(80i32) }
+        f = mem.arena_from(frame_storage)
+        let (pill_bar, pill_bar_error) = navigation.destination_bar_of(&f, 3000u64, &theme, s.places[0usize..3usize], pill_pick, s.picks[0usize..3usize], .Bottom, 400.0)
+        let (pill_parts, pill_parts_error) = mem.alloc[widget.Node](&f, 1usize)
+        if pill_bar_error != ok || pill_parts_error != ok { os.exit(81i32) }
+        pill_parts[0usize] = pill_bar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 520.0), pill_parts[0usize..1usize]), time.Instant { nanos: pill_at }) != ok { os.exit(82i32) }
+        let fill_key = 3002u64 + 1048576u64
+        if pill_step == 3usize {
+            let (fill_box, has_fill_box) = bounds(&harness, &runtime, fill_key)
+            if !has_fill_box || !(fill_box.width > 1.0) || !(fill_box.width < 63.0) { os.exit(83i32) }
+        }
+        if pill_step == 4usize && testing.by_key(&harness, fill_key).count != 0usize { os.exit(84i32) }
+        pill_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation3 v2 ok\n")
     ret ok

@@ -25419,3 +25419,19 @@ tile now shows the pressed layer and the ripple over the media, as its
 rows already do, and keeps its rounded corner clear. This passes on
 Windows and Linux, and `ui_collection` and `ui_containers5_v2` still pass
 on both.
+
+## D1317 — Destination pills fill from the centre
+
+A bar's or rail's newly active destination now fills its indicator pill
+from the centre outwards over `duration-medium-1`, as the DestinationBar
+spec asks. The pill's `secondary-container` fill is a centred box as wide
+as the eased share (keyed `key + 1 + index + 1048576` while it grows),
+over the resting pill with its state layer. A pill that loses the
+selection shrinks the same way. Reduced motion and the first frame show the
+fill at once. The fill eases in-out rather than emphasized-decelerate, and
+hiding on scroll is still to come.
+
+`ui_navigation3_v2` picks People on the bottom bar. Part way through, its
+fill is narrower than the 64 pill; settled, no separate fill remains. This
+passes on Windows and Linux, and `ui_adaptive` and `ui_navigation` still
+pass on both.
