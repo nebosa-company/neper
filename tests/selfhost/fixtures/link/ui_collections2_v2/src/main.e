@@ -79,6 +79,10 @@ fn row_count(ctx: *void) -> usize {
     ret 50usize
 }
 
+fn no_row_count(ctx: *void) -> usize {
+    ret 0usize
+}
+
 fn row_key(ctx: *void, index: usize) -> widget.Key {
     ret 1000u64 + u64(index)
 }
@@ -332,7 +336,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Ctrl-click toggles, Space toggles and Ctrl+A selects all; with Beta selected
     // the bar says "1 selected", select-all is mixed and a plain click toggles.
     var chose: Chosen = zero
-    var table_choice: collection.TableSelect = zero
+    var table_choice: collection.TableOptions = zero
     table_choice.select = widget.Change[collection.ListSelect] { ctx: mem.cast[*void](&chose), invoke: on_choose }
     var held_control: input.Modifiers = zero
     held_control.control = true
@@ -380,6 +384,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if testing.tap(&harness, select_all.bounds.x + select_all.bounds.width * 0.5, select_all.bounds.y + select_all.bounds.height * 0.5) != ok || chose.kind != .All { os.exit(72i32) }
         }
         sel_step += 1usize
+    }
+    // (D1248) With no rows the header stays over the loading state (a busy
+    // "Loading" group under an indeterminate progress bar) or the empty state.
+    var state_step = 0usize
+    while state_step < 2usize {
+        var state_options: collection.TableOptions = zero
+        state_options.loading = state_step == 0usize
+        state_options.empty_title = "No builds yet"
+        state_options.empty_message = "Builds you start appear here"
+        f = mem.arena_from(frame_storage)
+        let empty_source = collection.TableSource { ctx: ctx, count: no_row_count, key: row_key, cell: row_cell }
+        let (stated, stated_error) = collection.table_with(&f, 1u64, &theme, "Builds", columns[0usize..3usize], empty_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, state_options)
+        let (stated_page, stated_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if stated_error != ok || stated_page_error != ok { os.exit(73i32) }
+        stated_page[0usize] = stated
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), stated_page[0usize..1usize]), time.Instant { nanos: 5100000000i64 + i64(state_step) }) != ok { os.exit(74i32) }
+        let (state_tree, state_tree_error) = testing.semantics(&harness)
+        if state_tree_error != ok { os.exit(75i32) }
+        let (loading_group, has_loading_group) = find(state_tree, .Group, "Loading")
+        let (_, has_state_header) = find(state_tree, .ColumnHeader, "Name")
+        if !has_state_header { os.exit(76i32) }
+        if state_step == 0usize && (!has_loading_group || !loading_group.state.busy || testing.by_role(&harness, .Progress).count == 0usize) { os.exit(77i32) }
+        if state_step == 1usize && (has_loading_group || testing.by_text(&harness, "No builds yet").count == 0usize) { os.exit(78i32) }
+        state_step += 1usize
     }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui collections2 v2 ok\n")

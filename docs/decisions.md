@@ -24399,3 +24399,17 @@ The skeleton rows are the 72 avatar rows whatever the real row's height, and
 they do not add "Still loading" after 10 seconds. `ui_collections_v2` holds the
 busy group and the 5 x 72 column, the loading grid and the empty grid on Windows
 and Linux.
+
+## D1248 — Tables have loading and empty states
+
+D1246's `TableSelect` becomes `TableOptions`, since it now carries more than
+selection. It adds `loading`, `empty_title` and `empty_message`. With no rows,
+`table_state` replaces the body and the header stays, as the Table spec asks.
+Loading shows an indeterminate linear progress under the header over skeleton
+rows at the row's height, as many as fit (3 to 8), each a 12-tall bar across
+60% of the row, in a busy "Loading" group. Otherwise the compact empty state
+stands centred in the body's area. The error state stays the caller's: a Banner
+with Retry in place of the body.
+
+`ui_collections2_v2` holds the header, the busy group, the progress bar and
+the empty state on Windows and Linux.
