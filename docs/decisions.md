@@ -25242,3 +25242,24 @@ come.
 
 `ui_pickers2_v2` focuses the dial at 14:30: Up reports 15 and Down 13, and
 on the minute dial Page Up reports 35 and Left 29, on Windows and Linux.
+
+## D1307 — Calendars have a year view
+
+`CalendarMarks` gains `toggle_years` and `year_view`. With `toggle_years`
+set, the month and year become the Calendar spec's month button (keyed
+`key + 4095`): the title and an 18 `chevron-down` (up while open),
+expanded with the year view, firing `toggle_years`. With `year_view`, the
+weekdays and days give way to `year_grid`: fifteen years round the shown
+one (inside `earliest` and `latest`), in rows of three. Each is a fully
+rounded pill, 72 by 36 on touch or 64 by 32 with a pointer, with its year
+in `body-large` `on-surface-variant`; the shown year is `primary` /
+`on-primary` and selected. A pill (keyed `key + 4096 + index`) shows that
+year's month through `show` and then fires `toggle_years`, returning to the
+days. The window is fifteen years, not a scrolled century, and arrows do not
+yet move between pills.
+
+`ui_pickers_v2` holds the month button (not expanded, with the days, its
+press toggling). In the year view it is expanded, the days are gone, and
+2026 is selected. A press on 2030 shows March 2030 and toggles back. This
+passes on Windows and Linux, and `ui_pickers` and `ui_pickers3_v2` still
+pass on both.
