@@ -24469,3 +24469,16 @@ description, and there is still no fade.
 
 `ui_content_v2` holds the one Button, no alt-named Image, the tap and Enter on
 Windows and Linux.
+
+## D1253 — Avatars can be pressable
+
+`AvatarOptions.action` and `action_label` give a single avatar the Avatar
+spec's pressable form. The disc (or square) goes into a pressable keyed
+`key + 1`, with the `on-surface` state layer over it, the focus ring following
+its radius, and Enter and Space. It is a Button named by `action_label`
+("Open profile of Ada Lovelace"), or by the avatar's name when that is empty,
+and it stands alone in the tree as D1252's image does. `avatar_options` now
+builds from zero, so the next field added to the struct needs no edit there.
+
+`ui_content_v2` holds the Button, its 40 size and the tap; the avatar
+fixtures still pass on Windows and Linux.

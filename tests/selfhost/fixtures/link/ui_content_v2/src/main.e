@@ -435,6 +435,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if open_images != 0usize { os.exit(104i32) }
     if testing.tap(&harness, opener_box.x + 80.0, opener_box.y + 40.0) != ok || s.retries != opens_before + 1u32 { os.exit(101i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 721u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.retries != opens_before + 2u32 { os.exit(102i32) }
+    // (D1253) A pressable avatar is a Button named by its action; a tap opens.
+    var profile = control.avatar_options()
+    profile.initials = "AL"
+    profile.label = "Ada Lovelace"
+    profile.action = &s.retry
+    profile.action_label = "Open profile of Ada Lovelace"
+    var no_face: scene.TextureId = zero
+    fr = mem.arena_from(frame_storage)
+    let (face, face_error) = control.avatar_of(&fr, 730u64, &theme, no_face, profile)
+    let (face_page, face_page_error) = mem.alloc[widget.Node](&fr, 1usize)
+    if face_error != ok || face_page_error != ok { os.exit(105i32) }
+    face_page[0usize] = face
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 520.0), face_page[0usize..1usize]), time.Instant { nanos: 2300000000i64 }) != ok { os.exit(106i32) }
+    let (face_tree, face_tree_error) = testing.semantics(&harness)
+    if face_tree_error != ok { os.exit(107i32) }
+    var profile_buttons = 0usize
+    n = 0usize
+    while n < face_tree.nodes.len {
+        if face_tree.nodes[n].role == .Button && mem.eq[u8](face_tree.nodes[n].label, "Open profile of Ada Lovelace") { profile_buttons += 1usize }
+        n += 1usize
+    }
+    let face_box = bounds(&harness, &runtime, 731u64)
+    let profile_before = s.retries
+    if profile_buttons != 1usize || !(face_box.width > 39.5) || testing.tap(&harness, face_box.x + 20.0, face_box.y + 20.0) != ok || s.retries != profile_before + 1u32 { os.exit(108i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui content v2 ok\n")
     ret ok

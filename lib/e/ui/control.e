@@ -772,10 +772,16 @@ type Presence = enum u8 { None, Online, Away, Busy, Offline }
 // (snapped to 24, 32, 40, 56 or 72), whether it is the square team form, its
 // presence, the colour it sits on (for the presence ring), and the person's name
 // (empty: decorative, beside the name).
-type AvatarOptions = struct { initials: str, account: str, size: f32, square: bool, presence: Presence, ground: style.ColorRole, label: str }
+// (D1253) `action`, when set, makes the avatar pressable: a Button named
+// `action_label` ("Open profile of Ada Lovelace"), or its name when that is empty.
+type AvatarOptions = struct { initials: str, account: str, size: f32, square: bool, presence: Presence, ground: style.ColorRole, label: str, action: *const widget.Submit, action_label: str }
 
 fn avatar_options() -> AvatarOptions {
-    ret AvatarOptions { initials: "", account: "", size: 40.0, square: false, presence: .None, ground: .Background, label: "" }
+    var out: AvatarOptions = zero
+    out.size = 40.0
+    out.presence = .None
+    out.ground = .Background
+    ret out
 }
 
 // The avatar size nearest a requested one.
@@ -810,8 +816,9 @@ fn account_hash(id: str) -> u32 {
 // `warning` ring 2.5 wide, busy an `error` disc with an `on-error` bar, offline a
 // hollow `outline` ring 2 wide. The name carries the presence ("Ada, online").
 // (D1227) `avatar_group` overlaps several.
-// ponytail: 32's initials are label-large 14 (the ramp has no 13); no pressable
-// form of a single avatar, no cross-fade from initials to the photo.
+// (D1253) With `options.action` a single avatar is pressable.
+// ponytail: 32's initials are label-large 14 (the ramp has no 13); no
+// cross-fade from initials to the photo.
 // (D1227, docs/ux/components/Avatar, group) Up to three of `faces` (pictured
 // by `textures` where given) overlapped by a quarter of their size, each ringed 2
 // in the first face's ground, then, when `total` counts more, a neutral "+n" disc
@@ -1027,6 +1034,40 @@ fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Tex
         at += copy_text(named[at..named.len], ", ")
         at += copy_text(named[at..named.len], word)
         name = named[0usize..at]
+    }
+    // (D1253) Pressable: the `on-surface` state layer over the disc (or square),
+    // the focus ring round it, Enter and Space; a Button (keyed `key + 1`).
+    if mem.address_of(options.action) != 0usize {
+        let press_key = key + 1u64
+        let state = control_state(t, press_key, true, false)
+        var round = size * 0.5
+        if options.square { round = t.tokens.radii.sm }
+        var layer = sized_style(size, size)
+        layer.radius = round
+        layer.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .OnSurface), state_opacity(t, state)) }
+        let (over, over_error) = mem.alloc[widget.Node](a, 2usize)
+        if over_error != ok { ret (zero, TooLarge) }
+        over[0usize] = layers[2usize]
+        over[1usize] = widget.box(0u64, layer, zero)
+        let stacked = widget.stack(0u64, sized_style(size, size), over[0usize..2usize])
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        look.border_width = 0.0
+        look.radius = round
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_start = 0.0
+        look.padding_y = 0.0
+        look.min_width = size
+        look.min_height = size
+        var spoken = options.action_label
+        if spoken.len == 0usize { spoken = name }
+        let (pressed, pressed_error) = pressable_states(a, press_key, t, 3u8, spoken, look, true, false, 0u32, 0u32, 0u64, options.action, stacked)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = pressed
+        ret (widget.box(key, style.defaults(), held[0usize..1usize]), ok)
     }
     var sem: widget.Semantics = zero
     sem.role = ROLE_IMAGE
