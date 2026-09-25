@@ -209,7 +209,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_2_error != ok || testing.pump(&harness, root_2, now) != ok { os.exit(26i32) }
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if tree_2_error != ok { os.exit(27i32) }
-    let (explorer, has_explorer) = find(tree_2, .Group, "Explorer")
+    let (explorer, has_explorer) = find(tree_2, .Region, "Explorer")
     if !has_explorer || !near(explorer.bounds.width, 200.0, 0.5) { os.exit(28i32) }
     let (panel_close_at, has_panel_close) = centre_of(&harness, &runtime, 51u64)
     if !has_panel_close || testing.tap(&harness, panel_close_at.x, panel_close_at.y) != ok || logs[0usize].panel_closes != 1usize { os.exit(29i32) }

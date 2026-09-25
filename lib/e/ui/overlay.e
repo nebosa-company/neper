@@ -1957,7 +1957,7 @@ fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
 // outside fires `outside` (normally the same action).
 fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, drag_offset: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
-    let (body, body_error) = mem.alloc[widget.Node](a, 5usize)
+    let (body, body_error) = mem.alloc[widget.Node](a, 6usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = column
     var raised = control.surface_options(t)
@@ -1998,11 +1998,13 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         body[4usize] = placed
         placed = widget.aligned(0u64, .Center, .End, centre, body[4usize..5usize])
     }
-    body[4usize] = placed
+    // Its own slot: body[4] is the aligned node's child, and a node listed among
+    // its own children would nest without end (TooDeep at any depth).
+    body[5usize] = placed
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), body[4usize..5usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), body[5usize..6usize])
     var sem: widget.Semantics = zero
     sem.role = 23u8
     sem.label = label

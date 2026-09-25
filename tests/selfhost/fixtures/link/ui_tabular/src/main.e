@@ -324,8 +324,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_5_error != ok || testing.pump(&harness, root_5, now) != ok { os.exit(37i32) }
     let (tree_5, tree_5_error) = testing.semantics(&harness)
     if tree_5_error != ok { os.exit(38i32) }
-    let (sizes, has_sizes) = find(tree_5, .Tree, "Sizes")
-    if !has_sizes || count_role(tree_5, .ColumnHeader) != 2usize || count_role(tree_5, .TreeItem) != 5usize || count_role(tree_5, .Cell) != 10usize { os.exit(39i32) }
+    // A treegrid (D1106): its header row and five item rows are Rows.
+    let (sizes, has_sizes) = find(tree_5, .TreeGrid, "Sizes")
+    if !has_sizes || count_role(tree_5, .ColumnHeader) != 2usize || count_role(tree_5, .Row) != 6usize || count_role(tree_5, .Cell) != 10usize { os.exit(39i32) }
     if testing.by_text(&harness, "Size").count == 0usize || testing.by_text(&harness, "k").count != 5usize { os.exit(40i32) }
     let (head_at, has_head) = centre_of(&harness, &runtime, 201u64)
     if !has_head || testing.tap(&harness, head_at.x, head_at.y) != ok || logs[0usize].sorts != 2usize || logs[0usize].sorted != 0usize { os.exit(41i32) }

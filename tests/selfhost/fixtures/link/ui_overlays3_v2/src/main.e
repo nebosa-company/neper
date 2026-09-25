@@ -496,6 +496,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_half, build_half_error) = build(&f, &theme, s, .BottomHalf)
     if build_half_error != ok || testing.pump(&harness, root_half, time.Instant { nanos: 1220000000i64 }) != ok { os.exit(126i32) }
     let (half_sheet, has_half_sheet) = lifted(&harness, 300u64)
+    let (half_title, has_half_title) = bounds(&harness, &runtime, 301u64)
     let (resize_handle, has_resize_handle) = bounds(&harness, &runtime, 302u64)
     let (half_tree, half_tree_error) = testing.semantics(&harness)
     if half_tree_error != ok { os.exit(127i32) }
@@ -507,11 +508,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let drag_from = geometry.Point { x: resize_handle.x + resize_handle.width * 0.5, y: resize_handle.y + resize_handle.height * 0.5 }
     let drag_short = geometry.Point { x: drag_from.x, y: drag_from.y + 36.0 }
     let drag_cycle_before = s.counters[6usize].count
-    if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(drag_from.x, drag_from.y) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(drag_short.x, drag_short.y) }) != ok { os.exit(132i32) }
+    if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(drag_from.x, drag_from.y) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(drag_from.x, drag_from.y + 12.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(drag_short.x, drag_short.y) }) != ok { os.exit(132i32) }
     let (root_half_drag, build_half_drag_error) = build(&f, &theme, s, .BottomHalf)
     if build_half_drag_error != ok || testing.pump(&harness, root_half_drag, time.Instant { nanos: 1225000000i64 }) != ok { os.exit(133i32) }
-    let (dragged_sheet, has_dragged_sheet) = lifted(&harness, 300u64)
-    if !has_dragged_sheet || !near(dragged_sheet.y, half_sheet.y + 36.0) { os.exit(134i32) }
+    // The panel moves inside the overlay's unmoved rectangle: its title shows it.
+    let (dragged_title, has_dragged_title) = bounds(&harness, &runtime, 301u64)
+    if !has_half_title || !has_dragged_title || !near(dragged_title.y, half_title.y + 36.0) { os.exit(134i32) }
     if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(drag_short.x, drag_short.y) }) != ok || s.counters[6usize].count != drag_cycle_before { os.exit(135i32) }
     let (root_half_settled, build_half_settled_error) = build(&f, &theme, s, .BottomHalf)
     if build_half_settled_error != ok || testing.pump(&harness, root_half_settled, time.Instant { nanos: 1227500000i64 }) != ok { os.exit(136i32) }

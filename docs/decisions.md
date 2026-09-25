@@ -23982,3 +23982,34 @@ the disclosure by delegating to `section_header_icon` and `section_body_from`.
 left in right-to-left on Windows and Linux. A sweep of all 103 `ui_*` fixtures
 on both hosts shows only the 12 pre-existing failures recorded in D1195, with
 unchanged exit codes.
+
+## D1222 — All 103 ui fixtures pass again
+
+Twelve `ui_*` link fixtures, all registered in both suites, had failed since
+library changes went in with only their own fixtures run. Two failures were
+library bugs:
+
+- A modal bottom sheet listed itself among its own children. `sheet_frame`
+  wrapped `body[4]` in an aligned node whose child slice was `body[4..5]`, then
+  stored that node back into `body[4]`, so reconciling any open bottom sheet
+  nested without end and failed `TooDeep` at every depth (from 01db304a). The
+  final node now has its own slot.
+- The compact breadcrumb's 48 px parent link drew its chevron and name at the
+  top of the target. Its row now stands the full 48, so they centre.
+
+The rest were expectations older than recorded decisions, now updated to them:
+the Select popup and list box are a Listbox of Options (D985), as are the
+window switcher's rows; the menu bar reports MenuBar; a menu command dismisses
+its menu (D998) and a modal drawer pick dismisses the drawer (D1139); a scrim
+press never closes an alert (Dialog spec); a modal side sheet is at least 256
+wide (D1040); a TreeTable is a TreeGrid of Rows (D1106); and a dock panel is a
+Region. The right-to-left chevron samples, and the compact-pagination text
+counts, were added in commits whose fixtures already failed earlier, so they
+never ran; they now sample the rendered glyphs, and a text button's label is
+checked by presence, since `find_by_text` also counts the button that holds it.
+The bottom-sheet drag check now moves in two steps (the first move past the
+slop is DragStart only) and measures the moving title, since the overlay's own
+rectangle stays put by design. `ui_pickers` needs a depth of 24 for the v2 date
+picker, and `ui_transient` no longer uses one exit code twice.
+
+All 103 `ui_*` fixtures pass on Windows and Linux.

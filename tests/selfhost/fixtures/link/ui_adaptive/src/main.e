@@ -193,15 +193,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tree_error != ok { os.exit(16i32) }
     // The menu bar: a group of two menu buttons, none open; a tap on File fires
     // its toggle; open, File's menu holds two items under the button.
-    let (bar, has_bar) = find(tree, .Group, "Menu bar")
+    let (bar, has_bar) = find(tree, .MenuBar, "Menu bar")
     if !has_bar || testing.by_role(&harness, .MenuItem).count != 0usize { os.exit(17i32) }
     let (file_at, has_file) = centre_of(&harness, &runtime, 2u64)
     if !has_file || testing.tap(&harness, file_at.x, file_at.y) != ok || logs[0usize].toggles != 1usize || logs[0usize].last_toggle != 0usize { os.exit(18i32) }
     let (root_2, build_2_error) = build(&frame, &theme, ctx, &acts[0usize], 0usize, false, false, 700.0, false)
     if build_2_error != ok || testing.pump(&harness, root_2, now) != ok { os.exit(19i32) }
     if testing.by_role(&harness, .MenuItem).count != 2usize || testing.by_key(&harness, 3u64).count != 1usize { os.exit(20i32) }
-    if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].commands != 1usize { os.exit(21i32) }
-    if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].toggles != 2usize { os.exit(22i32) }
+    // A command dismisses its menu (D998); reopened, Escape dismisses it too.
+    if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].commands != 1usize || logs[0usize].toggles != 2usize { os.exit(21i32) }
+    let (root_2b, build_2b_error) = build(&frame, &theme, ctx, &acts[0usize], 0usize, false, false, 700.0, false)
+    if build_2b_error != ok || testing.pump(&harness, root_2b, now) != ok { os.exit(44i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].toggles != 3usize { os.exit(22i32) }
     // The context menu: open, it lies under Item with its two items; Escape
     // dismisses.
     let (root_3, build_3_error) = build(&frame, &theme, ctx, &acts[0usize], 9usize, true, false, 700.0, false)
@@ -217,7 +220,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (grip_at, has_grip) = centre_of(&harness, &runtime, 23u64)
     if !has_grip || testing.tap(&harness, grip_at.x, grip_at.y) != ok || testing.press_key(&harness, 39u32, zero) != ok || logs[0usize].sizes == 0usize { os.exit(28i32) }
     // The drawer: open, a modal dialog named Navigation along the left edge with
-    // three tabs, the first selected; Calendar picks; Escape dismisses.
+    // three tabs, the first selected; Calendar picks and so dismisses it (D1139);
+    // reopened, Escape dismisses it.
     let (root_5, build_5_error) = build(&frame, &theme, ctx, &acts[0usize], 9usize, false, true, 700.0, false)
     if build_5_error != ok || testing.pump(&harness, root_5, now) != ok { os.exit(29i32) }
     let (tree_5, tree_5_error) = testing.semantics(&harness)
@@ -228,7 +232,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_drawer_bounds || drawer_bounds.x != 0.0 { os.exit(32i32) }
     let (calendar_at, has_calendar) = centre_of(&harness, &runtime, 33u64)
     if !has_calendar || testing.tap(&harness, calendar_at.x, calendar_at.y) != ok || logs[0usize].picks != 1usize || logs[0usize].last_pick != 1usize { os.exit(33i32) }
-    if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].dismisses != 2usize { os.exit(34i32) }
+    if logs[0usize].dismisses != 2usize { os.exit(34i32) }
+    let (root_5b, build_5b_error) = build(&frame, &theme, ctx, &acts[0usize], 9usize, false, true, 700.0, false)
+    if build_5b_error != ok || testing.pump(&harness, root_5b, now) != ok { os.exit(45i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].dismisses != 3usize { os.exit(46i32) }
     // The rail: a column of three tabs, Calendar selected; the breadcrumbs: two
     // links and the current name; Docs fires its pick.
     let (root_6, build_6_error) = build(&frame, &theme, ctx, &acts[0usize], 9usize, false, false, 700.0, false)

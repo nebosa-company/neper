@@ -234,11 +234,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (dialog_bounds, has_dialog_bounds) = testing.overlay_of(&harness, testing.by_key(&harness, 20u64).element)
     if !has_dialog_bounds || dialog_bounds.x <= 0.0 || dialog_bounds.x + dialog_bounds.width >= 320.0 { os.exit(42i32) }
     // A tap on the destructive button deletes; Escape cancels; a press outside
-    // cancels too.
+    // an alert does nothing (docs/ux/components/Dialog: never close an alert on
+    // a scrim press).
     let (delete_at, has_delete) = centre_of(&harness, &runtime, 24u64)
     if !has_delete || testing.tap(&harness, delete_at.x, delete_at.y) != ok || logs[0usize].deletes != 1usize { os.exit(43i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].cancels != 1usize { os.exit(44i32) }
-    if testing.tap(&harness, 2.0, 318.0) != ok || logs[0usize].cancels != 2usize { os.exit(45i32) }
+    if testing.tap(&harness, 2.0, 318.0) != ok || logs[0usize].cancels != 1usize { os.exit(67i32) }
     // Touch waits for a 500 ms hold, consumes the release, then keeps the plain
     // tooltip for 1500 ms so the user can read it.
     let touch_start = time.Instant { nanos: 5000000000i64 }

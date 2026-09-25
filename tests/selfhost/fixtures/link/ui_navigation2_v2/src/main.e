@@ -447,7 +447,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (rtl_parent, has_rtl_parent) = bounds(&harness, &runtime, 2102u64)
     let rtl_muted = style.color(&rtl_tokens, .OnSurfaceVariant)
     let separator_x = rtl_root.x + rtl_root.width
-    if rtl_shot_error != ok || !has_rtl_root || !has_rtl_parent || !is_color(rtl_shot, at(separator_x + 10.0, rtl_root.y + 13.0), rtl_muted) || is_color(rtl_shot, at(separator_x + 6.0, rtl_root.y + 13.0), rtl_muted) || !is_color(rtl_shot, at(rtl_parent.x + 15.0, rtl_parent.y + 21.0), rtl_muted) || is_color(rtl_shot, at(rtl_parent.x + 18.0, rtl_parent.y + 21.0), rtl_muted) { os.exit(86i32) }
+    if rtl_shot_error != ok || !has_rtl_root || !has_rtl_parent || !is_color(rtl_shot, at(separator_x + 9.0, rtl_root.y + 13.0), rtl_muted) || is_color(rtl_shot, at(separator_x + 6.0, rtl_root.y + 13.0), rtl_muted) || !is_color(rtl_shot, at(rtl_parent.x + 15.0, rtl_parent.y + 21.0), rtl_muted) || is_color(rtl_shot, at(rtl_parent.x + 18.0, rtl_parent.y + 21.0), rtl_muted) { os.exit(86i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui navigation2 v2 ok\n")
     ret ok
