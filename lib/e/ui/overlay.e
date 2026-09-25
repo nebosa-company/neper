@@ -2684,6 +2684,7 @@ fn weekday_name(day: usize, narrow: bool) -> str {
 // label while there is none) firing `toggle`, with a calendar (keyed `key + 2`,
 // in a flyout keyed `key + 1`) of the month `shown` below it while `open`; a pick
 // reaches `pick`, a month turn `show`, and the flyout's dismissal is `toggle` again.
+// Alt+Down opens a closed picker.
 fn date_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (made, made_error) = dated(a, key, t, label, value, has_value, false, value, value, open, toggle, shown, show, pick)
     ret (made, made_error)
@@ -2758,7 +2759,19 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
-    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    var shortcuts: []const widget.Shortcut = zero
+    if !open {
+        let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 1usize)
+        if keys_error != ok { ret (zero, TooLarge) }
+        var alt: input.Modifiers = zero
+        alt.alt = true
+        keys[0usize] = widget.Shortcut { key: 40u32, modifiers: alt, action: *toggle }
+        shortcuts = keys[0usize..1usize]
+    }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
 
 // A part of a time of day stepped: which part, the whole value, whom to tell.

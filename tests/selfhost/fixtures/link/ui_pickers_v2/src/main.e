@@ -26,9 +26,11 @@ use e.ui.style
 use e.ui.testing
 use e.ui.widget
 
-type Store = struct { press: widget.Submit, picks: [3]widget.Submit, words: [3]str, dates: usize, last_date: time.Date }
+type Store = struct { press: widget.Submit, picks: [3]widget.Submit, words: [3]str, dates: usize, last_date: time.Date, toggles: usize }
 
 fn on_press(ctx: *void) -> err {
+    let s = mem.cast[*Store](ctx)
+    s.toggles += 1usize
     ret ok
 }
 
@@ -214,6 +216,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let top = pear.y - 44.0
     if !is_color(shot_2, at(300.0, top + 18.0), over(low, style.color(&tokens, .OnSurfaceVariant), 0.4)) || !is_color(shot_2, at(300.0, top + 10.0), low) { os.exit(27i32) }
     if !is_color(shot_2, at(36.0, plum.y + 28.0), primary) || !is_color(shot_2, at(36.0, pear.y + 28.0), low) || !is_color(shot_2, at(27.0, pear.y + 28.0), style.color(&tokens, .OnSurfaceVariant)) { os.exit(28i32) }
+    let (closed, closed_error) = build(&f, &theme, &stores[0usize], false, false)
+    if closed_error != ok || testing.pump(&harness, closed, time.Instant { nanos: 3000000000i64 }) != ok || widget.focus(&runtime, testing.by_key(&harness, 200u64).element) != ok { os.exit(35i32) }
+    var alt: input.Modifiers = zero
+    alt.alt = true
+    if testing.press_key(&harness, 40u32, alt) != ok || stores[0usize].toggles != 1usize { os.exit(36i32) }
     try io.print("ui pickers v2 ok\n")
     ret ok
 }
