@@ -399,6 +399,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 1114u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok { os.exit(105i32) }
     let (skip_focus, has_skip_focus) = testing.focused(&harness)
     if !has_skip_focus || skip_focus.slot != testing.by_key(&harness, 1128u64).element.slot { os.exit(106i32) }
+    // (D1311) A sheet of twelve options in a 720 window scrolls past 60%: its rows
+    // stand in a viewport 352 tall (432 less the 80 above and below).
+    var many_words: [12]str = zero
+    var many_picks: [12]widget.Submit = zero
+    var mw = 0usize
+    while mw < 12usize {
+        many_words[mw] = "Choice"
+        many_picks[mw] = stores[0usize].press
+        mw += 1usize
+    }
+    f = mem.arena_from(frame_storage)
+    let (tall_sheet, tall_sheet_error) = control.picker(&f, 1300u64, &theme, "Many", many_words[..], 0usize, true, &stores[0usize].press, many_picks[..], .Sheet)
+    let (tall_page, tall_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if tall_sheet_error != ok || tall_page_error != ok { os.exit(122i32) }
+    tall_page[0usize] = tall_sheet
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), tall_page[0usize..1usize]), time.Instant { nanos: 3600000000i64 }) != ok { os.exit(123i32) }
+    let (tall_view, has_tall_view) = bounds(&harness, &runtime, 1300u64 + 1048576u64)
+    if !has_tall_view || !near(tall_view.height, 352.0) { os.exit(124i32) }
     // (D1307) The month button toggles the year view; there, 2026 is chosen and
     // a press on 2030 shows March 2030 and leaves the view.
     var year_step = 0usize

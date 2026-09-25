@@ -7117,7 +7117,9 @@ type PickerForm = enum u8 { Popup, Sheet }
 // `on-surface-variant` at 40% stands 16 from its top, the title in `title-large`
 // 24 in from the sides, then rows 56 tall, 16 in, a radio in its 40 circle before
 // the option in `body-large`; a press on the scrim, or Escape, fires `toggle`.
-// ponytail: the sheet opens at its full height; the 60% cap, the drag to expand and the slide wait on motion and a scrolled body.
+// (D1311) The sheet stands at most 60% of the window tall: past that its rows
+// scroll in a viewport (keyed `key + 1048576`) under the handle and title.
+// ponytail: no drag to expand and no slide.
 fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, presentation: PickerForm) -> (widget.Node, err) {
     if presentation == .Popup {
         let (popup, popup_error) = select(a, key, t, label, options, selected, open, toggle, picks)
@@ -7191,6 +7193,27 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
             rows[2usize + i] = widget.semantics(0u64, entry, full, inner[0usize..1usize])
             i += 1usize
         }
+        // (D1311) Past 60% of the window the rows scroll: the handle, its 16 above
+        // and the title take 72, the foot 8.
+        var body = rows[0usize..options.len + 2usize]
+        if mem.address_of(t.runtime) != 0usize {
+            let window_high = widget.surface_size(t.runtime).height
+            let room = window_high * 0.6 - 80.0
+            if window_high > 0.0 && f32(options.len) * 56.0 > room && room > 56.0 {
+                var view_style = style.defaults()
+                view_style.width = style.Length { Percent: 100.0 }
+                view_style.height = style.Length { Px: room }
+                view_style.overflow = .Clip
+                let (view, view_error) = widget.scroll_view(a, key + 1048576u64, .Vertical, view_style, rows[2usize..options.len + 2usize])
+                if view_error != ok { ret (zero, TooLarge) }
+                let (capped, capped_error) = mem.alloc[widget.Node](a, 3usize)
+                if capped_error != ok { ret (zero, TooLarge) }
+                capped[0usize] = rows[0usize]
+                capped[1usize] = rows[1usize]
+                capped[2usize] = view
+                body = capped[0usize..3usize]
+            }
+        }
         var sheet_style = style.defaults()
         sheet_style.width = style.Length { Percent: 100.0 }
         sheet_style.max_width = style.Length { Px: 640.0 }
@@ -7201,7 +7224,7 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         sheet_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 16.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
-        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..options.len + 2usize])
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, body)
         var group: widget.Semantics = zero
         group.role = 2u8
         group.label = label
