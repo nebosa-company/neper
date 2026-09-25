@@ -449,6 +449,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if !found { os.exit(53i32) }
+    // (D1284) Pasted text: two rows of three and two cells (CRLF, a trailing LF),
+    // a quoted cell holding a tab and a doubled quote, and an empty cell.
+    let pasted = "a\tb\tc\r\n\"x\ty \"\"q\"\"\"\t\n"
+    let (paste_rows, paste_columns) = collection.grid_paste_size(pasted)
+    if paste_rows != 2usize || paste_columns != 3usize { os.exit(134i32) }
+    let (paste_room, paste_room_error) = mem.alloc[u8](a, 32usize)
+    if paste_room_error != ok { os.exit(135i32) }
+    let (first_cell, has_first_cell) = collection.grid_paste_cell(pasted, 0usize, 1usize, paste_room)
+    if !has_first_cell || !mem.eq[u8](first_cell, "b") { os.exit(136i32) }
+    let (quoted_cell, has_quoted_cell) = collection.grid_paste_cell(pasted, 1usize, 0usize, paste_room)
+    if !has_quoted_cell || !mem.eq[u8](quoted_cell, "x\ty \"q\"") { os.exit(137i32) }
+    let (empty_cell, has_empty_cell) = collection.grid_paste_cell(pasted, 1usize, 1usize, paste_room)
+    let (_, has_missing_cell) = collection.grid_paste_cell(pasted, 2usize, 0usize, paste_room)
+    if !has_empty_cell || empty_cell.len != 0usize || has_missing_cell { os.exit(138i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(54i32) }
     try io.print("ui collections6 v2 ok\n")
     ret ok

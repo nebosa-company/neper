@@ -2127,6 +2127,96 @@ type GridState = struct { row: usize, column: usize, anchor_row: usize, anchor_c
 type GridEventKind = enum u8 { Move, Extend, Edit, Replace, Type, Commit, Cancel, Toggle, Open, Menu, Paste, Clear, Undo, FillDown }
 type GridEvent = struct { kind: GridEventKind, row: usize, column: usize, next: GridState, text: str }
 
+// (D1284, docs/ux/components/DataGrid, paste) Pasted text as the grid reads it:
+// rows end at LF or CRLF (a trailing one ends nothing), cells split at tabs, and
+// a cell that starts with a quote runs to its closing quote -- holding tabs and
+// line ends -- with a doubled quote standing for one. How many rows and, at
+// most, columns the text holds.
+fn grid_paste_size(text: str) -> (usize, usize) {
+    var rows = 0usize
+    var widest = 0usize
+    var at = 0usize
+    while at < text.len {
+        var cells = 0usize
+        var done = false
+        while !done {
+            let (_, next, row_end) = paste_cell_span(text, at)
+            cells += 1usize
+            at = next
+            done = row_end || at >= text.len
+        }
+        rows += 1usize
+        if cells > widest { widest = cells }
+    }
+    ret (rows, widest)
+}
+
+// (D1284) The text of the pasted cell at `at_row` and `at_column`, unquoted into
+// `out`; false when the text has no such cell.
+fn grid_paste_cell(text: str, at_row: usize, at_column: usize, out: []u8) -> (str, bool) {
+    var r = 0usize
+    var c = 0usize
+    var at = 0usize
+    while at < text.len {
+        let (span, next, row_end) = paste_cell_span(text, at)
+        if r == at_row && c == at_column { ret (unquote_cell(span, out), true) }
+        at = next
+        c += 1usize
+        if row_end {
+            r += 1usize
+            c = 0usize
+        }
+    }
+    ret ("", false)
+}
+
+// A cell's raw span from `at`: the span, where the next cell starts, and whether
+// a row ended with it.
+fn paste_cell_span(text: str, at: usize) -> (str, usize, bool) {
+    var i = at
+    if i < text.len && text[i] == 34u8 {
+        i += 1usize
+        while i < text.len {
+            if text[i] == 34u8 {
+                if i + 1usize < text.len && text[i + 1usize] == 34u8 {
+                    i += 2usize
+                    continue
+                }
+                i += 1usize
+                break
+            }
+            i += 1usize
+        }
+    }
+    while i < text.len && text[i] != 9u8 && text[i] != 10u8 && text[i] != 13u8 { i += 1usize }
+    let span = text[at..i]
+    if i >= text.len { ret (span, i, true) }
+    if text[i] == 9u8 { ret (span, i + 1usize, false) }
+    if text[i] == 13u8 && i + 1usize < text.len && text[i + 1usize] == 10u8 { ret (span, i + 2usize, true) }
+    ret (span, i + 1usize, true)
+}
+
+fn unquote_cell(span: str, out: []u8) -> str {
+    if span.len < 2usize || span[0usize] != 34u8 { ret span }
+    var n = 0usize
+    var i = 1usize
+    while i < span.len && n < out.len {
+        if span[i] == 34u8 {
+            if i + 1usize < span.len && span[i + 1usize] == 34u8 {
+                out[n] = 34u8
+                n += 1usize
+                i += 2usize
+                continue
+            }
+            break
+        }
+        out[n] = span[i]
+        n += 1usize
+        i += 1usize
+    }
+    ret out[0usize..n]
+}
+
 // An event fired, then the focus to the element keyed `to.key` (a tapped cell
 // takes the grid's focus with it).
 type GridFire = struct { event: GridEvent, change: widget.Change[GridEvent], to: control.FocusTo }
@@ -2647,7 +2737,9 @@ fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
 // status bar, 12 in, says the error count in `error` after an 18 `error` icon
 // and, for a range, "N cells selected" in `body-medium` `on-surface-variant`.
 // Every change reaches `change` as a `GridEvent` carrying the next state.
-// ponytail: no clipboard parsing and mutation, cross-fade, or touch sheet.
+// (D1284) `grid_paste_size` and `grid_paste_cell` read a Paste's text.
+// ponytail: the model's mutation and undo are the caller's; no cross-fade or
+// touch sheet.
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
     var row_extent = extent
