@@ -3935,12 +3935,23 @@ type EditorGroup = struct { documents: []const Document, current: usize, recent:
 // `group`, split the active group, reopen the last closed document, open a
 // recent one, follow crumb `index`, open the document switcher, or open the
 // group's actions menu.
-type WorkspaceEventKind = enum u8 { Pick, Close, Move, Split, Reopen, OpenRecent, Crumb, Switcher, GroupMenu }
-type WorkspaceEvent = struct { kind: WorkspaceEventKind, group: usize, index: usize, move: DocumentMove }
+type WorkspaceEventKind = enum u8 { Pick, Close, Move, Split, Reopen, OpenRecent, Crumb, Switcher, GroupMenu, Resize }
+// (D1273) `size` is a Resize's new size of `group` along the axis.
+type WorkspaceEvent = struct { kind: WorkspaceEventKind, group: usize, index: usize, move: DocumentMove, size: f32 }
 
 // The workspace's layout: the active group, the axis the groups divide
 // (Horizontal: side by side), and the compact form.
-type WorkspaceOptions = struct { active: usize, axis: ui_layout.Axis, compact: bool }
+// (D1273) `sizes` holds each group's size along the axis (the last takes the
+// rest); with `resizable` a sash between groups reports `Resize` events.
+type WorkspaceOptions = struct { active: usize, axis: ui_layout.Axis, compact: bool, sizes: []const f32, resizable: bool }
+
+// (D1273) A group sash's report, as a workspace event.
+type GroupResize = struct { group: usize, change: widget.Change[WorkspaceEvent] }
+
+fn group_resize_fire(ctx: *void, size: f32) -> err {
+    let r = mem.cast[*GroupResize](ctx)
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: .Resize, group: r.group, index: 0usize, move: zero, size: size })
+}
 
 fn workspace_options() -> WorkspaceOptions {
     var out: WorkspaceOptions = zero
@@ -3952,17 +3963,17 @@ type GroupRelay = struct { kind: WorkspaceEventKind, group: usize, index: usize,
 
 fn relay_index_fire(ctx: *void, index: usize) -> err {
     let r = mem.cast[*GroupRelay](ctx)
-    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: index, move: zero })
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: index, move: zero, size: 0.0 })
 }
 
 fn relay_move_fire(ctx: *void, moved: DocumentMove) -> err {
     let r = mem.cast[*GroupRelay](ctx)
-    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: .Move, group: r.group, index: moved.from, move: moved })
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: .Move, group: r.group, index: moved.from, move: moved, size: 0.0 })
 }
 
 fn relay_fire(ctx: *void) -> err {
     let r = mem.cast[*GroupRelay](ctx)
-    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: r.index, move: zero })
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: r.index, move: zero, size: 0.0 })
 }
 
 fn relay(a: *mem.Arena, kind: WorkspaceEventKind, group: usize, index: usize, change: widget.Change[WorkspaceEvent]) -> (*GroupRelay, err) {
@@ -4052,8 +4063,9 @@ fn location_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, crumbs:
 // switcher. Every press and key is a `WorkspaceEvent` for the caller to apply.
 // A group in the tree named `label`, each group a group named by its current
 // document.
-// ponytail: groups share the axis equally (no group sashes, no 2 x 2 grid, no
-// drag between groups); the switcher itself is the caller's (window_switcher);
+// (D1273) With `sizes` the groups take the caller's sizes, and `resizable` puts
+// a sash between them.
+// ponytail: no 2 x 2 grid and no drag between groups; the switcher itself is the caller's (window_switcher);
 // no restore hooks beyond the caller's own model; macOS/Web key maps not done.
 fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, groups: []const EditorGroup, views: []const widget.Node, options: WorkspaceOptions, change: widget.Change[WorkspaceEvent], width: f32, height: f32) -> (widget.Node, err) {
     if views.len != groups.len { ret (zero, TooLarge) }
@@ -4139,7 +4151,8 @@ fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control
         single[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, ground, column[0usize..2usize])
         ret (widget.semantics(key, sem, style.defaults(), single[0usize..1usize]), ok)
     }
-    // The groups along the axis, equal shares between 1px lines.
+    // The groups along the axis, equal shares between 1px lines; (D1273) or the
+    // caller's `sizes`, the last group taking what is left.
     let n_groups = groups.len
     let across = options.axis == .Horizontal
     var share_w = width
@@ -4149,6 +4162,19 @@ fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control
     } else {
         share_h = (height - f32(n_groups - 1usize)) / f32(n_groups)
     }
+    let sized = options.sizes.len == n_groups && n_groups > 1usize
+    var span = height
+    if across { span = width }
+    let resizing = sized && options.resizable && widget.change_set[WorkspaceEvent](change.invoke)
+    // Between groups stands a 1px line, or the sash's hit strip (8, 24 on touch).
+    var between: f32 = 1.0
+    if resizing {
+        between = 8.0
+        if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { between = 24.0 }
+    }
+    var rest = span - between * f32(n_groups - 1usize)
+    let (resizes, resizes_error) = mem.alloc[GroupResize](a, n_groups)
+    if resizes_error != ok { ret (zero, TooLarge) }
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * n_groups)
     if cells_error != ok { ret (zero, TooLarge) }
     var count = 0usize
@@ -4156,7 +4182,14 @@ fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control
     while g < n_groups {
         let group = groups[g]
         let base = key + 1u64 + 200u64 * u64(g)
-        if g > 0usize {
+        if sized {
+            var own = options.sizes[g]
+            if g + 1usize == n_groups { own = rest }
+            if own < 0.0 { own = 0.0 }
+            if g + 1usize < n_groups { rest -= own }
+            if across { share_w = own } else { share_h = own }
+        }
+        if g > 0usize && !resizing {
             var line = style.defaults()
             line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
             if across {
@@ -4278,6 +4311,23 @@ fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control
         group_sem.role = 2u8
         if group.current < group.documents.len { group_sem.label = group.documents[group.current].title }
         cells[count] = widget.semantics(base, group_sem, style.defaults(), named[0usize..1usize])
+        // (D1273) A resizable group but the last carries the ResizablePane sash on
+        // its end edge (keyed `base + 196`), at least 120 and leaving 120 for each
+        // group after it.
+        if resizing && g + 1usize < n_groups {
+            resizes[g] = GroupResize { group: g, change: change }
+            var own = share_h
+            if across { own = share_w }
+            var high = span - (120.0 + between) * f32(n_groups - 1usize - g)
+            var k = 0usize
+            while k < g {
+                high -= options.sizes[k]
+                k += 1usize
+            }
+            let (sashed, sashed_error) = control.pane_with_reserve(a, base + 195u64, t, "Group size", options.axis, own, 120.0, control.max_zero(high), 0u64, 0.0, widget.Change[f32] { ctx: mem.cast[*void](&resizes[g]), invoke: group_resize_fire }, cells[count], false)
+            if sashed_error != ok { ret (zero, sashed_error) }
+            cells[count] = sashed
+        }
         count += 1usize
         g += 1usize
     }

@@ -190,6 +190,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !tap_key(&harness, &runtime, 2901u64) || s.last.kind != .Switcher { os.exit(28i32) }
     // Empty: the Open recent button.
     if testing.by_label(&harness, "Open recent").count == 0usize || !tap_key(&harness, &runtime, 3900u64) || s.last.kind != .OpenRecent { os.exit(29i32) }
+    // (D1273) Groups sized 200 and the rest of 601: the first is 200 wide and the
+    // second 400; Right on the first group's sash asks for 208.
+    var group_sizes: [2]f32 = zero
+    group_sizes[0usize] = 200.0
+    var sized_options = navigation.workspace_options()
+    sized_options.sizes = group_sizes[..]
+    sized_options.resizable = true
+    let sized_change = widget.Change[navigation.WorkspaceEvent] { ctx: mem.cast[*void](s), invoke: on_event }
+    f = mem.arena_from(frame_storage)
+    let (sized_views, sized_views_error) = mem.alloc[widget.Node](&f, 2usize)
+    if sized_views_error != ok { os.exit(31i32) }
+    sized_views[0usize] = blank(10.0, 10.0)
+    sized_views[1usize] = blank(10.0, 10.0)
+    let (sized_space, sized_space_error) = navigation.multi_document_workspace_of(&f, 4000u64, &theme, "Sized", s.groups[0usize..2usize], sized_views[0usize..2usize], sized_options, sized_change, 601.0, 200.0)
+    if sized_space_error != ok || testing.pump(&harness, sized_space, time.Instant { nanos: 6000000000i64 }) != ok { os.exit(32i32) }
+    let (first_group, has_first_group) = bounds(&harness, &runtime, 4001u64)
+    let (second_group, has_second_group) = bounds(&harness, &runtime, 4201u64)
+    if !has_first_group || !has_second_group || !near(first_group.width, 200.0) || !near(second_group.width, 393.0) { os.exit(33i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 4001u64 + 195u64 + 2u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok || s.last.kind != .Resize || s.last.group != 0usize || !near(s.last.size, 208.0) { os.exit(34i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(30i32) }
     try io.print("ui containers5 v2 ok\n")
     ret ok
