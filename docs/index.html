@@ -150,6 +150,7 @@
     .benefit b { display: inline-flex; margin-bottom: var(--space-8); padding: var(--space-1) var(--space-2); border-radius: var(--radius-xs); background: var(--secondary-container); color: var(--on-secondary-container); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
     .benefit h3 { margin: 0 0 var(--space-2); font: 600 16px/24px var(--font-sans); letter-spacing: .15px; }
     .benefit p { margin: 0; color: var(--muted); }
+    .switch-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: var(--space-8); }
 
     .library-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
     .library-item { padding: var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); }
@@ -413,7 +414,12 @@ Hello, Neper</code></pre>
       <section id="llm">
         <div class="eyebrow">04 // the complete llm stack</div>
         <h2>Optimized for every step an LLM takes.</h2>
-        <p class="section-intro">“LLM-friendly” is not syntax sugar. Neper reduces uncertainty and token cost across generation, retrieval, editing, compilation, repair, testing, and final verification.</p>
+        <p class="section-intro">“LLM-friendly” is not syntax sugar. Neper reduces uncertainty and token cost across generation, retrieval, editing, compilation, repair, testing, and final verification. The 26 guarantees below explain exactly how.</p>
+        <div class="benefits switch-grid" aria-label="Why switch from Go or TypeScript to Neper">
+          <article class="benefit"><b>[ Go ]</b><h3>Fast builds, but a runtime-centered contract.</h3><p>Go is an excellent compiled default, yet garbage collection, external language-server state, and separate build, test, and provenance surfaces leave agents coordinating several sources of truth.</p></article>
+          <article class="benefit"><b>[ TypeScript ]</b><h3>Excellent tooling, but many delivery layers.</h3><p>TypeScript adds strong language services to JavaScript, then depends on a runtime, transpilation, package scripts, configuration, and a large dependency graph that make native proof harder.</p></article>
+          <article class="benefit"><b>[ Neper ]</b><h3>One deterministic contract from edit to artifact.</h3><p>Neper combines compact explicit semantics, bounded compiler context, transactional edits, causal diagnostics, machine-applicable repairs, hermetic native builds, and content-addressed verification.</p></article>
+        </div>
         <div class="proof-callout">
           <strong>From prompt to proof.</strong>
           <p>Every source snapshot, semantic edit, dependency, unsafe boundary, test, and native artifact is connected by verifiable hashes.</p>
