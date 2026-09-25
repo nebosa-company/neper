@@ -460,8 +460,18 @@ fn live_code(live: Live) -> u8 {
     ret 0u8
 }
 
+fn relation_bits(r: Relations) -> u8 {
+    var bits = 0u8
+    if r.labelled_by.slot != 0u32 || r.labelled_by.generation != 0u32 { bits = bits | 1u8 }
+    if r.described_by.slot != 0u32 || r.described_by.generation != 0u32 { bits = bits | 2u8 }
+    if r.error_by.slot != 0u32 || r.error_by.generation != 0u32 { bits = bits | 4u8 }
+    if r.controls.slot != 0u32 || r.controls.generation != 0u32 { bits = bits | 8u8 }
+    if r.active.slot != 0u32 || r.active.generation != 0u32 { bits = bits | 16u8 }
+    ret bits
+}
+
 fn flat_node(n: *const Node) -> os.AccessibleNode {
-    ret os.AccessibleNode { id: n.id.slot, parent: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), sort: sort_code(n.sort), live: live_code(n.live), row: n.position.row, column: n.position.column, row_count: n.position.row_count, column_count: n.position.column_count, level: n.level, selection_start: n.selection_start, selection_end: n.selection_end, x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
+    ret os.AccessibleNode { id: n.id.slot, parent: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), sort: sort_code(n.sort), live: live_code(n.live), row: n.position.row, column: n.position.column, row_count: n.position.row_count, column_count: n.position.column_count, level: n.level, selection_start: n.selection_start, selection_end: n.selection_end, labelled_by: n.relations.labelled_by.slot, described_by: n.relations.described_by.slot, error_by: n.relations.error_by.slot, controls: n.relations.controls.slot, active: n.relations.active.slot, relation_flags: relation_bits(n.relations), x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
 }
 
 // The tree flattened into the bridge's records and handed to the host: every node
