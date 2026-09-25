@@ -3727,7 +3727,8 @@ fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: Doc
 // tree.
 // (D1298) A floating panel drags by its header (`Drag`, which `dock_apply` applies).
 // ponytail: tearing a docked panel off is the caller's (a Move event through
-// dock_apply); no drag ghost, dock guide, drop preview or sash double-click reset.
+// dock_apply); no drag ghost, dock guide or drop preview (its sashes restore on a
+// double press through D1212).
 fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: DockModel, placements: []const DockPlacement, contents: []const widget.Node, centre: widget.Node, change: widget.Change[DockEvent], width: f32, height: f32) -> (widget.Node, err) {
     if contents.len != placements.len { ret (zero, TooLarge) }
     let (main_child, main_child_error) = mem.alloc[widget.Node](a, 1usize)
@@ -4071,7 +4072,8 @@ type WorkspaceEvent = struct { kind: WorkspaceEventKind, group: usize, index: us
 // (Horizontal: side by side), and the compact form.
 // (D1273) `sizes` holds each group's size along the axis (the last takes the
 // rest); with `resizable` a sash between groups reports `Resize` events.
-type WorkspaceOptions = struct { active: usize, axis: ui_layout.Axis, compact: bool, sizes: []const f32, resizable: bool }
+// (D1299) `grid` sets four groups two by two.
+type WorkspaceOptions = struct { active: usize, axis: ui_layout.Axis, compact: bool, sizes: []const f32, resizable: bool, grid: bool }
 
 // (D1273) A group sash's report, as a workspace event.
 type GroupResize = struct { group: usize, change: widget.Change[WorkspaceEvent] }
@@ -4193,7 +4195,8 @@ fn location_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, crumbs:
 // document.
 // (D1273) With `sizes` the groups take the caller's sizes, and `resizable` puts
 // a sash between them.
-// ponytail: no 2 x 2 grid and no drag between groups; the switcher itself is the caller's (window_switcher);
+// (D1299) With `grid` four groups stand two by two.
+// ponytail: no drag between groups; the switcher itself is the caller's (window_switcher);
 // no restore hooks beyond the caller's own model; macOS/Web key maps not done.
 fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, groups: []const EditorGroup, views: []const widget.Node, options: WorkspaceOptions, change: widget.Change[WorkspaceEvent], width: f32, height: f32) -> (widget.Node, err) {
     if views.len != groups.len { ret (zero, TooLarge) }
@@ -4290,7 +4293,13 @@ fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control
     } else {
         share_h = (height - f32(n_groups - 1usize)) / f32(n_groups)
     }
-    let sized = options.sizes.len == n_groups && n_groups > 1usize
+    // (D1299) Four groups in a grid take a quarter each between 1px lines.
+    let gridded = options.grid && n_groups == 4usize
+    if gridded {
+        share_w = (width - 1.0) / 2.0
+        share_h = (height - 1.0) / 2.0
+    }
+    let sized = !gridded && options.sizes.len == n_groups && n_groups > 1usize
     var span = height
     if across { span = width }
     let resizing = sized && options.resizable && widget.change_set[WorkspaceEvent](change.invoke)
@@ -4317,7 +4326,7 @@ fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control
             if g + 1usize < n_groups { rest -= own }
             if across { share_w = own } else { share_h = own }
         }
-        if g > 0usize && !resizing {
+        if g > 0usize && !resizing && !gridded {
             var line = style.defaults()
             line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
             if across {
@@ -4458,6 +4467,32 @@ fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control
         }
         count += 1usize
         g += 1usize
+    }
+    if gridded {
+        // Two rows of two, a 1px line between the groups of a row and between rows.
+        let rule = style.color(t.tokens, .OutlineVariant)
+        let (grid_parts, grid_parts_error) = mem.alloc[widget.Node](a, 9usize)
+        if grid_parts_error != ok { ret (zero, TooLarge) }
+        var vertical = control.sized_style(1.0, share_h)
+        vertical.background = paint.Brush { Solid: rule }
+        var horizontal = control.sized_style(width, 1.0)
+        horizontal.background = paint.Brush { Solid: rule }
+        grid_parts[0usize] = cells[0usize]
+        grid_parts[1usize] = widget.box(0u64, vertical, zero)
+        grid_parts[2usize] = cells[1usize]
+        grid_parts[3usize] = cells[2usize]
+        grid_parts[4usize] = widget.box(0u64, vertical, zero)
+        grid_parts[5usize] = cells[3usize]
+        grid_parts[6usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), grid_parts[0usize..3usize])
+        grid_parts[7usize] = widget.box(0u64, horizontal, zero)
+        grid_parts[8usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), grid_parts[3usize..6usize])
+        let (rows_parts, rows_parts_error) = mem.alloc[widget.Node](a, 3usize)
+        if rows_parts_error != ok { ret (zero, TooLarge) }
+        rows_parts[0usize] = grid_parts[6usize]
+        rows_parts[1usize] = grid_parts[7usize]
+        rows_parts[2usize] = grid_parts[8usize]
+        single[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, ground, rows_parts[0usize..3usize])
+        ret (widget.semantics(key, sem, style.defaults(), single[0usize..1usize]), ok)
     }
     single[0usize] = widget.flex(0u64, ui_layout.Flex { axis: options.axis, main: .Start, cross: .Start, gap: 0.0 }, ground, cells[0usize..count])
     ret (widget.semantics(key, sem, style.defaults(), single[0usize..1usize]), ok)
