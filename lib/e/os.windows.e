@@ -3077,7 +3077,7 @@ type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focus
 type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
-type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
+type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
 
 // WNDCLASSEXW, MSG, RECT and BITMAPINFOHEADER as user32 and gdi32 lay them out.
 type WindowClass = struct { size: u32, style: u32, procedure: fn(usize, u32, usize, isize) -> isize, class_extra: i32, window_extra: i32, instance: usize, icon: usize, cursor: usize, background: usize, menu_name: usize, class_name: *const u16, small_icon: usize }
@@ -3171,6 +3171,9 @@ extern fn raw_key_state(key: i32) -> i16
 
 @import("user32.dll", "GetSystemMetrics")
 extern fn raw_system_metrics(index: i32) -> i32
+
+@import("user32.dll", "SystemParametersInfoW")
+extern fn raw_system_parameters_info(action: u32, parameter: u32, value: *WindowRect, flags: u32) -> i32
 
 @import("user32.dll", "OpenClipboard")
 extern fn raw_open_clipboard(owner: usize) -> i32
@@ -3563,7 +3566,11 @@ fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
     if limit == 0usize { ret (nothing, Unsupported) }
     let (found, found_error) = mem.alloc[MonitorInfo](a, 1usize)
     if found_error != ok { ret (nothing, OutOfMemory) }
-    found[0usize] = MonitorInfo { x: 0i32, y: 0i32, width: u32(raw_system_metrics(0i32)), height: u32(raw_system_metrics(1i32)), scale_percent: raw_dpi_for_system() * 100u32 / 96u32, primary: true }
+    let width = u32(raw_system_metrics(0i32))
+    let height = u32(raw_system_metrics(1i32))
+    var work = WindowRect { left: 0i32, top: 0i32, right: i32(width), bottom: i32(height) }
+    let has_work = raw_system_parameters_info(48u32, 0u32, &work, 0u32)
+    found[0usize] = MonitorInfo { x: 0i32, y: 0i32, width: width, height: height, work_x: work.left, work_y: work.top, work_width: u32(work.right - work.left), work_height: u32(work.bottom - work.top), scale_percent: raw_dpi_for_system() * 100u32 / 96u32, primary: true }
     ret (found[0usize..1usize], ok)
 }
 

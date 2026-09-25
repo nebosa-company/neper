@@ -22847,3 +22847,13 @@ before mapping, leaving placement and decoration policy with the window manager.
 `os_window` opens every mode and `ui_window` holds the higher-level path on
 Windows and Linux. Transparency remains separate because it needs an alpha-capable
 native surface and compositor path. The reviewed surface is unchanged.
+
+## D1118 — Screen work areas come from the desktop shell
+
+The host monitor record carries both physical bounds and the shell work area.
+Win32 reads `SPI_GETWORKAREA`; X11 reads `_NET_WORKAREA` for
+`_NET_CURRENT_DESKTOP`, falling back to the root bounds when no EWMH window
+manager publishes it. The UI converts both rectangles through the same scale.
+
+`ui_host` holds a positive work area contained by its screen on Windows and
+Linux. The change is host metadata only; reviewed surfaces are unchanged.
