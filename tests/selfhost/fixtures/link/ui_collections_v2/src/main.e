@@ -715,6 +715,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (thumb_pic, has_thumb_pic) = bounds(&harness, &runtime, 996u64)
     let (avatar_pic, has_avatar_pic) = bounds(&harness, &runtime, 997u64)
     if !has_thumb_row || !has_thumb_pic || !has_avatar_pic || !near(thumb_row.height, 72.0) || !near(thumb_pic.x, thumb_row.x + 16.0) || !near(avatar_pic.width, 40.0) { os.exit(163i32) }
+    // (D1315) Anchored at the end with the rows past the second pending and a
+    // loading cap: the cap stands at the viewport's foot and the last row above
+    // it is a placeholder (no text); failed, the cap's Retry presses.
+    var cap_step = 0usize
+    while cap_step < 2usize {
+        var tail = collection.virtual_list_options()
+        tail.width = 300.0
+        tail.height = 144.0
+        tail.has_pending = true
+        tail.pending_from = 2usize
+        tail.anchored = true
+        tail.cap = .Loading
+        tail.cap_text = "Loading more numbers"
+        if cap_step == 1usize {
+            tail.cap = .Failed
+            tail.cap_text = "Couldn't load more"
+            tail.retry = s.press
+        }
+        var no_ctx: *void = zero
+        f = mem.arena_from(frame_storage)
+        let (tailed, tailed_error) = collection.virtual_list_of(&f, 7000u64, &theme, "Tail", collection.RowSource { ctx: no_ctx, count: number_count, key: number_key, item: number_item }, tail)
+        let (tail_page, tail_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if tailed_error != ok || tail_page_error != ok { os.exit(184i32) }
+        tail_page[0usize] = tailed
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 300.0), tail_page[0usize..1usize]), time.Instant { nanos: 70000000000i64 + i64(cap_step) }) != ok { os.exit(185i32) }
+        let (view_box, has_view_box) = bounds(&harness, &runtime, 7000u64)
+        let (cap_box, has_cap_box) = bounds(&harness, &runtime, 7000u64 ^ hash.fnv1a64("end-cap"))
+        let (last_row, has_last_row) = bounds(&harness, &runtime, 4099u64)
+        if !has_view_box || !has_cap_box || !has_last_row { os.exit(186i32) }
+        if !(cap_box.y + cap_box.height <= view_box.y + view_box.height + 0.5) || !(cap_box.y + cap_box.height >= view_box.y + view_box.height - 0.5) || !(last_row.y < cap_box.y) { os.exit(187i32) }
+        if testing.by_text(&harness, "Number").count != 0usize { os.exit(188i32) }
+        if cap_step == 1usize {
+            let before_retry = s.presses
+            if !tap_key(&harness, &runtime, 7000u64 ^ hash.fnv1a64("end-retry")) || s.presses != before_retry + 1usize { os.exit(189i32) }
+        }
+        cap_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok

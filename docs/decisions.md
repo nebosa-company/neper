@@ -25376,3 +25376,30 @@ commented, blank-lined text into HOME and PATH. It names line 2 of
 "A=1\noops". Only the Text segment fires the switch, and text mode shows
 the area and its error without the rows. This passes on Windows and Linux,
 and `ui_property` still passes on both.
+
+## D1315 — Virtual lists gain placeholders, an end cap and an anchored mode
+
+`VirtualListOptions` gains the VirtualList spec's placeholder rows, end cap
+and reverse form.
+
+- **Placeholders.** With `has_pending`, rows from `pending_from` show as
+  placeholders (`placeholder_row`): two skeleton lines 12 and 10 tall, at 70%
+  and 30% of the text's width, 16 in, keyed by the source and out of the tree.
+- **End cap.** `cap` (`EndCap`: Loading, Count, Failed) is a row of the
+  list's height after the last (`end_cap_row`, keyed `key ^
+  fnv1a64("end-cap")`), a polite status in `body-medium`
+  `on-surface-variant`, centred. Loading leads with a 24 ring, Count is
+  `cap_text` alone, and Failed adds a Retry text button (`key ^
+  fnv1a64("end-retry")`) firing `retry`. The virtual count includes it.
+- **Anchored.** `anchored` keeps the list at its end: `offset` and `change`
+  measure up from the end (`AnchorChange`), so rows added at the bottom leave
+  a zero offset pinned there.
+
+Paging stays the caller's, from the offset it keeps. Sticky headers are
+still to come.
+
+`ui_collections_v2` anchors a hundred rows with all but two pending. With a
+loading cap, the cap stands at the viewport's foot with the last row above
+it and no row text shown. With a failed cap, Retry presses. This passes on
+Windows and Linux, and `ui_algorithms` and `ui_collection` still pass on
+both.
