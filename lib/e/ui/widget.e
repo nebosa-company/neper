@@ -4666,14 +4666,14 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             let (accessed, access_error) = menu_bar_access_key(s, k.key.logical)
             if accessed || access_error != ok { ret access_error }
         }
+        let (taken, key_error) = dispatch_key(s, k)
+        if taken || key_error != ok { ret key_error }
         if s.has_focus {
             let f = &s.elements[usize(s.focus)]
             if f.live && f.kind == REGION_TAG && f.enabled && (f.gestures & GESTURE_TAP) != 0u8 && (code == 13u32 || code == 32u32) {
                 ret menu_tap(s, usize(s.focus), geometry.Point { x: f.bounds.x + f.bounds.width * 0.5, y: f.bounds.y + f.bounds.height * 0.5 })
             }
         }
-        let (taken, key_error) = dispatch_key(s, k)
-        if taken || key_error != ok { ret key_error }
         if s.has_focus && s.elements[usize(s.focus)].has_action {
             let action = s.elements[usize(s.focus)].action
             ret action.invoke(action.ctx, event)

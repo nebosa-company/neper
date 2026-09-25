@@ -940,8 +940,8 @@ type CardVariant = enum u8 { Elevated, Filled, Outlined }
 // A card's options: its treatment, its width (0: its content's), the dense grid's
 // padding, whether it is enabled, selected or loading, the loading media height
 // and shimmer phase, the title and supporting text it is named and described by,
-// and the action a press on the whole card fires (none: a static card).
-type CardOptions = struct { variant: CardVariant, width: f32, dense: bool, enabled: bool, selected: bool, dragged: bool, loading: bool, phase: f32, media_height: f32, title: str, description: str, action: *const widget.Submit }
+// the actions that open and select the card (both absent: a static card).
+type CardOptions = struct { variant: CardVariant, width: f32, dense: bool, enabled: bool, selected: bool, dragged: bool, loading: bool, phase: f32, media_height: f32, title: str, description: str, action: *const widget.Submit, select: *const widget.Submit }
 
 fn card_options() -> CardOptions {
     var out: CardOptions = zero
@@ -962,17 +962,37 @@ fn card_options() -> CardOptions {
 // content at 38%, no shadow, not focusable. Loading replaces the content with
 // synchronised media, title (60%) and supporting-line (90%) skeletons, and marks
 // the non-interactive Card busy; the caller owns the 300ms delay and phase.
-// ponytail: no media, header or actions slots (the caller composes the column).
-// Dragged omits the 1.5-degree tilt and 102%
-// scale until nodes have a visual transform independent of layout.
+// ponytail: no long-press or modifier range selection, and child hover does not
+// suppress the parent layer. Dragged omits the 1.5-degree tilt and 102% scale
+// until nodes have a visual transform independent of layout.
 fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, children: []const widget.Node) -> (widget.Node, err) {
     let (made, made_error) = card_render(a, key, t, options, false, children)
     ret (made, made_error)
 }
 
+type CardCommands = struct { open: *const widget.Submit, select: *const widget.Submit }
+
+fn card_semantic_action(ctx: *void, action: u32) -> err {
+    let commands = mem.cast[*CardCommands](ctx)
+    if action == accessibility.ACTION_SELECT && mem.address_of(commands.select) != 0usize { ret widget.fire_submit(*commands.select) }
+    if action == accessibility.ACTION_PRESS && mem.address_of(commands.open) != 0usize { ret widget.fire_submit(*commands.open) }
+    ret ok
+}
+
+fn card_selection_scope(a: *mem.Arena, selection: *const widget.Submit, card_node: widget.Node) -> (widget.Node, err) {
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 1usize)
+    let (children, children_error) = mem.alloc[widget.Node](a, 1usize)
+    if shortcuts_error != ok || children_error != ok { ret (zero, TooLarge) }
+    shortcuts[0usize] = widget.Shortcut { key: 32u32, modifiers: zero, action: *selection }
+    children[0usize] = card_node
+    ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), children), ok)
+}
+
 fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, flush: bool, children: []const widget.Node) -> (widget.Node, err) {
-    let pressed = mem.address_of(options.action) != 0usize && !options.loading
-    let state = control_state(t, key, options.enabled && pressed, options.selected)
+    let opens = mem.address_of(options.action) != 0usize
+    let can_select = mem.address_of(options.select) != 0usize
+    let interactive = (opens || can_select) && !options.loading
+    let state = control_state(t, key, options.enabled && interactive, options.selected)
     var ground = style.color(t.tokens, .SurfaceContainerLow)
     var raised = 1usize
     if options.variant == .Filled {
@@ -986,7 +1006,7 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
     if options.dragged && options.enabled {
         ground = style.layer(ground, style.color(t.tokens, .OnSurface), t.tokens.states.dragged)
         raised = 4usize
-    } else if pressed && options.enabled {
+    } else if interactive && options.enabled {
         ground = style.layer(ground, style.color(t.tokens, .OnSurface), state_opacity(t, state))
         if state.hovered { raised += 1usize }
     }
@@ -1060,7 +1080,7 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
         parts[1usize] = widget.positioned(0u64, options.width - 8.0 - 24.0 - pad_px, 8.0 - pad_px, style.defaults(), parts[2usize..3usize])
         count = 2usize
     }
-    let (holder, holder_error) = mem.alloc[widget.Node](a, 1usize)
+    let (holder, holder_error) = mem.alloc[widget.Node](a, 2usize)
     if holder_error != ok { ret (zero, TooLarge) }
     var sem: widget.Semantics = zero
     sem.role = 2u8
@@ -1069,11 +1089,28 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
     if options.selected { sem.states = accessibility.STATE_SELECTED }
     if options.loading { sem.states = sem.states | accessibility.STATE_BUSY }
     if !options.enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
-    if pressed {
+    if interactive {
+        let (commands, commands_error) = mem.alloc[CardCommands](a, 1usize)
+        if commands_error != ok { ret (zero, TooLarge) }
+        commands[0usize] = CardCommands { open: options.action, select: options.select }
+        var primary = options.select
+        if opens { primary = options.action }
         sem.role = 3u8
-        sem.actions = accessibility.ACTION_PRESS
-        holder[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](options.action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: options.enabled, focusable: options.enabled }, s, parts[0usize..count])
-        ret (widget.semantics(0u64, sem, style.defaults(), holder[0usize..1usize]), ok)
+        if opens { sem.actions = accessibility.ACTION_PRESS }
+        if can_select { sem.actions = sem.actions | accessibility.ACTION_SELECT }
+        sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](&commands[0usize]), invoke: card_semantic_action }
+        var press_children = parts[0usize..1usize]
+        if count > 1usize {
+            holder[1usize] = widget.stack(0u64, style.defaults(), parts[0usize..count])
+            press_children = holder[1usize..2usize]
+        }
+        holder[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](primary), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: options.enabled, focusable: options.enabled }, s, press_children)
+        let card_node = widget.semantics(0u64, sem, style.defaults(), holder[0usize..1usize])
+        if can_select {
+            let (scoped, scoped_error) = card_selection_scope(a, options.select, card_node)
+            ret (scoped, scoped_error)
+        }
+        ret (card_node, ok)
     }
     if count == 1usize {
         holder[0usize] = widget.box(0u64, s, parts[0usize..1usize])
