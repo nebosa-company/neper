@@ -453,7 +453,11 @@ type Transition = struct { enter: Effect, exit: Effect, spec: MotionSpec, reduce
 type Reduced = enum u8 { Fade, CrossFade, Instant, StaticFrame }
 ```
 
-The named patterns below cover every `Motion:` line in `docs/ux/components`:
+The named patterns below are the core of the vocabulary. The full motion table,
+[`animation-controls.md`](animation-controls.md), adds nine more (Ripple,
+ValueEase, Morph, Reflow, Pulse, Loop, ScrollTo, ScrollLinked and the Stagger
+modifier). With those, one row covers each motion of every control, using its
+tokens and its reduced behaviour.
 
 | Pattern | Enter | Exit | Used by (examples) |
 |---|---|---|---|
