@@ -110,7 +110,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 4u32)
     if renderer_error != ok { os.exit(3i32) }
     var renderer = r
-    let tokens = style.reference(.Light)
+    var tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 160usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 12u16, max_commands: 1024usize })
@@ -132,8 +132,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let ctx = mem.cast[*void](&stores[0usize])
     let press = widget.Submit { ctx: ctx, invoke: on_press }
     stores[0usize].press = press
-    stores[0usize].items[0usize] = navigation.Action { label: "", action: press, icon: zero, enabled: true }
-    stores[0usize].items[1usize] = navigation.Action { label: "", action: press, icon: zero, enabled: true }
+    stores[0usize].items[0usize] = navigation.Action { label: "Cancel", action: press, icon: zero, enabled: true }
+    stores[0usize].items[1usize] = navigation.Action { label: "Publish", action: press, icon: zero, enabled: true }
     stores[0usize].dial[0usize] = press
     stores[0usize].dial[1usize] = press
     stores[0usize].labels[0usize] = ""
@@ -195,6 +195,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (item, has_item) = bounds(&harness, &runtime, 32u64)
     if !has_item || !near(item.height, tokens.sizes.control_xl) || !(item.y + item.height < head.y) { os.exit(27i32) }
     if !is_color(opened, at(head.x + head.width * 0.5, head.y + head.height * 0.5), style.color(&tokens, .Primary)) { os.exit(28i32) }
+    // The ActionRow alone mirrors in RTL: logical Cancel remains key 10 but
+    // moves after Publish. The Toolbar keeps its existing physical order.
+    tokens.direction = .RightToLeft
+    let (_, rtl_error) = frame(&harness, a, &f, &theme, &stores[0usize], false)
+    if rtl_error != ok { os.exit(32i32) }
+    let (rtl_first, has_rtl_first) = bounds(&harness, &runtime, 10u64)
+    let (rtl_second, has_rtl_second) = bounds(&harness, &runtime, 11u64)
+    if !has_rtl_first || !has_rtl_second || !near(rtl_first.x - (rtl_second.x + rtl_second.width), 8.0) { os.exit(33i32) }
+    let (rtl_tool_a, has_rtl_tool_a) = bounds(&harness, &runtime, 21u64)
+    let (rtl_tool_b, has_rtl_tool_b) = bounds(&harness, &runtime, 22u64)
+    if !has_rtl_tool_a || !has_rtl_tool_b || !near(rtl_tool_b.x - (rtl_tool_a.x + rtl_tool_a.width), 4.0) { os.exit(34i32) }
     try io.print("ui actions v2 ok\n")
     ret ok
 }

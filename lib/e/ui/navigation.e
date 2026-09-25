@@ -41,21 +41,24 @@ fn action_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: 
     ret (worded, worded_error)
 }
 
-// The actions as plain buttons in a row, keyed `key + index`, `space-2` apart
-// (D944, docs/ux/components/ActionRow).
+// The actions as plain buttons in a row, keyed `key + index`, `space-2` apart;
+// right-to-left layouts mirror their physical order (D944, D1158,
+// docs/ux/components/ActionRow).
 fn action_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Action, variant: style.ControlVariant) -> (widget.Node, err) {
-    let (row, row_error) = spaced_row(a, key, t, items, variant, 8.0)
+    let (row, row_error) = spaced_row(a, key, t, items, variant, 8.0, t.tokens.direction == .RightToLeft)
     ret (row, row_error)
 }
 
-fn spaced_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Action, variant: style.ControlVariant, gap: f32) -> (widget.Node, err) {
+fn spaced_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Action, variant: style.ControlVariant, gap: f32, reverse: bool) -> (widget.Node, err) {
     let (buttons, buttons_error) = mem.alloc[widget.Node](a, items.len)
     if buttons_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < items.len {
         let (made, made_error) = action_button(a, key + u64(i), t, &items[i], variant)
         if made_error != ok { ret (zero, made_error) }
-        buttons[i] = made
+        var slot = i
+        if reverse { slot = items.len - 1usize - i }
+        buttons[slot] = made
         i += 1usize
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, style.defaults(), buttons[0usize..items.len]), ok)
@@ -353,7 +356,7 @@ fn joined(a: *mem.Arena, first: str, second: str) -> (str, err) {
 fn toolbar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const Action) -> (widget.Node, err) {
     var gap: f32 = 4.0
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { gap = 8.0 }
-    let (row, row_error) = spaced_row(a, key + 1u64, t, items, .Plain, gap)
+    let (row, row_error) = spaced_row(a, key + 1u64, t, items, .Plain, gap, false)
     if row_error != ok { ret (zero, row_error) }
     var options = control.surface_options(t)
     options.background = .SurfaceContainer
