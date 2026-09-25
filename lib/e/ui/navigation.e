@@ -2824,9 +2824,11 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // pointer-only.
 // (D1233) Each tab offers Show menu: Close, Close others, Close to the right and
 // Close saved over its unpinned tabs.
-// ponytail: no file-type icons (a pinned tab keeps its title), preview tabs,
-// dragged lift or drop line, overflow scrolling, Show all open files, Pin, Copy
-// path, Reveal or Split in the menu, or read-only mark.
+// (D1329) `document_tabs_with` adds file-type icons, the read-only mark and the
+// preview tab's name.
+// ponytail: a preview tab's title is upright (no italic face); no dragged lift or
+// drop line, overflow scrolling, Show all open files, Pin, Copy path, Reveal or
+// Split in the menu.
 // (D1233) A document strip's tab menu, kept across frames on the strip: whether
 // it is open and for which tab.
 type TabMenu = struct { open: bool, index: usize }
@@ -2926,6 +2928,25 @@ fn tab_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, documents: 
 }
 
 fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], marked: bool, active: bool) -> (widget.Node, err) {
+    var plain: DocumentTabsOptions = zero
+    let (made, made_error) = document_tabs_styled(a, key, t, label, documents, current, pick, close, move, active, plain)
+    ret (made, made_error)
+}
+
+// (D1329, docs/ux/components/DocumentTabs) A strip's per-document extras, by
+// index: `icons` a file-type glyph before each title (a pinned tab with one shows
+// the icon alone), `read_only` a 16 `visibility` mark after the title with "read
+// only" in the tab's name, and `preview` (the index plus one, 0 for none) the
+// preview tab, named so.
+type DocumentTabsOptions = struct { icons: []const control.GlyphKind, read_only: []const bool, preview: usize }
+
+// (D1329) `document_tabs` with those extras.
+fn document_tabs_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], options: DocumentTabsOptions) -> (widget.Node, err) {
+    let (made, made_error) = document_tabs_styled(a, key, t, label, documents, current, pick, close, move, false, options)
+    ret (made, made_error)
+}
+
+fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], active: bool, options: DocumentTabsOptions) -> (widget.Node, err) {
     if documents.len > 64usize { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var strip_height: f32 = 40.0
@@ -2996,6 +3017,32 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
         if parts_error != ok { ret (zero, TooLarge) }
         parts[0usize] = title_node
+        // (D1329) The file-type icon before the title (alone on a pinned tab) and
+        // the read-only mark after it.
+        let iconed = i < options.icons.len
+        let locked = i < options.read_only.len && options.read_only[i]
+        if iconed || locked {
+            let (heads, heads_error) = mem.alloc[widget.Node](a, 3usize)
+            if heads_error != ok { ret (zero, TooLarge) }
+            var head_count = 0usize
+            if iconed {
+                let (file_icon, file_icon_error) = control.icon_square(a, ink, options.icons[i], control.if_else(touch, 24.0, 18.0))
+                if file_icon_error != ok { ret (zero, file_icon_error) }
+                heads[head_count] = file_icon
+                head_count += 1usize
+            }
+            if !(iconed && d.pinned) {
+                heads[head_count] = title_node
+                head_count += 1usize
+            }
+            if locked {
+                let (lock, lock_error) = control.icon_square(a, muted, .Visibility, 16.0)
+                if lock_error != ok { ret (zero, lock_error) }
+                heads[head_count] = lock
+                head_count += 1usize
+            }
+            parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), heads[0usize..head_count])
+        }
         var part_count = 1usize
         if !d.pinned {
             // The close slot: the close glyph, or the unsaved dot at rest.
@@ -3072,6 +3119,16 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             let (pinned_name, pinned_error) = joined(a, named, ", pinned")
             if pinned_error != ok { ret (zero, pinned_error) }
             named = pinned_name
+        }
+        if locked {
+            let (locked_name, locked_error) = joined(a, named, ", read only")
+            if locked_error != ok { ret (zero, locked_error) }
+            named = locked_name
+        }
+        if options.preview == i + 1usize {
+            let (preview_name, preview_error) = joined(a, named, ", preview")
+            if preview_error != ok { ret (zero, preview_error) }
+            named = preview_name
         }
         var sem: widget.Semantics = zero
         sem.role = 19u8

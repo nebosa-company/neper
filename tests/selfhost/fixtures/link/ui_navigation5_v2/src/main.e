@@ -352,6 +352,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     f = mem.arena_from(frame_storage)
     let (tabs_shut, tabs_shut_error) = build(&f, &theme, s)
     if tabs_shut_error != ok || testing.pump(&harness, tabs_shut, time.Instant { nanos: 1320000000i64 }) != ok || testing.by_role(&harness, .Menu).count != 0usize { os.exit(64i32) }
+    // (D1329) File-type icons, a read-only mark and a preview tab: the pinned
+    // main.e shows its icon alone, notes says read only, lower.e is the preview.
+    var file_icons: [3]control.GlyphKind = zero
+    file_icons[0usize] = .Edit
+    file_icons[1usize] = .Edit
+    file_icons[2usize] = .Info
+    var locked_files: [3]bool = zero
+    locked_files[2usize] = true
+    var extras: navigation.DocumentTabsOptions = zero
+    extras.icons = file_icons[..]
+    extras.read_only = locked_files[..]
+    extras.preview = 2usize
+    f = mem.arena_from(frame_storage)
+    let (extra_strip, extra_strip_error) = navigation.document_tabs_with(&f, 5600u64, &theme, "Open files", s.documents[0usize..3usize], 1usize, zero, zero, zero, extras)
+    let (extra_page, extra_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if extra_strip_error != ok || extra_page_error != ok { os.exit(65i32) }
+    extra_page[0usize] = extra_strip
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), extra_page[0usize..1usize]), time.Instant { nanos: 9000000000i64 }) != ok { os.exit(66i32) }
+    let (extra_tree, extra_tree_error) = testing.semantics(&harness)
+    if extra_tree_error != ok { os.exit(67i32) }
+    let (_, has_locked) = find(extra_tree, .Tab, "notes, read only")
+    let (_, has_preview) = find(extra_tree, .Tab, "lower.e, unsaved changes, preview")
+    if !has_locked || !has_preview { os.exit(68i32) }
+    if testing.by_text(&harness, "main.e").count != 0usize || testing.by_text(&harness, "notes").count == 0usize { os.exit(69i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(32i32) }
     try io.print("ui navigation5 v2 ok\n")
     ret ok
