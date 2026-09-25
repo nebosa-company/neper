@@ -23077,3 +23077,13 @@ key that will hold the moved document after the caller rebuilds.
 
 `ui_navigation5_v2` holds both movement directions and payloads on Windows and
 Linux. The reviewed surface is unchanged.
+
+## D1142 — Wizard step changes focus their heading
+
+Wizard content publishes the current step name as a stable level-2 Heading.
+Successful Back and Next actions request that key for the caller's next rebuild,
+so the newly labelled heading receives programmatic focus and is announced;
+failed actions and Finish do not move focus.
+
+`ui_navigation5_v2` holds heading semantics and the Next-to-rebuild focus
+handoff on Windows and Linux. The reviewed surface is unchanged.

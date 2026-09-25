@@ -232,7 +232,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // `primary`.
     let (across, has_across) = bounds(&harness, &runtime, 6000u64)
     let (title, has_title) = find(tree, .Heading, "Setup")
-    if !has_across || !has_title || title.level != 1u8 { os.exit(21i32) }
+    let (step_title, has_step_title) = find(tree, .Heading, "Build")
+    if !has_across || !has_title || title.level != 1u8 || !has_step_title || step_title.level != 2u8 { os.exit(21i32) }
     let (account, has_account) = find(tree, .ListItem, "Account, completed")
     let (building, has_building) = find(tree, .ListItem, "Build")
     let (deploy, has_deploy) = find(tree, .ListItem, "Deploy, needs attention: Fix 1 field")
@@ -244,6 +245,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (next, has_next) = bounds(&harness, &runtime, 6003u64)
     if !has_cancel || !has_next || !near(cancel.x, across.x + 24.0) || !near(next.x + next.width, across.x + 576.0) || testing.by_key(&harness, 6002u64).count != 1usize { os.exit(24i32) }
     if !tap_key(&harness, &runtime, 6003u64) || s.counters[1usize].count != 1usize { os.exit(25i32) }
+    let (focused_step, focused_step_error) = build(&f, &theme, s)
+    if focused_step_error != ok || testing.pump(&harness, focused_step, time.Instant { nanos: 1200000000i64 }) != ok || !widget.focus_within(&runtime, 6005u64) { os.exit(40i32) }
     // The vertical wizard in a dialog: `surface-container-high`; its steps down
     // the start, 48 apart; Back hidden on the first step.
     let (column, has_column) = bounds(&harness, &runtime, 6100u64)
