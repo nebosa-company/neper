@@ -22476,3 +22476,14 @@ Ctrl+M, so maximise and restore keep one state path.
 and Linux. This is a behavior-only change on the reviewed DockPanel surface, so
 no duplicate screenshot is added. DockLayout's separate sash double-click reset
 remains open.
+
+## D1081 — Tree arrows follow the visible hierarchy
+
+Tree rows derive their first-child and nearest-parent targets from the flattened
+visible order they already build. Right expands a closed branch or focuses an
+open branch's first child; Left collapses an open branch or focuses its parent.
+Right on a leaf stays put and no longer emits a false toggle command.
+
+`ui_collections3_v2` holds linear movement, child and parent movement, collapse,
+expand and the leaf no-op on Windows and Linux. This is a behavior-only change
+on the reviewed Tree surface, so no duplicate screenshot is added.
