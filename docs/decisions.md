@@ -24428,3 +24428,20 @@ measured from the viewport's bounds, not its padded inside.
 `ui_collections_v2` drags the virtual list's thumb 56 (1,866.7 of content) and
 jumps it with a press lower on the strip on Windows and Linux; the full UI
 sweep passes 103/103 on both hosts.
+
+## D1250 — Builders measure text, and breadcrumbs collapse to fit
+
+`widget.text_width` lays out a Text node on one line with no limit through the
+same `layout.layout` call the runtime's measure makes. It returns 0 for any
+other node or for a text with no fonts, so a builder can fit its content before
+layout. `BreadcrumbsOptions.width` uses it: when set, and `hidden` is not,
+`breadcrumbs_fit` collapses the fewest levels, keeping the root and the last
+two, that let the trail fit. A crumb counts as its label plus 16 of padding,
+capped at 200 (160 on touch, 320 for the current place), with a 16 chevron
+between crumbs and the overflow crumb as a square of its height. This closes
+the breadcrumb half of the ledger's "geometry learned from layout" item. The
+same helper is the way in for centred segments and the other truncation gaps.
+
+`ui_content2_v2`, the fixture with a real (synthetic) font, holds the doubling
+width and the 0, 1 and 2 collapses on Windows and Linux; the breadcrumb
+fixtures still pass.

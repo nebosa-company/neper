@@ -3037,6 +3037,21 @@ fn gesture_slop() -> f32 {
     ret 8.0
 }
 
+// (D1250) The one-line width a Text node lays out to with no limit -- what the
+// runtime's measure gives it unconstrained -- so a builder can fit its content
+// before layout; 0 for any other node or a text with no fonts.
+fn text_width(a: *mem.Arena, node: Node) -> f32 {
+    switch node.kind {
+    case .Text as t:
+        if t.style.fonts.len == 0usize { ret 0.0 }
+        let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: 3.0e38, max_lines: 1u32, align: t.align, wrap: t.wrap, ellipsis: "" })
+        if layout_error != ok { ret 0.0 }
+        ret laid.bounds.width
+    default:
+        ret 0.0
+    }
+}
+
 // (D1249) A press on a viewport's thumb strip -- the trailing 12 of a viewport
 // that paints its thumb over more content than it shows: the viewport, which
 // the press now drags by its thumb. A press off the thumb first moves it to
