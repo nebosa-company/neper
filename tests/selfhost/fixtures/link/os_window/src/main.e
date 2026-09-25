@@ -9,7 +9,7 @@ use e.mem
 use e.os
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let options = os.WindowOptions { title: "neper os_window", width: 320u32, height: 200u32, resizable: true, visible: false }
+    let options = os.WindowOptions { title: "neper os_window", width: 320u32, height: 200u32, resizable: true, visible: false, mode: .Windowed }
     let (w, open_error) = os.window_open(a, options)
     if open_error == os.Unsupported {
         try io.print("os window unsupported\n")
@@ -65,8 +65,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, stale_error) = os.window_metrics(w)
     if stale_error != os.NotFound { os.exit(19i32) }
     if os.window_present(w, pixels[0..], 320u32, 200u32) != os.NotFound { os.exit(20i32) }
-    let (_, none_error) = os.window_open(a, os.WindowOptions { title: "", width: 0u32, height: 10u32, resizable: false, visible: false })
-    if none_error != os.Unsupported { os.exit(21i32) }
+    let (full, full_error) = os.window_open(a, os.WindowOptions { title: "mode", width: 320u32, height: 200u32, resizable: false, visible: false, mode: .Fullscreen })
+    if full_error != ok || os.window_close(full) != ok { os.exit(21i32) }
+    let (maximized, maximized_error) = os.window_open(a, os.WindowOptions { title: "mode", width: 320u32, height: 200u32, resizable: true, visible: false, mode: .Maximized })
+    if maximized_error != ok || os.window_close(maximized) != ok { os.exit(22i32) }
+    let (_, none_error) = os.window_open(a, os.WindowOptions { title: "", width: 0u32, height: 10u32, resizable: false, visible: false, mode: .Windowed })
+    if none_error != os.Unsupported { os.exit(23i32) }
     try io.print("os window ok\n")
     ret ok
 }

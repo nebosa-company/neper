@@ -7,8 +7,8 @@
 //
 // Windows live in a bounded table so `e.ui.input` can name one by its `Id` from the
 // host's handle; a closed window's slot is reused with a new generation.
-// ponytail: `Mode` and `transparent` are accepted and recorded, not acted on --
-// maximised and fullscreen windows wait on a host that can show them.
+// ponytail: `transparent` is accepted and recorded, not acted on; an alpha-capable
+// native surface and compositor path are the upgrade when transparent windows matter.
 
 use e.gpu
 use e.mem
@@ -75,7 +75,10 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
     var slot = 0usize
     while slot < MAX_WINDOWS && live[slot] { slot += 1usize }
     if slot >= MAX_WINDOWS { ret (none, Invalid) }
-    let (handle, open_error) = os.window_open(a, os.WindowOptions { title: options.title, width: options.width, height: options.height, resizable: options.resizable, visible: true })
+    var mode: os.WindowMode = .Windowed
+    if options.mode == .Maximized { mode = .Maximized }
+    if options.mode == .Fullscreen { mode = .Fullscreen }
+    let (handle, open_error) = os.window_open(a, os.WindowOptions { title: options.title, width: options.width, height: options.height, resizable: options.resizable, visible: true, mode: mode })
     if open_error == os.Unsupported { ret (none, Unsupported) }
     if open_error != ok { ret (none, Invalid) }
     let (queue, queue_error) = gpu.queue(device)

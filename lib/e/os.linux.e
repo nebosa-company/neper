@@ -2791,7 +2791,8 @@ fn rename(a: *mem.Arena, src: str, dst: str) -> err {
 // `Unsupported` at `window_open`.
 
 type Window = struct { raw: usize }
-type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool }
+type WindowMode = enum u8 { Windowed, Maximized, Fullscreen }
+type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool, mode: WindowMode }
 type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focused: bool, visible: bool }
 type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
@@ -3401,6 +3402,26 @@ fn x_change_property(window: u32, property: u32, kind: u32, format: u32, data: [
     ret x_send(request[0usize..units * 4usize])
 }
 
+fn x_window_mode(window: u32, mode: WindowMode) -> err {
+    if mode == .Windowed { ret ok }
+    let (state, state_error) = x_intern_atom("_NET_WM_STATE")
+    if state_error != ok { ret state_error }
+    var values: [8]u8 = zero
+    var count = 1usize
+    var name = "_NET_WM_STATE_FULLSCREEN"
+    if mode == .Maximized { name = "_NET_WM_STATE_MAXIMIZED_VERT" }
+    let (first, first_error) = x_intern_atom(name)
+    if first_error != ok { ret first_error }
+    x_put32(values[..], 0usize, first)
+    if mode == .Maximized {
+        let (second, second_error) = x_intern_atom("_NET_WM_STATE_MAXIMIZED_HORZ")
+        if second_error != ok { ret second_error }
+        x_put32(values[..], 4usize, second)
+        count = 2usize
+    }
+    ret x_change_property(window, state, 4u32, 32u32, values[0usize..count * 4usize], count)
+}
+
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     var none: Window = zero
     if options.width == 0u32 || options.height == 0u32 || options.width > 16384u32 || options.height > 16384u32 { ret (none, Unsupported) }
@@ -3437,6 +3458,7 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
         let title_error = x_change_property(id, 39u32, 31u32, 8u32, options.title, options.title.len)
         if title_error != ok { ret (none, Failed) }
     }
+    if x_window_mode(id, options.mode) != ok { ret (none, Failed) }
     // A graphics context for the presents.
     let gc = x_resource()
     var gc_request: [16]u8 = zero
