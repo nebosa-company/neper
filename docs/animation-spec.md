@@ -9,9 +9,8 @@ existing widgets adopt it, and how every part is tested.
 
 API sketches are written in neper, but they are **proposals**. They are not in
 `docs/module-apis.md`, so they create no fence debt. Each sketch moves into
-`module-apis.md` when its P6 item opens. Choices still waiting for a decision are marked
-**Decision →** with a recommendation. Every one needs a `D<n>` row before
-implementation.
+`module-apis.md` when its P6 item opens. Settled choices are marked
+**Decided (D<n>)**. All nine were locked in D1201–D1209.
 
 ---
 
@@ -64,7 +63,7 @@ implementation.
   `from`/`to`/controller state in the widget runtime under the element's
   stable key, the same way drag cells and hover state are stored. The caller
   writes only the target value.
-  **Decision →** runtime-keyed state (Flutter ergonomics, and nothing for the
+  **Decided (D1201):** runtime-keyed state (Flutter ergonomics, and nothing for the
   caller to own) over caller-owned `*AnimState` fields. The capacity is bounded
   by `widget.Limits.animations`. On overflow the animation snaps to its target
   and is counted in `AnimationFrameStats`, and never fails.
@@ -188,7 +187,7 @@ fn token_curve(t: *const style.ThemeTokens, token: style.EaseToken) -> Curve
   `style.e`'s theme block the way the colours are (D938).
 - D800's `Curve` enum (`Linear`, `EaseIn`, `EaseOut`, `EaseInOut`) keeps its
   quadratic meaning under the names `QuadIn`/`QuadOut`/`QuadInOut` for source
-  compatibility. **Decision →** alias the old enum members to the new
+  compatibility. **Decided (D1202):** alias the old enum members to the new
   constructors and mark them deprecated, rather than changing their shape
   silently.
 
@@ -225,7 +224,7 @@ fn sequence_at[T: type](s: *const Sequence[T], t: f32) -> T
   conversion.
 - `Sequence` normalises the weights. A segment's local `t` goes through its own
   curve. A zero total weight is `Invalid`.
-- **Decision →** colour interpolates in *premultiplied linear light* (no
+- **Decided (D1203):** colour interpolates in *premultiplied linear light* (no
   muddy midpoints, and it matches the renderer's linear blending). The
   alternative is Oklab: better for hue changes, but it costs more and would be
   different from blending.
@@ -304,7 +303,7 @@ fn set_time_dilation(runtime: *widget.Runtime, factor: f32)     // debug slow mo
 
 This lives in the same module (`sim` below is a namespace inside
 `e.ui.animation`, not a separate module).
-**Decision →** keep physics in `e.ui.animation` and not in a new module: it
+**Decided (D1204):** keep physics in `e.ui.animation` and not in a new module: it
 has no other consumers, and `modules.json` gains no row.
 
 ```neper
@@ -387,7 +386,7 @@ fn animated[T: type](runtime: *widget.Runtime, key: widget.Key, target: T, spec:
 **Behaviour**
 
 - **First build:** there is no animation. The value starts at the target.
-  (**Decision →** `appear: bool` in the spec opts into an entrance from a
+  (**Decided (D1205):** `appear: bool` in the spec opts into an entrance from a
   given start value. Flutter makes you wrap in `TweenAnimationBuilder` for
   this.)
 - **Keys:** implicit state lives under `key ^ fnv1a64("anim")`, derived with
@@ -410,7 +409,7 @@ fn faded(key: Key, opacity: f32, value_style: style.Style, children: []const Nod
 // existing (D1192):   Transformed: VisualTransform { scale, rotation, offset }
 ```
 
-**Decision →** make opacity a node kind, not a `style.Style` field. A kind
+**Decided (D1206):** make opacity a node kind, not a `style.Style` field. A kind
 lets reconcile identify an opacity-only change without diffing every style
 field, and it matches `Transformed`. Both are paint-only (P6).
 
@@ -511,7 +510,7 @@ fn sequence_of(parts: []const f32) -> []const Curve   // weights -> contiguous i
 `stagger` returns an `interval` curve for item `index` and the total
 duration: `duration + stagger × (count − 1)`, where `stagger` is the token
 (`Durations.stagger`). It is capped at 8 steps, so long lists do not wait.
-**Decision →** the cap is 8, the Material guidance. Items past the cap enter
+**Decided (D1207):** the cap is 8, the Material guidance. Items past the cap enter
 together with the eighth.
 
 ### 8.2 Keyed list and grid changes (`AnimatedListChanges`, `AnimatedGridChanges`)
@@ -878,7 +877,7 @@ both hosts.
 | `FadeTransition`, `ScaleTransition`, `RotationTransition`, `SlideTransition`, `SizeTransition`, `AlignTransition`, `DecoratedBoxTransition`, `DefaultTextStyleTransition`, `PositionedTransition`, `RelativePositionedTransition`, `MatrixTransition` | §7.2 | |
 | `AnimatedList`, `SliverAnimatedList`, `AnimatedGrid` | keyed list changes (§8.2) | no `removeItem` builder: ghosts replace it |
 | staggered animations (the Interval idiom) | `stagger`, `sequence_of` | |
-| `Hero`, `HeroMode`, `HeroFlightShuttleBuilder` | `hero`, reduced motion; the shuttle is always the destination | **Decision →** no custom shuttle builders in v1 |
+| `Hero`, `HeroMode`, `HeroFlightShuttleBuilder` | `hero`, reduced motion; the shuttle is always the destination | **Decided (D1208):** no custom shuttle builders in v1 |
 | `PageRouteBuilder`, `PageTransitionsTheme` (FadeUpwards, OpenUpwards, Zoom, Cupertino, PredictiveBack) | `RouteTransition` (§9.1), predictive back (§9.2) | `OpenUpwards` is omitted (superseded by Zoom) |
 | `animations` package: `OpenContainer`, `SharedAxisTransition`, `FadeThroughTransition`, `FadeScaleTransition` | `ContainerTransform`, `SharedAxis*`, `FadeThrough`, FadeScale | |
 | `AnimationStyle` (per-call overrides of popups and routes) | the `Transition` argument on overlays and routes | |
@@ -888,17 +887,16 @@ both hosts.
 
 ---
 
-## 16. Decisions to lock before P6 opens
+## 16. Locked decisions
 
-1. Implicit state is runtime-keyed (P3), with snap on overflow.
-2. D800's quadratic curves are renamed and aliased (§4.1).
-3. Colour interpolates in premultiplied linear light (§4.2).
-4. Physics stays inside `e.ui.animation` (§5).
-5. Implicit animations opt into an entrance with `appear` (§6).
-6. Opacity is a node kind, `Faded` (§7.1).
-7. The stagger cap is 8 (§8.1).
-8. There are no custom hero shuttles in v1 (§15).
-9. Pointer input is absorbed by both routes during a route transition (§9.1).
-
-Each becomes a `D<n>` row when it is accepted, and the P6 item it belongs to
-cites it.
+| # | Decision | Row |
+|---|---|---|
+| 1 | Implicit state is runtime-keyed (P3), with snap on overflow | D1201 |
+| 2 | D800's quadratic curves are renamed and aliased (§4.1) | D1202 |
+| 3 | Colour interpolates in premultiplied linear light (§4.2) | D1203 |
+| 4 | Physics stays inside `e.ui.animation` (§5) | D1204 |
+| 5 | Implicit animations opt into an entrance with `appear` (§6) | D1205 |
+| 6 | Opacity is a node kind, `Faded` (§7.1) | D1206 |
+| 7 | The stagger cap is 8 (§8.1) | D1207 |
+| 8 | There are no custom hero shuttles in v1 (§15) | D1208 |
+| 9 | Pointer input is absorbed by both routes during a route transition (§9.1) | D1209 |
