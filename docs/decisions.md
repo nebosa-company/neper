@@ -24802,3 +24802,15 @@ left its buffer zeroed) does not filter. The error icon is still to come.
 
 `ui_pickers2_v2` holds the whole list unfocused and the two rows kept for
 "15" once focused on Windows and Linux; its earlier checks still pass.
+
+## D1276 — Calendar days are named by their full date
+
+A calendar day's button is named by its full date, "Tuesday, 10 March 2026",
+as the Calendar spec's accessibility section asks, rather than by its digits;
+the digits stay the visible text. The weekday comes from `weekday_of` and the
+new `weekday_full`, the month from `month_name`, all English for now like the
+rest of the calendar. The two fixtures that looked days up by digits now use
+the full name, or count only the day's text.
+
+`ui_pickers` finds the selected day by its full date, and `ui_pickers_v2` and
+the other calendar fixtures still pass, on Windows and Linux.
