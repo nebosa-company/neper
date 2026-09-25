@@ -22621,3 +22621,12 @@ already used by rows and grids.
 
 `ui_collections2_v2` holds both horizontal directions on Windows and Linux.
 This is behavior-only on the reviewed HeaderRow surface.
+
+## D1095 — Table headers move into the first row
+
+An embedded HeaderRow receives the first stable key already exposed by its
+TableSource and binds Down to it. Standalone headers retain no body target, and
+an empty source binds none.
+
+`ui_collections2_v2` holds the header-to-row return on Windows and Linux. This
+is behavior-only on the reviewed Table surface.
