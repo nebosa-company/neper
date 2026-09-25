@@ -24347,3 +24347,19 @@ unzeroed arena slot crashed the second.
 
 `ui_pickers_v2` holds the week column, the dot's pixel, the dead presses and
 the disabled count on Windows and Linux.
+
+## D1245 — Grid views have the list's multi-select model
+
+`GridOptions.select` makes `grid_view_of` multi-select, reporting the same
+`ListSelect` gestures as a list (D1240). While any tile is selected, every tile
+shows its check. Ctrl-click toggles and Shift-click extends; on touch a hold
+toggles, and in selection mode a tap does too. The list's per-row key scope is
+now `selection_scopes`, shared by both. It binds Space, Shift+Up and Shift+Down
+by `across` items (1 in a list, the column count in a grid), Ctrl+A and Escape.
+In a grid it also binds Shift+Left and Shift+Right to the neighbours in reading
+order, which puts seven shortcuts in the scope, under its limit of eight. The
+caller keeps the set and, as the spec's Android row says, its own app bar
+becomes the selection bar.
+
+`ui_collections_v2` holds Space, both Shift arrows, Ctrl+A, Escape and a
+Ctrl-click on a tile on Windows and Linux.

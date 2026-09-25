@@ -4333,6 +4333,58 @@ fn list_click_fire(ctx: *void) -> err {
     ret widget.fire_submit(c.action)
 }
 
+// (D1240, D1245) Wraps each of `nodes` in a scope of selection keys: Space
+// toggles it; Shift+Up and Shift+Down extend to the item `across` before or after
+// and move there (and, in a grid, where `across` is its column count, Shift+Left
+// and Shift+Right to the item before or after in reading order); Ctrl+A selects
+// all and Escape clears.
+fn selection_scopes(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []const widget.Key, select: widget.Change[ListSelect], across: usize) -> err {
+    let count = nodes.len
+    if count == 0usize { ret ok }
+    let (picks, picks_error) = mem.alloc[ListPick](a, 7usize * count)
+    if picks_error != ok { ret TooLarge }
+    let (keyed, keyed_error) = mem.alloc[widget.Shortcut](a, 7usize * count)
+    if keyed_error != ok { ret TooLarge }
+    let (held, held_error) = mem.alloc[widget.Node](a, count)
+    if held_error != ok { ret TooLarge }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
+    var controlled: input.Modifiers = zero
+    controlled.control = true
+    var i = 0usize
+    while i < count {
+        let b = 7usize * i
+        var up = i
+        if i >= across { up = i - across }
+        var down = i
+        if i + across < count { down = i + across }
+        var before = i
+        if i > 0usize { before = i - 1usize }
+        var after = i
+        if i + 1usize < count { after = i + 1usize }
+        picks[b] = ListPick { runtime: t.runtime, select: select, kind: .Toggle, index: i, focus: 0u64, has_focus: false }
+        picks[b + 1usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: up, focus: keys[up], has_focus: true }
+        picks[b + 2usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: down, focus: keys[down], has_focus: true }
+        picks[b + 3usize] = ListPick { runtime: t.runtime, select: select, kind: .All, index: i, focus: 0u64, has_focus: false }
+        picks[b + 4usize] = ListPick { runtime: t.runtime, select: select, kind: .Clear, index: i, focus: 0u64, has_focus: false }
+        picks[b + 5usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: before, focus: keys[before], has_focus: true }
+        picks[b + 6usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: after, focus: keys[after], has_focus: true }
+        keyed[b] = widget.Shortcut { key: 32u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&picks[b]), invoke: list_pick_fire } }
+        keyed[b + 1usize] = widget.Shortcut { key: 38u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 1usize]), invoke: list_pick_fire } }
+        keyed[b + 2usize] = widget.Shortcut { key: 40u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 2usize]), invoke: list_pick_fire } }
+        keyed[b + 3usize] = widget.Shortcut { key: 65u32, modifiers: controlled, action: widget.Submit { ctx: ctx_of(&picks[b + 3usize]), invoke: list_pick_fire } }
+        keyed[b + 4usize] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&picks[b + 4usize]), invoke: list_pick_fire } }
+        keyed[b + 5usize] = widget.Shortcut { key: 37u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 5usize]), invoke: list_pick_fire } }
+        keyed[b + 6usize] = widget.Shortcut { key: 39u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 6usize]), invoke: list_pick_fire } }
+        var bound = 5usize
+        if across > 1usize { bound = 7usize }
+        held[i] = nodes[i]
+        nodes[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: keyed[b..b + bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
+        i += 1usize
+    }
+    ret ok
+}
+
 fn list_options() -> ListOptions {
     var out: ListOptions = zero
     ret out
@@ -4410,40 +4462,10 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     let rove_error = roving(a, t, rows, keys, 1usize, page)
     if rove_error != ok { ret (zero, rove_error) }
     // (D1240) A multi-select row's keys, in a scope of their own round the roving
-    // one: Space toggles it, Shift+Up and Shift+Down extend to the neighbour and
-    // move there, Ctrl+A selects all and Escape clears.
-    if selecting && items.len > 0usize {
-        let (picks, picks_error) = mem.alloc[ListPick](a, 5usize * items.len)
-        if picks_error != ok { ret (zero, TooLarge) }
-        let (keyed, keyed_error) = mem.alloc[widget.Shortcut](a, 5usize * items.len)
-        if keyed_error != ok { ret (zero, TooLarge) }
-        let (held, held_error) = mem.alloc[widget.Node](a, items.len)
-        if held_error != ok { ret (zero, TooLarge) }
-        var shifted: input.Modifiers = zero
-        shifted.shift = true
-        var controlled: input.Modifiers = zero
-        controlled.control = true
-        i = 0usize
-        while i < items.len {
-            let b = 5usize * i
-            var up = i
-            if i > 0usize { up = i - 1usize }
-            var down = i
-            if i + 1usize < items.len { down = i + 1usize }
-            picks[b] = ListPick { runtime: t.runtime, select: options.select, kind: .Toggle, index: i, focus: 0u64, has_focus: false }
-            picks[b + 1usize] = ListPick { runtime: t.runtime, select: options.select, kind: .Extend, index: up, focus: keys[up], has_focus: true }
-            picks[b + 2usize] = ListPick { runtime: t.runtime, select: options.select, kind: .Extend, index: down, focus: keys[down], has_focus: true }
-            picks[b + 3usize] = ListPick { runtime: t.runtime, select: options.select, kind: .All, index: i, focus: 0u64, has_focus: false }
-            picks[b + 4usize] = ListPick { runtime: t.runtime, select: options.select, kind: .Clear, index: i, focus: 0u64, has_focus: false }
-            keyed[b] = widget.Shortcut { key: 32u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&picks[b]), invoke: list_pick_fire } }
-            keyed[b + 1usize] = widget.Shortcut { key: 38u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 1usize]), invoke: list_pick_fire } }
-            keyed[b + 2usize] = widget.Shortcut { key: 40u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 2usize]), invoke: list_pick_fire } }
-            keyed[b + 3usize] = widget.Shortcut { key: 65u32, modifiers: controlled, action: widget.Submit { ctx: ctx_of(&picks[b + 3usize]), invoke: list_pick_fire } }
-            keyed[b + 4usize] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&picks[b + 4usize]), invoke: list_pick_fire } }
-            held[i] = rows[i]
-            rows[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: keyed[b..b + 5usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
-            i += 1usize
-        }
+    // one (`selection_scopes`).
+    if selecting {
+        let scoped_error = selection_scopes(a, t, rows, keys, options.select, 1usize)
+        if scoped_error != ok { ret (zero, scoped_error) }
     }
     var inset = options.inset
     if options.grouped && !(inset > 0.0) { inset = 16.0 }
@@ -4873,7 +4895,8 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
 
 // A grid's form (D979): the least tile width (0: 144 with a pointer, 160 on
 // touch), whether it is selecting (every tile shows its check), and the width.
-type GridOptions = struct { min_width: f32, selecting: bool, width: f32 }
+// (D1245) `select`, when set, makes the grid multi-select as a list is (D1240).
+type GridOptions = struct { min_width: f32, selecting: bool, width: f32, select: widget.Change[ListSelect] }
 
 fn grid_options() -> GridOptions {
     var out: GridOptions = zero
@@ -4886,8 +4909,10 @@ fn grid_options() -> GridOptions {
 // clamps into a short last row), Home and End to the row ends, and Ctrl+Home and
 // Ctrl+End to the set ends. A grid named `label` with its counts.
 // (D1235) Page Up and Page Down move a window's height of tile rows in the column.
-// ponytail: no selection model, rubber band, reflow
-// motion, loading or empty state; the caller keeps the page margins.
+// (D1245) With `options.select` the grid is multi-select (`selection_scopes`, a
+// grid's column count across); the caller keeps the set and its app bar.
+// ponytail: no rubber band, reflow motion, loading or empty state; the caller
+// keeps the page margins.
 fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, tiles: []const Tile, keys: []const widget.Key, options: GridOptions) -> (widget.Node, err) {
     if keys.len != tiles.len { ret (zero, TooLarge) }
     var least = options.min_width
@@ -4896,11 +4921,42 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     let side = (options.width - 8.0 * f32(columns - 1usize)) / f32(columns)
     let (cells, cells_error) = mem.alloc[widget.Node](a, tiles.len)
     if cells_error != ok { ret (zero, TooLarge) }
+    // (D1245) A multi-select grid: in selection mode (any tile selected) every tile
+    // shows its check; Ctrl-click toggles and Shift-click extends, on touch a hold
+    // toggles and in the mode a tap does too.
+    let multi = widget.change_set[ListSelect](options.select.invoke) && mem.address_of(t.runtime) != 0usize
+    var any_selected = false
+    var c = 0usize
+    while c < tiles.len {
+        if tiles[c].selected { any_selected = true }
+        c += 1usize
+    }
+    let touch = density_of(t) == 2usize
+    let in_mode = multi && any_selected
+    let (shown, shown_error) = mem.alloc[Tile](a, tiles.len)
+    if shown_error != ok { ret (zero, TooLarge) }
+    let (clicks, clicks_error) = mem.alloc[ListClick](a, tiles.len)
+    if clicks_error != ok { ret (zero, TooLarge) }
+    let (holds, holds_error) = mem.alloc[ListPick](a, tiles.len)
+    if holds_error != ok { ret (zero, TooLarge) }
+    let (hold_fires, hold_fires_error) = mem.alloc[widget.Submit](a, tiles.len)
+    if hold_fires_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < tiles.len {
-        let (made, made_error) = tile_node(a, keys[i], t, &tiles[i], i / columns, i % columns, side, false, options.selecting)
+        shown[i] = tiles[i]
+        if multi {
+            clicks[i] = ListClick { runtime: t.runtime, select: options.select, index: i, action: tiles[i].action, toggles: in_mode && touch }
+            shown[i].action = widget.Submit { ctx: ctx_of(&clicks[i]), invoke: list_click_fire }
+        }
+        let (made, made_error) = tile_node(a, keys[i], t, &shown[i], i / columns, i % columns, side, false, options.selecting || in_mode)
         if made_error != ok { ret (zero, made_error) }
         cells[i] = made
+        if multi && touch && !tiles[i].disabled {
+            holds[i] = ListPick { runtime: t.runtime, select: options.select, kind: .Toggle, index: i, focus: 0u64, has_focus: false }
+            hold_fires[i] = widget.Submit { ctx: ctx_of(&holds[i]), invoke: list_pick_fire }
+            let hold_error = widget.long_press(t.runtime, keys[i], &hold_fires[i])
+            if hold_error != ok { ret (zero, hold_error) }
+        }
         i += 1usize
     }
     // (D1235) A page is the window's height in tile rows, from the first tile's
@@ -4914,6 +4970,10 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     }
     let rove_error = roving(a, t, cells, keys, columns, page_rows)
     if rove_error != ok { ret (zero, rove_error) }
+    if multi {
+        let scoped_error = selection_scopes(a, t, cells, keys, options.select, columns)
+        if scoped_error != ok { ret (zero, scoped_error) }
+    }
     var flow_style = style.defaults()
     flow_style.width = style.Length { Px: options.width }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
