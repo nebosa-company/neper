@@ -4732,18 +4732,32 @@ fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
 // on touch); the channel fields 32 tall (48 on touch), 8 apart; the section label
 // in `label-medium` `on-surface-variant`; the swatches 32 (40 on touch) in 40
 // cells, so 8 apart, the chosen one in a 2px `on-surface` ring 2 outside it.
-// ponytail: the hue comes from the colour, so it resets to red at a grey; hex only (no RGB/HSL select), the readout is not typed, no recent colours, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
+// (D1274) `color_field_with` adds the Recent swatches.
+// ponytail: the hue comes from the colour, so it resets to red at a grey; hex only (no RGB/HSL select), the readout is not typed, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
 fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
+    var no_recent: []const paint.Color = zero
+    let (made, made_error) = color_field_with(a, key, t, label, value, with_alpha, change, open, toggle, swatches, no_recent, hex, hex_len, typed, width)
+    ret (made, made_error)
+}
+
+// (D1274, docs/ux/components/ColorPicker, recent) `color_field` with the caller's
+// `recent` colours (newest first, at most 8 shown) as a second swatch section,
+// "Recent", after "Theme", keyed on from the theme swatches
+// (`key + 8 + swatches.len + index`); the caller adds each committed colour.
+fn color_field_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, recent_colors: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     if swatches.len > 64usize { ret (zero, TooLarge) }
+    var recent = recent_colors
+    if recent.len > 8usize { recent = recent_colors[0usize..8usize] }
+    let spots = swatches.len + recent.len
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     let (hue, saturation, bright) = hsv_of(value)
     let light = style.color(t.tokens, .SurfaceContainerLowest)
     let dark = style.color(t.tokens, .OutlineVariant)
     let ink = style.color(t.tokens, .OnSurface)
-    let (tints, tints_error) = mem.alloc[Tint](a, 4usize + swatches.len)
+    let (tints, tints_error) = mem.alloc[Tint](a, 4usize + spots)
     if tints_error != ok { ret (zero, TooLarge) }
     var i = 0usize
-    while i < 4usize + swatches.len {
+    while i < 4usize + spots {
         tints[i] = Tint { runtime: t.runtime, key: key + 2u64 + u64(i), kind: u8(i), hue: hue, saturation: saturation, bright: bright, alpha: value.alpha, color: value, light: light, dark: dark, outer: style.color(t.tokens, .Outline), inner: light, ink: ink, hairline: control.with_alpha(ink, 0.16), chosen: false, layer: 0.0, change: change, arena: a }
         if i >= 3usize {
             tints[i].kind = 3u8
@@ -4770,7 +4784,7 @@ fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     parts[0usize] = head
     if open {
         let inner = control.max_zero(width - 32.0)
-        let (blocks, blocks_error) = mem.alloc[widget.Node](a, 8usize)
+        let (blocks, blocks_error) = mem.alloc[widget.Node](a, 9usize)
         if blocks_error != ok { ret (zero, TooLarge) }
         var used = 0usize
         let area_h: f32 = control.if_else(touch, 200.0, 150.0)
@@ -4822,36 +4836,47 @@ fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         }
         blocks[used] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), channel_row[0usize..channel_count])
         used += 1usize
-        if swatches.len > 0usize {
-            let (swatch_picks, swatch_picks_error) = mem.alloc[Swatch](a, swatches.len)
+        var section_at = 0usize
+        while section_at < 2usize {
+            var list = swatches
+            var first = 0usize
+            var title = "Theme"
+            if section_at == 1usize {
+                list = recent
+                first = swatches.len
+                title = "Recent"
+            }
+            section_at += 1usize
+            if list.len == 0usize { continue }
+            let (swatch_picks, swatch_picks_error) = mem.alloc[Swatch](a, list.len)
             if swatch_picks_error != ok { ret (zero, TooLarge) }
-            let (submits, submits_error) = mem.alloc[widget.Submit](a, swatches.len)
+            let (submits, submits_error) = mem.alloc[widget.Submit](a, list.len)
             if submits_error != ok { ret (zero, TooLarge) }
-            let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * swatches.len)
+            let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * list.len)
             if cells_error != ok { ret (zero, TooLarge) }
             let dot: f32 = control.if_else(touch, 40.0, 32.0)
             var j = 0usize
-            while j < swatches.len {
-                let tint = &tints[4usize + j]
-                let swatch_key = key + 8u64 + u64(j)
-                let chosen = same_color(swatches[j], value)
-                tint.color = swatches[j]
+            while j < list.len {
+                let tint = &tints[4usize + first + j]
+                let swatch_key = key + 8u64 + u64(first + j)
+                let chosen = same_color(list[j], value)
+                tint.color = list[j]
                 tint.chosen = chosen
                 tint.layer = control.state_opacity(t, control.control_state(t, swatch_key, true, chosen))
-                swatch_picks[j] = Swatch { color: swatches[j], change: change }
+                swatch_picks[j] = Swatch { color: list[j], change: change }
                 submits[j] = widget.Submit { ctx: mem.cast[*void](&swatch_picks[j]), invoke: swatch_fire }
-                cells[swatches.len + j] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](tint), measure: control.mark_measure, paint: tint_paint, state: widget.bytes_of[Tint](tint) } }, style: control.sized_style(dot, dot), children: none }
+                cells[list.len + j] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](tint), measure: control.mark_measure, paint: tint_paint, state: widget.bytes_of[Tint](tint) } }, style: control.sized_style(dot, dot), children: none }
                 var cell_style = control.sized_style(dot, dot)
                 cell_style.radius = dot * 0.5
                 let (pressed_cell, pressed_error) = mem.alloc[widget.Node](a, 1usize)
                 if pressed_error != ok { ret (zero, TooLarge) }
-                pressed_cell[0usize] = widget.region(swatch_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&submits[j]), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, cell_style, cells[swatches.len + j..swatches.len + j + 1usize])
+                pressed_cell[0usize] = widget.region(swatch_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&submits[j]), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, cell_style, cells[list.len + j..list.len + j + 1usize])
                 var entry: widget.Semantics = zero
                 entry.role = 5u8
                 let (named, named_error) = mem.alloc[u8](a, 9usize)
                 if named_error != ok { ret (zero, TooLarge) }
-                entry.label = named[0usize..write_hex(named, swatches[j])]
-                if swatches[j].alpha <= 0.0 { entry.label = "No colour" }
+                entry.label = named[0usize..write_hex(named, list[j])]
+                if list[j].alpha <= 0.0 { entry.label = "No colour" }
                 entry.actions = accessibility.ACTION_PRESS
                 if chosen { entry.states = accessibility.STATE_CHECKED }
                 cells[j] = widget.semantics(0u64, entry, style.defaults(), pressed_cell[0usize..1usize])
@@ -4860,17 +4885,17 @@ fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
             var section = control.text_options()
             section.role = .LabelMedium
             section.wrap = .None
-            let (theme_label, theme_label_error) = control.colored_text(a, 0u64, "Theme", t, section, style.color(t.tokens, .OnSurfaceVariant))
+            let (theme_label, theme_label_error) = control.colored_text(a, 0u64, title, t, section, style.color(t.tokens, .OnSurfaceVariant))
             if theme_label_error != ok { ret (zero, theme_label_error) }
             let (group, group_error) = mem.alloc[widget.Node](a, 3usize)
             if group_error != ok { ret (zero, TooLarge) }
             var flow = style.defaults()
             flow.width = style.Length { Px: inner }
             group[0usize] = theme_label
-            group[2usize] = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: control.if_else(touch, 16.0, 8.0) }, flow, cells[0usize..swatches.len])
+            group[2usize] = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: control.if_else(touch, 16.0, 8.0) }, flow, cells[0usize..list.len])
             var radio: widget.Semantics = zero
             radio.role = 2u8
-            radio.label = "Theme"
+            radio.label = title
             group[1usize] = widget.semantics(0u64, radio, style.defaults(), group[2usize..3usize])
             blocks[used] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), group[0usize..2usize])
             used += 1usize
