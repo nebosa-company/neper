@@ -5165,6 +5165,15 @@ fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize,
 }
 
 // A viewport's offset, set (clamped to what was last placed) or read.
+// (D1255) A viewport's content and visible extents from its last placement.
+fn scroll_extents(widget_runtime: *Runtime, element: ElementId) -> (f32, f32, bool) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret (0.0, 0.0, false) }
+    let (index, found) = element_of(s, element)
+    if !found || s.elements[index].kind != SCROLL_TAG { ret (0.0, 0.0, false) }
+    ret (s.elements[index].content_extent, s.elements[index].viewport_extent, true)
+}
+
 fn scroll_to(widget_runtime: *Runtime, element: ElementId, offset: f32) -> err {
     let (s, state_error) = state_of(widget_runtime)
     if state_error != ok { ret state_error }

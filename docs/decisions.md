@@ -24496,3 +24496,20 @@ chevron and edge fade are still to come.
 `ui_tabs_rtl` holds eight tabs overflowing 200, the focused last tab fully
 shown and the first scrolled out on Windows and Linux; its runtime limits grew
 to hold the second bar.
+
+## D1255 — Overflowing tab bars page with chevrons
+
+On a pointer host a scrolling tab strip (D1254) that overflows shows round
+chevron buttons the control's size over its ends. "Scroll tabs back" (keyed
+`key + 1048577`) appears while the strip is scrolled, and "Scroll tabs
+forward" (`key + 1048578`) while more lies past its end. Each pages the strip
+by its width through `widget.scroll_to`, and neither takes a Tab stop. The
+chevrons overlay the strip rather than taking room from it: a first version
+that shrank the viewport made D1254's reveal chase a width it had just
+changed, and missed by exactly two chevrons. The reveal instead keeps the
+focused tab clear of the chevron at each end it can scroll past.
+`widget.scroll_extents` exposes a viewport's last content and visible extents
+for the builder. The edge fade is still to come.
+
+`ui_tabs_rtl` holds the reveal clear of the chevrons and a back page of the
+strip's width on Windows and Linux; the full UI sweep passes 103/103 on both.
