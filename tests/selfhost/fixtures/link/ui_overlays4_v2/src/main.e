@@ -95,9 +95,9 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
     var e1: err = ok
     if which == .PaletteGrouped {
         var grouped: [3]navigation.PaletteCommand = zero
-        grouped[0usize] = navigation.PaletteCommand { name: names[0usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 2usize, shortcut: "Ctrl+Shift+B" }
-        grouped[1usize] = navigation.PaletteCommand { name: names[1usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 0usize, shortcut: "F6" }
-        grouped[2usize] = navigation.PaletteCommand { name: names[2usize], group: "Commands", category: "Release", match_start: 0usize, match_end: 3usize, shortcut: "" }
+        grouped[0usize] = navigation.PaletteCommand { name: names[0usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 2usize, shortcut: "Ctrl+Shift+B", unavailable: "" }
+        grouped[1usize] = navigation.PaletteCommand { name: names[1usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 0usize, shortcut: "F6", unavailable: "" }
+        grouped[2usize] = navigation.PaletteCommand { name: names[2usize], group: "Commands", category: "Release", match_start: 0usize, match_end: 3usize, shortcut: "", unavailable: "No project open" }
         let (made_palette, made_palette_error) = navigation.command_palette_grouped(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, grouped[..], active, true, activate, run, dismiss, 560.0)
         palette = made_palette
         e1 = made_palette_error
@@ -230,10 +230,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, has_recent_group) = find(grouped_tree, .Group, "Recent")
     let (_, has_commands_group) = find(grouped_tree, .Group, "Commands")
     let (_, has_categorized_option) = find(grouped_tree, .Option, "Project: Build, Ctrl+Shift+B")
+    let (unavailable_option, has_unavailable_option) = find(grouped_tree, .Option, "Release: Deploy")
     if !has_grouped_panel || !has_grouped_first || !has_grouped_last { os.exit(41i32) }
-    if !has_recent_group || !has_commands_group || !has_categorized_option || testing.by_text(&harness, "Project:").count != 2usize || testing.by_text(&harness, "Release:").count != 1usize || testing.by_text(&harness, "Bu").count != 1usize || testing.by_text(&harness, "ild").count != 1usize || testing.by_text(&harness, "Ctrl").count != 1usize || testing.by_text(&harness, "Shift").count != 1usize || testing.by_text(&harness, "F6").count != 1usize { os.exit(42i32) }
+    if !has_recent_group || !has_commands_group || !has_categorized_option || !has_unavailable_option || !unavailable_option.state.disabled || !same(unavailable_option.hint, "No project open") || testing.by_text(&harness, "Project:").count != 2usize || testing.by_text(&harness, "Release:").count != 1usize || testing.by_text(&harness, "Bu").count != 1usize || testing.by_text(&harness, "ild").count != 1usize || testing.by_text(&harness, "Ctrl").count != 1usize || testing.by_text(&harness, "Shift").count != 1usize || testing.by_text(&harness, "F6").count != 1usize || testing.by_text(&harness, "No project open").count != 1usize { os.exit(42i32) }
     if !near(grouped_panel.height, 246.0) { os.exit(43i32) }
     if !near(grouped_first.y, grouped_panel.y + 73.0) || !near(grouped_last.y, grouped_first.y + 92.0) { os.exit(44i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].runs != 1usize { os.exit(45i32) }
     // With no match: the empty state, 24 above and below (142 in all).
     let (root_3, build_3_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Empty, 0usize)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(26i32) }

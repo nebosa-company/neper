@@ -3828,7 +3828,7 @@ fn index_pick_fire(ctx: *void) -> err {
 // in its height, under the `on-surface` state layer; the active one
 // `secondary-container` with its label in `on-secondary-container`. A list item
 // in the tree with its position, Selected when active.
-fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, active: usize, pick: widget.Change[usize]) -> ([]widget.Node, err) {
+fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, unavailable: []const str, active: usize, pick: widget.Change[usize]) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
     let (rows, rows_error) = mem.alloc[widget.Node](a, names.len)
     if rows_error != ok { ret (none, TooLarge) }
@@ -3842,10 +3842,11 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         picks[i] = IndexPick { index: i, pick: pick }
         actions[i] = widget.Submit { ctx: mem.cast[*void](&picks[i]), invoke: index_pick_fire }
         let row_key = first + u64(i)
-        let state = control.control_state(t, row_key, true, false)
+        let enabled = unavailable.len != names.len || unavailable[i].len == 0usize
+        let state = control.control_state(t, row_key, enabled, false)
         var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
         var ink = style.color(t.tokens, .OnSurface)
-        if i == active {
+        if i == active && enabled {
             fill = style.color(t.tokens, .SecondaryContainer)
             ink = style.color(t.tokens, .OnSecondaryContainer)
         }
@@ -3860,6 +3861,7 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         look.padding_y = control.max_zero((40.0 - line) * 0.5)
         look.min_height = 40.0
         look.min_width = 24.0
+        if !enabled { look.opacity = t.tokens.states.disabled_content }
         var caption = control.text_options()
         caption.role = .BodyMedium
         caption.wrap = .None
@@ -3907,23 +3909,36 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
             caption_parts[1usize] = name_node
             said = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), caption_parts[0usize..2usize])
         }
-        if shortcuts.len == names.len && shortcuts[i].len > 0usize {
+        var trailing: widget.Node = zero
+        var has_trailing = false
+        if !enabled {
+            var reason_options = caption
+            reason_options.role = .BodySmall
+            let (reason, reason_error) = control.colored_text(a, 0u64, unavailable[i], t, reason_options, style.color(t.tokens, .OnSurfaceVariant))
+            if reason_error != ok { ret (none, reason_error) }
+            trailing = reason
+            has_trailing = true
+        } else if shortcuts.len == names.len && shortcuts[i].len > 0usize {
             let (caps, caps_error) = control.compact_key_caps(a, t, shortcuts[i])
             if caps_error != ok { ret (none, caps_error) }
+            trailing = caps
+            has_trailing = true
             let (spoken_prefix, spoken_prefix_error) = string.concat(a, semantic_label, ", ")
             if spoken_prefix_error != ok { ret (none, TooLarge) }
             let (spoken, spoken_error) = string.concat(a, spoken_prefix, shortcuts[i])
             if spoken_error != ok { ret (none, TooLarge) }
             semantic_label = spoken
+        }
+        if has_trailing {
             let (row_parts, row_parts_error) = mem.alloc[widget.Node](a, 2usize)
             if row_parts_error != ok { ret (none, TooLarge) }
             row_parts[0usize] = said
-            row_parts[1usize] = caps
+            row_parts[1usize] = trailing
             var spread = style.defaults()
             spread.width = style.Length { Percent: 100.0 }
             said = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 12.0 }, spread, row_parts[0usize..2usize])
         }
-        let (made, made_error) = control.pressable(a, row_key, t, 3u8, semantic_label, look, true, false, &actions[i], said)
+        let (made, made_error) = control.pressable(a, row_key, t, 3u8, semantic_label, look, enabled, false, &actions[i], said)
         if made_error != ok { ret (none, made_error) }
         var stretched = made
         stretched.style.width = style.Length { Percent: 100.0 }
@@ -3933,6 +3948,10 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         entry.row = u32(i + 1usize)
         entry.row_count = u32(names.len)
         if i == active { entry.states = accessibility.STATE_SELECTED }
+        if !enabled {
+            entry.states = entry.states | accessibility.STATE_DISABLED
+            entry.hint = unavailable[i]
+        }
         let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
         if wrapped_error != ok { ret (none, TooLarge) }
         wrapped[0usize] = stretched
@@ -3946,7 +3965,7 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
 
 // The Up and Down shortcuts moving `active` through `activate`, and Enter
 // picking it, for a switcher or a palette; v2 (D978), wrapping at the ends.
-fn choice_scope(a: *mem.Arena, key: widget.Key, count: usize, active: usize, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
+fn choice_scope(a: *mem.Arena, key: widget.Key, count: usize, active: usize, runnable: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
     let (moves, moves_error) = mem.alloc[IndexPick](a, 3usize)
     if moves_error != ok { ret (zero, TooLarge) }
     var previous = active
@@ -3962,7 +3981,7 @@ fn choice_scope(a: *mem.Arena, key: widget.Key, count: usize, active: usize, act
     shortcuts[0usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: index_pick_fire } }
     shortcuts[1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: index_pick_fire } }
     var default_action: widget.Submit = zero
-    if count > 0usize { default_action = widget.Submit { ctx: mem.cast[*void](&moves[2usize]), invoke: index_pick_fire } }
+    if count > 0usize && runnable { default_action = widget.Submit { ctx: mem.cast[*void](&moves[2usize]), invoke: index_pick_fire } }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = content
@@ -4016,7 +4035,7 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var no_categories: []const str = zero
     var no_shortcuts: []const str = zero
     var no_matches: []const usize = zero
-    let (rows, rows_error) = choice_rows(a, key + 2u64, t, names, no_categories, no_matches, no_matches, no_shortcuts, active, pick)
+    let (rows, rows_error) = choice_rows(a, key + 2u64, t, names, no_categories, no_matches, no_matches, no_shortcuts, no_shortcuts, active, pick)
     if rows_error != ok { ret (zero, rows_error) }
     var inset = style.defaults()
     inset.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 4.0 } }
@@ -4030,14 +4049,14 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     list_sem.row_count = u32(names.len)
     if active < names.len { list_sem.active = key + 2u64 + u64(active) }
     let list = widget.semantics(0u64, list_sem, style.defaults(), list_body[0usize..1usize])
-    let (scoped, scoped_error) = choice_scope(a, key + 1u64, names.len, active, activate, pick, dismiss, list)
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, names.len, active, true, activate, pick, dismiss, list)
     if scoped_error != ok { ret (zero, scoped_error) }
     let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width, false)
     ret (made, made_error)
 }
 
 type PaletteMode = enum u8 { Commands, Files, Symbols, Line }
-type PaletteCommand = struct { name: str, group: str, category: str, match_start: usize, match_end: usize, shortcut: str }
+type PaletteCommand = struct { name: str, group: str, category: str, match_start: usize, match_end: usize, shortcut: str, unavailable: str }
 
 fn palette_mode_prefix(mode: PaletteMode) -> str {
     if mode == .Commands { ret ">" }
@@ -4164,7 +4183,7 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
 // `body-medium` `on-surface-variant`, centred. The footer is 32 tall, 16 at the
 // sides, below a 1px `outline-variant` line: "Up and Down to move, Enter to run"
 // in `body-small` `on-surface-variant`.
-// ponytail: no unavailable rows, busy bar, ranking or compact form; the
+// ponytail: no busy bar, ranking or compact form; the
 // caller still filters and keeps `active` inside the list.
 fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (made, made_error) = command_palette_mode(a, key, t, label, buffer, len, typed, .Commands, commands, active, open, activate, run, dismiss, width)
@@ -4174,7 +4193,7 @@ fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 fn command_palette_mode(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     var no_text: []const str = zero
     var no_matches: []const usize = zero
-    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, commands, no_text, no_text, no_matches, no_matches, no_text, active, open, activate, run, dismiss, width)
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, commands, no_text, no_text, no_matches, no_matches, no_text, no_text, active, open, activate, run, dismiss, width)
     ret (made, made_error)
 }
 
@@ -4191,6 +4210,8 @@ fn command_palette_grouped(a: *mem.Arena, key: widget.Key, t: *const control.The
     if match_ends_error != ok { ret (zero, TooLarge) }
     let (shortcuts, shortcuts_error) = mem.alloc[str](a, commands.len)
     if shortcuts_error != ok { ret (zero, TooLarge) }
+    let (unavailable, unavailable_error) = mem.alloc[str](a, commands.len)
+    if unavailable_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < commands.len {
         names[i] = commands[i].name
@@ -4199,13 +4220,14 @@ fn command_palette_grouped(a: *mem.Arena, key: widget.Key, t: *const control.The
         match_starts[i] = commands[i].match_start
         match_ends[i] = commands[i].match_end
         shortcuts[i] = commands[i].shortcut
+        unavailable[i] = commands[i].unavailable
         i += 1usize
     }
-    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, categories, match_starts, match_ends, shortcuts, active, open, activate, run, dismiss, width)
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, categories, match_starts, match_ends, shortcuts, unavailable, active, open, activate, run, dismiss, width)
     ret (made, made_error)
 }
 
-fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, unavailable: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (field, field_error) = palette_field(a, key + 2u64, t, buffer, len, typed, mode)
     if field_error != ok { ret (zero, field_error) }
@@ -4226,7 +4248,7 @@ fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
     var results = style.defaults()
     results.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
     if commands.len > 0usize {
-        let (plain_rows, rows_error) = choice_rows(a, key + 3u64, t, commands, categories, match_starts, match_ends, shortcuts, active, run)
+        let (plain_rows, rows_error) = choice_rows(a, key + 3u64, t, commands, categories, match_starts, match_ends, shortcuts, unavailable, active, run)
         if rows_error != ok { ret (zero, rows_error) }
         var rows = plain_rows
         if groups.len == commands.len {
@@ -4274,7 +4296,8 @@ fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
     parts[3usize] = edge
     parts[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, foot, parts[7usize..8usize])
     let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..5usize])
-    let (scoped, scoped_error) = choice_scope(a, key + 1u64, commands.len, active, activate, run, dismiss, column)
+    let runnable = active < commands.len && (unavailable.len != commands.len || unavailable[active].len == 0usize)
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, commands.len, active, runnable, activate, run, dismiss, column)
     if scoped_error != ok { ret (zero, scoped_error) }
     let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width, true)
     ret (made, made_error)

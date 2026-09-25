@@ -22210,3 +22210,13 @@ uses the 20px, 11px-text wrapper from the UX specification.
 The shortcut is joined to the Option's accessible name without changing its
 key or activation index. `ui_overlays4_v2` holds split chords and a single-key
 chord on Windows and Linux. `palette-key-caps.png` is the Segoe UI visual check.
+
+## D1060 — One unavailable reason owns every disabled-row signal
+
+A non-empty `PaletteCommand.unavailable` is the row's single disabled-state
+source: it replaces the shortcut with the trailing reason, fades all content to
+38%, removes pointer and Enter activation, and marks the Option Disabled with
+the same reason as its accessibility hint. An empty value remains runnable.
+
+`ui_overlays4_v2` holds the visual word, disabled semantics and suppressed Enter
+on Windows and Linux. `palette-unavailable.png` is the Segoe UI visual check.
