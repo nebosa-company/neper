@@ -184,7 +184,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     fonts[0usize] = shape.Font { id: 7u32, data: font_bytes, face_index: 0u32 }
     if scene.register_font(&renderer, fonts[0usize]) != ok { os.exit(6i32) }
     let tokens = style.reference(.Light)
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 64usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 8u16, max_commands: 512usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 256usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 2048usize })
     if runtime_error != ok { os.exit(7i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts[0usize..1usize], language: "", runtime: &runtime }
@@ -297,6 +297,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         d += 1usize
     }
     if dots != 3usize || !mem.eq[u8](navigation.middle_cut(&frame, &theme, "aaaa", measure_caption, room), "aaaa") { os.exit(38i32) }
+    // (D1291) A cut crumb, hovered past the delay, shows its whole name as a
+    // tooltip.
+    var crumb_names: [4]str = zero
+    crumb_names[0usize] = "aaaa"
+    crumb_names[1usize] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    crumb_names[2usize] = "aaaa"
+    crumb_names[3usize] = "aaaa"
+    var crumb_picks: [4]widget.Submit = zero
+    var tip_step = 0usize
+    while tip_step < 3usize {
+        let tip_at = 8000000000i64 + i64(tip_step) * 600000000i64
+        if testing.begin(&harness, time.Instant { nanos: tip_at }) != ok { os.exit(39i32) }
+        frame = mem.arena_from(frame_storage)
+        let (tip_trail, tip_trail_error) = navigation.breadcrumbs_of(&frame, 5000u64, &theme, "Path", crumb_names[..], crumb_picks[..], navigation.breadcrumbs_options())
+        let (trail_page, trail_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if tip_trail_error != ok || trail_page_error != ok { os.exit(40i32) }
+        trail_page[0usize] = tip_trail
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 200.0), trail_page[0usize..1usize]), time.Instant { nanos: tip_at }) != ok { os.exit(41i32) }
+        if tip_step == 0usize {
+            let (long_crumb, has_long_crumb) = widget.bounds_of(&runtime, testing.by_key(&harness, 5002u64).element)
+            if !has_long_crumb || testing.hover(&harness, long_crumb.x + 10.0, long_crumb.y + long_crumb.height * 0.5) != ok { os.exit(42i32) }
+        }
+        tip_step += 1usize
+    }
+    if testing.by_text(&harness, crumb_names[1usize]).count == 0usize { os.exit(43i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(28i32) }
     try io.print("ui content2 v2 ok\n")
     ret ok
