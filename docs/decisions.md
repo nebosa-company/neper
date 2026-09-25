@@ -22639,3 +22639,12 @@ at the pointer handle's existing minimum.
 
 `ui_collections2_v2` holds both directions and their requested widths on
 Windows and Linux. This is behavior-only on the reviewed HeaderRow surface.
+
+## D1097 — Header keys reorder through the existing callback
+
+Focused header cells bind Ctrl+Shift+Left and Ctrl+Shift+Right to the existing
+caller-owned Reorder operation for the adjacent column. A boundary key is left
+unbound rather than emitting a no-op reorder.
+
+`ui_collections2_v2` holds adjacent movement and the boundary on Windows and
+Linux. This is behavior-only on the reviewed HeaderRow surface.
