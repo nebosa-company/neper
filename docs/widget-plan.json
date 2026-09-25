@@ -727,7 +727,7 @@
             "Outline",
             "TreeTable"
           ],
-          "evidence": "lib/e/ui/collection.e (D845): table and data_grid over a TableSource (count, key, cell) in the lazy viewport under a header row whose taps report the column to sort, whose drags carry the column as a D844 drop payload for a Reorder, and whose handles report a ColumnResize, rows picking by key and marked from a key selection; tree and outline over a TreeSource (count/key per parent, has_children, build) flattening only the expanded nodes, marks and Left/Right toggling, rows picking, tree items with level and position; tree_table hanging CellSource columns off the tree under the same header; tests/selfhost/fixtures/link/ui_tabular on both hosts"
+          "evidence": "lib/e/ui/collection.e (D845): table and data_grid over a TableSource (count, key, cell) in the lazy viewport under a header row whose taps report the column to sort, whose drags carry the column as a D844 drop payload for a Reorder, and whose handles report a ColumnResize, rows picking by key and marked from a key selection; tree and outline over a TreeSource (count/key per parent, has_children, build) flattening only the expanded nodes, marks and Left/Right toggling, rows picking, tree items with level and position; tree_table hanging CellSource columns off the tree under the same header; tests/selfhost/fixtures/link/ui_tabular on both hosts. (D1093) Focused HeaderRow cells route Enter and Space through the existing sort callback; ui_collections2_v2 holds both keys on Windows and Linux."
         },
         {
           "id": "P3-02",

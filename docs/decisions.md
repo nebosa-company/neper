@@ -22603,3 +22603,12 @@ introduced.
 
 `ui_collections2_v2` holds Up from the first source row into the header on
 Windows and Linux. This is behavior-only on the reviewed Table surface.
+
+## D1093 — Header cells sort from Enter and Space
+
+Each header cell's existing sort callback is also its scope's default action
+and Space shortcut. Pointer sorting, dragging and dropping still use the same
+gesture region and callback state.
+
+`ui_collections2_v2` holds Enter and Space sorting on Windows and Linux. This
+is behavior-only on the reviewed HeaderRow surface.
