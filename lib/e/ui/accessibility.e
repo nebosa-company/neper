@@ -27,7 +27,7 @@ type Relations = struct { labelled_by: Id, described_by: Id, error_by: Id, contr
 type Live = enum u8 { Off, Polite, Assertive }
 // A node's place in a collection: one-based row and column, 0 for none.
 type Position = struct { row: u32, column: u32, row_count: u32, column_count: u32 }
-type Node = struct { id: Id, role: Role, label: str, value: str, hint: str, state: State, bounds: geometry.Rect, actions: []const Action, children: []const Id, relations: Relations, live: Live, position: Position, level: u8, sort: Sort, selection_start: usize, selection_end: usize }
+type Node = struct { id: Id, role: Role, label: str, value: str, hint: str, state: State, bounds: geometry.Rect, actions: []const Action, children: []const Id, relations: Relations, live: Live, position: Position, level: u8, sort: Sort, selection_start: usize, selection_end: usize, names: []const str }
 type Tree = struct { root: Id, nodes: []const Node }
 error Unsupported
 error Invalid
@@ -358,6 +358,32 @@ fn promote_actions(a: *mem.Arena, nodes: []Node, marked: []const bool) -> err {
     ret ok
 }
 
+// (D1197) A node's named custom actions, one per line of `names`, copied.
+fn names_of(a: *mem.Arena, names: str) -> ([]const str, err) {
+    var count = 1usize
+    var i = 0usize
+    while i < names.len {
+        if names[i] == 10u8 { count += 1usize }
+        i += 1usize
+    }
+    let (named, named_error) = mem.alloc[str](a, count)
+    if named_error != ok { ret (zero, named_error) }
+    var start = 0usize
+    var j = 0usize
+    i = 0usize
+    while i <= names.len {
+        if i == names.len || names[i] == 10u8 {
+            let (copied, copy_error) = copy_text(a, names[start..i])
+            if copy_error != ok { ret (zero, copy_error) }
+            named[j] = copied
+            j += 1usize
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    ret (named, ok)
+}
+
 fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
     let (root, has_root) = widget.root_of(runtime)
     if !has_root { ret (zero, Invalid) }
@@ -422,6 +448,11 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 if sm.sort == 1u8 { node.sort = .Ascending }
                 if sm.sort == 2u8 { node.sort = .Descending }
                 if sm.sort == 3u8 { node.sort = .Other }
+                if sm.names.len > 0usize {
+                    let (named, named_error) = names_of(a, sm.names)
+                    if named_error != ok { ret (zero, named_error) }
+                    node.names = named
+                }
             }
             if node.relations.described_by.slot == 0u32 && node.relations.described_by.generation == 0u32 {
                 let (description, described) = widget.tooltip_description(runtime, slot)
@@ -681,6 +712,14 @@ fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err 
     }
     if action == .Copy && widget.edit_copy_child(runtime, id) == ok { ret ok }
     if widget.semantic_action(runtime, id, action_bit(action)) == ok { ret ok }
+    ret Unsupported
+}
+
+// (D1197) A named custom action of the node, performed as the platform would.
+// ponytail: the host records (os.AccessibleNode) do not carry names yet; the
+// bridge that publishes them is Unsupported on every host.
+fn perform_named(runtime: *widget.Runtime, id: Id, name: str) -> err {
+    if widget.semantic_named(runtime, id, name) == ok { ret ok }
     ret Unsupported
 }
 
