@@ -25083,3 +25083,17 @@ and iOS wheels are still to come.
 `ui_pickers2_v2` holds 14:30 shown as 02 and 30 with PM, the dial's 3 setting
 15, the minute box asking to be edited, and the minute dial's sixth number
 setting 30, on Windows and Linux.
+
+## D1295 — The time picker has its input mode
+
+`overlay.time_picker_modal_with` takes `TimeModalOptions` and gives the touch
+time picker its input mode. While typing, the hour and minute boxes become
+outlined 80-wide text fields (`key + 1`, `key + 2`) over the caller's
+buffers, with "Hour" and "Minute" in `body-small` under them, and the dial
+gives way. A 40 mode toggle (`key + 6`) stands at the start of the actions
+row: "Switch to text input" with the `edit` pencil, or "Switch to clock"
+with a clock. `time_picker_modal` passes no options and stays dial-only.
+Reading and range-checking the typed text is the caller's.
+
+`ui_pickers2_v2` holds, in input mode, the hour box as an editor, no dial and
+the mode toggle on Windows and Linux.

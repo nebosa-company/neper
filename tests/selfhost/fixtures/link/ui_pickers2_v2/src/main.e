@@ -297,6 +297,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         dial_step += 1usize
     }
+    // (D1295) Input mode: the boxes are typed fields, the dial gives way, and the
+    // mode toggle is there to switch back.
+    let (hour_text, hour_text_error) = mem.alloc[u8](a, 4usize)
+    let (minute_text, minute_text_error) = mem.alloc[u8](a, 4usize)
+    if hour_text_error != ok || minute_text_error != ok { os.exit(60i32) }
+    var typing_options: overlay.TimeModalOptions = zero
+    typing_options.typing = true
+    typing_options.toggle_mode = &s.press
+    typing_options.hour_text = hour_text
+    typing_options.minute_text = minute_text
+    f = mem.arena_from(frame_storage)
+    let (typing_modal, typing_error) = overlay.time_picker_modal_with(&f, 1300u64, &theme, 14u8, 30u8, false, true, true, time_change, &s.press, &s.press, typing_options)
+    let (typing_page, typing_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if typing_error != ok || typing_page_error != ok { os.exit(61i32) }
+    typing_page[0usize] = typing_modal
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), typing_page[0usize..1usize]), time.Instant { nanos: 6200000000i64 }) != ok { os.exit(62i32) }
+    let (_, _, has_typed_hour) = widget.edit_selection(&runtime, testing.by_key(&harness, 1301u64).element)
+    if !has_typed_hour || testing.by_key(&harness, 1305u64).count != 0usize || testing.by_key(&harness, 1306u64).count != 1usize { os.exit(63i32) }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }
