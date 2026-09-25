@@ -24899,3 +24899,15 @@ to come.
 `ui_containers_v2` holds the chevron's square drawn three different ways,
 shut, mid-turn and open, on Windows and Linux; the other disclosure fixtures
 still pass.
+
+## D1283 — Wide tables scroll sideways
+
+`TableOptions.view_width` gives a table the Table spec's Wide variant: when
+the columns are wider than the view, header and body sit together in a
+sideways viewport (keyed `key + 2097152`) the view's width, with its overlay
+thumb, so the header scrolls with the body as the spec says. The viewport
+takes the runtime's wheel, drag and thumb (D1249). The pinned first column
+and its seam shadow are still to come.
+
+`ui_collections2_v2` holds a 200 viewport over 300 of columns on Windows and
+Linux.
