@@ -23173,3 +23173,13 @@ works in both reading directions, and keeps taps as one-step actions.
 `ui_navigation4_v2` holds multi-page left-to-right and right-to-left drags on
 Windows and Linux. Host haptic ticks remain a consumer of those per-page
 changes when touch hosts expose haptics.
+
+## D1151 — Mouse Back shares navigation's cancel path
+
+A host PointerDown whose changed button is Back is translated by the widget
+runtime into its existing Back event. NavigationStack and compact
+NavigationSplit therefore reuse their scoped cancel action for the mouse's
+Back button, alongside Escape, Alt+Left and the platform back gesture.
+
+`ui_navigation` holds the mouse Back pop on Windows and Linux. The host layers
+already map Windows XBUTTON1 and X11 button 8 to the shared Back pointer button.
