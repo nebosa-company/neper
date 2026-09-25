@@ -2303,7 +2303,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32 }
 
 // An ellipse of four quarter arcs about a centre.
@@ -2320,7 +2320,14 @@ fn oval(b: *geometry.PathBuilder, cx: f32, cy: f32, rx: f32, ry: f32) -> err {
 
 fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*Glyph](ctx)
-    let (pb, pb_error) = geometry.path_builder(g.arena, 16usize, 24usize)
+    // (D1302) The gear's two rings and eight teeth need the larger builder.
+    var verbs = 16usize
+    var points = 24usize
+    if g.kind == .Settings {
+        verbs = 32usize
+        points = 48usize
+    }
+    let (pb, pb_error) = geometry.path_builder(g.arena, verbs, points)
     if pb_error != ok { ret TooLarge }
     var builder = pb
     let x = area.x
@@ -2511,6 +2518,41 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if g.kind == .VisibilityOff {
             try geometry.move_to(&builder, geometry.Point { x: x + w * 0.18, y: y + h * 0.18 })
             try geometry.line_to(&builder, geometry.Point { x: x + w * 0.82, y: y + h * 0.82 })
+        }
+    }
+    if g.kind == .Settings {
+        // (D1302) A gear: a hub ring and eight teeth standing out round it.
+        let gx = x + w * 0.5
+        let gy = y + h * 0.5
+        try oval(&builder, gx, gy, w * 0.16, h * 0.16)
+        try oval(&builder, gx, gy, w * 0.3, h * 0.3)
+        var tooth = 0usize
+        while tooth < 8usize {
+            var dx: f32 = 0.0
+            var dy: f32 = 0.0
+            if tooth == 0usize { dx = 1.0 }
+            if tooth == 1usize {
+                dx = 0.7071
+                dy = 0.7071
+            }
+            if tooth == 2usize { dy = 1.0 }
+            if tooth == 3usize {
+                dx = 0.0 - 0.7071
+                dy = 0.7071
+            }
+            if tooth == 4usize { dx = 0.0 - 1.0 }
+            if tooth == 5usize {
+                dx = 0.0 - 0.7071
+                dy = 0.0 - 0.7071
+            }
+            if tooth == 6usize { dy = 0.0 - 1.0 }
+            if tooth == 7usize {
+                dx = 0.7071
+                dy = 0.0 - 0.7071
+            }
+            try geometry.move_to(&builder, geometry.Point { x: gx + dx * w * 0.3, y: gy + dy * h * 0.3 })
+            try geometry.line_to(&builder, geometry.Point { x: gx + dx * w * 0.42, y: gy + dy * h * 0.42 })
+            tooth += 1usize
         }
     }
     if g.kind == .Refresh {
@@ -8644,14 +8686,34 @@ fn joined(a: *mem.Arena, head: str, tail: str) -> (str, err) {
 // fires that row's existing dismiss action. (D1220) With a pointer the Dismiss
 // button is built only while its row or the button is hovered or focused (a 32
 // space holds its place otherwise); on touch it always shows.
-// ponytail: no settings button, grouping of repeats, loading rows or insert
-// motion.
+// (D1302) `notification_list_with` adds the header's settings button, skeleton
+// rows while older notices load, and the failed-load row with Retry.
+// ponytail: no grouping of repeats or insert motion.
 fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
+    var options: NotificationListOptions = zero
+    let (node, node_error) = notification_list_with(a, key, t, label, items, mark_read, width, height, options)
+    ret (node, node_error)
+}
+
+// (D1302) A notification list's extras: a 40 `settings` icon button named
+// "Notification settings" (keyed `key + 200`) after Mark all read, firing
+// `settings`; with `loading`, three skeleton rows after the notices (a busy group
+// named "Loading older notifications", `key + 201`); with `failed`, the row
+// "Couldn't load older notifications." and a Retry text button (`key + 202`)
+// firing `retry`.
+type NotificationListOptions = struct { has_settings: bool, settings: widget.Submit, loading: bool, failed: bool, retry: widget.Submit }
+
+fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32, options: NotificationListOptions) -> (widget.Node, err) {
     if items.len > 64usize { ret (zero, TooLarge) }
+    // The buttons keep their actions past this call: settings, then retry.
+    let (extra_actions, extra_actions_error) = mem.alloc[widget.Submit](a, 2usize)
+    if extra_actions_error != ok { ret (zero, TooLarge) }
+    extra_actions[0usize] = options.settings
+    extra_actions[1usize] = options.retry
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let ink = style.color(t.tokens, .OnSurface)
     let inner = max_zero(width - 2.0)
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * items.len + 1usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * items.len + 3usize)
     if rows_error != ok { ret (zero, TooLarge) }
     let (targets, targets_error) = mem.alloc[FocusTo](a, items.len)
     if targets_error != ok { ret (zero, TooLarge) }
@@ -8790,7 +8852,47 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
         n += 1usize
         i += 1usize
     }
-    if items.len == 0usize {
+    if options.loading {
+        // (D1302) Older notices on their way: three skeleton rows.
+        let (sweep, sweep_error) = placeholder_sweep(a, t, 0.0, inner, 0.4)
+        if sweep_error != ok { ret (zero, sweep_error) }
+        let (bones, bones_error) = mem.alloc[widget.Node](a, 3usize)
+        if bones_error != ok { ret (zero, TooLarge) }
+        var b = 0usize
+        while b < 3usize {
+            let (bone, bone_error) = skeleton_row(a, 0u64, t, inner, sweep)
+            if bone_error != ok { ret (zero, bone_error) }
+            bones[b] = bone
+            b += 1usize
+        }
+        let bone_column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bones[0usize..3usize])
+        let (loading_node, loading_error) = placeholder_region(a, key + 201u64, t, "Loading older notifications", sweep, bone_column)
+        if loading_error != ok { ret (zero, loading_error) }
+        rows[n] = loading_node
+        n += 1usize
+    }
+    if options.failed {
+        // (D1302) The older notices failed to load: say so and offer Retry.
+        var said = text_options()
+        said.role = .BodyMedium
+        let (said_node, said_error) = colored_text(a, 0u64, "Couldn't load older notifications.", t, said, muted)
+        if said_error != ok { ret (zero, said_error) }
+        var plain_retry = button_options()
+        plain_retry.variant = .Plain
+        let (retry_node, retry_error) = button(a, key + 202u64, t, "Retry", &extra_actions[1usize], plain_retry)
+        if retry_error != ok { ret (zero, retry_error) }
+        let (failed_parts, failed_parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if failed_parts_error != ok { ret (zero, TooLarge) }
+        failed_parts[0usize] = said_node
+        failed_parts[1usize] = retry_node
+        var failed_style = style.defaults()
+        failed_style.width = style.Length { Px: inner }
+        let edge = style.Length { Px: 12.0 }
+        failed_style.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: edge, right: style.Length { Px: 8.0 }, bottom: edge }
+        rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, failed_style, failed_parts[0usize..2usize])
+        n += 1usize
+    }
+    if items.len == 0usize && !options.loading && !options.failed {
         var calm = empty_options()
         calm.compact = true
         calm.glyph = .CheckCircle
@@ -8817,10 +8919,18 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     plain.enabled = unread > 0usize || items.len > 0usize
     let (marked, marked_error) = button(a, key + 1u64, t, "Mark all read", mark_read, plain)
     if marked_error != ok { ret (zero, marked_error) }
-    let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 4usize)
     if bits_error != ok { ret (zero, TooLarge) }
     bits[0usize] = title_node
     bits[1usize] = marked
+    if options.has_settings {
+        // (D1302) The settings button after Mark all read.
+        let (gear, gear_error) = glyph_button(a, key + 200u64, t, .Settings, "Notification settings", &extra_actions[0usize], 40.0, 20.0)
+        if gear_error != ok { ret (zero, gear_error) }
+        bits[2usize] = marked
+        bits[3usize] = gear
+        bits[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), bits[2usize..4usize])
+    }
     var bar = sized_style(inner, 56.0)
     let flat = style.Length { Px: 0.0 }
     bar.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: flat, right: style.Length { Px: 8.0 }, bottom: flat }
