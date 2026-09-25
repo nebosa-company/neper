@@ -129,6 +129,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !close_to(shot.pixels[left], variant.red) || !close_to(shot.pixels[left + 1usize], variant.green) { os.exit(21i32) }
     // The centre is empty: a ring, not a disc.
     if shot.pixels[(cy * 120usize + cx) * 4usize + 3usize] != 0u8 { os.exit(22i32) }
+    // (D1279) A determinate bar eases: from 0.2 to 0.8 it stands near half way
+    // 150 ms into its 300, and at 0.8 once done.
+    let ease_primary = style.color(&tokens, .Primary)
+    var ease_step = 0usize
+    while ease_step < 5usize {
+        var ease_at = 10000000000i64
+        var ease_value: f32 = 0.2
+        if ease_step == 1usize { ease_at = 10016000000i64 }
+        if ease_step == 2usize {
+            ease_at = 10100000000i64
+            ease_value = 0.8
+        }
+        if ease_step == 3usize {
+            ease_at = 10250000000i64
+            ease_value = 0.8
+        }
+        if ease_step == 4usize {
+            ease_at = 10500000000i64
+            ease_value = 0.8
+        }
+        if testing.begin(&harness, time.Instant { nanos: ease_at }) != ok { os.exit(28i32) }
+        frame = mem.arena_from(frame_storage)
+        let (eased_bar, eased_error) = control.progress_bar(&frame, 90u64, &theme, "Copying", ease_value, false, 100.0)
+        let (eased_page, eased_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if eased_error != ok || eased_page_error != ok { os.exit(29i32) }
+        eased_page[0usize] = eased_bar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(120.0, 120.0), eased_page[0usize..1usize]), time.Instant { nanos: ease_at }) != ok { os.exit(30i32) }
+        if ease_step >= 3usize {
+            let (eased_box, has_eased_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 90u64).element)
+            let (eased_shot, eased_shot_error) = testing.snapshot(&harness, a)
+            if !has_eased_box || eased_shot_error != ok { os.exit(31i32) }
+            let row = usize(eased_box.y + 1.0) * 120usize
+            let mid = (row + usize(eased_box.x + 35.0)) * 4usize
+            let far = (row + usize(eased_box.x + 70.0)) * 4usize
+            let mid_lit = close_to(eased_shot.pixels[mid], ease_primary.red) && close_to(eased_shot.pixels[mid + 2usize], ease_primary.blue)
+            let far_lit = close_to(eased_shot.pixels[far], ease_primary.red) && close_to(eased_shot.pixels[far + 2usize], ease_primary.blue)
+            if ease_step == 3usize && (!mid_lit || far_lit) { os.exit(32i32) }
+            if ease_step == 4usize && !far_lit { os.exit(33i32) }
+        }
+        ease_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(23i32) }
     try io.print("ui progress ok\n")
     ret ok

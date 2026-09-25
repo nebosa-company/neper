@@ -3192,8 +3192,61 @@ fn progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, val
 // the value is the percent ("30%"). A progress role named `label`.
 // ponytail: the label row, detail line and completion icon compose with Text
 // beside the bar.
+// (D1279) An eased share, kept across frames on the element keyed `key`: where it
+// eases from, to, since when, and where it stood last frame.
+type EaseCell = struct { from: f32, to: f32, since: i64, shown: f32, set: bool }
+
+// (D1279) What a value drawn at `goal` shows this frame: easing to each new
+// goal over `duration-medium-2` with the standard (ease-in-out) curve from
+// wherever it stood, asking for frames until it arrives; under reduced motion,
+// or before the element exists, the target itself. `forward` never eases
+// backwards: a lower target jumps there (work restarted).
+fn eased_share(t: *const Theme, key: widget.Key, goal: f32, forward: bool) -> f32 {
+    if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret goal }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret goal }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret goal }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: EaseCell = zero
+    let (cell, _, cell_error) = widget.state[EaseCell](&build, key, fresh)
+    if cell_error != ok { ret goal }
+    let now = widget.frame_time(t.runtime).nanos
+    if !cell.set {
+        cell.set = true
+        cell.from = goal
+        cell.to = goal
+        cell.shown = goal
+        cell.since = now
+        ret goal
+    }
+    if goal != cell.to {
+        cell.from = cell.shown
+        cell.to = goal
+        cell.since = now
+        if forward && goal < cell.shown {
+            cell.from = goal
+            cell.shown = goal
+            ret goal
+        }
+    }
+    let span = i64(t.tokens.durations.medium2) * 1000000i64
+    var progress: f32 = 1.0
+    if span > 0i64 && now >= cell.since { progress = f32(now - cell.since) / f32(span) }
+    if progress >= 1.0 {
+        cell.shown = cell.to
+        ret cell.to
+    }
+    cell.shown = cell.from + (cell.to - cell.from) * animation.ease(.EaseInOut, progress)
+    widget.request_animation_frame(t.runtime)
+    ret cell.shown
+}
+
 fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {
-    let share = clamp_share(value)
+    let aimed = clamp_share(value)
+    // (D1279) A determinate bar eases to each new value, never backwards.
+    var share = aimed
+    if !indeterminate { share = eased_share(t, key, aimed, true) }
     let h: f32 = if_else(options.thick, 8.0, 4.0)
     let gap: f32 = if_else(options.full_bleed, 0.0, 4.0)
     let r: f32 = if_else(options.full_bleed, 0.0, h * 0.5)
@@ -3292,7 +3345,7 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     if indeterminate {
         sem.states = accessibility.STATE_BUSY
     } else {
-        let (shown, shown_error) = percent_text(a, share)
+        let (shown, shown_error) = percent_text(a, aimed)
         if shown_error != ok { ret (zero, shown_error) }
         sem.value = shown
     }
@@ -7093,11 +7146,14 @@ fn gauge(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32
 // draws the track alone with "-" and "No data"; stale draws the arc and readout
 // in `on-surface-variant`. One progress node named `label` with the digits as its
 // value and the status word as its hint; the ring is not in the tree.
-// ponytail: value changes jump (no easing) and the loading skeleton is the
-// caller's; the no-data readout is an ASCII hyphen.
+// (D1279) The arc eases to each new value (`eased_share`).
+// ponytail: the loading skeleton is the caller's; the no-data readout is an
+// ASCII hyphen.
 fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, size: f32, options: GaugeOptions) -> (widget.Node, err) {
     if high <= low { ret (zero, TooLarge) }
     let share = clamp_share((value - low) / (high - low))
+    // (D1279) The arc eases to each new value; the digits change at once.
+    let drawn_share = eased_share(t, key, share, false)
     var tone: style.ColorRole = .Primary
     var word = "Normal"
     if share >= options.warn {
@@ -7116,7 +7172,7 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
         fill = muted
         ink = muted
     }
-    var ring = Ring { track: style.color(t.tokens, .SurfaceContainerHighest), fill: fill, share: share, thickness: size * 0.1, arena: a, start: 0.0 - 2.3561945, sweep: 4.712389, gap: 0.0, band: style.color(t.tokens, .WarningContainer), band_from: options.warn }
+    var ring = Ring { track: style.color(t.tokens, .SurfaceContainerHighest), fill: fill, share: drawn_share, thickness: size * 0.1, arena: a, start: 0.0 - 2.3561945, sweep: 4.712389, gap: 0.0, band: style.color(t.tokens, .WarningContainer), band_from: options.warn }
     if options.no_data { ring.share = 0.0 }
     // The stroke's centre line at 40% of the size: the ring square 90% of it.
     let (painted, painted_error) = ring_node(a, key + 1u64, ring, size * 0.9)
