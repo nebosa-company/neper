@@ -60,6 +60,51 @@ fn build_disabled(a: *mem.Arena, t: *const control.Theme, s: *const Store) -> (w
     ret (widget.box(0u64, page, children[0usize..1usize]), ok)
 }
 
+// (D1226) The same tabs with icons over their labels and a count on Builds' icon;
+// or, `iconic` false, text tabs with a count after Overview's label.
+fn build_badged(a: *mem.Arena, t: *const control.Theme, s: *const Store, iconic: bool) -> (widget.Node, err) {
+    var labels: [3]str = zero
+    labels[0usize] = "Overview"
+    labels[1usize] = "Builds"
+    labels[2usize] = "Settings"
+    var glyphs: [3]control.GlyphKind = zero
+    glyphs[0usize] = .Picture
+    glyphs[1usize] = .Refresh
+    glyphs[2usize] = .Search
+    var counts: [3]str = zero
+    var meanings: [3]str = zero
+    var options = control.tabs_options()
+    if iconic {
+        counts[1usize] = "3"
+        meanings[1usize] = "3 failed"
+        options.icons = glyphs[..]
+        options.badge_names = meanings[..]
+    } else {
+        counts[0usize] = "2"
+    }
+    options.badges = counts[..]
+    let (tabs, tabs_error) = control.tabs_of(a, 100u64, t, labels[..], 0usize, s.actions[..], options)
+    if tabs_error != ok { ret (zero, tabs_error) }
+    let (children, children_error) = mem.alloc[widget.Node](a, 1usize)
+    if children_error != ok { ret (zero, children_error) }
+    children[0usize] = tabs
+    var page = style.defaults()
+    page.width = style.Length { Px: 320.0 }
+    page.height = style.Length { Px: 80.0 }
+    ret (widget.box(0u64, page, children[0usize..1usize]), ok)
+}
+
+fn tab_named(h: *const testing.Harness, label: str) -> bool {
+    let (tree, tree_error) = testing.semantics(h)
+    if tree_error != ok { ret false }
+    var n = 0usize
+    while n < tree.nodes.len {
+        if tree.nodes[n].role == .Tab && mem.eq[u8](tree.nodes[n].label, label) { ret true }
+        n += 1usize
+    }
+    ret false
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -71,7 +116,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (made_runtime, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 64usize, max_states: 4usize, state_bytes: 128usize, state_classes: 1u16, max_depth: 12u16, max_commands: 256usize })
+    let (made_runtime, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 64usize, max_states: 4usize, state_bytes: 128usize, state_classes: 1u16, max_depth: 16u16, max_commands: 256usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = made_runtime
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -124,6 +169,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         n += 1usize
     }
     if disabled_tabs != 1usize { os.exit(28i32) }
+    // (D1226) Icon tabs are 56 tall with the count on Builds' icon, named
+    // "Builds, 3 failed"; a text tab's count follows its label and joins its name.
+    let (iconic, iconic_error) = build_badged(&frame, &theme, &stores[0usize], true)
+    if iconic_error != ok || testing.pump(&harness, iconic, time.Instant { nanos: 4000000000i64 }) != ok { os.exit(29i32) }
+    let (icon_tab, has_icon_tab) = widget.bounds_of(&runtime, testing.by_key(&harness, 102u64).element)
+    if !has_icon_tab || icon_tab.height < 55.5 || icon_tab.height > 56.5 { os.exit(30i32) }
+    if !tab_named(&harness, "Builds, 3 failed") || !tab_named(&harness, "Overview") || testing.by_text(&harness, "3").count == 0usize { os.exit(31i32) }
+    let (texty, texty_error) = build_badged(&frame, &theme, &stores[0usize], false)
+    if texty_error != ok || testing.pump(&harness, texty, time.Instant { nanos: 4100000000i64 }) != ok { os.exit(32i32) }
+    let (text_tab, has_text_tab) = widget.bounds_of(&runtime, testing.by_key(&harness, 101u64).element)
+    if !has_text_tab || text_tab.height > 40.5 || !tab_named(&harness, "Overview, 2") || testing.by_text(&harness, "2").count == 0usize { os.exit(33i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui tabs rtl ok\n")
     ret ok
