@@ -3207,6 +3207,12 @@ fn eased_share(t: *const Theme, key: widget.Key, goal: f32, forward: bool) -> f3
 
 // (D1282) The same over `millis`.
 fn eased_over(t: *const Theme, key: widget.Key, goal: f32, forward: bool, millis: u32) -> f32 {
+    ret eased_on(t, key, key, goal, forward, millis)
+}
+
+// (D1285) The same kept under `slot` on the element keyed `key`, so one element
+// can hold several eases.
+fn eased_on(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32, forward: bool, millis: u32) -> f32 {
     if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret goal }
     let (s, state_error) = widget.state_of(t.runtime)
     if state_error != ok { ret goal }
@@ -3214,7 +3220,7 @@ fn eased_over(t: *const Theme, key: widget.Key, goal: f32, forward: bool, millis
     if found != 1usize { ret goal }
     var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
     var fresh: EaseCell = zero
-    let (cell, _, cell_error) = widget.state[EaseCell](&build, key, fresh)
+    let (cell, _, cell_error) = widget.state[EaseCell](&build, slot, fresh)
     if cell_error != ok { ret goal }
     let now = widget.frame_time(t.runtime).nanos
     if !cell.set {
@@ -4591,7 +4597,7 @@ fn toggle_keys(a: *mem.Arena, expanded: bool, rtl: bool, toggle: *const widget.S
 // focused header. Disabled, the header's content is `on-surface` 38%, no layer,
 // not focusable.
 // (D1282) The chevron turns (eased) rather than swapping.
-// ponytail: the content does not grow or shrink as it opens and closes.
+// (D1285) The content grows and shrinks as it opens and closes.
 fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, options: DisclosureOptions, content: widget.Node) -> (widget.Node, err) {
     let state = control_state(t, key, options.enabled, false)
     var h: f32 = t.tokens.sizes.control_md
@@ -4664,13 +4670,20 @@ fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ex
     if button_error != ok { ret (zero, button_error) }
     let (keyed, keyed_error) = toggle_keys(a, expanded, t.tokens.direction == .RightToLeft, toggle, button_node)
     if keyed_error != ok { ret (zero, keyed_error) }
+    // (D1285) The content grows open and shrinks shut over `duration-medium-2`:
+    // clipped to the share of its height (last frame's) the ease has reached,
+    // still built while it closes; reduced motion shows or hides it at once.
+    var open_goal: f32 = 0.0
+    if expanded { open_goal = 1.0 }
+    let reveal = eased_on(t, key, key + 1048576u64, open_goal, false, t.tokens.durations.medium2)
+    let showing = expanded || reveal > 0.0
     var count = 1usize
-    if expanded { count = 2usize }
+    if showing { count = 2usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = keyed
-    if expanded {
-        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if showing {
+        let (body, body_error) = mem.alloc[widget.Node](a, 2usize)
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = content
         var sem: widget.Semantics = zero
@@ -4679,6 +4692,24 @@ fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ex
         var padded = style.defaults()
         padded.padding = style.EdgeLengths { left: style.Length { Px: 40.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
         parts[1usize] = widget.semantics(key + 1u64, sem, padded, body[0usize..1usize])
+        if reveal < 1.0 && mem.address_of(t.runtime) != 0usize {
+            var natural: f32 = 0.0
+            let (s, state_error) = widget.state_of(t.runtime)
+            if state_error == ok {
+                let (inner_id, inner_count) = widget.find_by_key(s, key + 1u64)
+                if inner_count == 1usize {
+                    let (inner_box, has_inner) = widget.bounds_of(t.runtime, inner_id)
+                    if has_inner { natural = inner_box.height }
+                }
+            }
+            if natural > 0.0 {
+                body[1usize] = parts[1usize]
+                var window = style.defaults()
+                window.height = style.Length { Px: natural * reveal }
+                window.overflow = .Clip
+                parts[1usize] = widget.box(0u64, window, body[1usize..2usize])
+            }
+        }
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
 }
