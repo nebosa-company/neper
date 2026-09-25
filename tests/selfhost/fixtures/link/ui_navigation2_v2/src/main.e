@@ -1,6 +1,6 @@
 // The v2 breadcrumbs, tabs and menu bar (D972, widget plan P5-10,
 // docs/ux/components/Breadcrumbs, Tabs, MenuBar) under the light theme at pointer
-// density: 32 tall crumbs 16 apart across the `chevron-right`, the middle levels
+// density: 32 tall crumbs 16 apart across a direction-mirrored chevron, the middle levels
 // in a "Show 2 hidden levels" crumb opening a menu of them, the current place
 // marked Current; the compact trail the parent link alone, 48 tall; a primary
 // tab bar of 40 tall tabs 8 in, the 3px `primary` indicator under the active tab
@@ -435,6 +435,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (lib_item, has_lib) = find(tree_2, .MenuItem, "lib")
     let (e_item, has_e) = find(tree_2, .MenuItem, "e")
     if !has_folded_2 || !folded_2.state.expanded || !has_lib || !has_e || e_item.bounds.y <= lib_item.bounds.y { os.exit(34i32) }
+    // Right-to-left breadcrumbs keep their logical order but mirror both the
+    // trail separators and the compact parent chevron.
+    var rtl_tokens = style.reference(.Light)
+    rtl_tokens.direction = .RightToLeft
+    let rtl_theme = control.Theme { tokens: &rtl_tokens, fonts: fonts, language: "", runtime: &runtime }
+    let (root_rtl, root_rtl_error) = build(&f, &rtl_theme, s, false, 9usize)
+    if root_rtl_error != ok || testing.pump(&harness, root_rtl, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(85i32) }
+    let (rtl_shot, rtl_shot_error) = testing.snapshot(&harness, a)
+    let (rtl_root, has_rtl_root) = bounds(&harness, &runtime, 2001u64)
+    let (rtl_parent, has_rtl_parent) = bounds(&harness, &runtime, 2102u64)
+    let rtl_muted = style.color(&rtl_tokens, .OnSurfaceVariant)
+    let separator_x = rtl_root.x + rtl_root.width
+    if rtl_shot_error != ok || !has_rtl_root || !has_rtl_parent || !is_color(rtl_shot, at(separator_x + 10.0, rtl_root.y + 13.0), rtl_muted) || is_color(rtl_shot, at(separator_x + 6.0, rtl_root.y + 13.0), rtl_muted) || !is_color(rtl_shot, at(rtl_parent.x + 15.0, rtl_parent.y + 21.0), rtl_muted) || is_color(rtl_shot, at(rtl_parent.x + 18.0, rtl_parent.y + 21.0), rtl_muted) { os.exit(86i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui navigation2 v2 ok\n")
     ret ok
