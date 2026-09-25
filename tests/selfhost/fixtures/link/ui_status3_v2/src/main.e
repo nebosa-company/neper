@@ -301,6 +301,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
         grow_step += 1usize
     }
     if !(grown_height > 40.0) || !(mid_height < grown_height - 1.0) { os.exit(42i32) }
+    // (D1331) In a 400 tall view the state's centre stands 40 above the view's;
+    // new words fade in: part way the column is faint, then whole.
+    var fade_step = 0usize
+    while fade_step < 4usize {
+        var fade_at = 22000000000i64
+        var fade_title = "No builds yet"
+        if fade_step == 1usize { fade_at = 22016000000i64 }
+        if fade_step == 2usize {
+            fade_at = 22100000000i64
+            fade_title = "No results"
+        }
+        if fade_step == 3usize {
+            fade_at = 22500000000i64
+            fade_title = "No results"
+        }
+        var roomy = control.empty_options()
+        roomy.width = 480.0
+        roomy.height = 400.0
+        roomy.action_label = "Clear filters"
+        roomy.action = &s.press
+        if testing.begin(&harness, time.Instant { nanos: fade_at }) != ok { os.exit(43i32) }
+        f = mem.arena_from(frame_storage)
+        let (fading, fading_error) = control.empty_state_of(&f, 950u64, &theme, fade_title, "Try another filter.", roomy)
+        let (fade_page, fade_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if fading_error != ok || fade_page_error != ok { os.exit(44i32) }
+        fade_page[0usize] = fading
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 480.0), fade_page[0usize..1usize]), time.Instant { nanos: fade_at }) != ok { os.exit(45i32) }
+        let (view_box, has_view_box) = bounds(&harness, &runtime, 950u64)
+        let (column_box, has_column_box) = bounds(&harness, &runtime, 950u64 + 4194304u64)
+        let (clear_button, has_clear_button) = bounds(&harness, &runtime, 951u64)
+        if !has_view_box || !has_column_box || !has_clear_button || !near(view_box.height, 400.0) { os.exit(46i32) }
+        if fade_step == 0usize && !near(column_box.y + column_box.height * 0.5, view_box.y + 160.0) { os.exit(47i32) }
+        let (fade_shot, fade_shot_error) = testing.snapshot(&harness, a)
+        if fade_shot_error != ok { os.exit(48i32) }
+        let filled = is_color(fade_shot, at(clear_button.x + 4.0, clear_button.y + clear_button.height * 0.5), style.color(&tokens, .Primary))
+        if fade_step == 2usize && filled { os.exit(49i32) }
+        if fade_step == 3usize && !filled { os.exit(50i32) }
+        fade_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(34i32) }
     try io.print("ui status3 v2 ok\n")
     ret ok

@@ -25658,3 +25658,19 @@ tree table does not draw the loading child.
 on A2 picks nothing, and the tree holds one disabled and a busy item, on
 Windows and Linux; `ui_tabular` and `ui_collections4_v2` still pass on
 both.
+
+## D1331 — Empty states rise 10% and cross-fade
+
+The EmptyState spec's placement and motion. `EmptyOptions.height` is the
+view's: a full-size state then stands centred in it and optically raised
+by a tenth of the height (the foot takes a fifth), while a compact one stands
+centred. When the state's words change -- a filter leaving no results -- the
+column (keyed `key + 4194304`) fades in from nothing over
+`duration-short-4`, remembered across frames by a hash of the title and
+message (`EmptyFade`). The fade stays under reduced motion, since it is not
+movement.
+
+`ui_status3_v2` stands a state in a 400 tall view with its column centred
+160 down. Changing its title, part way the filled action is not yet drawn,
+and later it is. This passes on Windows and Linux, and `ui_feedback` and
+`ui_status5_v2` still pass on both.

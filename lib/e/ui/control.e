@@ -8227,7 +8227,56 @@ fn skeleton(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height:
 // for none), the compact form, the filled next step and the text alternative
 // (empty labels for none; compact draws the first as one outlined button), and
 // the view's width.
-type EmptyOptions = struct { art: bool, glyph: GlyphKind, compact: bool, action_label: str, action: *const widget.Submit, other_label: str, other: *const widget.Submit, width: f32 }
+// (D1331) `height` is the view's: a full-size state stands centred in it,
+// optically raised 10%.
+type EmptyOptions = struct { art: bool, glyph: GlyphKind, compact: bool, action_label: str, action: *const widget.Submit, other_label: str, other: *const widget.Submit, width: f32, height: f32 }
+
+// (D1331) An empty state's cross-fade: the words it said last, as a hash, and
+// since when it says the new ones.
+type EmptyFade = struct { said: u64, since: i64, set: bool }
+
+// (D1331) The opacity an empty state keyed `key` saying `title` and `message`
+// stands at: rising from 0 over `duration-short-4` after its words change (kept
+// under reduced motion, since a fade is not movement); 1 before it is built twice.
+fn empty_fade(t: *const Theme, key: widget.Key, title: str, message: str) -> f32 {
+    if mem.address_of(t.runtime) == 0usize { ret 1.0 }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret 1.0 }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret 1.0 }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: EmptyFade = zero
+    let (cell, _, cell_error) = widget.state[EmptyFade](&build, key + 3145728u64, fresh)
+    if cell_error != ok { ret 1.0 }
+    var said = 14695981039346656037u64
+    var i = 0usize
+    while i < title.len {
+        said = (said ^ u64(title[i])) *% 1099511628211u64
+        i += 1usize
+    }
+    said = (said ^ 10u64) *% 1099511628211u64
+    i = 0usize
+    while i < message.len {
+        said = (said ^ u64(message[i])) *% 1099511628211u64
+        i += 1usize
+    }
+    let now = widget.frame_time(t.runtime).nanos
+    if !cell.set {
+        cell.set = true
+        cell.said = said
+        cell.since = now - 1000000000000i64
+        ret 1.0
+    }
+    if cell.said != said {
+        cell.said = said
+        cell.since = now
+    }
+    let span = i64(t.tokens.durations.short4) * 1000000i64
+    if span <= 0i64 || now - cell.since >= span { ret 1.0 }
+    widget.request_animation_frame(t.runtime)
+    if now <= cell.since { ret 0.0 }
+    ret f32(now - cell.since) / f32(span)
+}
 
 fn empty_options() -> EmptyOptions {
     var out: EmptyOptions = zero
@@ -8261,7 +8310,8 @@ fn empty_state(a: *mem.Arena, key: widget.Key, t: *const Theme, icon_texture: sc
 // centred, and 24 below (16) the filled next step (keyed `key + 1`) and the text
 // alternative (`key + 2`) 8 apart -- compact, one outlined button. A group in the
 // tree named by the title with the message as its hint.
-// ponytail: no cross-fade on a filter change and no 10% optical raise.
+// (D1331) A change of words cross-fades in over `duration-short-4`, and with
+// `height` the state stands centred in the view, raised 10%.
 fn empty_state_of(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, message: str, options: EmptyOptions) -> (widget.Node, err) {
     let side: f32 = if_else(options.compact, 24.0, 36.0)
     var tint = style.color(t.tokens, .OnSecondaryContainer)
@@ -8345,11 +8395,23 @@ fn empty_with_art(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, m
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 0.0 }, column_style, parts[0usize..at])
+    // (D1331) A change of words fades the state in; the column is keyed
+    // `key + 4194304`.
+    column[0usize].style.opacity = empty_fade(t, key, title, message)
+    column[0usize].key = key + 4194304u64
     let (view, view_error) = mem.alloc[widget.Node](a, 1usize)
     if view_error != ok { ret (zero, TooLarge) }
     var view_style = style.defaults()
     view_style.width = style.Length { Px: options.width }
-    view[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 0.0 }, view_style, column[0usize..1usize])
+    var view_main: ui_layout.MainAlign = .Start
+    if options.height > 0.0 {
+        // (D1331) Centred in the view and raised by a tenth of its height (the
+        // foot takes a fifth); compact stands centred.
+        view_style.height = style.Length { Px: options.height }
+        view_main = .Center
+        if !compact { view_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: options.height * 0.2 } } }
+    }
+    view[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: view_main, cross: .Center, gap: 0.0 }, view_style, column[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = title
