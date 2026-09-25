@@ -23321,3 +23321,13 @@ physical, and the focused value label follows the mirrored handle.
 
 `ui_slider` holds pointer values and asymmetric track pixels on Windows and
 Linux. The Segoe review is `build/ux/slider-rtl-segoe.png`.
+
+## D1166 — Rating cells follow reading direction
+
+Rating now reverses its physical star cells in right-to-left themes while each
+star keeps its logical value and stable key. Filled values therefore grow from
+the right, pointer selection follows the visible cell, and the D1162 keyboard
+mapping remains unchanged.
+
+`ui_actions` holds cell order and both edge taps on Windows and Linux. The Segoe
+review is `build/ux/rating-rtl-segoe.png`.

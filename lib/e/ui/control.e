@@ -4992,6 +4992,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     // control height across (32 with a pointer, 40 on touch) that carries the hover
     // layer; the star 20 (24 on touch), filled `primary`, empty `on-surface-variant`;
     // while the pointer is over a star, the stars up to it preview in `primary` at 60%.
+    // (D1166) RTL reverses only the physical cells; logical values and keys stay fixed.
     let cell = t.tokens.metrics.control_height
     var size: f32 = 20.0
     if cell > t.tokens.sizes.control_sm { size = t.tokens.sizes.icon_md }
@@ -5022,7 +5023,9 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
         let inset = style.Length { Px: (cell - size) * 0.5 }
         cell_style.padding = style.EdgeLengths { left: inset, top: inset, right: inset, bottom: inset }
         if i == hovered { cell_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), t.tokens.states.hover) } }
-        items[i] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, cell_style, body[0usize..1usize])
+        var slot = i
+        if t.tokens.direction == .RightToLeft { slot = count - 1usize - i }
+        items[slot] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, cell_style, body[0usize..1usize])
         i += 1usize
     }
     let (steps, steps_error) = mem.alloc[Rate](a, 4usize)

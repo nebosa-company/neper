@@ -183,6 +183,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     tokens.direction = .RightToLeft
     let (root_rtl, build_rtl_error) = build(&frame, &theme, ctx, &handlers[0usize], dial_actions[0usize..2usize], menu_items[0usize..1usize], 2u32, false, false, false)
     if build_rtl_error != ok || testing.pump(&harness, root_rtl, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(47i32) }
+    let (rtl_first, has_rtl_first) = centre_of(&harness, &runtime, 2u64)
+    let (rtl_last, has_rtl_last) = centre_of(&harness, &runtime, 6u64)
+    if !has_rtl_first || !has_rtl_last || !(rtl_first.x > rtl_last.x) { os.exit(54i32) }
+    if testing.tap(&harness, rtl_last.x, rtl_last.y) != ok || logs[0usize].rating != 5u32 { os.exit(55i32) }
+    if testing.tap(&harness, rtl_first.x, rtl_first.y) != ok || logs[0usize].rating != 1u32 { os.exit(56i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || logs[0usize].rating != 3u32 { os.exit(48i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || logs[0usize].rating != 1u32 { os.exit(49i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].rating != 3u32 { os.exit(50i32) }
