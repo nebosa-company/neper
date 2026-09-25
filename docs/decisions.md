@@ -25146,3 +25146,12 @@ D1212. Dragging documents between groups is still to come.
 
 `ui_containers5_v2` holds four groups at 300 x 200 in a 601 x 401 workspace,
 the second beside the first and the third below it, on Windows and Linux.
+
+## D1300 — Selection bars say their count politely
+
+The selection bar's count, such as `1 selected`, now stands in a polite
+live status region, so an assistive reader announces each change of the
+selection without taking focus, as the List and DataTable specs ask for
+bulk selection.
+
+`ui_collections_v2` finds the count as a polite status on Windows and Linux.

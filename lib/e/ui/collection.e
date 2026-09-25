@@ -5085,7 +5085,15 @@ fn selection_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, cou
     said_held[0usize] = said
     var grow = style.defaults()
     grow.width = style.Length { Flex: 1.0 }
-    parts[1usize] = widget.box(0u64, grow, said_held[0usize..1usize])
+    // (D1300) The count is a polite status, so a change of selection is said.
+    let (counted, counted_error) = mem.alloc[widget.Node](a, 1usize)
+    if counted_error != ok { ret (zero, TooLarge) }
+    counted[0usize] = widget.box(0u64, grow, said_held[0usize..1usize])
+    var count_sem: widget.Semantics = zero
+    count_sem.role = 26u8
+    count_sem.label = said_bytes[0usize..n]
+    count_sem.live = 1u8
+    parts[1usize] = widget.semantics(0u64, count_sem, grow, counted[0usize..1usize])
     var b = 0usize
     while b < bulk.len {
         let (acted, acted_error) = control.glyph_action(a, key + 2u64 + u64(b), t, bulk[b].glyph, bulk[b].label, &bulk[b].action, side, glyph, muted, bulk[b].enabled, 0u32, 0u32, 0u64)

@@ -556,6 +556,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (beta_item, has_beta_item) = find(mode_tree, .ListItem, "Beta")
     let (alpha_item, has_alpha_item) = find(mode_tree, .ListItem, "Alpha")
     if !has_beta_item || !has_alpha_item || !beta_item.state.checked || alpha_item.state.checked { os.exit(129i32) }
+    // (D1300) The bar's count is said politely when it changes.
+    let (said_count, has_said_count) = find(mode_tree, .Status, "1 selected")
+    if !has_said_count || said_count.live != .Polite { os.exit(183i32) }
     if !tap_key(&harness, &runtime, bar_key + 1u64) || chosen.kind != .Clear { os.exit(130i32) }
     let bulk_before = s.presses
     if !tap_key(&harness, &runtime, bar_key + 2u64) || s.presses != bulk_before + 1usize { os.exit(131i32) }
