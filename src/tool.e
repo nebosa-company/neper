@@ -5936,7 +5936,7 @@ fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (us
     var out: Out = zero
     out.bytes = storage
     var no_reasons: []u8 = zero
-    let build_error = manifest_write(a, &out, arch, os_name, g, "debug", false, "", "", no_reasons)
+    let build_error = manifest_write(a, &out, arch, os_name, g, "debug", false, "", "", no_reasons, "")
     if build_error != ok { ret (2usize, build_error) }
     let flush_error = flush(&out)
     if flush_error != ok { ret (2usize, flush_error) }
@@ -6203,7 +6203,7 @@ fn module_inventory(a: *mem.Arena, module_name: str, text_bytes: str, lines: []u
     ret (storage[0usize..out.count], written, ok)
 }
 
-fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph, mode: str, unchecked: bool, artifact_path: str, artifact_sha256: str, reasons: []u8) -> err {
+fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph, mode: str, unchecked: bool, artifact_path: str, artifact_sha256: str, reasons: []u8, carried: str) -> err {
     try text(out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3,\"target\":\"")
     try text(out, arch)
     try byte(out, 45u8)
@@ -6349,6 +6349,13 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         }
         try byte(out, 125u8)
         reason_at += 1usize
+    }
+    // (D1224) A build that read no artifact carries the previous authenticated
+    // manifest's artifact records, since it left those artifacts as they were: the
+    // next warm build still finds them authorised (D1020) under this manifest's tag.
+    if carried.len != 0usize {
+        try text(out, "],\"cached\":[")
+        try text(out, carried)
     }
     if unchecked { try text(out, "],\"options\":{\"checks\":\"off\"") } else { try text(out, "],\"options\":{\"checks\":\"retained\"") }
     // The instruction level (D765): what the image's packed code was selected for.
@@ -6595,6 +6602,25 @@ fn manifest_previous_digest(a: *mem.Arena, manifest_path: str, relative_path: st
     ret manifest_after(entry, "\"sha256\":\"")
 }
 
+// (D1224) The artifact records an authenticated manifest holds: its `incremental`
+// entries, or, when a build that read no artifact wrote it, the `cached` entries it
+// carried; "" when the manifest is missing, unauthenticated or records none. The
+// entries are flat objects, so the array ends at the first `]`.
+fn manifest_previous_records(a: *mem.Arena, manifest_path: str) -> str {
+    let (document, load_error) = graph.load_file(a, manifest_path)
+    if load_error != ok || !artifact_hash.cache_auth_verify(a, document) { ret "" }
+    var from = manifest_key_at(document, "\"incremental\":[")
+    var end = from
+    while end < document.len && document[end] != 93u8 { end += 1usize }
+    if end == from || end >= document.len {
+        from = manifest_key_at(document, "\"cached\":[")
+        end = from
+        while end < document.len && document[end] != 93u8 { end += 1usize }
+    }
+    if end >= document.len { ret "" }
+    ret document[from..end]
+}
+
 // The index just past the first `key`, or the document's length when it is absent:
 // the key scan the manifest's other readers use (D255), not a JSON reader.
 fn manifest_key_at(document: str, key: str) -> usize {
@@ -6636,11 +6662,15 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
         if fresh_error != ok { ret fresh_error }
         digest = fresh
     }
+    // (D1224) A build without incremental reasons wrote no artifact; the records of
+    // the artifacts already under `.neper/<mode>/em/` stay authorised.
+    var carried = ""
+    if reasons.len == 0usize { carried = manifest_previous_records(a, manifest_path) }
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize + 90usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
     out.bytes = storage
-    try manifest_write(a, &out, arch, os_name, g, mode, unchecked, relative_path, digest, reasons)
+    try manifest_write(a, &out, arch, os_name, g, mode, unchecked, relative_path, digest, reasons, carried)
     // Authenticate the exact manifest prefix before its final top-level `}`. A hostile
     // cache may rewrite both artifacts and JSON, but not this tag without the user key.
     if out.count == 0usize || out.bytes[out.count - 1usize] != 125u8 { ret Capacity }

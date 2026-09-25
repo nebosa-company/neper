@@ -24024,3 +24024,21 @@ surface gate at the head of both suites refused the tree. The 20 signatures are
 now fenced in `docs/module-apis.md` as written in source, so all three modules
 keep an exact `source` surface. The gate reports 220 exact surfaces and 13
 partial catalogues matching.
+
+## D1224 — A plain build keeps the incremental cache authorised
+
+Since D1020 an incremental build reuses an artifact only when the previous
+authenticated manifest records its checksum and digest. A plain build writes the
+same `.neper/<mode>/build-manifest.json` with an empty `incremental` list, so a
+plain build between two incremental builds made every artifact
+`invalid-artifact` and the next warm build rebuilt everything. That failed the
+hot-build check in both suites from db473bc4 on.
+
+A build that read no artifact now copies the previous authenticated manifest's
+artifact records into a `cached` array beside its own empty `incremental`
+list; a chain of plain builds keeps carrying them. Its own HMAC covers the copy,
+so a forged record is still refused, and the hot loader already indexes records
+wherever they stand in an authenticated manifest. A fresh project writes no
+`cached` field, so manifest goldens are unchanged. Incremental, then plain twice,
+then a warm build keeps main, dep and e.os stable with no body checked, and the
+image matches the clean build's.
