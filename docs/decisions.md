@@ -23067,3 +23067,13 @@ key; one or zero documents leave them unbound.
 
 `ui_navigation5_v2` holds both directions on Windows and Linux. The reviewed
 surface is unchanged.
+
+## D1141 — Document tabs move with shifted page keys
+
+DocumentTabs binds Ctrl+Shift+PageUp and Ctrl+Shift+PageDown to the existing
+`DocumentMove` callback for one-place movement toward the strip's start or end.
+The edge direction stays unbound, and a successful move focuses the positional
+key that will hold the moved document after the caller rebuilds.
+
+`ui_navigation5_v2` holds both movement directions and payloads on Windows and
+Linux. The reviewed surface is unchanged.

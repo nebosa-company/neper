@@ -32,9 +32,10 @@ use e.ui.widget
 
 type Counter = struct { count: usize }
 type Turned = struct { count: usize, last: usize }
+type Moved = struct { count: usize, from: usize, to: usize }
 
 // The counters: 0 back, 1 next, 2 finish, 3 cancel.
-type Store = struct { counters: [4]Counter, subs: [4]widget.Submit, picks: Turned, closes: Turned, moves: Counter, documents: [3]navigation.Document, steps: [3]navigation.WizardStep }
+type Store = struct { counters: [4]Counter, subs: [4]widget.Submit, picks: Turned, closes: Turned, moves: Moved, documents: [3]navigation.Document, steps: [3]navigation.WizardStep }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -50,8 +51,10 @@ fn on_turn(ctx: *void, value: usize) -> err {
 }
 
 fn on_move(ctx: *void, value: navigation.DocumentMove) -> err {
-    let c = mem.cast[*Counter](ctx)
+    let c = mem.cast[*Moved](ctx)
     c.count += 1usize
+    c.from = value.from
+    c.to = value.to
     ret ok
 }
 
@@ -221,6 +224,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     ctrl.control = true
     if testing.press_key(&harness, 34u32, ctrl) != ok || s.picks.last != 2usize || !widget.focus_within(&runtime, 5005u64) { os.exit(36i32) }
     if testing.press_key(&harness, 33u32, ctrl) != ok || s.picks.last != 0usize || !widget.focus_within(&runtime, 5001u64) { os.exit(37i32) }
+    ctrl.shift = true
+    if testing.press_key(&harness, 33u32, ctrl) != ok || s.moves.count != 1usize || s.moves.from != 1usize || s.moves.to != 0usize || !widget.focus_within(&runtime, 5001u64) { os.exit(38i32) }
+    if testing.press_key(&harness, 34u32, ctrl) != ok || s.moves.count != 2usize || s.moves.from != 1usize || s.moves.to != 2usize || !widget.focus_within(&runtime, 5005u64) { os.exit(39i32) }
     // The horizontal wizard: its title a level-1 heading; the steps named with
     // their state; the done marker `primary` and the connector after it 2px
     // `primary`.
