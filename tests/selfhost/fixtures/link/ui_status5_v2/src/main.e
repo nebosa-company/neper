@@ -182,6 +182,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // the meter half filled, the end item pressing at the end.
     let (bar, has_bar) = bounds(&harness, &runtime, 3000u64)
     if !has_bar || !near(bar.height, 24.0) || !is_color(shot, at(bar.x + 1.0, bar.y + 12.0), style.color(&tokens, .SurfaceContainer)) { os.exit(22i32) }
+    let (_, has_bar_group) = find(tree, .Group, "Status bar")
+    if !has_bar_group { os.exit(28i32) }
     let (ready, has_ready) = find(tree, .Status, "Ready")
     if !has_ready || ready.live != .Polite { os.exit(23i32) }
     if !is_color(shot, at(bar.x + 70.0, bar.y + 12.0), style.color(&tokens, .Primary)) || !is_color(shot, at(bar.x + 100.0, bar.y + 12.0), style.color(&tokens, .SecondaryContainer)) { os.exit(24i32) }

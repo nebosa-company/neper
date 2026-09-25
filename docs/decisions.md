@@ -23428,3 +23428,10 @@ mode now sit on the Region role required by the UX contract instead of a generic
 Group. Row semantics and focus ownership are unchanged.
 
 `ui_status5_v2` and `ui_desktop` hold the Region landmark on Windows and Linux.
+
+## D1178 — Status Bar is one named group
+
+The Status Bar wraps its existing keyed layout in a Group named “Status bar”.
+Its message remains the only polite Status, and item roles and keys are unchanged.
+
+`ui_status5_v2` holds the Group and nested message on Windows and Linux.
