@@ -22441,3 +22441,15 @@ read-only cells reject every edit entry path.
 The caller still owns the checked value and the menu or picker. The focused
 `ui_collections6_v2` behavior passes on Windows and Linux;
 `datagrid-cell-types.png` is the Segoe UI visual check.
+
+## D1078 — Column selection is a standard header menu command
+
+A header press emits `Menu` with the column in caller-owned `GridState`. The
+open state builds the shared modal menu anchored to that header; “Select column”
+closes it and emits the existing full-height `Extend` range. Outside press and
+Escape emit the same close state.
+
+The command and automatic leaf dismissal share one frame context, so dismissal
+cannot overwrite the selection event's immutable next-state snapshot.
+`ui_collections6_v2` holds open, selection, focus and dismissal on Windows and
+Linux; `datagrid-column-menu.png` is the Segoe UI visual check.

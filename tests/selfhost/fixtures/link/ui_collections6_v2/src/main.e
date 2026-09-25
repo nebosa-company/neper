@@ -399,6 +399,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 27u32, plain) != ok || store.last.kind != .Cancel || store.state.editing { os.exit(93i32) }
     let (root_24, build_24_error) = build(&f, &theme, ctx, store)
     if build_24_error != ok || testing.pump(&harness, root_24, now) != ok || !focus_on(&harness, 2u64) { os.exit(94i32) }
+    // A header press opens its menu; the command selects the complete column.
+    if testing.tap(&harness, port_x + 50.0, grid.y + 20.0) != ok || store.last.kind != .Menu || !store.state.menu_open || store.state.menu_column != 1usize { os.exit(122i32) }
+    let (root_24m, build_24m_error) = build(&f, &theme, ctx, store)
+    if build_24m_error != ok { os.exit(123i32) }
+    if testing.pump(&harness, root_24m, now) != ok { os.exit(126i32) }
+    let select_match = testing.by_role(&harness, .MenuItem)
+    if select_match.count != 1usize { os.exit(127i32) }
+    let (select_column, has_select_column) = widget.bounds_of(&runtime, select_match.element)
+    if !has_select_column { os.exit(124i32) }
+    if testing.tap(&harness, select_column.x + 12.0, select_column.y + 12.0) != ok { os.exit(128i32) }
+    if store.last.kind != .Extend || store.state.menu_open || store.state.row != 4usize || store.state.column != 1usize || store.state.anchor_row != 0usize || store.state.anchor_column != 1usize { os.exit(129i32) }
+    let (root_24c, build_24c_error) = build(&f, &theme, ctx, store)
+    if build_24c_error != ok || testing.pump(&harness, root_24c, now) != ok || testing.by_text(&harness, "5 cells selected").count != 1usize || !focus_on(&harness, 2u64) { os.exit(125i32) }
+    if testing.tap(&harness, port_x + 50.0, grid.y + 20.0) != ok || !store.state.menu_open { os.exit(130i32) }
+    let (root_24d, build_24d_error) = build(&f, &theme, ctx, store)
+    if build_24d_error != ok || testing.pump(&harness, root_24d, now) != ok || testing.press_key(&harness, 27u32, plain) != ok || store.last.kind != .Menu || store.state.menu_open { os.exit(131i32) }
+    let (root_24e, build_24e_error) = build(&f, &theme, ctx, store)
+    if build_24e_error != ok || testing.pump(&harness, root_24e, now) != ok || store.state.row != 4usize || store.state.anchor_row != 0usize || store.state.column != 1usize || store.state.anchor_column != 1usize { os.exit(132i32) }
     // A row-number click selects every column in that row and keeps grid focus.
     if testing.tap(&harness, grid.x + 20.0, grid.y + 152.0) != ok || store.last.kind != .Extend || store.state.row != 3usize || store.state.column != 1usize || store.state.anchor_row != 3usize || store.state.anchor_column != 0usize { os.exit(113i32) }
     let (root_24r, build_24r_error) = build(&f, &theme, ctx, store)
