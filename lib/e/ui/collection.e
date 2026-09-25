@@ -455,8 +455,8 @@ fn scrub_gesture(ctx: *void, g: widget.Gesture) -> err {
 // End go to the ends. A slider named "Page", its value "Page 2 of 5", said
 // politely. Disabled, the dots and pill are `on-surface` at 38% and the track
 // takes no focus.
-// ponytail: no drag to scrub, pill motion or right-to-left mirroring; the focus
-// ring is the runtime's.
+// ponytail: no drag to scrub, pill motion or right-to-left layout/tap mirroring;
+// the focus ring is the runtime's.
 fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, current: usize, turn: widget.Change[usize], options: IndicatorOptions) -> (widget.Node, err) {
     if count == 0usize || current >= count { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -549,12 +549,18 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
     if turns_error != ok { ret (zero, TooLarge) }
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
+    var back_key = 37u32
+    var on_key = 39u32
+    if t.tokens.direction == .RightToLeft {
+        back_key = 39u32
+        on_key = 37u32
+    }
     var bound = 0usize
     if enabled && current > 0usize {
         turns[0usize] = Turn { index: current - 1usize, turn: turn }
         turns[1usize] = Turn { index: 0usize, turn: turn }
         let back = widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: turn_fire }
-        shortcuts[bound] = widget.Shortcut { key: 37u32, modifiers: zero, action: back }
+        shortcuts[bound] = widget.Shortcut { key: back_key, modifiers: zero, action: back }
         shortcuts[bound + 1usize] = widget.Shortcut { key: 33u32, modifiers: zero, action: back }
         shortcuts[bound + 2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: turn_fire } }
         bound += 3usize
@@ -563,7 +569,7 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
         turns[2usize] = Turn { index: current + 1usize, turn: turn }
         turns[3usize] = Turn { index: count - 1usize, turn: turn }
         let on = widget.Submit { ctx: mem.cast[*void](&turns[2usize]), invoke: turn_fire }
-        shortcuts[bound] = widget.Shortcut { key: 39u32, modifiers: zero, action: on }
+        shortcuts[bound] = widget.Shortcut { key: on_key, modifiers: zero, action: on }
         shortcuts[bound + 1usize] = widget.Shortcut { key: 34u32, modifiers: zero, action: on }
         shortcuts[bound + 2usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&turns[3usize]), invoke: turn_fire } }
         bound += 3usize
