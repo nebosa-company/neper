@@ -22888,3 +22888,12 @@ adding another caller callback or field.
 
 `ui_collections5_v2` and `ui_property` hold toggle reporting, collapse and
 group reordering on Windows and Linux. The reviewed surface is unchanged.
+
+## D1122 — Navigation stack binds the desktop back chord
+
+A pushed NavigationStack binds Alt+Left in its existing scope to the same
+caller-owned pop action used by its Back button and Escape. The root stack has
+no binding, so an outer scope or host remains free to handle the chord.
+
+`ui_navigation` and `ui_navigation_v2` pass on Windows and Linux. The reviewed
+surface is unchanged.
