@@ -25641,3 +25641,20 @@ fuller menu are still to come.
 `ui_navigation5_v2` shows the pinned main.e by its icon alone, names notes
 "read only" and lower.e the preview, on Windows and Linux; `ui_workspace` and
 `ui_containers5_v2` still pass on both.
+
+## D1330 — Trees have disabled and loading nodes
+
+`collection.tree_with` takes `TreeOptions` by node key rather than new
+`TreeSource` members, which the example app builds as a literal. A node in
+`disabled` is drawn at 38%, takes the focus but no pick, and says Disabled,
+as the Tree spec asks so its reason can be read. An open node in `loading` is
+Busy, and under it stands the spec's loading child: an 18 ring and
+"Loading" in `on-surface-variant` one level in, keyed `node ^
+fnv1a64("tree-loading")`. The icon and meta slot remain the caller's
+content through `build`. Rename and drag and drop are still to come, and a
+tree table does not draw the loading child.
+
+`ui_collections3_v2` disables A2 and loads B: B's Loading row stands, a tap
+on A2 picks nothing, and the tree holds one disabled and a busy item, on
+Windows and Linux; `ui_tabular` and `ui_collections4_v2` still pass on
+both.

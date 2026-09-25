@@ -3387,9 +3387,15 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // over a full-width 1px `outline-variant` divider, the last excepted. Up, Down,
 // Home and End move among visible rows; Right expands or enters the first child,
 // Left collapses or returns to the parent, and `*` expands siblings.
-// ponytail: rows are not virtualised; no icon or meta slot, rename,
-// drag and drop, loading or disabled rows.
-fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key) -> ([]widget.Node, err) {
+// (D1330) Disabled and loading nodes from `tree_with`; the icon and meta are the
+// caller's content (`build`).
+// ponytail: rows are not virtualised; no rename, drag and drop.
+// (D1330) A tree's per-node states, by key: `disabled` nodes are drawn at 38%,
+// take focus but no pick and say Disabled; an open node in `loading` is Busy and
+// its children wait under a "Loading" row.
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key }
+
+fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key, options: TreeOptions) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
     let count = visible_tree_count(source, expanded, 0u64)
     let (visible, visible_error) = mem.alloc[TreeRow](a, count)
@@ -3474,7 +3480,14 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         var lead_style = style.defaults()
         lead_style.height = style.Length { Px: tall }
         let first_cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, lead_style, lead[0usize..4usize])
-        picks[i] = RowPick { key: entry.key, pick: pick, double: toggle, has_double: entry.branch }
+        // (D1330) A disabled node takes no pick.
+        let off = is_selected(options.disabled, entry.key)
+        var row_pick = pick
+        if off {
+            var no_pick: widget.Change[widget.Key] = zero
+            row_pick = no_pick
+        }
+        picks[i] = RowPick { key: entry.key, pick: row_pick, double: toggle, has_double: entry.branch }
         var made: widget.Node = zero
         if tabled {
             let (cells, cells_error) = mem.alloc[widget.Node](a, columns.len)
@@ -3499,6 +3512,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             row_style.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: flat, right: style.Length { Px: 8.0 }, bottom: flat }
             row_style.radius = t.tokens.radii.sm
             row_style.background = paint.Brush { Solid: fill }
+            if off { row_style.opacity = t.tokens.states.disabled_content }
             let (inside, inside_error) = mem.alloc[widget.Node](a, 2usize)
             if inside_error != ok { ret (none, TooLarge) }
             inside[0usize] = first_cell
@@ -3576,10 +3590,35 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         item_sem.on_action = widget.Change[u32] { ctx: ctx_of(&keys[i]), invoke: tree_action }
         if chosen { item_sem.states = item_sem.states | accessibility.STATE_SELECTED }
         if current != 0u64 && entry.key == current { item_sem.states = item_sem.states | accessibility.STATE_CURRENT }
+        if off { item_sem.states = item_sem.states | accessibility.STATE_DISABLED }
+        let waiting = open && is_selected(options.loading, entry.key)
+        if waiting { item_sem.states = item_sem.states | accessibility.STATE_BUSY }
         let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
         if framed_error != ok { ret (none, TooLarge) }
         framed[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), scoped[0usize..1usize])
         rows[i] = widget.semantics(0u64, item_sem, style.defaults(), framed[0usize..1usize])
+        if waiting && !tabled {
+            // (D1330, docs/ux/components/Tree, loading child) An 18 ring and
+            // "Loading" in `on-surface-variant` one level in, under the node.
+            let (ring, ring_error) = control.progress_ring(a, 0u64, t, "Loading", 0.0, true, 18.0)
+            if ring_error != ok { ret (none, ring_error) }
+            var said = control.text_options()
+            said.role = .BodyMedium
+            said.wrap = .None
+            let (words, words_error) = control.colored_text(a, 0u64, "Loading", t, said, muted)
+            if words_error != ok { ret (none, words_error) }
+            let (waits, waits_error) = mem.alloc[widget.Node](a, 4usize)
+            if waits_error != ok { ret (none, TooLarge) }
+            waits[0usize] = widget.box(0u64, control.sized_style(8.0 + start + f32(entry.depth + 1usize) * step + 24.0 + 8.0, tall), zero)
+            waits[1usize] = ring
+            waits[2usize] = words
+            waits[3usize] = widget.flex(entry.key ^ hash.fnv1a64("tree-loading"), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, control.sized_style(control.max_zero(width), tall), waits[0usize..3usize])
+            let (paired, paired_error) = mem.alloc[widget.Node](a, 2usize)
+            if paired_error != ok { ret (none, TooLarge) }
+            paired[0usize] = rows[i]
+            paired[1usize] = waits[3usize]
+            rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), paired[0usize..2usize])
+        }
         i += 1usize
     }
     if tabled {
@@ -3659,9 +3698,21 @@ fn no_cell(ctx: *void, a: *mem.Arena, row_key: widget.Key, column: usize, out: *
 // v2 (D981, docs/ux/components/Tree): the rows on `surface` with 4 above and
 // below.
 fn treed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, extent: f32, width: f32, current: widget.Key) -> (widget.Node, err) {
+    var plain: TreeOptions = zero
+    let (made, made_error) = treed_with(a, key, t, label, source, expanded, selected, toggle, pick, guides, extent, width, current, plain)
+    ret (made, made_error)
+}
+
+// (D1330) A tree with its disabled and loading nodes (`TreeOptions`).
+fn tree_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], extent: f32, width: f32, options: TreeOptions) -> (widget.Node, err) {
+    let (made, made_error) = treed_with(a, key, t, label, source, expanded, selected, toggle, pick, false, extent, width, 0u64, options)
+    ret (made, made_error)
+}
+
+fn treed_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, extent: f32, width: f32, current: widget.Key, options: TreeOptions) -> (widget.Node, err) {
     var no_columns: []const Column = zero
     var none_ctx: *void = zero
-    let (rows, rows_error) = tree_rows(a, key, t, source, expanded, selected, toggle, pick, guides, no_columns, CellSource { ctx: none_ctx, cell: no_cell }, extent, width, current)
+    let (rows, rows_error) = tree_rows(a, key, t, source, expanded, selected, toggle, pick, guides, no_columns, CellSource { ctx: none_ctx, cell: no_cell }, extent, width, current, options)
     if rows_error != ok { ret (zero, rows_error) }
     var column_style = style.defaults()
     column_style.width = style.Length { Px: width }
@@ -3694,7 +3745,8 @@ fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         width += columns[c].width
         c += 1usize
     }
-    let (rows, rows_error) = tree_rows(a, key + 128u64, t, source, expanded, selected, toggle, pick, false, columns, cells_of, extent, width, 0u64)
+    var plain_tree: TreeOptions = zero
+    let (rows, rows_error) = tree_rows(a, key + 128u64, t, source, expanded, selected, toggle, pick, false, columns, cells_of, extent, width, 0u64, plain_tree)
     if rows_error != ok { ret (zero, rows_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, rows.len + 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
