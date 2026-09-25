@@ -7301,8 +7301,8 @@ fn gauge(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32
 // in `on-surface-variant`. One progress node named `label` with the digits as its
 // value and the status word as its hint; the ring is not in the tree.
 // (D1279) The arc eases to each new value (`eased_share`).
-// ponytail: the loading skeleton is the caller's; the no-data readout is an
-// ASCII hyphen.
+// (D1301) No data reads an en dash, and the readout is `on-surface-variant`.
+// ponytail: the loading skeleton is the caller's.
 fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, size: f32, options: GaugeOptions) -> (widget.Node, err) {
     if high <= low { ret (zero, TooLarge) }
     let share = clamp_share((value - low) / (high - low))
@@ -7331,7 +7331,8 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
     // The stroke's centre line at 40% of the size: the ring square 90% of it.
     let (painted, painted_error) = ring_node(a, key + 1u64, ring, size * 0.9)
     if painted_error != ok { ret (zero, painted_error) }
-    var shown = "-"
+    var shown = "–"
+    if options.no_data { ink = muted }
     if !options.no_data {
         let (digits, digits_error) = rounded_digits(a, value)
         if digits_error != ok { ret (zero, digits_error) }
@@ -7399,7 +7400,7 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
 // empty: the rounded digits), the status line, the small form (4 tall, no
 // header), the limit mark at the warning share, and the segmented form (2 to 5
 // segments) or the bars form (rising bars) in place of the continuous bar.
-type LevelOptions = struct { value_text: str, status: str, small: bool, limit: bool, segments: u32, bars: bool }
+type LevelOptions = struct { value_text: str, status: str, small: bool, limit: bool, segments: u32, bars: bool, neutral: bool }
 
 fn level_options() -> LevelOptions {
     var out: LevelOptions = zero
@@ -7425,8 +7426,8 @@ fn level(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32
 // progress node named `label` with the value text, the status as its hint, and
 // invalid from `danger`.
 // (D1280) A continuous fill eases to each new value (`eased_share`).
-// ponytail: segmented scales always take the strength colours (no neutral
-// `primary` scale).
+// (D1301) `neutral` lights a segmented or bar scale in `primary`, for a scale
+// that is not a strength.
 fn level_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, warn: f32, danger: f32, width: f32, options: LevelOptions) -> (widget.Node, err) {
     if high <= low { ret (zero, TooLarge) }
     let share = clamp_share((value - low) / (high - low))
@@ -7479,6 +7480,7 @@ fn level_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
         var lit_tone: style.ColorRole = .Success
         if lit * 3u32 <= 2u32 * steps { lit_tone = .Warning }
         if lit * 3u32 <= steps { lit_tone = .Error }
+        if options.neutral { lit_tone = .Primary }
         let (cells, cells_error) = mem.alloc[widget.Node](a, usize(steps))
         if cells_error != ok { ret (zero, TooLarge) }
         var i = 0u32
