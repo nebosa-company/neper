@@ -23621,3 +23621,23 @@ cancels and every announcement on Windows and Linux; `ui_interaction` passes on
 both hosts. The Segoe reviews are `build/ux/ui-reorder-drop-line-segoe.png` and
 `build/ux/ui-reorder-moving-segoe.png`. Still open: auto-scroll, context-menu
 move commands and named accessibility move actions.
+
+## D1195 — Context menus are asked for through Show menu
+
+The widget runtime now routes the three desktop context-menu gestures to the
+semantic action every menu owner already offers. A secondary press asks the
+deepest element under the pointer whose semantics offer Show menu and does not
+press what is under it; the Menu key (X11 `Menu` keysym normalised to 93) and
+Shift+F10 ask the nearest such owner at or above the focus. Callers keep the
+open state: `widget.context_point` answers the pointer's window point and
+whether the request came from a pointer, so `overlay.context_menu_of` can open
+at the pointer or below its owner.
+
+A secondary press with no menu owner under it keeps its previous behaviour.
+`ui_overlays_v2` holds the pointer, Shift+F10 and Menu-key paths on Windows and
+Linux; `ui_interaction`, `ui_widget` and `ui_collections4_v2` pass on both
+hosts. A Windows sweep of all 103 `ui_*` fixtures found 12 legacy fixtures
+(`ui_adaptive`, `ui_choice`, `ui_navigation2_v2`, `ui_navigation4_v2`,
+`ui_overlays2_v2`, `ui_overlays3_v2`, `ui_pickers`, `ui_presentation`,
+`ui_productivity`, `ui_tabular`, `ui_transient`, `ui_workspace`) failing with
+the same exit codes without this change; they are not addressed here.

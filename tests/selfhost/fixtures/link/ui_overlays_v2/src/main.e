@@ -462,6 +462,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(rename_at.x, rename_at.y) }) != ok || s.counters[1usize].count != leaf_before + 1usize || s.counters[8usize].count != 6usize || s.counters[4usize].count != 0usize { os.exit(134i32) }
     let (drag_done, drag_done_error) = build(&f, &touch_theme, s, .ContextTouch)
     if drag_done_error != ok || testing.pump(&harness, drag_done, time.Instant { nanos: 2540000000i64 }) != ok || testing.by_key(&harness, 400u64).count != 0usize { os.exit(135i32) }
+    // (D1195) A secondary press on the target asks for its menu at the pointer
+    // without pressing the button; Shift+F10 and the Menu key ask from the focus.
+    let (secondary_root, secondary_root_error) = build(&f, &theme, s, .ContextTouch)
+    if secondary_root_error != ok || testing.pump(&harness, secondary_root, time.Instant { nanos: 2550000000i64 }) != ok { os.exit(170i32) }
+    let (pointer_info, has_pointer_info) = bounds(&harness, &runtime, 3u64)
+    if !has_pointer_info { os.exit(171i32) }
+    var secondary = testing.pointer_at(pointer_info.x + 4.0, pointer_info.y + 4.0)
+    secondary.buttons = 2u32
+    secondary.changed = .Secondary
+    if testing.send(&harness, input.Event { PointerDown: secondary }) != ok || s.counters[8usize].count != 7usize { os.exit(172i32) }
+    let (asked_at, pointed) = widget.context_point(&runtime)
+    if !pointed || !near(asked_at.x, pointer_info.x + 4.0) || !near(asked_at.y, pointer_info.y + 4.0) { os.exit(173i32) }
+    secondary.buttons = 0u32
+    if testing.send(&harness, input.Event { PointerUp: secondary }) != ok || s.counters[4usize].count != 0usize { os.exit(174i32) }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
+    if widget.focus(&runtime, testing.by_key(&harness, 30u64).element) != ok { os.exit(177i32) }
+    // F10 arrives as X11's keysym on both hosts (D797).
+    if testing.press_key(&harness, 65479u32, shifted) != ok || s.counters[8usize].count != 8usize { os.exit(175i32) }
+    let (_, keyed_pointed) = widget.context_point(&runtime)
+    if keyed_pointed || testing.press_key(&harness, 93u32, zero) != ok || s.counters[8usize].count != 9usize || s.counters[4usize].count != 0usize { os.exit(176i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 1u64).element) != ok { os.exit(179i32) }
     // Rich tooltips wait 500 ms, bridge the pointer's 4px crossing for 300 ms,
     // remain for focus inside either surface, and dismiss on Escape.
     let rich_start = time.Instant { nanos: 3000000000i64 }

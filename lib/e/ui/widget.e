@@ -353,6 +353,9 @@ type State = struct {
     menu_mode: bool,
     menu_alt_down: bool,
     menu_alt_used: bool,
+    // (D1195) Where the last context menu was asked for, and whether by pointer.
+    context_at: geometry.Point,
+    context_pointed: bool,
     menu_hovered_title: u32,
     has_menu_hovered_title: bool,
     menu_hover_target: u32,
@@ -2978,6 +2981,41 @@ fn hit_region(s: *State, index: usize, p: geometry.Point, wanted: u8) -> (usize,
     ret (0usize, false)
 }
 
+// (D1195) The deepest live element under `p` whose semantics offer Show menu.
+fn menu_owner_at(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
+    let e = &s.elements[index]
+    if !e.live || !geometry.contains(e.bounds, p) { ret (0usize, false) }
+    var found = 0usize
+    var has_found = false
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        let (candidate, has_candidate) = menu_owner_at(s, usize(at), p)
+        if has_candidate {
+            found = candidate
+            has_found = true
+        }
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    if has_found { ret (found, true) }
+    if e.has_semantics && (e.sem.actions & 1024u32) != 0u32 { ret (index, true) }
+    ret (0usize, false)
+}
+
+// (D1195) The nearest element at or above `index` whose semantics offer Show menu.
+fn menu_owner_above(s: *State, index: usize) -> (usize, bool) {
+    var at = index
+    while true {
+        let e = &s.elements[at]
+        if e.live && e.has_semantics && (e.sem.actions & 1024u32) != 0u32 { ret (at, true) }
+        if !e.has_parent { ret (0usize, false) }
+        at = usize(e.parent)
+    }
+    ret (0usize, false)
+}
+
 // The slop a press may wander before it is a drag, in logical pixels; a function,
 // since a module-scope constant has no float form.
 fn gesture_slop() -> f32 {
@@ -3930,6 +3968,7 @@ fn key_code(physical: u32) -> u32 {
     if physical == 65535u32 { ret 46u32 }
     if physical == 65293u32 || physical == 65421u32 { ret 13u32 }
     if physical == 65307u32 { ret 27u32 }
+    if physical == 65383u32 { ret 93u32 }
     if physical == 65289u32 { ret 9u32 }
     if physical == 65505u32 || physical == 65506u32 { ret 16u32 }
     if physical == 65507u32 || physical == 65508u32 { ret 17u32 }
@@ -4407,6 +4446,15 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             }
             from = over
         }
+        // (D1195) A secondary press asks the deepest menu owner under it.
+        if p.changed == .Secondary {
+            let (owner, has_owner) = menu_owner_at(s, from, p.position)
+            if has_owner {
+                s.context_at = p.position
+                s.context_pointed = true
+                ret fire_change[u32](s.elements[owner].sem.on_action, 1024u32)
+            }
+        }
         // The arena takes the pointer for the deepest region that taps or drags; an
         // action element under it is the old contract and still answers.
         let (region_index, has_region) = hit_region(s, from, p.position, GESTURE_TAP | GESTURE_DRAG)
@@ -4721,6 +4769,16 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             if item_accessed || item_access_error != ok { ret item_access_error }
             let (accessed, access_error) = menu_bar_access_key(s, k.key.logical)
             if accessed || access_error != ok { ret access_error }
+        }
+        // (D1195) The Menu key or Shift+F10 asks the focus's nearest menu owner.
+        let bare = !k.modifiers.shift && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta
+        let shift_only = k.modifiers.shift && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta
+        if s.has_focus && ((code == 93u32 && bare) || (code == 121u32 && shift_only)) {
+            let (owner, has_owner) = menu_owner_above(s, usize(s.focus))
+            if has_owner {
+                s.context_pointed = false
+                ret fire_change[u32](s.elements[owner].sem.on_action, 1024u32)
+            }
         }
         if s.has_focus {
             let f = &s.elements[usize(s.focus)]
@@ -5400,6 +5458,14 @@ fn bounds_for_key(widget_runtime: *const Runtime, key: Key) -> (geometry.Rect, b
     let (found, count) = find_by_key(s, key)
     if count != 1usize { ret (zero, false) }
     ret (s.elements[usize(found.slot)].bounds, true)
+}
+
+// (D1195) Where the last context menu was asked for: the pointer's window point
+// and true after a secondary press, false after the Menu key or Shift+F10.
+fn context_point(widget_runtime: *const Runtime) -> (geometry.Point, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret (zero, false) }
+    ret (s.context_at, s.context_pointed)
 }
 
 fn surface_size(widget_runtime: *const Runtime) -> geometry.Size {
