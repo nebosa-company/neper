@@ -3774,6 +3774,186 @@ fn declaration_from(bytes: []const u8, cursor: usize, end: usize) -> (Declaratio
     ret (Declaration { kind: kind, flags: flags, name_index: name_index, signature_hash: signature, body_hash: body }, payload + length, ok)
 }
 
+// (D1325, C036) The Interface's typed payload read back. Where one type the writer
+// encoded (`write_type_indexed`) ends: its 20-byte head, then a pointer's, slice's
+// or array's element when its flags say it has one, or a function type's
+// parameters and returns; a kind or flag the writer never uses, a record cut short
+// or a nesting deeper than 64 is refused.
+fn interface_type_end(bytes: []const u8, cursor: usize, end: usize, depth: usize) -> (usize, err) {
+    if depth > 64usize || cursor > end || end > bytes.len || end - cursor < 20usize { ret (0usize, InvalidArtifact) }
+    let kind = usize(bytes[cursor])
+    let flags = usize(bytes[cursor + 1usize])
+    if kind == 0usize || kind > 16usize || flags > 7usize { ret (0usize, InvalidArtifact) }
+    var next = cursor + 20usize
+    if (kind == 9usize || kind == 10usize || kind == 11usize) && (flags & 2usize) != 0usize {
+        let (element_end, element_error) = interface_type_end(bytes, next, end, depth + 1usize)
+        ret (element_end, element_error)
+    }
+    if kind == 16usize {
+        if end - next < 8usize { ret (0usize, InvalidArtifact) }
+        let (parameters, parameters_error) = binary.read_u32(bytes, next)
+        let (results, results_error) = binary.read_u32(bytes, next + 4usize)
+        if parameters_error != ok || results_error != ok { ret (0usize, InvalidArtifact) }
+        next += 8usize
+        var at = 0usize
+        while at < parameters + results {
+            let (after, after_error) = interface_type_end(bytes, next, end, depth + 1usize)
+            if after_error != ok { ret (0usize, after_error) }
+            next = after
+            at += 1usize
+        }
+    }
+    ret (next, ok)
+}
+
+// (D1325) Past `count` bytes from `cursor`, or refused when the record is shorter.
+fn interface_skip(cursor: usize, end: usize, count: usize) -> (usize, err) {
+    if cursor > end || end - cursor < count { ret (0usize, InvalidArtifact) }
+    ret (cursor + count, ok)
+}
+
+// (D1325) A u32 count at `cursor`, and the cursor past it.
+fn interface_count(bytes: []const u8, cursor: usize, end: usize) -> (usize, usize, err) {
+    if cursor > end || end - cursor < 4usize { ret (0usize, 0usize, InvalidArtifact) }
+    let (value, value_error) = binary.read_u32(bytes, cursor)
+    if value_error != ok { ret (0usize, 0usize, InvalidArtifact) }
+    ret (value, cursor + 4usize, ok)
+}
+
+// (D1325) Past a function's or aggregate's comptime parameters: the count, then
+// each a kind byte, three zeroes and a name, an integer's, array's or function's
+// parameter with its type.
+fn interface_comptime_end(bytes: []const u8, cursor: usize, end: usize) -> (usize, err) {
+    let (count, first, count_error) = interface_count(bytes, cursor, end)
+    if count_error != ok { ret (0usize, count_error) }
+    var next = first
+    var at = 0usize
+    while at < count {
+        if next > end || end - next < 8usize { ret (0usize, InvalidArtifact) }
+        let kind = usize(bytes[next])
+        if kind == 0usize || kind > 7usize { ret (0usize, InvalidArtifact) }
+        next += 8usize
+        if kind == 2usize || kind == 6usize || kind == 7usize {
+            let (typed, typed_error) = interface_type_end(bytes, next, end, 0usize)
+            if typed_error != ok { ret (0usize, typed_error) }
+            next = typed
+        }
+        at += 1usize
+    }
+    ret (next, ok)
+}
+
+// (D1325) Where a declaration's typed payload ends, read from its kind: past the
+// name and the two hashes, a function's borrow source, no-escape positions,
+// comptime parameters, parameters and returns; an aggregate's kind, comptime
+// parameters, backing type and fields; an alias's resolved type; a constant's type
+// and value; an error's qualified value.
+fn interface_payload_end(bytes: []const u8, kind: usize, payload: usize, end: usize) -> (usize, err) {
+    let (named, named_error) = interface_skip(payload, end, 20usize)
+    if named_error != ok { ret (0usize, named_error) }
+    var next = named
+    if kind == declaration_function_kind() {
+        let (borrowed, borrowed_error) = interface_skip(next, end, 4usize)
+        if borrowed_error != ok { ret (0usize, borrowed_error) }
+        let (noescapes, positions, noescape_error) = interface_count(bytes, borrowed, end)
+        if noescape_error != ok || noescapes > (end - positions) / 4usize { ret (0usize, InvalidArtifact) }
+        let (comptimes_end, comptime_error) = interface_comptime_end(bytes, positions + 4usize * noescapes, end)
+        if comptime_error != ok { ret (0usize, comptime_error) }
+        let (parameters, parameter_first, parameters_error) = interface_count(bytes, comptimes_end, end)
+        if parameters_error != ok { ret (0usize, parameters_error) }
+        next = parameter_first
+        var at = 0usize
+        while at < parameters {
+            let (after_name, name_error) = interface_skip(next, end, 4usize)
+            if name_error != ok { ret (0usize, name_error) }
+            let (after, after_error) = interface_type_end(bytes, after_name, end, 0usize)
+            if after_error != ok { ret (0usize, after_error) }
+            next = after
+            at += 1usize
+        }
+        let (results, result_first, results_error) = interface_count(bytes, next, end)
+        if results_error != ok { ret (0usize, results_error) }
+        next = result_first
+        at = 0usize
+        while at < results {
+            let (after, after_error) = interface_type_end(bytes, next, end, 0usize)
+            if after_error != ok { ret (0usize, after_error) }
+            next = after
+            at += 1usize
+        }
+        ret (next, ok)
+    }
+    if kind == declaration_aggregate_kind() {
+        if next > end || end - next < 4usize || usize(bytes[next]) == 0usize || usize(bytes[next]) > 4usize { ret (0usize, InvalidArtifact) }
+        let (comptimes_end, comptime_error) = interface_comptime_end(bytes, next + 4usize, end)
+        if comptime_error != ok { ret (0usize, comptime_error) }
+        next = comptimes_end
+        if next >= end { ret (0usize, InvalidArtifact) }
+        let backed = usize(bytes[next])
+        next += 1usize
+        if backed > 1usize { ret (0usize, InvalidArtifact) }
+        if backed == 1usize {
+            let (after, after_error) = interface_type_end(bytes, next, end, 0usize)
+            if after_error != ok { ret (0usize, after_error) }
+            next = after
+        }
+        let (fields, field_first, fields_error) = interface_count(bytes, next, end)
+        if fields_error != ok { ret (0usize, fields_error) }
+        next = field_first
+        var at = 0usize
+        while at < fields {
+            let (after_name, name_error) = interface_skip(next, end, 4usize)
+            if name_error != ok { ret (0usize, name_error) }
+            let (typed, typed_error) = interface_type_end(bytes, after_name, end, 0usize)
+            if typed_error != ok { ret (0usize, typed_error) }
+            let (after, after_error) = interface_skip(typed, end, 12usize)
+            if after_error != ok { ret (0usize, after_error) }
+            next = after
+            at += 1usize
+        }
+        ret (next, ok)
+    }
+    if kind == declaration_alias_kind() {
+        if next >= end { ret (0usize, InvalidArtifact) }
+        let resolved = usize(bytes[next])
+        if resolved > 1usize { ret (0usize, InvalidArtifact) }
+        if resolved == 0usize { ret (next + 1usize, ok) }
+        let (after, after_error) = interface_type_end(bytes, next + 1usize, end, 0usize)
+        ret (after, after_error)
+    }
+    if kind == declaration_constant_kind() {
+        let (typed, typed_error) = interface_type_end(bytes, next, end, 0usize)
+        if typed_error != ok { ret (0usize, typed_error) }
+        let (after, after_error) = interface_skip(typed, end, 12usize)
+        ret (after, after_error)
+    }
+    if kind == declaration_error_kind() {
+        let (after, after_error) = interface_skip(next, end, 4usize)
+        ret (after, after_error)
+    }
+    ret (0usize, InvalidArtifact)
+}
+
+// (D1325) Whether every declaration of the artifact's Interface reads back whole:
+// each record's typed payload ends exactly where its length says. A kept artifact
+// that does not is rebuilt as invalid.
+fn interface_payloads_read(bytes: []const u8) -> err {
+    let (count, first, end, open_error) = interface_declarations(bytes)
+    if open_error != ok { ret open_error }
+    var cursor = first
+    var at = 0usize
+    while at < count {
+        let (declaration, next, read_error) = declaration_from(bytes, cursor, end)
+        if read_error != ok { ret read_error }
+        let (payload_end, payload_error) = interface_payload_end(bytes, declaration.kind, cursor + 8usize, next)
+        if payload_error != ok { ret payload_error }
+        if payload_end != next { ret InvalidArtifact }
+        cursor = next
+        at += 1usize
+    }
+    ret ok
+}
+
 fn find_declaration_indexed(bytes: []const u8, query: []const u8, query_name_index: usize) -> (Declaration, bool, err) {
     let empty = Declaration { kind: 0usize, flags: 0usize, name_index: 0usize, signature_hash: 0usize, body_hash: 0usize }
     let (count, first, end, open_error) = interface_declarations(bytes)
