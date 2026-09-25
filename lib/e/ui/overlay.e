@@ -4045,6 +4045,24 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // ponytail: no input mode (typed boxes), no inner 13-23 ring, no drag round the
 // dial; a minute off the fives puts the knob on no number.
 fn time_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, minute: u8, editing_minute: bool, twelve: bool, open: bool, change: widget.Change[TimeChoice], cancel: *const widget.Submit, confirm: *const widget.Submit) -> (widget.Node, err) {
+    var dial_only: TimeModalOptions = zero
+    let (made, made_error) = time_picker_modal_with(a, key, t, hour, minute, editing_minute, twelve, open, change, cancel, confirm, dial_only)
+    ret (made, made_error)
+}
+
+// (D1295) A modal time picker's input mode: whether it is typing and what
+// toggles it, and the hour's and minute's typed text (the caller's buffers and
+// lengths, reporting through `typed_hour` and `typed_minute`).
+type TimeModalOptions = struct { typing: bool, toggle_mode: *const widget.Submit, hour_text: []u8, hour_len: usize, minute_text: []u8, minute_len: usize, typed_hour: widget.Change[str], typed_minute: widget.Change[str] }
+
+// (D1295, docs/ux/components/TimePicker, input mode) `time_picker_modal` with its
+// input mode: typing, the boxes are outlined 80 wide text fields (`key + 1`,
+// `key + 2`) over the caller's text with "Hour" and "Minute" in `body-small`
+// `on-surface-variant` under them, and the dial gives way; a 40 mode toggle
+// (`key + 6`) at the start of the actions says "Switch to text input" with an
+// `edit` pencil or "Switch to clock" with a clock.
+// ponytail: the typed text is the caller's to read and range-check.
+fn time_picker_modal_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, minute: u8, editing_minute: bool, twelve: bool, open: bool, change: widget.Change[TimeChoice], cancel: *const widget.Submit, confirm: *const widget.Submit, options: TimeModalOptions) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (choices, choices_error) = mem.alloc[TimeChoosing](a, 16usize)
     if choices_error != ok { ret (zero, TooLarge) }
@@ -4065,10 +4083,22 @@ fn time_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, ho
         shown_hour = shown_hour % 12u8
         if shown_hour == 0u8 { shown_hour = 12u8 }
     }
-    let (hour_box, hour_error) = time_box(a, key + 1u64, t, two_digits(a, shown_hour), "Hour", !editing_minute, &presses[0usize])
-    if hour_error != ok { ret (zero, hour_error) }
-    let (minute_box, minute_error) = time_box(a, key + 2u64, t, two_digits(a, minute % 60u8), "Minute", editing_minute, &presses[1usize])
-    if minute_error != ok { ret (zero, minute_error) }
+    var hour_box: widget.Node = zero
+    var minute_box: widget.Node = zero
+    if options.typing {
+        let (typed_hour_box, typed_hour_error) = typed_time_box(a, key + 1u64, t, "Hour", options.hour_text, options.hour_len, options.typed_hour)
+        let (typed_minute_box, typed_minute_error) = typed_time_box(a, key + 2u64, t, "Minute", options.minute_text, options.minute_len, options.typed_minute)
+        if typed_hour_error != ok || typed_minute_error != ok { ret (zero, TooLarge) }
+        hour_box = typed_hour_box
+        minute_box = typed_minute_box
+    } else {
+        let (hour_node, hour_error) = time_box(a, key + 1u64, t, two_digits(a, shown_hour), "Hour", !editing_minute, &presses[0usize])
+        if hour_error != ok { ret (zero, hour_error) }
+        let (minute_node, minute_error) = time_box(a, key + 2u64, t, two_digits(a, minute % 60u8), "Minute", editing_minute, &presses[1usize])
+        if minute_error != ok { ret (zero, minute_error) }
+        hour_box = hour_node
+        minute_box = minute_node
+    }
     var big = control.text_options()
     big.role = .DisplaySmall
     big.wrap = .None
@@ -4090,19 +4120,58 @@ fn time_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, ho
         row_parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), row_parts[5usize..7usize])
         row_count = 4usize
     }
-    let (dial_node, dial_error) = time_dial(a, key, t, hour, minute, editing_minute, twelve, change, choices[4usize..16usize], presses[4usize..16usize])
-    if dial_error != ok { ret (zero, dial_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), row_parts[0usize..row_count])
-    parts[1usize] = dial_node
-    let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 24.0 }, style.defaults(), parts[0usize..2usize])
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 12.0 }, style.defaults(), row_parts[0usize..row_count])
+    var used = 1usize
+    if !options.typing {
+        let (dial_node, dial_error) = time_dial(a, key, t, hour, minute, editing_minute, twelve, change, choices[4usize..16usize], presses[4usize..16usize])
+        if dial_error != ok { ret (zero, dial_error) }
+        parts[used] = dial_node
+        used += 1usize
+    }
+    if mem.address_of(options.toggle_mode) != 0usize {
+        var mode_glyph: control.GlyphKind = .Edit
+        var mode_name = "Switch to text input"
+        if options.typing {
+            mode_glyph = .Clock
+            mode_name = "Switch to clock"
+        }
+        let (mode_button, mode_error) = control.glyph_action(a, key + 6u64, t, mode_glyph, mode_name, options.toggle_mode, 40.0, t.tokens.sizes.icon_md, style.color(t.tokens, .OnSurfaceVariant), true, 0u32, 0u32, 0u64)
+        if mode_error != ok { ret (zero, mode_error) }
+        let (mode_row, mode_row_error) = mem.alloc[widget.Node](a, 1usize)
+        if mode_row_error != ok { ret (zero, TooLarge) }
+        mode_row[0usize] = mode_button
+        parts[used] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(280.0, 40.0), mode_row[0usize..1usize])
+        used += 1usize
+    }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 24.0 }, style.defaults(), parts[0usize..used])
     let (buttons, buttons_error) = mem.alloc[DialogButton](a, 2usize)
     if buttons_error != ok { ret (zero, TooLarge) }
     buttons[0usize] = DialogButton { label: "Cancel", action: *cancel, kind: .Cancel }
     buttons[1usize] = DialogButton { label: "OK", action: *confirm, kind: .Default }
     let (made, made_error) = dialog_dismissable(a, key, t, "Select time", content, buttons[0usize..2usize], true, false, false, cancel)
     ret (made, made_error)
+}
+
+// (D1295) A typed time box: an outlined 80 wide text field over the caller's
+// text with its `label` in `body-small` `on-surface-variant` under it.
+fn typed_time_box(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str]) -> (widget.Node, err) {
+    var boxed = control.field_options()
+    boxed.width = 80.0
+    boxed.height = 64.0
+    let (field_node, field_error) = control.text_field(a, key, t, label, buffer, len, typed, zero, boxed)
+    if field_error != ok { ret (zero, field_error) }
+    var small = control.text_options()
+    small.role = .BodySmall
+    small.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, label, t, small, style.color(t.tokens, .OnSurfaceVariant))
+    if said_error != ok { ret (zero, said_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = field_node
+    parts[1usize] = said
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), parts[0usize..2usize]), ok)
 }
 
 // (D1294) An AM or PM segment: 48 by 64 with a 1px `outline` edge, the chosen
@@ -4262,7 +4331,8 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
 // theme language's 12- or 24-hour clock and read typed text with `parse_clock`.
 // (D1275) Typing filters the list to the times the text starts.
 // (D1294) `time_picker_modal` is the touch dial form.
-// ponytail: no input mode or wheels for touch, and there is no error icon; the caller's text and picks
+// (D1295) `time_picker_modal_with` adds its input mode.
+// ponytail: no wheels for touch, and there is no error icon; the caller's text and picks
 // carry the value.
 fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, times: []const str, offsets: []const str, selected: usize, picks: []const widget.Submit, note: str, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != times.len || offsets.len != times.len { ret (zero, TooLarge) }
