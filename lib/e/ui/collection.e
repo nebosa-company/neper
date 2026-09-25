@@ -1155,9 +1155,15 @@ fn swipe_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, conten
     row_style.overflow = .Clip
     parts[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&reveals[0usize]), invoke: reveal_drag }, gestures: 2u8, enabled: true, focusable: false }, row_style, body[0usize..1usize])
     if revealed {
+        let (runs, runs_error) = mem.alloc[SwipeTileRun](a, actions.len)
+        if runs_error != ok { ret (zero, TooLarge) }
+        let (closed, closed_error) = mem.alloc[widget.Submit](a, actions.len)
+        if closed_error != ok { ret (zero, TooLarge) }
         var i = 0usize
         while i < labels.len {
-            let (act, act_error) = control.button(a, key + 2u64 + u64(i), t, labels[i], &actions[i], control.button_options())
+            runs[i] = SwipeTileRun { action: actions[i], reveal: reveal }
+            closed[i] = widget.Submit { ctx: ctx_of(&runs[i]), invoke: swipe_tile_run }
+            let (act, act_error) = control.button(a, key + 2u64 + u64(i), t, labels[i], &closed[i], control.button_options())
             if act_error != ok { ret (zero, act_error) }
             parts[1usize + i] = act
             i += 1usize
