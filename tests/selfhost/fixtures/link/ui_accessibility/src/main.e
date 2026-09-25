@@ -113,6 +113,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let all_flags = accessibility.flags_of(accessibility.State { disabled: true, focused: true, selected: true, checked: true, expanded: true, hidden: true, mixed: true, busy: true, invalid: true, required: true, read_only: true, modal: true, current: true })
     if all_flags != 8191u16 { os.exit(22i32) }
     var sample: accessibility.Node = zero
+    sample.id = accessibility.Id { slot: 4u32, generation: 6u32 }
     sample.role = .TextField
     sample.live = .Assertive
     sample.position = accessibility.Position { row: 2u32, column: 3u32, row_count: 20u32, column_count: 4u32 }
@@ -122,7 +123,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     sample.relations.labelled_by = accessibility.Id { slot: 0u32, generation: 1u32 }
     sample.relations.described_by = accessibility.Id { slot: 9u32, generation: 2u32 }
     let flat = accessibility.flat_node(&sample)
-    if flat.role != 7u8 || flat.live != 2u8 || flat.row != 2u32 || flat.column != 3u32 || flat.row_count != 20u32 || flat.column_count != 4u32 || flat.level != 5u8 || flat.selection_start != 7usize || flat.selection_end != 11usize || flat.labelled_by != 0u32 || flat.described_by != 9u32 || flat.relation_flags != 3u8 { os.exit(23i32) }
+    if flat.id != 4u32 || flat.generation != 6u32 || flat.role != 7u8 || flat.live != 2u8 || flat.row != 2u32 || flat.column != 3u32 || flat.row_count != 20u32 || flat.column_count != 4u32 || flat.level != 5u8 || flat.selection_start != 7usize || flat.selection_end != 11usize || flat.labelled_by != 0u32 || flat.labelled_by_generation != 1u32 || flat.described_by != 9u32 || flat.described_by_generation != 2u32 || flat.relation_flags != 3u8 { os.exit(23i32) }
     if widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui accessibility ok\n")
     ret ok
