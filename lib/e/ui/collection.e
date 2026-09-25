@@ -425,7 +425,7 @@ fn indicator_options() -> IndicatorOptions {
 
 // What a tap on the track knows (D973): where the track is, the current page,
 // the count and where the current pill's middle stands from the track's start.
-type Scrub = struct { runtime: *widget.Runtime, key: widget.Key, current: usize, count: usize, middle: f32, turn: widget.Change[usize] }
+type Scrub = struct { runtime: *widget.Runtime, key: widget.Key, current: usize, count: usize, middle: f32, rtl: bool, turn: widget.Change[usize] }
 
 fn scrub_gesture(ctx: *void, g: widget.Gesture) -> err {
     let s = mem.cast[*Scrub](ctx)
@@ -433,7 +433,9 @@ fn scrub_gesture(ctx: *void, g: widget.Gesture) -> err {
     case .Tap as at:
         let (area, found) = control.keyed_bounds(s.runtime, s.key)
         if !found { ret ok }
-        if at.x < area.x + s.middle {
+        var before = at.x < area.x + s.middle
+        if s.rtl { before = !before }
+        if before {
             if s.current > 0usize { ret widget.fire_change[usize](s.turn, s.current - 1usize) }
             ret ok
         }
@@ -455,8 +457,7 @@ fn scrub_gesture(ctx: *void, g: widget.Gesture) -> err {
 // End go to the ends. A slider named "Page", its value "Page 2 of 5", said
 // politely. Disabled, the dots and pill are `on-surface` at 38% and the track
 // takes no focus.
-// ponytail: no drag to scrub, pill motion or right-to-left layout/tap mirroring;
-// the focus ring is the runtime's.
+// ponytail: no drag to scrub or pill motion; the focus ring is the runtime's.
 fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, current: usize, turn: widget.Change[usize], options: IndicatorOptions) -> (widget.Node, err) {
     if count == 0usize || current >= count { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -467,6 +468,7 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
         pad = 16.0
     }
     let enabled = !options.disabled
+    let rtl = t.tokens.direction == .RightToLeft
     var shown = count
     var first = 0usize
     if count > 7usize {
@@ -487,12 +489,14 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
     var middle = pad + inner
     var v = 0usize
     while v < shown {
-        let page = first + v
+        var logical = v
+        if rtl { logical = shown - 1usize - v }
+        let page = first + logical
         var size: f32 = 8.0
-        if first > 0usize && v == 0usize { size = 4.0 }
-        if first > 0usize && v == 1usize { size = 6.0 }
-        if first + shown < count && v + 1usize == shown { size = 4.0 }
-        if first + shown < count && v + 2usize == shown { size = 6.0 }
+        if first > 0usize && logical == 0usize { size = 4.0 }
+        if first > 0usize && logical == 1usize { size = 6.0 }
+        if first + shown < count && logical + 1usize == shown { size = 4.0 }
+        if first + shown < count && logical + 2usize == shown { size = 6.0 }
         var dot = control.sized_style(size, size)
         dot.radius = size * 0.5
         dot.background = paint.Brush { Solid: dot_ink }
@@ -502,7 +506,7 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
             dot.background = paint.Brush { Solid: pill_ink }
             middle += 12.0
         }
-        if page < current { middle += size + 8.0 }
+        if (!rtl && page < current) || (rtl && page > current) { middle += size + 8.0 }
         dots[v] = widget.box(0u64, dot, zero)
         v += 1usize
     }
@@ -538,7 +542,7 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
     track.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
     let (scrubs, scrubs_error) = mem.alloc[Scrub](a, 1usize)
     if scrubs_error != ok { ret (zero, TooLarge) }
-    scrubs[0usize] = Scrub { runtime: t.runtime, key: track_key, current: current, count: count, middle: middle, turn: turn }
+    scrubs[0usize] = Scrub { runtime: t.runtime, key: track_key, current: current, count: count, middle: middle, rtl: rtl, turn: turn }
     control.focus_look(t)
     let (regions, regions_error) = mem.alloc[widget.Node](a, 1usize)
     if regions_error != ok { ret (zero, TooLarge) }

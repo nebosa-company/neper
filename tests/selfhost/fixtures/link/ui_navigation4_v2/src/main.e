@@ -215,6 +215,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let rtl_theme = control.Theme { tokens: &rtl_tokens, fonts: fonts, language: "", runtime: &runtime }
     let (rtl, rtl_error) = build(&f, &rtl_theme, s)
     if rtl_error != ok || testing.pump(&harness, rtl, time.Instant { nanos: 1100000000i64 }) != ok || testing.press_key(&harness, 39u32, zero) != ok || s.dots.last != 4usize || testing.press_key(&harness, 37u32, zero) != ok || s.dots.last != 6usize { os.exit(34i32) }
+    let (rtl_shot, rtl_shot_error) = testing.snapshot(&harness, a)
+    let (rtl_media, has_rtl_media) = bounds(&harness, &runtime, 4401u64)
+    if rtl_shot_error != ok || !has_rtl_media || !is_color(rtl_shot, at(rtl_media.x + 76.0, rtl_media.y + 16.0), style.color(&rtl_tokens, .Primary)) || testing.tap(&harness, track.x + 20.0, track.y + 16.0) != ok || s.dots.last != 6usize || testing.tap(&harness, track.x + 110.0, track.y + 16.0) != ok || s.dots.last != 4usize { os.exit(35i32) }
     // On media: the dots on a 32 tall `surface-container-high` pill 12 in.
     let (media, has_media) = bounds(&harness, &runtime, 4401u64)
     if !has_media || !is_color(shot, at(media.x + 16.0, media.y + 16.0), style.color(&tokens, .SurfaceContainerHigh)) || !is_color(shot, at(media.x + 36.0, media.y + 16.0), style.color(&tokens, .Primary)) { os.exit(24i32) }
