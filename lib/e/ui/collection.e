@@ -2412,6 +2412,13 @@ fn tree_collapse(ctx: *void) -> err {
     ret ok
 }
 
+fn tree_action(ctx: *void, action: u32) -> err {
+    let k = mem.cast[*TreeKeys](ctx)
+    if action == accessibility.ACTION_EXPAND && k.branch && !k.open { ret widget.fire_change[widget.Key](k.toggle, k.key) }
+    if action == accessibility.ACTION_COLLAPSE && k.open { ret widget.fire_change[widget.Key](k.toggle, k.key) }
+    ret ok
+}
+
 // The rows of a tree or a tree table: each indented by its depth with a
 // disclosure mark (keyed `key + 1 + 2 * position`, a tap reporting the node through
 // `toggle`) before the content, the row itself (keyed by the node) a focusable tap
@@ -2433,7 +2440,7 @@ fn tree_collapse(ctx: *void) -> err {
 // and Left collapses or returns to the parent.
 // ponytail: at most 512 visible rows, not virtualised; no icon or meta slot,
 // twisty rotation, `*`, typeahead, rename,
-// drag and drop, loading or disabled rows, and no Expand/Collapse actions.
+// drag and drop, loading or disabled rows.
 fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
     let (visible, visible_error) = mem.alloc[TreeRow](a, 512usize)
@@ -2599,6 +2606,11 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         item_sem.row = u32(entry.index + 1usize)
         item_sem.row_count = u32(entry.siblings)
         if open { item_sem.states = accessibility.STATE_EXPANDED }
+        if entry.branch {
+            item_sem.actions = accessibility.ACTION_EXPAND
+            if open { item_sem.actions = accessibility.ACTION_COLLAPSE }
+            item_sem.on_action = widget.Change[u32] { ctx: ctx_of(&keys[i]), invoke: tree_action }
+        }
         if chosen { item_sem.states = item_sem.states | accessibility.STATE_SELECTED }
         if current != 0u64 && entry.key == current { item_sem.states = item_sem.states | accessibility.STATE_CURRENT }
         let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)

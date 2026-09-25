@@ -247,6 +247,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 111u64) || testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 111u64) || logs[0usize].toggles != 1usize { os.exit(40i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 11u64) || testing.press_key(&harness, 37u32, zero) != ok || logs[0usize].toggles != 2usize || logs[0usize].toggled != 11u64 { os.exit(41i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || !focused_is(&harness, 2u64) || testing.press_key(&harness, 39u32, zero) != ok || logs[0usize].toggles != 3usize || logs[0usize].toggled != 2u64 { os.exit(42i32) }
+    // Branch semantics offer only the action matching their current state.
+    var open_id: accessibility.Id = zero
+    var shut_id: accessibility.Id = zero
+    var has_open_id = false
+    var has_shut_id = false
+    i = 0usize
+    while i < tree.nodes.len {
+        if tree.nodes[i].role == .TreeItem && tree.nodes[i].level == 1u8 && tree.nodes[i].position.row == 1u32 && tree.nodes[i].actions.len == 2usize && tree.nodes[i].actions[1usize] == .Collapse {
+            open_id = tree.nodes[i].id
+            has_open_id = true
+        }
+        if tree.nodes[i].role == .TreeItem && tree.nodes[i].level == 1u8 && tree.nodes[i].position.row == 2u32 && tree.nodes[i].actions.len == 2usize && tree.nodes[i].actions[1usize] == .Expand {
+            shut_id = tree.nodes[i].id
+            has_shut_id = true
+        }
+        i += 1usize
+    }
+    if !has_open_id || !has_shut_id { os.exit(43i32) }
+    if widget.semantic_action(&runtime, open_id, accessibility.ACTION_COLLAPSE) != ok || logs[0usize].toggles != 4usize || logs[0usize].toggled != 1u64 { os.exit(44i32) }
+    if widget.semantic_action(&runtime, shut_id, accessibility.ACTION_EXPAND) != ok || logs[0usize].toggles != 5usize || logs[0usize].toggled != 2u64 { os.exit(45i32) }
     // The outline: guides through each ancestor's twisty, 16 and 36 in, from row
     // to row; A2, the current heading, with its 3px `primary` bar.
     let (root_2, build_2_error) = build(&f, &theme, ctx, 1usize)
