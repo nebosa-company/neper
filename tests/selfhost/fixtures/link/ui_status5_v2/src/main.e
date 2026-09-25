@@ -138,9 +138,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     stores[0usize] = store
     let s = &stores[0usize]
     s.press = widget.Submit { ctx: mem.cast[*void](s), invoke: on_press }
-    s.items[0usize] = control.NotificationItem { title: "Build 4128 failed", message: "3 tests failed in e.fs", time: "12 min ago", severity: .Error, unread: true, group: "Today", action_label: "View log", action: s.press, dismiss: s.press }
-    s.items[1usize] = control.NotificationItem { title: "Ada requested your review", message: "", time: "1 h ago", severity: .Info, unread: false, group: "Today", action_label: "", action: s.press, dismiss: s.press }
-    s.items[2usize] = control.NotificationItem { title: "Release 1.2 is out", message: "", time: "", severity: .Success, unread: false, group: "Yesterday", action_label: "", action: s.press, dismiss: s.press }
+    s.items[0usize] = control.NotificationItem { title: "Build 4128 failed", message: "3 tests failed in e.fs", time: "12 min ago", severity: .Error, unread: true, group: "Today", action_label: "View log", action: s.press, dismiss: s.press, source: "" }
+    s.items[1usize] = control.NotificationItem { title: "Ada requested your review", message: "", time: "1 h ago", severity: .Info, unread: false, group: "Today", action_label: "", action: s.press, dismiss: s.press, source: "" }
+    s.items[2usize] = control.NotificationItem { title: "Release 1.2 is out", message: "", time: "", severity: .Success, unread: false, group: "Yesterday", action_label: "", action: s.press, dismiss: s.press, source: "" }
     s.bar[0usize] = navigation.status_item("Ready")
     s.bar[1usize] = navigation.status_item("2")
     s.bar[1usize].marked = true
@@ -296,6 +296,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.by_text(&harness, "Couldn't load older notifications.").count != 1usize { os.exit(56i32) }
     let before_extras = s.presses
     if !tap_key(&harness, &runtime, 5200u64) || !tap_key(&harness, &runtime, 5202u64) || s.presses != before_extras + 2usize { os.exit(57i32) }
+    // (D1303) Four failed builds from one source fold into "4 builds failed";
+    // pressed, the row opens (expanded) and the builds show.
+    var runs: [5]control.NotificationItem = zero
+    var run_index = 0usize
+    while run_index < 4usize {
+        runs[run_index] = s.items[0usize]
+        runs[run_index].source = "builds failed"
+        run_index += 1usize
+    }
+    runs[1usize].title = "Build 4127 failed"
+    runs[4usize] = s.items[1usize]
+    var fold_pass = 0usize
+    while fold_pass < 4usize {
+        f = mem.arena_from(frame_storage)
+        let (fold_list, fold_list_error) = control.notification_list_of(&f, 6000u64, &theme, "Folded", runs[..], &s.press, 380.0, 500.0)
+        let (fold_page, fold_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if fold_list_error != ok || fold_page_error != ok { os.exit(58i32) }
+        fold_page[0usize] = fold_list
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 520.0), fold_page[0usize..1usize]), time.Instant { nanos: 9100000000i64 + i64(fold_pass) }) != ok { os.exit(59i32) }
+        let (fold_tree, fold_tree_error) = testing.semantics(&harness)
+        let (fold_row, has_fold_row) = find(fold_tree, .ListItem, "4 builds failed")
+        if fold_tree_error != ok || !has_fold_row { os.exit(60i32) }
+        let shown_builds = testing.by_text(&harness, "Build 4127 failed").count
+        if fold_pass < 2usize && (shown_builds != 0usize || fold_row.state.expanded) { os.exit(61i32) }
+        if fold_pass == 1usize && !tap_key(&harness, &runtime, 6256u64) { os.exit(62i32) }
+        if fold_pass >= 2usize && (shown_builds == 0usize || !fold_row.state.expanded) { os.exit(63i32) }
+        let (_, has_review) = find(fold_tree, .ListItem, "info, Ada requested your review")
+        if !has_review { os.exit(64i32) }
+        fold_pass += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(27i32) }
     try io.print("ui status5 v2 ok\n")
     ret ok
