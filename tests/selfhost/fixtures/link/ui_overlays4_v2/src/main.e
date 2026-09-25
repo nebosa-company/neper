@@ -28,7 +28,7 @@ use e.ui.widget
 
 type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, typed: usize, dismisses: usize }
 
-type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, Empty, Switcher }
+type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, Empty, Switcher }
 
 fn on_activate(ctx: *void, index: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -93,12 +93,12 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
     if which == .PaletteSymbols { mode = .Symbols }
     var palette: widget.Node = zero
     var e1: err = ok
-    if which == .PaletteGrouped {
+    if which == .PaletteGrouped || which == .PaletteBusy {
         var grouped: [3]navigation.PaletteCommand = zero
         grouped[0usize] = navigation.PaletteCommand { name: names[0usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 2usize, shortcut: "Ctrl+Shift+B", unavailable: "" }
         grouped[1usize] = navigation.PaletteCommand { name: names[1usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 0usize, shortcut: "F6", unavailable: "" }
         grouped[2usize] = navigation.PaletteCommand { name: names[2usize], group: "Commands", category: "Release", match_start: 0usize, match_end: 3usize, shortcut: "", unavailable: "No project open" }
-        let (made_palette, made_palette_error) = navigation.command_palette_grouped(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, grouped[..], active, true, activate, run, dismiss, 560.0)
+        let (made_palette, made_palette_error) = navigation.command_palette_grouped_busy(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, grouped[..], active, which == .PaletteBusy, true, activate, run, dismiss, 560.0)
         palette = made_palette
         e1 = made_palette_error
     } else {
@@ -236,6 +236,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(grouped_panel.height, 246.0) { os.exit(43i32) }
     if !near(grouped_first.y, grouped_panel.y + 73.0) || !near(grouped_last.y, grouped_first.y + 92.0) { os.exit(44i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].runs != 1usize { os.exit(45i32) }
+    // Loading replaces the divider with one full-width 2px indeterminate bar
+    // and reports Busy without moving the selected command while results stream.
+    let (root_busy, build_busy_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .PaletteBusy, 0usize)
+    if build_busy_error != ok || testing.pump(&harness, root_busy, time.Instant { nanos: 1180000000i64 }) != ok { os.exit(46i32) }
+    let (busy_panel, has_busy_panel) = lifted(&harness, 100u64)
+    let (busy_first, has_busy_first) = bounds(&harness, &runtime, 103u64)
+    let (busy_tree, busy_tree_error) = testing.semantics(&harness)
+    if busy_tree_error != ok { os.exit(47i32) }
+    let (busy_progress, has_busy_progress) = find(busy_tree, .Progress, "Loading commands")
+    if !has_busy_panel || !has_busy_first || !near(busy_panel.height, 247.0) || !near(busy_first.y, busy_panel.y + 74.0) || !has_busy_progress || !busy_progress.state.busy { os.exit(48i32) }
     // With no match: the empty state, 24 above and below (142 in all).
     let (root_3, build_3_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Empty, 0usize)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(26i32) }

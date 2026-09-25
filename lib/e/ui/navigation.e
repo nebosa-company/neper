@@ -4183,7 +4183,7 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
 // `body-medium` `on-surface-variant`, centred. The footer is 32 tall, 16 at the
 // sides, below a 1px `outline-variant` line: "Up and Down to move, Enter to run"
 // in `body-small` `on-surface-variant`.
-// ponytail: no busy bar, ranking or compact form; the
+// ponytail: no ranking or compact form; the
 // caller still filters and keeps `active` inside the list.
 fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (made, made_error) = command_palette_mode(a, key, t, label, buffer, len, typed, .Commands, commands, active, open, activate, run, dismiss, width)
@@ -4193,11 +4193,16 @@ fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 fn command_palette_mode(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     var no_text: []const str = zero
     var no_matches: []const usize = zero
-    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, commands, no_text, no_text, no_matches, no_matches, no_text, no_text, active, open, activate, run, dismiss, width)
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, commands, no_text, no_text, no_matches, no_matches, no_text, no_text, active, false, open, activate, run, dismiss, width)
     ret (made, made_error)
 }
 
 fn command_palette_grouped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const PaletteCommand, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = command_palette_grouped_busy(a, key, t, label, buffer, len, typed, mode, commands, active, false, open, activate, run, dismiss, width)
+    ret (made, made_error)
+}
+
+fn command_palette_grouped_busy(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const PaletteCommand, active: usize, busy: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (names, names_error) = mem.alloc[str](a, commands.len)
     if names_error != ok { ret (zero, TooLarge) }
     let (groups, groups_error) = mem.alloc[str](a, commands.len)
@@ -4223,11 +4228,11 @@ fn command_palette_grouped(a: *mem.Arena, key: widget.Key, t: *const control.The
         unavailable[i] = commands[i].unavailable
         i += 1usize
     }
-    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, categories, match_starts, match_ends, shortcuts, unavailable, active, open, activate, run, dismiss, width)
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, categories, match_starts, match_ends, shortcuts, unavailable, active, busy, open, activate, run, dismiss, width)
     ret (made, made_error)
 }
 
-fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, unavailable: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, unavailable: []const str, active: usize, busy: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (field, field_error) = palette_field(a, key + 2u64, t, buffer, len, typed, mode)
     if field_error != ok { ret (zero, field_error) }
@@ -4242,9 +4247,23 @@ fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
     combo_sem.states = accessibility.STATE_EXPANDED
     if active < commands.len { combo_sem.active = key + 3u64 + u64(active) }
     parts[0usize] = widget.semantics(0u64, combo_sem, style.defaults(), field_body[0usize..1usize])
-    let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
-    if rule_error != ok { ret (zero, rule_error) }
-    parts[1usize] = rule
+    if busy {
+        var progress_options = control.progress_options()
+        progress_options.full_bleed = true
+        let (progress, progress_error) = control.progress_bar_of(a, key + 100u64, t, "Loading commands", 0.0, true, width, progress_options)
+        if progress_error != ok { ret (zero, progress_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = progress
+        var clipped = control.sized_style(0.0, 2.0)
+        clipped.width = style.Length { Percent: 100.0 }
+        clipped.overflow = .Clip
+        parts[1usize] = widget.box(0u64, clipped, held[0usize..1usize])
+    } else {
+        let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+        if rule_error != ok { ret (zero, rule_error) }
+        parts[1usize] = rule
+    }
     var results = style.defaults()
     results.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
     if commands.len > 0usize {
