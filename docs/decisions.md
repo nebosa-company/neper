@@ -25758,3 +25758,13 @@ come.
 `ui_navigation5_v2` opens notes' menu with a secondary press and presses Copy
 path: tab 2, command 1 is reported, on Windows and Linux; `ui_workspace` still
 passes on both.
+
+## D1338 — Colour thumbs are 28 on touch and grow when hovered
+
+The ColorPicker spec sizes the spectrum's and strips' thumbs 20 with a
+pointer, 24 while hovered and 28 on touch. `Tint` now carries a `thumb`
+scale -- 1, 1.2 hovered, 1.4 on touch -- and the area's disc and the strips'
+rings scale their radii by it, their 2 inner and 1 outer strokes kept.
+
+`ui_pickers3_v2` finds the hue thumb's inner ring 12 from its centre on touch
+and the strip there with a pointer, on Windows and Linux.
