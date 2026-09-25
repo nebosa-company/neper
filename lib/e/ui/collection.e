@@ -1222,6 +1222,11 @@ fn header_sort(ctx: *void) -> err {
     ret widget.fire_change[usize](h.sort, h.column)
 }
 
+fn header_action(ctx: *void, action: u32) -> err {
+    if action == accessibility.ACTION_PRESS { ret header_sort(ctx) }
+    ret ok
+}
+
 type ReorderKey = struct { value: Reorder, reorder: widget.Change[Reorder] }
 
 fn reorder_key(ctx: *void) -> err {
@@ -1415,6 +1420,7 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         sem.column = u32(i + 1usize)
         sem.column_count = u32(columns.len)
         sem.actions = accessibility.ACTION_PRESS
+        sem.on_action = widget.Change[u32] { ctx: ctx_of(&drags[i]), invoke: header_action }
         if sorted { sem.states = accessibility.STATE_SELECTED }
         cells[n] = widget.semantics(0u64, sem, style.defaults(), keyboard[0usize..1usize])
         n += 1usize

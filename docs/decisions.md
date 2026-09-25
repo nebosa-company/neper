@@ -22648,3 +22648,12 @@ unbound rather than emitting a no-op reorder.
 
 `ui_collections2_v2` holds adjacent movement and the boundary on Windows and
 Linux. This is behavior-only on the reviewed HeaderRow surface.
+
+## D1098 — Header semantic Press performs its advertised sort
+
+Column headers already advertised Press to assistive technology. Their action
+callback now routes Press to the same caller-owned sort operation as a pointer,
+Enter or Space; unknown actions remain no-ops.
+
+`ui_collections2_v2` holds the semantic action on Windows and Linux. This is
+behavior-only on the reviewed HeaderRow surface.
