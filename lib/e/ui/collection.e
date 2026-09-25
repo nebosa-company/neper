@@ -5406,7 +5406,8 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
 // lifted one keeps its elements -- and the drag its handle -- at the top of the
 // stack. A list named `label`.
 // (D1197) The same moves are the row's named accessibility actions.
-// ponytail: no auto-scroll; touch has no long press for the menu.
+// (D1199) A drag near the edge of the viewport it sits in auto-scrolls it.
+// ponytail: touch has no long press for the menu.
 fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, move: widget.Change[Reorder], width: f32) -> (widget.Node, err) {
     if keys.len != items.len || items.len == 0usize { ret (zero, TooLarge) }
     let n = items.len

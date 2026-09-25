@@ -9,6 +9,7 @@ use e.gpu
 use e.io
 use e.mem
 use e.os
+use e.time
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -18,7 +19,7 @@ use e.ui.style
 use e.ui.widget
 use e.ui.window
 
-type Log = struct { taps: usize, double_taps: usize, drag_starts: usize, drag_moves: usize, drag_ends: usize, hovers: usize, hover_ends: usize, last_x: f32, submits: usize, cancels: usize, saves: usize, changes: usize, last_value: i32 }
+type Log = struct { taps: usize, double_taps: usize, drag_starts: usize, drag_moves: usize, drag_ends: usize, hovers: usize, hover_ends: usize, last_x: f32, submits: usize, cancels: usize, saves: usize, changes: usize, last_value: i32, last_start_y: f32 }
 
 fn on_gesture(ctx: *void, g: widget.Gesture) -> err {
     let log = mem.cast[*Log](ctx)
@@ -34,6 +35,7 @@ fn on_gesture(ctx: *void, g: widget.Gesture) -> err {
     case .DragMove as d:
         log.drag_moves += 1usize
         log.last_x = d.position.x
+        log.last_start_y = d.start.y
     case .DragEnd as p:
         log.drag_ends += 1usize
     case .Hover as p:
@@ -190,6 +192,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.fire_change[i32](unset, 7i32) != ok || log.changes != 1usize { os.exit(41i32) }
     var quiet: widget.Submit = zero
     if widget.fire_submit(quiet) != ok { os.exit(42i32) }
+    // (D1199) A drag held 5 from the bottom of a 100 tall viewport scrolls it each
+    // frame by (48 - 5) / 48 of a viewport a second; the drag's start moves up
+    // with the content and the region hears the move. Away from the edges, no step.
+    let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
+    if scrolled_error != ok { os.exit(51i32) }
+    scrolled[0usize] = widget.region(21u64, widget.Region { gesture: widget.GestureAction { ctx: ctx, invoke: on_gesture }, gestures: 2u8, enabled: true, focusable: false }, sized(40.0, 400.0), zero)
+    let viewport = widget.scroll(20u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: zero, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, sized(64.0, 100.0), scrolled[0usize..1usize])
+    frame = mem.arena_from(frame_storage)
+    let (_, scroll_reconcile_error) = widget.reconcile(&runtime, &frame, viewport, ui_layout.Constraints { min_width: 0.0, max_width: 64.0, min_height: 0.0, max_height: 100.0 })
+    if scroll_reconcile_error != ok { os.exit(52i32) }
+    let moves_before = log.drag_moves
+    if widget.dispatch(&runtime, input.Event { PointerDown: pointer(5.0, 40.0) }) != ok || widget.dispatch(&runtime, input.Event { PointerMove: pointer(5.0, 60.0) }) != ok || widget.dispatch(&runtime, input.Event { PointerMove: pointer(5.0, 50.0) }) != ok { os.exit(53i32) }
+    widget.begin_frame(&runtime, time.Instant { nanos: 0i64 })
+    if widget.dispatch(&runtime, input.Event { Frame: zero }) != ok || log.drag_moves != moves_before + 1usize || widget.animation_frame_requested(&runtime) { os.exit(54i32) }
+    if widget.dispatch(&runtime, input.Event { PointerMove: pointer(5.0, 95.0) }) != ok || !widget.animation_frame_requested(&runtime) { os.exit(55i32) }
+    if widget.dispatch(&runtime, input.Event { Frame: zero }) != ok || log.drag_moves != moves_before + 3usize { os.exit(56i32) }
+    let (viewport_id, viewport_count) = widget.find_by_key(mem.cast[*widget.State](runtime.state), 20u64)
+    let (offset, has_offset) = widget.scroll_offset_of(&runtime, viewport_id)
+    let step: f32 = 100.0 * 43.0 / 48.0 / 60.0
+    if viewport_count != 1usize || !has_offset || offset < step - 0.01 || offset > step + 0.01 || log.last_start_y < 40.0 - step - 0.01 || log.last_start_y > 40.0 - step + 0.01 { os.exit(57i32) }
+    if widget.dispatch(&runtime, input.Event { PointerUp: pointer(5.0, 95.0) }) != ok || widget.dispatch(&runtime, input.Event { Frame: zero }) != ok || log.drag_moves != moves_before + 3usize { os.exit(58i32) }
     if widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(43i32) }
     try io.print("ui gesture ok\n")
     ret ok
