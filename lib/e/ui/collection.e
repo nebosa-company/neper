@@ -2374,9 +2374,9 @@ type CellSource = struct { ctx: *void, cell: fn(*void, *mem.Arena, widget.Key, u
 // stable key, whether a node has children, and a node's row built into the arena.
 type TreeSource = struct { ctx: *void, count: fn(*void, widget.Key) -> usize, key: fn(*void, widget.Key, usize) -> widget.Key, has_children: fn(*void, widget.Key) -> bool, build: fn(*void, *mem.Arena, widget.Key, *widget.Node) -> err }
 
-// A visible tree row: its key, its depth, its index among its siblings and their
-// count, and whether it may expand.
-type TreeRow = struct { key: widget.Key, depth: usize, index: usize, siblings: usize, branch: bool }
+// A visible tree row: its key and parent, its depth, its index among its siblings
+// and their count, and whether it is a branch and currently open.
+type TreeRow = struct { key: widget.Key, parent: widget.Key, depth: usize, index: usize, siblings: usize, branch: bool, open: bool }
 
 // The visible rows of a tree, depth first, only the expanded nodes' children
 // asked for; the count (at most `out.len`).
@@ -2387,9 +2387,10 @@ fn flatten(source: TreeSource, expanded: []const widget.Key, parent: widget.Key,
     while i < count && n < out.len {
         let child = source.key(source.ctx, parent, i)
         let branch = source.has_children(source.ctx, child)
-        out[n] = TreeRow { key: child, depth: depth, index: i, siblings: count, branch: branch }
+        let open = branch && is_selected(expanded, child)
+        out[n] = TreeRow { key: child, parent: parent, depth: depth, index: i, siblings: count, branch: branch, open: open }
         n += 1usize
-        if branch && is_selected(expanded, child) { n = flatten(source, expanded, child, depth + 1usize, out, n) }
+        if open { n = flatten(source, expanded, child, depth + 1usize, out, n) }
         i += 1usize
     }
     ret n
@@ -2420,6 +2421,22 @@ fn tree_action(ctx: *void, action: u32) -> err {
     ret ok
 }
 
+type TreeSiblings = struct { visible: []const TreeRow, parent: widget.Key, toggle: widget.Change[widget.Key] }
+
+fn tree_expand_siblings(ctx: *void) -> err {
+    let s = mem.cast[*TreeSiblings](ctx)
+    var i = 0usize
+    while i < s.visible.len {
+        let sibling = s.visible[i]
+        if sibling.parent == s.parent && sibling.branch && !sibling.open {
+            let fired = widget.fire_change[widget.Key](s.toggle, sibling.key)
+            if fired != ok { ret fired }
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
 // The rows of a tree or a tree table: each indented by its depth with a
 // disclosure mark (keyed `key + 1 + 2 * position`, a tap reporting the node through
 // `toggle`) before the content, the row itself (keyed by the node) a focusable tap
@@ -2439,9 +2456,9 @@ fn tree_action(ctx: *void, action: u32) -> err {
 // is a table row (`table_row_of`: 40 with a pointer, 48 touch, 32 dense, 16 in)
 // over a full-width 1px `outline-variant` divider, the last excepted. Up, Down,
 // Home and End move among visible rows; Right expands or enters the first child,
-// and Left collapses or returns to the parent.
+// Left collapses or returns to the parent, and `*` expands siblings.
 // ponytail: at most 512 visible rows, not virtualised; no icon or meta slot,
-// twisty rotation, `*`, typeahead, rename,
+// twisty rotation, typeahead, rename,
 // drag and drop, loading or disabled rows.
 fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
@@ -2456,9 +2473,11 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     if picks_error != ok { ret (none, TooLarge) }
     let (keys, keys_error) = mem.alloc[TreeKeys](a, count)
     if keys_error != ok { ret (none, TooLarge) }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize * count)
+    let (siblings, siblings_error) = mem.alloc[TreeSiblings](a, count)
+    if siblings_error != ok { ret (none, TooLarge) }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 8usize * count)
     if shortcuts_error != ok { ret (none, TooLarge) }
-    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 6usize * count)
+    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 8usize * count)
     if moves_error != ok { ret (none, TooLarge) }
     let tabled = columns.len > 0usize
     let touch = density_of(t) == 2usize
@@ -2474,7 +2493,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     var i = 0usize
     while i < count {
         let entry = visible[i]
-        let open = entry.branch && is_selected(expanded, entry.key)
+        let open = entry.open
         let chosen = is_selected(selected, entry.key)
         let lined = tabled && i + 1usize < count
         let tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
@@ -2581,7 +2600,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         var child_key: widget.Key = 0u64
         if has_child { child_key = visible[i + 1usize].key }
         keys[i] = TreeKeys { key: entry.key, open: open, branch: entry.branch, has_parent: has_parent, has_child: has_child, parent: control.FocusTo { runtime: t.runtime, key: parent_key }, child: control.FocusTo { runtime: t.runtime, key: child_key }, toggle: toggle }
-        let base = 6usize * i
+        let base = 8usize * i
         shortcuts[base] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_collapse } }
         shortcuts[base + 1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_expand } }
         // Up, Down, Home and End in the same scope: a level fewer than `roving`.
@@ -2599,6 +2618,13 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             bind_move(moves, shortcuts, bound + 1usize, t.runtime, visible[count - 1usize].key, 35u32)
             bound += 2usize
         }
+        siblings[i] = TreeSiblings { visible: visible[0usize..count], parent: entry.parent, toggle: toggle }
+        var shifted: input.Modifiers = zero
+        shifted.shift = true
+        let expand_siblings = widget.Submit { ctx: ctx_of(&siblings[i]), invoke: tree_expand_siblings }
+        shortcuts[bound] = widget.Shortcut { key: 56u32, modifiers: shifted, action: expand_siblings }
+        shortcuts[bound + 1usize] = widget.Shortcut { key: 42u32, modifiers: shifted, action: expand_siblings }
+        bound += 2usize
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
         if scoped_error != ok { ret (none, TooLarge) }
         scoped[0usize] = made

@@ -22,6 +22,7 @@ use e.text.shape
 use e.ui.accessibility
 use e.ui.collection
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.testing
@@ -269,6 +270,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.semantic_action(&runtime, shut_id, accessibility.ACTION_EXPAND) != ok || logs[0usize].toggles != 5usize || logs[0usize].toggled != 2u64 { os.exit(45i32) }
     // The ordinary second row tap still selects, then DoubleTap toggles a branch.
     if testing.tap(&harness, row_a.x + 150.0, row_a.y + 16.0) != ok || testing.tap(&harness, row_a.x + 150.0, row_a.y + 16.0) != ok || logs[0usize].picks != 2usize || logs[0usize].toggles != 6usize || logs[0usize].toggled != 1u64 { os.exit(46i32) }
+    // `*` expands collapsed branch siblings through the Windows Shift+8 and X
+    // asterisk physical paths.
+    var star_held: input.Modifiers = zero
+    star_held.shift = true
+    if !focused_is(&harness, 1u64) || testing.press_key(&harness, 56u32, star_held) != ok || logs[0usize].toggles != 7usize || logs[0usize].toggled != 2u64 { os.exit(48i32) }
+    if testing.press_key(&harness, 42u32, star_held) != ok || logs[0usize].toggles != 8usize || logs[0usize].toggled != 2u64 { os.exit(49i32) }
     // The outline: guides through each ancestor's twisty, 16 and 36 in, from row
     // to row; A2, the current heading, with its 3px `primary` bar.
     let (root_2, build_2_error) = build(&f, &theme, ctx, 1usize)
@@ -311,7 +318,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(head.height, 47.0) || !near(table_a.y, head.y + 48.0) || !near(table_a.height, 39.0) || !near(table_a.width, 280.0) || !near(table_b.height, 40.0) { os.exit(34i32) }
     if !is_color(shot_3, at(table_a.x + 2.0, table_a.y + 39.5), rule) || !is_color(shot_3, at(table_a.x + 150.0, table_a.y + 20.0), background) || !is_color(shot_3, at(table_b.x + 150.0, table_b.y + 20.0), style.color(&tokens, .SecondaryContainer)) { os.exit(35i32) }
     if !near(table_twisty.x, table_a.x + 16.0) || !near(table_twisty_a1.x, table_twisty.x + 20.0) { os.exit(36i32) }
-    if testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || logs[0usize].picks != 4usize || logs[0usize].toggles != 7usize || logs[0usize].toggled != 1u64 { os.exit(47i32) }
+    if testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || logs[0usize].picks != 4usize || logs[0usize].toggles != 9usize || logs[0usize].toggled != 1u64 { os.exit(47i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
     try io.print("ui collections3 v2 ok\n")
     ret ok

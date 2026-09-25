@@ -22508,3 +22508,14 @@ first, so double-click selects the row and then toggles its branch.
 `ui_collections3_v2` holds Tree and TreeTable double-click behavior on Windows
 and Linux. This changes behavior on the reviewed Tree surfaces, so no duplicate
 screenshot is added.
+
+## D1084 — Tree star expands collapsed siblings
+
+Each visible tree row keeps its source parent and its build-time open state.
+Pressing `*` scans that existing visible snapshot and emits the stable key of
+every collapsed branch with the same parent through the caller's toggle. No
+expansion state is retained by the control.
+
+`ui_collections3_v2` holds the Windows Shift+8 and X asterisk physical paths on
+Windows and Linux. This changes behavior on the reviewed Tree surface, so no
+duplicate screenshot is added.
