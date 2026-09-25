@@ -603,6 +603,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (touch_up, has_touch_up) = find(touch_menu_tree, .MenuItem, "Move up")
     if !has_touch_down || !has_touch_up || !touch_up.state.disabled || touch_down.bounds.y < touch_list.y + 56.0 { os.exit(167i32) }
     if testing.tap(&harness, touch_down.bounds.x + 20.0, touch_down.bounds.y + touch_down.bounds.height * 0.5) != ok || s.moves != 2usize || s.moved.from != 0usize || s.moved.to != 1usize { os.exit(168i32) }
+    // (D1288) Turning to the second page slides the strip: half way the first
+    // page is still built and the second not yet in place; settled, the second
+    // stands at the view's start and the first is gone.
+    var settle_pages: [3]widget.Node = zero
+    var settle_step = 0usize
+    while settle_step < 5usize {
+        var settle_at = 50000000000i64
+        var settle_page = 0usize
+        if settle_step == 1usize { settle_at = 50016000000i64 }
+        if settle_step == 2usize {
+            settle_at = 50100000000i64
+            settle_page = 1usize
+        }
+        if settle_step == 3usize {
+            settle_at = 50250000000i64
+            settle_page = 1usize
+        }
+        if settle_step == 4usize {
+            settle_at = 50500000000i64
+            settle_page = 1usize
+        }
+        if testing.begin(&harness, time.Instant { nanos: settle_at }) != ok { os.exit(172i32) }
+        f = mem.arena_from(frame_storage)
+        settle_pages[0usize] = widget.box(1910u64, control.sized_style(240.0, 120.0), zero)
+        settle_pages[1usize] = widget.box(1911u64, control.sized_style(240.0, 120.0), zero)
+        settle_pages[2usize] = widget.box(1912u64, control.sized_style(240.0, 120.0), zero)
+        var settle_view = collection.page_view_options()
+        settle_view.label = "Settle"
+        settle_view.width = 240.0
+        settle_view.height = 120.0
+        let (settling, settling_error) = collection.page_view_of(&f, 1900u64, &theme, settle_pages[0usize..3usize], settle_page, zero, settle_view)
+        let (settle_root, settle_root_error) = mem.alloc[widget.Node](&f, 1usize)
+        if settling_error != ok || settle_root_error != ok { os.exit(173i32) }
+        settle_root[0usize] = settling
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), settle_root[0usize..1usize]), time.Instant { nanos: settle_at }) != ok { os.exit(174i32) }
+        if settle_step >= 3usize {
+            let (settle_box, has_settle_box) = bounds(&harness, &runtime, 1900u64)
+            let (second_page, has_second_page) = bounds(&harness, &runtime, 1911u64)
+            let first_count = testing.by_key(&harness, 1910u64).count
+            if !has_settle_box || !has_second_page { os.exit(175i32) }
+            if settle_step == 3usize && (first_count != 1usize || !(second_page.x > settle_box.x + 1.0)) { os.exit(176i32) }
+            if settle_step == 4usize && (first_count != 0usize || !near(second_page.x, settle_box.x)) { os.exit(177i32) }
+        }
+        settle_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(68i32) }
     try io.print("ui collections4 v2 ok\n")
     ret ok
