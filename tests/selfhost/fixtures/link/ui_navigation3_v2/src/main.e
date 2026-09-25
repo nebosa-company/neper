@@ -333,6 +333,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         drawer_step += 1usize
     }
+    // (D1270) A drag from the start edge opens the drawer; a short one does not.
+    f = mem.arena_from(frame_storage)
+    let (edged, edged_error) = navigation.drawer_edge_swipe(&f, 3800u64, &theme, widget.box(0u64, control.sized_style(400.0, 300.0), zero), s.dismiss, 400.0, 300.0)
+    if edged_error != ok || testing.pump(&harness, edged, time.Instant { nanos: 5200000000i64 }) != ok { os.exit(69i32) }
+    let swipes_before = s.counters[3usize].count
+    if testing.drag(&harness, geometry.Point { x: 5.0, y: 100.0 }, geometry.Point { x: 40.0, y: 100.0 }, 4usize) != ok || s.counters[3usize].count != swipes_before { os.exit(70i32) }
+    if testing.drag(&harness, geometry.Point { x: 5.0, y: 100.0 }, geometry.Point { x: 120.0, y: 100.0 }, 6usize) != ok || s.counters[3usize].count == swipes_before { os.exit(71i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation3 v2 ok\n")
     ret ok

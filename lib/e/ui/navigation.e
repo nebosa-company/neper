@@ -1904,6 +1904,43 @@ fn drawer_pick_fire(ctx: *void) -> err {
     ret widget.fire_submit(p.dismiss)
 }
 
+// (D1270) An edge swipe's drag: past 56 inward it opens the drawer.
+type EdgeSwipe = struct { open: widget.Submit, rtl: bool }
+
+fn edge_swipe_drag(ctx: *void, g: widget.Gesture) -> err {
+    let e = mem.cast[*EdgeSwipe](ctx)
+    switch g {
+    case .DragMove as d:
+        var moved = d.position.x - d.start.x
+        if e.rtl { moved = 0.0 - moved }
+        if moved >= 56.0 { ret widget.fire_submit(e.open) }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// (D1270, docs/ux/components/NavigationDrawer, edge swipe) `content` (`width` by
+// `height`) with a 20 wide drag strip (keyed `key`) along its start edge (the
+// end in right-to-left): a drag from it 56 inward fires `open`, which the caller
+// answers by opening the modal drawer. The strip takes no tap, focus or place in
+// the tree. Callers leave it out where the host's gesture navigation claims the
+// edge.
+fn drawer_edge_swipe(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, open: widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
+    let rtl = t.tokens.direction == .RightToLeft
+    let (swipes, swipes_error) = mem.alloc[EdgeSwipe](a, 1usize)
+    if swipes_error != ok { ret (zero, TooLarge) }
+    swipes[0usize] = EdgeSwipe { open: open, rtl: rtl }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = content
+    layers[2usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&swipes[0usize]), invoke: edge_swipe_drag }, gestures: widget.GESTURE_DRAG, enabled: true, focusable: false }, control.sized_style(20.0, height), zero)
+    var x: f32 = 0.0
+    if rtl { x = control.max_zero(width - 20.0) }
+    layers[1usize] = widget.positioned(0u64, x, 0.0, style.defaults(), layers[2usize..3usize])
+    ret (widget.stack(0u64, control.sized_style(width, height), layers[0usize..2usize]), ok)
+}
+
 // v2 (D973, docs/ux/components/NavigationDrawer, modal): 256 to 360 wide and the
 // window's height on `surface-container-low`, its end corners `radius-lg`,
 // elevation 1, 12 in, over a `scrim` at 32% across the window; the header in
@@ -1911,7 +1948,8 @@ fn drawer_pick_fire(ctx: *void) -> err {
 // `destination_rows` 56 tall, 16 in and 24 at the end, sections with their
 // headings and dividers. A modal dialog named "Navigation" round the list; a
 // successful destination pick, press on the scrim or Escape fires `dismiss`.
-// ponytail: no edge swipe or open/close motion.
+// (D1270) `drawer_edge_swipe` opens it from the start edge.
+// ponytail: no open/close motion.
 fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if picks.len != items.len { ret (zero, TooLarge) }
