@@ -5013,15 +5013,19 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     // while the pointer is over a star, the stars up to it preview in `primary` at 60%.
     // (D1166) RTL reverses only the physical cells; logical values and keys stay fixed.
     // (D1171) Keyboard focus rings the row and layers its current star.
+    // (D1172) A pressed cell takes the pressed layer over hover and focus.
     let cell = t.tokens.metrics.control_height
     var size: f32 = 20.0
     if cell > t.tokens.sizes.control_sm { size = t.tokens.sizes.icon_md }
     let primary = style.color(t.tokens, .Primary)
     let group_state = control_state(t, key, true, false)
     var hovered = count
+    var pressed = count
     var h = 0usize
     while h < count {
-        if control_state(t, key + 1u64 + u64(h), true, false).hovered { hovered = h }
+        let state = control_state(t, key + 1u64 + u64(h), true, false)
+        if state.hovered { hovered = h }
+        if state.pressed { pressed = h }
         h += 1usize
     }
     var none: []const widget.Node = zero
@@ -5045,6 +5049,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
         cell_style.padding = style.EdgeLengths { left: inset, top: inset, right: inset, bottom: inset }
         if group_state.focus_visible && u32(i) + 1u32 == value { cell_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), t.tokens.states.focus) } }
         if i == hovered { cell_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), t.tokens.states.hover) } }
+        if i == pressed { cell_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), t.tokens.states.pressed) } }
         var slot = i
         if t.tokens.direction == .RightToLeft { slot = count - 1usize - i }
         items[slot] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, cell_style, body[0usize..1usize])

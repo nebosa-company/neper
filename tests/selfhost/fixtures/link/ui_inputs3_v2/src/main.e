@@ -17,6 +17,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.testing
@@ -139,6 +140,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if hovered_error != ok { os.exit(19i32) }
     let cell = over(page, style.color(&tokens, .OnSurface), tokens.states.hover)
     if !is_color(hovered, at(fourth.x + 16.0, fourth.y + 16.0), over(cell, primary, 0.6)) { os.exit(20i32) }
+    if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(fourth.x + 16.0, fourth.y + 16.0) }) != ok { os.exit(25i32) }
+    let (pressed, pressed_error) = frame(&harness, a, &f, &theme, &stores[0usize], false)
+    if pressed_error != ok { os.exit(26i32) }
+    if !is_color(pressed, at(fourth.x + 4.0, fourth.y + 16.0), over(page, style.color(&tokens, .OnSurface), tokens.states.pressed)) { os.exit(27i32) }
+    if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(fourth.x + 16.0, fourth.y + 16.0) }) != ok { os.exit(28i32) }
     // Keyboard focus rings the rating group and layers the current star.
     if testing.hover(&harness, 250.0, 310.0) != ok || testing.tab(&harness, false) != ok { os.exit(22i32) }
     let (focused, focused_error) = frame(&harness, a, &f, &theme, &stores[0usize], false)
