@@ -5165,6 +5165,15 @@ fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize,
 }
 
 // A viewport's offset, set (clamped to what was last placed) or read.
+// (D1262) Whether a text editor has the keyboard focus, so a plain-key shortcut
+// can stand aside for typing.
+fn editing(widget_runtime: *Runtime) -> bool {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret false }
+    let (_, has_editor) = focused_edit(s)
+    ret has_editor
+}
+
 // (D1255) A viewport's content and visible extents from its last placement.
 fn scroll_extents(widget_runtime: *Runtime, element: ElementId) -> (f32, f32, bool) {
     let (s, state_error) = state_of(widget_runtime)

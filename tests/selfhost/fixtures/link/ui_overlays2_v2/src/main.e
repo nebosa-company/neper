@@ -20,6 +20,7 @@ use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
@@ -513,6 +514,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (emptied, emptied_error) = build_search(&f, &theme, s, &steps, search_buffer, "", groups[..])
     if emptied_error != ok || testing.pump(&harness, emptied, time.Instant { nanos: 9200000000i64 }) != ok { os.exit(120i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 800u64).element) != ok || testing.press_key(&harness, 27u32, zero) != ok || s.counters[7usize].count != closes_before + 1usize { os.exit(121i32) }
+    // (D1262) Ctrl+K and `/` open search from the content; `/` typed in the
+    // field is the character, not the shortcut.
+    f = mem.arena_from(frame_storage)
+    let (search_page, search_page_error) = build_search(&f, &theme, s, &steps, search_buffer, "", groups[..])
+    if search_page_error != ok { os.exit(122i32) }
+    let (opener, opener_error) = overlay.search_shortcuts(&f, &theme, search_page, s.subs[4usize])
+    if opener_error != ok || testing.pump(&harness, opener, time.Instant { nanos: 9300000000i64 }) != ok { os.exit(123i32) }
+    var ctrl_down: input.Modifiers = zero
+    ctrl_down.control = true
+    let opens_before = s.counters[4usize].count
+    if widget.focus(&runtime, testing.by_key(&harness, 902u64).element) != ok || testing.press_key(&harness, 75u32, ctrl_down) != ok || s.counters[4usize].count != opens_before + 1usize { os.exit(124i32) }
+    if testing.press_key(&harness, 47u32, zero) != ok || s.counters[4usize].count != opens_before + 2usize { os.exit(125i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 800u64).element) != ok || testing.press_key(&harness, 47u32, zero) != ok || s.counters[4usize].count != opens_before + 2usize { os.exit(126i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok

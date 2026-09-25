@@ -24608,3 +24608,16 @@ spec asks. The caller keeps `revealed` and masks again on blur or submit.
 `ui_field` holds the masked and plain field, the toggle's single node and
 Checked state, and the press that reports with the focus kept, on Windows and
 Linux.
+
+## D1262 — Ctrl+K and / open search
+
+`overlay.search_shortcuts` wraps the caller's content in a scope whose Ctrl+K
+(Cmd+K) and `/` fire `open`; the caller then opens the search view and
+focuses its field. A key down reaches scope shortcuts even while a text field
+has the focus, because the typed character arrives as a separate text event.
+So `/` stands aside while `widget.editing` (new) says an editor holds the
+focus: the slash is typed, not caught. `/` binds both 47, where keys are
+characters, and 191 (OEM 2), where they are virtual keys.
+
+`ui_overlays2_v2` holds Ctrl+K and `/` from a row and `/` ignored in the
+field on Windows and Linux.

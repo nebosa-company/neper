@@ -1121,6 +1121,7 @@ fn match_range(label: str, query: str) -> (usize, usize, bool) {
 // fallback row, `fallback_label` (the caller's "Search all files for "build""),
 // keyed `key + 4096`. A polite status says "6 suggestions" or "No results". A
 // click outside fires `dismiss`. A listbox named `label` (keyed `key`).
+// (D1262) `search_shortcuts` opens it with Ctrl+K or `/`.
 // ponytail: docked only (the compact full-screen form and the grow/fade motion
 // are not drawn); no loading bar under the header -- pass `popup_loading`
 // content round the view's owner instead.
@@ -1234,6 +1235,43 @@ fn search_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     var dismissing: widget.Submit = zero
     if mem.address_of(dismiss) != 0usize { dismissing = *dismiss }
     ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .BelowMatch, offset: gap_offset(.BelowMatch, 4.0), modal: false, dismiss: dismissing }, style.defaults(), named[0usize..1usize]), ok)
+}
+
+// (D1262) A search opening key: `open`, unless `typed` and a text editor has the
+// focus, where the key is the character being typed.
+type SearchOpen = struct { runtime: *widget.Runtime, open: widget.Submit, typed: bool }
+
+fn search_open_fire(ctx: *void) -> err {
+    let o = mem.cast[*SearchOpen](ctx)
+    if o.typed && widget.editing(o.runtime) { ret ok }
+    ret widget.fire_submit(o.open)
+}
+
+// (D1262, docs/ux/components/SearchBar, opening) `content` in a scope whose
+// Ctrl+K (Cmd+K) and `/` fire `open` -- the caller opens the search view and
+// focuses its field; `/` stands aside while a field has the focus.
+fn search_shortcuts(a: *mem.Arena, t: *const control.Theme, content: widget.Node, open: widget.Submit) -> (widget.Node, err) {
+    let (opens, opens_error) = mem.alloc[SearchOpen](a, 2usize)
+    if opens_error != ok { ret (zero, TooLarge) }
+    let (bound, bound_error) = mem.alloc[widget.Shortcut](a, 4usize)
+    if bound_error != ok { ret (zero, TooLarge) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    opens[0usize] = SearchOpen { runtime: t.runtime, open: open, typed: false }
+    opens[1usize] = SearchOpen { runtime: t.runtime, open: open, typed: true }
+    var control_held: input.Modifiers = zero
+    control_held.control = true
+    var meta_held: input.Modifiers = zero
+    meta_held.meta = true
+    let chord = widget.Submit { ctx: mem.cast[*void](&opens[0usize]), invoke: search_open_fire }
+    let slash = widget.Submit { ctx: mem.cast[*void](&opens[1usize]), invoke: search_open_fire }
+    bound[0usize] = widget.Shortcut { key: 75u32, modifiers: control_held, action: chord }
+    bound[1usize] = widget.Shortcut { key: 75u32, modifiers: meta_held, action: chord }
+    // `/` is 47 where keys are characters and 191 (OEM 2) where they are keys.
+    bound[2usize] = widget.Shortcut { key: 47u32, modifiers: zero, action: slash }
+    bound[3usize] = widget.Shortcut { key: 191u32, modifiers: zero, action: slash }
+    held[0usize] = content
+    ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: bound[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize]), ok)
 }
 
 // (D1256) What a search field's keys do round `field`: Escape clears a query
