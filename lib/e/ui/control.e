@@ -962,8 +962,6 @@ fn card_options() -> CardOptions {
 // content at 38%, no shadow, not focusable. Loading replaces the content with
 // synchronised media, title (60%) and supporting-line (90%) skeletons, and marks
 // the non-interactive Card busy; the caller owns the 300ms delay and phase.
-// ponytail: dragged omits the 1.5-degree tilt and 102% scale until nodes have
-// a visual transform independent of layout.
 fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, children: []const widget.Node) -> (widget.Node, err) {
     let (made, made_error) = card_render(a, key, t, options, false, children)
     ret (made, made_error)
@@ -1086,7 +1084,7 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
         parts[1usize] = widget.positioned(0u64, options.width - 8.0 - 24.0 - pad_px, 8.0 - pad_px, style.defaults(), parts[2usize..3usize])
         count = 2usize
     }
-    let (holder, holder_error) = mem.alloc[widget.Node](a, 2usize)
+    let (holder, holder_error) = mem.alloc[widget.Node](a, 4usize)
     if holder_error != ok { ret (zero, TooLarge) }
     var sem: widget.Semantics = zero
     sem.role = 2u8
@@ -1110,14 +1108,24 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
             press_children = holder[1usize..2usize]
         }
         holder[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&commands[0usize]), invoke: card_gesture }, gestures: 1u8 | 4u8 | 16u8, enabled: options.enabled, focusable: options.enabled }, s, press_children)
-        ret (widget.semantics(0u64, sem, style.defaults(), holder[0usize..1usize]), ok)
+        holder[2usize] = widget.semantics(0u64, sem, style.defaults(), holder[0usize..1usize])
+        if options.dragged && options.enabled && !t.tokens.motion.reduced {
+            holder[3usize] = holder[2usize]
+            ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
+        }
+        ret (holder[2usize], ok)
     }
     if count == 1usize {
         holder[0usize] = widget.box(0u64, s, parts[0usize..1usize])
     } else {
         holder[0usize] = widget.stack(0u64, s, parts[0usize..count])
     }
-    ret (widget.semantics(key, sem, style.defaults(), holder[0usize..1usize]), ok)
+    holder[2usize] = widget.semantics(key, sem, style.defaults(), holder[0usize..1usize])
+    if options.dragged && options.enabled && !t.tokens.motion.reduced {
+        holder[3usize] = holder[2usize]
+        ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
+    }
+    ret (holder[2usize], ok)
 }
 
 // A Card's standard content slots: optional full-bleed media, an optional
@@ -1627,7 +1635,7 @@ fn avatar(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Textur
 // motion, none), the region's width, the band's share of it and its colour, and
 // where the region stands on the page -- learnt when the region's probe paints,
 // which is before its shapes, so every shape's band is the same band.
-type Sweep = struct { x: f32, y: f32, known: bool, phase: f32, span: f32, band: f32, stops: [3]paint.Stop }
+type Sweep = struct { x: f32, y: f32, known: bool, angled: bool, phase: f32, span: f32, band: f32, stops: [3]paint.Stop }
 
 // A sweep for a region `span` wide at `phase`, its band `band` of the width
 // (Placeholder 45%, Skeleton 40%) in `surface-container-high`.
@@ -1661,7 +1669,9 @@ fn band_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let width = s.span * s.band
     let turn = s.phase - f32(i64(s.phase))
     let left = s.x - width + turn * (s.span + width)
-    let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: left, y: area.y }, end: geometry.Point { x: left + width, y: area.y }, stops: s.stops[0usize..3usize] } }
+    var lean: f32 = 0.0
+    if s.angled { lean = width * 0.17632698 }
+    let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: left, y: s.y }, end: geometry.Point { x: left + width, y: s.y - lean }, stops: s.stops[0usize..3usize] } }
     ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: area, brush: brush } })
 }
 
@@ -7156,8 +7166,7 @@ fn skeleton_options() -> SkeletonOptions {
 // line with `radius-xs`, a circle `width` across, a rectangle with
 // `options.radius`, or a pill fully rounded; carrying its region's shimmer, a
 // `surface-container-high` band 40% of the region wide; not in the tree.
-// ponytail: the band is upright, not angled 10 degrees; the 300 ms show delay and
-// 500 ms minimum are the caller's timing.
+// ponytail: the 300 ms show delay and 500 ms minimum are the caller's timing.
 fn skeleton_of(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, options: SkeletonOptions) -> (widget.Node, err) {
     var h = height
     var radius = options.radius
@@ -7169,6 +7178,7 @@ fn skeleton_of(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
     }
     var fill = style.color(t.tokens, .SurfaceContainerHighest)
     if options.on_highest { fill = style.color(t.tokens, .SurfaceContainerLowest) }
+    if mem.address_of(options.sweep) != 0usize { options.sweep.angled = true }
     let (node, node_error) = loading_shape(a, key, width, h, radius, fill, options.sweep)
     ret (node, node_error)
 }

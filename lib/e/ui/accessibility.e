@@ -362,13 +362,24 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
     let (root, has_root) = widget.root_of(runtime)
     if !has_root { ret (zero, Invalid) }
     let count = widget.element_count(runtime)
+    var has_promotions = false
+    var probe = 0usize
+    while probe < count {
+        let (summary, live) = widget.summary_at(runtime, probe)
+        if live && summary.has_semantics && summary.semantics.promote_actions { has_promotions = true }
+        probe += 1usize
+    }
     // One node per live element, in slot order; a table from slot to node index.
     let (nodes, nodes_error) = mem.alloc[Node](a, count)
     if nodes_error != ok { ret (zero, nodes_error) }
     let (index_of, index_error) = mem.alloc[usize](a, count)
     if index_error != ok { ret (zero, index_error) }
-    let (promote, promote_error) = mem.alloc[bool](a, count)
-    if promote_error != ok { ret (zero, promote_error) }
+    var promote: []bool = zero
+    if has_promotions {
+        let (flags, flags_error) = mem.alloc[bool](a, count)
+        if flags_error != ok { ret (zero, flags_error) }
+        promote = flags
+    }
     var produced = 0usize
     var slot = 0usize
     while slot < count {
@@ -472,14 +483,16 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
             }
             node.children = children[0usize..filled]
             index_of[slot] = produced
-            promote[produced] = summary.has_semantics && summary.semantics.promote_actions
+            if has_promotions { promote[produced] = summary.has_semantics && summary.semantics.promote_actions }
             nodes[produced] = node
             produced += 1usize
         }
         slot += 1usize
     }
-    let promotion_error = promote_actions(a, nodes[0usize..produced], promote[0usize..produced])
-    if promotion_error != ok { ret (zero, promotion_error) }
+    if has_promotions {
+        let promotion_error = promote_actions(a, nodes[0usize..produced], promote[0usize..produced])
+        if promotion_error != ok { ret (zero, promotion_error) }
+    }
     ret (Tree { root: root, nodes: nodes[0usize..produced] }, ok)
 }
 

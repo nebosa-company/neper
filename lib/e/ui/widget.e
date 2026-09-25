@@ -138,10 +138,12 @@ type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32
 // content is painted, not pressed: a press on it pans.
 type ZoomState = struct { scale: f32, offset: geometry.Point }
 type Zoom = struct { state: ZoomState, min_scale: f32, max_scale: f32, change: Change[ZoomState] }
+// A paint-only transform about the node's centre. Layout and hit bounds stay put.
+type VisualTransform = struct { scale: f32, rotation: f32, offset: geometry.Point }
 // A drop (D844): what a drag begun with `begin_drag` carried, released over a region
 // that takes drops.
 type Dropped = struct { position: geometry.Point, payload: u64 }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar, Slider: Slider, Zoom: Zoom }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar, Slider: Slider, Zoom: Zoom, Transformed: VisualTransform }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -168,6 +170,7 @@ const FITTED_TAG: u8 = 16u8
 const SCROLLBAR_TAG: u8 = 17u8
 const SLIDER_TAG: u8 = 18u8
 const ZOOM_TAG: u8 = 19u8
+const TRANSFORMED_TAG: u8 = 20u8
 const MAX_OVERLAYS: usize = 8usize
 const MAX_SHORT: usize = 32usize
 const MAX_HISTORY: usize = 32usize
@@ -587,6 +590,10 @@ fn zoom(key: Key, value: Zoom, value_style: style.Style, children: []const Node)
     ret Node { key: key, kind: Kind { Zoom: value }, style: value_style, children: children }
 }
 
+fn transformed(key: Key, value: VisualTransform, value_style: style.Style, children: []const Node) -> Node {
+    ret Node { key: key, kind: Kind { Transformed: value }, style: value_style, children: children }
+}
+
 fn slider(key: Key, value: Slider, value_style: style.Style) -> Node {
     var none: []const Node = zero
     ret Node { key: key, kind: Kind { Slider: value }, style: value_style, children: none }
@@ -803,6 +810,8 @@ fn kind_tag(kind: Kind) -> u8 {
         ret SLIDER_TAG
     case .Zoom as z:
         ret ZOOM_TAG
+    case .Transformed as tr:
+        ret TRANSFORMED_TAG
     }
     ret 0u8
 }
@@ -1112,6 +1121,8 @@ fn hash_node(seed: u64, node: *const Node) -> (u64, bool) {
         h = hash_bytes(h, bytes_of[ui_layout.Wrap](&w))
     case .Aspect as ratio:
         h = hash_f32(h, ratio)
+    case .Transformed as tr:
+        h = hash_bytes(h, bytes_of[VisualTransform](&tr))
     case .Button as bt:
         h = hash_bytes(h, bytes_of[Button](&bt))
     case .Image as im:
@@ -1321,6 +1332,8 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     case .Aspect as ratio:
         e.enabled = true
     case .Fitted:
+        e.enabled = true
+    case .Transformed as tr:
         e.enabled = true
     case .Scrollbar as bar:
         e.enabled = true
@@ -1681,6 +1694,9 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         let (natural, natural_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, ui_layout.Constraints { min_width: 0.0, max_width: 3.0e38, min_height: 0.0, max_height: 3.0e38 })
         if natural_error != ok { ret (zero, natural_error) }
         ret (ui_layout.constrain(natural, inner), ok)
+    case .Transformed as tr:
+        let (content, content_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner)
+        ret (content, content_error)
     case .Wrap as w:
         let (children, children_error) = children_of(s, a, node, inner, w.axis == .Horizontal)
         if children_error != ok { ret (zero, children_error) }
@@ -1885,6 +1901,8 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try place_fitted(s, a, node, element, inner, b, depth)
     case .Zoom as z:
         try place_zoom(s, a, node, element, inner, b, depth)
+    case .Transformed as tr:
+        try place_transformed(s, a, node, element, tr, inner, inner_limits, b, depth)
     case .Scrollbar as bar:
         try place_scrollbar(s, bar, inner, b, node.style.border.color)
     case .Slider as sl:
@@ -2668,6 +2686,23 @@ fn place_fitted(s: *State, a: *mem.Arena, node: *const Node, element: usize, inn
     let about = geometry.transform_multiply(geometry.transform_translate(inner.x, inner.y), geometry.transform_multiply(geometry.transform_scale(scale, scale), geometry.transform_translate(0.0 - inner.x, 0.0 - inner.y)))
     try scene.push(b, scene.Command { Transform: about })
     try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, geometry.Rect { x: inner.x, y: inner.y, width: natural.width, height: natural.height }, open, b, depth)
+    try scene.push(b, restore)
+    ret ok
+}
+
+fn place_transformed(s: *State, a: *mem.Arena, node: *const Node, element: usize, value: VisualTransform, inner: geometry.Rect, limits: ui_layout.Constraints, b: *scene.Builder, depth: usize) -> err {
+    var scale = value.scale
+    if !(scale > 0.0) { scale = 1.0 }
+    let cx = inner.x + inner.width * 0.5
+    let cy = inner.y + inner.height * 0.5
+    let moved = geometry.transform_translate(cx + value.offset.x, cy + value.offset.y)
+    let changed = geometry.transform_multiply(geometry.transform_rotate(value.rotation), geometry.transform_scale(scale, scale))
+    let about = geometry.transform_multiply(moved, geometry.transform_multiply(changed, geometry.transform_translate(0.0 - cx, 0.0 - cy)))
+    var save: scene.Command = .Save
+    var restore: scene.Command = .Restore
+    try scene.push(b, save)
+    try scene.push(b, scene.Command { Transform: about })
+    try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, limits, b, depth)
     try scene.push(b, restore)
     ret ok
 }
