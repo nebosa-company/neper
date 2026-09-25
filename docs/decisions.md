@@ -23805,3 +23805,17 @@ While a route transition runs, pointer input to both the outgoing and the
 incoming route is absorbed, and keyboard focus is already in the incoming
 route (on pop, it returns to the element that pushed). A predictive-back
 gesture is the only input that drives a transition. (§9.1; P6-08.)
+
+## D1210 — A touch hold opens a reorderable row's Move menu
+
+On touch, each Reorderable List row asks the shared `widget.long_press` for its
+key, so a 500 ms hold on the row body (away from the trailing handle) opens the
+D1196 Move menu. On touch the menu is `overlay.context_menu_touch_of`: 8 below
+the row under the target-preserving scrim, the same form the ContextMenu spec
+uses for touch. The shared hold consumes the release, so the row's own tap does
+not also run, and the handle keeps starting drags without a hold, as the spec
+asks.
+
+`ui_collections4_v2` holds the quiet first frame, the opened menu below the
+row with Move up disabled on the first row, and one reported move on Windows
+and Linux.

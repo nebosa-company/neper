@@ -582,6 +582,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let touch_ground = style.layer(style.color(&touch_tokens, .SurfaceContainerHigh), style.color(&touch_tokens, .OnSurface), 0.16)
     if !is_color(touch_shot, at(touch_list.x + 4.0, touch_list.y + 60.0), style.color(&touch_tokens, .SurfaceContainerLow)) || !is_color(touch_shot, at(touch_list.x + 200.0, touch_list.y + 88.0), touch_ground) || !is_color(touch_shot, at(touch_lifted.x + touch_lifted.width * 0.5, touch_lifted.y - 3.0), touch_ground) { os.exit(104i32) }
     if !release(&harness, touch_grip.x + 24.0, touch_grip.y + 84.0) || s.moves != 1usize || s.moved.from != 0usize || s.moved.to != 1usize { os.exit(105i32) }
+    // (D1210) A 500 ms hold on a touch row opens its Move menu below the row and
+    // eats the release; a command reports one move and closes it.
+    let (root_touch_rest, root_touch_rest_error) = build(&f, &rtl_theme, &touch, s)
+    if root_touch_rest_error != ok || testing.pump(&harness, root_touch_rest, now) != ok { os.exit(171i32) }
+    let hold_start = time.Instant { nanos: now.nanos + 1000000000i64 }
+    if testing.begin(&harness, hold_start) != ok || !press(&harness, touch_list.x + 80.0, touch_list.y + 28.0) { os.exit(160i32) }
+    let (root_hold, root_hold_error) = build(&f, &rtl_theme, &touch, s)
+    if root_hold_error != ok || testing.pump(&harness, root_hold, hold_start) != ok || testing.by_role(&harness, .Menu).count != 0usize { os.exit(161i32) }
+    let hold_due = time.Instant { nanos: hold_start.nanos + 500000000i64 }
+    if testing.begin(&harness, hold_due) != ok { os.exit(162i32) }
+    let (root_held, root_held_error) = build(&f, &rtl_theme, &touch, s)
+    if root_held_error != ok || testing.pump(&harness, root_held, hold_due) != ok { os.exit(163i32) }
+    if !release(&harness, touch_list.x + 80.0, touch_list.y + 28.0) || s.moves != 1usize { os.exit(164i32) }
+    let (root_touch_menu, root_touch_menu_error) = build(&f, &rtl_theme, &touch, s)
+    if root_touch_menu_error != ok || testing.pump(&harness, root_touch_menu, hold_due) != ok { os.exit(165i32) }
+    let (touch_menu_tree, touch_menu_tree_error) = testing.semantics(&harness)
+    if touch_menu_tree_error != ok { os.exit(166i32) }
+    let (touch_down, has_touch_down) = find(touch_menu_tree, .MenuItem, "Move down")
+    let (touch_up, has_touch_up) = find(touch_menu_tree, .MenuItem, "Move up")
+    if !has_touch_down || !has_touch_up || !touch_up.state.disabled || touch_down.bounds.y < touch_list.y + 56.0 { os.exit(167i32) }
+    if testing.tap(&harness, touch_down.bounds.x + 20.0, touch_down.bounds.y + touch_down.bounds.height * 0.5) != ok || s.moves != 2usize || s.moved.from != 0usize || s.moved.to != 1usize { os.exit(168i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(68i32) }
     try io.print("ui collections4 v2 ok\n")
     ret ok

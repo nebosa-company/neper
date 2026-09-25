@@ -1093,6 +1093,11 @@ fn reorder_pick(ctx: *void) -> err {
     ret widget.fire_change[Reorder](p.move, Reorder { from: p.from, to: p.to })
 }
 
+// (D1210) A touch hold on a row opens its Move menu.
+fn reorder_row_hold(ctx: *void) -> err {
+    ret reorder_row_action(ctx, accessibility.ACTION_SHOW_MENU)
+}
+
 type ReorderKeyCommand = enum u8 { Toggle, Drop, Cancel, Previous, Next, First, Last }
 type ReorderKeyboard = struct { runtime: *widget.Runtime, item: widget.Key, index: usize, count: usize, move: widget.Change[Reorder], cell: *Swipe, has_cell: bool, command: ReorderKeyCommand }
 
@@ -5443,7 +5448,8 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
 // stack. A list named `label`.
 // (D1197) The same moves are the row's named accessibility actions.
 // (D1199) A drag near the edge of the viewport it sits in auto-scrolls it.
-// ponytail: touch has no long press for the menu.
+// (D1210) On touch a 500 ms hold on a row opens the menu 8 below the row under
+// the target-preserving scrim.
 fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, move: widget.Change[Reorder], width: f32) -> (widget.Node, err) {
     if keys.len != items.len || items.len == 0usize { ret (zero, TooLarge) }
     let n = items.len
@@ -5495,6 +5501,8 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if layers_error != ok { ret (zero, TooLarge) }
     let (acting, acting_error) = mem.alloc[ReorderRow](a, n)
     if acting_error != ok { ret (zero, TooLarge) }
+    let (holds, holds_error) = mem.alloc[widget.Submit](a, n)
+    if holds_error != ok { ret (zero, TooLarge) }
     var alt: input.Modifiers = zero
     alt.alt = true
     var ctrl: input.Modifiers = zero
@@ -5519,6 +5527,11 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         acting[i] = ReorderRow { runtime: t.runtime, action: items[i].action, cell: cells[i], has_cell: has[i], item: keys[i], index: i, count: n, move: move }
         let (made, made_error) = row_acting(a, keys[i], t, &shown[i], i, n, wide, tall, accessibility.ACTION_PRESS | accessibility.ACTION_SHOW_MENU, widget.Change[u32] { ctx: ctx_of(&acting[i]), invoke: reorder_row_action }, reorder_row_names(i, n))
         if made_error != ok { ret (zero, made_error) }
+        if touch && mem.address_of(t.runtime) != 0usize {
+            holds[i] = widget.Submit { ctx: ctx_of(&acting[i]), invoke: reorder_row_hold }
+            let hold_error = widget.long_press(t.runtime, keys[i], &holds[i])
+            if hold_error != ok { ret (zero, hold_error) }
+        }
         // The handle's target over the glyph.
         drags[i] = Dragging { runtime: t.runtime, list: key, item: keys[i], index: i, count: n, extent: tall, move: move, cell: cells[i], has_cell: has[i] }
         var grip_x: f32 = 12.0
@@ -5680,9 +5693,18 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         commands[1usize].enabled = menu_row + 1usize < n
         commands[3usize].enabled = menu_row + 1usize < n
         closer[0usize] = widget.Submit { ctx: ctx_of(&picks[4usize]), invoke: reorder_pick }
-        let (at, pointed) = widget.context_point(t.runtime)
-        let (menu, menu_error) = overlay.context_menu_of(a, key ^ hash.fnv1a64("reorder-menu"), t, keys[menu_row], items[menu_row].headline, commands[0usize..4usize], true, &closer[0usize], at, pointed)
-        if menu_error != ok { ret (zero, menu_error) }
+        let menu_key = key ^ hash.fnv1a64("reorder-menu")
+        var menu: widget.Node = zero
+        if touch {
+            let (made, made_error) = overlay.context_menu_touch_of(a, menu_key, t, keys[menu_row], items[menu_row].headline, commands[0usize..4usize], true, &closer[0usize])
+            if made_error != ok { ret (zero, made_error) }
+            menu = made
+        } else {
+            let (at, pointed) = widget.context_point(t.runtime)
+            let (made, made_error) = overlay.context_menu_of(a, menu_key, t, keys[menu_row], items[menu_row].headline, commands[0usize..4usize], true, &closer[0usize], at, pointed)
+            if made_error != ok { ret (zero, made_error) }
+            menu = made
+        }
         layers[l] = menu
         l += 1usize
     }
