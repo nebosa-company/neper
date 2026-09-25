@@ -22464,3 +22464,15 @@ callback, and clamps it to the content; an already visible row stays quiet.
 `ui_collections6_v2` holds the caller-owned offset and upward reveal on Windows
 and Linux. This changes behavior on the reviewed DataGrid surface, so no
 duplicate screenshot is added.
+
+## D1080 — DockPanel header double-click reuses Maximise
+
+A DockPanel with a Maximise action wraps its header in one tap region. Nested
+tabs and action buttons remain the deeper hit targets; two taps on the remaining
+header surface fire the same caller-owned action used by the Maximise button and
+Ctrl+M, so maximise and restore keep one state path.
+
+`ui_containers3_v2` holds the header gesture and nested tab priority on Windows
+and Linux. This is a behavior-only change on the reviewed DockPanel surface, so
+no duplicate screenshot is added. DockLayout's separate sash double-click reset
+remains open.

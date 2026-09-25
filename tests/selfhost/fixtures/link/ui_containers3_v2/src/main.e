@@ -187,6 +187,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_later_floated || !has_later_busy || !(later_busy.x > busy.x) || !near(later_busy.width, busy.width) { os.exit(28i32) }
     if testing.by_role(&harness, .Region).count != 4usize { os.exit(27i32) }
     if testing.by_label(&harness, "Dock panel").count != 1usize || testing.by_label(&harness, "Restore panel").count != 1usize || testing.by_text(&harness, "Nothing here").count != 1usize { os.exit(20i32) }
+    // Two taps on the otherwise-empty header surface reuse Maximise; its child
+    // action buttons remain the deeper hit targets.
+    if testing.tap(&harness, floated.x + 110.0, floated.y + 20.0) != ok || testing.tap(&harness, floated.x + 110.0, floated.y + 20.0) != ok || stores[0usize].hits[3usize] != 1u32 { os.exit(31i32) }
     // The stacked slot: 32 headers, the two open bodies sharing what is left.
     let (top, has_top) = bounds(&harness, &runtime, 51u64)
     let (middle, has_middle) = bounds(&harness, &runtime, 53u64)
