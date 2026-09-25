@@ -22827,3 +22827,12 @@ focusables or 64 overlay focusables.
 `ui_algorithms` holds Tab across the old boundary and List typeahead to item 300
 on Windows and Linux. Virtual collections still need source-level lookup beyond
 their built window. The reviewed surface is unchanged.
+
+## D1116 — Hit testing traverses every sibling
+
+The action, region, scroll, zoom and general hit walkers traverse children in
+forward paint order and retain the last hit. This preserves front-to-back results
+without fixed reverse-order scratch arrays or the former 64-sibling truncation.
+
+`ui_algorithms` holds the 300th overlapping child and `ui_gesture` guards dispatch
+on Windows and Linux. The reviewed surface is unchanged.
