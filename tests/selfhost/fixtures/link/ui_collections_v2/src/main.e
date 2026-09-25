@@ -285,9 +285,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (gamma_node, has_gamma_node) = find(tree, .ListItem, "Gamma")
     if !has_list || list_node.position.row_count != 3u32 || !has_beta_node || !beta_node.state.selected || beta_node.position.row != 2u32 || !same(beta_node.hint, "Approved build 4128") { os.exit(18i32) }
     if !has_gamma_node || !gamma_node.state.disabled { os.exit(19i32) }
+    let (beta_tile_action, has_beta_tile_action) = find(tree, .Cell, "Beta tile")
+    if !has_beta_tile_action || widget.semantic_action(&runtime, beta_node.id, accessibility.ACTION_PRESS) != ok || widget.semantic_action(&runtime, beta_tile_action.id, accessibility.ACTION_PRESS) != ok || s.presses != 2usize { os.exit(83i32) }
     // A tap runs the row's action; Tab reaches the first row and Down, Home move
     // the focus.
-    if !tap_key(&harness, &runtime, 101u64) || s.presses != 1usize { os.exit(20i32) }
+    if !tap_key(&harness, &runtime, 101u64) || s.presses != 3usize { os.exit(20i32) }
     if testing.tab(&harness, false) != ok { os.exit(21i32) }
     var tabs = 0usize
     while !focused_is(&harness, 101u64) && tabs < 60usize {
@@ -351,7 +353,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // `primary` check 12 from the corner.
     if !is_color(shot, at(two.x + 4.0, two.y + 60.0), style.color(&tokens, .SecondaryContainer)) || !is_color(shot, at(two.x + 70.0, two.y + 60.0), style.color(&tokens, .SurfaceContainerHighest)) { os.exit(37i32) }
     if !is_color(shot, at(two.x + 14.5, two.y + 24.0), style.color(&tokens, .Primary)) { os.exit(38i32) }
-    if !tap_key(&harness, &runtime, 503u64) || s.presses != 2usize { os.exit(39i32) }
+    if !tap_key(&harness, &runtime, 503u64) || s.presses != 4usize { os.exit(39i32) }
     // Grid Home/End stay in the row, Ctrl reaches the set, and Down clamps to
     // the only tile in a short final row.
     if widget.focus(&runtime, testing.by_key(&harness, 501u64).element) != ok { os.exit(74i32) }

@@ -227,6 +227,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.semantic_action(&runtime, name_header.id, accessibility.ACTION_PRESS) != ok || logs[0usize].sorts != 1usize { os.exit(53i32) }
     if widget.semantic_action(&runtime, name_grip.id, accessibility.ACTION_INCREMENT) != ok || logs[0usize].resizes != 1usize || !near(logs[0usize].width, 136.0) { os.exit(54i32) }
     if widget.semantic_action(&runtime, name_grip.id, accessibility.ACTION_DECREMENT) != ok || logs[0usize].resizes != 2usize || !near(logs[0usize].width, 104.0) { os.exit(55i32) }
+    var first_row_node: accessibility.Node = zero
+    var has_first_row_node = false
+    var row_at = 0usize
+    while row_at < tree.nodes.len {
+        if tree.nodes[row_at].role == .Row && tree.nodes[row_at].position.row == 1u32 && tree.nodes[row_at].position.row_count == 50u32 {
+            first_row_node = tree.nodes[row_at]
+            has_first_row_node = true
+            row_at = tree.nodes.len
+        }
+        row_at += 1usize
+    }
+    if !has_first_row_node || widget.semantic_action(&runtime, first_row_node.id, accessibility.ACTION_PRESS) != ok || logs[0usize].picks != 1usize { os.exit(56i32) }
     // The rows: 40 each (39 over the divider) on `surface`, 48 under the
     // header's top; Beta (1001) `secondary-container`.
     let (first, has_first) = bounds(&harness, &runtime, 1000u64)
@@ -241,7 +253,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (shot_2, shot_2_error) = testing.snapshot(&harness, a)
     if shot_2_error != ok || !is_color(shot_2, at(grip.x + 3.5, grip.y + 4.0), style.color(&tokens, .Primary)) { os.exit(22i32) }
     // A tap on a row picks it; Tab reaches the rows and Down moves on.
-    if testing.tap(&harness, first.x + 150.0, first.y + 20.0) != ok || logs[0usize].picks != 1usize { os.exit(23i32) }
+    if testing.tap(&harness, first.x + 150.0, first.y + 20.0) != ok || logs[0usize].picks != 2usize { os.exit(23i32) }
     var tabs = 0usize
     while !focused_is(&harness, 1000u64) && tabs < 60usize {
         if testing.tab(&harness, false) != ok { os.exit(24i32) }

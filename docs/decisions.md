@@ -22667,3 +22667,13 @@ is the column width in pixels; Increment and Decrement reuse ColumnResize in
 
 `ui_collections2_v2` and `ui_tabular` hold stable identity, value exposure and
 both semantic actions on Windows and Linux. The reviewed surface is unchanged.
+
+## D1100 — Collection Press actions execute their callbacks
+
+Table rows, enabled List items and enabled GridView tiles route their advertised
+semantic Press action through the same caller callback as a pointer tap.
+Disabled items advertise no Press action, and caller-owned DataGrid rows remain
+non-interactive.
+
+`ui_collections2_v2` and `ui_collections_v2` hold all three collection families
+on Windows and Linux. Their reviewed surfaces are unchanged.
