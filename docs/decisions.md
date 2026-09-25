@@ -23641,3 +23641,26 @@ hosts. A Windows sweep of all 103 `ui_*` fixtures found 12 legacy fixtures
 `ui_overlays2_v2`, `ui_overlays3_v2`, `ui_pickers`, `ui_presentation`,
 `ui_productivity`, `ui_tabular`, `ui_transient`, `ui_workspace`) failing with
 the same exit codes without this change; they are not addressed here.
+
+## D1196 — Reorderable rows carry a Move context menu
+
+Every Reorderable List row now offers Show menu beside Press. `row_sized`
+becomes a thin call to `row_acting`, which takes the enabled row's semantic
+actions and handler, so the list row reuses the shared Row drawing instead of
+wrapping it in another semantic node. The row handler keeps Press for the
+caller's row action and marks the row's retained `Swipe` cell open on Show menu.
+
+While a cell is open the list draws `overlay.context_menu_of` with Move up,
+Move down, Move to top and Move to bottom, disabling the moves that cannot
+happen. D1195's `widget.context_point` places it at the pointer after a
+secondary press or below the row after the Menu key or Shift+F10. A command
+closes the menu and reports one `Reorder` with the same polite "moved to
+position" notice as the direct keyboard move; dismissal is the same command
+landing where it started. The menu is keyed `key ^ fnv1a64("reorder-menu")`
+so its commands cannot fall on the caller's row keys.
+
+`ui_collections4_v2` holds the pointer menu, one move, the announcement, the
+keyboard menu, disabled ends and Escape on Windows and Linux; every collection
+fixture and `ui_overlays_v2` pass on both hosts. The Segoe review is
+`build/ux/ui-reorder-menu-segoe.png`. Touch has no long press for this menu
+yet.
