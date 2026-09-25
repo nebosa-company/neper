@@ -251,6 +251,113 @@ fn descendant_label(runtime: *const widget.Runtime, slot: usize, include_self: b
     ret ("", false)
 }
 
+fn same_id(a: Id, b: Id) -> bool {
+    ret a.slot == b.slot && a.generation == b.generation
+}
+
+fn tree_parent(nodes: []const Node, child: Id) -> (usize, bool) {
+    var i = 0usize
+    while i < nodes.len {
+        var j = 0usize
+        while j < nodes[i].children.len {
+            if same_id(nodes[i].children[j], child) { ret (i, true) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn tree_descends(nodes: []const Node, child: usize, ancestor: usize) -> bool {
+    var at = child
+    while true {
+        let (parent, found) = tree_parent(nodes, nodes[at].id)
+        if !found { ret false }
+        if parent == ancestor { ret true }
+        at = parent
+    }
+    ret false
+}
+
+fn children_without(a: *mem.Arena, children: []const Id, removed: Id) -> ([]const Id, err) {
+    var count = 0usize
+    var i = 0usize
+    while i < children.len {
+        if !same_id(children[i], removed) { count += 1usize }
+        i += 1usize
+    }
+    let (kept, kept_error) = mem.alloc[Id](a, count)
+    if kept_error != ok { ret (zero, kept_error) }
+    var at = 0usize
+    i = 0usize
+    while i < children.len {
+        if !same_id(children[i], removed) {
+            kept[at] = children[i]
+            at += 1usize
+        }
+        i += 1usize
+    }
+    ret (kept[0usize..at], ok)
+}
+
+// Controls such as Card visually contain their actions but must not expose a
+// Button inside a Button. Promote those Button/Link descendants beside the
+// marked control while leaving the retained visual tree unchanged.
+fn promote_actions(a: *mem.Arena, nodes: []Node, marked: []const bool) -> err {
+    var owner = 0usize
+    while owner < nodes.len {
+        if marked[owner] {
+            let (parent, has_parent) = tree_parent(nodes, nodes[owner].id)
+            if has_parent {
+                let (promoted, promoted_error) = mem.alloc[Id](a, nodes.len)
+                if promoted_error != ok { ret promoted_error }
+                var count = 0usize
+                var i = 0usize
+                while i < nodes.len {
+                    if i != owner && (nodes[i].role == .Button || nodes[i].role == .Link) && tree_descends(nodes, i, owner) {
+                        promoted[count] = nodes[i].id
+                        count += 1usize
+                    }
+                    i += 1usize
+                }
+                i = 0usize
+                while i < count {
+                    let (old_parent, found) = tree_parent(nodes, promoted[i])
+                    if found {
+                        let (kept, kept_error) = children_without(a, nodes[old_parent].children, promoted[i])
+                        if kept_error != ok { ret kept_error }
+                        nodes[old_parent].children = kept
+                    }
+                    i += 1usize
+                }
+                if count != 0usize {
+                    let old = nodes[parent].children
+                    let (joined, joined_error) = mem.alloc[Id](a, old.len + count)
+                    if joined_error != ok { ret joined_error }
+                    var out = 0usize
+                    i = 0usize
+                    while i < old.len {
+                        joined[out] = old[i]
+                        out += 1usize
+                        if same_id(old[i], nodes[owner].id) {
+                            var p = 0usize
+                            while p < count {
+                                joined[out] = promoted[p]
+                                out += 1usize
+                                p += 1usize
+                            }
+                        }
+                        i += 1usize
+                    }
+                    nodes[parent].children = joined[0usize..out]
+                }
+            }
+        }
+        owner += 1usize
+    }
+    ret ok
+}
+
 fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
     let (root, has_root) = widget.root_of(runtime)
     if !has_root { ret (zero, Invalid) }
@@ -260,6 +367,8 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
     if nodes_error != ok { ret (zero, nodes_error) }
     let (index_of, index_error) = mem.alloc[usize](a, count)
     if index_error != ok { ret (zero, index_error) }
+    let (promote, promote_error) = mem.alloc[bool](a, count)
+    if promote_error != ok { ret (zero, promote_error) }
     var produced = 0usize
     var slot = 0usize
     while slot < count {
@@ -363,11 +472,14 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
             }
             node.children = children[0usize..filled]
             index_of[slot] = produced
+            promote[produced] = summary.has_semantics && summary.semantics.promote_actions
             nodes[produced] = node
             produced += 1usize
         }
         slot += 1usize
     }
+    let promotion_error = promote_actions(a, nodes[0usize..produced], promote[0usize..produced])
+    if promotion_error != ok { ret (zero, promotion_error) }
     ret (Tree { root: root, nodes: nodes[0usize..produced] }, ok)
 }
 
