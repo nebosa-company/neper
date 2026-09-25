@@ -4073,7 +4073,7 @@ fn compact_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // whatever chord its host lets it hear.
 // v2 (D978, docs/ux/components/WindowSwitcher, list form): the panel of
 // `centred_modal`, no scrim, the rows 4 above and below and 8 at the sides.
-// ponytail: no hold-to-switch or type-to-filter.
+// ponytail: no hold-to-switch.
 fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (made, made_error) = window_switcher_closable(a, key, t, label, names, active, open, activate, pick, zero, dismiss, width)
     ret (made, made_error)
@@ -4123,6 +4123,16 @@ fn switcher_item_label(a: *mem.Arena, item: SwitcherItem) -> (str, err) {
         label = full_label
     }
     ret (label, ok)
+}
+
+fn switcher_item_detail(a: *mem.Arena, item: SwitcherItem) -> (str, err) {
+    if item.context.len == 0usize { ret (item.state, ok) }
+    if item.state.len == 0usize { ret (item.context, ok) }
+    let (prefix, prefix_error) = string.concat(a, item.context, ", ")
+    if prefix_error != ok { ret ("", TooLarge) }
+    let (detail, detail_error) = string.concat(a, prefix, item.state)
+    if detail_error != ok { ret ("", TooLarge) }
+    ret (detail, ok)
 }
 
 fn switcher_grid_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, items: []const SwitcherItem, active: usize, pick: widget.Change[usize], close: widget.Change[usize]) -> ([]widget.Node, err) {
@@ -4288,18 +4298,8 @@ fn window_switcher_grid_closable(a: *mem.Arena, key: widget.Key, t: *const contr
         let (detail_parts, detail_parts_error) = mem.alloc[widget.Node](a, 2usize)
         if detail_parts_error != ok { ret (zero, TooLarge) }
         detail_parts[0usize] = name
-        var detail = items[active].context
-        if items[active].state.len > 0usize {
-            if detail.len > 0usize {
-                let (prefix, prefix_error) = string.concat(a, detail, ", ")
-                if prefix_error != ok { ret (zero, TooLarge) }
-                let (full_detail, full_detail_error) = string.concat(a, prefix, items[active].state)
-                if full_detail_error != ok { ret (zero, TooLarge) }
-                detail = full_detail
-            } else {
-                detail = items[active].state
-            }
-        }
+        let (detail, detail_error) = switcher_item_detail(a, items[active])
+        if detail_error != ok { ret (zero, detail_error) }
         var small = control.text_options()
         small.role = .BodySmall
         small.wrap = .None
@@ -4828,5 +4828,243 @@ fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
         ret (made, made_error)
     }
     let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width, true)
+    ret (made, made_error)
+}
+
+type SwitcherRanked = struct { item: SwitcherItem, source: usize, score: u64 }
+
+fn switcher_match_rank(haystack: str, needle: str, base: u64) -> u64 {
+    if palette_prefix(haystack, needle) { ret base + 2u64 }
+    let (_, word) = palette_word_match(haystack, needle)
+    if word { ret base + 1u64 }
+    let (_, subsequence) = palette_subsequence(haystack, needle, 0usize)
+    if subsequence { ret base }
+    ret 0u64
+}
+
+fn switcher_rank(a: *mem.Arena, items: []const SwitcherItem, query: str) -> ([]SwitcherRanked, err) {
+    var none: []SwitcherRanked = zero
+    let (ranked, ranked_error) = mem.alloc[SwitcherRanked](a, items.len)
+    if ranked_error != ok { ret (none, TooLarge) }
+    let (folded_query, query_error) = unicode.casefold(a, query)
+    if query_error != ok { ret (none, TooLarge) }
+    var count = 0usize
+    var i = 0usize
+    while i < items.len {
+        var score = 1u64
+        if folded_query.len > 0usize {
+            let (name, name_error) = unicode.casefold(a, items[i].name)
+            if name_error != ok { ret (none, TooLarge) }
+            score = switcher_match_rank(name, folded_query, 4u64)
+            if score == 0u64 {
+                let (context, context_error) = unicode.casefold(a, items[i].context)
+                if context_error != ok { ret (none, TooLarge) }
+                score = switcher_match_rank(context, folded_query, 1u64)
+            }
+        }
+        if score > 0u64 {
+            ranked[count] = SwitcherRanked { item: items[i], source: i, score: score }
+            count += 1usize
+        }
+        i += 1usize
+    }
+    i = 1usize
+    while i < count {
+        var j = i
+        while j > 0usize && (ranked[j].score > ranked[j - 1usize].score || (ranked[j].score == ranked[j - 1usize].score && ranked[j].source < ranked[j - 1usize].source)) {
+            let swap = ranked[j - 1usize]
+            ranked[j - 1usize] = ranked[j]
+            ranked[j] = swap
+            j -= 1usize
+        }
+        i += 1usize
+    }
+    ret (ranked[0usize..count], ok)
+}
+
+fn switcher_filter_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer: []u8, len: usize, typed: widget.Change[str]) -> (widget.Node, err) {
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    let (text_look, text_error) = control.text_style(a, t, .BodyLarge)
+    if text_error != ok { ret (zero, text_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    if len == 0usize {
+        var hint = control.text_options()
+        hint.role = .BodyLarge
+        hint.wrap = .None
+        let (placeholder, placeholder_error) = control.colored_text(a, 0u64, "Filter open windows", t, hint, muted)
+        if placeholder_error != ok { ret (zero, placeholder_error) }
+        layers[at] = placeholder
+        at += 1usize
+    }
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: style.text_style(t.tokens, .BodyLarge).line_height }
+    layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    at += 1usize
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (search, search_error) = control.icon_square(a, muted, .Search, 24.0)
+    if search_error != ok { ret (zero, search_error) }
+    parts[0usize] = search
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    parts[1usize] = widget.stack(0u64, grow, layers[0usize..at])
+    var bar = style.defaults()
+    bar.width = style.Length { Percent: 100.0 }
+    bar.height = style.Length { Px: 48.0 }
+    bar.padding = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, bar, parts[0usize..2usize]), ok)
+}
+
+fn switcher_list_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, items: []const SwitcherItem, active: usize, pick: widget.Change[usize]) -> ([]widget.Node, err) {
+    var none: []widget.Node = zero
+    let (rows, rows_error) = mem.alloc[widget.Node](a, items.len)
+    if rows_error != ok { ret (none, TooLarge) }
+    let (picks, picks_error) = mem.alloc[IndexPick](a, items.len)
+    if picks_error != ok { ret (none, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, items.len)
+    if actions_error != ok { ret (none, TooLarge) }
+    var i = 0usize
+    while i < items.len {
+        picks[i] = IndexPick { index: i, pick: pick }
+        actions[i] = widget.Submit { ctx: mem.cast[*void](&picks[i]), invoke: index_pick_fire }
+        let row_key = first + u64(i)
+        var ink = style.color(t.tokens, .OnSurface)
+        var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        if i == active {
+            ink = style.color(t.tokens, .OnSecondaryContainer)
+            fill = style.color(t.tokens, .SecondaryContainer)
+        }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+        if parts_error != ok { ret (none, TooLarge) }
+        let (icon, icon_error) = control.icon_square(a, ink, .Picture, 18.0)
+        if icon_error != ok { ret (none, icon_error) }
+        parts[0usize] = icon
+        var words = control.text_options()
+        words.role = .BodyMedium
+        words.wrap = .None
+        words.ellipsis = "…"
+        let (name, name_error) = control.colored_text(a, 0u64, items[i].name, t, words, ink)
+        if name_error != ok { ret (none, name_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (none, TooLarge) }
+        held[0usize] = name
+        var grow = style.defaults()
+        grow.width = style.Length { Flex: 1.0 }
+        parts[1usize] = widget.box(0u64, grow, held[0usize..1usize])
+        let (detail, detail_error) = switcher_item_detail(a, items[i])
+        if detail_error != ok { ret (none, detail_error) }
+        words.role = .BodySmall
+        let (context, context_error) = control.colored_text(a, 0u64, detail, t, words, style.color(t.tokens, .OnSurfaceVariant))
+        if context_error != ok { ret (none, context_error) }
+        parts[2usize] = context
+        var row_style = style.defaults()
+        row_style.width = style.Length { Percent: 100.0 }
+        row_style.height = style.Length { Px: 40.0 }
+        let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, row_style, parts[0usize..3usize])
+        var look = style.resolve(t.tokens, .Plain, control.control_state(t, row_key, true, false))
+        look.background = style.layer(fill, ink, control.state_opacity(t, control.control_state(t, row_key, true, false)))
+        look.foreground = ink
+        look.border_width = 0.0
+        look.radius = t.tokens.radii.sm
+        look.custom_padding = true
+        look.padding = 12.0
+        look.padding_y = 0.0
+        look.min_height = 40.0
+        let (semantic_label, semantic_label_error) = switcher_item_label(a, items[i])
+        if semantic_label_error != ok { ret (none, semantic_label_error) }
+        let (pressed, pressed_error) = control.pressable(a, row_key, t, 3u8, semantic_label, look, true, false, &actions[i], content)
+        if pressed_error != ok { ret (none, pressed_error) }
+        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+        if body_error != ok { ret (none, TooLarge) }
+        body[0usize] = pressed
+        var sem: widget.Semantics = zero
+        sem.role = accessibility.ROLE_OPTION
+        sem.label = semantic_label
+        sem.row = u32(i + 1usize)
+        sem.row_count = u32(items.len)
+        if i == active { sem.states = accessibility.STATE_SELECTED }
+        rows[i] = widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize])
+        i += 1usize
+    }
+    ret (rows, ok)
+}
+
+fn window_switcher_filterable(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], items: []const SwitcherItem, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], close: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var query_len = len
+    if query_len > buffer.len { query_len = buffer.len }
+    let (ranked, ranked_error) = switcher_rank(a, items, buffer[0usize..query_len])
+    if ranked_error != ok { ret (zero, ranked_error) }
+    let (shown, shown_error) = mem.alloc[SwitcherItem](a, ranked.len)
+    if shown_error != ok { ret (zero, TooLarge) }
+    let (indices, indices_error) = mem.alloc[usize](a, ranked.len)
+    if indices_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < ranked.len {
+        shown[i] = ranked[i].item
+        indices[i] = ranked[i].source
+        i += 1usize
+    }
+    let (maps, maps_error) = mem.alloc[PaletteIndexMap](a, 2usize)
+    if maps_error != ok { ret (zero, TooLarge) }
+    maps[0usize] = PaletteIndexMap { indices: indices, change: pick }
+    maps[1usize] = PaletteIndexMap { indices: indices, change: close }
+    let mapped_pick = widget.Change[usize] { ctx: mem.cast[*void](&maps[0usize]), invoke: palette_mapped_change }
+    var mapped_close: widget.Change[usize] = zero
+    if widget.change_set[usize](close.invoke) { mapped_close = widget.Change[usize] { ctx: mem.cast[*void](&maps[1usize]), invoke: palette_mapped_change } }
+    let (relays, relays_error) = mem.alloc[PaletteTyped](a, 1usize)
+    if relays_error != ok { ret (zero, TooLarge) }
+    relays[0usize] = PaletteTyped { typed: typed, activate: activate }
+    let relayed = widget.Change[str] { ctx: mem.cast[*void](&relays[0usize]), invoke: palette_typed_fire }
+    let (field, field_error) = switcher_filter_field(a, key + 2u64, t, buffer, query_len, relayed)
+    if field_error != ok { ret (zero, field_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (field_body, field_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if field_body_error != ok { ret (zero, TooLarge) }
+    field_body[0usize] = field
+    var combo_sem: widget.Semantics = zero
+    combo_sem.role = accessibility.ROLE_COMBOBOX
+    combo_sem.label = label
+    combo_sem.states = accessibility.STATE_EXPANDED
+    if active < shown.len { combo_sem.active = key + 3u64 + u64(active) }
+    parts[0usize] = widget.semantics(0u64, combo_sem, style.defaults(), field_body[0usize..1usize])
+    let (divider, divider_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+    if divider_error != ok { ret (zero, divider_error) }
+    parts[1usize] = divider
+    var inset = style.defaults()
+    inset.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
+    if shown.len > 0usize {
+        let (rows, rows_error) = switcher_list_rows(a, key + 3u64, t, shown, active, mapped_pick)
+        if rows_error != ok { ret (zero, rows_error) }
+        parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, inset, rows)
+    } else {
+        var message = control.text_options()
+        message.role = .BodyMedium
+        message.align = .Center
+        let (empty, empty_error) = control.colored_text(a, 0u64, "No matching windows", t, message, style.color(t.tokens, .OnSurfaceVariant))
+        if empty_error != ok { ret (zero, empty_error) }
+        let (empty_body, empty_body_error) = mem.alloc[widget.Node](a, 1usize)
+        if empty_body_error != ok { ret (zero, TooLarge) }
+        empty_body[0usize] = empty
+        inset.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 24.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 24.0 } }
+        parts[2usize] = widget.box(0u64, inset, empty_body[0usize..1usize])
+    }
+    let (result_body, result_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if result_body_error != ok { ret (zero, TooLarge) }
+    result_body[0usize] = parts[2usize]
+    var list_sem: widget.Semantics = zero
+    list_sem.role = accessibility.ROLE_LISTBOX
+    list_sem.label = label
+    list_sem.row_count = u32(shown.len)
+    if active < shown.len { list_sem.active = key + 3u64 + u64(active) }
+    parts[2usize] = widget.semantics(0u64, list_sem, style.defaults(), result_body[0usize..1usize])
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..3usize])
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, shown.len, active, true, activate, mapped_pick, mapped_close, dismiss, column)
+    if scoped_error != ok { ret (zero, scoped_error) }
+    let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width, false)
     ret (made, made_error)
 }

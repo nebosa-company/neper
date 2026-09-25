@@ -3942,6 +3942,22 @@ fn edit_key(s: *State, element: usize, k: input.KeyEvent) -> (bool, err) {
         ret (true, erased)
     }
     if code == 46u32 {
+        // An enclosing control may own Delete (for example, closing the active
+        // switcher item). Yield only when that exact unmodified shortcut exists;
+        // otherwise Delete keeps editing text as usual.
+        var at = element
+        while s.elements[at].has_parent {
+            at = usize(s.elements[at].parent)
+            let parent = &s.elements[at]
+            if parent.kind == SCOPE_TAG {
+                var shortcut = 0usize
+                while shortcut < parent.shortcut_count {
+                    let bound = parent.shortcuts[shortcut]
+                    if key_code(bound.key) == code && !bound.modifiers.shift && !bound.modifiers.control && !bound.modifiers.alt && !bound.modifiers.meta && !k.modifiers.shift && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta { ret (false, ok) }
+                    shortcut += 1usize
+                }
+            }
+        }
         if !writable { ret (true, ok) }
         if lo < hi {
             let erased = edit_replace(s, element, lo, hi, "", true)
