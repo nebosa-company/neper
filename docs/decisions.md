@@ -22925,3 +22925,12 @@ the caller remains responsible for applying a pick and rebuilding the list.
 
 `ui_pickers2_v2` holds both directions on Windows and Linux. The reviewed
 surface is unchanged; typed filtering remains open.
+
+## D1126 — Swipe tiles close after successful actions
+
+Every revealed leading or trailing SwipeAction tile wraps its existing command
+with the caller-owned `reveal(false)` callback. A failed command returns its
+error without changing reveal state; full swipes keep their existing path.
+
+`ui_collections4_v2` holds action, close, reopen, Escape and full-swipe behavior
+on Windows and Linux. The reviewed surface is unchanged.

@@ -4933,6 +4933,16 @@ fn reveal_set_fire(ctx: *void) -> err {
     ret widget.fire_change[bool](r.reveal, r.value)
 }
 
+// A revealed tile runs its action, then closes its row.
+type SwipeTileRun = struct { action: widget.Submit, reveal: widget.Change[bool] }
+
+fn swipe_tile_run(ctx: *void) -> err {
+    let r = mem.cast[*SwipeTileRun](ctx)
+    let action_error = widget.fire_submit(r.action)
+    if action_error != ok { ret action_error }
+    ret widget.fire_change[bool](r.reveal, false)
+}
+
 // One 80 wide action tile (D982), `wide` across: its container and `on-`
 // colour by tone, the 24 glyph 4 above the `label-medium` label, centred.
 fn swipe_tile(a: *mem.Arena, key: widget.Key, t: *const control.Theme, act: *const SwipeAction, wide: f32, tall: f32) -> (widget.Node, err) {
@@ -4986,11 +4996,29 @@ fn swipe_tile(a: *mem.Arena, key: widget.Key, t: *const control.Theme, act: *con
 // action, its tile stretched to the row's end. With a pointer, while the row
 // or one of them is hovered or focused, the actions are also 32 icon buttons
 // (`key + 8 + index`) in `on-surface-variant` 4 apart at the row's end; Escape
-// closes. A list item in the tree, Expanded while revealed.
+// closes. Pressing a revealed tile runs it, then closes the row. A list item in
+// the tree, Expanded while revealed.
 // ponytail: no fling velocity, rubber band or settle motion, and no custom
 // accessibility actions; the actions reach the keyboard as the hover buttons.
 fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, actions: []const SwipeAction, revealed: bool, reveal: widget.Change[bool], options: SwipeOptions) -> (widget.Node, err) {
     if actions.len == 0usize || actions.len > 3usize || options.leading.len > 1usize { ret (zero, TooLarge) }
+    let tile_count = actions.len + options.leading.len
+    let (shown, shown_error) = mem.alloc[SwipeAction](a, tile_count)
+    if shown_error != ok { ret (zero, TooLarge) }
+    let (tile_runs, tile_runs_error) = mem.alloc[SwipeTileRun](a, tile_count)
+    if tile_runs_error != ok { ret (zero, TooLarge) }
+    var tile_at = 0usize
+    while tile_at < actions.len {
+        tile_runs[tile_at] = SwipeTileRun { action: actions[tile_at].action, reveal: reveal }
+        shown[tile_at] = actions[tile_at]
+        shown[tile_at].action = widget.Submit { ctx: ctx_of(&tile_runs[tile_at]), invoke: swipe_tile_run }
+        tile_at += 1usize
+    }
+    if options.leading.len == 1usize {
+        tile_runs[tile_at] = SwipeTileRun { action: options.leading[0usize].action, reveal: reveal }
+        shown[tile_at] = options.leading[0usize]
+        shown[tile_at].action = widget.Submit { ctx: ctx_of(&tile_runs[tile_at]), invoke: swipe_tile_run }
+    }
     let w = options.width
     let h = options.height
     let stop = 80.0 * f32(actions.len)
@@ -5011,7 +5039,7 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
     var l = 0usize
     if offset < 0.0 - w * 0.6 {
         // The full swipe: the outermost tile alone, stretched.
-        let (tile, tile_error) = swipe_tile(a, key + 2u64 + u64(actions.len - 1usize), t, &actions[actions.len - 1usize], 0.0 - offset, h)
+        let (tile, tile_error) = swipe_tile(a, key + 2u64 + u64(actions.len - 1usize), t, &shown[actions.len - 1usize], 0.0 - offset, h)
         if tile_error != ok { ret (zero, tile_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
@@ -5021,7 +5049,7 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
     } else {
         var i = 0usize
         while i < actions.len {
-            let (tile, tile_error) = swipe_tile(a, key + 2u64 + u64(i), t, &actions[i], 80.0, h)
+            let (tile, tile_error) = swipe_tile(a, key + 2u64 + u64(i), t, &shown[i], 80.0, h)
             if tile_error != ok { ret (zero, tile_error) }
             let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
             if held_error != ok { ret (zero, TooLarge) }
@@ -5032,7 +5060,7 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
         }
     }
     if options.leading.len == 1usize {
-        let (tile, tile_error) = swipe_tile(a, key + 16u64, t, &options.leading[0usize], 80.0, h)
+        let (tile, tile_error) = swipe_tile(a, key + 16u64, t, &shown[actions.len], 80.0, h)
         if tile_error != ok { ret (zero, tile_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
