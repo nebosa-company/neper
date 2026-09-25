@@ -23512,3 +23512,12 @@ caller owns the existing 300-millisecond delay and animation phase.
 
 `ui_containers_v2` holds the shapes, Busy state and missing Button on Windows
 and Linux. The Segoe review is `build/ux/card-loading-segoe.png`.
+
+## D1187 — Card slots keep media flush and actions aligned
+
+`card_with_slots` adds optional full-bleed media and header slots, caller-owned
+content, and an end-aligned action row with an 8-pixel gap. The body keeps the
+standard 16-pixel padding (12 dense), while `card_of` remains unchanged.
+
+`ui_containers_v2` holds the slot geometry on Windows and Linux. The Segoe
+review is `build/ux/card-slots-segoe.png`.
