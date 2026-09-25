@@ -3535,7 +3535,7 @@ fn collection_item_owner(s: *State, index: usize) -> (usize, u8, bool) {
     var at = index
     while true {
         let e = &s.elements[at]
-        if e.has_semantics && (e.sem.role == 11u8 || (e.sem.role == 13u8 && e.sem.level > 0u8) || e.sem.role == 14u8 || e.sem.role == 29u8) { ret (at, e.sem.role, true) }
+        if e.has_semantics && (e.sem.role == 11u8 || (e.sem.role == 13u8 && e.sem.level > 0u8) || e.sem.role == 14u8 || e.sem.role == 19u8 || e.sem.role == 29u8) { ret (at, e.sem.role, true) }
         if !e.has_parent { ret (0usize, 0u8, false) }
         at = usize(e.parent)
     }
@@ -3547,11 +3547,51 @@ fn collection_root(s: *State, owner: usize, item_role: u8) -> (usize, u8, bool) 
         let e = &s.elements[at]
         if item_role == 11u8 && e.has_semantics && e.sem.role == 10u8 { ret (at, 2u8, true) }
         if item_role == 14u8 && e.has_semantics && e.sem.role == 30u8 { ret (at, 3u8, true) }
+        if item_role == 19u8 && e.has_semantics && e.sem.role == 20u8 { ret (at, 5u8, true) }
         if item_role == 29u8 && e.has_semantics && e.sem.role == 28u8 { ret (at, 4u8, true) }
         if item_role == 13u8 && e.has_semantics && e.sem.role == 43u8 { ret (at, 4u8, true) }
         if !e.has_parent { ret (0usize, 0u8, false) }
         at = usize(e.parent)
     }
+}
+
+fn collection_target_under(s: *State, index: usize) -> (usize, bool) {
+    let e = &s.elements[index]
+    if !e.live { ret (0usize, false) }
+    if e.enabled && (e.kind == REGION_TAG || e.has_action) { ret (index, true) }
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        let (found, has_found) = collection_target_under(s, usize(at))
+        if has_found { ret (found, true) }
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    ret (0usize, false)
+}
+
+fn collect_collection_targets(s: *State, index: usize, role: u8, out: []u32, count: usize) -> usize {
+    var n = count
+    let e = &s.elements[index]
+    if !e.live { ret n }
+    if e.has_semantics && e.sem.role == role {
+        let (found, has_found) = collection_target_under(s, index)
+        if has_found && n < out.len {
+            out[n] = u32(found)
+            n += 1usize
+        }
+        ret n
+    }
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        n = collect_collection_targets(s, usize(at), role, out, n)
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    ret n
 }
 
 fn focus_collection_prefix(s: *State, order: []const u32, count: usize, current: usize, root: usize, item_role: u8, prefix: []const u32) -> bool {
@@ -3571,7 +3611,7 @@ fn focus_collection_prefix(s: *State, order: []const u32, count: usize, current:
     ret false
 }
 
-// Buffered typeahead for built List, GridView and Tree items.
+// Buffered typeahead for built List, GridView, Tree and roving TabList items.
 // ponytail: virtual sources need a source-level lookup beyond their built rows.
 fn collection_typeahead_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     if !s.has_focus || k.modifiers.shift || k.modifiers.control || k.modifiers.alt || k.modifiers.meta { ret false }
@@ -3586,7 +3626,8 @@ fn collection_typeahead_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
         ret false
     }
     let order = s.focus_order
-    let count = collect_focusable(s, root, order, 0usize)
+    var count = collect_focusable(s, root, order, 0usize)
+    if item_role == 19u8 { count = collect_collection_targets(s, root, item_role, order, 0usize) }
     if count == 0usize { ret true }
     var current = 0usize
     var i = 0usize

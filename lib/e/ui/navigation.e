@@ -1531,7 +1531,8 @@ fn navigation_drawer(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
 // A drawer's sheet (D973): the optional header, then the rows, in a column
 // `width` wide, `pad` in; a list named "Main" (keyed `key`). The selected or
 // focused row is its one Tab stop; Up/Down move focus, Home/End jump, and the
-// pressable's Enter and Space activate it.
+// pressable's Enter and Space activate it. The runtime's buffered TabList
+// typeahead moves focus by label.
 fn drawer_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, row_height: f32, start: f32, end: f32, pad: f32, head_top: f32, head_bottom: f32, width: f32) -> (widget.Node, err) {
     if picks.len != items.len { ret (zero, TooLarge) }
     let (pick_actions, tab_stop, pick_actions_error) = destination_actions(a, key + 1u64, t, picks, selected)

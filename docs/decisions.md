@@ -23037,3 +23037,13 @@ activation follows the same stable-focus action wrapper as DestinationBar.
 
 `ui_navigation3_v2` holds both drawer forms on Windows and Linux. The reviewed
 surface is unchanged.
+
+## D1138 — Roving tab lists share buffered typeahead
+
+The runtime's existing Unicode case-folded, 500 ms buffered collection
+typeahead now includes Tab items inside a TabList. It gathers every semantic
+tab's enabled action target rather than only tabbable regions, so roving
+NavigationDrawer rows remain searchable while preserving one Tab stop.
+
+`ui_navigation3_v2` holds match, prefix fallback and structural-row skipping on
+Windows and Linux. The reviewed surface is unchanged.

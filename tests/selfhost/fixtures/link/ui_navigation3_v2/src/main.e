@@ -241,6 +241,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_drawer_focus || drawer_focus.slot != testing.by_key(&harness, 3402u64).element.slot { os.exit(32i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !widget.focus_within(&runtime, 3403u64) || testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 3404u64) { os.exit(51i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || s.counters[2usize].count != 2usize || testing.press_key(&harness, 36u32, zero) != ok || !widget.focus_within(&runtime, 3402u64) { os.exit(52i32) }
+    if testing.press_key(&harness, 83u32, zero) != ok || !widget.focus_within(&runtime, 3403u64) || testing.press_key(&harness, 68u32, zero) != ok || !widget.focus_within(&runtime, 3404u64) { os.exit(53i32) }
+    if testing.press_key(&harness, 73u32, zero) != ok || !widget.focus_within(&runtime, 3402u64) { os.exit(54i32) }
     let (shot_2, shot_2_error) = testing.snapshot(&harness, a)
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if shot_2_error != ok || tree_2_error != ok { os.exit(25i32) }
