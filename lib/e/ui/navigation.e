@@ -3523,8 +3523,9 @@ type DockPlacement = struct { name: str, icon: control.GlyphKind, slot: DockSlot
 type DockModel = struct { sizes: DockSizes, current: [3]usize, collapsed: [3]bool, maximised: u8 }
 
 // What a press or a drag in the layout asks of the model.
-type DockEventKind = enum u8 { Resize, Pick, Toggle, Close, Maximise, Dock, Move }
-type DockEvent = struct { kind: DockEventKind, panel: usize, slot: DockSlot, sizes: DockSizes }
+// (D1298) `Drag` moves a floating panel by `offset`.
+type DockEventKind = enum u8 { Resize, Pick, Toggle, Close, Maximise, Dock, Move, Drag }
+type DockEvent = struct { kind: DockEventKind, panel: usize, slot: DockSlot, sizes: DockSizes, offset: geometry.Point }
 
 type DockFire = struct { event: DockEvent, change: widget.Change[DockEvent] }
 
@@ -3550,7 +3551,7 @@ type DockResize = struct { change: widget.Change[DockEvent] }
 
 fn dock_resize_fire(ctx: *void, sizes: DockSizes) -> err {
     let r = mem.cast[*DockResize](ctx)
-    ret widget.fire_change[DockEvent](r.change, DockEvent { kind: .Resize, panel: 0usize, slot: .Left, sizes: sizes })
+    ret widget.fire_change[DockEvent](r.change, DockEvent { kind: .Resize, panel: 0usize, slot: .Left, sizes: sizes, offset: zero })
 }
 
 fn slot_index(slot: DockSlot) -> usize {
@@ -3617,6 +3618,11 @@ fn dock_apply(model: *DockModel, placements: []DockPlacement, e: DockEvent) {
         }
     }
     if e.kind == .Close { p.slot = .Hidden }
+    // (D1298) A floating panel dragged by its header moves its rectangle.
+    if e.kind == .Drag && p.slot == .Floating {
+        p.x += e.offset.x
+        p.y += e.offset.y
+    }
     if e.kind == .Dock {
         p.slot = p.home
         if side_slot(p.slot) { model.current[slot_index(p.slot)] = e.panel }
@@ -3635,11 +3641,19 @@ fn dock_apply(model: *DockModel, placements: []DockPlacement, e: DockEvent) {
 fn dock_action(a: *mem.Arena, kind: DockEventKind, panel: usize, change: widget.Change[DockEvent]) -> (*widget.Submit, err) {
     let (fires, fires_error) = mem.alloc[DockFire](a, 1usize)
     if fires_error != ok { ret (zero, TooLarge) }
-    fires[0usize] = DockFire { event: DockEvent { kind: kind, panel: panel, slot: .Left, sizes: zero }, change: change }
+    fires[0usize] = DockFire { event: DockEvent { kind: kind, panel: panel, slot: .Left, sizes: zero, offset: zero }, change: change }
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
     if actions_error != ok { ret (zero, TooLarge) }
     actions[0usize] = widget.Submit { ctx: mem.cast[*void](&fires[0usize]), invoke: dock_fire }
     ret (&actions[0usize], ok)
+}
+
+// (D1298) A floating panel's header drag as a dock event.
+type DockDrag = struct { panel: usize, change: widget.Change[DockEvent] }
+
+fn dock_drag_fire(ctx: *void, delta: geometry.Point) -> err {
+    let d = mem.cast[*DockDrag](ctx)
+    ret widget.fire_change[DockEvent](d.change, DockEvent { kind: .Drag, panel: d.panel, slot: .Floating, sizes: zero, offset: delta })
 }
 
 // The panel a slot shows, as a dock panel keyed `key` (its tabs the slot's
@@ -3656,6 +3670,11 @@ fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: Doc
         let (docking, docking_error) = dock_action(a, .Dock, shown, change)
         if docking_error != ok { ret (zero, docking_error) }
         options.dock = docking
+        // (D1298) Its header drags it: each move a `Drag` event.
+        let (drags, drags_error) = mem.alloc[DockDrag](a, 1usize)
+        if drags_error != ok { ret (zero, TooLarge) }
+        drags[0usize] = DockDrag { panel: shown, change: change }
+        options.move = widget.Change[geometry.Point] { ctx: mem.cast[*void](&drags[0usize]), invoke: dock_drag_fire }
     } else {
         options.maximise = maximise
         var n = 0usize
@@ -3706,7 +3725,8 @@ fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: Doc
 // button. Every press and drag reaches `change` as a `DockEvent`, which
 // `dock_apply` turns into the caller's next model and placements. A group in the
 // tree.
-// ponytail: moving and tearing off are the caller's (a Move event through
+// (D1298) A floating panel drags by its header (`Drag`, which `dock_apply` applies).
+// ponytail: tearing a docked panel off is the caller's (a Move event through
 // dock_apply); no drag ghost, dock guide, drop preview or sash double-click reset.
 fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: DockModel, placements: []const DockPlacement, contents: []const widget.Node, centre: widget.Node, change: widget.Change[DockEvent], width: f32, height: f32) -> (widget.Node, err) {
     if contents.len != placements.len { ret (zero, TooLarge) }
