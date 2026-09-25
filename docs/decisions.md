@@ -25354,3 +25354,25 @@ it scrolls as part of its row.
 other row has one. Exactly one of the rows' disclosures reads expanded, and
 a press on Gamma's reports Gamma. This passes on Windows and Linux, and
 `ui_tabular` still passes on both.
+
+## D1314 — Key-value editors have a text mode
+
+The KeyValueEditor spec's text mode: `KeyValueOptions` gains `text_mode`,
+`toggle_mode`, `text`, `text_len`, `typed` and `text_error`. With
+`toggle_mode` set, a Table / Text segmented button (keyed `key ^
+fnv1a64("kv-mode")`) stands under the Add button; the segment for the
+other mode fires it. In text mode the rows give way to a text area (`key ^
+fnv1a64("kv-text")`) over the caller's text, at least four lines, with
+"One NAME=value per line" under it or `text_error` as its error. Two
+helpers do the conversion. `pairs_text` writes the pairs one NAME=value a
+line. `pairs_parse` reads text back into the pairs' buffers, passing blank
+lines and `#` comments and trimming the name. It answers the count and the
+first line that did not parse: no `=`, an empty name, a part too long for
+its buffer, or too many pairs. Comments are not kept for the way back, and
+the area is not in a mono face.
+
+`ui_collections5_v2` writes two pairs as "API=\nAPI=" and parses a
+commented, blank-lined text into HOME and PATH. It names line 2 of
+"A=1\noops". Only the Text segment fires the switch, and text mode shows
+the area and its error without the rows. This passes on Windows and Linux,
+and `ui_property` still passes on both.
