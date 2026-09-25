@@ -2514,6 +2514,18 @@ fn flatten(source: TreeSource, expanded: []const widget.Key, parent: widget.Key,
     ret n
 }
 
+fn visible_tree_count(source: TreeSource, expanded: []const widget.Key, parent: widget.Key) -> usize {
+    let count = source.count(source.ctx, parent)
+    var total = count
+    var i = 0usize
+    while i < count {
+        let child = source.key(source.ctx, parent, i)
+        if is_selected(expanded, child) { total += visible_tree_count(source, expanded, child) }
+        i += 1usize
+    }
+    ret total
+}
+
 // A tree row's keys: Left collapses or moves to its parent; Right expands or
 // moves to its first child. The visible keys already carry both targets.
 type TreeKeys = struct { key: widget.Key, open: bool, branch: bool, has_parent: bool, has_child: bool, parent: control.FocusTo, child: control.FocusTo, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key] }
@@ -2576,14 +2588,14 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // over a full-width 1px `outline-variant` divider, the last excepted. Up, Down,
 // Home and End move among visible rows; Right expands or enters the first child,
 // Left collapses or returns to the parent, and `*` expands siblings.
-// ponytail: at most 512 visible rows, not virtualised; no icon or meta slot,
-// twisty rotation, rename,
+// ponytail: rows are not virtualised; no icon or meta slot, twisty rotation, rename,
 // drag and drop, loading or disabled rows.
 fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
-    let (visible, visible_error) = mem.alloc[TreeRow](a, 512usize)
+    let count = visible_tree_count(source, expanded, 0u64)
+    let (visible, visible_error) = mem.alloc[TreeRow](a, count)
     if visible_error != ok { ret (none, TooLarge) }
-    let count = flatten(source, expanded, 0u64, 0usize, visible, 0usize)
+    if flatten(source, expanded, 0u64, 0usize, visible, 0usize) != count { ret (none, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (none, TooLarge) }
     let (toggles, toggles_error) = mem.alloc[RowPick](a, count)

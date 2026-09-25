@@ -30,7 +30,7 @@ use e.ui.widget
 
 const W: usize = 320usize
 
-type Log = struct { toggles: usize, toggled: widget.Key, picks: usize, collapses: usize }
+type Log = struct { toggles: usize, toggled: widget.Key, picks: usize, collapses: usize, large: bool }
 
 fn on_toggle(ctx: *void, value: widget.Key) -> err {
     let log = mem.cast[*Log](ctx)
@@ -65,12 +65,19 @@ fn on_resize(ctx: *void, value: collection.ColumnResize) -> err {
 
 // A (1) holds A1 (11), which holds A1a (111), and A2 (12); B (2) holds B1 (21).
 fn tree_count(ctx: *void, parent: widget.Key) -> usize {
+    let log = mem.cast[*Log](ctx)
+    if log.large {
+        if parent == 0u64 { ret 513usize }
+        ret 0usize
+    }
     if parent == 0u64 || parent == 1u64 { ret 2usize }
     if parent == 11u64 || parent == 2u64 { ret 1usize }
     ret 0usize
 }
 
 fn tree_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key {
+    let log = mem.cast[*Log](ctx)
+    if log.large { ret 10000u64 + u64(index) }
     if parent == 0u64 { ret 1u64 + u64(index) }
     if parent == 1u64 { ret 11u64 + u64(index) }
     if parent == 11u64 { ret 111u64 }
@@ -78,11 +85,15 @@ fn tree_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key {
 }
 
 fn tree_has_children(ctx: *void, key: widget.Key) -> bool {
+    let log = mem.cast[*Log](ctx)
+    if log.large { ret false }
     ret key == 1u64 || key == 11u64 || key == 2u64
 }
 
 fn tree_build(ctx: *void, a: *mem.Arena, key: widget.Key, out: *widget.Node) -> err {
+    let log = mem.cast[*Log](ctx)
     var label = "A"
+    if log.large { label = "Item" }
     if key == 11u64 { label = "A1" }
     if key == 111u64 { label = "A1a" }
     if key == 12u64 { label = "A2" }
@@ -211,7 +222,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var log: Log = zero
     logs[0usize] = log
     let ctx = mem.cast[*void](&logs[0usize])
-    let (frame_storage, storage_error) = mem.alloc[u8](a, 4194304usize)
+    let (frame_storage, storage_error) = mem.alloc[u8](a, 16777216usize)
     if storage_error != ok { os.exit(8i32) }
     var f = mem.arena_from(frame_storage)
     let now = time.Instant { nanos: 1000000000i64 }
@@ -337,7 +348,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot_3, at(table_a.x + 2.0, table_a.y + 39.5), rule) || !is_color(shot_3, at(table_a.x + 150.0, table_a.y + 20.0), background) || !is_color(shot_3, at(table_b.x + 150.0, table_b.y + 20.0), style.color(&tokens, .SecondaryContainer)) { os.exit(35i32) }
     if !near(table_twisty.x, table_a.x + 16.0) || !near(table_twisty_a1.x, table_twisty.x + 20.0) { os.exit(36i32) }
     if testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || logs[0usize].picks != 5usize || logs[0usize].toggles != 9usize || logs[0usize].toggled != 1u64 { os.exit(47i32) }
-    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
+    logs[0usize].large = true
+    let (large_rt, large_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 6000usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 16384usize })
+    if large_runtime_error != ok { os.exit(53i32) }
+    var large_runtime = large_rt
+    let large_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &large_runtime }
+    let (large_h, large_harness_error) = testing.harness(a, &large_runtime, 320u32, 360u32, 1.0)
+    if large_harness_error != ok { os.exit(53i32) }
+    var large_harness = large_h
+    f = mem.arena_from(frame_storage)
+    let (root_4, build_4_error) = build(&f, &large_theme, ctx, 0usize)
+    if build_4_error != ok || testing.pump(&large_harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok || testing.by_key(&large_harness, 10512u64).count != 1usize { os.exit(53i32) }
+    if testing.close(&large_harness) != ok || widget.close(&large_runtime) != ok || testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
     try io.print("ui collections3 v2 ok\n")
     ret ok
 }
