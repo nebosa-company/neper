@@ -938,14 +938,15 @@ fn card(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widge
 type CardVariant = enum u8 { Elevated, Filled, Outlined }
 
 // A card's options: its treatment, its width (0: its content's), the dense grid's
-// padding, whether it is enabled and selected, the title and supporting text it
-// is named and described by, and the action a press on the whole card fires
-// (none: a static card).
-type CardOptions = struct { variant: CardVariant, width: f32, dense: bool, enabled: bool, selected: bool, dragged: bool, title: str, description: str, action: *const widget.Submit }
+// padding, whether it is enabled, selected or loading, the loading media height
+// and shimmer phase, the title and supporting text it is named and described by,
+// and the action a press on the whole card fires (none: a static card).
+type CardOptions = struct { variant: CardVariant, width: f32, dense: bool, enabled: bool, selected: bool, dragged: bool, loading: bool, phase: f32, media_height: f32, title: str, description: str, action: *const widget.Submit }
 
 fn card_options() -> CardOptions {
     var out: CardOptions = zero
     out.enabled = true
+    out.media_height = 112.0
     ret out
 }
 
@@ -958,12 +959,14 @@ fn card_options() -> CardOptions {
 // elevated); a static one is a Group named by the title. Selected draws the 2px
 // `primary` outline inside the edge and a 24 `primary` check disc 8 in from the
 // top end (with a width to place it). Disabled is `on-surface` 12% with the
-// content at 38%, no shadow, not focusable.
-// ponytail: no media, header or actions slots (the caller composes the column),
-// no loading skeletons. ponytail: dragged omits the 1.5-degree tilt and 102%
+// content at 38%, no shadow, not focusable. Loading replaces the content with
+// synchronised media, title (60%) and supporting-line (90%) skeletons, and marks
+// the non-interactive Card busy; the caller owns the 300ms delay and phase.
+// ponytail: no media, header or actions slots (the caller composes the column).
+// Dragged omits the 1.5-degree tilt and 102%
 // scale until nodes have a visual transform independent of layout.
 fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, children: []const widget.Node) -> (widget.Node, err) {
-    let pressed = mem.address_of(options.action) != 0usize
+    let pressed = mem.address_of(options.action) != 0usize && !options.loading
     let state = control_state(t, key, options.enabled && pressed, options.selected)
     var ground = style.color(t.tokens, .SurfaceContainerLow)
     var raised = 1usize
@@ -1003,9 +1006,40 @@ fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions
     if raised > 0usize { s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(raised) * 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[raised]) } }
     var column_style = style.defaults()
     if !options.enabled { column_style.opacity = t.tokens.states.disabled_content }
+    var card_children = children
+    if options.loading {
+        var inner_width: f32 = 168.0
+        if options.width > pad_px * 2.0 { inner_width = options.width - pad_px * 2.0 }
+        let (sweep, sweep_error) = placeholder_sweep(a, t, options.phase / 6.2831855, inner_width, 0.4)
+        if sweep_error != ok { ret (zero, sweep_error) }
+        var media_options = skeleton_options()
+        media_options.radius = t.tokens.radii.sm
+        media_options.sweep = sweep
+        media_options.on_highest = options.variant == .Filled
+        var line_options = media_options
+        line_options.shape = .Line
+        let (loading_shapes, loading_shapes_error) = mem.alloc[widget.Node](a, 2usize)
+        let (content_parts, content_parts_error) = mem.alloc[widget.Node](a, 2usize)
+        let (probe_parts, probe_parts_error) = mem.alloc[widget.Node](a, 1usize)
+        let (loading_layers, loading_layers_error) = mem.alloc[widget.Node](a, 3usize)
+        if loading_shapes_error != ok || content_parts_error != ok || probe_parts_error != ok || loading_layers_error != ok { ret (zero, TooLarge) }
+        let (media_node, media_error) = skeleton_of(a, 0u64, t, inner_width, options.media_height, media_options)
+        let (title_node, title_error) = skeleton_of(a, 0u64, t, inner_width * 0.6, 14.0, line_options)
+        let (supporting_node, supporting_error) = skeleton_of(a, 0u64, t, inner_width * 0.9, 12.0, line_options)
+        if media_error != ok || title_error != ok || supporting_error != ok { ret (zero, TooLarge) }
+        loading_shapes[0usize] = title_node
+        loading_shapes[1usize] = supporting_node
+        content_parts[0usize] = media_node
+        content_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), loading_shapes[0usize..2usize])
+        probe_parts[0usize] = sweep_node(sweep, probe_paint, 1.0, 1.0)
+        loading_layers[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), probe_parts)
+        loading_layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, style.defaults(), content_parts)
+        loading_layers[2usize] = widget.stack(0u64, style.defaults(), loading_layers[0usize..2usize])
+        card_children = loading_layers[2usize..3usize]
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, children)
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, card_children)
     var count = 1usize
     if options.selected && options.width > 0.0 {
         // The check disc, placed from the start: the stack has no end anchor.
@@ -1027,6 +1061,7 @@ fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions
     sem.label = options.title
     sem.hint = options.description
     if options.selected { sem.states = accessibility.STATE_SELECTED }
+    if options.loading { sem.states = sem.states | accessibility.STATE_BUSY }
     if !options.enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
     if pressed {
         sem.role = 3u8
