@@ -3071,7 +3071,8 @@ fn rename(a: *mem.Arena, src: str, dst: str) -> err {
 // ponytail: the primary monitor only; EnumDisplayMonitors when a second one matters.
 
 type Window = struct { raw: usize }
-type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool }
+type WindowMode = enum u8 { Windowed, Maximized, Fullscreen }
+type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool, mode: WindowMode }
 type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focused: bool, visible: bool }
 type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
@@ -3209,6 +3210,8 @@ extern fn raw_set_dib_bits(dc: usize, x: i32, y: i32, width: u32, height: u32, s
 
 const WS_OVERLAPPEDWINDOW: u32 = 13565952u32
 const WS_OVERLAPPED_FIXED: u32 = 13238272u32
+const WS_MAXIMIZE: u32 = 16777216u32
+const WS_POPUP: u32 = 2147483648u32
 const WS_VISIBLE: u32 = 268435456u32
 const CW_USEDEFAULT: i32 = -2147483648i32
 const SW_SHOW: i32 = 5i32
@@ -3408,11 +3411,23 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     }
     var style = WS_OVERLAPPED_FIXED
     if options.resizable { style = WS_OVERLAPPEDWINDOW }
+    if options.mode == .Maximized { style = style | WS_MAXIMIZE }
+    if options.mode == .Fullscreen { style = WS_POPUP }
     if options.visible { style = style | WS_VISIBLE }
-    // The size asked for is the client's; the frame is added around it.
+    // The size asked for is the client's; the frame is added around it. Fullscreen
+    // is the existing primary-monitor limitation without a frame.
     var rect = WindowRect { left: 0i32, top: 0i32, right: i32(options.width), bottom: i32(options.height) }
-    let adjusted = raw_adjust_window_rect(&rect, style, 0i32, 0u32)
-    let handle = raw_create_window(0u32, &window_class_name[0usize], &title[0usize], style, CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, 0usize, 0usize, raw_module_handle(0usize), 0usize)
+    var x = CW_USEDEFAULT
+    var y = CW_USEDEFAULT
+    if options.mode == .Fullscreen {
+        x = 0i32
+        y = 0i32
+        rect.right = raw_system_metrics(0i32)
+        rect.bottom = raw_system_metrics(1i32)
+    } else {
+        let adjusted = raw_adjust_window_rect(&rect, style, 0i32, 0u32)
+    }
+    let handle = raw_create_window(0u32, &window_class_name[0usize], &title[0usize], style, x, y, rect.right - rect.left, rect.bottom - rect.top, 0usize, 0usize, raw_module_handle(0usize), 0usize)
     mem.reset(a, checkpoint)
     if handle == 0usize { ret (none, from_last_error()) }
     window_handles[slot] = handle

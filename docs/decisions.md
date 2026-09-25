@@ -22836,3 +22836,14 @@ without fixed reverse-order scratch arrays or the former 64-sibling truncation.
 
 `ui_algorithms` holds the 300th overlapping child and `ui_gesture` guards dispatch
 on Windows and Linux. The reviewed surface is unchanged.
+
+## D1117 — Window mode reaches the native host
+
+The UI's Windowed, Maximized and Fullscreen choice is carried into `e.os` at
+creation. Win32 uses its native maximized style or a borderless popup sized to
+the supported primary monitor. X11 writes the standard `_NET_WM_STATE` atoms
+before mapping, leaving placement and decoration policy with the window manager.
+
+`os_window` opens every mode and `ui_window` holds the higher-level path on
+Windows and Linux. Transparency remains separate because it needs an alpha-capable
+native surface and compositor path. The reviewed surface is unchanged.
