@@ -608,7 +608,7 @@
             "PullToRefresh",
             "SwipeActions"
           ],
-          "evidence": "lib/e/ui/collection.e (D839): reorderable_list as focusable drag rows whose drop reports a Reorder from the row's index to the row under the pointer and whose Alt+Up/Alt+Down report a move by one, pull_to_refresh firing once per pull past a third of the height with a Refresh button as the keyboard alternative and a busy ring while refreshing, swipe_actions revealing a row's action buttons once per swipe left and hiding on a swipe right with a More button for a keyboard; tests/selfhost/fixtures/link/ui_interaction on both hosts"
+          "evidence": "lib/e/ui/collection.e (D839): reorderable_list as focusable drag rows whose drop reports a Reorder from the row's index to the row under the pointer and whose Alt+Up/Alt+Down report a move by one, pull_to_refresh firing once per pull past a third of the height with a Refresh button as the keyboard alternative and a busy ring while refreshing, swipe_actions revealing a row's action buttons once per swipe left and hiding on a swipe right with a More button for a keyboard; tests/selfhost/fixtures/link/ui_interaction on both hosts. (D1127) Revealed legacy swipe buttons reuse SwipeTileRun, firing their existing command and then caller-owned close only on success; ui_interaction holds action-close, reopen, swipe-close and More-open on Windows and Linux"
         },
         {
           "id": "P2-08",

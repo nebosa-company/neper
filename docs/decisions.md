@@ -22934,3 +22934,12 @@ error without changing reveal state; full swipes keep their existing path.
 
 `ui_collections4_v2` holds action, close, reopen, Escape and full-swipe behavior
 on Windows and Linux. The reviewed surface is unchanged.
+
+## D1127 — Legacy swipe actions share tile dismissal
+
+The original label-and-action `swipe_actions` entry point now wraps revealed
+buttons with the same close-after-success callback as `swipe_actions_of`.
+Existing swipe-right and More paths remain caller-owned and unchanged.
+
+`ui_interaction` holds action-close, reopen, swipe-close and More-open behavior
+on Windows and Linux. The reviewed surface is unchanged.

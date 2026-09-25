@@ -195,15 +195,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_4_error != ok || testing.pump(&harness, root_4, now) != ok { os.exit(31i32) }
     if testing.by_label(&harness, "More").count != 0usize { os.exit(32i32) }
     let (delete_at, has_delete) = centre_of(&harness, &runtime, 22u64)
-    if !has_delete || testing.tap(&harness, delete_at.x, delete_at.y) != ok || logs[0usize].deletes != 1usize { os.exit(33i32) }
+    if !has_delete || testing.tap(&harness, delete_at.x, delete_at.y) != ok || logs[0usize].deletes != 1usize || logs[0usize].reveals != 2usize || logs[0usize].revealed { os.exit(33i32) }
+    // Reveal once more, then a swipe right closes without running an action.
+    let (root_action_closed, root_action_closed_error) = build(&frame, &theme, ctx, &actions[0usize], actions[1usize..2usize], false, false)
+    if root_action_closed_error != ok || testing.pump(&harness, root_action_closed, now) != ok { os.exit(39i32) }
+    let (more_again, has_more_again) = centre_of(&harness, &runtime, 21u64)
+    if !has_more_again || testing.tap(&harness, more_again.x, more_again.y) != ok || logs[0usize].reveals != 3usize || !logs[0usize].revealed { os.exit(40i32) }
+    let (root_again, root_again_error) = build(&frame, &theme, ctx, &actions[0usize], actions[1usize..2usize], false, true)
+    if root_again_error != ok || testing.pump(&harness, root_again, now) != ok { os.exit(41i32) }
     let (mail_2_at, has_mail_2) = centre_of(&harness, &runtime, 20u64)
     if !has_mail_2 || testing.drag(&harness, mail_2_at, geometry.Point { x: mail_2_at.x + 70.0, y: mail_2_at.y }, 7usize) != ok { os.exit(34i32) }
-    if logs[0usize].reveals != 2usize || logs[0usize].revealed { os.exit(35i32) }
+    if logs[0usize].reveals != 4usize || logs[0usize].revealed { os.exit(35i32) }
     // Hidden again, More reveals for a keyboard.
     let (root_5, build_5_error) = build(&frame, &theme, ctx, &actions[0usize], actions[1usize..2usize], false, false)
     if build_5_error != ok || testing.pump(&harness, root_5, now) != ok { os.exit(36i32) }
     let (more_at, has_more) = centre_of(&harness, &runtime, 21u64)
-    if !has_more || testing.tap(&harness, more_at.x, more_at.y) != ok || logs[0usize].reveals != 3usize || !logs[0usize].revealed { os.exit(37i32) }
+    if !has_more || testing.tap(&harness, more_at.x, more_at.y) != ok || logs[0usize].reveals != 5usize || !logs[0usize].revealed { os.exit(37i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(38i32) }
     try io.print("ui interaction ok\n")
     ret ok
