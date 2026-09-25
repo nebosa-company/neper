@@ -112,6 +112,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if accessibility.perform(&runtime, stale, .Focus, "") != accessibility.Invalid { os.exit(20i32) }
     let all_flags = accessibility.flags_of(accessibility.State { disabled: true, focused: true, selected: true, checked: true, expanded: true, hidden: true, mixed: true, busy: true, invalid: true, required: true, read_only: true, modal: true, current: true })
     if all_flags != 8191u16 { os.exit(22i32) }
+    var sample: accessibility.Node = zero
+    sample.role = .TextField
+    sample.live = .Assertive
+    sample.position = accessibility.Position { row: 2u32, column: 3u32, row_count: 20u32, column_count: 4u32 }
+    sample.level = 5u8
+    sample.selection_start = 7usize
+    sample.selection_end = 11usize
+    let flat = accessibility.flat_node(&sample)
+    if flat.role != 7u8 || flat.live != 2u8 || flat.row != 2u32 || flat.column != 3u32 || flat.row_count != 20u32 || flat.column_count != 4u32 || flat.level != 5u8 || flat.selection_start != 7usize || flat.selection_end != 11usize { os.exit(23i32) }
     if widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui accessibility ok\n")
     ret ok
