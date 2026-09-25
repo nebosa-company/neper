@@ -159,16 +159,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     logs[0usize].value = 50.0
     let (rtl_root, rtl_error) = build(&frame, &theme, &logs[0usize], ctx)
     if rtl_error != ok || testing.pump(&harness, rtl_root, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(39i32) }
-    if testing.tap(&harness, track.x + 8.0 + 104.0 * 0.5, mid_y) != ok { os.exit(40i32) }
-    if testing.press_key(&harness, 37u32, zero) != ok { os.exit(41i32) }
+    if testing.tap(&harness, track.x + 8.0 + 104.0 * 0.25, mid_y) != ok { os.exit(40i32) }
+    let (rtl_point, _, _) = widget.slider_value_of(&runtime, volume)
+    if !near(rtl_point, 75.0) { os.exit(41i32) }
+    if testing.tap(&harness, track.x + 8.0 + 104.0 * 0.5, mid_y) != ok { os.exit(42i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok { os.exit(43i32) }
     let (rtl_left, _, _) = widget.slider_value_of(&runtime, volume)
-    if !near(rtl_left, 55.0) { os.exit(42i32) }
-    if testing.press_key(&harness, 39u32, zero) != ok || testing.press_key(&harness, 33u32, zero) != ok { os.exit(43i32) }
+    if !near(rtl_left, 55.0) { os.exit(44i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || testing.press_key(&harness, 33u32, zero) != ok { os.exit(45i32) }
     let (rtl_page_up, _, _) = widget.slider_value_of(&runtime, volume)
-    if !near(rtl_page_up, 60.0) { os.exit(44i32) }
-    if testing.press_key(&harness, 34u32, zero) != ok || testing.press_key(&harness, 38u32, zero) != ok { os.exit(45i32) }
+    if !near(rtl_page_up, 60.0) { os.exit(46i32) }
+    if testing.press_key(&harness, 34u32, zero) != ok || testing.press_key(&harness, 38u32, zero) != ok { os.exit(47i32) }
     let (rtl_vertical, _, _) = widget.slider_value_of(&runtime, volume)
-    if !near(rtl_vertical, 55.0) { os.exit(46i32) }
+    if !near(rtl_vertical, 55.0) { os.exit(48i32) }
+    // The low end is physically right in RTL: value 25 leaves the left inactive
+    // and fills from its mirrored handle towards the right edge.
+    logs[0usize].value = 25.0
+    let (rtl_paint_root, rtl_paint_error) = build(&frame, &theme, &logs[0usize], ctx)
+    if rtl_paint_error != ok || testing.pump(&harness, rtl_paint_root, time.Instant { nanos: 3000000000i64 }) != ok { os.exit(49i32) }
+    let (rtl_shot, rtl_shot_error) = testing.snapshot(&harness, a)
+    if rtl_shot_error != ok { os.exit(50i32) }
+    let rtl_inactive = (y * 200usize + usize(track.x + 8.0 + 104.0 * 0.25)) * 4usize
+    let rtl_active = (y * 200usize + usize(track.x + 8.0 + 104.0 * 0.9)) * 4usize
+    if !(f32(rtl_shot.pixels[rtl_active + 2usize]) > primary.blue * 255.0 - 3.0) || !(f32(rtl_shot.pixels[rtl_active]) < primary.red * 255.0 + 3.0) { os.exit(51i32) }
+    if !(rtl_shot.pixels[rtl_inactive] > rtl_shot.pixels[rtl_active] + 40u8) { os.exit(52i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(38i32) }
     try io.print("ui slider ok\n")
     ret ok

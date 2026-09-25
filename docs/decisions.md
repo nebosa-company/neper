@@ -23311,3 +23311,13 @@ names are unchanged.
 
 `ui_content_v2` holds both chevrons and Back/Forward pixels on Windows and
 Linux. The Segoe review is `build/ux/icon-directional-rtl-segoe.png`.
+
+## D1165 — Slider geometry mirrors in RTL
+
+Horizontal Slider rendering and pointer mapping now use the direction already
+carried by the runtime: the low end moves right, the track, ticks and handles
+mirror, and pointer values increase right-to-left. Vertical sliders stay
+physical, and the focused value label follows the mirrored handle.
+
+`ui_slider` holds pointer values and asymmetric track pixels on Windows and
+Linux. The Segoe review is `build/ux/slider-rtl-segoe.png`.
