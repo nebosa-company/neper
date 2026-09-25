@@ -245,7 +245,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (twisty_a, has_twisty_a) = bounds(&harness, &runtime, 101u64)
     let (twisty_a1, has_twisty_a1) = bounds(&harness, &runtime, 103u64)
     if !has_twisty_a || !has_twisty_a1 || !near(twisty_a.x, row_a.x + 4.0) || !near(twisty_a.width, 24.0) || !near(twisty_a1.x, twisty_a.x + 20.0) { os.exit(14i32) }
-    if !any_color(shot, twisty_a.x, twisty_a.y, 24.0, 24.0, muted) || any_color(shot, row_a.x + 70.0, row_a.y, 100.0, 32.0, muted) { os.exit(15i32) }
+    if !any_color(shot, twisty_a.x, twisty_a.y, 24.0, 24.0, muted) || !is_color(shot, at(twisty_a.x + 9.0, twisty_a.y + 10.0), muted) || any_color(shot, row_a.x + 70.0, row_a.y, 100.0, 32.0, muted) { os.exit(15i32) }
     if !is_color(shot, at(row_b.x + 200.0, row_b.y + 16.0), style.color(&tokens, .SecondaryContainer)) || !is_color(shot, at(row_b.x + 0.5, row_b.y + 0.5), background) { os.exit(16i32) }
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(17i32) }

@@ -2686,7 +2686,7 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // over a full-width 1px `outline-variant` divider, the last excepted. Up, Down,
 // Home and End move among visible rows; Right expands or enters the first child,
 // Left collapses or returns to the parent, and `*` expands siblings.
-// ponytail: rows are not virtualised; no icon or meta slot, twisty rotation, rename,
+// ponytail: rows are not virtualised; no icon or meta slot, rename,
 // drag and drop, loading or disabled rows.
 fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
@@ -2731,13 +2731,16 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         if entry.branch {
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false }
             var kind: control.GlyphKind = .ChevronRight
-            if open { kind = .ChevronDown }
+            if open && t.tokens.motion.reduced { kind = .ChevronDown }
             // The 18 icon (its 1.5 inset kept) centred in the 24 box.
             let (chevron, chevron_error) = control.stroked_glyph(a, muted, kind, 15.0, 18.0 * 1.75 / 24.0)
             if chevron_error != ok { ret (none, chevron_error) }
-            let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)
+            let (drawn, drawn_error) = mem.alloc[widget.Node](a, 2usize)
             if drawn_error != ok { ret (none, TooLarge) }
-            drawn[0usize] = chevron
+            drawn[1usize] = chevron
+            var rotation: f32 = 0.0
+            if open && !t.tokens.motion.reduced { rotation = 1.5707963 }
+            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: rotation, offset: zero }, style.defaults(), drawn[1usize..2usize])
             var box_style = control.sized_style(24.0, 24.0)
             let around = style.Length { Px: 4.5 }
             box_style.padding = style.EdgeLengths { left: around, top: around, right: around, bottom: around }
@@ -5255,8 +5258,8 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
 // Home and End move the focus. Each row stands in a holder keyed `key + 1 +
 // count + index`, so the lifted one keeps its elements -- and the drag its
 // handle -- when it moves to the top of the stack. A list named `label`.
-// ponytail: the handle shows at rest rather than only on hover; no lift scale,
-// drop line, auto-scroll, keyboard pick-up (Space) or move actions.
+// ponytail: the handle shows at rest rather than only on hover; no drop line,
+// auto-scroll, keyboard pick-up (Space) or move actions.
 fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, move: widget.Change[Reorder], width: f32) -> (widget.Node, err) {
     if keys.len != items.len || items.len == 0usize { ret (zero, TooLarge) }
     let n = items.len
@@ -5337,6 +5340,14 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             row_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
         }
         rows[i] = widget.stack(0u64, row_style, pair[0usize..2usize])
+        if touch && !t.tokens.motion.reduced {
+            let (lifted_row, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+            if lifted_error != ok { ret (zero, TooLarge) }
+            lifted_row[0usize] = rows[i]
+            var lift = widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: zero }
+            if i == lifted { lift = widget.VisualTransform { scale: 1.02, rotation: 0.0, offset: geometry.Point { x: 0.0, y: -4.0 } } }
+            rows[i] = widget.transformed(0u64, lift, style.defaults(), lifted_row[0usize..1usize])
+        }
         nudges[2usize * i] = Nudging { index: i, count: n, up: true, move: move }
         nudges[2usize * i + 1usize] = Nudging { index: i, count: n, up: false, move: move }
         let up = widget.Submit { ctx: ctx_of(&nudges[2usize * i]), invoke: reorder_nudge }

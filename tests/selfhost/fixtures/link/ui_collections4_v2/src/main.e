@@ -140,23 +140,29 @@ fn build(a: *mem.Arena, t: *const control.Theme, touch: *const control.Theme, s:
     row_keys[1usize] = 612u64
     row_keys[2usize] = 613u64
     let (ordered, e6) = collection.reorderable_list_of(a, 600u64, t, "Priorities", s.rows[0usize..3usize], row_keys[..], widget.Change[collection.Reorder] { ctx: ctx, invoke: on_move }, 280.0)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (zero, e1) }
+    var touch_keys: [3]widget.Key = zero
+    touch_keys[0usize] = 631u64
+    touch_keys[1usize] = 632u64
+    touch_keys[2usize] = 633u64
+    let (touch_ordered, e7) = collection.reorderable_list_of(a, 620u64, touch, "Touch priorities", s.rows[0usize..3usize], touch_keys[..], widget.Change[collection.Reorder] { ctx: ctx, invoke: on_move }, 280.0)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret (zero, e1) }
     let (left, left_error) = mem.alloc[widget.Node](a, 4usize)
     if left_error != ok { ret (zero, left_error) }
     left[0usize] = view
     left[1usize] = desk
     left[2usize] = phone
     left[3usize] = ordered
-    let (right, right_error) = mem.alloc[widget.Node](a, 2usize)
+    let (right, right_error) = mem.alloc[widget.Node](a, 3usize)
     if right_error != ok { ret (zero, right_error) }
     right[0usize] = strip
     right[1usize] = row
+    right[2usize] = touch_ordered
     let (sides, sides_error) = mem.alloc[widget.Node](a, 2usize)
     if sides_error != ok { ret (zero, sides_error) }
     var left_style = style.defaults()
     left_style.width = style.Length { Px: 280.0 }
     sides[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, left_style, left[0usize..4usize])
-    sides[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, style.defaults(), right[0usize..2usize])
+    sides[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, style.defaults(), right[0usize..3usize])
     var page = style.defaults()
     page.width = style.Length { Px: 900.0 }
     page.height = style.Length { Px: 780.0 }
@@ -429,17 +435,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (rtl_previous, has_rtl_previous) = bounds(&harness, &runtime, 101u64)
     let (rtl_next, has_rtl_next) = bounds(&harness, &runtime, 102u64)
     let rtl_ink = style.color(&rtl_tokens, .OnSecondaryContainer)
-    if rtl_shot_error != ok || !has_rtl_previous || !has_rtl_next || !near(rtl_previous.x, view.x + 188.0) || !near(rtl_next.x, view.x + 12.0) || !is_color(rtl_shot, at(rtl_previous.x + 19.0, rtl_previous.y + 16.0), rtl_ink) || is_color(rtl_shot, at(rtl_previous.x + 22.0, rtl_previous.y + 16.0), rtl_ink) || !is_color(rtl_shot, at(rtl_next.x + 21.0, rtl_next.y + 16.0), rtl_ink) || is_color(rtl_shot, at(rtl_next.x + 18.0, rtl_next.y + 16.0), rtl_ink) { os.exit(84i32) }
+    if rtl_shot_error != ok || !has_rtl_previous || !has_rtl_next || !near(rtl_previous.x, view.x + 188.0) || !near(rtl_next.x, view.x + 12.0) || !is_color(rtl_shot, at(rtl_previous.x + 18.0, rtl_previous.y + 16.0), rtl_ink) || is_color(rtl_shot, at(rtl_previous.x + 22.0, rtl_previous.y + 16.0), rtl_ink) || !is_color(rtl_shot, at(rtl_next.x + 21.0, rtl_next.y + 16.0), rtl_ink) || is_color(rtl_shot, at(rtl_next.x + 18.0, rtl_next.y + 16.0), rtl_ink) { os.exit(84i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 100u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || s.page != 2usize { os.exit(85i32) }
     s.page = 1usize
     if testing.press_key(&harness, 39u32, zero) != ok || s.page != 0usize { os.exit(86i32) }
     s.page = 1usize
-    if !press(&harness, view.x + 60.0, view.y + 100.0) || !move_to(&harness, view.x + 120.0, view.y + 100.0) { os.exit(87i32) }
+    if !press(&harness, view.x + 60.0, view.y + 100.0) || !move_to(&harness, view.x + 120.0, view.y + 100.0) || !move_to(&harness, view.x + 150.0, view.y + 100.0) { os.exit(87i32) }
     let (root_rtl_drag, root_rtl_drag_error) = build(&f, &rtl_theme, &touch, s)
     if root_rtl_drag_error != ok || testing.pump(&harness, root_rtl_drag, now) != ok { os.exit(88i32) }
     let (rtl_drag, rtl_drag_error) = testing.snapshot(&harness, a)
     if rtl_drag_error != ok || !is_color(rtl_drag, at(view.x + 20.0, view.y + 100.0), style.color(&rtl_tokens, .ErrorContainer)) || !is_color(rtl_drag, at(view.x + 100.0, view.y + 100.0), style.color(&rtl_tokens, .TertiaryContainer)) { os.exit(89i32) }
     if !move_to(&harness, view.x + 200.0, view.y + 100.0) || !release(&harness, view.x + 200.0, view.y + 100.0) || s.page != 2usize { os.exit(90i32) }
+    // Touch lift scales the row to 102% and moves it 4 up without changing its
+    // layout or hit bounds; the transform wrapper stays present across the drag.
+    let (touch_list, has_touch_list) = bounds(&harness, &runtime, 620u64)
+    let (touch_grip, has_touch_grip) = bounds(&harness, &runtime, 621u64)
+    if !has_touch_list || !has_touch_grip || !near(touch_grip.x, touch_list.x + 196.0) || !near(touch_grip.width, 48.0) { os.exit(100i32) }
+    s.moves = 0usize
+    if !press(&harness, touch_grip.x + 24.0, touch_grip.y + 24.0) || !move_to(&harness, touch_grip.x + 24.0, touch_grip.y + 48.0) || !move_to(&harness, touch_grip.x + 24.0, touch_grip.y + 84.0) { os.exit(101i32) }
+    let (root_touch, root_touch_error) = build(&f, &rtl_theme, &touch, s)
+    if root_touch_error != ok || testing.pump(&harness, root_touch, now) != ok { os.exit(102i32) }
+    let (touch_shot, touch_shot_error) = testing.snapshot(&harness, a)
+    let (touch_lifted, has_touch_lifted) = bounds(&harness, &runtime, 631u64)
+    let (touch_second, has_touch_second) = bounds(&harness, &runtime, 632u64)
+    if touch_shot_error != ok || !has_touch_lifted || !has_touch_second || !near(touch_lifted.x, touch_list.x + 8.0) || !near(touch_lifted.y, touch_list.y + 60.0) || !near(touch_lifted.width, 264.0) || !near(touch_second.y, touch_list.y) { os.exit(103i32) }
+    let touch_ground = style.layer(style.color(&touch_tokens, .SurfaceContainerHigh), style.color(&touch_tokens, .OnSurface), 0.16)
+    if !is_color(touch_shot, at(touch_list.x + 4.0, touch_list.y + 60.0), style.color(&touch_tokens, .SurfaceContainerLow)) || !is_color(touch_shot, at(touch_list.x + 200.0, touch_list.y + 88.0), touch_ground) || !is_color(touch_shot, at(touch_lifted.x + touch_lifted.width * 0.5, touch_lifted.y - 3.0), touch_ground) { os.exit(104i32) }
+    if !release(&harness, touch_grip.x + 24.0, touch_grip.y + 84.0) || s.moves != 1usize || s.moved.from != 0usize || s.moved.to != 1usize { os.exit(105i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(68i32) }
     try io.print("ui collections4 v2 ok\n")
     ret ok

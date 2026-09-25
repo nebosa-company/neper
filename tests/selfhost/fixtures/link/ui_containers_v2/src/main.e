@@ -313,7 +313,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot, at(chosen.x + 1.0, chosen.y + 26.0), primary) || !is_color(shot, at(chosen.x + 60.0, chosen.y + 26.0), page) || !is_color(shot, at(chosen.x + 120.0 - 8.0 - 21.0, chosen.y + 8.0 + 12.0), primary) { os.exit(16i32) }
     if testing.tap(&harness, chosen.x + 20.0, chosen.y + 26.0) != ok || stores[0usize].hits[0usize] != 1u32 || stores[0usize].hits[7usize] != 0u32 || testing.press_key(&harness, 32u32, zero) != ok || stores[0usize].hits[7usize] != 1u32 { os.exit(54i32) }
     let dragged_ground = style.layer(style.color(&tokens, .SurfaceContainerLow), style.color(&tokens, .OnSurface), tokens.states.dragged)
-    if !is_color(shot, at(dragged.x + 60.0, dragged.y + 21.0), dragged_ground) || is_color(shot, at(dragged.x + 60.0, dragged.y + dragged.height + 4.0), page) { os.exit(50i32) }
+    if !is_color(shot, at(dragged.x + 60.0, dragged.y + 21.0), dragged_ground) || !is_color(shot, at(dragged.x - 1.0, dragged.y + dragged.height * 0.5), dragged_ground) || is_color(shot, at(dragged.x + 60.0, dragged.y + dragged.height + 4.0), page) { os.exit(50i32) }
     let (loading, has_loading) = bounds(&harness, &runtime, 24u64)
     if !has_loading || !near(loading.width, 200.0) || !is_color(shot, at(loading.x + 100.0, loading.y + 16.0 + 24.0), style.color(&tokens, .SurfaceContainerHighest)) { os.exit(51i32) }
     let (slotted, has_slotted) = bounds(&harness, &runtime, 25u64)
@@ -336,7 +336,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, slot_action.x + slot_action.width * 0.5, slot_action.y + slot_action.height * 0.5) != ok { os.exit(67i32) }
     if stores[0usize].hits[9usize] != 1u32 || stores[0usize].hits[0usize] != 1u32 { os.exit(68i32) }
     if testing.press_key(&harness, 32u32, zero) != ok { os.exit(69i32) }
-    if stores[0usize].hits[9usize] != 2u32 || stores[0usize].hits[7usize] != 0u32 { os.exit(70i32) }
+    if stores[0usize].hits[9usize] != 2u32 || stores[0usize].hits[7usize] != 1u32 { os.exit(70i32) }
     // The pressable card is a Button named by its title, and fires on a tap.
     if testing.by_label(&harness, "Open").count != 1usize || testing.by_role(&harness, .Button).count == 0usize { os.exit(17i32) }
     if testing.tap(&harness, filled.x + 60.0, filled.y + 21.0) != ok || stores[0usize].hits[0usize] != 2u32 { os.exit(18i32) }

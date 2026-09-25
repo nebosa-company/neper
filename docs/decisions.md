@@ -23567,3 +23567,21 @@ activation: Space selects a focused Card, while Space on a focused slotted
 button activates only that button. `ui_containers_v2` holds pointer, keyboard
 and tree-parentage behavior on Windows and Linux; the affected accessibility,
 gesture, widget and action fixtures also pass on both hosts.
+
+## D1192 — Visual transforms stay out of layout
+
+`VisualTransform` wraps a subtree's paint commands in a centre-based scale,
+rotation and offset while leaving its measured bounds, hit testing and semantic
+geometry unchanged. Dragged Cards use 102% scale and a 1.5-degree tilt unless
+motion is reduced. Open Tree twisties rotate the right chevron 90 degrees, with
+the down glyph used instead under reduced motion.
+
+Touch reorder rows keep the transform wrapper before, during and after a drag,
+so reconciliation preserves the gesture owner; the lifted row paints 4 pixels
+up at 102% scale. Skeleton sweeps lean 10 degrees through their shared gradient,
+while Placeholder sweeps stay upright. Accessibility allocates Card action-
+promotion flags only when a promoting node exists, preserving arena headroom.
+
+`ui_widget`, `ui_containers_v2`, `ui_collections3_v2`,
+`ui_collections4_v2` and `ui_status2_v2` hold the paths on Windows and Linux.
+The Segoe review is `build/ux/ui-transform-batch-segoe.png`.

@@ -81,21 +81,27 @@ fn build(a: *mem.Arena, t: *const control.Theme) -> (widget.Node, err) {
     let (s1, e4) = control.skeleton_of(a, 40u64, t, 80.0, 40.0, pill)
     let (s2, e5) = control.skeleton_of(a, 41u64, t, 80.0, 40.0, lowest)
     let (s3, e6) = control.skeleton(a, 50u64, t, 120.0, 16.0, 0.0)
-    if e4 != ok || e5 != ok || e6 != ok { ret (zero, e4) }
-    let (items, items_error) = mem.alloc[widget.Node](a, 5usize)
+    let (angled_sweep, angled_sweep_error) = control.placeholder_sweep(a, t, 0.5, 120.0, 0.4)
+    var angled_options = control.skeleton_options()
+    angled_options.sweep = angled_sweep
+    let (angled, angled_error) = control.skeleton_of(a, 60u64, t, 120.0, 60.0, angled_options)
+    let (angled_region, angled_region_error) = control.placeholder_region(a, 61u64, t, "Loading angled", angled_sweep, angled)
+    if e4 != ok || e5 != ok || e6 != ok || angled_sweep_error != ok || angled_error != ok || angled_region_error != ok { ret (zero, e4) }
+    let (items, items_error) = mem.alloc[widget.Node](a, 6usize)
     if items_error != ok { ret (zero, items_error) }
     items[0usize] = region
     items[1usize] = people
     items[2usize] = s1
     items[3usize] = s2
     items[4usize] = s3
+    items[5usize] = angled_region
     var page = style.defaults()
     page.width = style.Length { Px: 640.0 }
     page.height = style.Length { Px: 660.0 }
     page.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let pad = style.Length { Px: 10.0 }
     page.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, page, items[0usize..5usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, page, items[0usize..6usize]), ok)
 }
 
 fn busy_group(tree: accessibility.Tree, label: str) -> bool {
@@ -159,7 +165,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if tree.nodes[i].state.busy { busy += 1usize }
         i += 1usize
     }
-    if busy != 3usize { os.exit(13i32) }
+    if busy != 4usize { os.exit(13i32) }
     // A text line 12 tall and fully rounded; the sweep's band at half its cycle
     // centred 150 into the region, `surface-container-high`, the rest
     // `surface-container-highest`.
@@ -182,6 +188,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // The lone skeleton: `surface-container-highest` at full opacity.
     let (lone, has_lone) = bounds(&harness, &runtime, 50u64)
     if !has_lone || !is_color(shot, at(lone.x + 60.0, lone.y + 8.0), highest) { os.exit(21i32) }
+    let (angled, has_angled) = bounds(&harness, &runtime, 60u64)
+    if !has_angled { os.exit(23i32) }
+    if !is_color(shot, at(angled.x + 62.0, angled.y + 10.0), high) { os.exit(24i32) }
+    if !is_color(shot, at(angled.x + 69.0, angled.y + 50.0), high) { os.exit(25i32) }
+    if shot.pixels[at(angled.x + 62.0, angled.y + 10.0)] <= shot.pixels[at(angled.x + 62.0, angled.y + 50.0)] || shot.pixels[at(angled.x + 69.0, angled.y + 50.0)] <= shot.pixels[at(angled.x + 69.0, angled.y + 10.0)] { os.exit(26i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(22i32) }
     try io.print("ui status2 v2 ok\n")
     ret ok
