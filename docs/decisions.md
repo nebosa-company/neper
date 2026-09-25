@@ -24197,3 +24197,18 @@ the caller chooses when to fold.
 `ui_navigation2_v2` holds the shut button, the open menu with File's cascade
 (two menus, File Expanded) and a press on Edit firing its own toggle on Windows
 and Linux; `ui_navigation5_v2` and `ui_adaptive` pass on both hosts.
+
+## D1235 — Grid views page by the window's height
+
+GridView's Page Up and Page Down now move focus a window's height of tile rows
+in the same column, stopping at the first and last rows that hold that column.
+The shared `roving` helper (D1211) already paged one-column lists, but a grid
+cell uses all eight of its scope's shortcut slots for arrows, Home, End and the
+Ctrl ends. The two Page bindings therefore stand in one extra scope round each
+cell. `grid_view_of` sizes the page from the first tile's laid-out height plus
+the 8 between rows over the window's height; before the first layout, a page is
+the whole grid.
+
+`ui_collections_v2` holds Page Down to the tile below, its stop at the last row
+and Page Up back on Windows and Linux. All 103 `ui_*` fixtures pass on both
+hosts.
