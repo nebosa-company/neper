@@ -1982,14 +1982,15 @@ fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column,
 // caller keeps the columns); a row tap reports the row's key through `pick` and
 // `selected` marks rows. A table in the tree named `label`.
 fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32) -> (widget.Node, err) {
-    var selection: TableSelect = zero
+    var selection: TableOptions = zero
     let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 12u8, false, selection)
     ret (made, made_error)
 }
 
-// (D1246) A selectable table's selection: whom to tell of each gesture, and the
-// selection bar's actions.
-type TableSelect = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand }
+// (D1246) A table's options: whom to tell of each selection gesture, and the
+// selection bar's actions; (D1248) whether the first page is loading, and the
+// empty state's words for a table with no rows.
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str }
 
 // (D1246, docs/ux/components/Table, TableRow, HeaderRow) `table` made selectable
 // by `selection`: a 52 first column (40 dense) holds each row's checkbox in its
@@ -2001,9 +2002,63 @@ type TableSelect = struct { select: widget.Change[ListSelect], bulk: []const ove
 // click is `pick`. A focused row takes Space, Shift+Up/Down, Ctrl+A and Escape as
 // a list's does (`selection_scopes`). The caller keeps `selected`.
 // ponytail: Shift+Up/Down stop at the built rows' edge; no touch hold.
-fn table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, selection: TableSelect) -> (widget.Node, err) {
+fn table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, selection: TableOptions) -> (widget.Node, err) {
     let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 12u8, false, selection)
     ret (made, made_error)
+}
+
+// (D1248, docs/ux/components/Table) A table body with no rows, `width` by
+// `height`: loading, an indeterminate linear progress (keyed
+// `key ^ fnv1a64("table-progress")`) over skeleton rows `extent` tall -- a bar
+// 12 tall across 60% of the row, `pad` in -- as many as fit, 3 to 8, in a busy
+// group named "Loading"; otherwise the compact empty state, centred.
+// ponytail: no error state (a Banner with Retry is the caller's, in place of
+// the table).
+fn table_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, options: TableOptions, width: f32, height: f32, extent: f32, pad: f32) -> (widget.Node, err) {
+    var area = control.sized_style(width, height)
+    area.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    if !options.loading {
+        var empty = control.empty_options()
+        empty.compact = true
+        empty.width = width
+        let (said, said_error) = control.empty_state_of(a, key + 1u64, t, options.empty_title, options.empty_message, empty)
+        if said_error != ok { ret (zero, said_error) }
+        held[0usize] = said
+        ret (widget.aligned(0u64, .Center, .Center, area, held[0usize..1usize]), ok)
+    }
+    var n = 3usize
+    if extent > 0.0 { n = usize(height / extent) }
+    if n < 3usize { n = 3usize }
+    if n > 8usize { n = 8usize }
+    let (sweep, sweep_error) = control.placeholder_sweep(a, t, 0.0, width, 0.4)
+    if sweep_error != ok { ret (zero, sweep_error) }
+    var bar = control.skeleton_options()
+    bar.shape = .Line
+    bar.sweep = sweep
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize * n + 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (progress, progress_error) = control.progress_bar(a, key ^ hash.fnv1a64("table-progress"), t, "Loading", 0.0, true, width)
+    if progress_error != ok { ret (zero, progress_error) }
+    parts[0usize] = progress
+    var i = 0usize
+    while i < n {
+        let (line, line_error) = control.skeleton_of(a, 0u64, t, control.max_zero(width - 2.0 * pad) * 0.6, 12.0, bar)
+        if line_error != ok { ret (zero, line_error) }
+        parts[n + 1usize + i] = line
+        var bone_style = control.sized_style(width, extent)
+        let sides = style.Length { Px: pad }
+        let flat = style.Length { Px: 0.0 }
+        bone_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+        parts[1usize + i] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bone_style, parts[n + 1usize + i..n + 2usize + i])
+        i += 1usize
+    }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..n + 1usize])
+    let (region, region_error) = control.placeholder_region(a, key + 1u64, t, "Loading", sweep, column)
+    if region_error != ok { ret (zero, region_error) }
+    held[0usize] = region
+    ret (widget.box(0u64, area, held[0usize..1usize]), ok)
 }
 
 // (D1246) A selectable table row's press: a toggle in selection mode, Ctrl
@@ -2045,7 +2100,7 @@ fn selection_check(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 // A data grid: the table as a grid in the tree, whose cells the source may build
 // as fields, so the caller edits in place; the same contract otherwise.
 fn data_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32) -> (widget.Node, err) {
-    var selection: TableSelect = zero
+    var selection: TableOptions = zero
     let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 30u8, false, selection)
     ret (made, made_error)
 }
@@ -2604,7 +2659,7 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     if column_menus_error != ok { ret (zero, TooLarge) }
     column_menus[0usize] = GridColumnMenu { state: state, change: change }
     var none: [1]widget.Key = zero
-    var no_selection: TableSelect = zero
+    var no_selection: TableOptions = zero
     let (table_node, table_error) = tabulated(a, key + 16u64, t, label, columns, table_source, none[0usize..0usize], columns.len, false, widget.Change[usize] { ctx: ctx_of(&column_menus[0usize]), invoke: grid_column_menu }, zero, zero, zero, row_extent, offset, scrolled, height - 40.0, 30u8, true, no_selection)
     if table_error != ok { ret (zero, table_error) }
     var width: f32 = 40.0
@@ -2819,11 +2874,12 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
 // source key and request the minimum revealing offset.
 // (D984) `owned` rows (`data_grid_of`'s) are neither focusable nor tapped and
 // hold their cells unpadded: the cells draw their own looks.
-// (D1246) `selection` (from `table_with`) adds the check column and bar.
-// ponytail: no toolbar, footer, pinned column, horizontal
-// scroll, loading, empty or error state; `data_grid` keeps the caller's cells
+// (D1246) `selection` (from `table_with`) adds the check column and bar;
+// (D1248) with no rows, its loading or empty state (`table_state`).
+// ponytail: no toolbar, footer, pinned column, horizontal scroll or error
+// state; `data_grid` keeps the caller's cells
 // as its editors -- `data_grid_of` is the one with the DataGrid's core.
-fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, role: u8, owned: bool, selection: TableSelect) -> (widget.Node, err) {
+fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, role: u8, owned: bool, selection: TableOptions) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
     let grid = role == 30u8
     var row_extent = extent
@@ -2955,6 +3011,12 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     }
     parts[p] = head
     parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent }, view_style, rows[0usize..count])
+    // (D1248) With no rows the body is the loading or empty state; the header stays.
+    if total == 0usize && (selection.loading || selection.empty_title.len > 0usize) {
+        let (state_node, state_error) = table_state(a, key, t, selection, width, body_height, row_extent, pad)
+        if state_error != ok { ret (zero, state_error) }
+        parts[p + 1usize] = state_node
+    }
     p += 2usize
     var column_style = style.defaults()
     column_style.width = style.Length { Px: width }
