@@ -25688,3 +25688,16 @@ expand is still to come, and closing is at once.
 `ui_pickers_v2` opens a sheet: part way its `surface-container-low` has not
 reached the window's foot, and settled it has. This passes on Windows and
 Linux, and `ui_entry`'s sheet still passes on both.
+
+## D1333 — Resizable panes show their size while dragged
+
+The ResizablePane spec's readout: while a `resizable_pane_with`'s sash is
+dragged (the sash cell's `dragging`, not cancelled), a plain tooltip stands
+over the pane, 8 from its top just past the sash, saying the size ("150 px")
+in `body-small` `inverse-on-surface` on `inverse-surface`, `radius-xs`, 4 by 8
+in, keyed `key + 1048577` and out of the tree (the separator already says the
+value). Released, it goes. The resize cursor still waits on the runtime
+setting a pointer cursor.
+
+`ui_panes` holds a sash mid-drag: the tooltip stands saying "150 px"; released,
+it is gone, on Windows and Linux; `ui_containers4_v2` still passes on both.
