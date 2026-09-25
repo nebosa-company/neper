@@ -2715,8 +2715,53 @@ fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // neighbouring months stay empty cells.
 // (D1229) The week starts on the theme language's first day (`week_start_of`):
 // Monday by default, Sunday for "en-US", Saturday for "ar-EG".
-// ponytail: English month and weekday names; the year view, week numbers, event dots and unavailable days are still to come.
+// ponytail: English month and weekday names; no year view.
 fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+    var marks: CalendarMarks = zero
+    let (made, made_error) = calendar_with(a, key, t, label, shown, selected, has_selected, ranged, from, to, today, has_today, show, pick, marks)
+    ret (made, made_error)
+}
+
+// (D1244) What a calendar marks beyond the selection: a week-number column, a
+// dot under days with `events`, and unavailable days -- those in `unavailable`,
+// before `earliest` or after `latest`.
+type CalendarMarks = struct { week_numbers: bool, events: []const time.Date, unavailable: []const time.Date, earliest: time.Date, has_earliest: bool, latest: time.Date, has_latest: bool }
+
+fn date_listed(dates: []const time.Date, d: time.Date) -> bool {
+    var i = 0usize
+    while i < dates.len {
+        if same_date(dates[i], d) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+fn date_unavailable(marks: *const CalendarMarks, d: time.Date) -> bool {
+    let n = time.days_from_civil(i64(d.year), i64(d.month), i64(d.day))
+    if marks.has_earliest && n < time.days_from_civil(i64(marks.earliest.year), i64(marks.earliest.month), i64(marks.earliest.day)) { ret true }
+    if marks.has_latest && n > time.days_from_civil(i64(marks.latest.year), i64(marks.latest.month), i64(marks.latest.day)) { ret true }
+    ret date_listed(marks.unavailable, d)
+}
+
+// The ISO 8601 week of the day `count` days from 1970-01-01: the week holding the
+// year's first Thursday is week 1.
+fn iso_week_of(count: i64) -> i64 {
+    var weekday = (count + 3i64) % 7i64
+    if weekday < 0i64 { weekday += 7i64 }
+    let thursday = count - weekday + 3i64
+    let (thursday_year, _, _) = time.civil_from_days(thursday)
+    ret (thursday - time.days_from_civil(thursday_year, 1i64, 1i64)) / 7i64 + 1i64
+}
+
+// (D1244, docs/ux/components/Calendar) `calendar_marked` with `marks`: week numbers
+// stand in a column the cell's width at the start, in `label-small`
+// `on-surface-variant` -- the ISO week of the row's Monday; an event day has a 4
+// `tertiary` dot centred 4 above its cell's bottom; an unavailable day's digits
+// are `on-surface` at 38% under no state layer, a press does nothing and the tree
+// calls it disabled, though arrow keys still reach it.
+// ponytail: arrows do not skip a wholly unavailable week; a day's name is its
+// digits, not the full date.
+fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], marks: CalendarMarks) -> (widget.Node, err) {
     let year = i64(shown.year)
     let month = i64(shown.month)
     if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
@@ -2756,6 +2801,14 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let primary = style.color(t.tokens, .Primary)
     let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var lead = 0usize
+    if marks.week_numbers { lead = 1usize }
+    let grid_width = f32(7usize + lead) * cell
+    // An unavailable day's press, in the arena since the tree outlives this call.
+    let (nothing, nothing_error) = mem.alloc[widget.Submit](a, 1usize)
+    if nothing_error != ok { ret (zero, TooLarge) }
+    var no_press: widget.Submit = zero
+    nothing[0usize] = no_press
     // The header: the month and year, then Previous and Next at the end.
     let (head, head_error) = mem.alloc[widget.Node](a, 3usize)
     if head_error != ok { ret (zero, TooLarge) }
@@ -2784,9 +2837,10 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let (forward, forward_error) = month_turn(a, key + 2u64, t, .ChevronRight, "Next month", &actions[1usize], cell, icon)
     if forward_error != ok { ret (zero, forward_error) }
     head[2usize] = forward
-    // The weekdays.
-    let (names, names_error) = mem.alloc[widget.Node](a, 7usize)
+    // The weekdays, after an empty corner over the week numbers.
+    let (names, names_error) = mem.alloc[widget.Node](a, 8usize)
     if names_error != ok { ret (zero, TooLarge) }
+    if marks.week_numbers { names[0usize] = widget.box(0u64, control.sized_style(cell, cell), zero) }
     var weekday = 0usize
     while weekday < 7usize {
         var caption = control.text_options()
@@ -2797,7 +2851,7 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
         if named_error != ok { ret (zero, TooLarge) }
         named[0usize] = name_node
-        names[weekday] = widget.aligned(0u64, .Center, .Center, control.sized_style(cell, cell), named[0usize..1usize])
+        names[lead + weekday] = widget.aligned(0u64, .Center, .Center, control.sized_style(cell, cell), named[0usize..1usize])
         weekday += 1usize
     }
     // The days: blanks before the first, then a disc a day, in rows of seven.
@@ -2818,8 +2872,23 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     if rows_error != ok { ret (zero, TooLarge) }
     var week = 0usize
     while week < weeks {
-        let (cells, cells_error) = mem.alloc[widget.Node](a, 7usize)
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
         if cells_error != ok { ret (zero, TooLarge) }
+        if marks.week_numbers {
+            let monday = time.days_from_civil(year, month, 1i64) + i64(week * 7usize) - first_weekday + (7i64 - i64(week_start)) % 7i64
+            let (week_bytes, week_bytes_error) = mem.alloc[u8](a, 4usize)
+            if week_bytes_error != ok { ret (zero, TooLarge) }
+            let week_len = control.write_i64(week_bytes, iso_week_of(monday))
+            var small = control.text_options()
+            small.role = .LabelSmall
+            small.wrap = .None
+            let (week_text, week_text_error) = control.colored_text(a, 0u64, week_bytes[0usize..week_len], t, small, muted)
+            if week_text_error != ok { ret (zero, week_text_error) }
+            let (week_held, week_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if week_held_error != ok { ret (zero, TooLarge) }
+            week_held[0usize] = week_text
+            cells[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(cell, cell), week_held[0usize..1usize])
+        }
         var column = 0usize
         while column < 7usize {
             let slot = week * 7usize + column
@@ -2835,11 +2904,13 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
                 let spans = ranged && !same_date(from, to)
                 let inside = spans && within_range(date, from, to)
                 let marked = has_today && same_date(date, today) && !end
+                let unavailable = date_unavailable(&marks, date)
                 var fill = clear
                 var digit_color = ink
                 var layer_color = ink
                 if inside { digit_color = style.color(t.tokens, .OnPrimaryContainer) }
                 if marked { digit_color = primary }
+                if unavailable && !end { digit_color = control.with_alpha(ink, t.tokens.states.disabled_content) }
                 if end {
                     fill = primary
                     digit_color = style.color(t.tokens, .OnPrimary)
@@ -2848,6 +2919,7 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
                 let state = control.control_state(t, day_key, true, end)
                 var look = style.resolve(t.tokens, .Plain, state)
                 look.background = style.layer(fill, layer_color, control.state_opacity(t, state))
+                if unavailable { look.background = fill }
                 look.foreground = digit_color
                 look.border = primary
                 look.border_width = 0.0
@@ -2871,7 +2943,13 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
                 if centred_error != ok { ret (zero, TooLarge) }
                 centred[0usize] = label_node
                 let content = widget.aligned(0u64, .Center, .Center, control.sized_style(cell, cell), centred[0usize..1usize])
-                let (pressed, pressed_error) = control.pressable_states(a, day_key, t, 3u8, digits[0usize..digit_count], look, true, end, 0u32, 0u32, 0u64, &actions[1usize + day], content)
+                var day_action = &actions[1usize + day]
+                var day_states = 0u32
+                if unavailable {
+                    day_action = &nothing[0usize]
+                    day_states = accessibility.STATE_DISABLED
+                }
+                let (pressed, pressed_error) = control.pressable_states(a, day_key, t, 3u8, digits[0usize..digit_count], look, true, end, day_states, 0u32, 0u64, day_action, content)
                 if pressed_error != ok { ret (zero, pressed_error) }
                 let (tabbed, tabbed_error) = calendar_tab_stop(a, pressed, day == tab_day)
                 if tabbed_error != ok { ret (zero, tabbed_error) }
@@ -2896,6 +2974,17 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
                     layers[0usize] = widget.positioned(0u64, band_x, 0.0, band, none)
                     layers[1usize] = sized
                     made = widget.stack(0u64, control.sized_style(cell, cell), layers[0usize..2usize])
+                }
+                if date_listed(marks.events, date) {
+                    var dot = control.sized_style(4.0, 4.0)
+                    dot.background = paint.Brush { Solid: style.color(t.tokens, .Tertiary) }
+                    dot.radius = 2.0
+                    let (dotted, dotted_error) = mem.alloc[widget.Node](a, 2usize)
+                    if dotted_error != ok { ret (zero, TooLarge) }
+                    var no_children: []const widget.Node = zero
+                    dotted[0usize] = made
+                    dotted[1usize] = widget.positioned(0u64, cell * 0.5 - 2.0, cell - 8.0, dot, no_children)
+                    made = widget.stack(0u64, control.sized_style(cell, cell), dotted[0usize..2usize])
                 }
                 let (moves, moves_error) = mem.alloc[DayMove](a, 6usize)
                 if moves_error != ok { ret (zero, TooLarge) }
@@ -2926,18 +3015,18 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
                 day_node[0usize] = made
                 made = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: day_keys[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), day_node[0usize..1usize])
             }
-            cells[column] = made
+            cells[lead + column] = made
             column += 1usize
         }
-        rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..7usize])
+        rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..7usize + lead])
         week += 1usize
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    var head_style = control.sized_style(7.0 * cell, head_height)
+    var head_style = control.sized_style(grid_width, head_height)
     head_style.margin.bottom = style.Length { Px: head_below }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head[0usize..3usize])
-    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), names[0usize..7usize])
+    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), names[0usize..7usize + lead])
     parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: week_gap }, style.defaults(), rows[0usize..weeks])
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
@@ -2945,7 +3034,7 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var sem: widget.Semantics = zero
     sem.role = 30u8
     sem.label = label
-    sem.column_count = 7u32
+    sem.column_count = u32(7usize + lead)
     sem.row_count = u32(weeks)
     let (calendar_node, calendar_node_error) = mem.alloc[widget.Node](a, 1usize)
     if calendar_node_error != ok { ret (zero, TooLarge) }

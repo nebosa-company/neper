@@ -24326,3 +24326,24 @@ the whole text to assistive technology.
 
 `ui_status5_v2` squeezes "Ready" into a 30 wide bar, hovers it past the delay
 and finds its tooltip on Windows and Linux.
+
+## D1244 — Calendars mark week numbers, events and unavailable days
+
+`overlay.calendar_with` takes `CalendarMarks`, and `calendar_marked` passes
+none, so every existing caller is unchanged. With `week_numbers` a column the
+cell's width stands before the first weekday, in `label-small`
+`on-surface-variant`, holding the ISO week of each row's Monday: that is exact
+for a Monday start, and for Sunday or Saturday starts it is the ISO week most
+of the row belongs to. A day in `events` has a 4 `tertiary` dot centred 4 above
+its cell's bottom. A day in `unavailable`, before `earliest` or after `latest`
+has its digits at `on-surface` 38% under no state layer. A press on it does
+nothing and the tree calls it disabled. It stays focusable, because the spec
+lets arrow keys land on unavailable days; skipping a wholly unavailable week is
+left for later.
+
+The no-op press lives in the frame arena, explicitly zeroed. A stack local
+left a dangling context in the tree, which hung the first run, and an
+unzeroed arena slot crashed the second.
+
+`ui_pickers_v2` holds the week column, the dot's pixel, the dead presses and
+the disabled count on Windows and Linux.

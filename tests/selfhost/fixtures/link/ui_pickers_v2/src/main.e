@@ -265,6 +265,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if locale_step == 1usize && !near(day_one.x, us_first_x + 32.0) { os.exit(48i32) }
         locale_step += 1usize
     }
+    // (D1244) Marks on March 2026, Monday first: week numbers 9 to 14 in a column
+    // before Monday, a tertiary dot under the 10th, and the 12th and every day
+    // before the 3rd unavailable -- a press on them picks nothing and the tree
+    // calls them disabled.
+    var event_days: [1]time.Date = zero
+    event_days[0usize] = time.Date { year: 2026i32, month: 3u8, day: 10u8 }
+    var closed_days: [1]time.Date = zero
+    closed_days[0usize] = time.Date { year: 2026i32, month: 3u8, day: 12u8 }
+    var marks: overlay.CalendarMarks = zero
+    marks.week_numbers = true
+    marks.events = event_days[..]
+    marks.unavailable = closed_days[..]
+    marks.earliest = time.Date { year: 2026i32, month: 3u8, day: 3u8 }
+    marks.has_earliest = true
+    let picked_dates = widget.Change[time.Date] { ctx: mem.cast[*void](&stores[0usize]), invoke: on_date }
+    f = mem.arena_from(frame_storage)
+    let (marked_cal, marked_cal_error) = overlay.calendar_with(&f, 900u64, &theme, "March", first_of_march, first_of_march, false, false, first_of_march, first_of_march, first_of_march, false, picked_dates, picked_dates, marks)
+    let (marked_page, marked_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if marked_cal_error != ok || marked_page_error != ok { os.exit(82i32) }
+    marked_page[0usize] = marked_cal
+    var marked_ground = control.sized_style(600.0, 720.0)
+    marked_ground.background = paint.Brush { Solid: style.color(&tokens, .Surface) }
+    if testing.pump(&harness, widget.box(0u64, marked_ground, marked_page[0usize..1usize]), time.Instant { nanos: 3100000000i64 }) != ok { os.exit(83i32) }
+    let (marked_box, has_marked_box) = bounds(&harness, &runtime, 900u64)
+    let (monday_two, has_monday_two) = bounds(&harness, &runtime, 905u64)
+    if !has_marked_box || !has_monday_two || !near(monday_two.x, marked_box.x + 32.0) || testing.by_text(&harness, "9").count != 3usize || testing.by_text(&harness, "14").count != 3usize { os.exit(84i32) }
+    let (tenth_marked, has_tenth_marked) = bounds(&harness, &runtime, 913u64)
+    let (open_day, has_open_day) = bounds(&harness, &runtime, 914u64)
+    let (marked_shot, marked_shot_error) = testing.snapshot(&harness, a)
+    if !has_tenth_marked || !has_open_day || marked_shot_error != ok { os.exit(85i32) }
+    if !is_color(marked_shot, at(tenth_marked.x + 16.0, tenth_marked.y + 26.0), style.color(&tokens, .Tertiary)) || is_color(marked_shot, at(open_day.x + 16.0, open_day.y + 26.0), style.color(&tokens, .Tertiary)) { os.exit(86i32) }
+    var no_date: time.Date = zero
+    stores[0usize].last_date = no_date
+    let (twelfth_marked, has_twelfth_marked) = bounds(&harness, &runtime, 915u64)
+    if !has_twelfth_marked || testing.tap(&harness, twelfth_marked.x + 16.0, twelfth_marked.y + 16.0) != ok || testing.tap(&harness, monday_two.x + 16.0, monday_two.y + 16.0) != ok || stores[0usize].last_date.day != 0u8 { os.exit(87i32) }
+    if testing.tap(&harness, open_day.x + 16.0, open_day.y + 16.0) != ok || stores[0usize].last_date.day != 11u8 { os.exit(88i32) }
+    let (marked_tree, marked_tree_error) = testing.semantics(&harness)
+    if marked_tree_error != ok { os.exit(89i32) }
+    var disabled_days = 0usize
+    var marked_node = 0usize
+    while marked_node < marked_tree.nodes.len {
+        if marked_tree.nodes[marked_node].role == .Button && marked_tree.nodes[marked_node].state.disabled { disabled_days += 1usize }
+        marked_node += 1usize
+    }
+    if disabled_days != 3usize { os.exit(90i32) }
     // (D1230) Times in the locale's clock, and typed times in any common form.
     let (clock_bytes, clock_bytes_error) = mem.alloc[u8](a, 16usize)
     if clock_bytes_error != ok { os.exit(50i32) }
