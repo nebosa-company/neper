@@ -26,6 +26,7 @@ use e.ui.collection
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.overlay
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -381,6 +382,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 501u64) { os.exit(80i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 502u64) { os.exit(81i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 501u64) { os.exit(82i32) }
+    // (D1236) A row with commands has a context menu: a secondary press on Alpha
+    // opens Rename, which runs and closes the menu.
+    var rename_commands: [1]overlay.MenuCommand = zero
+    rename_commands[0usize] = overlay.menu_command("Rename", s.press)
+    s.files[0usize].commands = rename_commands[..]
+    var menu_step = 0usize
+    while menu_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        let (menu_root, menu_root_error) = build(&f, &theme, s)
+        if menu_root_error != ok || testing.pump(&harness, menu_root, now) != ok { os.exit(97i32) }
+        if menu_step == 0usize {
+            let (alpha_row, has_alpha_row) = bounds(&harness, &runtime, 101u64)
+            if !has_alpha_row || testing.by_role(&harness, .Menu).count != 0usize { os.exit(98i32) }
+            var right_press = testing.pointer_at(alpha_row.x + 120.0, alpha_row.y + 20.0)
+            right_press.buttons = 2u32
+            right_press.changed = .Secondary
+            if testing.send(&harness, input.Event { PointerDown: right_press }) != ok { os.exit(99i32) }
+            right_press.buttons = 0u32
+            if testing.send(&harness, input.Event { PointerUp: right_press }) != ok { os.exit(100i32) }
+        }
+        if menu_step == 1usize {
+            let (row_menu_tree, row_menu_tree_error) = testing.semantics(&harness)
+            if row_menu_tree_error != ok { os.exit(101i32) }
+            let (rename, has_rename) = find(row_menu_tree, .MenuItem, "Rename")
+            let presses_before = s.presses
+            if !has_rename || testing.tap(&harness, rename.bounds.x + 20.0, rename.bounds.y + rename.bounds.height * 0.5) != ok || s.presses != presses_before + 1usize { os.exit(102i32) }
+        }
+        if menu_step == 2usize && testing.by_role(&harness, .Menu).count != 0usize { os.exit(103i32) }
+        menu_step += 1usize
+    }
+    s.files[0usize].commands = rename_commands[0usize..0usize]
+    f = mem.arena_from(frame_storage)
+    let (plain_root, plain_root_error) = build(&f, &theme, s)
+    if plain_root_error != ok || testing.pump(&harness, plain_root, now) != ok { os.exit(104i32) }
     // (D1235) Page Down reaches the same column a page of rows below, stopping at
     // the last row; Page Up returns.
     if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 503u64) { os.exit(94i32) }

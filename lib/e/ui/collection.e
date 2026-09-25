@@ -3718,8 +3718,47 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // A row's content (D979, docs/ux/components/Row): the headline, the supporting
 // line and the overline (either may be empty), the meta at the end, a leading
 // and a trailing glyph, whether it is selected (and then marked with a trailing
-// check, for a single-select list), disabled, and its primary action.
-type RowItem = struct { headline: str, supporting: str, overline: str, meta: str, leading: control.GlyphKind, has_leading: bool, trailing: control.GlyphKind, has_trailing: bool, selected: bool, check: bool, disabled: bool, action: widget.Submit }
+// check, for a single-select list), disabled, and its primary action. (D1236)
+// `commands` (empty for none) are the row's context menu.
+type RowItem = struct { headline: str, supporting: str, overline: str, meta: str, leading: control.GlyphKind, has_leading: bool, trailing: control.GlyphKind, has_trailing: bool, selected: bool, check: bool, disabled: bool, action: widget.Submit, commands: []const overlay.MenuCommand }
+
+// (D1236) A row's context menu, kept across frames on the row: whether it is open.
+type RowMenu = struct { open: bool }
+type RowMenuAsk = struct { runtime: *widget.Runtime, cell: *RowMenu, has_cell: bool, action: widget.Submit }
+
+fn row_menu_cell(t: *const control.Theme, key: widget.Key) -> (*RowMenu, bool) {
+    var none: *RowMenu = zero
+    if mem.address_of(t.runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    let (kept, _, kept_error) = widget.state[RowMenu](&build, key, RowMenu { open: false })
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
+fn row_menu_action(ctx: *void, action: u32) -> err {
+    let ask = back_of[RowMenuAsk](ctx)
+    if action == accessibility.ACTION_PRESS { ret widget.fire_submit(ask.action) }
+    if action == accessibility.ACTION_SHOW_MENU && ask.has_cell {
+        ask.cell.open = true
+        widget.request_animation_frame(ask.runtime)
+    }
+    ret ok
+}
+
+fn row_menu_hold(ctx: *void) -> err {
+    ret row_menu_action(ctx, accessibility.ACTION_SHOW_MENU)
+}
+
+fn row_menu_close(ctx: *void) -> err {
+    let ask = back_of[RowMenuAsk](ctx)
+    if ask.has_cell { ask.cell.open = false }
+    widget.request_animation_frame(ask.runtime)
+    ret ok
+}
 
 fn row_item(headline: str) -> RowItem {
     var out: RowItem = zero
@@ -3767,17 +3806,55 @@ fn row_lines(item: *const RowItem) -> usize {
 // part is `on-surface` at 38%, under no layer and out of the Tab order. A tap
 // runs the action; a list item in the tree named by the headline, described by
 // the supporting line, at `index` of `count`.
-// ponytail: no avatar, thumbnail or control leading slot, no context menu,
-// long press or selection animation; the focus ring is the runtime's, inset
-// where the list clips it.
+// (D1236) With `commands` the row has a context menu (a secondary press, the Menu
+// key, Shift+F10, or a touch hold).
+// ponytail: no avatar, thumbnail or control leading slot, or selection
+// animation; the focus ring is the runtime's, inset where the list clips it.
 fn row_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32) -> (widget.Node, err) {
     let (made, made_error) = row_sized(a, key, t, item, index, count, width, row_height(t, row_lines(item)))
     ret (made, made_error)
 }
 
 fn row_sized(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32, height: f32) -> (widget.Node, err) {
-    let (made, made_error) = row_acting(a, key, t, item, index, count, width, height, accessibility.ACTION_PRESS, widget.Change[u32] { ctx: ctx_of(&item.action), invoke: submit_semantic_action }, "")
-    ret (made, made_error)
+    if item.commands.len == 0usize || item.disabled || mem.address_of(t.runtime) == 0usize {
+        let (made, made_error) = row_acting(a, key, t, item, index, count, width, height, accessibility.ACTION_PRESS, widget.Change[u32] { ctx: ctx_of(&item.action), invoke: submit_semantic_action }, "")
+        ret (made, made_error)
+    }
+    // (D1236) A row with commands offers Show menu (and, on touch, a 500 ms hold)
+    // and stands beside its open context menu, keyed `key ^ fnv1a64("row-menu")`.
+    let (menu_cell, has_cell) = row_menu_cell(t, key)
+    let (asks, asks_error) = mem.alloc[RowMenuAsk](a, 1usize)
+    if asks_error != ok { ret (zero, TooLarge) }
+    asks[0usize] = RowMenuAsk { runtime: t.runtime, cell: menu_cell, has_cell: has_cell, action: item.action }
+    let (made, made_error) = row_acting(a, key, t, item, index, count, width, height, accessibility.ACTION_PRESS | accessibility.ACTION_SHOW_MENU, widget.Change[u32] { ctx: ctx_of(&asks[0usize]), invoke: row_menu_action }, "")
+    if made_error != ok { ret (zero, made_error) }
+    let touch = density_of(t) == 2usize
+    let (hooks, hooks_error) = mem.alloc[widget.Submit](a, 2usize)
+    if hooks_error != ok { ret (zero, TooLarge) }
+    hooks[0usize] = widget.Submit { ctx: ctx_of(&asks[0usize]), invoke: row_menu_hold }
+    hooks[1usize] = widget.Submit { ctx: ctx_of(&asks[0usize]), invoke: row_menu_close }
+    if touch {
+        let hold_error = widget.long_press(t.runtime, key, &hooks[0usize])
+        if hold_error != ok { ret (zero, hold_error) }
+    }
+    if !has_cell || !menu_cell.open { ret (made, ok) }
+    let menu_key = key ^ hash.fnv1a64("row-menu")
+    var menu: widget.Node = zero
+    if touch {
+        let (floating, floating_error) = overlay.context_menu_touch_of(a, menu_key, t, key, item.headline, item.commands, true, &hooks[1usize])
+        if floating_error != ok { ret (zero, floating_error) }
+        menu = floating
+    } else {
+        let (at, pointed) = widget.context_point(t.runtime)
+        let (floating, floating_error) = overlay.context_menu_of(a, menu_key, t, key, item.headline, item.commands, true, &hooks[1usize], at, pointed)
+        if floating_error != ok { ret (zero, floating_error) }
+        menu = floating
+    }
+    let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+    if both_error != ok { ret (zero, TooLarge) }
+    both[0usize] = made
+    both[1usize] = menu
+    ret (widget.box(0u64, style.defaults(), both[0usize..2usize]), ok)
 }
 
 // (D1196) A row whose enabled semantics offer `actions` and (D1197) the named
