@@ -22543,3 +22543,15 @@ at the source ends; stable source keys continue to drive reconciliation.
 `ui_collections_v2` holds the six-row start, nine-row middle and six-row end
 windows for a three-row viewport on Windows and Linux. The visible surface is
 unchanged, so no duplicate screenshot is added.
+
+## D1087 — VirtualGrid keys reveal unbuilt tiles
+
+VirtualList's deferred stable-key move record is generalized and reused by
+VirtualGrid. Each built tile binds all eight allowed shortcuts: arrows preserve
+its grid relationship, Page Up and Page Down move by a viewport of rows, and
+Home and End reach the set boundaries. The last short row clamps to its nearest
+tile, and every vertical move requests only the offset needed to reveal it.
+
+`ui_collections_v2` holds two-dimensional movement, paging, both ends, the short
+last row, caller-owned offsets and deferred focus on Windows and Linux. This is
+a behavior-only change on the reviewed VirtualGrid surface.
