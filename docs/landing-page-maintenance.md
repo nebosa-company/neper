@@ -93,6 +93,9 @@ The editable records are:
 
 - `docs/video/neper-capabilities.jsx` — Higgsedit composition, on-screen copy,
   timing, syntax highlighting, and poster render;
+- `docs/video/neper-capabilities/` — self-contained editable project, original
+  narration stems, clean render, source images, fonts, and font licenses;
+- `docs/video/rebuild.py` — rebuilds and verifies the published video locally;
 - `docs/video/neper-capabilities-narration.json` — narration text, time windows,
   voice choice, and generated job IDs;
 - `docs/video/voice.lock` — locked Gideon preset ID;
