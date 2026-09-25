@@ -474,12 +474,9 @@ fn flat_node(n: *const Node) -> os.AccessibleNode {
     ret os.AccessibleNode { id: n.id.slot, generation: n.id.generation, parent: 0u32, parent_generation: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), sort: sort_code(n.sort), live: live_code(n.live), row: n.position.row, column: n.position.column, row_count: n.position.row_count, column_count: n.position.column_count, level: n.level, selection_start: n.selection_start, selection_end: n.selection_end, labelled_by: n.relations.labelled_by.slot, labelled_by_generation: n.relations.labelled_by.generation, described_by: n.relations.described_by.slot, described_by_generation: n.relations.described_by.generation, error_by: n.relations.error_by.slot, error_by_generation: n.relations.error_by.generation, controls: n.relations.controls.slot, controls_generation: n.relations.controls.generation, active: n.relations.active.slot, active_generation: n.relations.active.generation, relation_flags: relation_bits(n.relations), x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
 }
 
-// The tree flattened into the bridge's records and handed to the host: every node
-// once, its parent found from the children lists; nothing of the tree is kept.
-fn publish(window_value: window.Id, t: *const Tree) -> err {
-    let (state, window_error) = window.state_by_id(window_value)
-    if window_error != ok { ret Invalid }
-    var storage: [256]os.AccessibleNode = zero
+// Flatten every node into caller-owned bridge storage, finding each parent from
+// the tree's child lists.
+fn flatten_into(t: *const Tree, storage: []os.AccessibleNode) -> err {
     if t.nodes.len > storage.len { ret Invalid }
     var i = 0usize
     while i < t.nodes.len {
@@ -505,7 +502,17 @@ fn publish(window_value: window.Id, t: *const Tree) -> err {
         }
         i += 1usize
     }
-    let published = os.accessibility_publish(state.handle, storage[0usize..t.nodes.len])
+    ret ok
+}
+
+// The tree flattened into window-owned reusable records and handed to the host.
+fn publish(window_value: window.Id, t: *const Tree) -> err {
+    let (state, window_error) = window.state_by_id(window_value)
+    if window_error != ok { ret Invalid }
+    let (storage, storage_error) = window.accessibility_storage(window_value, t.nodes.len)
+    if storage_error != ok { ret Invalid }
+    if flatten_into(t, storage) != ok { ret Invalid }
+    let published = os.accessibility_publish(state.handle, storage)
     if published == os.Unsupported { ret Unsupported }
     if published != ok { ret Invalid }
     ret ok

@@ -42,6 +42,7 @@ type State = struct {
     arena: *mem.Arena,
     handle: os.Window,
     scratch: []u32,
+    accessibility: []os.AccessibleNode,
     queue: *gpu.Queue,
     frames: *gpu.Target,
     drawable: scene.Target,
@@ -102,7 +103,7 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
-    states[0usize] = State { arena: a, handle: handle, scratch: scratch, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false }
+    states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false }
     generations[slot] += 1u32
     slots[slot] = &states[0usize]
     live[slot] = true
@@ -124,6 +125,20 @@ fn state_by_id(id: Id) -> (*State, err) {
     var none: *State = zero
     if usize(id.slot) >= MAX_WINDOWS || !live[usize(id.slot)] || generations[usize(id.slot)] != id.generation { ret (none, Closed) }
     ret (slots[usize(id.slot)], ok)
+}
+
+fn accessibility_storage(id: Id, count: usize) -> ([]os.AccessibleNode, err) {
+    var nothing: []os.AccessibleNode = zero
+    let (s, state_error) = state_by_id(id)
+    if state_error != ok { ret (nothing, state_error) }
+    if s.accessibility.len < count {
+        // ponytail: a larger semantic tree leaves the prior arena slice behind;
+        // geometric or caller-sized storage is the upgrade if repeated growth matters.
+        let (grown, grown_error) = mem.alloc[os.AccessibleNode](s.arena, count)
+        if grown_error != ok { ret (nothing, Invalid) }
+        s.accessibility = grown
+    }
+    ret (s.accessibility[0usize..count], ok)
 }
 
 // A frame request the input queue has not delivered yet, taken once.
