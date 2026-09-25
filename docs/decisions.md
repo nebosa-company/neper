@@ -22816,3 +22816,14 @@ conversion instead of rejecting trees beyond a 256-record stack array.
 
 `ui_algorithms` holds a larger tree and `ui_accessibility` holds the general path
 on Windows and Linux. The reviewed surface is unchanged.
+
+## D1115 — Runtime focus order uses element capacity
+
+The widget runtime allocates one focus-order buffer at its declared element
+capacity and reuses it for Tab traversal, overlay autofocus, semantic landmarks,
+menu access keys and menu or collection typeahead. No path stops at 256 built
+focusables or 64 overlay focusables.
+
+`ui_algorithms` holds Tab across the old boundary and List typeahead to item 300
+on Windows and Linux. Virtual collections still need source-level lookup beyond
+their built window. The reviewed surface is unchanged.

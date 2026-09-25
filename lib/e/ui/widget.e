@@ -326,6 +326,7 @@ type State = struct {
     renderer: *scene.Renderer,
     limits: Limits,
     elements: []Element,
+    focus_order: []u32,
     cells: []Cell,
     storage: []u8,
     measured: []Measured,
@@ -655,6 +656,8 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
     if states_error != ok { ret (zero, TooLarge) }
     let (elements, elements_error) = mem.alloc[Element](a, limits.max_elements)
     if elements_error != ok { ret (zero, TooLarge) }
+    let (focus_order, focus_order_error) = mem.alloc[u32](a, limits.max_elements)
+    if focus_order_error != ok { ret (zero, TooLarge) }
     let (cells, cells_error) = mem.alloc[Cell](a, limits.max_states)
     if cells_error != ok { ret (zero, TooLarge) }
     let (storage, storage_error) = mem.alloc[u8](a, limits.state_bytes + 16usize)
@@ -682,6 +685,7 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
     s.renderer = renderer
     s.limits = limits
     s.elements = elements
+    s.focus_order = focus_order
     s.cells = cells
     s.storage = storage
     s.measured = measured
@@ -2799,8 +2803,8 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
         let overlay_element = usize(s.overlays[o])
         if s.elements[overlay_element].wants_focus {
             s.elements[overlay_element].wants_focus = false
-            var order: [64]u32 = zero
-            let count = collect_focusable(s, overlay_element, order[..], 0usize)
+            let order = s.focus_order
+            let count = collect_focusable(s, overlay_element, order, 0usize)
             if count > 0usize {
                 s.focus = order[0usize]
                 s.has_focus = true
@@ -3498,8 +3502,8 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
         move_focus(s, code == 38u32)
         ret true
     }
-    var order: [256]u32 = zero
-    let count = collect_focusable(s, focus_root(s), order[..], 0usize)
+    let order = s.focus_order
+    let count = collect_focusable(s, focus_root(s), order, 0usize)
     if count == 0usize { ret true }
     if code == 36u32 || code == 35u32 {
         s.menu_typeahead_len = 0usize
@@ -3571,8 +3575,8 @@ fn focus_collection_prefix(s: *State, order: []const u32, count: usize, current:
     ret false
 }
 
-// Buffered typeahead for built List, GridView and Tree items. ponytail: only the first
-// 256 built focusables participate; virtual sources need a source-level lookup.
+// Buffered typeahead for built List, GridView and Tree items.
+// ponytail: virtual sources need a source-level lookup beyond their built rows.
 fn collection_typeahead_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     if !s.has_focus || k.modifiers.shift || k.modifiers.control || k.modifiers.alt || k.modifiers.meta { ret false }
     let (owner, item_role, has_owner) = collection_item_owner(s, usize(s.focus))
@@ -3585,8 +3589,8 @@ fn collection_typeahead_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
         s.typeahead_context = 0u8
         ret false
     }
-    var order: [256]u32 = zero
-    let count = collect_focusable(s, root, order[..], 0usize)
+    let order = s.focus_order
+    let count = collect_focusable(s, root, order, 0usize)
     if count == 0usize { ret true }
     var current = 0usize
     var i = 0usize
@@ -3667,8 +3671,8 @@ fn menu_item_access_key(s: *State, logical: u32) -> (bool, err) {
     if !focused_item { ret (false, ok) }
     let typed = unicode.to_lower_simple(logical)
     if !unicode.is_alphabetic(typed) { ret (false, ok) }
-    var order: [256]u32 = zero
-    let count = collect_focusable(s, focus_root(s), order[..], 0usize)
+    let order = s.focus_order
+    let count = collect_focusable(s, focus_root(s), order, 0usize)
     var i = 0usize
     while i < count {
         let candidate = usize(order[i])
@@ -3690,8 +3694,8 @@ fn menu_item_access_key(s: *State, logical: u32) -> (bool, err) {
 // the trapping scope's subtree when the focus sits in one, wrapping at the ends.
 fn move_focus(s: *State, backward: bool) {
     let root = focus_root(s)
-    var order: [256]u32 = zero
-    let count = collect_focusable(s, root, order[..], 0usize)
+    let order = s.focus_order
+    let count = collect_focusable(s, root, order, 0usize)
     if count == 0usize { ret }
     var current = count
     if s.has_focus {
@@ -3750,8 +3754,8 @@ fn collect_semantic_targets(s: *State, index: usize, roles: []const u8, out: []u
 fn focus_semantics(widget_runtime: *Runtime, roles: []const u8, backward: bool) -> err {
     let (s, state_error) = state_of(widget_runtime)
     if state_error != ok { ret state_error }
-    var order: [256]u32 = zero
-    let count = collect_semantic_targets(s, usize(s.root), roles, order[..], 0usize)
+    let order = s.focus_order
+    let count = collect_semantic_targets(s, usize(s.root), roles, order, 0usize)
     if count == 0usize { ret ok }
     var current = count
     if s.has_focus {
