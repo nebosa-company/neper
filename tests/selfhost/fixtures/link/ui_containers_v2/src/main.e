@@ -105,6 +105,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     chosen.variant = .Outlined
     chosen.selected = true
     let (five, e5) = control.card_of(a, 22u64, t, chosen, fillers[3usize..4usize])
+    var dragged_options = lifted
+    dragged_options.dragged = true
+    dragged_options.title = "Dragging"
+    dragged_options.action = &s.actions[7usize]
+    let (dragged_card, dragged_error) = control.card_of(a, 23u64, t, dragged_options, fillers[2usize..3usize])
     // Group boxes.
     var boxed = control.group_options()
     boxed.width = 200.0
@@ -135,25 +140,26 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     contents[1usize] = blank(20.0, 10.0)
     contents[2usize] = blank(20.0, 10.0)
     let (ten, e10) = control.accordion_of(a, 60u64, t, "Sections", s.words[0usize..3usize], contents[0usize..3usize], s.open[0usize..3usize], s.actions[3usize..6usize], folded)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || collapsed_error != ok || e8 != ok || e9 != ok || e10 != ok { ret (zero, e1) }
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || dragged_error != ok || e6 != ok || e7 != ok || collapsed_error != ok || e8 != ok || e9 != ok || e10 != ok { ret (zero, e1) }
     items[0usize] = one
     items[1usize] = two
     items[2usize] = three
     items[3usize] = four
     items[4usize] = five
-    items[5usize] = six
-    items[6usize] = seven
-    items[7usize] = collapsed_group
-    items[8usize] = eight
-    items[9usize] = nine
-    items[10usize] = ten
+    items[5usize] = dragged_card
+    items[6usize] = six
+    items[7usize] = seven
+    items[8usize] = collapsed_group
+    items[9usize] = eight
+    items[10usize] = nine
+    items[11usize] = ten
     var page = style.defaults()
     page.width = style.Length { Px: 300.0 }
     page.height = style.Length { Px: 900.0 }
     page.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let pad = style.Length { Px: 12.0 }
     page.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, page, items[0usize..11usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, page, items[0usize..12usize]), ok)
 }
 
 fn at(x: f32, y: f32) -> usize {
@@ -233,9 +239,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (lifted, has_lifted) = bounds(&harness, &runtime, 20u64)
     let (filled, has_filled) = bounds(&harness, &runtime, 21u64)
     let (chosen, has_chosen) = bounds(&harness, &runtime, 22u64)
-    if !has_lifted || !has_filled || !has_chosen || !near(lifted.width, 120.0) || !near(lifted.height, 42.0) || !near(chosen.height, 52.0) { os.exit(14i32) }
+    let (dragged, has_dragged) = bounds(&harness, &runtime, 23u64)
+    if !has_lifted || !has_filled || !has_chosen || !has_dragged || !near(lifted.width, 120.0) || !near(lifted.height, 42.0) || !near(chosen.height, 52.0) { os.exit(14i32) }
     if !is_color(shot, at(lifted.x + 60.0, lifted.y + 21.0), style.color(&tokens, .SurfaceContainerLow)) || !is_color(shot, at(filled.x + 60.0, filled.y + 21.0), style.color(&tokens, .SurfaceContainerHighest)) { os.exit(15i32) }
     if !is_color(shot, at(chosen.x + 1.0, chosen.y + 26.0), primary) || !is_color(shot, at(chosen.x + 60.0, chosen.y + 26.0), page) || !is_color(shot, at(chosen.x + 120.0 - 8.0 - 21.0, chosen.y + 8.0 + 12.0), primary) { os.exit(16i32) }
+    let dragged_ground = style.layer(style.color(&tokens, .SurfaceContainerLow), style.color(&tokens, .OnSurface), tokens.states.dragged)
+    if !is_color(shot, at(dragged.x + 60.0, dragged.y + 21.0), dragged_ground) || is_color(shot, at(dragged.x + 60.0, dragged.y + dragged.height + 4.0), page) { os.exit(50i32) }
     // The pressable card is a Button named by its title, and fires on a tap.
     if testing.by_label(&harness, "Open").count != 1usize || testing.by_role(&harness, .Button).count == 0usize { os.exit(17i32) }
     if testing.tap(&harness, filled.x + 60.0, filled.y + 21.0) != ok || stores[0usize].hits[0usize] != 1u32 { os.exit(18i32) }

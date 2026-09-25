@@ -941,7 +941,7 @@ type CardVariant = enum u8 { Elevated, Filled, Outlined }
 // padding, whether it is enabled and selected, the title and supporting text it
 // is named and described by, and the action a press on the whole card fires
 // (none: a static card).
-type CardOptions = struct { variant: CardVariant, width: f32, dense: bool, enabled: bool, selected: bool, title: str, description: str, action: *const widget.Submit }
+type CardOptions = struct { variant: CardVariant, width: f32, dense: bool, enabled: bool, selected: bool, dragged: bool, title: str, description: str, action: *const widget.Submit }
 
 fn card_options() -> CardOptions {
     var out: CardOptions = zero
@@ -960,7 +960,8 @@ fn card_options() -> CardOptions {
 // top end (with a width to place it). Disabled is `on-surface` 12% with the
 // content at 38%, no shadow, not focusable.
 // ponytail: no media, header or actions slots (the caller composes the column),
-// no dragged look, no loading skeletons; add them when a card grid needs them.
+// no loading skeletons. ponytail: dragged omits the 1.5-degree tilt and 102%
+// scale until nodes have a visual transform independent of layout.
 fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, children: []const widget.Node) -> (widget.Node, err) {
     let pressed = mem.address_of(options.action) != 0usize
     let state = control_state(t, key, options.enabled && pressed, options.selected)
@@ -974,7 +975,10 @@ fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions
         ground = style.color(t.tokens, .Background)
         raised = 0usize
     }
-    if pressed && options.enabled {
+    if options.dragged && options.enabled {
+        ground = style.layer(ground, style.color(t.tokens, .OnSurface), t.tokens.states.dragged)
+        raised = 4usize
+    } else if pressed && options.enabled {
         ground = style.layer(ground, style.color(t.tokens, .OnSurface), state_opacity(t, state))
         if state.hovered { raised += 1usize }
     }
