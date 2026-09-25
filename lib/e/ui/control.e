@@ -1046,9 +1046,9 @@ fn group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, childr
 type GroupVariant = enum u8 { Outlined, Filled, Plain }
 
 // A group box's options: its box, the description under the title, the
-// group-level message (set: the group is invalid), whether it is enabled, and its
-// width (0: its widest row's).
-type GroupOptions = struct { variant: GroupVariant, description: str, message: str, enabled: bool, width: f32 }
+// group-level message (set: the group is invalid), whether it is enabled, its
+// width (0: its widest row's), and an optional caller-owned collapsed form.
+type GroupOptions = struct { variant: GroupVariant, description: str, message: str, enabled: bool, width: f32, expanded: bool, summary: str, toggle: *const widget.Submit }
 
 fn group_options() -> GroupOptions {
     var out: GroupOptions = zero
@@ -1064,11 +1064,12 @@ fn group_options() -> GroupOptions {
 // 16, 1px `outline-variant` dividers between them (plain: no box and no
 // dividers). Invalid, the edge is 2px `error` and the message stands 8 below in
 // `body-small` `error` after a 16 `alert` mark 4 from it. Disabled, the title and
-// rows are at 38% and the edge `on-surface` 12%, the description kept. A Group
-// named by the title.
-// ponytail: no collapsible form (chevron title row with Expanded) yet.
+// rows are at 38% and the edge `on-surface` 12%, the description kept. With a
+// toggle, the title is an inset-ring Button with Expanded/Controls, a trailing
+// chevron and the caller's collapsed summary. A Group named by the title.
 fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: GroupOptions, children: []const widget.Node) -> (widget.Node, err) {
     let plain = options.variant == .Plain
+    let collapsible = mem.address_of(options.toggle) != 0usize
     var row_h: f32 = t.tokens.sizes.control_lg
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { row_h = t.tokens.sizes.control_xl }
     var fade: f32 = 1.0
@@ -1122,21 +1123,74 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     let (heading, heading_error) = colored_text(a, 0u64, label, t, caption, with_alpha(style.color(t.tokens, .OnSurface), fade))
     if heading_error != ok { ret (zero, heading_error) }
     heads[0usize] = heading
+    if collapsible {
+        let (title_bits, title_bits_error) = mem.alloc[widget.Node](a, 3usize)
+        if title_bits_error != ok { ret (zero, TooLarge) }
+        title_bits[0usize] = heading
+        title_bits[1usize] = widget.spacer(0u64, 1.0)
+        var chevron: GlyphKind = .ChevronRight
+        if t.tokens.direction == .RightToLeft { chevron = .ChevronLeft }
+        if options.expanded { chevron = .ChevronDown }
+        let (mark, mark_error) = icon_square(a, with_alpha(style.color(t.tokens, .OnSurfaceVariant), fade), chevron, t.tokens.sizes.icon_sm)
+        if mark_error != ok { ret (zero, mark_error) }
+        title_bits[2usize] = mark
+        var title_style = style.defaults()
+        if options.width > 0.0 { title_style.width = style.Length { Px: options.width } }
+        let title_line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, title_style, title_bits[0usize..3usize])
+        let title_state = control_state(t, key + 1u64, options.enabled, false)
+        var look = style.resolve(t.tokens, .Plain, title_state)
+        look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), state_opacity(t, title_state))
+        look.foreground = style.color(t.tokens, .OnSurface)
+        look.border_width = 0.0
+        look.custom_padding = true
+        look.padding = 4.0
+        look.padding_y = 2.0
+        look.min_height = 24.0
+        if options.width > 0.0 { look.min_width = options.width }
+        var states = 0u32
+        var actions = accessibility.ACTION_EXPAND
+        if options.expanded {
+            states = accessibility.STATE_EXPANDED
+            actions = accessibility.ACTION_COLLAPSE
+        }
+        let (built, button_error) = pressable_states(a, key + 1u64, t, 3u8, label, look, options.enabled, false, states, actions, key + 2u64, options.toggle, title_line)
+        if button_error != ok { ret (zero, button_error) }
+        var title_button = built
+        switch title_button.kind {
+        case .Semantics as button_sem:
+            var inset_sem = button_sem
+            inset_sem.focus_inset = 3.0
+            title_button.kind = widget.Kind { Semantics: inset_sem }
+        default:
+            title_button = built
+        }
+        let (keyed, keyed_error) = toggle_keys(a, options.expanded, t.tokens.direction == .RightToLeft, options.toggle, title_button)
+        if keyed_error != ok { ret (zero, keyed_error) }
+        heads[0usize] = keyed
+    }
     var head_count = 1usize
-    if options.description.len != 0usize {
+    var note = options.description
+    if collapsible && !options.expanded && options.summary.len > 0usize { note = options.summary }
+    if note.len != 0usize {
         var said = text_options()
         said.role = .BodySmall
         said.max_lines = 2u32
-        let (described, described_error) = colored_text(a, 0u64, options.description, t, said, style.color(t.tokens, .OnSurfaceVariant))
+        let (described, described_error) = colored_text(a, 0u64, note, t, said, style.color(t.tokens, .OnSurfaceVariant))
         if described_error != ok { ret (zero, described_error) }
         heads[1usize] = described
         head_count = 2usize
     }
     var head_style = style.defaults()
     head_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    if collapsible { head_style.padding.left = style.Length { Px: 0.0 } }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 2.0 }, head_style, heads[0usize..head_count])
-    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, box_style, rows[0usize..count])
-    var part_count = 2usize
+    var part_count = 1usize
+    if !collapsible || options.expanded {
+        var box_key = 0u64
+        if collapsible { box_key = key + 2u64 }
+        parts[part_count] = widget.flex(box_key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, box_style, rows[0usize..count])
+        part_count += 1usize
+    }
     if options.message.len != 0usize {
         let alarm = style.color(t.tokens, .Error)
         let (said, said_error) = mem.alloc[widget.Node](a, 2usize)
@@ -1149,8 +1203,8 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         let (message_node, message_error) = colored_text(a, 0u64, options.message, t, words, alarm)
         if message_error != ok { ret (zero, message_error) }
         said[1usize] = message_node
-        parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), said[0usize..2usize])
-        part_count = 3usize
+        parts[part_count] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), said[0usize..2usize])
+        part_count += 1usize
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
@@ -1158,7 +1212,7 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
-    sem.hint = options.description
+    sem.hint = note
     if options.message.len != 0usize {
         sem.hint = options.message
         sem.states = accessibility.STATE_INVALID

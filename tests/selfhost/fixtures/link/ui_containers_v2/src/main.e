@@ -6,8 +6,9 @@
 // `primary` check disc 8 in from the top end, and a pressable card is a Button
 // firing its action; a group box sets its rows 48 tall on `surface` in a 1px
 // `outline-variant` edge with a divider between them, 8 under the title, and an
-// invalid one wears a 2px `error` edge; a disclosure's header is 40 tall with the
-// content 40 in and 4 below, Left shutting it; an expander is a 56 header in a
+// invalid one wears a 2px `error` edge; a collapsible box has an inset-ring title
+// Button, summary, trailing chevron and caller-owned body; a disclosure's header
+// is 40 tall with the content 40 in and 4 below, Left shutting it; an expander is a 56 header in a
 // 1px `outline-variant` edge; an accordion is `surface-container-low` with 48
 // headers (64 with a supporting line), several open at once, 1px dividers between
 // sections, and Down and End moving focus between headers.
@@ -30,7 +31,7 @@ use e.ui.testing
 use e.ui.widget
 
 type Hit = struct { store: *Store, index: usize }
-type Store = struct { hits: [8]u32, targets: [8]Hit, actions: [8]widget.Submit, words: [3]str, lines: [3]str, open: [3]bool, disclosed: bool }
+type Store = struct { hits: [8]u32, targets: [8]Hit, actions: [8]widget.Submit, words: [3]str, lines: [3]str, open: [3]bool, disclosed: bool, group_open: bool }
 
 fn on_hit(ctx: *void) -> err {
     let h = mem.cast[*Hit](ctx)
@@ -41,6 +42,25 @@ fn on_hit(ctx: *void) -> err {
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.01 && d > -0.01
+}
+
+fn same(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn has_action(node: accessibility.Node, action: accessibility.Action) -> bool {
+    var i = 0usize
+    while i < node.actions.len {
+        if node.actions[i] == action { ret true }
+        i += 1usize
+    }
+    ret false
 }
 
 fn close_to(value: u8, expected: f32) -> bool {
@@ -91,6 +111,15 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     var wrong = boxed
     wrong.message = "Choose one"
     let (seven, e7) = control.group_box_of(a, 31u64, t, "Targets", wrong, fillers[6usize..7usize])
+    let (collapsed_children, collapsed_children_error) = mem.alloc[widget.Node](a, 1usize)
+    if collapsed_children_error != ok { ret (zero, collapsed_children_error) }
+    collapsed_children[0usize] = widget.box(320u64, control.sized_style(20.0, 10.0), zero)
+    var collapsed = boxed
+    collapsed.description = "Rare settings"
+    collapsed.summary = "4 settings, 1 changed"
+    collapsed.expanded = s.group_open
+    collapsed.toggle = &s.actions[6usize]
+    let (collapsed_group, collapsed_error) = control.group_box_of(a, 32u64, t, "Advanced", collapsed, collapsed_children[0usize..1usize])
     // A disclosure, open; an expander, shut; an accordion with two open.
     let (eight, e8) = control.disclosure(a, 40u64, t, "Details", s.disclosed, &s.actions[1usize], widget.box(45u64, control.sized_style(20.0, 10.0), zero))
     var wide = control.disclosure_options()
@@ -105,7 +134,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     contents[1usize] = blank(20.0, 10.0)
     contents[2usize] = blank(20.0, 10.0)
     let (ten, e10) = control.accordion_of(a, 60u64, t, "Sections", s.words[0usize..3usize], contents[0usize..3usize], s.open[0usize..3usize], s.actions[3usize..6usize], folded)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret (zero, e1) }
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || collapsed_error != ok || e8 != ok || e9 != ok || e10 != ok { ret (zero, e1) }
     items[0usize] = one
     items[1usize] = two
     items[2usize] = three
@@ -113,16 +142,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     items[4usize] = five
     items[5usize] = six
     items[6usize] = seven
-    items[7usize] = eight
-    items[8usize] = nine
-    items[9usize] = ten
+    items[7usize] = collapsed_group
+    items[8usize] = eight
+    items[9usize] = nine
+    items[10usize] = ten
     var page = style.defaults()
     page.width = style.Length { Px: 300.0 }
     page.height = style.Length { Px: 900.0 }
     page.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let pad = style.Length { Px: 12.0 }
     page.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, page, items[0usize..10usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, page, items[0usize..11usize]), ok)
 }
 
 fn at(x: f32, y: f32) -> usize {
@@ -215,6 +245,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_group || !has_wrong || !near(group.height, 8.0 + 97.0) || !near(group.width, 200.0) { os.exit(19i32) }
     if !is_color(shot, at(group.x + 0.5, group.y + 8.0 + 24.0), edge) || !is_color(shot, at(group.x + 100.0, group.y + 8.0 + 24.0), page) || !is_color(shot, at(group.x + 100.0, group.y + 8.0 + 48.5), edge) { os.exit(20i32) }
     if !is_color(shot, at(wrong.x + 1.0, wrong.y + 8.0 + 24.0), style.color(&tokens, .Error)) || !near(wrong.height, 8.0 + 48.0 + 8.0 + 16.0) { os.exit(21i32) }
+    // Collapsed groups expose a trailing-chevron Button and summary, but no body.
+    let (advanced, has_advanced) = bounds(&harness, &runtime, 33u64)
+    if !has_advanced || testing.by_text(&harness, "4 settings, 1 changed").count != 1usize || testing.by_key(&harness, 320u64).count != 0usize { os.exit(43i32) }
+    let (group_tree, group_tree_error) = testing.semantics(&harness)
+    if group_tree_error != ok { os.exit(44i32) }
+    var advanced_sem = false
+    var sem_at = 0usize
+    while sem_at < group_tree.nodes.len {
+        let node = group_tree.nodes[sem_at]
+        if node.role == .Button && same(node.label, "Advanced") {
+            advanced_sem = !node.state.expanded && has_action(node, .Expand)
+        }
+        sem_at += 1usize
+    }
+    if !advanced_sem || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[6usize] != 2u32 { os.exit(46i32) }
     // The disclosure: a 40 header, the content 40 in and 4 below; open, the
     // header says expanded, and Left on it (focused by the tap) shuts it.
     let (head, has_head) = bounds(&harness, &runtime, 40u64)
@@ -240,10 +286,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, second.x + 100.0, second.y + 32.0) != ok || stores[0usize].hits[4usize] != 1u32 { os.exit(30i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 65u64) { os.exit(31i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !focused_is(&harness, 61u64) { os.exit(32i32) }
+    // The caller's next frame opens the controlled box and swaps Expand for Collapse.
+    stores[0usize].group_open = true
+    f = mem.arena_from(frame_storage)
+    let (group_open_root, group_open_error) = build(&f, &theme, &stores[0usize])
+    if group_open_error != ok || testing.pump(&harness, group_open_root, time.Instant { nanos: 1500000000i64 }) != ok || testing.by_key(&harness, 320u64).count != 1usize { os.exit(47i32) }
+    let (open_tree, open_tree_error) = testing.semantics(&harness)
+    if open_tree_error != ok { os.exit(48i32) }
+    advanced_sem = false
+    sem_at = 0usize
+    while sem_at < open_tree.nodes.len {
+        let node = open_tree.nodes[sem_at]
+        if node.role == .Button && same(node.label, "Advanced") {
+            advanced_sem = node.state.expanded && has_action(node, .Collapse)
+        }
+        sem_at += 1usize
+    }
+    if !advanced_sem { os.exit(49i32) }
     // Horizontal start/end insets follow reading direction: the 56px blank
     // moves from the left edge to the right edge in RTL.
     tokens.direction = .RightToLeft
+    stores[0usize].group_open = false
     stores[0usize].disclosed = false
+    f = mem.arena_from(frame_storage)
     let (rtl_root, rtl_build_error) = build(&f, &theme, &stores[0usize])
     if rtl_build_error != ok { os.exit(34i32) }
     if testing.pump(&harness, rtl_root, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(35i32) }

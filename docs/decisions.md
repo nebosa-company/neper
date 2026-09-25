@@ -23463,3 +23463,14 @@ The item reuses the shared Tooltip timing, focus trigger, placement and
 
 `ui_status5_v2` holds a focused “Open Problems” tooltip on Windows and Linux.
 The Segoe review is `build/ux/status-bar-tooltip-segoe.png`.
+
+## D1182 — GroupBox collapse remains caller-owned
+
+Setting a GroupBox toggle turns its title into the specified Button with a
+trailing chevron, inset focus ring, Expand/Collapse action and controlled body.
+The caller supplies `expanded` and the collapsed summary, so no duplicate state
+or hidden child controls remain in the tree.
+
+`ui_containers_v2` holds both states, pointer and directional-key toggles, the
+summary and body presence on Windows and Linux. The Segoe review is
+`build/ux/group-box-collapsed-segoe.png`.
