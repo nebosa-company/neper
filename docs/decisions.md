@@ -22700,3 +22700,12 @@ semantic or text label. Visible focusable TreeItems then share the same Unicode,
 `ui_collections3_v2` holds TreeItem labels and movement, while
 `ui_accessibility` guards the general tree build on Windows and Linux. The
 reviewed Tree surface is unchanged.
+
+## D1103 — TreeItem Press uses the row's pick callback
+
+Every TreeItem advertises Press and dispatches it through the same stable-key
+pick callback as pointer activation. Branches additionally retain exactly one
+state-matched Expand or Collapse action through the same action dispatcher.
+
+`ui_collections3_v2` holds leaf and branch action sets, Press, Expand and
+Collapse on Windows and Linux. The reviewed Tree surface is unchanged.

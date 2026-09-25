@@ -272,21 +272,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var has_shut_id = false
     i = 0usize
     while i < tree.nodes.len {
-        if tree.nodes[i].role == .TreeItem && tree.nodes[i].level == 1u8 && tree.nodes[i].position.row == 1u32 && tree.nodes[i].actions.len == 2usize && tree.nodes[i].actions[1usize] == .Collapse {
+        if tree.nodes[i].role == .TreeItem && tree.nodes[i].level == 1u8 && tree.nodes[i].position.row == 1u32 && tree.nodes[i].actions.len == 3usize && tree.nodes[i].actions[1usize] == .Press && tree.nodes[i].actions[2usize] == .Collapse {
             open_id = tree.nodes[i].id
             has_open_id = true
         }
-        if tree.nodes[i].role == .TreeItem && tree.nodes[i].level == 1u8 && tree.nodes[i].position.row == 2u32 && tree.nodes[i].actions.len == 2usize && tree.nodes[i].actions[1usize] == .Expand {
+        if tree.nodes[i].role == .TreeItem && tree.nodes[i].level == 1u8 && tree.nodes[i].position.row == 2u32 && tree.nodes[i].actions.len == 3usize && tree.nodes[i].actions[1usize] == .Press && tree.nodes[i].actions[2usize] == .Expand {
             shut_id = tree.nodes[i].id
             has_shut_id = true
         }
         i += 1usize
     }
     if !has_open_id || !has_shut_id { os.exit(43i32) }
+    if widget.semantic_action(&runtime, open_id, accessibility.ACTION_PRESS) != ok || logs[0usize].picks != 1usize { os.exit(52i32) }
     if widget.semantic_action(&runtime, open_id, accessibility.ACTION_COLLAPSE) != ok || logs[0usize].toggles != 4usize || logs[0usize].toggled != 1u64 { os.exit(44i32) }
     if widget.semantic_action(&runtime, shut_id, accessibility.ACTION_EXPAND) != ok || logs[0usize].toggles != 5usize || logs[0usize].toggled != 2u64 { os.exit(45i32) }
     // The ordinary second row tap still selects, then DoubleTap toggles a branch.
-    if testing.tap(&harness, row_a.x + 150.0, row_a.y + 16.0) != ok || testing.tap(&harness, row_a.x + 150.0, row_a.y + 16.0) != ok || logs[0usize].picks != 2usize || logs[0usize].toggles != 6usize || logs[0usize].toggled != 1u64 { os.exit(46i32) }
+    if testing.tap(&harness, row_a.x + 150.0, row_a.y + 16.0) != ok || testing.tap(&harness, row_a.x + 150.0, row_a.y + 16.0) != ok || logs[0usize].picks != 3usize || logs[0usize].toggles != 6usize || logs[0usize].toggled != 1u64 { os.exit(46i32) }
     // `*` expands collapsed branch siblings through the Windows Shift+8 and X
     // asterisk physical paths.
     var star_held: input.Modifiers = zero
@@ -335,7 +336,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(head.height, 47.0) || !near(table_a.y, head.y + 48.0) || !near(table_a.height, 39.0) || !near(table_a.width, 280.0) || !near(table_b.height, 40.0) { os.exit(34i32) }
     if !is_color(shot_3, at(table_a.x + 2.0, table_a.y + 39.5), rule) || !is_color(shot_3, at(table_a.x + 150.0, table_a.y + 20.0), background) || !is_color(shot_3, at(table_b.x + 150.0, table_b.y + 20.0), style.color(&tokens, .SecondaryContainer)) { os.exit(35i32) }
     if !near(table_twisty.x, table_a.x + 16.0) || !near(table_twisty_a1.x, table_twisty.x + 20.0) { os.exit(36i32) }
-    if testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || logs[0usize].picks != 4usize || logs[0usize].toggles != 9usize || logs[0usize].toggled != 1u64 { os.exit(47i32) }
+    if testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || logs[0usize].picks != 5usize || logs[0usize].toggles != 9usize || logs[0usize].toggled != 1u64 { os.exit(47i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
     try io.print("ui collections3 v2 ok\n")
     ret ok
