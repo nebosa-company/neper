@@ -22718,3 +22718,14 @@ the two passes, the build returns `TooLarge` instead of exposing partial data.
 
 `ui_collections3_v2` holds a flat 513-row source on Windows and Linux. Tree is
 still not virtualised, but it no longer silently drops rows.
+
+## D1105 — Header sort direction reaches the host record
+
+Widget semantics carries an explicit four-state sort code. Accessibility exposes
+None, Ascending, Descending and Other, and the flattened Windows/Linux host
+record preserves that code. HeaderRow marks only its sorted column from the
+caller's descending flag.
+
+`ui_collections2_v2` holds one ascending and one descending ColumnHeader and
+`ui_accessibility` guards the general tree on Windows and Linux. The reviewed
+surface is unchanged.

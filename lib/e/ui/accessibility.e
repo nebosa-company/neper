@@ -21,12 +21,13 @@ type Id = widget.ElementId
 type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader, Separator, AlertDialog, Listbox, Option, MenuItemCheckbox, Combobox, Region, Main, MenuBar, MenuItemRadio }
 type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool, mixed: bool, busy: bool, invalid: bool, required: bool, read_only: bool, modal: bool, current: bool }
 type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll, Dismiss, Expand, Collapse, Select, ShowMenu, SetSelection, Copy }
+type Sort = enum u8 { None, Ascending, Descending, Other }
 // Relationships to other nodes; an `Id` of generation 0 is none.
 type Relations = struct { labelled_by: Id, described_by: Id, error_by: Id, controls: Id, active: Id }
 type Live = enum u8 { Off, Polite, Assertive }
 // A node's place in a collection: one-based row and column, 0 for none.
 type Position = struct { row: u32, column: u32, row_count: u32, column_count: u32 }
-type Node = struct { id: Id, role: Role, label: str, value: str, hint: str, state: State, bounds: geometry.Rect, actions: []const Action, children: []const Id, relations: Relations, live: Live, position: Position, level: u8, selection_start: usize, selection_end: usize }
+type Node = struct { id: Id, role: Role, label: str, value: str, hint: str, state: State, bounds: geometry.Rect, actions: []const Action, children: []const Id, relations: Relations, live: Live, position: Position, level: u8, sort: Sort, selection_start: usize, selection_end: usize }
 type Tree = struct { root: Id, nodes: []const Node }
 error Unsupported
 error Invalid
@@ -296,6 +297,9 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 if sm.live == 2u8 { node.live = .Assertive }
                 node.position = Position { row: sm.row, column: sm.column, row_count: sm.row_count, column_count: sm.column_count }
                 node.level = sm.level
+                if sm.sort == 1u8 { node.sort = .Ascending }
+                if sm.sort == 2u8 { node.sort = .Descending }
+                if sm.sort == 3u8 { node.sort = .Other }
             }
             if node.relations.described_by.slot == 0u32 && node.relations.described_by.generation == 0u32 {
                 let (description, described) = widget.tooltip_description(runtime, slot)
@@ -429,6 +433,13 @@ fn action_bits(actions: []const Action) -> u32 {
     ret bits
 }
 
+fn sort_code(sort: Sort) -> u8 {
+    if sort == .Ascending { ret 1u8 }
+    if sort == .Descending { ret 2u8 }
+    if sort == .Other { ret 3u8 }
+    ret 0u8
+}
+
 // The tree flattened into the bridge's records and handed to the host: every node
 // once, its parent found from the children lists; nothing of the tree is kept.
 fn publish(window_value: window.Id, t: *const Tree) -> err {
@@ -439,7 +450,7 @@ fn publish(window_value: window.Id, t: *const Tree) -> err {
     var i = 0usize
     while i < t.nodes.len {
         let n = &t.nodes[i]
-        storage[i] = os.AccessibleNode { id: n.id.slot, parent: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
+        storage[i] = os.AccessibleNode { id: n.id.slot, parent: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), sort: sort_code(n.sort), x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
         i += 1usize
     }
     i = 0usize

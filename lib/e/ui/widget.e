@@ -93,7 +93,7 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 // `column` place the element in a collection of `row_count` by `column_count`;
 // `level` is a heading's or a tree item's depth; a hidden element and its subtree
 // leave the tree. A platform action the element offers reaches `on_action` as its bit.
-type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
+type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
 // An overlay (D810, widget plan P0-07): its children leave the flow and paint at the
 // root level, last, stacked against the element `anchor` names by key (0: the
 // window) with `placement` and `offset`, kept inside the window. A modal overlay

@@ -1308,7 +1308,7 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // `outline-variant` line inset 12 top and bottom (8 when `height` is 40), a
 // full-height 3px `primary` bar while hovered or dragged.
 // ponytail: no numeric (end-aligned) columns, filter mark, select-all
-// checkbox, grouped tier, reorder lift or aria-sort.
+// checkbox, grouped tier or reorder lift.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
@@ -1430,7 +1430,11 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         sem.column_count = u32(columns.len)
         sem.actions = accessibility.ACTION_PRESS
         sem.on_action = widget.Change[u32] { ctx: ctx_of(&drags[i]), invoke: header_action }
-        if sorted { sem.states = accessibility.STATE_SELECTED }
+        if sorted {
+            sem.states = accessibility.STATE_SELECTED
+            sem.sort = 1u8
+            if descending { sem.sort = 2u8 }
+        }
         cells[n] = widget.semantics(0u64, sem, style.defaults(), keyboard[0usize..1usize])
         n += 1usize
         // The resize handle: a 1px line, or the 3px `primary` bar while hovered
