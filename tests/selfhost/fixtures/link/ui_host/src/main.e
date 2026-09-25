@@ -62,7 +62,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let s = found[i]
         if s.primary { primaries += 1usize }
         if !(s.bounds.width > 0.0) || !(s.bounds.height > 0.0) || !(s.scale > 0.0) { os.exit(9i32) }
-        if !near(s.work_area.width, s.bounds.width) { os.exit(10i32) }
+        if !(s.work_area.width > 0.0) || !(s.work_area.height > 0.0) || s.work_area.x < s.bounds.x || s.work_area.y < s.bounds.y || s.work_area.x + s.work_area.width > s.bounds.x + s.bounds.width + 0.001 || s.work_area.y + s.work_area.height > s.bounds.y + s.bounds.height + 0.001 { os.exit(10i32) }
         i += 1usize
     }
     if primaries != 1usize { os.exit(11i32) }

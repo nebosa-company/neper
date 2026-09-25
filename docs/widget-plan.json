@@ -142,7 +142,7 @@
             "SafeInsets",
             "LifecycleEvents"
           ],
-          "evidence": "lib/e/ui/window.e and lib/e/ui/input.e (D811): capabilities as style.Capabilities, safe_insets and keyboard_insets, orientation, screens in logical pixels, lifecycle from focus and visibility; Lifecycle, Insets and Back events, the first derived from Focus/Blur, Back dispatched as Escape; tests/selfhost/fixtures/link/ui_host on both hosts. (D1117) Window mode now reaches the native host: Win32 uses its maximized style or a borderless primary-screen popup, while X11 publishes the standard pre-map _NET_WM_STATE maximized/fullscreen atoms; os_window and ui_window hold the path on Windows and Linux."
+          "evidence": "lib/e/ui/window.e and lib/e/ui/input.e (D811): capabilities as style.Capabilities, safe_insets and keyboard_insets, orientation, screens in logical pixels, lifecycle from focus and visibility; Lifecycle, Insets and Back events, the first derived from Focus/Blur, Back dispatched as Escape; tests/selfhost/fixtures/link/ui_host on both hosts. (D1117) Window mode now reaches the native host: Win32 uses its maximized style or a borderless primary-screen popup, while X11 publishes the standard pre-map _NET_WM_STATE maximized/fullscreen atoms; os_window and ui_window hold the path on Windows and Linux. (D1118) Screen work_area uses Win32 SPI_GETWORKAREA and the current X11 desktop's _NET_WORKAREA, with the full root screen only when no EWMH work area is reported; ui_host holds positive, bounded logical work areas on both hosts."
         },
         {
           "id": "P0-09",

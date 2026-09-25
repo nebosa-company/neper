@@ -296,8 +296,7 @@ fn lifecycle(window: *const Window) -> (Lifecycle, err) {
     ret (.Active, ok)
 }
 
-// The host's screens in logical pixels, from its monitors.
-// ponytail: the work area is the screen; a host that reports its shell's reserved edges narrows it.
+// The host's screens and shell work areas in logical pixels, from its monitors.
 fn screens(a: *mem.Arena, limit: usize) -> ([]const Screen, err) {
     let (found, found_error) = os.monitors(a, limit)
     if found_error == os.Unsupported { ret (zero, Unsupported) }
@@ -310,7 +309,8 @@ fn screens(a: *mem.Arena, limit: usize) -> ([]const Screen, err) {
         var scale = f32(m.scale_percent) / 100.0
         if !(scale > 0.0) { scale = 1.0 }
         let bounds = geometry.Rect { x: f32(m.x) / scale, y: f32(m.y) / scale, width: f32(m.width) / scale, height: f32(m.height) / scale }
-        out[i] = Screen { bounds: bounds, work_area: bounds, scale: scale, primary: m.primary }
+        let work_area = geometry.Rect { x: f32(m.work_x) / scale, y: f32(m.work_y) / scale, width: f32(m.work_width) / scale, height: f32(m.work_height) / scale }
+        out[i] = Screen { bounds: bounds, work_area: work_area, scale: scale, primary: m.primary }
         i += 1usize
     }
     ret (out, ok)

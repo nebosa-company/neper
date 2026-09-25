@@ -2797,7 +2797,7 @@ type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focus
 type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
-type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
+type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
 
 const WINDOW_RING: usize = 256usize
 const WINDOW_TABLE: usize = 16usize
@@ -3422,6 +3422,42 @@ fn x_window_mode(window: u32, mode: WindowMode) -> err {
     ret x_change_property(window, state, 4u32, 32u32, values[0usize..count * 4usize], count)
 }
 
+fn x_cardinals(property: u32, offset: u32, count: u32) -> (usize, err) {
+    var request: [24]u8 = zero
+    request[0usize] = 20u8
+    x_put16(request[..], 2usize, 6u32)
+    x_put32(request[..], 4usize, x_root)
+    x_put32(request[..], 8usize, property)
+    x_put32(request[..], 12usize, 6u32)
+    x_put32(request[..], 16usize, offset)
+    x_put32(request[..], 20usize, count)
+    let send_error = x_send(request[..])
+    if send_error != ok { ret (0usize, send_error) }
+    let reply_error = x_await_reply()
+    if reply_error != ok { ret (0usize, reply_error) }
+    if x_reply[1usize] != 32u8 || x_get32(x_reply[..], 8usize) != 6u32 { ret (0usize, ok) }
+    var found = usize(x_get32(x_reply[..], 16usize))
+    if found > x_reply_extra_len / 4usize { found = x_reply_extra_len / 4usize }
+    ret (found, ok)
+}
+
+fn x_work_area() -> (i32, i32, u32, u32, bool) {
+    var desktop = 0u32
+    let (current_atom, current_atom_error) = x_intern_atom("_NET_CURRENT_DESKTOP")
+    if current_atom_error == ok {
+        let (current_count, current_error) = x_cardinals(current_atom, 0u32, 1u32)
+        if current_error == ok && current_count == 1usize { desktop = x_get32(x_reply_extra[..], 0usize) }
+    }
+    let (work_atom, work_atom_error) = x_intern_atom("_NET_WORKAREA")
+    if work_atom_error != ok { ret (0i32, 0i32, 0u32, 0u32, false) }
+    let (work_count, work_error) = x_cardinals(work_atom, desktop * 4u32, 4u32)
+    if work_error != ok || work_count != 4usize { ret (0i32, 0i32, 0u32, 0u32, false) }
+    let width = x_get32(x_reply_extra[..], 8usize)
+    let height = x_get32(x_reply_extra[..], 12usize)
+    if width == 0u32 || height == 0u32 { ret (0i32, 0i32, 0u32, 0u32, false) }
+    ret (mem.bitcast[i32](x_get32(x_reply_extra[..], 0usize)), mem.bitcast[i32](x_get32(x_reply_extra[..], 4usize)), width, height, true)
+}
+
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     var none: Window = zero
     if options.width == 0u32 || options.height == 0u32 || options.width > 16384u32 || options.height > 16384u32 { ret (none, Unsupported) }
@@ -3644,7 +3680,18 @@ fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
     if connect_error != ok { ret (nothing, connect_error) }
     let (found, found_error) = mem.alloc[MonitorInfo](a, 1usize)
     if found_error != ok { ret (nothing, OutOfMemory) }
-    found[0usize] = MonitorInfo { x: 0i32, y: 0i32, width: x_screen_width, height: x_screen_height, scale_percent: 100u32, primary: true }
+    var work_x = 0i32
+    var work_y = 0i32
+    var work_width = x_screen_width
+    var work_height = x_screen_height
+    let (reported_x, reported_y, reported_width, reported_height, reported) = x_work_area()
+    if reported {
+        work_x = reported_x
+        work_y = reported_y
+        work_width = reported_width
+        work_height = reported_height
+    }
+    found[0usize] = MonitorInfo { x: 0i32, y: 0i32, width: x_screen_width, height: x_screen_height, work_x: work_x, work_y: work_y, work_width: work_width, work_height: work_height, scale_percent: 100u32, primary: true }
     ret (found[0usize..1usize], ok)
 }
 
