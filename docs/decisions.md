@@ -24150,3 +24150,17 @@ English month name either way round. It refuses a day the month lacks, so
 The field is still read-only; typing into it, Today and Clear, the touch modal
 and inline errors stay open. `ui_pickers_v2` holds the written forms, hints and
 parsed dates on Windows and Linux; `ui_pickers` passes on both hosts.
+
+## D1232 — The colour picker's spectrum and strips take keys
+
+Each tinted region of the colour field (the saturation and brightness spectrum,
+the hue strip and the opacity strip) was focusable but took no keys. Each now
+stands in a scope of eight shortcuts, per the ColorPicker spec. In the
+spectrum, Left and Right move saturation and Up and Down move brightness by 1%,
+or 10% with Shift. On a strip, the arrows move one degree or 1%, Page Up and
+Page Down move ten, and Home and End go to the ends (0 and 359 degrees, or clear
+and opaque). A step reaches the caller's `change` with the whole colour, as a
+press or drag does.
+
+`ui_pickers3_v2` holds a saturation step, a shifted brightness step, a paged and
+an ended hue, and cleared and stepped opacity on Windows and Linux.

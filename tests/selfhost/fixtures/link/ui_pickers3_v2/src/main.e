@@ -23,6 +23,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
@@ -229,6 +230,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_fades || !near(fades.height, 12.0) || !near(fades.y, hues.y + 28.0) { os.exit(19i32) }
     let dark = style.color(&tokens, .OutlineVariant)
     if !roughly(shot, at(fades.x + 7.0, fades.y + 6.0), mix(dark, copper(), 7.5 / 264.0)) || !roughly(shot, at(fades.x + 12.0, fades.y + 6.0), mix(lowest, copper(), 12.5 / 264.0)) || !roughly(shot, at(fades.x + 132.0, fades.y + 6.0), mix(lowest, copper(), 132.5 / 264.0)) { os.exit(20i32) }
+    // (D1232) Keys on the focused spectrum and strips: Right is 1% more
+    // saturation, Shift+Up 10% more brightness; on the hue strip Page Up is 10
+    // degrees and End the last; on the opacity strip Home is clear and Left 1% less.
+    var shift_held: input.Modifiers = zero
+    shift_held.shift = true
+    let colours_before = s.colours
+    if widget.focus(&runtime, testing.by_key(&harness, 502u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok { os.exit(49i32) }
+    let (right_hue, right_saturation, right_bright) = overlay.hsv_of(s.colour)
+    if s.colours != colours_before + 1u32 || !(right_saturation > saturation + 0.005 && right_saturation < saturation + 0.015) || !(right_bright > bright - 0.005 && right_bright < bright + 0.005) { os.exit(50i32) }
+    if testing.press_key(&harness, 38u32, shift_held) != ok { os.exit(51i32) }
+    let (_, _, up_bright) = overlay.hsv_of(s.colour)
+    if !(up_bright > bright + 0.095 && up_bright < bright + 0.105) { os.exit(52i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 503u64).element) != ok || testing.press_key(&harness, 33u32, zero) != ok { os.exit(53i32) }
+    let (paged_hue, _, _) = overlay.hsv_of(s.colour)
+    if !(paged_hue > hue + 9.5 && paged_hue < hue + 10.5) { os.exit(54i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok { os.exit(55i32) }
+    let (end_hue, _, _) = overlay.hsv_of(s.colour)
+    if !(end_hue > 358.0) { os.exit(56i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 504u64).element) != ok || testing.press_key(&harness, 36u32, zero) != ok || s.colour.alpha > 0.001 { os.exit(57i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || !(s.colour.alpha > 0.985 && s.colour.alpha < 0.995) { os.exit(58i32) }
+    if right_hue < 0.0 { os.exit(59i32) }
+    s.colours = colours_before
+    s.colour = copper()
     // The channel row: the 184 x 32 hex field (its editor 16 in) and the 72
     // readout 8 after it, 16 below.
     let (hexed, has_hexed) = bounds(&harness, &runtime, 505u64)
