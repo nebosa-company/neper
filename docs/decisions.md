@@ -23483,3 +23483,11 @@ hint, so navigation and the change announcement carry the same correction text.
 
 `ui_containers_v2` holds the Alert role, invalid state and live mode on Windows
 and Linux.
+
+## D1184 — Card supporting text is its description
+
+CardOptions now carries optional supporting text into the existing static Group
+or pressable Button hint. The caller still composes the visible content, while
+the control no longer forces assistive technology to infer that relationship.
+
+`ui_containers_v2` holds the pressable Card description on Windows and Linux.

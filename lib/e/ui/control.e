@@ -938,9 +938,10 @@ fn card(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widge
 type CardVariant = enum u8 { Elevated, Filled, Outlined }
 
 // A card's options: its treatment, its width (0: its content's), the dense grid's
-// padding, whether it is enabled and selected, the title it is named by, and the
-// action a press on the whole card fires (none: a static card).
-type CardOptions = struct { variant: CardVariant, width: f32, dense: bool, enabled: bool, selected: bool, title: str, action: *const widget.Submit }
+// padding, whether it is enabled and selected, the title and supporting text it
+// is named and described by, and the action a press on the whole card fires
+// (none: a static card).
+type CardOptions = struct { variant: CardVariant, width: f32, dense: bool, enabled: bool, selected: bool, title: str, description: str, action: *const widget.Submit }
 
 fn card_options() -> CardOptions {
     var out: CardOptions = zero
@@ -1020,6 +1021,7 @@ fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = options.title
+    sem.hint = options.description
     if options.selected { sem.states = accessibility.STATE_SELECTED }
     if !options.enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
     if pressed {

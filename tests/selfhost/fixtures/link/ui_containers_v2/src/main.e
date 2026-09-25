@@ -98,6 +98,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     var filled = lifted
     filled.variant = .Filled
     filled.title = "Open"
+    filled.description = "Build details"
     filled.action = &s.actions[0usize]
     let (four, e4) = control.card_of(a, 21u64, t, filled, fillers[1usize..2usize])
     var chosen = lifted
@@ -252,6 +253,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if group_tree_error != ok { os.exit(44i32) }
     var advanced_sem = false
     var invalid_alert = false
+    var described_card = false
     var sem_at = 0usize
     while sem_at < group_tree.nodes.len {
         let node = group_tree.nodes[sem_at]
@@ -261,9 +263,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if node.role == .Alert && same(node.label, "Choose one") {
             invalid_alert = node.state.invalid && node.live == .Assertive
         }
+        if node.role == .Button && same(node.label, "Open") { described_card = same(node.hint, "Build details") }
         sem_at += 1usize
     }
-    if !advanced_sem || !invalid_alert || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
+    if !advanced_sem || !invalid_alert || !described_card || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[6usize] != 2u32 { os.exit(46i32) }
     // The disclosure: a 40 header, the content 40 in and 4 below; open, the
     // header says expanded, and Left on it (focused by the tap) shuts it.
