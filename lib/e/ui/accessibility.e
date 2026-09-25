@@ -234,14 +234,14 @@ fn copy_text(a: *mem.Arena, text: str) -> (str, err) {
     ret (bytes, ok)
 }
 
-fn descendant_label(runtime: *const widget.Runtime, slot: usize) -> (str, bool) {
+fn descendant_label(runtime: *const widget.Runtime, slot: usize, include_self: bool) -> (str, bool) {
     let (summary, live) = widget.summary_at(runtime, slot)
     if !live { ret ("", false) }
-    if summary.text.len > 0usize { ret (summary.text, true) }
+    if include_self && summary.text.len > 0usize && (!summary.has_semantics || summary.semantics.role != 14u8) { ret (summary.text, true) }
     var child = summary.first_child
     var has_child = summary.has_child
     while has_child {
-        let (label, has_label) = descendant_label(runtime, usize(child.slot))
+        let (label, has_label) = descendant_label(runtime, usize(child.slot), true)
         if has_label { ret (label, true) }
         let (next, next_live) = widget.summary_at(runtime, usize(child.slot))
         if !next_live { ret ("", false) }
@@ -314,8 +314,12 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 if has_child && child.kind == KIND_TEXT { label = child.text }
             }
             if label.len == 0usize && (node.role == .TreeItem || (node.role == .Row && node.position.row > 0u32)) {
-                let (nested, has_nested) = descendant_label(runtime, slot)
+                let (nested, has_nested) = descendant_label(runtime, slot, true)
                 if has_nested { label = nested }
+            }
+            if value.len == 0usize && node.role == .Cell {
+                let (nested, has_nested) = descendant_label(runtime, slot, false)
+                if has_nested { value = nested }
             }
             let (copied, copy_error) = copy_text(a, label)
             if copy_error != ok { ret (zero, copy_error) }
