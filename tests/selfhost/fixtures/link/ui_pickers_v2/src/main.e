@@ -310,6 +310,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
         marked_node += 1usize
     }
     if disabled_days != 3usize { os.exit(90i32) }
+    // (D1257) A typed date in en-US: the hint below the field, Enter on "9/25/2026"
+    // picks the 25th of September, and "13/45/2026" in an unfocused field says how to write
+    // it, in `error`.
+    let (typed_bytes, typed_bytes_error) = mem.alloc[u8](a, 32usize)
+    if typed_bytes_error != ok { os.exit(91i32) }
+    let typed_today = time.Date { year: 2026i32, month: 9u8, day: 1u8 }
+    var typed_step = 0usize
+    while typed_step < 2usize {
+        var typed_text = "9/25/2026"
+        if typed_step == 1usize { typed_text = "13/45/2026" }
+        var tb = 0usize
+        while tb < typed_text.len {
+            typed_bytes[tb] = typed_text[tb]
+            tb += 1usize
+        }
+        f = mem.arena_from(frame_storage)
+        let (typed, typed_error) = overlay.date_entry(&f, 960u64 + 2u64 * u64(typed_step), &us_theme, "Release date", typed_bytes, typed_text.len, zero, picked_dates, typed_today, 280.0)
+        let (typed_page, typed_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if typed_error != ok || typed_page_error != ok { os.exit(92i32) }
+        typed_page[0usize] = typed
+        var typed_ground = control.sized_style(600.0, 720.0)
+        typed_ground.background = paint.Brush { Solid: style.color(&tokens, .Surface) }
+        if testing.pump(&harness, widget.box(0u64, typed_ground, typed_page[0usize..1usize]), time.Instant { nanos: 3200000000i64 + i64(typed_step) }) != ok { os.exit(93i32) }
+        if typed_step == 0usize {
+            if testing.by_text(&harness, "mm/dd/yyyy").count == 0usize { os.exit(94i32) }
+            var cleared: time.Date = zero
+            stores[0usize].last_date = cleared
+            if widget.focus(&runtime, testing.by_key(&harness, 960u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || stores[0usize].last_date.month != 9u8 || stores[0usize].last_date.day != 25u8 { os.exit(95i32) }
+        }
+        if typed_step == 1usize && testing.by_text(&harness, "Enter a date as mm/dd/yyyy").count == 0usize { os.exit(97i32) }
+        typed_step += 1usize
+    }
     // (D1230) Times in the locale's clock, and typed times in any common form.
     let (clock_bytes, clock_bytes_error) = mem.alloc[u8](a, 16usize)
     if clock_bytes_error != ok { os.exit(50i32) }
