@@ -1222,6 +1222,13 @@ fn header_sort(ctx: *void) -> err {
     ret widget.fire_change[usize](h.sort, h.column)
 }
 
+type ReorderKey = struct { value: Reorder, reorder: widget.Change[Reorder] }
+
+fn reorder_key(ctx: *void) -> err {
+    let r = mem.cast[*ReorderKey](ctx)
+    ret widget.fire_change[Reorder](r.reorder, r.value)
+}
+
 type Resizing = struct { runtime: *widget.Runtime, header: widget.Key, column: usize, low: f32, resize: widget.Change[ColumnResize] }
 
 type ResizeKey = struct { value: ColumnResize, resize: widget.Change[ColumnResize] }
@@ -1297,9 +1304,11 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
     if resizes_error != ok { ret (zero, TooLarge) }
     let (resize_keys, resize_keys_error) = mem.alloc[ResizeKey](a, 2usize * columns.len)
     if resize_keys_error != ok { ret (zero, TooLarge) }
-    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 6usize * columns.len)
+    let (reorder_keys, reorder_keys_error) = mem.alloc[ReorderKey](a, 2usize * columns.len)
+    if reorder_keys_error != ok { ret (zero, TooLarge) }
+    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 8usize * columns.len)
     if moves_error != ok { ret (zero, TooLarge) }
-    let (header_keys, header_keys_error) = mem.alloc[widget.Shortcut](a, 6usize * columns.len)
+    let (header_keys, header_keys_error) = mem.alloc[widget.Shortcut](a, 8usize * columns.len)
     if header_keys_error != ok { ret (zero, TooLarge) }
     let grip: f32 = 8.0
     let inner = height - t.tokens.sizes.divider
@@ -1363,7 +1372,7 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         if previous > 0usize { previous -= 1usize }
         var next = i
         if next + 1usize < columns.len { next += 1usize }
-        let shortcut = 6usize * i
+        let shortcut = 8usize * i
         bind_move(moves, header_keys, shortcut, t.runtime, key + 1u64 + u64(previous), 37u32)
         bind_move(moves, header_keys, shortcut + 1usize, t.runtime, key + 1u64 + u64(next), 39u32)
         var bound = shortcut + 2usize
@@ -1383,6 +1392,20 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         header_keys[bound] = widget.Shortcut { key: 37u32, modifiers: alt, action: widget.Submit { ctx: ctx_of(&resize_keys[resize_at]), invoke: resize_key } }
         header_keys[bound + 1usize] = widget.Shortcut { key: 39u32, modifiers: alt, action: widget.Submit { ctx: ctx_of(&resize_keys[resize_at + 1usize]), invoke: resize_key } }
         bound += 2usize
+        var move_modifiers: input.Modifiers = zero
+        move_modifiers.control = true
+        move_modifiers.shift = true
+        let reorder_at = 2usize * i
+        if i > 0usize {
+            reorder_keys[reorder_at] = ReorderKey { value: Reorder { from: i, to: i - 1usize }, reorder: reorder }
+            header_keys[bound] = widget.Shortcut { key: 37u32, modifiers: move_modifiers, action: widget.Submit { ctx: ctx_of(&reorder_keys[reorder_at]), invoke: reorder_key } }
+            bound += 1usize
+        }
+        if i + 1usize < columns.len {
+            reorder_keys[reorder_at + 1usize] = ReorderKey { value: Reorder { from: i, to: i + 1usize }, reorder: reorder }
+            header_keys[bound] = widget.Shortcut { key: 39u32, modifiers: move_modifiers, action: widget.Submit { ctx: ctx_of(&reorder_keys[reorder_at + 1usize]), invoke: reorder_key } }
+            bound += 1usize
+        }
         let (keyboard, keyboard_error) = mem.alloc[widget.Node](a, 1usize)
         if keyboard_error != ok { ret (zero, TooLarge) }
         keyboard[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: header_keys[shortcut..bound], default_action: sort_action, cancel_action: zero, keys: zero }, style.defaults(), tapped[0usize..1usize])

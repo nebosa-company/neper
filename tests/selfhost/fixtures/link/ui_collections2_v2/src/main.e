@@ -29,7 +29,7 @@ use e.ui.widget
 
 const W: usize = 400usize
 
-type Log = struct { theme: *const control.Theme, sorts: usize, picks: usize, resizes: usize, width: f32, offset: f32 }
+type Log = struct { theme: *const control.Theme, sorts: usize, picks: usize, resizes: usize, reorders: usize, from: usize, to: usize, width: f32, offset: f32 }
 
 fn on_sort(ctx: *void, value: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -38,6 +38,10 @@ fn on_sort(ctx: *void, value: usize) -> err {
 }
 
 fn on_reorder(ctx: *void, value: collection.Reorder) -> err {
+    let log = mem.cast[*Log](ctx)
+    log.reorders += 1usize
+    log.from = value.from
+    log.to = value.to
     ret ok
 }
 
@@ -267,6 +271,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     alt.alt = true
     if testing.press_key(&harness, 39u32, alt) != ok || logs[0usize].resizes != 1usize || !near(logs[0usize].width, 136.0) { os.exit(49i32) }
     if testing.press_key(&harness, 37u32, alt) != ok || logs[0usize].resizes != 2usize || !near(logs[0usize].width, 104.0) { os.exit(50i32) }
+    var move_modifiers: input.Modifiers = zero
+    move_modifiers.control = true
+    move_modifiers.shift = true
+    if testing.press_key(&harness, 39u32, move_modifiers) != ok || logs[0usize].reorders != 1usize || logs[0usize].from != 0usize || logs[0usize].to != 1usize { os.exit(51i32) }
+    if testing.press_key(&harness, 37u32, move_modifiers) != ok || logs[0usize].reorders != 1usize { os.exit(52i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 1000u64) { os.exit(48i32) }
     // The data grid: a 40 header, 32 rows, the row numbers on
     // `surface-container-low` and a grid line after each cell.
