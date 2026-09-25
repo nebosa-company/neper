@@ -22868,3 +22868,13 @@ The existing overlay scopes provide Right/Left traversal, Show menu, Expanded
 and Controls semantics, hover timing, safe-triangle travel and full-chain leaf
 dismissal at every level. `ui_navigation2_v2` holds a second cascade on Windows
 and Linux. The reviewed first-level surface is unchanged.
+
+## D1120 — Pull to refresh starts only at the scroll edge
+
+`PullOptions.at_top` carries the caller-owned scroll position into the touch
+pull recognizer. Away from the leading edge the region does not capture a drag,
+retained pull distance is hidden, and release cannot request a refresh. The
+constructor defaults it on, preserving existing callers.
+
+`ui_collections4_v2` holds an ignored mid-scroll drag on Windows and Linux.
+The resting surface is unchanged.
