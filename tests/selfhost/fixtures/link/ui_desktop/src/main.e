@@ -170,8 +170,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // first's action; the second's close fires its dismiss; Mark all read fires.
     let (notifications, has_notifications) = find(tree, .Group, "Notifications")
     if !has_notifications || notifications.live != .Polite || notifications.position.row_count != 2u32 { os.exit(17i32) }
-    let (deleted, has_deleted) = find(tree, .ListItem, "Deleted 3 files")
-    let (backup, has_backup) = find(tree, .ListItem, "Backup done")
+    let (deleted, has_deleted) = find(tree, .ListItem, "info, Deleted 3 files")
+    let (backup, has_backup) = find(tree, .ListItem, "info, Backup done")
     if !has_deleted || !has_backup { os.exit(18i32) }
     let (undo_at, has_undo) = centre_of(&harness, &runtime, 103u64)
     if !has_undo || testing.tap(&harness, undo_at.x, undo_at.y) != ok || logs[0usize].undos != 1usize { os.exit(19i32) }
