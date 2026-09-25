@@ -23706,3 +23706,23 @@ host bridge is still `Unsupported` on both hosts. `ui_collections4_v2` holds
 the names, the refusal, one performed move and its announcement on Windows
 and Linux; a sweep of all 103 `ui_*` fixtures on both hosts shows only the 12
 pre-existing failures recorded in D1195.
+
+## D1199 — A drag near a viewport's edge scrolls it
+
+The widget runtime auto-scrolls the nearest viewport above a region being
+dragged. From 48 px inside either end of the viewport the speed rises linearly
+to one viewport a second at the edge (and stays there past it), as
+`docs/ux/components/ReorderableList` asks. A drag move inside that band asks for
+an animation frame; each `Frame` then scrolls by that frame's share, moves the
+drag's start point with the content and fires a DragMove at the unmoved
+pointer, asking for the next frame while the viewport still moves.
+
+Because the start moves with the content, `position - start` already includes
+the scroll, so Reorderable List's lifted row, landing and drop need no change
+and every other draggable region inside a scroll viewport gets the same
+behaviour. A step is a 60 Hz frame's share rather than measured time.
+
+`ui_gesture` holds the quiet middle, the requested frame, one step's offset,
+the shifted start and the stop on release on Windows and Linux; a sweep of all
+103 `ui_*` fixtures on both hosts shows only the 12 pre-existing failures
+recorded in D1195.

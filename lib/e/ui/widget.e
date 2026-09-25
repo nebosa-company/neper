@@ -3097,6 +3097,50 @@ fn settle_scrolls(s: *State) -> err {
     ret ok
 }
 
+// (D1199) How far a frame of edge auto-scroll moves the viewport above the
+// dragged region `candidate`: from 48 in from either end of the viewport the
+// speed rises to one viewport a second at the edge and past it; 0 elsewhere.
+// ponytail: a step is a 60 Hz frame's share, not measured time.
+fn edge_scroll_step(s: *State, candidate: usize) -> (usize, f32) {
+    let (viewport, has_viewport) = scroll_ancestor(s, candidate)
+    if !has_viewport { ret (0usize, 0.0) }
+    let v = &s.elements[viewport]
+    if !v.live || v.viewport_extent <= 0.0 { ret (0usize, 0.0) }
+    let reach: f32 = 48.0
+    var start = v.bounds.y
+    var length = v.bounds.height
+    if v.scroll_axis == .Horizontal {
+        start = v.bounds.x
+        length = v.bounds.width
+    }
+    let at = axis_of(v, s.arena_state.last)
+    let near_start = max_f(at - start, 0.0)
+    let near_end = max_f(start + length - at, 0.0)
+    if near_start < reach { ret (viewport, 0.0 - v.viewport_extent * (reach - near_start) / reach / 60.0) }
+    if near_end < reach { ret (viewport, v.viewport_extent * (reach - near_end) / reach / 60.0) }
+    ret (viewport, 0.0)
+}
+
+// (D1199) A frame of edge auto-scroll for the region being dragged: the viewport
+// moves, the drag's start moves with the content, and the region hears a
+// DragMove at the unmoved pointer, so its travel includes the scroll.
+fn edge_scroll(s: *State) -> err {
+    if !s.arena_state.pressed || !s.arena_state.dragging { ret ok }
+    let candidate = usize(s.arena_state.candidate)
+    let e = &s.elements[candidate]
+    if !e.live || e.kind != REGION_TAG || (e.gestures & GESTURE_DRAG) == 0u8 { ret ok }
+    let (viewport, step) = edge_scroll_step(s, candidate)
+    if step == 0.0 { ret ok }
+    let v = &s.elements[viewport]
+    let before = v.scroll_offset
+    try scroll_by(s, viewport, step, false)
+    let moved = v.scroll_offset - before
+    if moved == 0.0 { ret ok }
+    if v.scroll_axis == .Horizontal { s.arena_state.down.x -= moved } else { s.arena_state.down.y -= moved }
+    s.animation_due = true
+    ret fire_gesture(e.gesture, Gesture { DragMove: Drag { start: s.arena_state.down, position: s.arena_state.last, delta: zero } })
+}
+
 fn distance_sq(a: geometry.Point, b: geometry.Point) -> f32 {
     let dx = a.x - b.x
     let dy = a.y - b.y
@@ -4693,6 +4737,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             }
             let delta = geometry.Point { x: p.position.x - s.arena_state.last.x, y: p.position.y - s.arena_state.last.y }
             s.arena_state.last = p.position
+            let (_, edge_step) = edge_scroll_step(s, candidate)
+            if edge_step != 0.0 { s.animation_due = true }
             ret fire_gesture(e.gesture, Gesture { DragMove: Drag { start: s.arena_state.down, position: p.position, delta: delta } })
         }
         s.arena_state.last = p.position
@@ -4834,7 +4880,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if has_editor { edit_compose(s, editor, c.text) }
         ret ok
     case .Frame as w:
-        ret settle_scrolls(s)
+        try settle_scrolls(s)
+        ret edge_scroll(s)
     case .Close as w:
         ret ok
     case .Resize as m:
