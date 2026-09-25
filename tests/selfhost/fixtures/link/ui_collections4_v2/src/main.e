@@ -2,7 +2,7 @@
 // list (D982, widget plan P5-12, docs/ux/components/PageView, Carousel,
 // PullToRefresh, SwipeActions, ReorderableList) under the light theme: a
 // `radius-md` page view whose tonal Next button shows under the pointer, whose
-// strip follows a drag and turns past half its width; a multi-browse carousel of
+// strip follows a reading-direction drag and turns past half its width; a multi-browse carousel of
 // a 256 large, a 200 medium and a 56 small item under a header with outlined
 // Previous and Next; a pointer refresh button with F5 and a busy bar, and a
 // touch pull whose content follows the damped pull under an indicator armed
@@ -416,6 +416,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var control_held: input.Modifiers = zero
     control_held.control = true
     if !tab_to(&harness, 612u64) || testing.press_key(&harness, 40u32, control_held) != ok || s.moves != 2usize || s.moved.from != 1usize || s.moved.to != 2usize { os.exit(67i32) }
+    // In a right-to-left theme the PageView's physical strip, buttons,
+    // chevrons, drag and horizontal keys mirror while page indices stay logical.
+    s.page = 1usize
+    var rtl_tokens = style.reference(.Light)
+    rtl_tokens.direction = .RightToLeft
+    let rtl_theme = control.Theme { tokens: &rtl_tokens, fonts: fonts, language: "", runtime: &runtime }
+    if testing.hover(&harness, view.x + 120.0, view.y + 60.0) != ok { os.exit(82i32) }
+    let (root_rtl, root_rtl_error) = build(&f, &rtl_theme, &touch, s)
+    if root_rtl_error != ok || testing.pump(&harness, root_rtl, now) != ok { os.exit(83i32) }
+    let (rtl_shot, rtl_shot_error) = testing.snapshot(&harness, a)
+    let (rtl_previous, has_rtl_previous) = bounds(&harness, &runtime, 101u64)
+    let (rtl_next, has_rtl_next) = bounds(&harness, &runtime, 102u64)
+    let rtl_ink = style.color(&rtl_tokens, .OnSecondaryContainer)
+    if rtl_shot_error != ok || !has_rtl_previous || !has_rtl_next || !near(rtl_previous.x, view.x + 188.0) || !near(rtl_next.x, view.x + 12.0) || !is_color(rtl_shot, at(rtl_previous.x + 19.0, rtl_previous.y + 16.0), rtl_ink) || is_color(rtl_shot, at(rtl_previous.x + 22.0, rtl_previous.y + 16.0), rtl_ink) || !is_color(rtl_shot, at(rtl_next.x + 21.0, rtl_next.y + 16.0), rtl_ink) || is_color(rtl_shot, at(rtl_next.x + 18.0, rtl_next.y + 16.0), rtl_ink) { os.exit(84i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 100u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || s.page != 2usize { os.exit(85i32) }
+    s.page = 1usize
+    if testing.press_key(&harness, 39u32, zero) != ok || s.page != 0usize { os.exit(86i32) }
+    s.page = 1usize
+    if !press(&harness, view.x + 60.0, view.y + 100.0) || !move_to(&harness, view.x + 120.0, view.y + 100.0) { os.exit(87i32) }
+    let (root_rtl_drag, root_rtl_drag_error) = build(&f, &rtl_theme, &touch, s)
+    if root_rtl_drag_error != ok || testing.pump(&harness, root_rtl_drag, now) != ok { os.exit(88i32) }
+    let (rtl_drag, rtl_drag_error) = testing.snapshot(&harness, a)
+    if rtl_drag_error != ok || !is_color(rtl_drag, at(view.x + 20.0, view.y + 100.0), style.color(&rtl_tokens, .ErrorContainer)) || !is_color(rtl_drag, at(view.x + 100.0, view.y + 100.0), style.color(&rtl_tokens, .TertiaryContainer)) { os.exit(89i32) }
+    if !move_to(&harness, view.x + 200.0, view.y + 100.0) || !release(&harness, view.x + 200.0, view.y + 100.0) || s.page != 2usize { os.exit(90i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(68i32) }
     try io.print("ui collections4 v2 ok\n")
     ret ok
