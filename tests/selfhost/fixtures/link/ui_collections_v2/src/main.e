@@ -455,6 +455,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_7, build_7_error) = build(&f, &theme, s)
     if build_7_error != ok || testing.pump(&harness, root_7, time.Instant { nanos: 1600000000i64 }) != ok { os.exit(72i32) }
     if testing.by_key(&harness, 6000u64).count != 1usize || testing.by_key(&harness, 6009u64).count != 1usize || testing.by_key(&harness, 6010u64).count != 0usize { os.exit(73i32) }
+    // (D1237) An icon tile: no container at rest (the page shows at its corner,
+    // where a plain tile is surface-container-low), one under the pointer, and its
+    // name in the tree.
+    var icon_tiles: [2]collection.Tile = zero
+    icon_tiles[0usize].name = "Reports"
+    icon_tiles[0usize].has_icon = true
+    icon_tiles[0usize].icon = .Picture
+    icon_tiles[0usize].action = s.press
+    icon_tiles[1usize].name = "Photos"
+    icon_tiles[1usize].action = s.press
+    var icon_keys: [2]widget.Key = zero
+    icon_keys[0usize] = 801u64
+    icon_keys[1usize] = 802u64
+    var icon_grid = collection.grid_options()
+    icon_grid.width = 400.0
+    var icon_step = 0usize
+    while icon_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (icon_view, icon_view_error) = collection.grid_view_of(&f, 800u64, &theme, "Files", icon_tiles[..], icon_keys[..], icon_grid)
+        if icon_view_error != ok { os.exit(105i32) }
+        let (icon_page, icon_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if icon_page_error != ok { os.exit(105i32) }
+        icon_page[0usize] = icon_view
+        var icon_ground = control.sized_style(700.0, 760.0)
+        icon_ground.background = paint.Brush { Solid: background }
+        if testing.pump(&harness, widget.box(0u64, icon_ground, icon_page[0usize..1usize]), now) != ok { os.exit(106i32) }
+        let (icon_shot, icon_shot_error) = testing.snapshot(&harness, a)
+        let (reports, has_reports) = bounds(&harness, &runtime, 801u64)
+        let (plain_tile, has_plain_tile) = bounds(&harness, &runtime, 802u64)
+        if icon_shot_error != ok || !has_reports || !has_plain_tile { os.exit(107i32) }
+        if icon_step == 0usize {
+            if !is_color(icon_shot, at(reports.x + 2.0, reports.y + 2.0), background) || !is_color(icon_shot, at(plain_tile.x + 20.0, plain_tile.y + plain_tile.height - 4.0), style.color(&tokens, .SurfaceContainerLow)) { os.exit(108i32) }
+            if testing.by_label(&harness, "Reports").count == 0usize || testing.hover(&harness, reports.x + 10.0, reports.y + 10.0) != ok { os.exit(109i32) }
+        }
+        if icon_step == 1usize && is_color(icon_shot, at(reports.x + 2.0, reports.y + 40.0), background) { os.exit(110i32) }
+        icon_step += 1usize
+    }
+    if testing.hover(&harness, 1.0, 1.0) != ok { os.exit(111i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok
