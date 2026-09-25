@@ -22789,3 +22789,12 @@ relationship from a valid element at slot zero without five separate booleans.
 
 `ui_accessibility` holds both ordinary and slot-zero targets on Windows and Linux.
 The change is semantic only; reviewed surfaces are unchanged.
+
+## D1112 — Host identities retain generations
+
+AccessibleNode retains the ElementId generation for the node, its parent and all
+five relationship targets. A recycled runtime slot therefore remains distinct
+from the prior semantic element when a native bridge caches host objects.
+
+`ui_accessibility` holds node and relationship generations on Windows and Linux.
+The change is semantic only; reviewed surfaces are unchanged.

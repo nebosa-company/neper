@@ -471,7 +471,7 @@ fn relation_bits(r: Relations) -> u8 {
 }
 
 fn flat_node(n: *const Node) -> os.AccessibleNode {
-    ret os.AccessibleNode { id: n.id.slot, parent: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), sort: sort_code(n.sort), live: live_code(n.live), row: n.position.row, column: n.position.column, row_count: n.position.row_count, column_count: n.position.column_count, level: n.level, selection_start: n.selection_start, selection_end: n.selection_end, labelled_by: n.relations.labelled_by.slot, described_by: n.relations.described_by.slot, error_by: n.relations.error_by.slot, controls: n.relations.controls.slot, active: n.relations.active.slot, relation_flags: relation_bits(n.relations), x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
+    ret os.AccessibleNode { id: n.id.slot, generation: n.id.generation, parent: 0u32, parent_generation: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), sort: sort_code(n.sort), live: live_code(n.live), row: n.position.row, column: n.position.column, row_count: n.position.row_count, column_count: n.position.column_count, level: n.level, selection_start: n.selection_start, selection_end: n.selection_end, labelled_by: n.relations.labelled_by.slot, labelled_by_generation: n.relations.labelled_by.generation, described_by: n.relations.described_by.slot, described_by_generation: n.relations.described_by.generation, error_by: n.relations.error_by.slot, error_by_generation: n.relations.error_by.generation, controls: n.relations.controls.slot, controls_generation: n.relations.controls.generation, active: n.relations.active.slot, active_generation: n.relations.active.generation, relation_flags: relation_bits(n.relations), x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
 }
 
 // The tree flattened into the bridge's records and handed to the host: every node
@@ -496,6 +496,7 @@ fn publish(window_value: window.Id, t: *const Tree) -> err {
             while k < t.nodes.len {
                 if t.nodes[k].id.slot == n.children[c].slot && t.nodes[k].id.generation == n.children[c].generation {
                     storage[k].parent = n.id.slot
+                    storage[k].parent_generation = n.id.generation
                     storage[k].has_parent = true
                 }
                 k += 1usize
