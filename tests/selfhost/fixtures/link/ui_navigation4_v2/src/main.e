@@ -210,6 +210,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, track.x + 20.0, track.y + 16.0) != ok || s.dots.count != 1usize || s.dots.last != 4usize { os.exit(21i32) }
     if testing.tap(&harness, track.x + 110.0, track.y + 16.0) != ok || s.dots.count != 2usize || s.dots.last != 6usize { os.exit(22i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || s.dots.last != 4usize || testing.press_key(&harness, 35u32, zero) != ok || s.dots.last != 11usize || testing.press_key(&harness, 36u32, zero) != ok || s.dots.last != 0usize { os.exit(23i32) }
+    var rtl_tokens = style.reference(.Light)
+    rtl_tokens.direction = .RightToLeft
+    let rtl_theme = control.Theme { tokens: &rtl_tokens, fonts: fonts, language: "", runtime: &runtime }
+    let (rtl, rtl_error) = build(&f, &rtl_theme, s)
+    if rtl_error != ok || testing.pump(&harness, rtl, time.Instant { nanos: 1100000000i64 }) != ok || testing.press_key(&harness, 39u32, zero) != ok || s.dots.last != 4usize || testing.press_key(&harness, 37u32, zero) != ok || s.dots.last != 6usize { os.exit(34i32) }
     // On media: the dots on a 32 tall `surface-container-high` pill 12 in.
     let (media, has_media) = bounds(&harness, &runtime, 4401u64)
     if !has_media || !is_color(shot, at(media.x + 16.0, media.y + 16.0), style.color(&tokens, .SurfaceContainerHigh)) || !is_color(shot, at(media.x + 36.0, media.y + 16.0), style.color(&tokens, .Primary)) { os.exit(24i32) }

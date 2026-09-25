@@ -23143,3 +23143,12 @@ specific focus painting.
 `ui_navigation5_v2` holds the inset pixel on Windows and Linux;
 `ui_navigation2_v2` guards ordinary Tabs on both hosts. The Segoe review is
 `build/ux/tab-focus-inset-segoe.png`.
+
+## D1148 — Page-indicator arrow keys follow reading direction
+
+PageIndicator maps Left to the previous page and Right to the next in a
+left-to-right theme, reversing those two physical keys in a right-to-left
+theme. Page Up/Down and Home/End retain their logical meanings.
+
+`ui_navigation4_v2` holds both right-to-left directions on Windows and Linux.
+The drawn order and tap sides remain open with the visual RTL work.
