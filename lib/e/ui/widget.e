@@ -242,6 +242,8 @@ type Element = struct {
     scroll_change: Change[f32],
     overscroll: Overscroll,
     momentum: bool,
+    // (D1249) Whether the viewport paints its overlay thumb.
+    scrollbar: bool,
     linked: Key,
     // A slider's values and range, its second thumb, and which thumb a press took.
     slider_value: f32,
@@ -389,6 +391,8 @@ type State = struct {
     has_long_press: bool,
     long_press_at: i64,
     long_press_fired: bool,
+    // (D1249) The pressed viewport is being moved by its thumb.
+    thumb_drag: bool,
     long_press_feedback: Submit,
     has_long_press_feedback: bool,
     rich_anchor_key: Key,
@@ -1275,6 +1279,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.scroll_change = sc.change
         e.overscroll = sc.overscroll
         e.momentum = sc.momentum
+        e.scrollbar = sc.scrollbar
         e.enabled = true
     case .Box:
         e.enabled = true
@@ -2108,7 +2113,7 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         try place_stack(s, a, node, element, shifted, open, b, depth)
     }
     if sc.scrollbar && content > e.viewport_extent {
-        // ponytail: the thumb is painted, not dragged; a press on it scrolls the content.
+        // (D1249) A press in the trailing 12 grabs the thumb (`thumb_grab`).
         // v2 (D979, docs/ux/components/VirtualList): 4 wide, fully rounded, 2 from
         // the trailing edge, viewport squared over the content long, 32 at least.
         // (D1219) 8 wide while the pointer is over the viewport's trailing 12.
@@ -3030,6 +3035,36 @@ fn menu_owner_above(s: *State, index: usize) -> (usize, bool) {
 // since a module-scope constant has no float form.
 fn gesture_slop() -> f32 {
     ret 8.0
+}
+
+// (D1249) A press on a viewport's thumb strip -- the trailing 12 of a viewport
+// that paints its thumb over more content than it shows: the viewport, which
+// the press now drags by its thumb. A press off the thumb first moves it to
+// centre under the pointer.
+// ponytail: the strip is measured from the viewport's bounds, not its padded
+// inside; a padded viewport's strip sits its padding off.
+fn thumb_grab(s: *State, from: usize, p: geometry.Point) -> (usize, bool, err) {
+    let (viewport, has_viewport) = hit_scroll(s, from, p)
+    if !has_viewport { ret (0usize, false, ok) }
+    let e = &s.elements[viewport]
+    if !e.scrollbar || e.content_extent <= e.viewport_extent || e.viewport_extent <= 0.0 { ret (0usize, false, ok) }
+    let vertical = e.scroll_axis == .Vertical
+    if vertical && p.x < e.bounds.x + e.bounds.width - 12.0 { ret (0usize, false, ok) }
+    if !vertical && p.y < e.bounds.y + e.bounds.height - 12.0 { ret (0usize, false, ok) }
+    let viewport_size = e.viewport_extent
+    var length = viewport_size * viewport_size / e.content_extent
+    if length < 32.0 { length = min_f(32.0, viewport_size) }
+    var at = e.scroll_offset / e.content_extent * viewport_size
+    if at > viewport_size - length { at = viewport_size - length }
+    if at < 0.0 { at = 0.0 }
+    var along = p.y - e.bounds.y
+    if !vertical { along = p.x - e.bounds.x }
+    if along < at || along > at + length {
+        let wanted = (along - length * 0.5) * e.content_extent / viewport_size
+        let jumped = scroll_by(s, viewport, wanted - e.scroll_offset, false)
+        if jumped != ok { ret (0usize, false, jumped) }
+    }
+    ret (viewport, true, ok)
 }
 
 // The offset moved by `delta`: clamped to the content, or -- a soft move past an
@@ -4509,6 +4544,20 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 ret fire_change[u32](s.elements[owner].sem.on_action, 1024u32)
             }
         }
+        // (D1249) A press on a thumb strip drags the thumb, before any row under it.
+        s.thumb_drag = false
+        let (grabbed, has_grabbed, grab_error) = thumb_grab(s, from, p.position)
+        if grab_error != ok { ret grab_error }
+        if has_grabbed {
+            s.arena_state.pressed = true
+            s.arena_state.candidate = u32(grabbed)
+            s.arena_state.down = p.position
+            s.arena_state.last = p.position
+            s.arena_state.dragging = true
+            s.thumb_drag = true
+            s.elements[grabbed].scroll_velocity = 0.0
+            ret ok
+        }
         // The arena takes the pointer for the deepest region that taps or drags; an
         // action element under it is the old contract and still answers.
         let (region_index, has_region) = hit_region(s, from, p.position, GESTURE_TAP | GESTURE_DRAG)
@@ -4701,6 +4750,15 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 let delta = geometry.Point { x: p.position.x - s.arena_state.last.x, y: p.position.y - s.arena_state.last.y }
                 s.arena_state.last = p.position
                 ret pan_by(s, candidate, delta)
+            }
+            if e.live && e.kind == SCROLL_TAG && s.thumb_drag {
+                // (D1249) The thumb follows the pointer: the content moves by its
+                // share of the distance along the viewport, with no momentum after.
+                let moved = axis_of(e, p.position) - axis_of(e, s.arena_state.last)
+                s.arena_state.last = p.position
+                e.scroll_velocity = 0.0
+                if e.viewport_extent <= 0.0 { ret ok }
+                ret scroll_by(s, candidate, moved * e.content_extent / e.viewport_extent, false)
             }
             if e.live && e.kind == SCROLL_TAG {
                 if !s.arena_state.dragging {

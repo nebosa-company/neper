@@ -641,6 +641,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if wait_step == 2usize && (has_busy || testing.by_text(&harness, "No photos").count == 0usize) { os.exit(149i32) }
         wait_step += 1usize
     }
+    // (D1249) The virtual list's thumb drags: 100 rows of 48 in a 144 viewport, so
+    // 56 down the thumb moves the content 56 x 4800 / 144; a press on the strip
+    // below the thumb first centres the thumb there.
+    s.list_offset = 0.0
+    f = mem.arena_from(frame_storage)
+    let (thumb_root, thumb_root_error) = build(&f, &theme, s)
+    if thumb_root_error != ok || testing.pump(&harness, thumb_root, time.Instant { nanos: 7000000000i64 }) != ok { os.exit(150i32) }
+    let (thumbed, has_thumbed) = bounds(&harness, &runtime, 400u64)
+    let (start_offset, has_start_offset) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 400u64).element)
+    if !has_thumbed || !has_start_offset || start_offset > 100.0 { os.exit(151i32) }
+    let thumb_y = thumbed.y + start_offset / 4800.0 * 144.0 + 16.0
+    if testing.drag(&harness, geometry.Point { x: thumbed.x + 296.0, y: thumb_y }, geometry.Point { x: thumbed.x + 296.0, y: thumb_y + 56.0 }, 4usize) != ok { os.exit(152i32) }
+    let dragged = s.list_offset - start_offset - 56.0 * 4800.0 / 144.0
+    if dragged > 0.5 || dragged < -0.5 { os.exit(153i32) }
+    let (after_drag, _) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 400u64).element)
+    let jump_y = thumbed.y + 130.0
+    if testing.tap(&harness, thumbed.x + 296.0, jump_y) != ok { os.exit(154i32) }
+    let jumped = s.list_offset - (130.0 - 16.0) * 4800.0 / 144.0
+    if after_drag > (130.0 - 16.0) * 4800.0 / 144.0 || jumped > 0.5 || jumped < -0.5 { os.exit(155i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok

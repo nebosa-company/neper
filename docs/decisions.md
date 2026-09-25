@@ -24413,3 +24413,18 @@ with Retry in place of the body.
 
 `ui_collections2_v2` holds the header, the busy group, the progress bar and
 the empty state on Windows and Linux.
+
+## D1249 — Scroll thumbs drag
+
+A viewport that paints its overlay thumb (`Scroll.scrollbar`, now kept on the
+element) over more content than it shows lets a press in its trailing 12 --
+the strip D1219 widens under the pointer -- grab the thumb. `thumb_grab` runs
+before the row hit test, so a row under the strip no longer takes that press.
+A press off the thumb first moves the thumb to centre under the pointer. While
+held, the content moves by the pointer's distance along the viewport times
+content over viewport, with no momentum after the release. The strip is
+measured from the viewport's bounds, not its padded inside.
+
+`ui_collections_v2` drags the virtual list's thumb 56 (1,866.7 of content) and
+jumps it with a press lower on the strip on Windows and Linux; the full UI
+sweep passes 103/103 on both hosts.
