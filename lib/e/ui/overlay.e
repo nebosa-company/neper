@@ -2971,7 +2971,9 @@ fn time_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, clock_text:
 // menu at pointer density on `surface-container`, 8 corners, elevation 2, 8 above
 // and below the rows, 4 below the field and as wide; 6 rows show and it scrolls
 // to put the selected one first.
-// ponytail: no dial, input mode or wheels for touch, no 12-hour clock, no Up/Down through the list or typing to filter it, no error icon; the caller's text and picks carry the value.
+// ponytail: no dial, input mode or wheels for touch, no 12-hour clock, typing
+// does not filter the list, and there is no error icon; the caller's text and
+// picks carry the value.
 fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, times: []const str, offsets: []const str, selected: usize, picks: []const widget.Submit, note: str, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != times.len || offsets.len != times.len { ret (zero, TooLarge) }
     let (boxed, boxed_error) = clocked_field(a, key, t, label, buffer, len, typed, note, true, open, toggle, options)
@@ -2983,6 +2985,7 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = boxed
     var default_action: widget.Submit = zero
+    var list_keys: []const widget.Shortcut = zero
     if listing {
         let row_height = t.tokens.sizes.control_sm
         let (items, items_error) = mem.alloc[widget.Node](a, times.len)
@@ -3028,15 +3031,28 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         list_sem.row_count = u32(times.len)
         lifted[0usize] = widget.semantics(0u64, list_sem, style.defaults(), lifted[1usize..2usize])
         parts[1usize] = widget.overlay(key + 3u64, widget.Overlay { anchor: key + 2u64, placement: .Below, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
-        if selected < picks.len { default_action = picks[selected] }
+        if selected < picks.len {
+            default_action = picks[selected]
+            let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 2usize)
+            if keys_error != ok { ret (zero, TooLarge) }
+            var n = 0usize
+            if selected > 0usize {
+                keys[n] = widget.Shortcut { key: 38u32, modifiers: zero, action: picks[selected - 1usize] }
+                n += 1usize
+            }
+            if selected + 1usize < picks.len {
+                keys[n] = widget.Shortcut { key: 40u32, modifiers: zero, action: picks[selected + 1usize] }
+                n += 1usize
+            }
+            list_keys = keys[0usize..n]
+        }
     }
-    var none_keys: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 2usize)
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count])
     var cancel: widget.Submit = zero
     if listing { cancel = *toggle }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: none_keys, default_action: default_action, cancel_action: cancel, keys: zero }, style.defaults(), scoped[1usize..2usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: list_keys, default_action: default_action, cancel_action: cancel, keys: zero }, style.defaults(), scoped[1usize..2usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label

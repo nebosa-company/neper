@@ -22916,3 +22916,12 @@ caller-owned pop action; side-by-side and legacy titleless forms are unchanged.
 
 `ui_navigation4_v2` holds all three paths on Windows and Linux. The reviewed
 surface is unchanged.
+
+## D1125 — Time lists route arrows through existing picks
+
+An open TimePicker list binds Up and Down in its existing scope to the rows
+adjacent to the caller-owned selected index. Boundary directions stay unbound;
+the caller remains responsible for applying a pick and rebuilding the list.
+
+`ui_pickers2_v2` holds both directions on Windows and Linux. The reviewed
+surface is unchanged; typed filtering remains open.

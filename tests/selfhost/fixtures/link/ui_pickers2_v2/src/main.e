@@ -24,15 +24,15 @@ use e.ui.style
 use e.ui.testing
 use e.ui.widget
 
-type Store = struct { press: widget.Submit, picked: u32, picks: [8]widget.Submit, times: [8]str, offsets: [8]str, presets: [3]str, clock: [8]u8, taken: [8]u8, cap: [8]u8 }
+type Store = struct { press: widget.Submit, picked: [8]u32, picks: [8]widget.Submit, times: [8]str, offsets: [8]str, presets: [3]str, clock: [8]u8, taken: [8]u8, cap: [8]u8 }
 
 fn on_press(ctx: *void) -> err {
     ret ok
 }
 
 fn on_pick(ctx: *void) -> err {
-    let s = mem.cast[*Store](ctx)
-    s.picked += 1u32
+    let count = mem.cast[*u32](ctx)
+    *count += 1u32
     ret ok
 }
 
@@ -162,7 +162,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.press = widget.Submit { ctx: mem.cast[*void](s), invoke: on_press }
     var i = 0usize
     while i < 8usize {
-        s.picks[i] = widget.Submit { ctx: mem.cast[*void](s), invoke: on_pick }
+        s.picks[i] = widget.Submit { ctx: mem.cast[*void](&s.picked[i]), invoke: on_pick }
         i += 1usize
     }
     s.times[0usize] = "13:00"
@@ -211,7 +211,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot, at(view.x + 100.0, view.y - 4.0), menu) || !is_color(shot, at(view.x + 100.0, view.y + 16.0), menu) || !is_color(shot, at(view.x + 100.0, view.y + 48.0), chosen) || !is_color(shot, at(view.x + 100.0, view.y + 80.0), menu) { os.exit(17i32) }
     // A press on the third row showing (15:00) fires its pick.
     if testing.tap(&harness, view.x + 100.0, view.y + 80.0) != ok { os.exit(18i32) }
-    if s.picked != 1u32 { os.exit(19i32) }
+    if s.picked[4usize] != 1u32 { os.exit(19i32) }
+    // Up and Down report the rows around the caller-owned selected index.
+    if testing.press_key(&harness, 38u32, zero) != ok || s.picked[2usize] != 1u32 { os.exit(45i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || s.picked[4usize] != 2u32 { os.exit(46i32) }
     // The duration field: the same 40 frame with a plain clock in on-surface-variant;
     // its chips 32 tall, 8 apart, 12 under the 4 + 16 supporting text, the 45 min
     // one secondary-container, the others outlined round the page.
