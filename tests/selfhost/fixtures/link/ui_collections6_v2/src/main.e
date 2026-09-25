@@ -33,7 +33,7 @@ use e.ui.widget
 
 const W: usize = 420usize
 
-type Store = struct { state: collection.GridState, draft: []u8, events: usize, last: collection.GridEvent, committed: usize, committed_row: usize, committed_column: usize }
+type Store = struct { state: collection.GridState, draft: []u8, events: usize, last: collection.GridEvent, committed: usize, committed_row: usize, committed_column: usize, saving: bool }
 
 fn cell_text(row: usize, column: usize) -> str {
     if column == 1usize {
@@ -52,7 +52,8 @@ fn grid_count(ctx: *void) -> usize {
 }
 
 fn grid_cell(ctx: *void, row: usize, column: usize) -> collection.GridCell {
-    var c = collection.GridCell { text: cell_text(row, column), message: "", dirty: false, read_only: false }
+    let store = mem.cast[*Store](ctx)
+    var c = collection.GridCell { text: cell_text(row, column), message: "", dirty: false, read_only: false, saving: store.saving && row == 2usize && column == 0usize }
     if row == 1usize && column == 1usize { c.message = "Port must be a number" }
     if row == 2usize && column == 0usize { c.dirty = true }
     if row == 3usize && column == 1usize { c.read_only = true }
@@ -353,6 +354,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 27u32, plain) != ok || store.last.kind != .Cancel || store.state.editing { os.exit(93i32) }
     let (root_24, build_24_error) = build(&f, &theme, ctx, store)
     if build_24_error != ok || testing.pump(&harness, root_24, now) != ok || !focus_on(&harness, 2u64) { os.exit(94i32) }
+    // Bulk saving disables every edit path, reports the count, and gives each
+    // saving cell the shared 16px indeterminate ring.
+    store.saving = true
+    store.state.disabled = true
+    store.state.saving = 3usize
+    let events_before_save = store.events
+    let row_before_save = store.state.row
+    let (root_25, build_25_error) = build(&f, &theme, ctx, store)
+    if build_25_error != ok || testing.pump(&harness, root_25, now) != ok || testing.by_text(&harness, "Saving 3 changes").count != 1usize || testing.by_key(&harness, 2001029u64).count != 1usize || !widget.animation_frame_requested(&runtime) { os.exit(105i32) }
+    if testing.press_key(&harness, 40u32, plain) != ok || testing.type_text(&harness, "x") != ok || testing.tap(&harness, port_x + 50.0, grid.y + 55.0) != ok || store.events != events_before_save || store.state.row != row_before_save { os.exit(106i32) }
     // The grid in the tree, named, 5 by 2.
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(52i32) }
