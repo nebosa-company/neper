@@ -23152,3 +23152,14 @@ theme. Page Up/Down and Home/End retain their logical meanings.
 
 `ui_navigation4_v2` holds both right-to-left directions on Windows and Linux.
 The drawn order and tap sides remain open with the visual RTL work.
+
+## D1149 — Page indicators mirror fully in right-to-left themes
+
+PageIndicator reverses its visible page order in a right-to-left theme while
+keeping the current pill and overflow-size cues attached to their logical
+pages. A tap on the physical left advances and a tap on the physical right
+goes back, matching the mirrored arrow keys.
+
+`ui_navigation4_v2` holds the drawn pill, both tap sides and both arrow keys on
+Windows and Linux. The Segoe review is
+`build/ux/page-indicator-rtl-segoe.png`.
