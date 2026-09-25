@@ -657,6 +657,23 @@ fn destination_pick_fire(ctx: *void) -> err {
     ret widget.focus_key(p.runtime, p.focus)
 }
 
+fn destination_actions(a: *mem.Arena, first: widget.Key, t: *const control.Theme, picks: []const widget.Submit, selected: usize) -> ([]widget.Submit, usize, err) {
+    let (contexts, contexts_error) = mem.alloc[DestinationPick](a, picks.len)
+    if contexts_error != ok { ret (zero, 0usize, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, picks.len)
+    if actions_error != ok { ret (zero, 0usize, TooLarge) }
+    var tab_stop = selected
+    if tab_stop >= picks.len { tab_stop = 0usize }
+    var i = 0usize
+    while i < picks.len {
+        if widget.focus_within(t.runtime, first + u64(i)) { tab_stop = i }
+        contexts[i] = DestinationPick { action: picks[i], runtime: t.runtime, focus: first + u64(i) }
+        actions[i] = widget.Submit { ctx: mem.cast[*void](&contexts[i]), invoke: destination_pick_fire }
+        i += 1usize
+    }
+    ret (actions[0usize..picks.len], tab_stop, ok)
+}
+
 type DestinationMove = struct { runtime: *widget.Runtime, first: widget.Key, count: usize, backward: bool, edge: bool }
 
 fn destination_move_fire(ctx: *void) -> err {
@@ -678,11 +695,11 @@ fn destination_move_fire(ctx: *void) -> err {
     ret widget.focus_key(m.runtime, m.first + u64(next_index))
 }
 
-fn destination_tab_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, form: DestinationForm, picks: []const widget.Submit, sem: widget.Semantics, body: widget.Node) -> (widget.Node, err) {
+fn destination_tab_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, form: DestinationForm, picks: []const widget.Submit, direct_keys: bool, sem: widget.Semantics, body: widget.Node) -> (widget.Node, err) {
     let (moves, moves_error) = mem.alloc[DestinationMove](a, 4usize)
     if moves_error != ok { ret (zero, TooLarge) }
     var direct = 0usize
-    if t.tokens.metrics.control_height <= t.tokens.sizes.control_sm {
+    if direct_keys && t.tokens.metrics.control_height <= t.tokens.sizes.control_sm {
         direct = picks.len
         if direct > 9usize { direct = 9usize }
     }
@@ -870,26 +887,8 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
 // tabs where the content changes without a URL).
 fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Destination, selected: usize, picks: []const widget.Submit, form: DestinationForm, extent: f32) -> (widget.Node, err) {
     if picks.len != items.len { ret (zero, TooLarge) }
-    let (pick_contexts, pick_contexts_error) = mem.alloc[DestinationPick](a, items.len)
-    if pick_contexts_error != ok { ret (zero, TooLarge) }
-    let (pick_actions, pick_actions_error) = mem.alloc[widget.Submit](a, items.len)
-    if pick_actions_error != ok { ret (zero, TooLarge) }
-    var tab_stop = selected
-    if tab_stop >= items.len { tab_stop = 0usize }
-    var focused = 0usize
-    while focused < items.len {
-        if widget.focus_within(t.runtime, key + 1u64 + u64(focused)) {
-            tab_stop = focused
-            break
-        }
-        focused += 1usize
-    }
-    var action_index = 0usize
-    while action_index < items.len {
-        pick_contexts[action_index] = DestinationPick { action: picks[action_index], runtime: t.runtime, focus: key + 1u64 + u64(action_index) }
-        pick_actions[action_index] = widget.Submit { ctx: mem.cast[*void](&pick_contexts[action_index]), invoke: destination_pick_fire }
-        action_index += 1usize
-    }
+    let (pick_actions, tab_stop, pick_actions_error) = destination_actions(a, key + 1u64, t, picks, selected)
+    if pick_actions_error != ok { ret (zero, pick_actions_error) }
     var sem: widget.Semantics = zero
     sem.role = 20u8
     sem.label = "Main"
@@ -908,7 +907,7 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         side.padding = style.EdgeLengths { left: rim, top: rim, right: rim, bottom: rim }
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, side, rows)
         sem.row_count = u32(items.len)
-        let (made, made_error) = destination_tab_list(a, key, t, form, pick_actions[0usize..items.len], sem, body[0usize])
+        let (made, made_error) = destination_tab_list(a, key, t, form, pick_actions, true, sem, body[0usize])
         ret (made, made_error)
     }
     let bottom = form == .Bottom
@@ -1016,7 +1015,7 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 12.0 }, sheet, cells[0usize..items.len])
         sem.row_count = u32(items.len)
     }
-    let (made, made_error) = destination_tab_list(a, key, t, form, pick_actions[0usize..items.len], sem, body[0usize])
+    let (made, made_error) = destination_tab_list(a, key, t, form, pick_actions, true, sem, body[0usize])
     ret (made, made_error)
 }
 
@@ -1530,10 +1529,14 @@ fn navigation_drawer(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
 }
 
 // A drawer's sheet (D973): the optional header, then the rows, in a column
-// `width` wide, `pad` in; a list named "Main" (keyed `key`).
+// `width` wide, `pad` in; a list named "Main" (keyed `key`). The selected or
+// focused row is its one Tab stop; Up/Down move focus, Home/End jump, and the
+// pressable's Enter and Space activate it.
 fn drawer_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, row_height: f32, start: f32, end: f32, pad: f32, head_top: f32, head_bottom: f32, width: f32) -> (widget.Node, err) {
     if picks.len != items.len { ret (zero, TooLarge) }
-    let (rows, rows_error) = destination_rows(a, key + 1u64, t, items, selected, picks, items.len, row_height, start, end, control.max_zero(width - 2.0 * pad))
+    let (pick_actions, tab_stop, pick_actions_error) = destination_actions(a, key + 1u64, t, picks, selected)
+    if pick_actions_error != ok { ret (zero, pick_actions_error) }
+    let (rows, rows_error) = destination_rows(a, key + 1u64, t, items, selected, pick_actions, tab_stop, row_height, start, end, control.max_zero(width - 2.0 * pad))
     if rows_error != ok { ret (zero, rows_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, rows.len + 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -1564,7 +1567,8 @@ fn drawer_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header:
     sem.role = 20u8
     sem.label = "Main"
     sem.row_count = u32(items.len)
-    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
+    let (made, made_error) = destination_tab_list(a, key, t, .Sidebar, pick_actions, false, sem, column[0usize])
+    ret (made, made_error)
 }
 
 // v2 (D973, docs/ux/components/NavigationDrawer, modal): 256 to 360 wide and the

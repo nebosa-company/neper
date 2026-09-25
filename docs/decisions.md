@@ -23027,3 +23027,13 @@ wrapper as pointer and default-key activation, and is absent at touch density.
 
 `ui_navigation3_v2` holds direct activation and focus on Windows and Linux. The
 reviewed surface is unchanged.
+
+## D1137 — Navigation drawers use roving row focus
+
+Standard and modal NavigationDrawers keep only the selected or focused
+destination in the Tab order. Up/Down and Home/End move through destination
+rows while skipping headings and dividers, and pointer or default-key
+activation follows the same stable-focus action wrapper as DestinationBar.
+
+`ui_navigation3_v2` holds both drawer forms on Windows and Linux. The reviewed
+surface is unchanged.
