@@ -34,8 +34,8 @@ use e.ui.widget
 type Counter = struct { count: usize }
 
 // The counters: 0-4 crumbs, 5 overflow toggle, 6-8 tabs, 9 menu toggles, 10
-// commands.
-type Store = struct { counters: [12]Counter, subs: [12]widget.Submit, crumbs: [5]widget.Submit, tabs: [3]widget.Submit, toggles: [2]widget.Submit, file: [5]navigation.BarCommand, submenu: [2]navigation.BarCommand, edit: [1]navigation.BarCommand, menus: [2]navigation.BarMenu }
+// commands, 11-12 submenu toggles, 13 the deep command.
+type Store = struct { counters: [14]Counter, subs: [14]widget.Submit, crumbs: [5]widget.Submit, tabs: [3]widget.Submit, toggles: [2]widget.Submit, file: [5]navigation.BarCommand, submenu: [2]navigation.BarCommand, deep: [1]navigation.BarCommand, edit: [1]navigation.BarCommand, menus: [2]navigation.BarMenu }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -185,7 +185,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     stores[0usize] = store
     let s = &stores[0usize]
     var i = 0usize
-    while i < 12usize {
+    while i < 14usize {
         s.subs[i] = widget.Submit { ctx: mem.cast[*void](&s.counters[i]), invoke: on_count }
         i += 1usize
     }
@@ -227,6 +227,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.submenu[1usize] = command
     s.submenu[1usize].label = "Workspace"
     s.submenu[1usize].radio = true
+    s.deep[0usize] = command
+    s.deep[0usize].label = "Pinned"
+    s.deep[0usize].action = s.subs[13usize]
+    s.submenu[1usize].submenu = s.deep[..]
+    s.submenu[1usize].submenu_toggle = s.subs[12usize]
     s.file[2usize].submenu = s.submenu[..]
     s.file[2usize].submenu_toggle = s.subs[11usize]
     s.edit[0usize] = command
@@ -377,6 +382,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (sub_returned, has_sub_returned) = testing.focused(&harness)
     if !has_sub_returned || !same_element(sub_returned, original) { os.exit(67i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 2450u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || s.counters[11usize].count != 3usize { os.exit(67i32) }
+    // A second cascade level reuses the same menu behavior and closes the full
+    // chain after its leaf runs.
+    if widget.focus(&runtime, testing.by_key(&harness, 2451u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok || s.counters[12usize].count != 1usize { os.exit(76i32) }
+    s.submenu[1usize].submenu_open = true
+    let (root_deep, root_deep_error) = build(&f, &theme, s, false, 0usize)
+    if root_deep_error != ok || testing.pump(&harness, root_deep, time.Instant { nanos: 2215000000i64 }) != ok { os.exit(77i32) }
+    let (tree_deep, tree_deep_error) = testing.semantics(&harness)
+    let (workspace_node, has_workspace_node) = find(tree_deep, .MenuItemRadio, "Workspace")
+    if tree_deep_error != ok { os.exit(78i32) }
+    if !has_workspace_node { os.exit(80i32) }
+    if !workspace_node.state.expanded { os.exit(81i32) }
+    if !has_action(workspace_node, .ShowMenu) { os.exit(82i32) }
+    if !same_element(workspace_node.relations.controls, testing.by_key(&harness, 78385u64).element) { os.exit(83i32) }
+    if testing.by_key(&harness, 78386u64).count != 1usize { os.exit(84i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 78386u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.counters[13usize].count != 1usize || s.counters[12usize].count != 2usize || s.counters[11usize].count != 4usize || s.counters[9usize].count != 2usize { os.exit(79i32) }
+    s.submenu[1usize].submenu_open = false
     s.counters[9usize].count = 0usize
     s.counters[10usize].count = 0usize
     s.file[2usize].submenu_open = false

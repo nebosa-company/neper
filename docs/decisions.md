@@ -22857,3 +22857,14 @@ manager publishes it. The UI converts both rectangles through the same scale.
 
 `ui_host` holds a positive work area contained by its screen on Windows and
 Linux. The change is host metadata only; reviewed surfaces are unchanged.
+
+## D1119 — Menu bar cascades reuse the recursive command model
+
+`BarCommand.submenu` now recurses beyond the first child menu. Existing title,
+top-menu and first-submenu keys remain unchanged; deeper overlays derive stable
+path keys, so they cannot collide with adjacent top-level menu allocations.
+
+The existing overlay scopes provide Right/Left traversal, Show menu, Expanded
+and Controls semantics, hover timing, safe-triangle travel and full-chain leaf
+dismissal at every level. `ui_navigation2_v2` holds a second cascade on Windows
+and Linux. The reviewed first-level surface is unchanged.

@@ -978,9 +978,10 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // separator is a 1px `outline-variant` line with 8 above and below. A disabled
 // command is `on-surface` at 38% under no layer. A MenuBar in the tree named
 // by `label`.
-// A command can open one submenu to its right, overlapping by 4 and aligned 8
-// above the row; Right opens it, Left closes it, and a leaf closes both menus.
-// ponytail: one submenu level only; no collapsed form.
+// A command can open a submenu to its right, overlapping by 4 and aligned 8
+// above the row; cascades repeat that rule, Right opens one level, Left closes
+// it, and a leaf closes the full chain.
+// ponytail: no collapsed form.
 // Command dismissal and focus return are shared by the widget runtime.
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
@@ -1043,11 +1044,11 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // A menu bar's menu (D972): a modal overlay 2 below `anchor` while `open`, the
 // commands keyed `key + 1 + index`; a press outside it or Escape fires `dismiss`.
 fn bar_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    let (made, made_error) = bar_menu_at(a, key, t, anchor, label, commands, open, dismiss, .Below, geometry.Point { x: 0.0, y: 2.0 }, true)
+    let (made, made_error) = bar_menu_at(a, key, t, anchor, label, commands, open, dismiss, .Below, geometry.Point { x: 0.0, y: 2.0 }, 0u8)
     ret (made, made_error)
 }
 
-fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, allow_submenus: bool) -> (widget.Node, err) {
+fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if commands.len > 14usize { ret (zero, TooLarge) }
     var slotted = false
@@ -1063,7 +1064,6 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     while i < commands.len {
         let c = &commands[i]
         let has_submenu = c.submenu.len != 0usize
-        if has_submenu && !allow_submenus { ret (zero, TooLarge) }
         if c.separated && i > 0usize {
             let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
             if lines_error != ok { ret (zero, TooLarge) }
@@ -1155,7 +1155,8 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
         var sem_actions = 0u32
         var controls = 0u64
         var chosen = &c.action
-        let submenu_key = key + 15u64 + 16u64 * u64(i)
+        var submenu_key = key + 15u64 + 16u64 * u64(i)
+        if depth > 0u8 { submenu_key = key * 32u64 + 16u64 + u64(i) }
         if has_submenu {
             sem_actions = accessibility.ACTION_SHOW_MENU
             controls = submenu_key
@@ -1167,7 +1168,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
         rows[n] = made
         n += 1usize
         if has_submenu {
-            let (nested, nested_error) = bar_menu_at(a, submenu_key, t, item_key, c.label, c.submenu, c.submenu_open, &c.submenu_toggle, .Right, geometry.Point { x: -4.0, y: -8.0 }, false)
+            let (nested, nested_error) = bar_menu_at(a, submenu_key, t, item_key, c.label, c.submenu, c.submenu_open, &c.submenu_toggle, .Right, geometry.Point { x: -4.0, y: -8.0 }, depth + 1u8)
             if nested_error != ok { ret (zero, nested_error) }
             rows[n] = nested
             n += 1usize
