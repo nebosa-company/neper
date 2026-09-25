@@ -750,8 +750,129 @@ fn pagination_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // `count`) is "…" 20 wide (24 touch) out of the tree. Compact, "Page 12 of 24" in
 // `label-large` stands between the buttons. A group named `label` saying the
 // current page of the count.
-// ponytail: no table-footer variant (range and rows per page); the focus ring is
+// (D1239) The table footer is `pagination_footer`.
+// ponytail: the focus ring is
 // the runtime's.
+// (D1239) `value` written with `separator` between each group of three digits
+// ("1,284"); the length.
+fn write_grouped(out: []u8, value: usize, separator: u8) -> usize {
+    var digits: [24]u8 = zero
+    var count = 0usize
+    var rest = value
+    while true {
+        digits[count] = u8(48usize + rest % 10usize)
+        count += 1usize
+        rest = rest / 10usize
+        if rest == 0usize { break }
+    }
+    var at = 0usize
+    while count > 0usize {
+        count -= 1usize
+        if at < out.len { out[at] = digits[count] }
+        at += 1usize
+        if count > 0usize && count % 3usize == 0usize {
+            if at < out.len { out[at] = separator }
+            at += 1usize
+        }
+    }
+    ret at
+}
+
+// (D1239) The first record a table shows after its page size becomes `size`:
+// the start of the page that still holds the old first record (index `first`),
+// so it stays in view -- 21-40 at 20 per page becomes 1-50 at 50.
+fn page_first_after_resize(first: usize, size: usize) -> usize {
+    if size == 0usize { ret 0usize }
+    ret first / size * size
+}
+
+// (D1239, docs/ux/components/Pagination, table footer) Under a table: a row
+// `control-lg` 48 tall, end-aligned, 16 between groups: "Rows per page" in
+// `body-medium` `on-surface-variant` before a select (keyed `key + 1`) of `sizes`
+// with `size` chosen, opened by `size_toggle` and picking through `size_picks`;
+// the range "21-40 of 1,284" (an en dash, the digits grouped with ',' or, for a
+// `separator` of '.', a dot) in `on-surface`; then Previous and Next icon buttons
+// (`key + 2`, `key + 3`), disabled at the ends, turning to the first record of the
+// neighbouring page through `turn`. A group in the tree named `label`.
+fn pagination_footer(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, total: usize, first: usize, size: usize, sizes: []const usize, size_open: bool, size_toggle: *const widget.Submit, size_picks: []const widget.Submit, turn: widget.Change[usize], separator: u8, width: f32) -> (widget.Node, err) {
+    if sizes.len == 0usize || size_picks.len != sizes.len || size == 0usize { ret (zero, TooLarge) }
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var caption = control.text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (per_page, per_page_error) = control.colored_text(a, 0u64, "Rows per page", t, caption, muted)
+    if per_page_error != ok { ret (zero, per_page_error) }
+    parts[0usize] = per_page
+    // The select of sizes, its options written once into the arena.
+    let (options, options_error) = mem.alloc[str](a, sizes.len)
+    if options_error != ok { ret (zero, TooLarge) }
+    var chosen = 0usize
+    var o = 0usize
+    while o < sizes.len {
+        let (digits, digits_error) = mem.alloc[u8](a, 24usize)
+        if digits_error != ok { ret (zero, TooLarge) }
+        let n = control.write_i64(digits, i64(sizes[o]))
+        options[o] = digits[0usize..n]
+        if sizes[o] == size { chosen = o }
+        o += 1usize
+    }
+    let (picker, picker_error) = control.select(a, key + 1u64, t, "Rows per page", options, chosen, size_open, size_toggle, size_picks)
+    if picker_error != ok { ret (zero, picker_error) }
+    parts[1usize] = picker
+    // The range.
+    var last = first + size
+    if last > total { last = total }
+    let (range_bytes, range_error) = mem.alloc[u8](a, 96usize)
+    if range_error != ok { ret (zero, TooLarge) }
+    var r = 0usize
+    if total == 0usize {
+        r = write_grouped(range_bytes, 0usize, separator)
+    } else {
+        r = write_grouped(range_bytes, first + 1usize, separator)
+        r += control.copy_text(range_bytes[r..96usize], "–")
+        r += write_grouped(range_bytes[r..96usize], last, separator)
+    }
+    r += control.copy_text(range_bytes[r..96usize], " of ")
+    r += write_grouped(range_bytes[r..96usize], total, separator)
+    let (range_node, range_node_error) = control.colored_text(a, 0u64, range_bytes[0usize..r], t, caption, style.color(t.tokens, .OnSurface))
+    if range_node_error != ok { ret (zero, range_node_error) }
+    parts[2usize] = range_node
+    // Previous and Next.
+    var side = t.tokens.sizes.control_sm
+    var glyph = t.tokens.sizes.icon_sm
+    if touch {
+        side = t.tokens.sizes.control_md
+        glyph = t.tokens.sizes.icon_md
+    }
+    let (turns, turns_error) = mem.alloc[Turn](a, 2usize)
+    if turns_error != ok { ret (zero, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 2usize)
+    if actions_error != ok { ret (zero, TooLarge) }
+    var back = 0usize
+    if first > size { back = first - size }
+    turns[0usize] = Turn { index: back, turn: turn }
+    turns[1usize] = Turn { index: first + size, turn: turn }
+    actions[0usize] = widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: turn_fire }
+    actions[1usize] = widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: turn_fire }
+    let (back_button, back_error) = control.glyph_action(a, key + 2u64, t, .ChevronLeft, "Previous", &actions[0usize], side, glyph, muted, first > 0usize, 0u32, 0u32, 0u64)
+    if back_error != ok { ret (zero, back_error) }
+    let (next_button, next_error) = control.glyph_action(a, key + 3u64, t, .ChevronRight, "Next", &actions[1usize], side, glyph, muted, first + size < total, 0u32, 0u32, 0u64)
+    if next_error != ok { ret (zero, next_error) }
+    parts[3usize] = back_button
+    parts[4usize] = next_button
+    var footer_row = control.sized_style(width, t.tokens.sizes.control_lg)
+    let (row_node, row_node_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_node_error != ok { ret (zero, TooLarge) }
+    row_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 16.0 }, footer_row, parts[0usize..5usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), row_node[0usize..1usize]), ok)
+}
+
 fn paged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, count: usize, current: usize, slots: []const usize, turn: widget.Change[usize], previous_label: str, next_label: str, named: bool, compact: bool) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var side = t.tokens.sizes.control_sm
