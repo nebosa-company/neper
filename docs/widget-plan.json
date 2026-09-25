@@ -1258,7 +1258,7 @@
           "id": "P5-08",
           "name": "Containers to the v2 specification",
           "module": "e.ui.control",
-          "latest_evidence": "D1159 mirrors horizontal Divider start/end insets with the theme direction while leaving vertical top/bottom insets unchanged; ui_containers_v2 holds both directions on Windows and Linux.",
+          "latest_evidence": "D1159 mirrors horizontal Divider start/end insets with the theme direction while leaving vertical top/bottom insets unchanged. D1160 mirrors Disclosure and Expander open/close arrow keys and the closed inline Disclosure chevron in right-to-left themes. ui_containers_v2 holds both directions on Windows and Linux.",
           "components": [
             "AccordionSpec",
             "CardSpec",

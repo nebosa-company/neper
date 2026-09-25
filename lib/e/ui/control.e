@@ -3996,12 +3996,17 @@ fn disclosure_options() -> DisclosureOptions {
     ret out
 }
 
-// Right opening a shut header and Left shutting an open one, around `header`.
-fn toggle_keys(a: *mem.Arena, expanded: bool, toggle: *const widget.Submit, header: widget.Node) -> (widget.Node, err) {
+// The reading-direction forward arrow opens a shut header and the back arrow
+// shuts an open one, around `header` (D1160).
+fn toggle_keys(a: *mem.Arena, expanded: bool, rtl: bool, toggle: *const widget.Submit, header: widget.Node) -> (widget.Node, err) {
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 1usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     var arrow = 39u32
     if expanded { arrow = 37u32 }
+    if rtl {
+        arrow = 37u32
+        if expanded { arrow = 39u32 }
+    }
     shortcuts[0usize] = widget.Shortcut { key: arrow, modifiers: zero, action: *toggle }
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
@@ -4041,6 +4046,7 @@ fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ex
     look.min_height = h
     look.min_width = h
     var kind: GlyphKind = .ChevronRight
+    if t.tokens.direction == .RightToLeft { kind = .ChevronLeft }
     if expanded { kind = .ChevronDown }
     let (head, head_error) = mem.alloc[widget.Node](a, 3usize)
     if head_error != ok { ret (zero, TooLarge) }
@@ -4072,7 +4078,7 @@ fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ex
     }
     let (button_node, button_error) = pressable_states(a, key, t, 3u8, label, look, options.enabled, false, states, actions, key + 1u64, toggle, header)
     if button_error != ok { ret (zero, button_error) }
-    let (keyed, keyed_error) = toggle_keys(a, expanded, toggle, button_node)
+    let (keyed, keyed_error) = toggle_keys(a, expanded, t.tokens.direction == .RightToLeft, toggle, button_node)
     if keyed_error != ok { ret (zero, keyed_error) }
     var count = 1usize
     if expanded { count = 2usize }
@@ -4192,7 +4198,7 @@ fn section_body(a: *mem.Arena, key: widget.Key, header: widget.Key, content: wid
 fn expander_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, options: DisclosureOptions, content: widget.Node) -> (widget.Node, err) {
     let (header, header_error) = section_header(a, key, t, label, options.supporting, expanded, options.enabled, toggle, options.width, t.tokens.sizes.control_xl, .BodyLarge, .BodyMedium)
     if header_error != ok { ret (zero, header_error) }
-    let (keyed, keyed_error) = toggle_keys(a, expanded, toggle, header)
+    let (keyed, keyed_error) = toggle_keys(a, expanded, t.tokens.direction == .RightToLeft, toggle, header)
     if keyed_error != ok { ret (zero, keyed_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }

@@ -30,7 +30,7 @@ use e.ui.testing
 use e.ui.widget
 
 type Hit = struct { store: *Store, index: usize }
-type Store = struct { hits: [8]u32, targets: [8]Hit, actions: [8]widget.Submit, words: [3]str, lines: [3]str, open: [3]bool }
+type Store = struct { hits: [8]u32, targets: [8]Hit, actions: [8]widget.Submit, words: [3]str, lines: [3]str, open: [3]bool, disclosed: bool }
 
 fn on_hit(ctx: *void) -> err {
     let h = mem.cast[*Hit](ctx)
@@ -92,7 +92,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     wrong.message = "Choose one"
     let (seven, e7) = control.group_box_of(a, 31u64, t, "Targets", wrong, fillers[6usize..7usize])
     // A disclosure, open; an expander, shut; an accordion with two open.
-    let (eight, e8) = control.disclosure(a, 40u64, t, "Details", true, &s.actions[1usize], widget.box(45u64, control.sized_style(20.0, 10.0), zero))
+    let (eight, e8) = control.disclosure(a, 40u64, t, "Details", s.disclosed, &s.actions[1usize], widget.box(45u64, control.sized_style(20.0, 10.0), zero))
     var wide = control.disclosure_options()
     wide.width = 200.0
     let (nine, e9) = control.expander_of(a, 50u64, t, "More", false, &s.actions[2usize], wide, fillers[7usize])
@@ -179,6 +179,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     stores[0usize].lines[2usize] = ""
     stores[0usize].open[0usize] = true
     stores[0usize].open[2usize] = true
+    stores[0usize].disclosed = true
     let (frame_storage, storage_error) = mem.alloc[u8](a, 1048576usize)
     if storage_error != ok { os.exit(8i32) }
     var f = mem.arena_from(frame_storage)
@@ -242,6 +243,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Horizontal start/end insets follow reading direction: the 56px blank
     // moves from the left edge to the right edge in RTL.
     tokens.direction = .RightToLeft
+    stores[0usize].disclosed = false
     let (rtl_root, rtl_build_error) = build(&f, &theme, &stores[0usize])
     if rtl_build_error != ok { os.exit(34i32) }
     if testing.pump(&harness, rtl_root, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(35i32) }
@@ -249,6 +251,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if rtl_shot_error != ok { os.exit(36i32) }
     let (rtl_inset, has_rtl_inset) = bounds(&harness, &runtime, 11u64)
     if !has_rtl_inset || !is_color(rtl_shot, at(rtl_inset.x + 30.0, rtl_inset.y + 0.5), edge) || !is_color(rtl_shot, at(rtl_inset.x + 170.0, rtl_inset.y + 0.5), page) { os.exit(37i32) }
+    // In RTL Left opens the shut Disclosure and Right does nothing; once open,
+    // Right closes it. The caller still owns the state between frames.
+    let (rtl_head, has_rtl_head) = bounds(&harness, &runtime, 40u64)
+    if !has_rtl_head || testing.tap(&harness, rtl_head.x + 20.0, rtl_head.y + 20.0) != ok || stores[0usize].hits[1usize] != 3u32 { os.exit(38i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[1usize] != 3u32 { os.exit(39i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || stores[0usize].hits[1usize] != 4u32 { os.exit(40i32) }
+    stores[0usize].disclosed = true
+    let (rtl_open, rtl_open_error) = build(&f, &theme, &stores[0usize])
+    if rtl_open_error != ok || testing.pump(&harness, rtl_open, time.Instant { nanos: 3000000000i64 }) != ok { os.exit(41i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[1usize] != 5u32 { os.exit(42i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(33i32) }
     try io.print("ui containers v2 ok\n")
     ret ok

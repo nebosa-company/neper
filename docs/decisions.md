@@ -23264,3 +23264,13 @@ the physical right, while vertical dividers keep their top and bottom insets.
 
 `ui_containers_v2` holds both left-to-right and right-to-left pixels on Windows
 and Linux. The Segoe review is `build/ux/divider-rtl-inset-segoe.png`.
+
+## D1160 — Disclosure arrows follow reading direction
+
+Disclosure and Expander keyboard scopes now use the reading-direction forward
+arrow to open and the back arrow to close. A closed inline Disclosure also
+mirrors its decorative chevron in right-to-left themes; its key and action stay
+unchanged.
+
+`ui_containers_v2` holds both RTL keyboard directions on Windows and Linux. The
+Segoe review is `build/ux/disclosure-rtl-segoe.png`.
