@@ -23968,3 +23968,17 @@ the button before Tab reaches it.
 and hold that no Dismiss is built at rest, on Windows and Linux. A sweep of all
 103 `ui_*` fixtures on both hosts shows only the 12 pre-existing failures
 recorded in D1195, with unchanged exit codes.
+
+## D1221 — An expander can lead with an icon
+
+`DisclosureOptions` gains `has_icon` and `icon`. With them the expander's header
+leads with a 24 `on-surface-variant` icon 16 before the title, and its open
+content is indented 56 from the start edge, as the Disclosure spec's expander
+row asks: on the left in left-to-right and on the right in right-to-left. The
+shared `section_header` and `section_body` stay unchanged for the accordion and
+the disclosure by delegating to `section_header_icon` and `section_body_from`.
+
+`ui_containers_v2` holds the 56 indent in left-to-right and its absence on the
+left in right-to-left on Windows and Linux. A sweep of all 103 `ui_*` fixtures
+on both hosts shows only the 12 pre-existing failures recorded in D1195, with
+unchanged exit codes.

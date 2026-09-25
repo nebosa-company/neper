@@ -4219,7 +4219,8 @@ fn disclosure(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expan
 // A disclosure's or an expander's extras (D965): the meta after a disclosure's
 // label (a count or summary), the supporting line under an expander's title,
 // whether it is enabled, and an expander's width (0: its header's).
-type DisclosureOptions = struct { meta: str, supporting: str, enabled: bool, width: f32 }
+// (D1221) `has_icon` puts `icon` at the start of an expander's header.
+type DisclosureOptions = struct { meta: str, supporting: str, enabled: bool, width: f32, has_icon: bool, icon: GlyphKind }
 
 fn disclosure_options() -> DisclosureOptions {
     var out: DisclosureOptions = zero
@@ -4343,6 +4344,13 @@ fn expander(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expande
 // `line` role `on-surface-variant`, and a trailing `chevron-down` 24 in
 // `on-surface-variant` (`chevron-up` open) 16 after them; it controls `key + 1`.
 fn section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, supporting: str, expanded: bool, enabled: bool, toggle: *const widget.Submit, width: f32, h: f32, title_role: style.TextRole, line_role: style.TextRole) -> (widget.Node, err) {
+    let (made, made_error) = section_header_icon(a, key, t, title, supporting, expanded, enabled, toggle, width, h, title_role, line_role, false, .ChevronDown)
+    ret (made, made_error)
+}
+
+// (D1221) The same header with, when `has_icon`, a 24 `leading` glyph in
+// `on-surface-variant` 16 before the title.
+fn section_header_icon(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, supporting: str, expanded: bool, enabled: bool, toggle: *const widget.Submit, width: f32, h: f32, title_role: style.TextRole, line_role: style.TextRole, has_icon: bool, leading: GlyphKind) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
     var fade: f32 = 1.0
     if !enabled { fade = t.tokens.states.disabled_content }
@@ -4380,20 +4388,29 @@ fn section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, s
         words[1usize] = line_node
         word_count = 2usize
     }
-    let (row, row_error) = mem.alloc[widget.Node](a, 2usize)
+    let (row, row_error) = mem.alloc[widget.Node](a, 3usize)
     if row_error != ok { ret (zero, TooLarge) }
+    var cells = 0usize
+    if has_icon {
+        let (lead, lead_error) = icon_square(a, muted, leading, t.tokens.sizes.icon_md)
+        if lead_error != ok { ret (zero, lead_error) }
+        row[cells] = lead
+        cells += 1usize
+    }
     var words_style = style.defaults()
     words_style.width = style.Length { Flex: 1.0 }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, words_style, words[0usize..word_count])
+    row[cells] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, words_style, words[0usize..word_count])
+    cells += 1usize
     var kind: GlyphKind = .ChevronDown
     if expanded { kind = .ChevronUp }
     let (chevron, chevron_error) = icon_square(a, muted, kind, t.tokens.sizes.icon_md)
     if chevron_error != ok { ret (zero, chevron_error) }
-    row[1usize] = chevron
+    row[cells] = chevron
+    cells += 1usize
     var row_style = style.defaults()
     if width > 0.0 { row_style.width = style.Length { Px: width - 32.0 } }
     row_style.min_height = style.Length { Px: tall - 16.0 }
-    let header = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, row_style, row[0usize..2usize])
+    let header = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, row_style, row[0usize..cells])
     var states = 0u32
     var actions = accessibility.ACTION_EXPAND
     if expanded {
@@ -4407,6 +4424,12 @@ fn section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, s
 // A section's content (D965): 16 at the sides and below, a group keyed `key`
 // labelled by its header.
 fn section_body(a: *mem.Arena, key: widget.Key, header: widget.Key, content: widget.Node) -> (widget.Node, err) {
+    let (made, made_error) = section_body_from(a, key, header, content, 16.0, 16.0)
+    ret (made, made_error)
+}
+
+// (D1221) The same content `left` and `right` in from the sides.
+fn section_body_from(a: *mem.Arena, key: widget.Key, header: widget.Key, content: widget.Node, left: f32, right: f32) -> (widget.Node, err) {
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = content
@@ -4415,7 +4438,7 @@ fn section_body(a: *mem.Arena, key: widget.Key, header: widget.Key, content: wid
     sem.labelled_by = header
     var padded = style.defaults()
     let side = style.Length { Px: 16.0 }
-    padded.padding = style.EdgeLengths { left: side, top: style.Length { Px: 0.0 }, right: side, bottom: side }
+    padded.padding = style.EdgeLengths { left: style.Length { Px: left }, top: style.Length { Px: 0.0 }, right: style.Length { Px: right }, bottom: side }
     ret (widget.semantics(key, sem, padded, body[0usize..1usize]), ok)
 }
 
@@ -4424,10 +4447,11 @@ fn section_body(a: *mem.Arena, key: widget.Key, header: widget.Key, content: wid
 // ring stands inside it), holding the section header 56 tall (72 with a
 // supporting line) with the title in `body-large` and the supporting line in
 // `body-medium`, and the content 16 in at the sides and below while open. Right
-// opens and Left closes a focused header.
-// ponytail: no leading icon (and its 56 content indent), no motion.
+// opens and Left closes a focused header. (D1221) With `has_icon` the header
+// leads with a 24 `on-surface-variant` icon and the open content is 56 in.
+// ponytail: no motion.
 fn expander_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, options: DisclosureOptions, content: widget.Node) -> (widget.Node, err) {
-    let (header, header_error) = section_header(a, key, t, label, options.supporting, expanded, options.enabled, toggle, options.width, t.tokens.sizes.control_xl, .BodyLarge, .BodyMedium)
+    let (header, header_error) = section_header_icon(a, key, t, label, options.supporting, expanded, options.enabled, toggle, options.width, t.tokens.sizes.control_xl, .BodyLarge, .BodyMedium, options.has_icon, options.icon)
     if header_error != ok { ret (zero, header_error) }
     let (keyed, keyed_error) = toggle_keys(a, expanded, t.tokens.direction == .RightToLeft, toggle, header)
     if keyed_error != ok { ret (zero, keyed_error) }
@@ -4436,7 +4460,10 @@ fn expander_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expa
     parts[0usize] = keyed
     var count = 1usize
     if expanded {
-        let (inner, inner_error) = section_body(a, key + 1u64, key, content)
+        var left: f32 = 16.0
+        var right: f32 = 16.0
+        if options.has_icon && t.tokens.direction == .RightToLeft { right = 56.0 } else if options.has_icon { left = 56.0 }
+        let (inner, inner_error) = section_body_from(a, key + 1u64, key, content, left, right)
         if inner_error != ok { ret (zero, inner_error) }
         parts[1usize] = inner
         count = 2usize
