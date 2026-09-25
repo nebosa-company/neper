@@ -4728,6 +4728,26 @@ fn tab_face(a: *mem.Arena, t: *const Theme, options: *const TabsOptions, i: usiz
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 4.0 }, style.defaults(), parts[0usize..2usize]), ok)
 }
 
+// (D1254) A scrolling tab strip's offset for this frame: where it last stood,
+// moved just enough to show the whole selected tab while that tab has the focus.
+fn tab_strip_offset(runtime: *widget.Runtime, strip_key: widget.Key, tab_key: widget.Key, has_tab: bool) -> f32 {
+    let (s, state_error) = widget.state_of(runtime)
+    if state_error != ok { ret 0.0 }
+    let (strip_id, strip_count) = widget.find_by_key(s, strip_key)
+    if strip_count == 0usize { ret 0.0 }
+    let (offset, has_offset) = widget.scroll_offset_of(runtime, strip_id)
+    if !has_offset { ret 0.0 }
+    if !has_tab || !widget.focus_within(runtime, tab_key) { ret offset }
+    let (tab_id, tab_count) = widget.find_by_key(s, tab_key)
+    if tab_count == 0usize { ret offset }
+    let (view, has_view) = widget.bounds_of(runtime, strip_id)
+    let (tab, has_tab_bounds) = widget.bounds_of(runtime, tab_id)
+    if !has_view || !has_tab_bounds { ret offset }
+    if tab.x < view.x { ret max_zero(offset - (view.x - tab.x)) }
+    if tab.x + tab.width > view.x + view.width { ret offset + (tab.x + tab.width - view.x - view.width) }
+    ret offset
+}
+
 fn tab_enabled(options: *const TabsOptions, i: usize) -> bool {
     ret i >= options.disabled.len || !options.disabled[i]
 }
@@ -4751,8 +4771,10 @@ fn tabs_options() -> TabsOptions {
 // corner, or 4 after the label on a text-only tab, and joins the tab's name.
 // (D1242) With `dots` a tab without a count shows a 6 `error` dot there instead,
 // its name gaining its `badge_names` meaning or "new".
-// ponytail: no overflow button or horizontal scrolling; the
-// indicator does not slide between tabs.
+// (D1254) A scrollable bar given a `width` scrolls sideways and keeps the
+// focused selected tab in view.
+// ponytail: no overflow button or edge fade; the indicator does not slide
+// between tabs.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -4855,6 +4877,20 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 2usize)
     if bar_parts_error != ok { ret (zero, TooLarge) }
     bar_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 0.0 }, strip, items[0usize..labels.len])
+    // (D1254) A scrollable bar with a width scrolls its strip sideways (keyed
+    // `key + 1048576`), clamped, with no thumb; while the selected tab has the
+    // focus the strip brings it fully into view.
+    if !sharing && options.width > 0.0 && mem.address_of(t.runtime) != 0usize {
+        let strip_key = key + 1048576u64
+        let offset = tab_strip_offset(t.runtime, strip_key, key + 1u64 + u64(selected), selected < labels.len)
+        let (strips, strips_error) = mem.alloc[widget.Node](a, 1usize)
+        if strips_error != ok { ret (zero, TooLarge) }
+        strips[0usize] = bar_parts[0usize]
+        var view = style.defaults()
+        view.width = style.Length { Px: options.width }
+        view.overflow = .Clip
+        bar_parts[0usize] = widget.scroll(strip_key, widget.Scroll { axis: .Horizontal, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view, strips[0usize..1usize])
+    }
     var line = style.defaults()
     line.height = style.Length { Px: t.tokens.sizes.divider }
     line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }

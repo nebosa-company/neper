@@ -24482,3 +24482,17 @@ builds from zero, so the next field added to the struct needs no edit there.
 
 `ui_content_v2` holds the Button, its 40 size and the tap; the avatar
 fixtures still pass on Windows and Linux.
+
+## D1254 — Scrollable tab bars scroll
+
+A scrollable (not fixed) `tabs_of` given a `width` puts its strip in a
+sideways, clamped, thumbless scroll viewport keyed `key + 1048576`. The
+wheel, drags and the runtime's usual viewport rules now reach tabs past the
+edge. While the selected tab holds the focus, `tab_strip_offset` moves the
+strip just far enough, using last frame's bounds, to show the whole tab.
+Pointer selection leaves the strip where the person scrolled it. The overflow
+chevron and edge fade are still to come.
+
+`ui_tabs_rtl` holds eight tabs overflowing 200, the focused last tab fully
+shown and the first scrolled out on Windows and Linux; its runtime limits grew
+to hold the second bar.

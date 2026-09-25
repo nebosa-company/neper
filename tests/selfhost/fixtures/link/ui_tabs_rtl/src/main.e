@@ -121,7 +121,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (made_runtime, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 64usize, max_states: 4usize, state_bytes: 128usize, state_classes: 1u16, max_depth: 16u16, max_commands: 256usize })
+    let (made_runtime, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 256usize, max_states: 4usize, state_bytes: 128usize, state_classes: 1u16, max_depth: 24u16, max_commands: 1024usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = made_runtime
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -189,6 +189,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !tab_named(&harness, "Settings, new") { os.exit(34i32) }
     let (iconic_node, iconic_node_error) = build_badged(&frame, &theme, &stores[0usize], true)
     if iconic_node_error != ok || testing.pump(&harness, iconic_node, time.Instant { nanos: 4200000000i64 }) != ok || !tab_named(&harness, "Settings, update ready") || !tab_named(&harness, "Builds, 3 failed") { os.exit(35i32) }
+    // (D1254) Eight scrollable tabs in 200 overflow; once the last (selected) tab
+    // has the focus the strip scrolls just far enough to show all of it.
+    var many_labels: [8]str = zero
+    var many_picks: [8]widget.Submit = zero
+    var m = 0usize
+    while m < 8usize {
+        many_labels[m] = "Tab"
+        many_picks[m] = stores[0usize].actions[0usize]
+        m += 1usize
+    }
+    var scroller = control.tabs_options()
+    scroller.width = 200.0
+    var scroll_step = 0usize
+    while scroll_step < 3usize {
+        frame = mem.arena_from(frame_bytes)
+        let (many, many_error) = control.tabs_of(&frame, 300u64, &theme, many_labels[..], 7usize, many_picks[..], scroller)
+        let (many_page, many_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if many_error != ok || many_page_error != ok { os.exit(36i32) }
+        many_page[0usize] = many
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 80.0), many_page[0usize..1usize]), time.Instant { nanos: 5000000000i64 + i64(scroll_step) }) != ok { os.exit(37i32) }
+        if scroll_step == 0usize && widget.focus(&runtime, testing.by_key(&harness, 308u64).element) != ok { os.exit(38i32) }
+        scroll_step += 1usize
+    }
+    let (strip_view, has_strip_view) = widget.bounds_of(&runtime, testing.by_key(&harness, 1048876u64).element)
+    let (last_tab, has_last_tab) = widget.bounds_of(&runtime, testing.by_key(&harness, 308u64).element)
+    let (first_tab, has_first_tab) = widget.bounds_of(&runtime, testing.by_key(&harness, 301u64).element)
+    let (strip_offset, has_strip_offset) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 1048876u64).element)
+    if !has_strip_view || !has_last_tab || !has_first_tab || !has_strip_offset || !(strip_offset > 0.0) { os.exit(39i32) }
+    if last_tab.x + last_tab.width > strip_view.x + strip_view.width + 0.5 || !(first_tab.x < strip_view.x) { os.exit(40i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui tabs rtl ok\n")
     ret ok
