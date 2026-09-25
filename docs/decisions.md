@@ -25499,3 +25499,22 @@ leading icon, error summary and motion.
 56 in and the shut second section's "1 field needs attention". Shutting the
 first keeps its content half way and drops it once settled. This passes on
 Windows and Linux, and `ui_feedback` and `ui_panes` still pass on both.
+
+## D1322 — Colour fields type Hex, RGB or HSL
+
+The ColorPicker spec's channel row gains its format select.
+`overlay.color_field_format` takes a `ColorFormat` (Hex, Rgb, Hsl) and
+`pick_format`. With `pick_format` set, a Hex / RGB / HSL segmented select
+(keyed `key + 4096`) stands over the channel row, a segment reporting its
+format. The channel field is named by the format and holds the caller's
+text. Helpers convert both ways. `write_color` writes "#rrggbb", "r, g,
+b" (0-255) or "h, s%, l%". `read_color` reads hex as `read_hex`, RGB as
+three whole numbers to 255, and HSL as a hue to 360 and two percentages,
+set apart by anything but digits. `hsl_of` and `hsl_color` convert through
+the picker's HSV. `color_field_with` is the call with Hex and no select.
+The typed opacity readout and the touch mode switch are still to come.
+
+`ui_pickers3_v2` writes orange as "255, 128, 0" and red as "0, 100%,
+50%". It reads "rgb(0, 128, 255)" and "120 100% 50%" and refuses "300,
+0, 0" as RGB. The RGB segment reports RGB. This passes on Windows and
+Linux.

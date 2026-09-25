@@ -62,6 +62,13 @@ fn on_text(ctx: *void, value: str) -> err {
     ret ok
 }
 
+// (D1322) A format segment's report.
+fn on_format(ctx: *void, value: overlay.ColorFormat) -> err {
+    let chosen = mem.cast[*overlay.ColorFormat](ctx)
+    *chosen = value
+    ret ok
+}
+
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.01 && d > -0.01
@@ -327,6 +334,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (recent_box, has_recent_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 814u64).element)
     let picks_before = s.colours
     if !has_recent_box || testing.tap(&harness, recent_box.x + recent_box.width * 0.5, recent_box.y + recent_box.height * 0.5) != ok || s.colours != picks_before + 1u32 || s.colour.blue < 0.85 { os.exit(62i32) }
+    // (D1322) The channel formats: copper written and read back as RGB and HSL;
+    // a select over the channel row whose RGB segment reports RGB.
+    let (formatted, formatted_error) = mem.alloc[u8](a, 32usize)
+    if formatted_error != ok { os.exit(66i32) }
+    let rgb_n = overlay.write_color(formatted, paint.rgba(1.0, 0.5, 0.0, 1.0), .Rgb)
+    if !same(formatted[0usize..rgb_n], "255, 128, 0") { os.exit(67i32) }
+    let hsl_n = overlay.write_color(formatted, paint.rgba(1.0, 0.0, 0.0, 1.0), .Hsl)
+    if !same(formatted[0usize..hsl_n], "0, 100%, 50%") { os.exit(68i32) }
+    let (read_rgb, read_rgb_ok) = overlay.read_color("rgb(0, 128, 255)", .Rgb)
+    let (read_hsl, read_hsl_ok) = overlay.read_color("120 100% 50%", .Hsl)
+    let (_, bad_rgb_ok) = overlay.read_color("300, 0, 0", .Rgb)
+    if !read_rgb_ok || !near(read_rgb.blue, 1.0) || !near(read_rgb.red, 0.0) || !read_hsl_ok || !near(read_hsl.green, 1.0) || !near(read_hsl.red, 0.0) || bad_rgb_ok { os.exit(69i32) }
+    var chosen_format: overlay.ColorFormat = .Hex
+    f = mem.arena_from(frame_storage)
+    let (formatted_field, formatted_field_error) = overlay.color_field_format(&f, 900u64, &theme, "Accent colour", copper(), false, recent_pick, true, &s.press, s.swatches[0usize..6usize], recent_colours[0usize..0usize], s.hex[0usize..16usize], 7usize, recent_typed, 296.0, .Hex, widget.Change[overlay.ColorFormat] { ctx: mem.cast[*void](&chosen_format), invoke: on_format })
+    let (formatted_page, formatted_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if formatted_field_error != ok || formatted_page_error != ok { os.exit(70i32) }
+    formatted_page[0usize] = formatted_field
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), formatted_page[0usize..1usize]), time.Instant { nanos: 6100000000i64 }) != ok { os.exit(71i32) }
+    let format_key = 900u64 + 4096u64
+    let (rgb_segment, has_rgb_segment) = widget.bounds_of(&runtime, testing.by_key(&harness, format_key + 2u64).element)
+    if !has_rgb_segment || testing.tap(&harness, rgb_segment.x + rgb_segment.width * 0.5, rgb_segment.y + rgb_segment.height * 0.5) != ok || chosen_format != .Rgb { os.exit(72i32) }
     try io.print("ui pickers3 v2 ok\n")
     ret ok
 }

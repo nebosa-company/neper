@@ -5099,6 +5099,101 @@ fn hex_value(c: u8) -> u32 {
     ret 16u32
 }
 
+// (D1322) A colour field's channel format: hex, RGB channels, or HSL.
+type ColorFormat = enum u8 { Hex, Rgb, Hsl }
+
+// (D1322) The colour as HSL: hue in degrees, saturation and lightness 0..1.
+fn hsl_of(c: paint.Color) -> (f32, f32, f32) {
+    let (hue, s_v, v) = hsv_of(c)
+    let l = v * (1.0 - s_v * 0.5)
+    var room = l
+    if 1.0 - l < room { room = 1.0 - l }
+    var s_l: f32 = 0.0
+    if room > 0.0 { s_l = (v - l) / room }
+    ret (hue, s_l, l)
+}
+
+// (D1322) The colour at an HSL hue, saturation and lightness.
+fn hsl_color(hue: f32, saturation: f32, lightness: f32, alpha: f32) -> paint.Color {
+    var room = lightness
+    if 1.0 - lightness < room { room = 1.0 - lightness }
+    let v = lightness + saturation * room
+    var s_v: f32 = 0.0
+    if v > 0.0 { s_v = 2.0 * (1.0 - lightness / v) }
+    ret hsv_color(hue, s_v, v, alpha)
+}
+
+// (D1322) The colour as text in `format`: "#rrggbb", "r, g, b" (0-255) or
+// "h, s%, l%"; how many bytes it wrote to `out` (at least 24 long).
+fn write_color(out: []u8, c: paint.Color, format: ColorFormat) -> usize {
+    if format == .Hex { ret write_hex(out, c) }
+    if out.len < 24usize { ret 0usize }
+    var first = i64(channel_byte(c.red))
+    var second = i64(channel_byte(c.green))
+    var third = i64(channel_byte(c.blue))
+    var marked = false
+    if format == .Hsl {
+        let (h, s_l, l) = hsl_of(c)
+        first = i64(h + 0.5)
+        if first >= 360i64 { first = 0i64 }
+        second = i64(s_l * 100.0 + 0.5)
+        third = i64(l * 100.0 + 0.5)
+        marked = true
+    }
+    var n = control.write_i64(out, first)
+    n += control.copy_text(out[n..out.len], ", ")
+    n += control.write_i64(out[n..out.len], second)
+    if marked { n += control.copy_text(out[n..out.len], "%") }
+    n += control.copy_text(out[n..out.len], ", ")
+    n += control.write_i64(out[n..out.len], third)
+    if marked { n += control.copy_text(out[n..out.len], "%") }
+    ret n
+}
+
+// (D1322) Typed text in `format`: hex as `read_hex`; RGB as three whole numbers
+// 0-255 and HSL as a hue 0-360 and two percentages, each set apart by anything
+// but digits (so "rgb(12, 34, 56)" and "30 100% 50%" read); false for anything
+// else. The alpha is 1.
+fn read_color(text: str, format: ColorFormat) -> (paint.Color, bool) {
+    if format == .Hex {
+        let (hexed, hexed_ok) = read_hex(text)
+        ret (hexed, hexed_ok)
+    }
+    var values: [3]i64 = zero
+    var count = 0usize
+    var i = 0usize
+    while i < text.len {
+        if text[i] >= 48u8 && text[i] <= 57u8 {
+            if count >= 3usize { ret (zero, false) }
+            var v = 0i64
+            while i < text.len && text[i] >= 48u8 && text[i] <= 57u8 {
+                v = v * 10i64 + i64(text[i] - 48u8)
+                if v > 1000i64 { ret (zero, false) }
+                i += 1usize
+            }
+            values[count] = v
+            count += 1usize
+        } else {
+            i += 1usize
+        }
+    }
+    if count != 3usize { ret (zero, false) }
+    if format == .Rgb {
+        if values[0usize] > 255i64 || values[1usize] > 255i64 || values[2usize] > 255i64 { ret (zero, false) }
+        ret (paint.rgba(f32(values[0usize]) / 255.0, f32(values[1usize]) / 255.0, f32(values[2usize]) / 255.0, 1.0), true)
+    }
+    if values[0usize] > 360i64 || values[1usize] > 100i64 || values[2usize] > 100i64 { ret (zero, false) }
+    ret (hsl_color(f32(values[0usize] % 360i64), f32(values[1usize]) / 100.0, f32(values[2usize]) / 100.0, 1.0), true)
+}
+
+// (D1322) A format segment's press.
+type FormatPick = struct { format: ColorFormat, pick: widget.Change[ColorFormat] }
+
+fn format_pick_fire(ctx: *void) -> err {
+    let p = mem.cast[*FormatPick](ctx)
+    ret widget.fire_change[ColorFormat](p.pick, p.format)
+}
+
 // Typed hex: 3, 6 or 8 digits, with or without "#"; false for anything else.
 fn read_hex(text: str) -> (paint.Color, bool) {
     var start = 0usize
@@ -5426,7 +5521,9 @@ fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
 // in `label-medium` `on-surface-variant`; the swatches 32 (40 on touch) in 40
 // cells, so 8 apart, the chosen one in a 2px `on-surface` ring 2 outside it.
 // (D1274) `color_field_with` adds the Recent swatches.
-// ponytail: the hue comes from the colour, so it resets to red at a grey; hex only (no RGB/HSL select), the readout is not typed, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
+// (D1322) `color_field_format` adds the Hex / RGB / HSL select (`write_color`,
+// `read_color`).
+// ponytail: the hue comes from the colour, so it resets to red at a grey; the readout is not typed, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
 fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     var no_recent: []const paint.Color = zero
     let (made, made_error) = color_field_with(a, key, t, label, value, with_alpha, change, open, toggle, swatches, no_recent, hex, hex_len, typed, width)
@@ -5438,6 +5535,18 @@ fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // "Recent", after "Theme", keyed on from the theme swatches
 // (`key + 8 + swatches.len + index`); the caller adds each committed colour.
 fn color_field_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, recent_colors: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
+    var no_format: widget.Change[ColorFormat] = zero
+    let (made, made_error) = color_field_format(a, key, t, label, value, with_alpha, change, open, toggle, swatches, recent_colors, hex, hex_len, typed, width, .Hex, no_format)
+    ret (made, made_error)
+}
+
+// (D1322, docs/ux/components/ColorPicker, channel row) `color_field_with` whose
+// channel text is in `format`: with `pick_format` set, a Hex / RGB / HSL
+// segmented select (keyed `key + 4096`, its segments after)
+// stands over the channel row, a segment reporting its format; the field (named
+// by the format) holds the caller's text, which the caller writes with
+// `write_color` and reads with `read_color`.
+fn color_field_format(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, recent_colors: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32, format: ColorFormat, pick_format: widget.Change[ColorFormat]) -> (widget.Node, err) {
     if swatches.len > 64usize { ret (zero, TooLarge) }
     var recent = recent_colors
     if recent.len > 8usize { recent = recent_colors[0usize..8usize] }
@@ -5477,7 +5586,7 @@ fn color_field_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
     parts[0usize] = head
     if open {
         let inner = control.max_zero(width - 32.0)
-        let (blocks, blocks_error) = mem.alloc[widget.Node](a, 9usize)
+        let (blocks, blocks_error) = mem.alloc[widget.Node](a, 10usize)
         if blocks_error != ok { ret (zero, TooLarge) }
         var used = 0usize
         let area_h: f32 = control.if_else(touch, 200.0, 150.0)
@@ -5496,6 +5605,31 @@ fn color_field_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
             blocks[used] = fades
             used += 1usize
         }
+        // (D1322) The format select over the channel row.
+        if widget.change_set[ColorFormat](pick_format.invoke) {
+            let (format_labels, format_labels_error) = mem.alloc[str](a, 3usize)
+            let (format_picks, format_picks_error) = mem.alloc[FormatPick](a, 3usize)
+            let (format_presses, format_presses_error) = mem.alloc[widget.Submit](a, 3usize)
+            if format_labels_error != ok || format_picks_error != ok || format_presses_error != ok { ret (zero, TooLarge) }
+            format_labels[0usize] = "Hex"
+            format_labels[1usize] = "RGB"
+            format_labels[2usize] = "HSL"
+            format_picks[0usize] = FormatPick { format: .Hex, pick: pick_format }
+            format_picks[1usize] = FormatPick { format: .Rgb, pick: pick_format }
+            format_picks[2usize] = FormatPick { format: .Hsl, pick: pick_format }
+            var fp = 0usize
+            while fp < 3usize {
+                format_presses[fp] = widget.Submit { ctx: mem.cast[*void](&format_picks[fp]), invoke: format_pick_fire }
+                fp += 1usize
+            }
+            var chosen_format = 0usize
+            if format == .Rgb { chosen_format = 1usize }
+            if format == .Hsl { chosen_format = 2usize }
+            let (formats, formats_error) = control.segmented_control(a, key + 4096u64, t, "Format", format_labels[0usize..3usize], chosen_format, format_presses[0usize..3usize], true)
+            if formats_error != ok { ret (zero, formats_error) }
+            blocks[used] = formats
+            used += 1usize
+        }
         // The channel row: the hex field and, with alpha, the opacity readout.
         let channel_h: f32 = control.if_else(touch, t.tokens.sizes.control_lg, t.tokens.sizes.control_sm)
         var readout_w: f32 = 0.0
@@ -5512,6 +5646,8 @@ fn color_field_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         var hex_sem: widget.Semantics = zero
         hex_sem.role = 2u8
         hex_sem.label = "Hex"
+        if format == .Rgb { hex_sem.label = "RGB" }
+        if format == .Hsl { hex_sem.label = "HSL" }
         channel_row[0usize] = widget.semantics(0u64, hex_sem, style.defaults(), channel_row[3usize..4usize])
         var channel_count = 1usize
         if with_alpha {
