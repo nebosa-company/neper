@@ -44,7 +44,7 @@ The variant is the state. A message switches variant in place and keeps its posi
 ## Behaviour
 - Timing follows the control's validation: first on blur or submit, then live while the reader corrects it. A message never appears while the reader is still typing a first value.
 - Pending shows only if the check has run 300 ms, which prevents a flash for fast checks. The result replaces it directly.
-- Changes swap in place with a `duration-short-2` cross-fade (`ease-standard`). The height changes with no animation, which avoids layout wobble.
+- Changes swap in place with a `duration-short-2` cross-fade (`ease-standard`). The height changes with no animation, which avoids layout wobble. With reduced motion the cross-fade stays (it is not movement).
 - The counter updates on every change. It turns `error` only past the limit and then the text says by how much.
 
 ## Platform adaptation

@@ -644,13 +644,14 @@ The runtime applies the policy. Components only declare their `Reduced` value:
 | Motion class | Reduced behaviour |
 |---|---|
 | Movement, scale, grow or rotate that the app started (enter/exit, routes, hero, list moves) | the component's `Reduced`: default `Fade` over 100 ms (the v2 language), or `Instant` |
-| Colour and opacity changes (state layers, cross-fades) | unchanged, because they are not motion |
-| Loops (indeterminate progress, skeleton sweep, pulses, carousel autoplay) | `StaticFrame`: the documented static frame, and **no frames are requested** |
+| Colour and opacity changes (state layers, cross-fades) | unchanged by default, because they are not motion; a component's own `Reduced` value overrides this (D1215) |
+| Loops (spins, sweeps, shimmers, caret blink, carousel autoplay) | `StaticFrame`: the documented static frame, and **no frames are requested** |
+| Opacity-only loops (the indeterminate ProgressBar and ProgressRing pulse, 38–100% every 2 s) | keep running, paced at **10 frames per second** by the scope's frame budget (D1216) |
 | Motion that follows the user (drag, fling coast, scrubbing, predictive back) | unchanged |
 | Programmatic scrolls (jump to latest, Home or End, smooth wheel) | instant or discrete |
 
 `repeat(count = 0)` under reduced motion settles immediately at its
-documented static value. This is the rule that keeps idle apps idle for
+documented static value, unless it animates opacity alone (D1216). This is the rule that keeps idle apps idle for
 people who ask for less motion.
 
 ### 10.3 Frame pacing
@@ -761,6 +762,8 @@ Every component that has a `Transition` gets a fixture that:
    Tooltip's scale at 50% = `lerp(0.8, 1, EmphasizedDecelerate(0.5))`).
 2. **Settles:** `pump_until_settled` returns within `duration + 1 frame`, and
    afterwards `frames_requested` is false for 3 more frames (**idle check**).
+   A visible indeterminate progress control is exempt under reduced motion.
+   It asserts the 10 fps ceiling instead (D1216).
 3. **Interrupts:** it reverses at 50%, and no frame moves more than the
    largest frame step of the uninterrupted run.
 4. **Checks semantics:** the accessibility tree at 0% and 50% equals the tree
@@ -774,7 +777,7 @@ Every component that has a `Transition` gets a fixture that:
 Generated from the `Transition` constants: for each component, reduced motion
 must (a) settle within its `Reduced` behaviour (≤ 1 frame for `Instant`,
 100 ms for `Fade`), (b) for loops, request **zero** frames after the first
-build, and (c) leave motion that follows the user unchanged (a drag fixture
+build (an opacity-only loop requests at most 10 a second, D1216), and (c) leave motion that follows the user unchanged (a drag fixture
 gives identical samples with reduced motion on and off).
 
 ### 12.5 Composition and stress

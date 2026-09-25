@@ -36,7 +36,7 @@ For items that are rows of the same shape use List. For a labelled set of contro
 | Selected | 2 px `primary` outline inside the edge, 24 `primary` check disc at the top end, `space-2` in |
 
 ## States
-- Hover: `on-surface` state layer at `state-hover`; elevated cards rise to `elevation-2`, filled and outlined to `elevation-1`.
+- Hover: `on-surface` state layer at `state-hover`; elevated cards rise to `elevation-2`, filled and outlined to `elevation-1`; the rise takes `duration-short-3` with `ease-standard`.
 - Focus: `state-focus` layer and the focus ring, 3 px `focus-ring`, 2 px outside.
 - Pressed: `state-pressed` layer; ripple from the touch point on touch hosts.
 - Dragged: `state-dragged` layer, `elevation-4`, tilted 1.5 degrees and scaled to 102%.
@@ -48,7 +48,7 @@ For items that are rows of the same shape use List. For a labelled set of contro
 - A pressable card has one primary action: the whole card opens the item. Buttons inside it are separate targets and keep their own states; the card's layer does not show while a child is hovered.
 - Keyboard: Tab focuses the card, Enter opens it, Tab again reaches its buttons. In a grid of cards, arrows move between cards (roving focus), Home and End go to the first and last, and Tab leaves the grid.
 - Selection mode: Space toggles the focused card; a long press on touch enters selection mode; Ctrl/Cmd+click toggles, Shift+click selects a range.
-- Drag to reorder: long press (touch) or press and move 4 px (pointer) lifts the card; Escape cancels and the card returns over `duration-medium-1` with `ease-standard`.
+- Drag to reorder: long press (touch) or press and move 4 px (pointer) lifts the card (over `duration-short-3` with `ease-standard`); Escape cancels and the card returns over `duration-medium-1` with `ease-standard`.
 - Opening a card may expand it into the detail view with a container transform over `duration-long-2` with `ease-emphasized-decelerate`; reduced motion cross-fades.
 
 ## Platform adaptation

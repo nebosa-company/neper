@@ -51,7 +51,7 @@ No bar draws a divider: the tonal change on scroll separates it from the content
 - Back (leading) pops the NavigationStack; Escape and the host's back gesture do the same.
 - Overflow: actions beyond three go into More, in the same order; an action never moves between the bar and More while the window keeps its size class.
 - Tap the bar's empty space on iOS scrolls the page to the top.
-- Motion: collapse and expand follow the scroll position (no easing); the contextual bar enters with `ease-emphasized-decelerate` over `duration-medium-2` and leaves with `ease-emphasized-accelerate` over `duration-short-4`. Reduced motion: cross-fade over `duration-short-3`.
+- Motion: collapse and expand follow the scroll position (no easing); the contextual bar fades in with a 4px drop, `ease-emphasized-decelerate`, over `duration-medium-2` and leaves with `ease-emphasized-accelerate` over `duration-short-4`. Reduced motion: cross-fade over `duration-short-3`.
 
 ## Platform adaptation
 | Host | What changes |

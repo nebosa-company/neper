@@ -52,7 +52,7 @@ Use Data grid when cells are edited in place. Use Tree table when rows nest. Use
 - Pointer: click a row to open, a checkbox to select, Shift and Ctrl/⌘ modifiers for ranges and toggles; right-click for the row menu.
 - Sorting and filtering keep the selection by key and keep the focused row in view if it survives the filter.
 - Virtualisation: only visible rows and one screen each way are built; the scroll position is anchored to the focused row across updates.
-- Live updates: changed cells cross-fade their new value in `duration-short-4`; new rows insert without moving the row under the pointer.
+- Live updates: changed cells cross-fade their new value in `duration-short-4`; new rows insert as in List (the height grows and the row fades in over `duration-medium-1`, `ease-emphasized-decelerate`) without moving the row under the pointer.
 - Column settings (widths, order, hidden, sort) persist per table.
 - Reduced motion: no cross-fades on updates; no animated insertions.
 

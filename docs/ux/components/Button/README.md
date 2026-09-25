@@ -35,7 +35,7 @@ Buttons in a row sit `space-2` apart; in a dialog's action row they align to the
 ## States
 - Hover: state layer at `state-hover`; an elevated button also rises to `elevation-2`.
 - Focus: `state-focus` layer plus the focus ring. The ring shows only after keyboard navigation, never after a press.
-- Pressed: `state-pressed` layer; on touch hosts a ripple spreads from the touch point over `duration-medium-2` with `ease-standard`.
+- Pressed: `state-pressed` layer; on touch hosts a ripple spreads from the touch point over `duration-medium-2` with `ease-standard`. With reduced motion there is no ripple; the pressed layer alone shows the press.
 - Disabled: container `on-surface` at 12%, label at 38%, no shadow, not focusable. Prefer an enabled button that explains what is missing over a disabled one that can't.
 - Loading: the label is kept and replaced by a 18px circular progress in the label colour; the width must not change.
 

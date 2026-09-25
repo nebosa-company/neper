@@ -40,7 +40,7 @@ For a single choice among options use Radio group (it is a group box with radio 
 - Invalid (group-level): the box edge becomes 2 px `error` and the message shows below with the `error` icon. Field-level errors stay on the field.
 - Disabled: title and rows at 38% `on-surface`, box edge `on-surface` 12%; the description stays at full contrast and says why.
 - Collapsible hover and pressed: state layer over the title row; focus: ring 3 px inset (`focus-ring`) on the title row because it is edge-to-edge in the box.
-- Expanding: the box height animates over `duration-medium-2` with `ease-emphasized-decelerate`, collapsing with `ease-emphasized-accelerate`; the chevron turns 180 degrees with `ease-standard`.
+- Expanding: the box height animates over `duration-medium-2` with `ease-emphasized-decelerate`, collapsing with `ease-emphasized-accelerate`; the chevron turns 180 degrees over `duration-short-3` with `ease-standard`.
 
 ## Behaviour
 - The group is not a Tab stop; Tab moves through its controls in order. A collapsible group's title row is one stop (Enter or Space toggles, Right expands, Left collapses).
