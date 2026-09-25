@@ -22354,6 +22354,17 @@ keyboard focus shows the active cell's message immediately.
 on Windows and Linux. `datagrid-error-tooltip.png` is the Segoe UI visual check;
 the grid does not duplicate tooltip timing, placement or styling.
 
+## D1073 — Saving remains a caller-owned DataGrid state
+
+`GridCell.saving` places the shared 16px indeterminate progress ring at the
+cell's end. `GridState.disabled` blocks keyboard, text, pointer and editor paths,
+mutes cell content to the token's disabled opacity and removes the active focus
+ring; `GridState.saving` supplies the status bar's “Saving N changes” count.
+The caller still decides when a save starts and which cells are pending.
+
+`ui_collections6_v2` holds the state, command blocking and animation request on
+Windows and Linux. `datagrid-saving.png` is the Segoe UI visual check.
+
 ## D1070 — DataGrid clipboard commands keep the source caller-owned
 
 The grid serializes its current rectangle as tab-separated columns and

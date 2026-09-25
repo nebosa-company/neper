@@ -1513,15 +1513,16 @@ fn data_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 
 // v2 (D984, docs/ux/components/DataGrid): the editable grid's core over
 // caller-owned state. A cell is what the source says of it: its text, an error
-// message (invalid when not empty), whether it is edited and unsaved (dirty) and
-// whether it is read only.
-type GridCell = struct { text: str, message: str, dirty: bool, read_only: bool }
+// message (invalid when not empty), whether it is edited and unsaved (dirty),
+// read only, or currently saving.
+type GridCell = struct { text: str, message: str, dirty: bool, read_only: bool, saving: bool }
 type GridSource = struct { ctx: *void, count: fn(*void) -> usize, cell: fn(*void, usize, usize) -> GridCell }
 
 // The grid's state, which the caller keeps: the active cell, the range's anchor
-// (the active cell when there is no range), edit mode and the draft's length in
-// the caller's buffer.
-type GridState = struct { row: usize, column: usize, anchor_row: usize, anchor_column: usize, editing: bool, len: usize }
+// (the active cell when there is no range), edit mode, whether the whole grid is
+// disabled, the number of changes saving, and the draft's length in the caller's
+// buffer.
+type GridState = struct { row: usize, column: usize, anchor_row: usize, anchor_column: usize, editing: bool, disabled: bool, saving: usize, len: usize }
 
 // What a key, a tap or the editor asks: Move and Extend (the range from the
 // anchor) to a cell, Edit (the caller puts the value in the draft and its length
@@ -1553,6 +1554,7 @@ type GridInput = struct { state: GridState, change: widget.Change[GridEvent] }
 
 fn grid_input(ctx: *void, event: input.Event) -> err {
     let g = back_of[GridInput](ctx)
+    if g.state.disabled { ret ok }
     switch event {
     case .Text as t:
         if t.text.len == 0usize { ret ok }
@@ -1629,7 +1631,7 @@ fn grid_copy_text(a: *mem.Arena, source: GridSource, s: GridState) -> (str, err)
 
 fn grid_key(ctx: *void, k: input.KeyEvent) -> err {
     let g = back_of[GridKeys](ctx)
-    if g.rows == 0usize { ret ok }
+    if g.rows == 0usize || g.state.disabled { ret ok }
     let code = widget.key_code(k.key.physical)
     let s = g.state
     var next = s
@@ -1792,7 +1794,8 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     var ink = style.color(t.tokens, .OnSurface)
     if value.read_only { ink = style.color(t.tokens, .OnSurfaceVariant) }
     if ranged { ink = style.color(t.tokens, .OnPrimaryContainer) }
-    let (inner, inner_error) = mem.alloc[widget.Node](a, 2usize)
+    if s.disabled { ink = control.with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 4usize)
     if inner_error != ok { ret TooLarge }
     var n = 0usize
     if invalid {
@@ -1811,6 +1814,16 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     if said_error != ok { ret said_error }
     inner[n] = said
     n += 1usize
+    if value.saving {
+        var spacer = style.defaults()
+        spacer.width = style.Length { Flex: 1.0 }
+        inner[n] = widget.box(0u64, spacer, zero)
+        n += 1usize
+        let (ring, ring_error) = control.progress_ring(a, cell_key + 2000000u64, t, "Saving", 0.0, true, t.tokens.sizes.icon_sm)
+        if ring_error != ok { ret ring_error }
+        inner[n] = ring
+        n += 1usize
+    }
     let flat = style.Length { Px: 0.0 }
     var body_style = style.defaults()
     body_style.width = style.Length { Flex: 1.0 }
@@ -1848,7 +1861,7 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
-    tapped[0usize] = widget.region(cell_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&taps[0usize]), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, fill, lined[0usize..1usize])
+    tapped[0usize] = widget.region(cell_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&taps[0usize]), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: !s.disabled, focusable: false }, fill, lined[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.value = value.text
     if value.read_only {
@@ -1890,6 +1903,17 @@ fn count_words(a: *mem.Arena, count: usize, one: str, many: str) -> (str, err) {
     ret (said[0usize..n], ok)
 }
 
+fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
+    let (said, said_error) = mem.alloc[u8](a, 56usize)
+    if said_error != ok { ret ("", TooLarge) }
+    var n = control.copy_text(said, "Saving ")
+    n += control.write_i64(said[n..56usize], i64(count))
+    var noun = " changes"
+    if count == 1usize { noun = " change" }
+    n += control.copy_text(said[n..56usize], noun)
+    ret (said[0usize..n], ok)
+}
+
 // v2 (D984, docs/ux/components/DataGrid): the data grid's core over the
 // caller's `state` (see `GridState`, `GridEvent`). The D980 dense frame (40
 // header, `extent` rows -- 32 at 0 -- with the 40 wide row numbers and grid lines
@@ -1906,8 +1930,7 @@ fn count_words(a: *mem.Arena, count: usize, one: str, many: str) -> (str, err) {
 // Every change reaches `change` as a `GridEvent` carrying the next state.
 // ponytail: text cells only -- no checkbox, select or date cells; no
 // double-click, Shift+click, pointer row/column selection, clipboard
-// parsing and mutation, saving
-// or disabled looks, cross-fade, or touch sheet; the caller keeps the active
+// parsing and mutation, cross-fade, or touch sheet; the caller keeps the active
 // row in view (the ring is held inside the viewport).
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
@@ -1946,10 +1969,10 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     let (inputs, inputs_error) = mem.alloc[GridInput](a, 1usize)
     if inputs_error != ok { ret (zero, TooLarge) }
     inputs[0usize] = GridInput { state: state, change: change }
-    held[0usize] = widget.button(key + 1u64, widget.Button { action: widget.Action { ctx: ctx_of(&inputs[0usize]), invoke: grid_input }, enabled: true }, fill, zero)
+    held[0usize] = widget.button(key + 1u64, widget.Button { action: widget.Action { ctx: ctx_of(&inputs[0usize]), invoke: grid_input }, enabled: !state.disabled }, fill, zero)
     var ring = control.sized_style(active_w, active_h)
     ring.overflow = .Clip
-    ring.border = style.Border { width: t.tokens.metrics.focus_ring, color: style.color(t.tokens, .FocusRing) }
+    if !state.disabled { ring.border = style.Border { width: t.tokens.metrics.focus_ring, color: style.color(t.tokens, .FocusRing) } }
     let (ringed, ringed_error) = mem.alloc[widget.Node](a, 1usize)
     if ringed_error != ok { ret (zero, TooLarge) }
     ringed[0usize] = widget.box(0u64, ring, held[0usize..1usize])
@@ -1958,7 +1981,7 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     layers[0usize] = table_node
     layers[1usize] = widget.positioned(0u64, x, y, style.defaults(), ringed[0usize..1usize])
     var layer_count = 2usize
-    if state.editing {
+    if state.editing && !state.disabled {
         let (fires, fires_error) = mem.alloc[GridFire](a, 2usize)
         if fires_error != ok { ret (zero, TooLarge) }
         var committed = state
@@ -2004,6 +2027,14 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     var caption = control.text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
+    if state.saving > 0usize {
+        let (words, words_error) = saving_words(a, state.saving)
+        if words_error != ok { ret (zero, words_error) }
+        let (saving_node, saving_error) = control.colored_text(a, key + 7u64, words, t, caption, style.color(t.tokens, .OnSurfaceVariant))
+        if saving_error != ok { ret (zero, saving_error) }
+        said[n] = saving_node
+        n += 1usize
+    }
     if errors > 0usize {
         var mark = control.icon_options()
         mark.size = t.tokens.sizes.icon_sm
