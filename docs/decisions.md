@@ -24593,3 +24593,18 @@ The 30-second reveal limit is left to the caller.
 
 `ui_collections5_v2` holds the toggle's press reporting the pair, the masked
 then plain value, the Checked toggle and the Add button on Windows and Linux.
+
+## D1261 — Password fields can reveal their value
+
+`control.password_field_with` is the TextField spec's password with its reveal
+button. While `revealed` the value is plain text; otherwise it is masked and
+never copied. A round icon button (keyed `key + 1`) stands inside the field's
+end: `visibility` in `on-surface-variant`, or `visibility-off` in `primary`
+while revealed, under its own state layer. It is a toggle button named "Show
+password" that reports Checked while revealed (the state set has no Pressed).
+It is a pointer-only region, so a press leaves the focus in the field, as the
+spec asks. The caller keeps `revealed` and masks again on blur or submit.
+
+`ui_field` holds the masked and plain field, the toggle's single node and
+Checked state, and the press that reports with the focus kept, on Windows and
+Linux.

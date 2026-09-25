@@ -207,6 +207,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if !note_frame_tall { os.exit(40i32) }
+    // (D1261) A password field with its reveal toggle: masked with the toggle
+    // clear, a press on it reports and leaves the focus in the field; revealed,
+    // the value is plain and the toggle Checked.
+    let (shown_bytes, shown_bytes_error) = mem.alloc[u8](a, 16usize)
+    if shown_bytes_error != ok { os.exit(42i32) }
+    shown_bytes[0usize] = 97u8
+    shown_bytes[1usize] = 98u8
+    shown_bytes[2usize] = 99u8
+    var reveal_step = 0usize
+    while reveal_step < 2usize {
+        frame = mem.arena_from(frame_storage)
+        var pw = control.field_options()
+        pw.width = 200.0
+        let (pw_field, pw_error) = control.password_field_with(&frame, 50u64, &theme, "Password", shown_bytes, 3usize, zero, zero, pw, reveal_step == 1usize, &clears[0usize])
+        let (pw_page, pw_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if pw_error != ok || pw_page_error != ok { os.exit(43i32) }
+        pw_page[0usize] = pw_field
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(240.0, 320.0), pw_page[0usize..1usize]), time.Instant { nanos: 6000000000i64 + i64(reveal_step) }) != ok { os.exit(44i32) }
+        let (pw_summary, has_pw_summary) = widget.summary_at(&runtime, usize(testing.by_key(&harness, 50u64).element.slot))
+        let (pw_tree, pw_tree_error) = testing.semantics(&harness)
+        if !has_pw_summary || pw_tree_error != ok { os.exit(45i32) }
+        var toggle_checked = false
+        var toggles = 0usize
+        var node_at = 0usize
+        while node_at < pw_tree.nodes.len {
+            if pw_tree.nodes[node_at].role == .Button && mem.eq[u8](pw_tree.nodes[node_at].label, "Show password") {
+                toggles += 1usize
+                toggle_checked = pw_tree.nodes[node_at].state.checked
+            }
+            node_at += 1usize
+        }
+        if toggles != 1usize { os.exit(46i32) }
+        if reveal_step == 0usize {
+            if !pw_summary.secret || toggle_checked { os.exit(47i32) }
+            let (eye_box, has_eye_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 51u64).element)
+            let clears_before = logs[0usize].clears
+            if !has_eye_box || widget.focus(&runtime, testing.by_key(&harness, 50u64).element) != ok { os.exit(48i32) }
+            if testing.tap(&harness, eye_box.x + eye_box.width * 0.5, eye_box.y + eye_box.height * 0.5) != ok || logs[0usize].clears != clears_before + 1usize { os.exit(49i32) }
+            let (still, has_still) = testing.focused(&harness)
+            if !has_still || still.slot != testing.by_key(&harness, 50u64).element.slot { os.exit(50i32) }
+        }
+        if reveal_step == 1usize && (pw_summary.secret || !toggle_checked) { os.exit(51i32) }
+        reveal_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui field ok\n")
     ret ok
