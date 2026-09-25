@@ -24456,3 +24456,16 @@ The bar no longer needs the caller to guess its titles' widths.
 
 `ui_content2_v2` holds the exact fit and the pixel short of it on Windows and
 Linux.
+
+## D1252 — Images can be pressable
+
+`ImageOptions.action` and `action_label` give `framed_image` the Image spec's
+pressable form. The frame goes into a pressable (keyed `key + 1`) with the
+`on-surface` state layer over the picture, the runtime's focus ring, and Enter
+and Space. It is a Button named by its action ("Open screenshot"). The Image
+node named by the alt gives way, because a hidden node hides its subtree, so
+the image returns under a plain keyed box. The alt is not yet the Button's
+description, and there is still no fade.
+
+`ui_content_v2` holds the one Button, no alt-named Image, the tap and Enter on
+Windows and Linux.

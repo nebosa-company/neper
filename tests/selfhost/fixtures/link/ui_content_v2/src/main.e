@@ -407,6 +407,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let retries_before = s.retries
     if !named_pair || testing.tap(&harness, pair_box.x + 10.0, pair_box.y + 18.0) != ok || s.retries != retries_before + 1u32 { os.exit(97i32) }
+    // (D1252) A pressable image is a Button named by its action, taps and takes
+    // the focus; no Image named by the alt stands beside it.
+    var opening = control.image_options()
+    opening.label = "Screenshot"
+    opening.action = &s.retry
+    opening.action_label = "Open screenshot"
+    fr = mem.arena_from(frame_storage)
+    let (opener, opener_error) = control.framed_image(&fr, 720u64, &theme, texture, opening)
+    let (opener_page, opener_page_error) = mem.alloc[widget.Node](&fr, 1usize)
+    if opener_error != ok || opener_page_error != ok { os.exit(98i32) }
+    opener_page[0usize] = opener
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 520.0), opener_page[0usize..1usize]), time.Instant { nanos: 2200000000i64 }) != ok { os.exit(99i32) }
+    let (opener_tree, opener_tree_error) = testing.semantics(&harness)
+    if opener_tree_error != ok { os.exit(100i32) }
+    var open_buttons = 0usize
+    var open_images = 0usize
+    n = 0usize
+    while n < opener_tree.nodes.len {
+        if opener_tree.nodes[n].role == .Button && mem.eq[u8](opener_tree.nodes[n].label, "Open screenshot") { open_buttons += 1usize }
+        if opener_tree.nodes[n].role == .Image && mem.eq[u8](opener_tree.nodes[n].label, "Screenshot") { open_images += 1usize }
+        n += 1usize
+    }
+    let opener_box = bounds(&harness, &runtime, 721u64)
+    let opens_before = s.retries
+    if open_buttons != 1usize { os.exit(103i32) }
+    if open_images != 0usize { os.exit(104i32) }
+    if testing.tap(&harness, opener_box.x + 80.0, opener_box.y + 40.0) != ok || s.retries != opens_before + 1u32 { os.exit(101i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 721u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.retries != opens_before + 2u32 { os.exit(102i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui content v2 ok\n")
     ret ok

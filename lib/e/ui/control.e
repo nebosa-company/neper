@@ -595,7 +595,9 @@ type ImageStatus = enum u8 { Loaded, Loading, Failed, Empty }
 // the picture, whether it meets its container's edge square, its status, its alt
 // text (empty: decorative), a caption, and the Retry action an error offers (none
 // when unset).
-type ImageOptions = struct { width: f32, aspect: f32, fit: widget.Fit, full_bleed: bool, status: ImageStatus, label: str, caption: str, retry: *const widget.Submit }
+// (D1252) `action`, when set, makes the image pressable, a Button named
+// `action_label` ("Open screenshot").
+type ImageOptions = struct { width: f32, aspect: f32, fit: widget.Fit, full_bleed: bool, status: ImageStatus, label: str, caption: str, retry: *const widget.Submit, action: *const widget.Submit, action_label: str }
 
 fn image_options() -> ImageOptions {
     var out: ImageOptions = zero
@@ -614,7 +616,10 @@ fn image_options() -> ImageOptions {
 // shows the `picture` mark and "No preview" -- the mark `icon-md` 24 (`icon-lg` 36
 // from 120 wide) in `on-surface-variant`, the message 4 below it. A caption in
 // `body-small` `on-surface-variant` stands 8 below the frame.
-// ponytail: no pressable form (state layers, focus ring, Button role) and no fade.
+// (D1252) With `options.action` the frame is pressable: the `on-surface` state
+// layer over the picture, the runtime's focus ring, Enter and Space, and a
+// Button named `action_label` in place of the Image.
+// ponytail: no fade; a pressable image's alt text is not its description.
 fn framed_image(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, options: ImageOptions) -> (widget.Node, err) {
     var ratio = options.aspect
     if !(ratio > 0.0) { ratio = 1.0 }
@@ -671,6 +676,32 @@ fn framed_image(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.
     } else {
         framed[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: t.tokens.spacing.xs }, frame, inside[0usize..inside_count])
     }
+    let pressable_image = mem.address_of(options.action) != 0usize
+    if pressable_image {
+        let press_key = key + 1u64
+        let state = control_state(t, press_key, true, false)
+        var layer = sized_style(width, height)
+        layer.radius = frame.radius
+        layer.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .OnSurface), state_opacity(t, state)) }
+        let (layered, layered_error) = mem.alloc[widget.Node](a, 2usize)
+        if layered_error != ok { ret (zero, TooLarge) }
+        layered[0usize] = framed[1usize]
+        layered[1usize] = widget.box(0u64, layer, zero)
+        let stacked = widget.stack(0u64, sized_style(width, height), layered[0usize..2usize])
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        look.border_width = 0.0
+        look.radius = frame.radius
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_start = 0.0
+        look.padding_y = 0.0
+        look.min_width = width
+        look.min_height = height
+        let (pressed, pressed_error) = pressable_states(a, press_key, t, 3u8, options.action_label, look, true, false, 0u32, 0u32, 0u64, options.action, stacked)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        framed[1usize] = pressed
+    }
     framed[0usize] = framed[1usize]
     if options.caption.len != 0usize {
         var caption_look = text_options()
@@ -686,6 +717,8 @@ fn framed_image(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.
     sem.value = message
     sem.hidden = options.label.len == 0usize && message.len == 0usize
     if options.status == .Loading { sem.states = accessibility.STATE_BUSY }
+    // A pressable image is its Button alone in the tree.
+    if pressable_image { ret (widget.box(key, style.defaults(), framed[0usize..1usize]), ok) }
     ret (widget.semantics(key, sem, style.defaults(), framed[0usize..1usize]), ok)
 }
 
