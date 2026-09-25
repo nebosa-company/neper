@@ -1526,7 +1526,7 @@ type GridState = struct { row: usize, column: usize, anchor_row: usize, anchor_c
 // anchor) to a cell, Edit (the caller puts the value in the draft and its length
 // in `next.len`), Type (the draft is `text` now), Commit (the draft is the value
 // of the cell at `row`, `column`) and Cancel. `next` is the caller's next state.
-type GridEventKind = enum u8 { Move, Extend, Edit, Type, Commit, Cancel, Paste, Clear, Undo, FillDown }
+type GridEventKind = enum u8 { Move, Extend, Edit, Replace, Type, Commit, Cancel, Paste, Clear, Undo, FillDown }
 type GridEvent = struct { kind: GridEventKind, row: usize, column: usize, next: GridState, text: str }
 
 // An event fired, then the focus to the element keyed `to.key` (a tapped cell
@@ -1546,6 +1546,22 @@ fn grid_typed(ctx: *void, value: str) -> err {
     event.next.len = value.len
     event.text = value
     ret widget.fire_change[GridEvent](f.change, event)
+}
+
+type GridInput = struct { state: GridState, change: widget.Change[GridEvent] }
+
+fn grid_input(ctx: *void, event: input.Event) -> err {
+    let g = back_of[GridInput](ctx)
+    switch event {
+    case .Text as t:
+        if t.text.len == 0usize { ret ok }
+        var next = g.state
+        next.editing = true
+        next.len = t.text.len
+        ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Replace, row: g.state.row, column: g.state.column, next: next, text: t.text })
+    default:
+        ret ok
+    }
 }
 
 // The grid's keys: in navigation mode the arrows, Home and End (with Ctrl, the
@@ -1870,8 +1886,8 @@ fn count_words(a: *mem.Arena, count: usize, one: str, many: str) -> (str, err) {
 // status bar, 12 in, says the error count in `error` after an 18 `error` icon
 // and, for a range, "N cells selected" in `body-medium` `on-surface-variant`.
 // Every change reaches `change` as a `GridEvent` carrying the next state.
-// ponytail: text cells only -- no checkbox, select or date cells; no typing to
-// replace, double-click, Shift+click, pointer row/column selection, clipboard
+// ponytail: text cells only -- no checkbox, select or date cells; no
+// double-click, Shift+click, pointer row/column selection, clipboard
 // parsing and mutation, hover cell layer, error tooltip, saving
 // or disabled looks, cross-fade, or touch sheet; the caller keeps the active
 // row in view (the ring is held inside the viewport).
@@ -1909,7 +1925,10 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
     control.focus_look(t)
-    held[0usize] = widget.region(key + 1u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, fill, zero)
+    let (inputs, inputs_error) = mem.alloc[GridInput](a, 1usize)
+    if inputs_error != ok { ret (zero, TooLarge) }
+    inputs[0usize] = GridInput { state: state, change: change }
+    held[0usize] = widget.button(key + 1u64, widget.Button { action: widget.Action { ctx: ctx_of(&inputs[0usize]), invoke: grid_input }, enabled: true }, fill, zero)
     var ring = control.sized_style(active_w, active_h)
     ring.overflow = .Clip
     ring.border = style.Border { width: t.tokens.metrics.focus_ring, color: style.color(t.tokens, .FocusRing) }
