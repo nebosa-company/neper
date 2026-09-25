@@ -425,7 +425,48 @@ fn indicator_options() -> IndicatorOptions {
 
 // What a tap on the track knows (D973): where the track is, the current page,
 // the count and where the current pill's middle stands from the track's start.
-type Scrub = struct { runtime: *widget.Runtime, key: widget.Key, current: usize, count: usize, middle: f32, rtl: bool, turn: widget.Change[usize] }
+type Scrub = struct { runtime: *widget.Runtime, key: widget.Key, current: usize, drawn: usize, count: usize, first: usize, shown: usize, start: f32, middle: f32, rtl: bool, turn: widget.Change[usize] }
+
+fn indicator_dot_size(first: usize, shown: usize, count: usize, logical: usize, current: usize) -> f32 {
+    if first + logical == current { ret 24.0 }
+    if first > 0usize && logical == 0usize { ret 4.0 }
+    if first > 0usize && logical == 1usize { ret 6.0 }
+    if first + shown < count && logical + 1usize == shown { ret 4.0 }
+    if first + shown < count && logical + 2usize == shown { ret 6.0 }
+    ret 8.0
+}
+
+fn scrub_at(s: *Scrub, x: f32) -> err {
+    let (area, found) = control.keyed_bounds(s.runtime, s.key)
+    if !found { ret ok }
+    var cursor = area.x + s.start
+    var nearest = s.current
+    var distance: f32 = 1000000.0
+    var v = 0usize
+    while v < s.shown {
+        var logical = v
+        if s.rtl { logical = s.shown - 1usize - v }
+        let page = s.first + logical
+        let size = indicator_dot_size(s.first, s.shown, s.count, logical, s.drawn)
+        var d = x - (cursor + size * 0.5)
+        if d < 0.0 { d = 0.0 - d }
+        if d < distance {
+            distance = d
+            nearest = page
+        }
+        cursor += size + 8.0
+        v += 1usize
+    }
+    if nearest == s.current { ret ok }
+    while s.current != nearest {
+        var next = s.current + 1usize
+        if nearest < s.current { next = s.current - 1usize }
+        let changed = widget.fire_change[usize](s.turn, next)
+        if changed != ok { ret changed }
+        s.current = next
+    }
+    ret ok
+}
 
 fn scrub_gesture(ctx: *void, g: widget.Gesture) -> err {
     let s = mem.cast[*Scrub](ctx)
@@ -441,6 +482,10 @@ fn scrub_gesture(ctx: *void, g: widget.Gesture) -> err {
         }
         if s.current + 1usize < s.count { ret widget.fire_change[usize](s.turn, s.current + 1usize) }
         ret ok
+    case .DragMove as moved:
+        ret scrub_at(s, moved.position.x)
+    case .DragEnd as at:
+        ret scrub_at(s, at.x)
     default:
         ret ok
     }
@@ -457,7 +502,7 @@ fn scrub_gesture(ctx: *void, g: widget.Gesture) -> err {
 // End go to the ends. A slider named "Page", its value "Page 2 of 5", said
 // politely. Disabled, the dots and pill are `on-surface` at 38% and the track
 // takes no focus.
-// ponytail: no drag to scrub or pill motion; the focus ring is the runtime's.
+// ponytail: no pill motion or touch haptics; the focus ring is the runtime's.
 fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, current: usize, turn: widget.Change[usize], options: IndicatorOptions) -> (widget.Node, err) {
     if count == 0usize || current >= count { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -492,16 +537,11 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
         var logical = v
         if rtl { logical = shown - 1usize - v }
         let page = first + logical
-        var size: f32 = 8.0
-        if first > 0usize && logical == 0usize { size = 4.0 }
-        if first > 0usize && logical == 1usize { size = 6.0 }
-        if first + shown < count && logical + 1usize == shown { size = 4.0 }
-        if first + shown < count && logical + 2usize == shown { size = 6.0 }
+        let size = indicator_dot_size(first, shown, count, logical, current)
         var dot = control.sized_style(size, size)
         dot.radius = size * 0.5
         dot.background = paint.Brush { Solid: dot_ink }
         if page == current {
-            dot = control.sized_style(24.0, 8.0)
             dot.radius = 4.0
             dot.background = paint.Brush { Solid: pill_ink }
             middle += 12.0
@@ -542,11 +582,11 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
     track.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
     let (scrubs, scrubs_error) = mem.alloc[Scrub](a, 1usize)
     if scrubs_error != ok { ret (zero, TooLarge) }
-    scrubs[0usize] = Scrub { runtime: t.runtime, key: track_key, current: current, count: count, middle: middle, rtl: rtl, turn: turn }
+    scrubs[0usize] = Scrub { runtime: t.runtime, key: track_key, current: current, drawn: current, count: count, first: first, shown: shown, start: pad + inner, middle: middle, rtl: rtl, turn: turn }
     control.focus_look(t)
     let (regions, regions_error) = mem.alloc[widget.Node](a, 1usize)
     if regions_error != ok { ret (zero, TooLarge) }
-    regions[0usize] = widget.region(track_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&scrubs[0usize]), invoke: scrub_gesture }, gestures: 1u8, enabled: enabled, focusable: enabled }, track, rows[0usize..1usize])
+    regions[0usize] = widget.region(track_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&scrubs[0usize]), invoke: scrub_gesture }, gestures: 1u8 | 2u8, enabled: enabled, focusable: enabled }, track, rows[0usize..1usize])
     // The keys: Left, Right, Page Up and Page Down step, Home and End go to the
     // ends.
     let (turns, turns_error) = mem.alloc[Turn](a, 4usize)
