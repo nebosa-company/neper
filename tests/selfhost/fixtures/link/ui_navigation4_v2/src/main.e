@@ -244,6 +244,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_compact || !has_compact_previous || !compact_previous.state.disabled || !has_compact_next || compact_next.state.disabled || testing.by_text(&harness, "Previous").count == 0usize || testing.by_text(&harness, "Page 1 of 5").count != 1usize || testing.by_text(&harness, "Next").count == 0usize { os.exit(29i32) }
     let (first_back, has_first_back) = bounds(&harness, &runtime, 4601u64)
     if !has_first_back || !tap_key(&harness, &runtime, 4602u64) || s.pages.count != 3usize || s.pages.last != 1usize { os.exit(30i32) }
+    // (D1239) The table footer: rows 21-40 of 1,284 at 20 a page; Next turns to
+    // record 40 and Previous to 0; at the first page Previous is disabled; and a
+    // page size of 50 keeps record 20 in view from record 0.
+    var page_sizes: [3]usize = zero
+    page_sizes[0usize] = 10usize
+    page_sizes[1usize] = 20usize
+    page_sizes[2usize] = 50usize
+    var size_picks: [3]widget.Submit = zero
+    let footer_turn = widget.Change[usize] { ctx: mem.cast[*void](&s.dots), invoke: on_turn }
+    var footer_step = 0usize
+    while footer_step < 2usize {
+        var footer_first = 20usize
+        if footer_step == 1usize { footer_first = 0usize }
+        f = mem.arena_from(frame_storage)
+        let (footer, footer_error) = collection.pagination_footer(&f, 9500u64, &theme, "Builds pages", 1284usize, footer_first, 20usize, page_sizes[..], false, &size_picks[0usize], size_picks[..], footer_turn, 44u8, 600.0)
+        if footer_error != ok { os.exit(56i32) }
+        let (footer_page, footer_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if footer_page_error != ok { os.exit(56i32) }
+        footer_page[0usize] = footer
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 200.0), footer_page[0usize..1usize]), time.Instant { nanos: 3000000000i64 + i64(footer_step) }) != ok { os.exit(57i32) }
+        let (footer_box, has_footer_box) = bounds(&harness, &runtime, 9500u64)
+        if !has_footer_box || !near(footer_box.height, 48.0) { os.exit(58i32) }
+        let (footer_tree, footer_tree_error) = testing.semantics(&harness)
+        if footer_tree_error != ok { os.exit(59i32) }
+        let (previous_button, has_previous_button) = find(footer_tree, .Button, "Previous")
+        let (next_button, has_next_button) = find(footer_tree, .Button, "Next")
+        if !has_previous_button || !has_next_button { os.exit(60i32) }
+        if footer_step == 0usize {
+            if testing.by_text(&harness, "21–40 of 1,284").count == 0usize || previous_button.state.disabled { os.exit(61i32) }
+            if !tap_key(&harness, &runtime, 9503u64) || s.dots.last != 40usize { os.exit(62i32) }
+            if !tap_key(&harness, &runtime, 9502u64) || s.dots.last != 0usize { os.exit(63i32) }
+        }
+        if footer_step == 1usize && (!previous_button.state.disabled || next_button.state.disabled || testing.by_text(&harness, "1–20 of 1,284").count == 0usize) { os.exit(64i32) }
+        footer_step += 1usize
+    }
+    if collection.page_first_after_resize(20usize, 50usize) != 0usize || collection.page_first_after_resize(45usize, 20usize) != 40usize { os.exit(65i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation4 v2 ok\n")
     ret ok

@@ -24256,3 +24256,18 @@ The message's full text is not yet its tooltip. `ui_status5_v2` holds all four
 items at 80, the line endings gone at 70 and the encoding too at 40 with the
 position and message kept, on Windows and Linux; `ui_desktop` and
 `ui_status4_v2` pass on both hosts.
+
+## D1239 — Pagination has a table footer
+
+`collection.pagination_footer` is the Pagination spec's table footer: a
+`control-lg` row, end-aligned with 16 between groups. It holds "Rows per page"
+before the existing select of the caller's page sizes, the range "21–40 of
+1,284" (an en dash, the digits grouped with the caller's separator through
+`write_grouped`) in `on-surface`, and Previous and Next icon buttons that turn
+to the first record of the neighbouring page and are disabled at the ends.
+`page_first_after_resize` keeps the first visible record in view when the page
+size changes: record 21 at 20 a page becomes 1–50 at 50 a page. The caller
+keeps the first record, the page size and the select's open state.
+
+`ui_navigation4_v2` holds the 48 row, both ranges, both turns, the disabled
+Previous on the first page and the resize rule on Windows and Linux.
