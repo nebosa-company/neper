@@ -28,7 +28,7 @@ use e.ui.widget
 
 const W: usize = 400usize
 
-type Log = struct { theme: *const control.Theme, sorts: usize, picks: usize }
+type Log = struct { theme: *const control.Theme, sorts: usize, picks: usize, offset: f32 }
 
 fn on_sort(ctx: *void, value: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -51,6 +51,8 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
 }
 
 fn on_scroll(ctx: *void, value: f32) -> err {
+    let log = mem.cast[*Log](ctx)
+    log.offset = value
     ret ok
 }
 
@@ -98,10 +100,11 @@ fn same(a: str, b: str) -> bool {
 }
 
 fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, columns: []const collection.Column) -> (widget.Node, err) {
+    let log = mem.cast[*Log](ctx)
     var chosen: [1]widget.Key = zero
     chosen[0usize] = 1001u64
     let source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
-    let (files, e1) = collection.table(a, 1u64, t, "Files", columns, source, chosen[..], 0usize, false, widget.Change[usize] { ctx: ctx, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: ctx, invoke: on_reorder }, widget.Change[collection.ColumnResize] { ctx: ctx, invoke: on_resize }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, 0.0, widget.Change[f32] { ctx: ctx, invoke: on_scroll }, 168.0)
+    let (files, e1) = collection.table(a, 1u64, t, "Files", columns, source, chosen[..], 0usize, false, widget.Change[usize] { ctx: ctx, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: ctx, invoke: on_reorder }, widget.Change[collection.ColumnResize] { ctx: ctx, invoke: on_resize }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, log.offset, widget.Change[f32] { ctx: ctx, invoke: on_scroll }, 168.0)
     let sheet_source = collection.TableSource { ctx: ctx, count: row_count, key: grid_key, cell: row_cell }
     var none: [1]widget.Key = zero
     let (sheet, e2) = collection.data_grid(a, 300u64, t, "Sheet", columns, sheet_source, none[0usize..0usize], 1usize, true, widget.Change[usize] { ctx: ctx, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: ctx, invoke: on_reorder }, widget.Change[collection.ColumnResize] { ctx: ctx, invoke: on_resize }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, 0.0, widget.Change[f32] { ctx: ctx, invoke: on_scroll }, 136.0)
@@ -232,6 +235,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         tabs += 1usize
     }
     if !focused_is(&harness, 1000u64) || testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 1001u64) { os.exit(25i32) }
+    // Page keys move by the three-row body viewport; targets outside the built
+    // window request their minimum offset and receive focus after rebuilding.
+    if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 1004u64) || !near(logs[0usize].offset, 80.0) { os.exit(32i32) }
+    if testing.press_key(&harness, 34u32, zero) != ok || !near(logs[0usize].offset, 200.0) || focused_is(&harness, 1007u64) { os.exit(33i32) }
+    f = mem.arena_from(frame_storage)
+    let (root_2, root_2_error) = build(&f, &theme, ctx, columns[0usize..3usize])
+    if root_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok || !focused_is(&harness, 1007u64) { os.exit(34i32) }
+    if testing.press_key(&harness, 33u32, zero) != ok || !focused_is(&harness, 1004u64) || !near(logs[0usize].offset, 160.0) { os.exit(35i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !near(logs[0usize].offset, 1880.0) || focused_is(&harness, 1049u64) { os.exit(36i32) }
+    f = mem.arena_from(frame_storage)
+    let (root_3, root_3_error) = build(&f, &theme, ctx, columns[0usize..3usize])
+    if root_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok || !focused_is(&harness, 1049u64) { os.exit(37i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !near(logs[0usize].offset, 0.0) || focused_is(&harness, 1000u64) { os.exit(38i32) }
+    f = mem.arena_from(frame_storage)
+    let (root_4, root_4_error) = build(&f, &theme, ctx, columns[0usize..3usize])
+    if root_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok || !focused_is(&harness, 1000u64) { os.exit(39i32) }
     // The data grid: a 40 header, 32 rows, the row numbers on
     // `surface-container-low` and a grid line after each cell.
     let (sheet_head, has_sheet_head) = bounds(&harness, &runtime, 301u64)
