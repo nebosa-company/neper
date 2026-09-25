@@ -23007,3 +23007,14 @@ buttons remain clickable and reachable through Delete without adding Tab stops.
 
 `ui_navigation5_v2` and `ui_containers2_v2` hold the behavior on Windows and
 Linux. The reviewed surface is unchanged.
+
+## D1135 — Destination bars use roving focus
+
+DestinationBar keeps only the selected or focused destination in the Tab
+order. Left/Right moves within the bottom bar, Up/Down within rails and
+sidebars, Home/End jump to the edges, and a pointer press moves the stable
+focus key after its caller-owned action succeeds. Enter and Space continue to
+activate through the shared pressable.
+
+`ui_navigation3_v2` holds all three forms on Windows and Linux. The reviewed
+surface is unchanged.

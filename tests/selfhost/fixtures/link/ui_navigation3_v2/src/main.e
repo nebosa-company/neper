@@ -98,6 +98,13 @@ fn bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> (ge
     ret (b, found)
 }
 
+fn focusable(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bool {
+    let match = testing.by_key(h, key)
+    if match.count != 1usize { ret false }
+    let (summary, found) = widget.summary_at(runtime, usize(match.element.slot))
+    ret found && summary.focusable
+}
+
 fn tap_key(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bool {
     let (b, found) = bounds(h, runtime, key)
     if !found { ret false }
@@ -181,7 +188,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (calendar_node, has_calendar_node) = find(tree, .Tab, "Calendar, new")
     let (main_list, has_main) = find(tree, .TabList, "Main")
     if !has_search_node || !search_node.state.selected || !search_node.state.current || !has_people_node || people_node.state.current || !has_calendar_node || !has_main { os.exit(15i32) }
-    if !tap_key(&harness, &runtime, 3002u64) || s.counters[1usize].count != 1usize { os.exit(16i32) }
+    if !focusable(&harness, &runtime, 3001u64) || focusable(&harness, &runtime, 3002u64) || focusable(&harness, &runtime, 3003u64) { os.exit(35i32) }
+    if !focusable(&harness, &runtime, 3102u64) || focusable(&harness, &runtime, 3101u64) || focusable(&harness, &runtime, 3103u64) { os.exit(36i32) }
+    if !focusable(&harness, &runtime, 3201u64) || focusable(&harness, &runtime, 3202u64) || focusable(&harness, &runtime, 3203u64) { os.exit(37i32) }
+    if !tap_key(&harness, &runtime, 3002u64) || s.counters[1usize].count != 1usize || !widget.focus_within(&runtime, 3002u64) { os.exit(16i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !widget.focus_within(&runtime, 3003u64) { os.exit(38i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !widget.focus_within(&runtime, 3001u64) { os.exit(39i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok || testing.press_key(&harness, 32u32, zero) != ok || s.counters[0usize].count != 2usize { os.exit(45i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 3102u64).element) != ok || testing.press_key(&harness, 38u32, zero) != ok || !widget.focus_within(&runtime, 3101u64) { os.exit(40i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 3103u64) { os.exit(41i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 3201u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || !widget.focus_within(&runtime, 3202u64) { os.exit(42i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 3203u64) { os.exit(43i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 3002u64).element) != ok { os.exit(44i32) }
     // The rail: 80 wide on `surface`, 56 tall cells 12 apart from 16 down, the
     // active (second) pill `secondary-container`.
     let (rail, has_rail) = bounds(&harness, &runtime, 3100u64)

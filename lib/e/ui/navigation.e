@@ -648,6 +648,65 @@ fn destination_name(a: *mem.Arena, item: *const Destination) -> (str, err) {
     ret (item.label, ok)
 }
 
+type DestinationPick = struct { action: widget.Submit, runtime: *widget.Runtime, focus: widget.Key }
+
+fn destination_pick_fire(ctx: *void) -> err {
+    let p = mem.cast[*DestinationPick](ctx)
+    let picked = widget.fire_submit(p.action)
+    if picked != ok { ret picked }
+    ret widget.focus_key(p.runtime, p.focus)
+}
+
+type DestinationMove = struct { runtime: *widget.Runtime, first: widget.Key, count: usize, backward: bool, edge: bool }
+
+fn destination_move_fire(ctx: *void) -> err {
+    let m = mem.cast[*DestinationMove](ctx)
+    var current = 0usize
+    while current < m.count {
+        if widget.focus_within(m.runtime, m.first + u64(current)) { break }
+        current += 1usize
+    }
+    if current == m.count { ret ok }
+    var next_index = current
+    if m.edge {
+        if m.backward { next_index = 0usize } else { next_index = m.count - 1usize }
+    } else if m.backward {
+        if next_index > 0usize { next_index -= 1usize }
+    } else if next_index + 1usize < m.count {
+        next_index += 1usize
+    }
+    ret widget.focus_key(m.runtime, m.first + u64(next_index))
+}
+
+fn destination_tab_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, form: DestinationForm, count: usize, sem: widget.Semantics, body: widget.Node) -> (widget.Node, err) {
+    let (moves, moves_error) = mem.alloc[DestinationMove](a, 4usize)
+    if moves_error != ok { ret (zero, TooLarge) }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    let horizontal = form == .Bottom
+    var previous = 38u32
+    var next = 40u32
+    if horizontal {
+        previous = 37u32
+        next = 39u32
+    }
+    moves[0usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: count, backward: true, edge: false }
+    moves[1usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: count, backward: false, edge: false }
+    moves[2usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: count, backward: true, edge: true }
+    moves[3usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: count, backward: false, edge: true }
+    shortcuts[0usize] = widget.Shortcut { key: previous, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: destination_move_fire } }
+    shortcuts[1usize] = widget.Shortcut { key: next, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: destination_move_fire } }
+    shortcuts[2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[2usize]), invoke: destination_move_fire } }
+    shortcuts[3usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[3usize]), invoke: destination_move_fire } }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = body
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize])
+    ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
 // The destinations as tabs keyed `key + 1 + index`, the current one selected and
 // each firing its own pick: a row when the form is the bottom bar, a column
 // otherwise. A tab list in the tree. The caller places it where the form says
@@ -668,7 +727,7 @@ fn destination_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 // starts with a 1px `outline-variant` divider (16 at the sides, 8 above and
 // below; none before the first) and its `label-medium` heading in
 // `on-surface-variant`, 16 in, 16 above and 8 below.
-fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, items: []const Destination, selected: usize, picks: []const widget.Submit, height: f32, start: f32, end: f32, width: f32) -> ([]widget.Node, err) {
+fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, items: []const Destination, selected: usize, picks: []const widget.Submit, tab_stop: usize, height: f32, start: f32, end: f32, width: f32) -> ([]widget.Node, err) {
     let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize * items.len)
     if rows_error != ok { ret (zero, TooLarge) }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -764,7 +823,13 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
         if chosen { states = accessibility.STATE_CURRENT }
         let (row, row_error) = control.pressable_states(a, row_key, t, 19u8, named, look, true, chosen, states, 0u32, 0u64, &picks[i], content)
         if row_error != ok { ret (zero, row_error) }
-        rows[n] = row
+        var placed = row
+        if tab_stop < items.len && i != tab_stop {
+            let (untabbed, untabbed_error) = untab_pressable(a, row)
+            if untabbed_error != ok { ret (zero, untabbed_error) }
+            placed = untabbed
+        }
+        rows[n] = placed
         n += 1usize
         i += 1usize
     }
@@ -784,12 +849,34 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
 // `surface-container-low`, 12 in, its destinations 40 tall rows (56 touch) of
 // `destination_rows`, 16 in and 24 at the end. Every destination is a tab named
 // by its label and badge, the active one Selected and Current, in a tab list
-// named "Main".
+// named "Main". The current or focused destination is the bar's one Tab stop;
+// Left/Right in the bottom bar or Up/Down in the rail and sidebar move focus,
+// Home and End jump, and the pressable's Enter and Space activate it.
 // ponytail: no rail menu button or FAB slot, sidebar header, hiding on scroll or
 // pill growth; tabs rather than links in a navigation landmark (the spec allows
 // tabs where the content changes without a URL).
 fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Destination, selected: usize, picks: []const widget.Submit, form: DestinationForm, extent: f32) -> (widget.Node, err) {
     if picks.len != items.len { ret (zero, TooLarge) }
+    let (pick_contexts, pick_contexts_error) = mem.alloc[DestinationPick](a, items.len)
+    if pick_contexts_error != ok { ret (zero, TooLarge) }
+    let (pick_actions, pick_actions_error) = mem.alloc[widget.Submit](a, items.len)
+    if pick_actions_error != ok { ret (zero, TooLarge) }
+    var tab_stop = selected
+    if tab_stop >= items.len { tab_stop = 0usize }
+    var focused = 0usize
+    while focused < items.len {
+        if widget.focus_within(t.runtime, key + 1u64 + u64(focused)) {
+            tab_stop = focused
+            break
+        }
+        focused += 1usize
+    }
+    var action_index = 0usize
+    while action_index < items.len {
+        pick_contexts[action_index] = DestinationPick { action: picks[action_index], runtime: t.runtime, focus: key + 1u64 + u64(action_index) }
+        pick_actions[action_index] = widget.Submit { ctx: mem.cast[*void](&pick_contexts[action_index]), invoke: destination_pick_fire }
+        action_index += 1usize
+    }
     var sem: widget.Semantics = zero
     sem.role = 20u8
     sem.label = "Main"
@@ -799,7 +886,7 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
         var row_height: f32 = 40.0
         if touch { row_height = 56.0 }
-        let (rows, rows_error) = destination_rows(a, key + 1u64, t, items, selected, picks, row_height, 16.0, 24.0, control.max_zero(extent - 24.0))
+        let (rows, rows_error) = destination_rows(a, key + 1u64, t, items, selected, pick_actions[0usize..items.len], tab_stop, row_height, 16.0, 24.0, control.max_zero(extent - 24.0))
         if rows_error != ok { ret (zero, rows_error) }
         var side = style.defaults()
         side.width = style.Length { Px: extent }
@@ -808,7 +895,8 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         side.padding = style.EdgeLengths { left: rim, top: rim, right: rim, bottom: rim }
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, side, rows)
         sem.row_count = u32(items.len)
-        ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+        let (made, made_error) = destination_tab_list(a, key, t, form, items.len, sem, body[0usize])
+        ret (made, made_error)
     }
     let bottom = form == .Bottom
     var pill_width: f32 = 56.0
@@ -889,9 +977,15 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         if named_error != ok { ret (zero, named_error) }
         var states = 0u32
         if chosen { states = accessibility.STATE_CURRENT }
-        let (tab, tab_error) = control.pressable_states(a, tab_key, t, 19u8, named, look, true, chosen, states, 0u32, 0u64, &picks[i], content)
+        let (tab, tab_error) = control.pressable_states(a, tab_key, t, 19u8, named, look, true, chosen, states, 0u32, 0u64, &pick_actions[i], content)
         if tab_error != ok { ret (zero, tab_error) }
-        cells[i] = tab
+        var placed = tab
+        if i != tab_stop {
+            let (untabbed, untabbed_error) = untab_pressable(a, tab)
+            if untabbed_error != ok { ret (zero, untabbed_error) }
+            placed = untabbed
+        }
+        cells[i] = placed
         i += 1usize
     }
     var sheet = style.defaults()
@@ -909,7 +1003,8 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 12.0 }, sheet, cells[0usize..items.len])
         sem.row_count = u32(items.len)
     }
-    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+    let (made, made_error) = destination_tab_list(a, key, t, form, items.len, sem, body[0usize])
+    ret (made, made_error)
 }
 
 // --------------------------------------------------- adaptive navigation (D840, P2-08)
@@ -1425,7 +1520,7 @@ fn navigation_drawer(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
 // `width` wide, `pad` in; a list named "Main" (keyed `key`).
 fn drawer_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, row_height: f32, start: f32, end: f32, pad: f32, head_top: f32, head_bottom: f32, width: f32) -> (widget.Node, err) {
     if picks.len != items.len { ret (zero, TooLarge) }
-    let (rows, rows_error) = destination_rows(a, key + 1u64, t, items, selected, picks, row_height, start, end, control.max_zero(width - 2.0 * pad))
+    let (rows, rows_error) = destination_rows(a, key + 1u64, t, items, selected, picks, items.len, row_height, start, end, control.max_zero(width - 2.0 * pad))
     if rows_error != ok { ret (zero, rows_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, rows.len + 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -1823,8 +1918,8 @@ fn tab_pick_fire(ctx: *void) -> err {
     ret widget.focus_key(p.runtime, p.focus)
 }
 
-// A nested close button remains pointer-accessible but does not add a second
-// tab stop to the roving tab strip.
+// A shared pressable remains pointer-accessible while excluded from a roving
+// Tab order.
 fn untab_pressable(a: *mem.Arena, node: widget.Node) -> (widget.Node, err) {
     if node.children.len != 1usize { ret (node, ok) }
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
