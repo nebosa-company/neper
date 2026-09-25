@@ -5433,7 +5433,9 @@ type RowSource = struct { ctx: *void, count: fn(*void) -> usize, key: fn(*void, 
 // placeholders; `cap` is the end cap after the last row (`cap_text` its words,
 // `retry` its Retry); `anchored` keeps the list at its end, `offset` and
 // `change` then measuring up from the end.
-type VirtualListOptions = struct { lines: usize, dividers: bool, inset: f32, width: f32, height: f32, offset: f32, change: widget.Change[f32], pending_from: usize, has_pending: bool, cap: EndCap, cap_text: str, retry: widget.Submit, anchored: bool }
+// (D1324) `headers` are the source's section-header rows (ascending indices):
+// the one over the rows at the top pins there.
+type VirtualListOptions = struct { lines: usize, dividers: bool, inset: f32, width: f32, height: f32, offset: f32, change: widget.Change[f32], pending_from: usize, has_pending: bool, cap: EndCap, cap_text: str, retry: widget.Submit, anchored: bool, headers: []const usize }
 
 // (D1315) A virtual list's end cap: none, loading the next page, the count at the
 // true end, or a failed page.
@@ -5550,7 +5552,11 @@ fn virtual_range(offset: f32, viewport: f32, total: usize, extent: f32) -> (usiz
 // (D1315) Placeholder rows, the end cap and the end-anchored mode
 // (`VirtualListOptions`); the cap is a row of the list's height counted after the
 // last, so paging is the caller's from the offset it keeps.
-// ponytail: no sticky headers.
+// (D1324, docs/ux/components/VirtualList, sticky section header) With `headers`,
+// a copy of the section header over the top row stands pinned at the viewport's
+// top on `surface-container` (keyed `key ^ fnv1a64("pinned")`, out of the tree),
+// pushed up by the next header as it arrives; none while the header itself is
+// at the top.
 fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: RowSource, options: VirtualListOptions) -> (widget.Node, err) {
     let extent = row_height(t, options.lines)
     let total = source.count(source.ctx)
@@ -5635,11 +5641,58 @@ fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: places, virtual_extent: extent }, view_style, rows[0usize..count])
+    // (D1324) The pinned section header.
+    let (shown_body, shown_body_error) = pinned_header(a, key, t, source, options, total, offset, extent, body[0usize])
+    if shown_body_error != ok { ret (zero, shown_body_error) }
+    body[0usize] = shown_body
     var sem: widget.Semantics = zero
     sem.role = 10u8
     sem.label = label
     sem.row_count = u32(total)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// (D1324) `view` with the section header over its top row pinned above it.
+fn pinned_header(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: RowSource, options: VirtualListOptions, total: usize, offset: f32, extent: f32, view: widget.Node) -> (widget.Node, err) {
+    if options.headers.len == 0usize || total == 0usize || !(extent > 0.0) { ret (view, ok) }
+    var top_row = usize(offset / extent)
+    if top_row >= total { top_row = total - 1usize }
+    var found = false
+    var current = 0usize
+    var h = 0usize
+    while h < options.headers.len && options.headers[h] <= top_row {
+        current = h
+        found = true
+        h += 1usize
+    }
+    if !found { ret (view, ok) }
+    let header_index = options.headers[current]
+    // At rest on its own row, the header needs no copy.
+    if !(offset - f32(header_index) * extent > 0.0) { ret (view, ok) }
+    var pinned_y: f32 = 0.0
+    if current + 1usize < options.headers.len {
+        let next_at = f32(options.headers[current + 1usize]) * extent - offset
+        if next_at < extent { pinned_y = next_at - extent }
+    }
+    let (items, items_error) = mem.alloc[RowItem](a, 1usize)
+    if items_error != ok { ret (zero, TooLarge) }
+    items[0usize] = source.item(source.ctx, header_index)
+    let (copy, copy_error) = row_sized(a, key ^ hash.fnv1a64("pinned-row"), t, &items[0usize], header_index, total, options.width, extent)
+    if copy_error != ok { ret (zero, copy_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[4usize] = copy
+    var quiet: widget.Semantics = zero
+    quiet.hidden = true
+    parts[3usize] = widget.semantics(0u64, quiet, style.defaults(), parts[4usize..5usize])
+    var pinned_style = control.sized_style(options.width, extent)
+    pinned_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+    parts[2usize] = widget.box(key ^ hash.fnv1a64("pinned"), pinned_style, parts[3usize..4usize])
+    parts[1usize] = widget.positioned(0u64, 0.0, pinned_y, style.defaults(), parts[2usize..3usize])
+    parts[0usize] = view
+    var framed = control.sized_style(options.width, options.height)
+    framed.overflow = .Clip
+    ret (widget.stack(0u64, framed, parts[0usize..2usize]), ok)
 }
 
 // A tile of a grid (D979, docs/ux/components/GridView): its name and meta, its
