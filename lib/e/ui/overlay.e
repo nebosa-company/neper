@@ -2378,6 +2378,22 @@ fn day_fire(ctx: *void) -> err {
     ret widget.fire_change[time.Date](p.pick, p.day)
 }
 
+type DayMove = struct { shown: time.Date, target: time.Date, show: widget.Change[time.Date], runtime: *widget.Runtime, calendar: widget.Key }
+
+fn moved_date(date: time.Date, days: i64) -> time.Date {
+    let (year, month, day) = time.civil_from_days(time.days_from_civil(i64(date.year), i64(date.month), i64(date.day)) + days)
+    ret time.Date { year: i32(year), month: u8(month), day: u8(day) }
+}
+
+fn day_move_fire(ctx: *void) -> err {
+    let move = mem.cast[*DayMove](ctx)
+    if move.target.year != move.shown.year || move.target.month != move.shown.month {
+        let shown = widget.fire_change[time.Date](move.show, time.Date { year: move.target.year, month: move.target.month, day: 1u8 })
+        if shown != ok { ret shown }
+    }
+    ret widget.focus_key(move.runtime, move.calendar + 3u64 + u64(move.target.day))
+}
+
 // Whether `d` lies in `from..to` inclusive (both given), for a range's tint.
 fn within_range(d: time.Date, from: time.Date, to: time.Date) -> bool {
     let n = time.days_from_civil(i64(d.year), i64(d.month), i64(d.day))
@@ -2397,6 +2413,8 @@ fn same_date(a: time.Date, b: time.Date) -> bool {
 // reporting its date through `pick`, the day of `selected` marked and the days
 // from `from` to `to` (when `ranged`) banded. Page Up and Page Down report the
 // previous and next month through `show`; with Shift, the previous and next year.
+// Left and Right move focus by one day, Up and Down by a week, and Home and End
+// to the Monday and Sunday; movement across a month also reports it through `show`.
 // A grid in the tree named `label`, seven columns.
 fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (made, made_error) = calendar_marked(a, key, t, label, shown, selected, has_selected, ranged, from, to, shown, false, show, pick)
@@ -2585,6 +2603,34 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
                     layers[1usize] = sized
                     made = widget.stack(0u64, control.sized_style(cell, cell), layers[0usize..2usize])
                 }
+                let (moves, moves_error) = mem.alloc[DayMove](a, 6usize)
+                if moves_error != ok { ret (zero, TooLarge) }
+                let (move_actions, move_actions_error) = mem.alloc[widget.Submit](a, 6usize)
+                if move_actions_error != ok { ret (zero, TooLarge) }
+                let column_day = weekday_of(i64(date.year), i64(date.month), i64(date.day))
+                moves[0usize] = DayMove { shown: shown, target: moved_date(date, -1i64), show: show, runtime: t.runtime, calendar: key }
+                moves[1usize] = DayMove { shown: shown, target: moved_date(date, 1i64), show: show, runtime: t.runtime, calendar: key }
+                moves[2usize] = DayMove { shown: shown, target: moved_date(date, -7i64), show: show, runtime: t.runtime, calendar: key }
+                moves[3usize] = DayMove { shown: shown, target: moved_date(date, 7i64), show: show, runtime: t.runtime, calendar: key }
+                moves[4usize] = DayMove { shown: shown, target: moved_date(date, -column_day), show: show, runtime: t.runtime, calendar: key }
+                moves[5usize] = DayMove { shown: shown, target: moved_date(date, 6i64 - column_day), show: show, runtime: t.runtime, calendar: key }
+                var move_index = 0usize
+                while move_index < 6usize {
+                    move_actions[move_index] = widget.Submit { ctx: mem.cast[*void](&moves[move_index]), invoke: day_move_fire }
+                    move_index += 1usize
+                }
+                let (day_keys, day_keys_error) = mem.alloc[widget.Shortcut](a, 6usize)
+                if day_keys_error != ok { ret (zero, TooLarge) }
+                day_keys[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: move_actions[0usize] }
+                day_keys[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: move_actions[1usize] }
+                day_keys[2usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: move_actions[2usize] }
+                day_keys[3usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: move_actions[3usize] }
+                day_keys[4usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: move_actions[4usize] }
+                day_keys[5usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: move_actions[5usize] }
+                let (day_node, day_node_error) = mem.alloc[widget.Node](a, 1usize)
+                if day_node_error != ok { ret (zero, TooLarge) }
+                day_node[0usize] = made
+                made = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: day_keys[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), day_node[0usize..1usize])
             }
             cells[column] = made
             column += 1usize
