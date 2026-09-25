@@ -5569,7 +5569,7 @@ fn find_by_text(s: *State, value: str) -> (ElementId, usize) {
 // What an accessibility tree needs of an element: its identity, kind tag, parent,
 // bounds, action, enabling, focus and text, the text borrowed from the runtime
 // until the element changes. `false` for a slot that holds no live element.
-type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool, semantics: Semantics, has_semantics: bool, value: str, selection_start: usize, selection_end: usize, read_only: bool, focusable: bool }
+type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool, semantics: Semantics, has_semantics: bool, value: str, selection_start: usize, selection_end: usize, read_only: bool, focusable: bool, secret: bool }
 
 // The visible tooltip that describes this semantic element through an anchored
 // overlay, if any. This keeps the relation with the tooltip instead of every caller.
@@ -5634,6 +5634,8 @@ fn summary_at(widget_runtime: *const Runtime, slot: usize) -> (Summary, bool) {
         summary.selection_start = lo
         summary.selection_end = hi
         summary.read_only = e.read_only
+        // (D1259) Whether the field masks its value.
+        summary.secret = e.secret
     }
     summary.has_child = e.has_child
     if e.has_child { summary.first_child = ElementId { slot: e.first_child, generation: s.elements[usize(e.first_child)].generation } }
