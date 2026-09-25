@@ -22555,3 +22555,12 @@ tile, and every vertical move requests only the offset needed to reveal it.
 `ui_collections_v2` holds two-dimensional movement, paging, both ends, the short
 last row, caller-owned offsets and deferred focus on Windows and Linux. This is
 a behavior-only change on the reviewed VirtualGrid surface.
+
+## D1088 — VirtualGrid shares the exact viewport overscan
+
+VirtualGrid now uses the same fixed-row range calculation as VirtualList. It
+builds every grid row intersecting the viewport plus one viewport before and
+after, clips the range to the source, and still keys each tile from its source.
+
+`ui_collections_v2` holds the five-row middle build window around a one-row
+viewport on Windows and Linux. The visible VirtualGrid surface is unchanged.

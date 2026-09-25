@@ -379,6 +379,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     f = mem.arena_from(frame_storage)
     let (root_6, build_6_error) = build(&f, &theme, s)
     if build_6_error != ok || testing.pump(&harness, root_6, time.Instant { nanos: 1500000000i64 }) != ok || !focused_is(&harness, 6000u64) { os.exit(68i32) }
+    // At row two, one full viewport of grid rows is built on either side.
+    s.grid_offset = 280.0
+    f = mem.arena_from(frame_storage)
+    let (root_7, build_7_error) = build(&f, &theme, s)
+    if build_7_error != ok || testing.pump(&harness, root_7, time.Instant { nanos: 1600000000i64 }) != ok { os.exit(72i32) }
+    if testing.by_key(&harness, 6000u64).count != 1usize || testing.by_key(&harness, 6009u64).count != 1usize || testing.by_key(&harness, 6010u64).count != 0usize { os.exit(73i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok

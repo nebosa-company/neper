@@ -3743,7 +3743,7 @@ fn bind_virtual_move(moves: []VirtualMove, shortcuts: []widget.Shortcut, at: usi
 }
 
 // Visible rows plus one viewport before and after, clipped to the source.
-fn virtual_list_range(offset: f32, viewport: f32, total: usize, extent: f32) -> (usize, usize) {
+fn virtual_range(offset: f32, viewport: f32, total: usize, extent: f32) -> (usize, usize) {
     if total == 0usize || extent <= 0.0 || viewport <= 0.0 {
         let (first, count) = widget.visible_range(offset, viewport, total, extent)
         ret (first, count)
@@ -3773,7 +3773,7 @@ fn virtual_list_range(offset: f32, viewport: f32, total: usize, extent: f32) -> 
 fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: RowSource, options: VirtualListOptions) -> (widget.Node, err) {
     let extent = row_height(t, options.lines)
     let total = source.count(source.ctx)
-    let (first, count) = virtual_list_range(options.offset, options.height, total, extent)
+    let (first, count) = virtual_range(options.offset, options.height, total, extent)
     let (items, items_error) = mem.alloc[RowItem](a, count)
     if items_error != ok { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
@@ -4053,7 +4053,8 @@ fn virtual_grid_options() -> VirtualGridOptions {
 // v2 (D979, docs/ux/components/VirtualGrid): photo tiles (`tile_node`, 1:1,
 // `radius-sm`) in `floor((width - 24 + 4) / (min + 4))` columns 4 apart, 12 in
 // at the sides, stretched to fill, in a clipped viewport (keyed `key`) on
-// `surface`; only the visible rows built, each tile keyed by the source; the
+// `surface`; the visible rows plus one viewport above and below built, each tile
+// keyed by the source; the
 // runtime's rounded thumb in `on-surface-variant` at 50%; arrows, Page Up,
 // Page Down, Home and End move by stable source key and request the minimum
 // revealing offset. A grid named `label` with its counts.
@@ -4069,7 +4070,7 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let side = (usable - 4.0 * f32(columns - 1usize)) / f32(columns)
     let row_total = (total + columns - 1usize) / columns
     let extent = side + 4.0
-    let (first, count) = widget.visible_range(options.offset, options.height, row_total, extent)
+    let (first, count) = virtual_range(options.offset, options.height, row_total, extent)
     var built_first = first * columns
     var built = count * columns
     if built_first > total { built_first = total }
