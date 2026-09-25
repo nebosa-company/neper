@@ -1203,7 +1203,15 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         let (message_node, message_error) = colored_text(a, 0u64, options.message, t, words, alarm)
         if message_error != ok { ret (zero, message_error) }
         said[1usize] = message_node
-        parts[part_count] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), said[0usize..2usize])
+        let (announced, announced_error) = mem.alloc[widget.Node](a, 1usize)
+        if announced_error != ok { ret (zero, TooLarge) }
+        announced[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), said[0usize..2usize])
+        var alert: widget.Semantics = zero
+        alert.role = 24u8
+        alert.label = options.message
+        alert.states = accessibility.STATE_INVALID
+        alert.live = 2u8
+        parts[part_count] = widget.semantics(0u64, alert, style.defaults(), announced[0usize..1usize])
         part_count += 1usize
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
