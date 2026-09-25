@@ -4344,9 +4344,10 @@ foreach ($hotMode in @('--release', '--time')) {
         if ($inventoryArtifactManifest.artifacts[$artifactAt].path -ne $inventoryArtifacts[$artifactAt] -or $inventoryArtifactManifest.artifacts[$artifactAt].sha256 -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $inventoryArtifacts[$artifactAt]).Hash.ToLowerInvariant()) { throw "the artifact-only manifest has the wrong artifact digest ($hotMode)" }
     }
     # A write that dies (D435, H24): `--fault-write 1` makes the second module's artifact
-    # write die after staging, so the build fails with its `.tmp` left; the warm build
-    # after it finds every published artifact whole, rebuilds that module alone as
-    # `no-artifact`, and is the clean build.
+    # write die after staging, so the build fails with its `.tmp` left and no manifest;
+    # the warm build after it has no authenticated record for the published artifact
+    # (D1020), so it rebuilds `main` as `invalid-artifact` and `dep` as `no-artifact`,
+    # and is the clean build (D1224).
     Copy-Item (Join-Path $hotFixture 'src\dep.e') (Join-Path $hotSource 'dep.e')
     Remove-Item -LiteralPath (Join-Path $hotScratch '.neper') -Recurse -Force
     $hotFaultBuild = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --fault-write 1 2>&1
@@ -4354,8 +4355,8 @@ foreach ($hotMode in @('--release', '--time')) {
     if (-not (Get-ChildItem -LiteralPath (Join-Path $hotScratch ".neper\$hotManifestMode") -Filter '*.tmp' -Recurse)) { throw "the injected write fault left no staged file ($hotMode)" }
     $hotAfterFault = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotAfterFault -ne 'executable written') { throw "the warm hot build after an injected write fault failed ($hotMode)" }
-    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:edges-hold' 'dep=rebuilt:no-artifact'
-    if ($LASTEXITCODE -ne 0) { throw "the manifest after an injected write fault does not say the faulted module alone was rebuilt ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:invalid-artifact' 'dep=rebuilt:no-artifact'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after an injected write fault does not say the unauthorised cache was rebuilt ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after an injected write fault is not the clean build ($hotMode)" }
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
