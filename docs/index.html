@@ -177,10 +177,10 @@
     <nav aria-label="Primary navigation">
       <a class="brand" href="#top" aria-label="Neper home"><img src="gtm/logo/neper-icon.svg" alt=""></a>
       <div class="nav-links">
+        <a href="#demo">demo</a>
         <a href="#speed">speed</a>
         <a href="#gpu">cpu + gpu</a>
         <a href="#llm">llm stack</a>
-        <a href="#demo">demo</a>
         <a href="https://discord.gg/AdRneEsbCu">discord ↗</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
       </div>
@@ -223,6 +223,15 @@ hello, neper</code></pre>
         <div class="metric"><strong>3 OS</strong><span>Windows · Linux · macOS</span></div>
         <div class="metric"><strong>Self-verifying</strong><span>byte-identical compiler fixed point</span></div>
       </div>
+
+      <section id="demo">
+        <div class="eyebrow">00 // watch it work</div>
+        <h2>From prompt to native binary.</h2>
+        <p class="section-intro">See one agent generate, check, repair, test, and compile a CPU/GPU program without leaving the deterministic Neper toolchain.</p>
+        <video class="demo-video" controls playsinline preload="metadata" poster="gtm/neper-capabilities-poster.png" aria-label="Neper capabilities demonstration">
+          <source src="gtm/neper-capabilities.mp4" type="video/mp4">
+        </video>
+      </section>
 
       <section id="speed">
         <div class="eyebrow">01 // ultra by design</div>
@@ -365,15 +374,6 @@ hello, neper</code></pre>
             <article class="llm-feature"><h3>Measured token economics</h3><p>Language changes are evaluated against tokenizer cost and verified repair success, making model efficiency an engineering constraint.</p><small class="why">Why: Language evolution must justify model cost.</small></article>
           </div>
         </details>
-      </section>
-
-      <section id="demo">
-        <div class="eyebrow">05 // watch it work</div>
-        <h2>From prompt to native binary.</h2>
-        <p class="section-intro">See one agent generate, check, repair, test, and compile a CPU/GPU program without leaving the deterministic Neper toolchain.</p>
-        <video class="demo-video" controls playsinline preload="metadata" poster="gtm/neper-capabilities-poster.png" aria-label="Neper capabilities demonstration">
-          <source src="gtm/neper-capabilities.mp4" type="video/mp4">
-        </video>
       </section>
 
       <section class="final">
