@@ -73,7 +73,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 4u32)
     if renderer_error != ok { os.exit(3i32) }
     var renderer = r
-    let tokens = style.reference(.Light)
+    var tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 32usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 8u16, max_commands: 128usize })
@@ -153,6 +153,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, span_track.x + 8.0 + 104.0 * 0.1, span_y) != ok { os.exit(36i32) }
     let (first_2, second_2, _) = widget.slider_value_of(&runtime, span)
     if !near(first_2, 10.0) || !near(second_2, 90.0) || !near(logs[0usize].first, 10.0) { os.exit(37i32) }
+    // RTL swaps only horizontal arrows. Page Up/Down remain logical ten-percent
+    // moves, while vertical arrows retain increase/decrease.
+    tokens.direction = .RightToLeft
+    logs[0usize].value = 50.0
+    let (rtl_root, rtl_error) = build(&frame, &theme, &logs[0usize], ctx)
+    if rtl_error != ok || testing.pump(&harness, rtl_root, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(39i32) }
+    if testing.tap(&harness, track.x + 8.0 + 104.0 * 0.5, mid_y) != ok { os.exit(40i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok { os.exit(41i32) }
+    let (rtl_left, _, _) = widget.slider_value_of(&runtime, volume)
+    if !near(rtl_left, 55.0) { os.exit(42i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || testing.press_key(&harness, 33u32, zero) != ok { os.exit(43i32) }
+    let (rtl_page_up, _, _) = widget.slider_value_of(&runtime, volume)
+    if !near(rtl_page_up, 60.0) { os.exit(44i32) }
+    if testing.press_key(&harness, 34u32, zero) != ok || testing.press_key(&harness, 38u32, zero) != ok { os.exit(45i32) }
+    let (rtl_vertical, _, _) = widget.slider_value_of(&runtime, volume)
+    if !near(rtl_vertical, 55.0) { os.exit(46i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(38i32) }
     try io.print("ui slider ok\n")
     ret ok

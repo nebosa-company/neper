@@ -23274,3 +23274,13 @@ unchanged.
 
 `ui_containers_v2` holds both RTL keyboard directions on Windows and Linux. The
 Segoe review is `build/ux/disclosure-rtl-segoe.png`.
+
+## D1161 — Slider keyboard follows direction and large steps
+
+The runtime Slider now carries the theme direction into its focused-key path.
+Left and Right swap decrease/increase in right-to-left themes; Down and Up stay
+decrease/increase. Page Down and Page Up move ten percent of the range through
+the existing clamp and step-snap path, while Home and End remain absolute.
+
+`ui_slider` holds the RTL horizontal arrows, unchanged vertical arrow, and both
+Page keys on Windows and Linux.
