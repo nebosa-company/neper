@@ -23109,3 +23109,15 @@ pointer density and 48 at touch density.
 `ui_navigation5_v2` holds focusability, target size, pointer/default-key picks
 and horizontal movement on Windows and Linux. The Segoe review is
 `build/ux/wizard-nonlinear-segoe.png`.
+
+## D1145 — Finishing wizards lock competing actions
+
+WizardOptions exposes a caller-owned finishing state on the last step. The
+primary action keeps its width and colour while replacing its label with the
+shared 18-pixel indeterminate ring and Busy semantics; repeat Finish, Back,
+Cancel, access keys and step picks become inert until the caller clears the
+state.
+
+`ui_navigation5_v2` holds Busy semantics and the inert pointer, Enter, Alt+B
+and Back paths on Windows and Linux. The Segoe review is
+`build/ux/wizard-finishing-segoe.png`.
