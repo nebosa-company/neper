@@ -1673,7 +1673,7 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         if ed.style.fonts.len == 0usize { ret (geometry.Size { width: 0.0, height: 0.0 }, ok) }
         // An empty value stands one line tall.
         if ed.len == 0usize { ret (geometry.Size { width: 0.0, height: ed.style.line_height }, ok) }
-        let (laid, layout_error) = layout.layout(a, ed.buffer[0usize..ed.len], ed.style, edit_options(inner.max_width, ed.multiline))
+        let (laid, layout_error) = lay_edit(a, ed.buffer[0usize..ed.len], ed.style, edit_options(inner.max_width, ed.multiline))
         if layout_error != ok { ret (zero, InvalidTree) }
         ret (geometry.Size { width: laid.bounds.width, height: laid.bounds.height }, ok)
     case .Image as im:
@@ -2026,7 +2026,7 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
         if focused_here { try push_rect(b, geometry.Rect { x: 0.0, y: 0.0, width: 1.0, height: ed.style.line_height }, origin, ed.color) }
         ret ok
     }
-    let (laid, layout_error) = layout.layout(a, shown, ed.style, edit_options(inner.width, ed.multiline))
+    let (laid, layout_error) = lay_edit(a, shown, ed.style, edit_options(inner.width, ed.multiline))
     if layout_error != ok { ret InvalidTree }
     let (copies, copies_error) = mem.alloc[layout.Layout](a, 1usize)
     if copies_error != ok { ret TooLarge }
@@ -3067,6 +3067,51 @@ fn lay_text(a: *mem.Arena, words: str, text_style: layout.Style, options: layout
     var kept = options
     kept.ellipsis = mappable(a, options.ellipsis, text_style)
     let (again, again_error) = layout.layout(a, mappable(a, words, text_style), text_style, kept)
+    ret (again, again_error)
+}
+
+// (D1292) An editor's layout that survives characters no font maps: each such
+// character's bytes stand as spaces (or, a font without one, a character of the
+// text it maps), so every byte offset -- the caret, the
+// selection, the composition -- still lands where it did.
+// ponytail: the character shows as blank space, not the font's missing-glyph box.
+fn lay_edit(a: *mem.Arena, words: str, text_style: layout.Style, options: layout.Options) -> (layout.Layout, err) {
+    let (laid, laid_error) = layout.layout(a, words, text_style, options)
+    if laid_error != layout.MissingGlyph { ret (laid, laid_error) }
+    let (out, out_error) = mem.alloc[u8](a, words.len)
+    if out_error != ok { ret (laid, laid_error) }
+    // The filler: a space when the fonts map one, else an ASCII character of the
+    // text that they do.
+    var filler = 32u8
+    let (space_font, space_error) = layout.font_for(a, text_style, 32u32)
+    if space_error != ok || space_font == layout.NONE {
+        var probe = 0usize
+        while probe < words.len {
+            if words[probe] > 32u8 && words[probe] < 127u8 {
+                let (probe_font, probe_error) = layout.font_for(a, text_style, u32(words[probe]))
+                if probe_error == ok && probe_font != layout.NONE {
+                    filler = words[probe]
+                    break
+                }
+            }
+            probe += 1usize
+        }
+    }
+    var at = 0usize
+    while at < words.len {
+        let (scalar, width) = unicode.read_utf8(words, at)
+        var step = width
+        if step == 0usize { step = 1usize }
+        let (font, font_error) = layout.font_for(a, text_style, scalar)
+        let keep = font_error == ok && font != layout.NONE
+        var k = 0usize
+        while k < step && at + k < words.len {
+            if keep { out[at + k] = words[at + k] } else { out[at + k] = filler }
+            k += 1usize
+        }
+        at += step
+    }
+    let (again, again_error) = layout.layout(a, out[0usize..words.len], text_style, options)
     ret (again, again_error)
 }
 
@@ -4185,7 +4230,7 @@ fn edit_layout(s: *State, e: *const Element) -> (layout.Layout, err) {
     var scratch = mem.arena_from(s.scratch)
     let (shown, shown_error) = edit_display(s, &scratch, e, false)
     if shown_error != ok { ret (zero, InvalidTree) }
-    let (laid, layout_error) = layout.layout(&scratch, shown, e.edit_style, edit_options(e.text_width, e.multiline))
+    let (laid, layout_error) = lay_edit(&scratch, shown, e.edit_style, edit_options(e.text_width, e.multiline))
     if layout_error != ok { ret (zero, InvalidTree) }
     ret (laid, ok)
 }

@@ -25030,3 +25030,18 @@ are dropped, not drawn as the font's missing-glyph box.
 shows the whole name in the tooltip after the delay, on Windows and Linux;
 the full UI sweep passes 103/103 on both hosts and `text_layout` still
 passes.
+
+## D1292 — Editors survive characters no font maps
+
+The same fault D1291 closed for text nodes held for editors: typing an emoji
+into a field whose fonts lack it made `layout.layout` answer `MissingGlyph`,
+and the frame failed. Editors now lay out through `lay_edit`, which on
+`MissingGlyph` lays the text out again with each unmappable character's bytes
+standing as a filler of the same byte length. Every offset (caret, selection,
+composition) therefore still lands where it did. The filler is a space when
+the fonts map one, else an ASCII character of the text that they do, as in
+the test font that maps only `a`. The character shows as blank space rather
+than the font's missing-glyph box.
+
+`ui_edit` reconciles and paints an editor holding an emoji between two a's on
+Windows and Linux; the full UI sweep passes 103/103 on both hosts.
