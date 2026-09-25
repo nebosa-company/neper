@@ -23183,3 +23183,13 @@ Back button, alongside Escape, Alt+Left and the platform back gesture.
 
 `ui_navigation` holds the mouse Back pop on Windows and Linux. The host layers
 already map Windows XBUTTON1 and X11 button 8 to the shared Back pointer button.
+
+## D1152 — Command-left-bracket shares the back scope
+
+The backable scope used by NavigationStack and compact NavigationSplit binds
+Meta+[ to the caller-owned pop action. It accepts both the Windows virtual-key
+code and the X keysym for the bracket, ready for a macOS host without changing
+the component contract.
+
+`ui_navigation` holds both physical-key forms on Windows and Linux. The same
+fixture continues to hold Back, Escape, Alt+Left and mouse Back.

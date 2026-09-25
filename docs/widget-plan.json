@@ -459,7 +459,7 @@
             "NavigationStack",
             "AdaptiveDestinationBar"
           ],
-          "evidence": "lib/e/ui/navigation.e (D828): app_bar with leading and trailing action buttons around a level-1 heading on the primary colour, toolbar and status_bar as a named group and a polite status on the surface variant, navigation_stack placing the top page under an app bar whose back button and whose scope's Escape (the host back gesture) fire pop, destination_form choosing bottom, rail or sidebar by size class and destination_bar laying the destinations out as a row or a column of tabs; (D1151) the runtime maps the host mouse Back button into that same scoped cancel path; tests/selfhost/fixtures/link/ui_navigation on both hosts"
+          "evidence": "lib/e/ui/navigation.e (D828): app_bar with leading and trailing action buttons around a level-1 heading on the primary colour, toolbar and status_bar as a named group and a polite status on the surface variant, navigation_stack placing the top page under an app bar whose back button and whose scope's Escape (the host back gesture) fire pop, destination_form choosing bottom, rail or sidebar by size class and destination_bar laying the destinations out as a row or a column of tabs; (D1151) the runtime maps the host mouse Back button into that same scoped cancel path; (D1152) the shared scope also binds both host key-code forms of Command+[; tests/selfhost/fixtures/link/ui_navigation on both hosts"
         }
       ]
     },

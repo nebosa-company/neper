@@ -216,6 +216,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     mouse_back.kind = .Mouse
     mouse_back.changed = .Back
     if testing.send(&harness, input.Event { PointerDown: mouse_back }) != ok || logs[0usize].pops != 4usize { os.exit(39i32) }
+    var command: input.Modifiers = zero
+    command.meta = true
+    if testing.press_key(&harness, 219u32, command) != ok || logs[0usize].pops != 5usize { os.exit(40i32) }
+    if testing.press_key(&harness, 91u32, command) != ok || logs[0usize].pops != 6usize { os.exit(41i32) }
     let (mail_2, has_mail_2) = find(tree_2, .Tab, "Mail")
     let (calendar_2, has_calendar_2) = find(tree_2, .Tab, "Calendar")
     if !has_mail_2 || !has_calendar_2 || calendar_2.bounds.y <= mail_2.bounds.y || calendar_2.bounds.x != mail_2.bounds.x { os.exit(35i32) }
