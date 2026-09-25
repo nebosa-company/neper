@@ -211,6 +211,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // the scrim; 56 tall rows; Sent picks, Escape dismisses.
     let (root_2, build_2_error) = build(&f, &theme, s, true)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(24i32) }
+    let (drawer_focus, has_drawer_focus) = testing.focused(&harness)
+    if !has_drawer_focus || drawer_focus.slot != testing.by_key(&harness, 3402u64).element.slot { os.exit(32i32) }
     let (shot_2, shot_2_error) = testing.snapshot(&harness, a)
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if shot_2_error != ok || tree_2_error != ok { os.exit(25i32) }
@@ -227,6 +229,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (sent_row, has_sent_row) = bounds(&harness, &runtime, 3403u64)
     if !has_sent_row || !near(sent_row.height, 56.0) || !near(sent_row.width, 276.0) || testing.by_text(&harness, "neper").count != 1usize { os.exit(29i32) }
     if !tap_key(&harness, &runtime, 3403u64) || s.counters[1usize].count != 2usize || testing.press_key(&harness, 27u32, zero) != ok || s.counters[3usize].count != 1usize { os.exit(30i32) }
+    let (root_3, build_3_error) = build(&f, &theme, s, false)
+    if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(33i32) }
+    let (returned_focus, has_returned_focus) = testing.focused(&harness)
+    if !has_returned_focus || returned_focus.slot != testing.by_key(&harness, 3002u64).element.slot { os.exit(34i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation3 v2 ok\n")
     ret ok
