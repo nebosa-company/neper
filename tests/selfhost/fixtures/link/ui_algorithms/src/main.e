@@ -63,18 +63,31 @@ fn build(a: *mem.Arena, t: *const control.Theme, press: *const widget.Submit) ->
     if scroll_error != ok { ret (zero, scroll_error) }
     let (pressed, button_error) = control.button(a, 1u64, t, "Press", press, control.button_options())
     if button_error != ok { ret (zero, button_error) }
+    let (regions, regions_error) = mem.alloc[widget.Node](a, 300usize)
+    if regions_error != ok { ret (zero, regions_error) }
     let (focusable, focusable_error) = mem.alloc[widget.Node](a, 300usize)
     if focusable_error != ok { ret (zero, focusable_error) }
     i = 0usize
     while i < 300usize {
-        focusable[i] = widget.region(10000u64 + u64(i), widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, style.defaults(), zero)
+        regions[i] = widget.region(10000u64 + u64(i), widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, style.defaults(), zero)
+        var item_sem: widget.Semantics = zero
+        item_sem.role = 11u8
+        item_sem.label = "Alpha"
+        if i == 299usize { item_sem.label = "Zulu" }
+        focusable[i] = widget.semantics(0u64, item_sem, style.defaults(), regions[i..i + 1usize])
         i += 1usize
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, parts_error) }
     parts[0usize] = pressed
     parts[1usize] = scrolled
-    parts[2usize] = widget.stack(0u64, style.defaults(), focusable[0usize..300usize])
+    let (list_body, list_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if list_body_error != ok { ret (zero, list_body_error) }
+    list_body[0usize] = widget.stack(0u64, style.defaults(), focusable[0usize..300usize])
+    var list_sem: widget.Semantics = zero
+    list_sem.role = 10u8
+    list_sem.label = "Large list"
+    parts[2usize] = widget.semantics(0u64, list_sem, style.defaults(), list_body[0usize..1usize])
     var column = style.defaults()
     column.width = style.Length { Px: 240.0 }
     column.height = style.Length { Px: 200.0 }
@@ -139,7 +152,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(12i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 16u16, max_commands: 1024usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1000usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 16u16, max_commands: 1024usize })
     if runtime_error != ok { os.exit(13i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -191,6 +204,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_first || first_bounds.x < button_bounds.x || first_bounds.y < button_bounds.y || first_bounds.y + first_bounds.height > button_bounds.y + button_bounds.height + 0.5 { os.exit(44i32) }
     let last_focusable = testing.by_key(&harness, 10299u64)
     if last_focusable.count != 1usize || order[order.len - 1usize].slot != last_focusable.element.slot || order[order.len - 1usize].generation != last_focusable.element.generation { os.exit(45i32) }
+    let before_limit = testing.by_key(&harness, 10255u64)
+    let after_limit = testing.by_key(&harness, 10256u64)
+    if widget.focus(&runtime, before_limit.element) != ok || testing.tab(&harness, false) != ok { os.exit(47i32) }
+    let (tabbed, has_tabbed) = testing.focused(&harness)
+    if !has_tabbed || tabbed.slot != after_limit.element.slot || tabbed.generation != after_limit.element.generation { os.exit(47i32) }
+    let first_item = testing.by_key(&harness, 10000u64)
+    if widget.focus(&runtime, first_item.element) != ok || testing.press_key(&harness, 90u32, zero) != ok { os.exit(48i32) }
+    let (typed, has_typed) = testing.focused(&harness)
+    if !has_typed || typed.slot != last_focusable.element.slot || typed.generation != last_focusable.element.generation { os.exit(48i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(27i32) }
     // The app: a requested frame and idle work, where the host has windows.
     var model = Log { presses: 0usize, idles: 0usize }
