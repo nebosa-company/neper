@@ -4431,8 +4431,9 @@ fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []
 // the width (0: the parent's); and the empty state's statement and suggestion.
 // (D1240) `select`, when set, makes the list multi-select: it hears each
 // selection gesture as a `ListSelect` and the caller keeps the selected set.
-// (D1241) `bulk` are the selection bar's actions.
-type ListOptions = struct { grouped: bool, dividers: bool, inset: f32, subheader: str, title: str, footnote: str, width: f32, empty_title: str, empty_message: str, select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand }
+// (D1241) `bulk` are the selection bar's actions. (D1247) `loading`, with no
+// items, is how many skeleton rows (3 to 8) stand in their place.
+type ListOptions = struct { grouped: bool, dividers: bool, inset: f32, subheader: str, title: str, footnote: str, width: f32, empty_title: str, empty_message: str, select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: usize }
 
 // (D1240) A multi-select list's selection gesture: toggle the row at `index`,
 // extend the selection from the anchor to it, select all, or clear.
@@ -4539,8 +4540,9 @@ fn list_options() -> ListOptions {
 // (D1241) While any row is selected every row leads with its checkbox and the
 // `selection_bar` stands above the rows; on touch a hold or, once in the mode,
 // a tap toggles.
+// (D1247) `loading` skeleton rows stand in for no rows.
 // ponytail: the caller sets `selected` from the gestures; no
-// sticky subheader, loading rows or insert motion; a page is the window's
+// sticky subheader or insert motion; a page is the window's
 // height over the first row's, not the enclosing viewport's.
 fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, options: ListOptions) -> (widget.Node, err) {
     if keys.len != items.len { ret (zero, TooLarge) }
@@ -4632,7 +4634,12 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
         p += 1usize
         i += 1usize
     }
-    if items.len == 0usize && options.empty_title.len > 0usize {
+    if items.len == 0usize && options.loading > 0usize {
+        let (loading_node, loading_error) = loading_rows(a, key + 1u64, t, options.loading, width)
+        if loading_error != ok { ret (zero, loading_error) }
+        parts[p] = loading_node
+        p += 1usize
+    } else if items.len == 0usize && options.empty_title.len > 0usize {
         var empty = control.empty_options()
         empty.compact = true
         empty.width = width
@@ -4768,6 +4775,33 @@ fn selection_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, cou
     sem.role = 2u8
     sem.label = said_bytes[0usize..n]
     ret (widget.semantics(key, sem, style.defaults(), row_node[0usize..1usize]), ok)
+}
+
+// (D1247, docs/ux/components/List, loading) `count` skeleton rows (held to 3..8)
+// `width` wide (360 when unset) in a busy group named "Loading" (keyed `key`),
+// the rows themselves out of the tree.
+// ponytail: the rows are the 72 avatar skeleton whatever the real row's height,
+// and still, with no "Still loading" after 10 seconds.
+fn loading_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, width: f32) -> (widget.Node, err) {
+    var n = count
+    if n < 3usize { n = 3usize }
+    if n > 8usize { n = 8usize }
+    var wide = width
+    if !(wide > 0.0) { wide = 360.0 }
+    let (sweep, sweep_error) = control.placeholder_sweep(a, t, 0.0, wide, 0.4)
+    if sweep_error != ok { ret (zero, sweep_error) }
+    let (bones, bones_error) = mem.alloc[widget.Node](a, n)
+    if bones_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        let (bone, bone_error) = control.skeleton_row(a, 0u64, t, wide, sweep)
+        if bone_error != ok { ret (zero, bone_error) }
+        bones[i] = bone
+        i += 1usize
+    }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bones[0usize..n])
+    let (made, made_error) = control.placeholder_region(a, key, t, "Loading", sweep, column)
+    ret (made, made_error)
 }
 
 // A source of rows (D979): the count, a row's stable key and its content.
@@ -5044,7 +5078,8 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
 // A grid's form (D979): the least tile width (0: 144 with a pointer, 160 on
 // touch), whether it is selecting (every tile shows its check), and the width.
 // (D1245) `select`, when set, makes the grid multi-select as a list is (D1240).
-type GridOptions = struct { min_width: f32, selecting: bool, width: f32, select: widget.Change[ListSelect] }
+// (D1247) With no tiles, `loading` skeleton tiles or the empty state (`empty_title`).
+type GridOptions = struct { min_width: f32, selecting: bool, width: f32, select: widget.Change[ListSelect], loading: usize, empty_title: str, empty_message: str }
 
 fn grid_options() -> GridOptions {
     var out: GridOptions = zero
@@ -5059,14 +5094,51 @@ fn grid_options() -> GridOptions {
 // (D1235) Page Up and Page Down move a window's height of tile rows in the column.
 // (D1245) With `options.select` the grid is multi-select (`selection_scopes`, a
 // grid's column count across); the caller keeps the set and its app bar.
-// ponytail: no rubber band, reflow motion, loading or empty state; the caller
-// keeps the page margins.
+// (D1247) With no tiles, `loading` skeleton tiles or the empty state.
+// ponytail: no rubber band or reflow motion; the caller keeps the page margins.
 fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, tiles: []const Tile, keys: []const widget.Key, options: GridOptions) -> (widget.Node, err) {
     if keys.len != tiles.len { ret (zero, TooLarge) }
     var least = options.min_width
     if !(least > 0.0) { least = control.if_else(density_of(t) == 2usize, 160.0, 144.0) }
     let columns = columns_across(options.width, least, 8.0)
     let side = (options.width - 8.0 * f32(columns - 1usize)) / f32(columns)
+    // (D1247) With no tiles: skeleton tiles, a `radius-md` square over a caption
+    // bar 60% wide, in a busy group named "Loading"; or the compact empty state
+    // centred in the width.
+    if tiles.len == 0usize && (options.loading > 0usize || options.empty_title.len > 0usize) {
+        if options.loading == 0usize {
+            var empty = control.empty_options()
+            empty.compact = true
+            empty.width = options.width
+            let (said, said_error) = control.empty_state_of(a, key + 1u64, t, options.empty_title, options.empty_message, empty)
+            ret (said, said_error)
+        }
+        let (sweep, sweep_error) = control.placeholder_sweep(a, t, 0.0, options.width, 0.4)
+        if sweep_error != ok { ret (zero, sweep_error) }
+        var square = control.skeleton_options()
+        square.radius = t.tokens.radii.md
+        square.sweep = sweep
+        var caption_bar = control.skeleton_options()
+        caption_bar.shape = .Line
+        caption_bar.sweep = sweep
+        let (bones, bones_error) = mem.alloc[widget.Node](a, 3usize * options.loading)
+        if bones_error != ok { ret (zero, TooLarge) }
+        var b = 0usize
+        while b < options.loading {
+            let (media, media_error) = control.skeleton_of(a, 0u64, t, side, side, square)
+            let (words, words_error) = control.skeleton_of(a, 0u64, t, side * 0.6, 12.0, caption_bar)
+            if media_error != ok || words_error != ok { ret (zero, TooLarge) }
+            bones[options.loading + 2usize * b] = media
+            bones[options.loading + 2usize * b + 1usize] = words
+            bones[b] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, control.sized_style(side, side + 20.0), bones[options.loading + 2usize * b..options.loading + 2usize * b + 2usize])
+            b += 1usize
+        }
+        var bone_flow = style.defaults()
+        bone_flow.width = style.Length { Px: options.width }
+        let flowed = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: 8.0 }, bone_flow, bones[0usize..options.loading])
+        let (loading_node, loading_error) = control.placeholder_region(a, key + 1u64, t, "Loading", sweep, flowed)
+        ret (loading_node, loading_error)
+    }
     let (cells, cells_error) = mem.alloc[widget.Node](a, tiles.len)
     if cells_error != ok { ret (zero, TooLarge) }
     // (D1245) A multi-select grid: in selection mode (any tile selected) every tile
