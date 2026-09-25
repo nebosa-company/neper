@@ -23819,3 +23819,17 @@ asks.
 `ui_collections4_v2` holds the quiet first frame, the opened menu below the
 row with Move up disabled on the first row, and one reported move on Windows
 and Linux.
+
+## D1211 — List rows page by the window's height
+
+The shared `roving` focus helper takes a page count. For one-column lists a
+positive page binds Page Up and Page Down to the row that many rows away,
+stopping at the first and last rows; grids and Reorderable List pass 0 and keep
+their bindings. `list_of` pages by the window's laid-out height over the first
+row's height, as the List spec's "a screenful" asks. Before the first layout the
+window height is not known yet, so a page is the whole list.
+
+The page is the window's height, not the height of an enclosing scroll viewport.
+`ui_collections_v2` holds Page Down to the end, its stop at the end and Page Up
+back on Windows and Linux; `ui_collections4_v2` and `ui_collection` pass on both
+hosts.

@@ -3997,7 +3997,7 @@ fn bind_move(moves: []control.FocusTo, shortcuts: []widget.Shortcut, at: usize, 
 // node wrapped in a scope (D979): Up and Down move a row (to the nearest item in
 // a short last row), Left and Right one item when there are columns, Home and End
 // to the row ends (Ctrl: the set ends), or the set ends for a one-column list.
-fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []const widget.Key, across: usize) -> err {
+fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []const widget.Key, across: usize, page: usize) -> err {
     let n = nodes.len
     if n == 0usize || mem.address_of(t.runtime) == 0usize { ret ok }
     let (moves, moves_error) = mem.alloc[control.FocusTo](a, 8usize * n)
@@ -4044,6 +4044,16 @@ fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []
             bind_move(moves, shortcuts, k, t.runtime, keys[0usize], 36u32)
             bind_move(moves, shortcuts, k + 1usize, t.runtime, keys[n - 1usize], 35u32)
             k += 2usize
+            // (D1211) Page Up and Page Down move `page` rows, stopping at the ends.
+            if page > 0usize {
+                var up = 0usize
+                if i > page { up = i - page }
+                var down = i + page
+                if down >= n { down = n - 1usize }
+                bind_move(moves, shortcuts, k, t.runtime, keys[up], 33u32)
+                bind_move(moves, shortcuts, k + 1usize, t.runtime, keys[down], 34u32)
+                k += 2usize
+            }
         }
         held[i] = nodes[i]
         nodes[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..k], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
@@ -4069,11 +4079,13 @@ fn list_options() -> ListOptions {
 // and 8 above and its `body-small` footnote 16 in and 8 below; 1px
 // `outline-variant` dividers between rows, inset `inset` (16 grouped); a
 // `title-small` `primary` subheader 16 in, 16 above and 8 below. One Tab stop a
-// row with Up, Down, Home and End moving the focus. With no rows and an
+// row with Up, Down, Home and End moving the focus, and (D1211) Page Up and
+// Page Down moving it by the window's height in rows. With no rows and an
 // `empty_title`, the compact empty state stands in their place. A list named
 // `label` with its count.
-// ponytail: no selection model (the caller sets `selected`), no Page keys,
-// selection bar, sticky subheader, loading rows or insert motion.
+// ponytail: no selection model (the caller sets `selected`), no selection bar,
+// sticky subheader, loading rows or insert motion; a page is the window's
+// height over the first row's, not the enclosing viewport's.
 fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, options: ListOptions) -> (widget.Node, err) {
     if keys.len != items.len { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, items.len)
@@ -4086,7 +4098,15 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
         rows[i] = made
         i += 1usize
     }
-    let rove_error = roving(a, t, rows, keys, 1usize)
+    var page = 0usize
+    if items.len > 0usize && mem.address_of(t.runtime) != 0usize {
+        let tall = row_height(t, row_lines(&items[0usize]))
+        let window = widget.surface_size(t.runtime)
+        if tall > 0.0 && window.height > tall { page = usize(window.height / tall) }
+        // Before the first layout the window is unknown: a page is the list.
+        if page == 0usize { page = items.len }
+    }
+    let rove_error = roving(a, t, rows, keys, 1usize, page)
     if rove_error != ok { ret (zero, rove_error) }
     var inset = options.inset
     if options.grouped && !(inset > 0.0) { inset = 16.0 }
@@ -4448,7 +4468,7 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         cells[i] = made
         i += 1usize
     }
-    let rove_error = roving(a, t, cells, keys, columns)
+    let rove_error = roving(a, t, cells, keys, columns, 0usize)
     if rove_error != ok { ret (zero, rove_error) }
     var flow_style = style.defaults()
     flow_style.width = style.Length { Px: options.width }
@@ -5615,7 +5635,7 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         rows[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[shortcut_base..shortcut_base + shortcut_count], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize])
         i += 1usize
     }
-    let rove_error = roving(a, t, rows, keys, 1usize)
+    let rove_error = roving(a, t, rows, keys, 1usize, 0usize)
     if rove_error != ok { ret (zero, rove_error) }
     // Place the rows: the gap first, the others round it, the lifted one last.
     var l = 0usize

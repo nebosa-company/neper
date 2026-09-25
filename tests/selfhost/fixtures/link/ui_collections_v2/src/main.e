@@ -302,6 +302,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !focused_is(&harness, 101u64) { os.exit(22i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 102u64) { os.exit(23i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !focused_is(&harness, 101u64) { os.exit(24i32) }
+    // (D1211) Page Down and Page Up move a window's height of rows, stopping at the ends.
+    if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 103u64) { os.exit(87i32) }
+    if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 103u64) { os.exit(88i32) }
+    if testing.press_key(&harness, 33u32, zero) != ok || !focused_is(&harness, 101u64) { os.exit(89i32) }
     // The grouped list: `surface-container-low`, rounded, its title and footnote.
     let (group, has_group) = bounds(&harness, &runtime, 2000u64)
     if !has_group || !is_color(shot, at(group.x + 150.0, group.y + 24.0), style.color(&tokens, .SurfaceContainerLow)) || !is_color(shot, at(group.x + 0.5, group.y + 0.5), background) { os.exit(25i32) }
