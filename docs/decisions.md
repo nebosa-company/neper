@@ -22952,3 +22952,12 @@ to select the next caller-owned time.
 
 `ui_pickers2_v2` holds closed opening and open navigation on Windows and Linux.
 The reviewed surface is unchanged.
+
+## D1129 — Calendar Page keys reuse month navigation
+
+Calendar and every date-picker calendar bind Page Up and Page Down to the
+existing caller-owned previous and next month callbacks. Holding Shift reports
+the same month in the previous or next year.
+
+`ui_pickers_v2` holds all four dates on Windows and Linux. The reviewed surface
+is unchanged.
