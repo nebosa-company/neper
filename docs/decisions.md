@@ -23665,7 +23665,7 @@ fixture and `ui_overlays_v2` pass on both hosts. The Segoe review is
 `build/ux/ui-reorder-menu-segoe.png`. Touch has no long press for this menu
 yet.
 
-## D1196 — The motion framework is planned for the next release
+## D1198 — The motion framework is planned for the next release
 
 `docs/animation-plan.md` plans a motion framework at Flutter's level for e.ui:
 curves (cubic Bézier, the named catalog, intervals), generic tweens over
