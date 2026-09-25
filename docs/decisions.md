@@ -25625,3 +25625,19 @@ reorder lift are still to come.
 `ui_collections2_v2` marks the third column numeric: a row's cell there ends
 16 in from the row's end, on Windows and Linux; `ui_tabular` still passes on
 both.
+
+## D1329 — Document tabs gain icons, a read-only mark and preview names
+
+`navigation.document_tabs_with` takes `DocumentTabsOptions`, per document by
+index, rather than new `Document` fields, which the example app builds as
+literals. `icons` sets a file-type glyph before each title (18, 24 on touch,
+in the title's colour), and a pinned tab with an icon shows the icon alone, as
+the DocumentTabs spec's pinned form asks. `read_only` sets a 16 `visibility`
+mark after the title and "read only" in the tab's name. `preview` (the index
+plus one) names that tab the preview. The preview title stays upright, since
+the theme has no italic face, and the dragged lift, overflow scrolling and the
+fuller menu are still to come.
+
+`ui_navigation5_v2` shows the pinned main.e by its icon alone, names notes
+"read only" and lower.e the preview, on Windows and Linux; `ui_workspace` and
+`ui_containers5_v2` still pass on both.
