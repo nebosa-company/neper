@@ -25166,3 +25166,21 @@ scales. A gauge with no data now reads an en dash (not a hyphen) in
 `ui_status_v2` holds a neutral four-step level lit in `primary` and a no-data
 gauge whose value is the en dash with "No data" as its hint, on Windows and
 Linux; `ui_feedback` and `metrics` still pass on both.
+
+## D1302 — Notification lists gain settings, loading and failed-load rows
+
+`control.notification_list_with` takes `NotificationListOptions`. With
+`has_settings`, a 40 `settings` icon button named "Notification settings"
+(keyed `key + 200`) follows Mark all read, firing `settings`. With `loading`,
+three skeleton rows follow the notices in a busy group named "Loading older
+notifications" (`key + 201`). With `failed`, the row "Couldn't load older
+notifications." stands there with a Retry text button (`key + 202`) firing
+`retry`. These follow the NotificationList spec's header and Loading older
+state. `notification_list_of` is the call with no extras. A new gear glyph,
+`GlyphKind.Settings`, draws two rings and eight teeth, and its glyph gets a
+larger path builder. Folding repeated notices and insert motion are still to
+come.
+
+`ui_status5_v2` holds the gear after Mark all read, the loading group, the
+failed row, and Settings and Retry pressing, on Windows and Linux;
+`ui_desktop` and `ui_overlays3_v2` still pass on both.

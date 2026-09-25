@@ -275,6 +275,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tip_tree, tip_tree_error) = testing.semantics(&harness)
     let (_, has_ready_tip) = find(tip_tree, .Tooltip, "Ready")
     if tip_tree_error != ok || !has_ready_tip { os.exit(51i32) }
+    // (D1302) The settings button, older notices loading and the failed load's
+    // Retry: each is there and the buttons press.
+    var extras: control.NotificationListOptions = zero
+    extras.has_settings = true
+    extras.settings = s.press
+    extras.loading = true
+    extras.failed = true
+    extras.retry = s.press
+    f = mem.arena_from(frame_storage)
+    let (extra_list, extra_list_error) = control.notification_list_with(&f, 5000u64, &theme, "More", s.items[0usize..1usize], &s.press, 380.0, 500.0, extras)
+    let (extra_page, extra_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if extra_list_error != ok || extra_page_error != ok { os.exit(52i32) }
+    extra_page[0usize] = extra_list
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 520.0), extra_page[0usize..1usize]), time.Instant { nanos: 9000000000i64 }) != ok { os.exit(53i32) }
+    let (gear, has_gear) = bounds(&harness, &runtime, 5200u64)
+    let (extra_mark, has_extra_mark) = bounds(&harness, &runtime, 5001u64)
+    if !has_gear || !has_extra_mark || !near(gear.width, 40.0) || !(gear.x > extra_mark.x) { os.exit(54i32) }
+    if testing.by_label(&harness, "Notification settings").count == 0usize || testing.by_label(&harness, "Loading older notifications").count == 0usize { os.exit(55i32) }
+    if testing.by_text(&harness, "Couldn't load older notifications.").count != 1usize { os.exit(56i32) }
+    let before_extras = s.presses
+    if !tap_key(&harness, &runtime, 5200u64) || !tap_key(&harness, &runtime, 5202u64) || s.presses != before_extras + 2usize { os.exit(57i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(27i32) }
     try io.print("ui status5 v2 ok\n")
     ret ok
