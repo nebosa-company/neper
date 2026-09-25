@@ -22453,3 +22453,14 @@ The command and automatic leaf dismissal share one frame context, so dismissal
 cannot overwrite the selection event's immutable next-state snapshot.
 `ui_collections6_v2` holds open, selection, focus and dismissal on Windows and
 Linux; `datagrid-column-menu.png` is the Segoe UI visual check.
+
+## D1079 — Keyboard grid movement requests only the scroll it needs
+
+Every keyboard-produced `GridEvent` now passes through one helper after the
+caller accepts it. The helper compares the next active row with the body
+viewport, requests the nearest revealing offset through the existing `scrolled`
+callback, and clamps it to the content; an already visible row stays quiet.
+
+`ui_collections6_v2` holds the caller-owned offset and upward reveal on Windows
+and Linux. This changes behavior on the reviewed DataGrid surface, so no
+duplicate screenshot is added.

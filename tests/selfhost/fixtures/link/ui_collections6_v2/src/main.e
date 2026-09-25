@@ -33,7 +33,7 @@ use e.ui.widget
 
 const W: usize = 420usize
 
-type Store = struct { state: collection.GridState, draft: []u8, events: usize, last: collection.GridEvent, committed: usize, committed_row: usize, committed_column: usize, saving: bool, checked: bool, opened: usize }
+type Store = struct { state: collection.GridState, draft: []u8, events: usize, last: collection.GridEvent, committed: usize, committed_row: usize, committed_column: usize, saving: bool, checked: bool, opened: usize, offset: f32, scrolls: usize }
 
 fn cell_text(row: usize, column: usize) -> str {
     if column == 1usize {
@@ -100,6 +100,9 @@ fn on_change(ctx: *void, event: collection.GridEvent) -> err {
 }
 
 fn on_scroll(ctx: *void, value: f32) -> err {
+    let store = mem.cast[*Store](ctx)
+    store.offset = value
+    store.scrolls += 1usize
     ret ok
 }
 
@@ -109,7 +112,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, store: *Store) -> (
     columns[0usize] = collection.Column { title: "Host", width: 120.0 }
     columns[1usize] = collection.Column { title: "Port", width: 100.0 }
     let source = collection.GridSource { ctx: ctx, count: grid_count, cell: grid_cell }
-    let (grid, grid_error) = collection.data_grid_of(a, 1u64, t, "Build hosts", columns[0usize..2usize], source, store.state, store.draft, widget.Change[collection.GridEvent] { ctx: ctx, invoke: on_change }, 0.0, 0.0, widget.Change[f32] { ctx: ctx, invoke: on_scroll }, 280.0)
+    let (grid, grid_error) = collection.data_grid_of(a, 1u64, t, "Build hosts", columns[0usize..2usize], source, store.state, store.draft, widget.Change[collection.GridEvent] { ctx: ctx, invoke: on_change }, 0.0, store.offset, widget.Change[f32] { ctx: ctx, invoke: on_scroll }, 280.0)
     if grid_error != ok { ret (zero, grid_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
     if parts_error != ok { ret (zero, parts_error) }
@@ -421,6 +424,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, grid.x + 20.0, grid.y + 152.0) != ok || store.last.kind != .Extend || store.state.row != 3usize || store.state.column != 1usize || store.state.anchor_row != 3usize || store.state.anchor_column != 0usize { os.exit(113i32) }
     let (root_24r, build_24r_error) = build(&f, &theme, ctx, store)
     if build_24r_error != ok || testing.pump(&harness, root_24r, now) != ok || testing.by_text(&harness, "2 cells selected").count != 1usize || !focus_on(&harness, 2u64) { os.exit(114i32) }
+    // Keyboard navigation asks the caller for the minimum scroll that reveals
+    // the new active row.
+    store.offset = 64.0
+    let (root_24s, build_24s_error) = build(&f, &theme, ctx, store)
+    if build_24s_error != ok || testing.pump(&harness, root_24s, now) != ok || testing.press_key(&harness, 36u32, ctrl) != ok || !at_cell(store, 0usize, 0usize) || store.scrolls != 1usize || !near(store.offset, 0.0) { os.exit(133i32) }
     // Bulk saving disables every edit path, reports the count, and gives each
     // saving cell the shared 16px indeterminate ring.
     store.saving = true

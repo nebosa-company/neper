@@ -1619,7 +1619,24 @@ fn grid_input(ctx: *void, event: input.Event) -> err {
 // all; F8 visits the next invalid cell; Enter or F2 edits; Escape drops the
 // range. In edit mode the editor keeps the arrows; Enter and Tab commit and move,
 // Escape cancels.
-type GridKeys = struct { state: GridState, rows: usize, columns: usize, page: usize, source: GridSource, arena: *mem.Arena, runtime: *widget.Runtime, change: widget.Change[GridEvent] }
+type GridKeys = struct { state: GridState, rows: usize, columns: usize, page: usize, source: GridSource, arena: *mem.Arena, runtime: *widget.Runtime, change: widget.Change[GridEvent], offset: f32, row_extent: f32, body_height: f32, scrolled: widget.Change[f32] }
+
+// Fire one grid event, then reveal its active row with the smallest scroll.
+fn grid_key_event(g: *GridKeys, event: GridEvent) -> err {
+    let fired = widget.fire_change[GridEvent](g.change, event)
+    if fired != ok || !(g.body_height > 0.0) || !(g.row_extent > 0.0) { ret fired }
+    let top = f32(event.next.row) * g.row_extent
+    let bottom = top + g.row_extent
+    var next = g.offset
+    if top < next { next = top }
+    if bottom > next + g.body_height { next = bottom - g.body_height }
+    var high = f32(g.rows) * g.row_extent - g.body_height
+    if high < 0.0 { high = 0.0 }
+    if next < 0.0 { next = 0.0 }
+    if next > high { next = high }
+    if next == g.offset { ret ok }
+    ret widget.fire_change[f32](g.scrolled, next)
+}
 
 fn grid_copy_text(a: *mem.Arena, source: GridSource, s: GridState) -> (str, err) {
     var row_lo = s.row
@@ -1703,7 +1720,7 @@ fn grid_key(ctx: *void, k: input.KeyEvent) -> err {
         next.editing = false
         next.anchor_row = next.row
         next.anchor_column = next.column
-        ret widget.fire_change[GridEvent](g.change, GridEvent { kind: kind, row: s.row, column: s.column, next: next, text: "" })
+        ret grid_key_event(g, GridEvent { kind: kind, row: s.row, column: s.column, next: next, text: "" })
     }
     let command = k.modifiers.control || k.modifiers.meta
     let value = g.source.cell(g.source.ctx, s.row, s.column)
@@ -1715,17 +1732,17 @@ fn grid_key(ctx: *void, k: input.KeyEvent) -> err {
     if command && code == 86u32 {
         let (text, text_error) = widget.clipboard_get(g.runtime, g.arena)
         if text_error != ok { ret text_error }
-        ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Paste, row: s.row, column: s.column, next: next, text: text })
+        ret grid_key_event(g, GridEvent { kind: .Paste, row: s.row, column: s.column, next: next, text: text })
     }
-    if command && code == 90u32 { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Undo, row: s.row, column: s.column, next: next, text: "" }) }
-    if command && (code == 68u32 || code == 13u32) { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .FillDown, row: s.row, column: s.column, next: next, text: "" }) }
-    if code == 46u32 { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Clear, row: s.row, column: s.column, next: next, text: "" }) }
+    if command && code == 90u32 { ret grid_key_event(g, GridEvent { kind: .Undo, row: s.row, column: s.column, next: next, text: "" }) }
+    if command && (code == 68u32 || code == 13u32) { ret grid_key_event(g, GridEvent { kind: .FillDown, row: s.row, column: s.column, next: next, text: "" }) }
+    if code == 46u32 { ret grid_key_event(g, GridEvent { kind: .Clear, row: s.row, column: s.column, next: next, text: "" }) }
     if code == 13u32 || code == 113u32 {
         if value.read_only { ret ok }
-        if value.kind == .Select || value.kind == .Date { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Open, row: s.row, column: s.column, next: next, text: "" }) }
+        if value.kind == .Select || value.kind == .Date { ret grid_key_event(g, GridEvent { kind: .Open, row: s.row, column: s.column, next: next, text: "" }) }
         if value.kind != .Text { ret ok }
         next.editing = true
-        ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Edit, row: s.row, column: s.column, next: next, text: "" })
+        ret grid_key_event(g, GridEvent { kind: .Edit, row: s.row, column: s.column, next: next, text: "" })
     }
     var r = s.row
     var c = s.column
@@ -1741,22 +1758,22 @@ fn grid_key(ctx: *void, k: input.KeyEvent) -> err {
         next.column = g.columns - 1usize
         next.anchor_row = 0usize
         next.anchor_column = 0usize
-        ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Extend, row: s.row, column: s.column, next: next, text: "" })
+        ret grid_key_event(g, GridEvent { kind: .Extend, row: s.row, column: s.column, next: next, text: "" })
     }
     if code == 32u32 && k.modifiers.shift {
         next.column = g.columns - 1usize
         next.anchor_row = s.row
         next.anchor_column = 0usize
-        ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Extend, row: s.row, column: s.column, next: next, text: "" })
+        ret grid_key_event(g, GridEvent { kind: .Extend, row: s.row, column: s.column, next: next, text: "" })
     }
     if code == 32u32 && command {
         next.row = g.rows - 1usize
         next.anchor_row = 0usize
         next.anchor_column = s.column
-        ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Extend, row: s.row, column: s.column, next: next, text: "" })
+        ret grid_key_event(g, GridEvent { kind: .Extend, row: s.row, column: s.column, next: next, text: "" })
     }
-    if code == 32u32 && value.kind == .Checkbox && !value.read_only { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Toggle, row: s.row, column: s.column, next: next, text: "" }) }
-    if code == 40u32 && k.modifiers.alt && (value.kind == .Select || value.kind == .Date) && !value.read_only { ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Open, row: s.row, column: s.column, next: next, text: "" }) }
+    if code == 32u32 && value.kind == .Checkbox && !value.read_only { ret grid_key_event(g, GridEvent { kind: .Toggle, row: s.row, column: s.column, next: next, text: "" }) }
+    if code == 40u32 && k.modifiers.alt && (value.kind == .Select || value.kind == .Date) && !value.read_only { ret grid_key_event(g, GridEvent { kind: .Open, row: s.row, column: s.column, next: next, text: "" }) }
     if code == 119u32 {
         let count = g.rows * g.columns
         var i = 1usize
@@ -1769,7 +1786,7 @@ fn grid_key(ctx: *void, k: input.KeyEvent) -> err {
                 next.column = target_column
                 next.anchor_row = target_row
                 next.anchor_column = target_column
-                ret widget.fire_change[GridEvent](g.change, GridEvent { kind: .Move, row: s.row, column: s.column, next: next, text: "" })
+                ret grid_key_event(g, GridEvent { kind: .Move, row: s.row, column: s.column, next: next, text: "" })
             }
             i += 1usize
         }
@@ -1804,7 +1821,7 @@ fn grid_key(ctx: *void, k: input.KeyEvent) -> err {
         next.anchor_row = r
         next.anchor_column = c
     }
-    ret widget.fire_change[GridEvent](g.change, GridEvent { kind: kind, row: s.row, column: s.column, next: next, text: "" })
+    ret grid_key_event(g, GridEvent { kind: kind, row: s.row, column: s.column, next: next, text: "" })
 }
 
 fn span_of(a: usize, b: usize) -> usize {
@@ -2034,8 +2051,7 @@ fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
 // status bar, 12 in, says the error count in `error` after an 18 `error` icon
 // and, for a range, "N cells selected" in `body-medium` `on-surface-variant`.
 // Every change reaches `change` as a `GridEvent` carrying the next state.
-// ponytail: no clipboard parsing and mutation, cross-fade, or touch sheet; the
-// caller keeps the active row in view (the ring is held inside the viewport).
+// ponytail: no clipboard parsing and mutation, cross-fade, or touch sheet.
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
     var row_extent = extent
@@ -2248,7 +2264,7 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     if keyed_error != ok { ret (zero, TooLarge) }
     var page = 1usize
     if row_extent > 0.0 && grid_height - 40.0 > row_extent { page = usize((grid_height - 40.0) / row_extent) }
-    keyed[0usize] = GridKeys { state: state, rows: total, columns: columns.len, page: page, source: source, arena: a, runtime: t.runtime, change: change }
+    keyed[0usize] = GridKeys { state: state, rows: total, columns: columns.len, page: page, source: source, arena: a, runtime: t.runtime, change: change, offset: offset, row_extent: row_extent, body_height: body_height, scrolled: scrolled }
     ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: zero, keys: widget.Change[input.KeyEvent] { ctx: ctx_of(&keyed[0usize]), invoke: grid_key } }, style.defaults(), column_node[0usize..1usize]), ok)
 }
 
