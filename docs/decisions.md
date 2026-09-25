@@ -22584,3 +22584,12 @@ unbuilt target across the caller's rebuild.
 
 `ui_collections2_v2` holds paging, both ends, caller-owned offsets and deferred
 focus on Windows and Linux. This is behavior-only on the reviewed Table surface.
+
+## D1091 — Table overscans one viewport each way
+
+Table now shares the exact fixed-row range used by VirtualList and VirtualGrid.
+It builds every row intersecting the body viewport plus one viewport before and
+after, clipped to the full source, while stable row keys drive reconciliation.
+
+`ui_collections2_v2` holds the start, middle and end build windows on Windows
+and Linux. The visible Table surface is unchanged.

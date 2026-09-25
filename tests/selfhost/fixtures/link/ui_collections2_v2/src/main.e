@@ -220,6 +220,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (first, has_first) = bounds(&harness, &runtime, 1000u64)
     let (second, has_second) = bounds(&harness, &runtime, 1001u64)
     if !has_first || !has_second || !near(first.y, name.y + 48.0) || !near(first.height, 39.0) || !near(second.y, first.y + 40.0) { os.exit(18i32) }
+    if testing.by_key(&harness, 1005u64).count != 1usize || testing.by_key(&harness, 1006u64).count != 0usize { os.exit(40i32) }
     if !is_color(shot, at(first.x + 150.0, first.y + 20.0), background) || !is_color(shot, at(first.x + 150.0, first.y + 39.5), rule) || !is_color(shot, at(second.x + 150.0, second.y + 20.0), style.color(&tokens, .SecondaryContainer)) { os.exit(19i32) }
     // The pointer over the resize handle turns it into the 3px `primary` bar.
     if testing.hover(&harness, grip.x + 4.0, grip.y + 24.0) != ok { os.exit(20i32) }
@@ -242,11 +243,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     f = mem.arena_from(frame_storage)
     let (root_2, root_2_error) = build(&f, &theme, ctx, columns[0usize..3usize])
     if root_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok || !focused_is(&harness, 1007u64) { os.exit(34i32) }
+    if testing.by_key(&harness, 1002u64).count != 1usize || testing.by_key(&harness, 1010u64).count != 1usize || testing.by_key(&harness, 1011u64).count != 0usize { os.exit(41i32) }
     if testing.press_key(&harness, 33u32, zero) != ok || !focused_is(&harness, 1004u64) || !near(logs[0usize].offset, 160.0) { os.exit(35i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || !near(logs[0usize].offset, 1880.0) || focused_is(&harness, 1049u64) { os.exit(36i32) }
     f = mem.arena_from(frame_storage)
     let (root_3, root_3_error) = build(&f, &theme, ctx, columns[0usize..3usize])
     if root_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok || !focused_is(&harness, 1049u64) { os.exit(37i32) }
+    if testing.by_key(&harness, 1044u64).count != 1usize || testing.by_key(&harness, 1043u64).count != 0usize { os.exit(42i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !near(logs[0usize].offset, 0.0) || focused_is(&harness, 1000u64) { os.exit(38i32) }
     f = mem.arena_from(frame_storage)
     let (root_4, root_4_error) = build(&f, &theme, ctx, columns[0usize..3usize])
