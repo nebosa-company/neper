@@ -5236,7 +5236,9 @@ fn read_hex(text: str) -> (paint.Color, bool) {
 // brightness area, 1 the hue strip, 2 the opacity strip, 3 a swatch), the colour
 // as hue, saturation, brightness and alpha, the checkerboard's and the thumb's
 // colours, and, for a pointer, where it is and whom to tell.
-type Tint = struct { runtime: *widget.Runtime, key: widget.Key, kind: u8, hue: f32, saturation: f32, bright: f32, alpha: f32, color: paint.Color, light: paint.Color, dark: paint.Color, outer: paint.Color, inner: paint.Color, ink: paint.Color, hairline: paint.Color, chosen: bool, layer: f32, change: widget.Change[paint.Color], arena: *mem.Arena }
+// (D1338) `thumb` scales the thumb: 1 for the 20 thumb, 1.2 hovered (24), 1.4 on
+// touch (28).
+type Tint = struct { runtime: *widget.Runtime, key: widget.Key, kind: u8, hue: f32, saturation: f32, bright: f32, alpha: f32, color: paint.Color, light: paint.Color, dark: paint.Color, outer: paint.Color, inner: paint.Color, ink: paint.Color, hairline: paint.Color, chosen: bool, layer: f32, change: widget.Change[paint.Color], arena: *mem.Arena, thumb: f32 }
 
 fn fill_rect(b: *scene.Builder, r: geometry.Rect, brush: paint.Brush) -> err {
     ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: r, brush: brush } })
@@ -5340,15 +5342,15 @@ fn tint_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     if k.kind == 0u8 {
         let tx = area.x + k.saturation * area.width
         let ty = area.y + (1.0 - k.bright) * area.height
-        try disc(k, b, tx, ty, 10.0, k.outer)
-        try disc(k, b, tx, ty, 9.0, k.inner)
-        ret disc(k, b, tx, ty, 7.0, control.with_alpha(k.color, 1.0))
+        try disc(k, b, tx, ty, 10.0 * k.thumb, k.outer)
+        try disc(k, b, tx, ty, 10.0 * k.thumb - 1.0, k.inner)
+        ret disc(k, b, tx, ty, 10.0 * k.thumb - 3.0, control.with_alpha(k.color, 1.0))
     }
     var share = k.hue / 360.0
     if k.kind == 2u8 { share = k.alpha }
     let tx = area.x + share * area.width
-    try ring(k, b, tx, cy, 9.5, 1.0, k.outer)
-    ret ring(k, b, tx, cy, 8.0, 2.0, k.inner)
+    try ring(k, b, tx, cy, 10.0 * k.thumb - 0.5, 1.0, k.outer)
+    ret ring(k, b, tx, cy, 10.0 * k.thumb - 2.0, 2.0, k.inner)
 }
 
 // A press or a drag on the area sets saturation (across) and brightness (up); on
@@ -5543,7 +5545,8 @@ fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
 // `read_color`).
 // (D1323) A grey keeps the last chromatic colour's hue (`HueMemo`), black its
 // saturation too.
-// ponytail: the readout is not typed, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
+// (D1338) Thumbs are 28 on touch and grow to 24 hovered.
+// ponytail: the readout is not typed, no sheet or mode switch for touch, no host panel.
 fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     var no_recent: []const paint.Color = zero
     let (made, made_error) = color_field_with(a, key, t, label, value, with_alpha, change, open, toggle, swatches, no_recent, hex, hex_len, typed, width)
@@ -5594,7 +5597,15 @@ fn color_field_format(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
     if tints_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < 4usize + spots {
-        tints[i] = Tint { runtime: t.runtime, key: key + 2u64 + u64(i), kind: u8(i), hue: hue, saturation: saturation, bright: bright, alpha: value.alpha, color: value, light: light, dark: dark, outer: style.color(t.tokens, .Outline), inner: light, ink: ink, hairline: control.with_alpha(ink, 0.16), chosen: false, layer: 0.0, change: change, arena: a }
+        tints[i] = Tint { runtime: t.runtime, key: key + 2u64 + u64(i), kind: u8(i), hue: hue, saturation: saturation, bright: bright, alpha: value.alpha, color: value, light: light, dark: dark, outer: style.color(t.tokens, .Outline), inner: light, ink: ink, hairline: control.with_alpha(ink, 0.16), chosen: false, layer: 0.0, change: change, arena: a, thumb: 1.0 }
+        // (D1338) 28 thumbs on touch; with a pointer, 24 while hovered.
+        if i < 3usize {
+            if touch {
+                tints[i].thumb = 1.4
+            } else if control.control_state(t, tints[i].key, true, false).hovered {
+                tints[i].thumb = 1.2
+            }
+        }
         if i >= 3usize {
             tints[i].kind = 3u8
             tints[i].key = 0u64

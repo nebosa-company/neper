@@ -381,6 +381,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         memo_step += 1usize
     }
+    // (D1338) On touch the hue thumb's inner ring stands 12 from its centre, where a
+    // pointer's 20 thumb leaves the strip.
+    let touch_tokens = style.adapt(&tokens, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
+    let touch_theme = control.Theme { tokens: &touch_tokens, fonts: theme.fonts, language: "", runtime: &runtime }
+    var thumb_step = 0usize
+    while thumb_step < 2usize {
+        var thumb_theme = &theme
+        if thumb_step == 1usize { thumb_theme = &touch_theme }
+        f = mem.arena_from(frame_storage)
+        let (thumbed, thumbed_error) = overlay.color_field_with(&f, 1100u64 + 100u64 * u64(thumb_step), thumb_theme, "Accent colour", paint.rgba(0.2, 0.5, 0.8, 1.0), false, recent_pick, true, &s.press, s.swatches[0usize..6usize], recent_colours[0usize..0usize], s.hex[0usize..16usize], 7usize, recent_typed, 296.0)
+        let (thumb_page, thumb_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if thumbed_error != ok || thumb_page_error != ok { os.exit(77i32) }
+        thumb_page[0usize] = thumbed
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), thumb_page[0usize..1usize]), time.Instant { nanos: 6300000000i64 + i64(thumb_step) }) != ok { os.exit(78i32) }
+        let (hue_strip, has_hue_strip) = bounds(&harness, &runtime, 1103u64 + 100u64 * u64(thumb_step))
+        let (thumb_shot, thumb_shot_error) = testing.snapshot(&harness, a)
+        if !has_hue_strip || thumb_shot_error != ok { os.exit(79i32) }
+        let centre_x = hue_strip.x + hue_strip.width * (210.0 / 360.0)
+        let ringed = is_color(thumb_shot, at(centre_x + 12.0, hue_strip.y + hue_strip.height * 0.5), style.color(&tokens, .SurfaceContainerLowest))
+        if thumb_step == 0usize && ringed { os.exit(80i32) }
+        if thumb_step == 1usize && !ringed { os.exit(81i32) }
+        thumb_step += 1usize
+    }
     try io.print("ui pickers3 v2 ok\n")
     ret ok
 }
