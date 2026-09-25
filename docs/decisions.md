@@ -25202,3 +25202,15 @@ wording, not localised.
 builds hidden and not expanded. A press opens it, expanded, with the builds
 shown, and the following review notice stays its own row. It passes on
 Windows and Linux, and `ui_desktop` still passes on both.
+
+## D1304 — Table selection bars use text buttons
+
+A table's selection bar now shows its bulk actions as text buttons, per the
+Table spec's selection bar row. They are in `on-secondary-container`, a
+`destructive` command's in `error`, and a disabled one takes the plain
+button's disabled look. Each keeps its key (`key + 2 + i`) and its label as
+its name. A list's selection bar keeps its icon buttons.
+
+`ui_collections2_v2` gives its selectable table Archive and Delete (the
+latter destructive). With a row selected, both stand in the bar as worded
+buttons on Windows and Linux; `ui_collections_v2` still passes on both.

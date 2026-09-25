@@ -23,6 +23,7 @@ use e.ui.collection
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.overlay
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -338,6 +339,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var chose: Chosen = zero
     var table_choice: collection.TableOptions = zero
     table_choice.select = widget.Change[collection.ListSelect] { ctx: mem.cast[*void](&chose), invoke: on_choose }
+    // (D1304) Bulk actions stand in the bar as text buttons.
+    var bulk_commands: [2]overlay.MenuCommand = zero
+    bulk_commands[0usize].label = "Archive"
+    bulk_commands[0usize].enabled = true
+    bulk_commands[1usize].label = "Delete"
+    bulk_commands[1usize].enabled = true
+    bulk_commands[1usize].destructive = true
+    table_choice.bulk = bulk_commands[..]
     var held_control: input.Modifiers = zero
     held_control.control = true
     var picked_keys: [1]widget.Key = zero
@@ -379,6 +388,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         if sel_step == 1usize {
             if select_all.state.checked || !select_all.state.mixed || testing.by_text(&harness, "1 selected").count == 0usize { os.exit(70i32) }
+            let (_, has_delete) = find(pick_tree, .Button, "Delete")
+            if !has_delete || testing.by_text(&harness, "Delete").count == 0usize || testing.by_text(&harness, "Archive").count == 0usize { os.exit(83i32) }
             let picks_before = logs[0usize].picks
             if testing.tap(&harness, gamma_row.x + gamma_row.width * 0.6, gamma_row.y + gamma_row.height * 0.5) != ok || logs[0usize].picks != picks_before || chose.kind != .Toggle || chose.index != 2usize { os.exit(71i32) }
             if testing.tap(&harness, select_all.bounds.x + select_all.bounds.width * 0.5, select_all.bounds.y + select_all.bounds.height * 0.5) != ok || chose.kind != .All { os.exit(72i32) }

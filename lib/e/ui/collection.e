@@ -5047,7 +5047,8 @@ fn selection_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count:
 
 // (D1246) A table's selection bar (`tabular`) is `secondary-container` with its
 // count in `title-small` and everything in `on-secondary-container`.
-// ponytail: a table's bulk actions are icon buttons, not the spec's text buttons.
+// (D1304) A table's bulk actions are text buttons in `on-secondary-container`,
+// a destructive one in `error`.
 fn selection_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, width: f32, tabular: bool) -> (widget.Node, err) {
     let touch = density_of(t) == 2usize
     var ink = style.color(t.tokens, .OnSurface)
@@ -5095,6 +5096,23 @@ fn selection_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, cou
     count_sem.live = 1u8
     parts[1usize] = widget.semantics(0u64, count_sem, grow, counted[0usize..1usize])
     var b = 0usize
+    while b < bulk.len && tabular {
+        let bulk_key = key + 2u64 + u64(b)
+        var look = control.button_look(t, style.resolve(t.tokens, .Plain, control.control_state(t, bulk_key, bulk[b].enabled, false)), bulk[b].enabled)
+        if bulk[b].enabled {
+            look.foreground = ink
+            if bulk[b].destructive { look.foreground = style.color(t.tokens, .Error) }
+        }
+        var worded = control.text_options()
+        worded.role = .Label
+        worded.wrap = .None
+        let (word_node, word_error) = control.colored_text(a, 0u64, bulk[b].label, t, worded, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        let (acted, acted_error) = control.pressable(a, bulk_key, t, 3u8, bulk[b].label, look, bulk[b].enabled, false, &bulk[b].action, word_node)
+        if acted_error != ok { ret (zero, acted_error) }
+        parts[2usize + b] = acted
+        b += 1usize
+    }
     while b < bulk.len {
         let (acted, acted_error) = control.glyph_action(a, key + 2u64 + u64(b), t, bulk[b].glyph, bulk[b].label, &bulk[b].action, side, glyph, muted, bulk[b].enabled, 0u32, 0u32, 0u64)
         if acted_error != ok { ret (zero, acted_error) }
