@@ -10,6 +10,7 @@
 // dismissing.
 
 use e.gpu
+use e.ui.input
 use e.io
 use e.mem
 use e.os
@@ -195,6 +196,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 39u32, zero) != ok || !widget.focus_within(&runtime, 3003u64) { os.exit(38i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !widget.focus_within(&runtime, 3001u64) { os.exit(39i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || testing.press_key(&harness, 32u32, zero) != ok || s.counters[0usize].count != 2usize { os.exit(45i32) }
+    var ctrl: input.Modifiers = zero
+    ctrl.control = true
+    if testing.press_key(&harness, 51u32, ctrl) != ok || s.counters[2usize].count != 1usize || !widget.focus_within(&runtime, 3003u64) { os.exit(46i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 3102u64).element) != ok || testing.press_key(&harness, 38u32, zero) != ok || !widget.focus_within(&runtime, 3101u64) { os.exit(40i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 3103u64) { os.exit(41i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 3201u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || !widget.focus_within(&runtime, 3202u64) { os.exit(42i32) }
