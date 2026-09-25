@@ -4275,7 +4275,8 @@ for hot_mode in --release --time; do
     "$test_build/neper-self" manifest-em $inventory_artifacts --json > "$test_build/inventory-artifacts.json"
     python3 -c "import hashlib,json,sys; source=json.load(open(sys.argv[1])); artifact=json.load(open(sys.argv[2])); paths=sys.argv[3:]; assert artifact['unsafe']==source['unsafe']; assert artifact['mode']==sys.argv[3]; assert artifact['root_module']=='main' and artifact['inputs']==[] and artifact['options']['checks']=='retained'; paths=paths[1:]; assert len(artifact['artifacts'])==len(paths); assert all(row['path']==path and row['sha256']==hashlib.sha256(open(path,'rb').read()).hexdigest() for row,path in zip(artifact['artifacts'],paths))" "$inventory_scratch/.neper/$hot_manifest_mode/build-manifest.json" "$test_build/inventory-artifacts.json" "$hot_manifest_mode" $inventory_artifacts
     # A write that dies (D435, H24): the second module's artifact write dies after
-    # staging; the warm build after it rebuilds that module alone and is the clean build.
+    # staging and no manifest is written; with no authenticated record (D1020) the warm
+    # build after it rebuilds both modules and is the clean build (D1224).
     cp "$hot_fixture/src/dep.e" "$hot_source/dep.e"
     rm -rf "$hot_scratch/.neper"
     hot_fault_status=0
@@ -4284,7 +4285,7 @@ for hot_mode in --release --time; do
     case "$hot_fault_output" in *"made to fail by --fault-write"*) ;; *) echo "a build with an injected write fault did not say so: $hot_fault_output" >&2; exit 1 ;; esac
     [ -n "$(find "$hot_scratch/.neper" -name '*.tmp')" ] || { echo "the injected write fault left no staged file" >&2; exit 1; }
     [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
-    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:edges-hold dep=rebuilt:no-artifact
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:invalid-artifact dep=rebuilt:no-artifact
     cmp "$hot_exe" "$hot_clean"
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt

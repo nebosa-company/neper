@@ -24042,3 +24042,13 @@ wherever they stand in an authenticated manifest. A fresh project writes no
 `cached` field, so manifest goldens are unchanged. Incremental, then plain twice,
 then a warm build keeps main, dep and e.os stable with no body checked, and the
 image matches the clean build's.
+
+## D1225 — A write fault leaves an unauthorised cache
+
+The injected-write-fault check (D435) expected the warm build after a failed
+incremental build to keep the module whose artifact was published before the
+fault. The failed build writes no manifest, and under D1020 an artifact with no
+authenticated record is never reused, so the warm build rebuilds `main` as
+`invalid-artifact` and `dep` as `no-artifact`. Both suites now expect that; the
+image still has to equal the clean build's. The rest of the hot-build section
+passes unchanged with D1224.
