@@ -233,16 +233,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if items != 5usize { os.exit(18i32) }
-    // A tap on the twisty toggles; Tab reaches A, Down moves to A1, Right on B
-    // expands it.
+    // A tap on the twisty toggles. The row key scope moves linearly and through
+    // the hierarchy: Right enters open children, leaves stay put, and Left
+    // returns to a parent or collapses it.
     if testing.tap(&harness, twisty_a.x + 12.0, twisty_a.y + 12.0) != ok || logs[0usize].toggles != 1usize || logs[0usize].toggled != 1u64 { os.exit(19i32) }
     var tabs = 0usize
     while !focused_is(&harness, 1u64) && tabs < 30usize {
         if testing.tab(&harness, false) != ok { os.exit(20i32) }
         tabs += 1usize
     }
-    if !focused_is(&harness, 1u64) || testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 11u64) { os.exit(21i32) }
-    if testing.press_key(&harness, 35u32, zero) != ok || !focused_is(&harness, 2u64) || testing.press_key(&harness, 39u32, zero) != ok || logs[0usize].toggled != 2u64 { os.exit(22i32) }
+    if !focused_is(&harness, 1u64) || testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 11u64) || testing.press_key(&harness, 36u32, zero) != ok || !focused_is(&harness, 1u64) { os.exit(21i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 11u64) || logs[0usize].toggles != 1usize { os.exit(22i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 111u64) || testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 111u64) || logs[0usize].toggles != 1usize { os.exit(40i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 11u64) || testing.press_key(&harness, 37u32, zero) != ok || logs[0usize].toggles != 2usize || logs[0usize].toggled != 11u64 { os.exit(41i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !focused_is(&harness, 2u64) || testing.press_key(&harness, 39u32, zero) != ok || logs[0usize].toggles != 3usize || logs[0usize].toggled != 2u64 { os.exit(42i32) }
     // The outline: guides through each ancestor's twisty, 16 and 36 in, from row
     // to row; A2, the current heading, with its 3px `primary` bar.
     let (root_2, build_2_error) = build(&f, &theme, ctx, 1usize)

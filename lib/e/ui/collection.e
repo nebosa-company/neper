@@ -2394,19 +2394,22 @@ fn flatten(source: TreeSource, expanded: []const widget.Key, parent: widget.Key,
     ret n
 }
 
-// A tree row's keys: Left collapses (or nothing), Right expands, through `toggle`.
-type TreeKeys = struct { key: widget.Key, open: bool, toggle: widget.Change[widget.Key] }
+// A tree row's keys: Left collapses or moves to its parent; Right expands or
+// moves to its first child. The visible keys already carry both targets.
+type TreeKeys = struct { key: widget.Key, open: bool, branch: bool, has_parent: bool, has_child: bool, parent: control.FocusTo, child: control.FocusTo, toggle: widget.Change[widget.Key] }
 
 fn tree_expand(ctx: *void) -> err {
     let k = mem.cast[*TreeKeys](ctx)
-    if k.open { ret ok }
-    ret widget.fire_change[widget.Key](k.toggle, k.key)
+    if k.branch && !k.open { ret widget.fire_change[widget.Key](k.toggle, k.key) }
+    if k.open && k.has_child { ret control.focus_to_fire(ctx_of(&k.child)) }
+    ret ok
 }
 
 fn tree_collapse(ctx: *void) -> err {
     let k = mem.cast[*TreeKeys](ctx)
-    if !k.open { ret ok }
-    ret widget.fire_change[widget.Key](k.toggle, k.key)
+    if k.open { ret widget.fire_change[widget.Key](k.toggle, k.key) }
+    if k.has_parent { ret control.focus_to_fire(ctx_of(&k.parent)) }
+    ret ok
 }
 
 // The rows of a tree or a tree table: each indented by its depth with a
@@ -2426,9 +2429,10 @@ fn tree_collapse(ctx: *void) -> err {
 // a 3px `primary` bar at its start, inset 8 top and bottom. A tree table's row
 // is a table row (`table_row_of`: 40 with a pointer, 48 touch, 32 dense, 16 in)
 // over a full-width 1px `outline-variant` divider, the last excepted. Up, Down,
-// Home and End move the focus among the visible rows.
+// Home and End move among visible rows; Right expands or enters the first child,
+// and Left collapses or returns to the parent.
 // ponytail: at most 512 visible rows, not virtualised; no icon or meta slot,
-// twisty rotation, Right-to-child or Left-to-parent, `*`, typeahead, rename,
+// twisty rotation, `*`, typeahead, rename,
 // drag and drop, loading or disabled rows, and no Expand/Collapse actions.
 fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
@@ -2550,8 +2554,24 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             control.focus_look(t)
             made = widget.region(entry.key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&picks[i]), invoke: row_pick_gesture }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, body[0usize..1usize])
         }
-        // The keyboard: Left collapses, Right expands, from the focused row.
-        keys[i] = TreeKeys { key: entry.key, open: open, toggle: toggle }
+        // The keyboard: Left collapses or finds the nearest visible parent;
+        // Right expands or takes the immediately following first child.
+        var parent_key: widget.Key = 0u64
+        var has_parent = false
+        if entry.depth > 0usize {
+            var before = i
+            while before > 0usize && !has_parent {
+                before -= 1usize
+                if visible[before].depth + 1usize == entry.depth {
+                    parent_key = visible[before].key
+                    has_parent = true
+                }
+            }
+        }
+        let has_child = open && i + 1usize < count && visible[i + 1usize].depth == entry.depth + 1usize
+        var child_key: widget.Key = 0u64
+        if has_child { child_key = visible[i + 1usize].key }
+        keys[i] = TreeKeys { key: entry.key, open: open, branch: entry.branch, has_parent: has_parent, has_child: has_child, parent: control.FocusTo { runtime: t.runtime, key: parent_key }, child: control.FocusTo { runtime: t.runtime, key: child_key }, toggle: toggle }
         let base = 6usize * i
         shortcuts[base] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_collapse } }
         shortcuts[base + 1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_expand } }
