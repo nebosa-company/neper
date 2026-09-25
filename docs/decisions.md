@@ -24679,3 +24679,17 @@ bottom bar takes none. `destination_bar_of` is unchanged.
 
 `ui_navigation3_v2` holds the order (menu, FAB, destinations), the menu's
 press, its name and the sidebar header on Windows and Linux.
+
+## D1267 — App bars collapse with the page's scroll
+
+`AppBarOptions.offset` is how far the content has scrolled under the bar. Any
+offset turns the bar `surface-container`, as `scrolled` did. A medium or large
+bar loses the offset's worth of height, clipped, down to its small row, the
+headline fading out as it goes, as the spec asks ("collapse and expand follow
+the scroll position, no easing"). At the row it is the small bar with the row's
+title type. With reduced motion it snaps to small at the collapse point. The
+title's cross-fade into the row before the collapse ends, hiding on scroll
+and the contextual bar's motion are still to come.
+
+`ui_navigation_v2` holds a medium bar at 112, at 80 after 32 of scroll and at
+48 past its 64 of collapse on Windows and Linux.
