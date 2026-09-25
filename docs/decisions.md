@@ -24129,3 +24129,24 @@ PM hour above 12 and words, so a caller's time field can reformat on blur.
 
 AM and PM stay English, and the dial, wheels, input mode and AM/PM selector stay
 open. `ui_pickers_v2` holds the written and parsed forms on Windows and Linux.
+
+## D1231 — Dates follow the locale's numeric form and typed dates parse
+
+`overlay.date_form` maps the theme language's region to an order and a
+separator. The US and the Philippines read month/day/year with '/'. Japan, China,
+Taiwan and Hong Kong read year/month/day with '/', Korea and Hungary with '.',
+and Sweden, Lithuania and Canada with '-'. Germany and its dot-date neighbours
+read day.month.year. Every other region reads day/month/year, and an empty tag
+or a tag without a region keeps ISO 8601.
+
+`write_date_in` writes a date that way ("9/5/2026", "05.09.2026", "2026/09/05",
+"2026-09-05"), `date_format_hint` names the form for the field's description,
+and the docked date field now shows its value in it. `parse_date` reads the
+locale's form with any of '/', '.' or '-', ISO whenever the year comes first, an
+optional year (today's), "today", "tomorrow" and "yesterday", and a day with an
+English month name either way round. It refuses a day the month lacks, so
+29 February passes only in a leap year.
+
+The field is still read-only; typing into it, Today and Clear, the touch modal
+and inline errors stay open. `ui_pickers_v2` holds the written forms, hints and
+parsed dates on Windows and Linux; `ui_pickers` passes on both hosts.

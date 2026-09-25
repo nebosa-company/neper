@@ -2405,6 +2405,175 @@ fn write_date(out: []u8, d: time.Date) -> usize {
     ret write_two(out, at + 1usize, i64(d.day))
 }
 
+// (D1231) The locale's numeric date form for the `language` tag's region: the
+// order (0 day-month-year, 1 month-day-year, 2 year-month-day) and separator.
+// An empty tag, or no region, keeps ISO 8601 (year-month-day with '-').
+type DateForm = struct { order: u8, separator: u8 }
+
+fn date_form(language: str) -> DateForm {
+    var region = ""
+    var at = 0usize
+    while at + 3usize <= language.len {
+        if (language[at] == 45u8 || language[at] == 95u8) && (at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8) {
+            region = language[at + 1usize..at + 3usize]
+        }
+        at += 1usize
+    }
+    if region.len != 2usize { ret DateForm { order: 2u8, separator: 45u8 } }
+    if week_region_in("US PH FM", region) { ret DateForm { order: 1u8, separator: 47u8 } }
+    if week_region_in("JP CN TW HK", region) { ret DateForm { order: 2u8, separator: 47u8 } }
+    if week_region_in("KR HU", region) { ret DateForm { order: 2u8, separator: 46u8 } }
+    if week_region_in("SE LT CA", region) { ret DateForm { order: 2u8, separator: 45u8 } }
+    if week_region_in("DE AT CH RU PL NO FI CZ SK DK TR UA RO BG HR RS SI EE LV IS", region) { ret DateForm { order: 0u8, separator: 46u8 } }
+    ret DateForm { order: 0u8, separator: 47u8 }
+}
+
+// (D1231) A date in the locale's numeric form ("9/25/2026", "25.09.2026",
+// "2026/09/25", or ISO "2026-09-25"); the length, 0 when `out` is shorter than 12.
+fn write_date_in(out: []u8, d: time.Date, language: str) -> usize {
+    if out.len < 12usize { ret 0usize }
+    let form = date_form(language)
+    if form.order == 2u8 {
+        var at = control.write_i64(out, i64(d.year))
+        out[at] = form.separator
+        at = write_two(out, at + 1usize, i64(d.month))
+        out[at] = form.separator
+        ret write_two(out, at + 1usize, i64(d.day))
+    }
+    var at = 0usize
+    if form.order == 1u8 {
+        at = control.write_i64(out, i64(d.month))
+        out[at] = form.separator
+        at += 1usize
+        at += control.write_i64(out[at..out.len], i64(d.day))
+    } else {
+        at = write_two(out, 0usize, i64(d.day))
+        out[at] = form.separator
+        at = write_two(out, at + 1usize, i64(d.month))
+    }
+    out[at] = form.separator
+    at += 1usize
+    ret at + control.write_i64(out[at..out.len], i64(d.year))
+}
+
+// (D1231) The hint that names the locale's form: "mm/dd/yyyy", "dd.mm.yyyy",
+// "yyyy/mm/dd" or "yyyy-mm-dd".
+fn date_format_hint(language: str) -> str {
+    let form = date_form(language)
+    if form.order == 1u8 { ret "mm/dd/yyyy" }
+    if form.order == 0u8 && form.separator == 46u8 { ret "dd.mm.yyyy" }
+    if form.order == 0u8 { ret "dd/mm/yyyy" }
+    if form.separator == 47u8 { ret "yyyy/mm/dd" }
+    if form.separator == 46u8 { ret "yyyy.mm.dd" }
+    ret "yyyy-mm-dd"
+}
+
+// (D1231, docs/ux/components/DatePicker) A typed date: the locale's numeric form
+// with '/', '.' or '-', ISO "yyyy-mm-dd" always, the year optional (then
+// `today`'s), "today", "tomorrow", "yesterday", or a day and an English month
+// name either way round ("25 sep", "Sep 25 2026"). False for anything else or a
+// day the month does not have.
+fn parse_date(text: str, language: str, today: time.Date) -> (time.Date, bool) {
+    var none: time.Date = zero
+    var start = 0usize
+    var end = text.len
+    while start < end && text[start] == 32u8 { start += 1usize }
+    while end > start && (text[end - 1usize] == 32u8 || text[end - 1usize] == 46u8) { end -= 1usize }
+    let word = text[start..end]
+    let base = time.days_from_civil(i64(today.year), i64(today.month), i64(today.day))
+    var shift = 0i64
+    var relative = false
+    if clock_word(word, "today") { relative = true }
+    if clock_word(word, "tomorrow") {
+        relative = true
+        shift = 1i64
+    }
+    if clock_word(word, "yesterday") {
+        relative = true
+        shift = -1i64
+    }
+    if relative {
+        let (y, m, d) = time.civil_from_days(base + shift)
+        ret (time.Date { year: i32(y), month: u8(m), day: u8(d) }, true)
+    }
+    // Up to three parts: runs of digits or letters, split by spaces, '/', '.', '-', ','.
+    var numbers: [3]i64 = zero
+    var widths: [3]usize = zero
+    var month_word = 0i64
+    var parts = 0usize
+    var i = 0usize
+    while i < word.len {
+        let c = word[i]
+        if c >= 48u8 && c <= 57u8 {
+            var j = i
+            var n = 0i64
+            while j < word.len && word[j] >= 48u8 && word[j] <= 57u8 {
+                n = n * 10i64 + i64(word[j] - 48u8)
+                j += 1usize
+            }
+            if parts == 3usize || j - i > 4usize { ret (none, false) }
+            numbers[parts] = n
+            widths[parts] = j - i
+            parts += 1usize
+            i = j
+        } else if clock_letter(c) {
+            var j = i
+            while j < word.len && clock_letter(word[j]) { j += 1usize }
+            if month_word != 0i64 || j - i < 3usize { ret (none, false) }
+            month_word = month_of_word(word[i..j])
+            if month_word == 0i64 { ret (none, false) }
+            i = j
+        } else if c == 32u8 || c == 47u8 || c == 46u8 || c == 45u8 || c == 44u8 {
+            i += 1usize
+        } else {
+            ret (none, false)
+        }
+    }
+    var year = i64(today.year)
+    var month = 0i64
+    var day = 0i64
+    if month_word != 0i64 {
+        if parts == 0usize || parts > 2usize { ret (none, false) }
+        month = month_word
+        day = numbers[0usize]
+        if parts == 2usize { year = numbers[1usize] }
+    } else {
+        if parts < 2usize { ret (none, false) }
+        var order = date_form(language).order
+        if widths[0usize] == 4usize { order = 2u8 }
+        if order == 2u8 {
+            if parts != 3usize { ret (none, false) }
+            year = numbers[0usize]
+            month = numbers[1usize]
+            day = numbers[2usize]
+        } else {
+            if order == 1u8 {
+                month = numbers[0usize]
+                day = numbers[1usize]
+            } else {
+                day = numbers[0usize]
+                month = numbers[1usize]
+            }
+            if parts == 3usize { year = numbers[2usize] }
+            if parts == 3usize && widths[2usize] == 2usize { year += 2000i64 }
+        }
+    }
+    if month < 1i64 || month > 12i64 || day < 1i64 || year < 1i64 || year > 9999i64 { ret (none, false) }
+    if day > time.days_in_month(year, month) { ret (none, false) }
+    ret (time.Date { year: i32(year), month: u8(month), day: u8(day) }, true)
+}
+
+// The month an English month word names (its first three letters), 0 for none.
+fn month_of_word(word: str) -> i64 {
+    let months = "janfebmaraprmayjunjulaugsepoctnovdec"
+    var m = 0usize
+    while m < 12usize {
+        if (word[0usize] | 32u8) == months[3usize * m] && (word[1usize] | 32u8) == months[3usize * m + 1usize] && (word[2usize] | 32u8) == months[3usize * m + 2usize] { ret i64(m + 1usize) }
+        m += 1usize
+    }
+    ret 0i64
+}
+
 // The weekday of a date, Monday 0 to Sunday 6.
 fn weekday_of(year: i64, month: i64, day: i64) -> i64 {
     // 1970-01-01 was a Thursday, day 3 from Monday.
@@ -2886,18 +3055,21 @@ fn date_open_fire(ctx: *void) -> err {
 // field saying Expanded. The calendar stands 4 below it on `surface-container-high`
 // with 12 corners and elevation 2, 8 above it and 12 at the sides and below, as
 // wide as seven cells and 32 (256 with a pointer).
-// ponytail: the value is typed by nobody and written YYYY-MM-DD; typing, the locale's format, Today and Clear, the modal form for touch and inline errors wait on a date field that owns its text.
+// (D1231) The value is written in the theme language's numeric form
+// (`write_date_in`, ISO with no language); `parse_date` reads typed dates and
+// `date_format_hint` names the form.
+// ponytail: the field is still read-only -- typing into it, Today and Clear, the modal form for touch and inline errors wait on a date field that owns its text.
 fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, ranged: bool, from: time.Date, to: time.Date, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (text_bytes, text_error) = mem.alloc[u8](a, 32usize)
     if text_error != ok { ret (zero, TooLarge) }
     var caption: str = label
     if has_value {
-        var n = write_date(text_bytes, value)
+        var n = write_date_in(text_bytes, value, t.language)
         if ranged && n > 0usize && n + 13usize <= text_bytes.len {
             text_bytes[n] = 32u8
             text_bytes[n + 1usize] = 45u8
             text_bytes[n + 2usize] = 32u8
-            n = n + 3usize + write_date(text_bytes[n + 3usize..text_bytes.len], to)
+            n = n + 3usize + write_date_in(text_bytes[n + 3usize..text_bytes.len], to, t.language)
         }
         caption = text_bytes[0usize..n]
     }

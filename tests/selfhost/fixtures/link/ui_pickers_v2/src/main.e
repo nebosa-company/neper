@@ -302,6 +302,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, pm_ok) = overlay.parse_clock("13 pm")
     let (_, word_ok) = overlay.parse_clock("soon")
     if late_ok || minute_ok || pm_ok || word_ok { os.exit(71i32) }
+    // (D1231) Dates in the locale's numeric form, its hint, and typed dates.
+    let (date_bytes, date_bytes_error) = mem.alloc[u8](a, 24usize)
+    if date_bytes_error != ok { os.exit(72i32) }
+    let release = time.Date { year: 2026i32, month: 9u8, day: 5u8 }
+    var date_len = overlay.write_date_in(date_bytes, release, "en-US")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "9/5/2026") || !mem.eq[u8](overlay.date_format_hint("en-US"), "mm/dd/yyyy") { os.exit(73i32) }
+    date_len = overlay.write_date_in(date_bytes, release, "de-DE")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "05.09.2026") || !mem.eq[u8](overlay.date_format_hint("de-DE"), "dd.mm.yyyy") { os.exit(74i32) }
+    date_len = overlay.write_date_in(date_bytes, release, "en-GB")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "05/09/2026") { os.exit(75i32) }
+    date_len = overlay.write_date_in(date_bytes, release, "ja-JP")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "2026/09/05") { os.exit(76i32) }
+    date_len = overlay.write_date_in(date_bytes, release, "")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "2026-09-05") { os.exit(77i32) }
+    let today_date = time.Date { year: 2026i32, month: 9u8, day: 25u8 }
+    let (us_date, us_ok) = overlay.parse_date("9/5/2026", "en-US", today_date)
+    let (gb_date, gb_ok) = overlay.parse_date("5/9/2026", "en-GB", today_date)
+    let (iso_date, iso_ok) = overlay.parse_date("2026-09-05", "en-US", today_date)
+    let (named_date, named_ok) = overlay.parse_date("5 sep", "en-US", today_date)
+    let (named_first, named_first_ok) = overlay.parse_date("Sep 5, 2026", "de-DE", today_date)
+    let (short_date, short_ok) = overlay.parse_date("9/5", "en-US", today_date)
+    if !us_ok || !gb_ok || !iso_ok || !named_ok || !named_first_ok || !short_ok { os.exit(78i32) }
+    if us_date.month != 9u8 || us_date.day != 5u8 || gb_date.month != 9u8 || gb_date.day != 5u8 || iso_date.day != 5u8 || named_date.month != 9u8 || named_date.day != 5u8 || named_date.year != 2026i32 || named_first.day != 5u8 || short_date.day != 5u8 || short_date.year != 2026i32 { os.exit(79i32) }
+    let (tomorrow, tomorrow_ok) = overlay.parse_date("Tomorrow", "", today_date)
+    let (year_end, year_end_ok) = overlay.parse_date("tomorrow", "", time.Date { year: 2026i32, month: 12u8, day: 31u8 })
+    if !tomorrow_ok || tomorrow.day != 26u8 || !year_end_ok || year_end.year != 2027i32 || year_end.month != 1u8 || year_end.day != 1u8 { os.exit(80i32) }
+    let (_, feb_ok) = overlay.parse_date("30/2/2026", "en-GB", today_date)
+    let (_, month_ok) = overlay.parse_date("13/13/2026", "en-GB", today_date)
+    let (_, date_word_ok) = overlay.parse_date("someday", "en-US", today_date)
+    let (leap, leap_ok) = overlay.parse_date("29.02.2028", "de-DE", today_date)
+    if feb_ok || month_ok || date_word_ok || !leap_ok || leap.day != 29u8 { os.exit(81i32) }
     try io.print("ui pickers v2 ok\n")
     ret ok
 }
