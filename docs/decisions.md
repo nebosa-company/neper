@@ -22771,3 +22771,12 @@ Busy, Invalid, Required, ReadOnly, Modal and Current after the tree was flattene
 
 `ui_accessibility` holds the complete 8191 mask on Windows and Linux. The change
 is semantic only; reviewed surfaces are unchanged.
+
+## D1110 — Flat records retain semantic metadata
+
+One flat-node conversion now feeds both host records. Besides role, text, state,
+actions, sort and bounds, it preserves live-region mode, row and column position
+and totals, hierarchy level, and text selection offsets.
+
+`ui_accessibility` directly holds the conversion on Windows and Linux. The change
+is semantic only; reviewed surfaces are unchanged.

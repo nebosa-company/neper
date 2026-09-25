@@ -454,6 +454,16 @@ fn sort_code(sort: Sort) -> u8 {
     ret 0u8
 }
 
+fn live_code(live: Live) -> u8 {
+    if live == .Polite { ret 1u8 }
+    if live == .Assertive { ret 2u8 }
+    ret 0u8
+}
+
+fn flat_node(n: *const Node) -> os.AccessibleNode {
+    ret os.AccessibleNode { id: n.id.slot, parent: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), sort: sort_code(n.sort), live: live_code(n.live), row: n.position.row, column: n.position.column, row_count: n.position.row_count, column_count: n.position.column_count, level: n.level, selection_start: n.selection_start, selection_end: n.selection_end, x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
+}
+
 // The tree flattened into the bridge's records and handed to the host: every node
 // once, its parent found from the children lists; nothing of the tree is kept.
 fn publish(window_value: window.Id, t: *const Tree) -> err {
@@ -464,7 +474,7 @@ fn publish(window_value: window.Id, t: *const Tree) -> err {
     var i = 0usize
     while i < t.nodes.len {
         let n = &t.nodes[i]
-        storage[i] = os.AccessibleNode { id: n.id.slot, parent: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), sort: sort_code(n.sort), x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
+        storage[i] = flat_node(n)
         i += 1usize
     }
     i = 0usize
