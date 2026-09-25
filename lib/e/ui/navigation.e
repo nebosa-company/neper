@@ -837,6 +837,11 @@ fn stack_cell(t: *const control.Theme, key: widget.Key) -> (*StackCell, bool) {
     ret (kept, true)
 }
 
+// (D1319) A stack's depth eased over `duration-medium-2`, kept on the stack.
+fn eased_on_depth(t: *const control.Theme, key: widget.Key, depth: usize) -> f32 {
+    ret control.eased_on(t, key, key + 1048576u64, f32(depth), false, t.tokens.durations.medium2)
+}
+
 // v2 (D972, docs/ux/components/NavigationStack): the top page fills on `surface`
 // under the v2 app bar (48 with `title-medium` at pointer density, 64 with
 // `title-large` at touch), led while there is a page beneath by Back: an
@@ -850,8 +855,12 @@ fn stack_cell(t: *const control.Theme, key: widget.Key) -> (*StackCell, bool) {
 // Back (keyed `key + 2`; its heading is not focusable), and on a pop it returns
 // to the element that pushed the page.
 // (D1272) `navigation_stack_with` guards a dirty page's pop.
-// ponytail: no push or pop transitions or predictive back; the page beneath is
-// not kept in the tree, so its scroll is the caller's.
+// (D1319) A push slides the new page in from the end over `duration-medium-2`;
+// a pop slides the page beneath back from 30% towards the start; reduced motion
+// shows it at once.
+// ponytail: the page leaving is not drawn (the caller no longer passes it), so a
+// pop is the revealed page's parallax alone; no predictive back; the page
+// beneath is not kept in the tree, so its scroll is the caller's.
 fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, jumps: []const widget.Submit, width: f32) -> (widget.Node, err) {
     if titles.len != pages.len || titles.len == 0usize { ret (zero, TooLarge) }
     let top = titles.len - 1usize
@@ -900,9 +909,24 @@ fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     grow.height = style.Length { Flex: 1.0 }
     grow.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     parts[1usize] = widget.semantics(key + 3u64, page_sem, grow, body[0usize..1usize])
+    // (D1319) The page slides as the depth eases to its new value: still to come
+    // on a push (from the end), past on a pop (a 30% parallax from the start).
+    let depth_now = eased_on_depth(t, key, titles.len)
+    let left = f32(titles.len) - depth_now
+    if left != 0.0 {
+        var dx = left * width
+        if left < 0.0 { dx = left * width * 0.3 }
+        if t.tokens.direction == .RightToLeft { dx = 0.0 - dx }
+        let (slid, slid_error) = mem.alloc[widget.Node](a, 1usize)
+        if slid_error != ok { ret (zero, TooLarge) }
+        slid[0usize] = parts[1usize]
+        parts[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, grow, slid[0usize..1usize])
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+    var clipped = style.defaults()
+    clipped.overflow = .Clip
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, clipped, parts[0usize..2usize])
     if top > 0usize {
         let (backed, backed_error) = back_scope(a, key, column[0usize], *pop)
         ret (backed, backed_error)

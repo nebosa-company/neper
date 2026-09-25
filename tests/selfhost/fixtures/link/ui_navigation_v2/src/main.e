@@ -309,6 +309,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if stack_step == 3usize && (!has_focus_now || focus_now.slot != testing.by_key(&harness, 2600u64).element.slot) { os.exit(42i32) }
         stack_step += 1usize
     }
+    // (D1319) A push slides the new page in from the end: part way its
+    // `primary` block is not yet at its place; settled, it is.
+    var slide_titles: [2]str = zero
+    slide_titles[0usize] = "Projects"
+    slide_titles[1usize] = "neper"
+    var slide_block = control.sized_style(100.0, 100.0)
+    slide_block.background = paint.Brush { Solid: style.color(&tokens, .Primary) }
+    var slide_step = 0usize
+    while slide_step < 4usize {
+        var slide_at = 12000000000i64
+        var slide_depth = 1usize
+        if slide_step == 1usize { slide_at = 12016000000i64 }
+        if slide_step == 2usize {
+            slide_at = 12150000000i64
+            slide_depth = 2usize
+        }
+        if slide_step == 3usize {
+            slide_at = 12600000000i64
+            slide_depth = 2usize
+        }
+        if testing.begin(&harness, time.Instant { nanos: slide_at }) != ok { os.exit(50i32) }
+        f = mem.arena_from(frame_storage)
+        var slide_pages: [2]widget.Node = zero
+        slide_pages[0usize] = widget.box(0u64, control.sized_style(100.0, 100.0), zero)
+        slide_pages[1usize] = widget.box(0u64, slide_block, zero)
+        let (sliding, sliding_error) = navigation.navigation_stack_of(&f, 2800u64, &theme, slide_titles[0usize..slide_depth], slide_pages[0usize..slide_depth], &s.subs[3usize], no_jumps(), 600.0)
+        if sliding_error != ok || testing.pump(&harness, sliding, time.Instant { nanos: slide_at }) != ok { os.exit(51i32) }
+        if slide_step >= 2usize {
+            let (slide_page, has_slide_page) = bounds(&harness, &runtime, 2803u64)
+            let (slide_shot, slide_shot_error) = testing.snapshot(&harness, a)
+            if !has_slide_page || slide_shot_error != ok { os.exit(52i32) }
+            let placed = is_color(slide_shot, at(slide_page.x + 50.0, slide_page.y + 50.0), style.color(&tokens, .Primary))
+            if slide_step == 2usize && placed { os.exit(53i32) }
+            if slide_step == 3usize && !placed { os.exit(54i32) }
+        }
+        slide_step += 1usize
+    }
     // (D1272) A dirty page's Back asks instead of popping; the open question's
     // Discard pops.
     var guarded: navigation.StackGuard = zero
