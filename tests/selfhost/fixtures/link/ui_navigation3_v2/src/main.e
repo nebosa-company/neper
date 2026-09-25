@@ -94,6 +94,13 @@ fn is_color(shot: image.Image, i: usize, c: paint.Color) -> bool {
     ret close_to(shot.pixels[i], c.red) && close_to(shot.pixels[i + 1usize], c.green) && close_to(shot.pixels[i + 2usize], c.blue)
 }
 
+// (D1269) The width a sash reported last.
+fn on_width(ctx: *void, value: f32) -> err {
+    let width = mem.cast[*f32](ctx)
+    *width = value
+    ret ok
+}
+
 fn bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
     let (b, found) = widget.bounds_of(runtime, testing.by_key(h, key).element)
     ret (b, found)
@@ -302,6 +309,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (extra_tree, extra_tree_error) = testing.semantics(&harness)
     let (_, has_open_nav) = find(extra_tree, .Button, "Open navigation")
     if extra_tree_error != ok || !has_open_nav { os.exit(63i32) }
+    // (D1269) The standard drawer hidden is nothing wide, as a rail 80, and shown
+    // with its sash: Right on the focused sash widens it 8.
+    var drawer_width: f32 = 0.0
+    let drawer_resize = widget.Change[f32] { ctx: mem.cast[*void](&drawer_width), invoke: on_width }
+    var drawer_step = 0usize
+    while drawer_step < 3usize {
+        var drawer_state: navigation.DrawerState = .Hidden
+        if drawer_step == 1usize { drawer_state = .Rail }
+        if drawer_step == 2usize { drawer_state = .Shown }
+        f = mem.arena_from(frame_storage)
+        let (standard_drawer, standard_error) = navigation.navigation_drawer_standard_with(&f, 3700u64, &theme, "Workspace", s.rows[0usize..2usize], 0usize, s.picks[0usize..2usize], 240.0, 300.0, drawer_state, drawer_resize)
+        let (standard_page, standard_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if standard_error != ok || standard_page_error != ok { os.exit(64i32) }
+        standard_page[0usize] = standard_drawer
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), standard_page[0usize..1usize]), time.Instant { nanos: 5100000000i64 + i64(drawer_step) }) != ok { os.exit(65i32) }
+        let (standard_box, has_standard_box) = bounds(&harness, &runtime, 3700u64)
+        if drawer_step == 0usize && (!has_standard_box || !near(standard_box.width, 0.0)) { os.exit(66i32) }
+        if drawer_step == 1usize && (!has_standard_box || !near(standard_box.width, 80.0)) { os.exit(67i32) }
+        if drawer_step == 2usize {
+            let (_, has_sash) = bounds(&harness, &runtime, 3700u64 + 4096u64 + 2u64)
+            if !has_sash || widget.focus(&runtime, testing.by_key(&harness, 3700u64 + 4096u64 + 2u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok || !near(drawer_width, 248.0) { os.exit(68i32) }
+        }
+        drawer_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation3 v2 ok\n")
     ret ok

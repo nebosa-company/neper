@@ -1977,13 +1977,36 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     ret (widget.box(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
+// (D1269) A standard drawer's state: shown, hidden (nothing), or collapsed to
+// the rail.
+type DrawerState = enum u8 { Shown, Hidden, Rail }
+
+// (D1269, docs/ux/components/NavigationDrawer, standard states) The standard
+// drawer as `state` asks: hidden, an empty box (keyed `key`) no wider than
+// nothing; collapsed, the destinations as an 80 rail (`destination_bar_of`,
+// keyed `key`); shown, the drawer with the ResizablePane sash on its end edge
+// (`pane_with_reserve`, keyed `key + 4096`) reporting widths held to 200..280
+// through `resize` when that is set. The caller keeps the state and width.
+fn navigation_drawer_standard_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, width: f32, height: f32, state: DrawerState, resize: widget.Change[f32]) -> (widget.Node, err) {
+    if state == .Hidden { ret (widget.box(key, control.sized_style(0.0, height), zero), ok) }
+    if state == .Rail {
+        let (rail, rail_error) = destination_bar_of(a, key, t, items, selected, picks, .Rail, 80.0)
+        ret (rail, rail_error)
+    }
+    let (drawer, drawer_error) = navigation_drawer_standard(a, key, t, header, items, selected, picks, width, height)
+    if drawer_error != ok || !widget.change_set[f32](resize.invoke) { ret (drawer, drawer_error) }
+    let (sized, sized_error) = control.pane_with_reserve(a, key + 4096u64, t, "Navigation width", .Horizontal, width, 200.0, 280.0, 0u64, 0.0, resize, drawer, false)
+    ret (sized, sized_error)
+}
+
 // v2 (D973, docs/ux/components/NavigationDrawer, standard): in the layout,
 // `width` wide (200-280 at pointer density) and `height` tall, square with no
 // shadow on `surface-container-low`, 8 in (12 touch); the header 12 above and 8
 // below (16 and 12 touch); rows 40 tall 12 in at both ends (56, 16 and 24
 // touch); the list (keyed `key + 1`, rows `key + 2 + index`) in a group named
 // "Main" keyed `key`.
-// ponytail: no hiding, collapsing to the rail or resizing sash.
+// (D1269) `navigation_drawer_standard_with` hides it, collapses it to the rail
+// or gives it its resizing sash.
 fn navigation_drawer_standard(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var row_height: f32 = 40.0
