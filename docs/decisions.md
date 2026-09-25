@@ -24363,3 +24363,24 @@ becomes the selection bar.
 
 `ui_collections_v2` holds Space, both Shift arrows, Ctrl+A, Escape and a
 Ctrl-click on a tile on Windows and Linux.
+
+## D1246 — Tables are selectable
+
+`collection.table_with` is `table` made selectable by a `TableSelect` (the
+`ListSelect` listener and the bar's bulk actions); `table`, `data_grid` and
+`data_grid_of` pass none. A 52 first column (40 dense) holds each row's
+checkbox in its circle, passed to `table_row_of` as a leading cell so the
+row's fill covers it. The header gains the select-all checkbox, checked when
+every row is selected and mixed when some are, named "Select all" plus the
+table's label. A press on it selects all, or clears once everything is
+selected. A row's checkbox toggles it without picking. While any row is
+selected the tabular selection bar (`secondary-container`, the count in
+`title-small`) stands above the header and a row click toggles; otherwise
+Ctrl-click toggles, Shift-click extends and a plain click is still `pick`. The
+virtual rows take the list's key scope through `selection_scopes_from`, which
+reports whole-set indices from the first built row.
+
+The bar's actions stay icon buttons rather than the spec's text buttons, and
+Shift+Up/Down stop at the built rows' edge. `ui_collections2_v2` holds both
+checkbox states, the checkbox toggle, the plain pick, Ctrl-click, Space,
+Ctrl+A, the bar, the mixed header and the toggling click on Windows and Linux.

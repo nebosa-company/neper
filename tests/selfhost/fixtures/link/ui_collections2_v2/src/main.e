@@ -58,6 +58,17 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
     ret ok
 }
 
+// (D1246) What a selectable table said last, and how often.
+type Chosen = struct { count: usize, kind: collection.ListSelectKind, index: usize }
+
+fn on_choose(ctx: *void, value: collection.ListSelect) -> err {
+    let chose = mem.cast[*Chosen](ctx)
+    chose.count += 1usize
+    chose.kind = value.kind
+    chose.index = value.index
+    ret ok
+}
+
 fn on_scroll(ctx: *void, value: f32) -> err {
     let log = mem.cast[*Log](ctx)
     log.offset = value
@@ -316,6 +327,60 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !has_sheet || sheet.position.row_count != 50u32 || sorted_sizes != 1usize { os.exit(29i32) }
     if testing.by_text(&harness, "1").count == 0usize { os.exit(30i32) }
+    // (D1246) A selectable table: with nothing selected the select-all checkbox is
+    // clear, a row's checkbox toggles it, a plain row click still picks, a
+    // Ctrl-click toggles, Space toggles and Ctrl+A selects all; with Beta selected
+    // the bar says "1 selected", select-all is mixed and a plain click toggles.
+    var chose: Chosen = zero
+    var table_choice: collection.TableSelect = zero
+    table_choice.select = widget.Change[collection.ListSelect] { ctx: mem.cast[*void](&chose), invoke: on_choose }
+    var held_control: input.Modifiers = zero
+    held_control.control = true
+    var picked_keys: [1]widget.Key = zero
+    picked_keys[0usize] = 1001u64
+    var sel_step = 0usize
+    while sel_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        var shown_keys = picked_keys[0usize..0usize]
+        if sel_step == 1usize { shown_keys = picked_keys[0usize..1usize] }
+        let pick_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        let (pickable, pickable_error) = collection.table_with(&f, 1u64, &theme, "Files", columns[0usize..3usize], pick_source, shown_keys, 0usize, false, zero, zero, zero, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, 0.0, zero, 300.0, table_choice)
+        let (pickable_page, pickable_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if pickable_error != ok || pickable_page_error != ok { os.exit(57i32) }
+        pickable_page[0usize] = pickable
+        var pickable_ground = style.defaults()
+        pickable_ground.width = style.Length { Px: 400.0 }
+        pickable_ground.height = style.Length { Px: 360.0 }
+        pickable_ground.background = paint.Brush { Solid: background }
+        if testing.pump(&harness, widget.box(0u64, pickable_ground, pickable_page[0usize..1usize]), time.Instant { nanos: 5000000000i64 + i64(sel_step) }) != ok { os.exit(58i32) }
+        let (pick_tree, pick_tree_error) = testing.semantics(&harness)
+        if pick_tree_error != ok { os.exit(59i32) }
+        let (select_all, has_select_all) = find(pick_tree, .Checkbox, "Select all Files")
+        let (first_check, has_first_check) = find(pick_tree, .Checkbox, "Select")
+        if !has_select_all || !has_first_check { os.exit(60i32) }
+        let (beta_row, has_beta_row) = bounds(&harness, &runtime, 1001u64)
+        let (gamma_row, has_gamma_row) = bounds(&harness, &runtime, 1002u64)
+        if !has_beta_row || !has_gamma_row { os.exit(61i32) }
+        if sel_step == 0usize {
+            if select_all.state.checked || select_all.state.mixed || testing.by_text(&harness, "1 selected").count != 0usize { os.exit(62i32) }
+            if testing.tap(&harness, first_check.bounds.x + first_check.bounds.width * 0.5, first_check.bounds.y + first_check.bounds.height * 0.5) != ok || chose.kind != .Toggle || chose.index != 0usize { os.exit(63i32) }
+            let picks_before = logs[0usize].picks
+            let chose_before = chose.count
+            if testing.tap(&harness, beta_row.x + beta_row.width * 0.6, beta_row.y + beta_row.height * 0.5) != ok || logs[0usize].picks != picks_before + 1usize || chose.count != chose_before { os.exit(64i32) }
+            if widget.dispatch(&runtime, input.Event { KeyDown: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: held_control, repeat: false } }) != ok { os.exit(65i32) }
+            if testing.tap(&harness, gamma_row.x + gamma_row.width * 0.6, gamma_row.y + gamma_row.height * 0.5) != ok || chose.kind != .Toggle || chose.index != 2usize { os.exit(66i32) }
+            if widget.dispatch(&runtime, input.Event { KeyUp: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(67i32) }
+            if widget.focus(&runtime, testing.by_key(&harness, 1001u64).element) != ok || testing.press_key(&harness, 32u32, zero) != ok || chose.kind != .Toggle || chose.index != 1usize { os.exit(68i32) }
+            if testing.press_key(&harness, 65u32, held_control) != ok || chose.kind != .All { os.exit(69i32) }
+        }
+        if sel_step == 1usize {
+            if select_all.state.checked || !select_all.state.mixed || testing.by_text(&harness, "1 selected").count == 0usize { os.exit(70i32) }
+            let picks_before = logs[0usize].picks
+            if testing.tap(&harness, gamma_row.x + gamma_row.width * 0.6, gamma_row.y + gamma_row.height * 0.5) != ok || logs[0usize].picks != picks_before || chose.kind != .Toggle || chose.index != 2usize { os.exit(71i32) }
+            if testing.tap(&harness, select_all.bounds.x + select_all.bounds.width * 0.5, select_all.bounds.y + select_all.bounds.height * 0.5) != ok || chose.kind != .All { os.exit(72i32) }
+        }
+        sel_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui collections2 v2 ok\n")
     ret ok
