@@ -4083,7 +4083,30 @@ fn key_value_editor(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
 // `key ^ fnv1a64("kv-mode")`) fires it from the other mode; `text_mode` shows the
 // pairs as the caller's `text` (`text_len` long, told through `typed`), one
 // NAME=value a line, with `text_error` (a line that did not parse) under it.
-type KeyValueOptions = struct { name_label: str, value_label: str, add_label: str, remove_label: str, duplicate_message: str, secret: []const bool, empty_row: bool, spare: Pair, empty_name: str, empty_hint: str, shown: []const bool, reveal: widget.Change[usize], text_mode: bool, toggle_mode: widget.Submit, text: []u8, text_len: usize, typed: widget.Change[str], text_error: str }
+// (D1327) `ordered` leads each row with a drag handle and lets Alt+Up and
+// Alt+Down move it, every move reaching `reorder`.
+type KeyValueOptions = struct { name_label: str, value_label: str, add_label: str, remove_label: str, duplicate_message: str, secret: []const bool, empty_row: bool, spare: Pair, empty_name: str, empty_hint: str, shown: []const bool, reveal: widget.Change[usize], text_mode: bool, toggle_mode: widget.Submit, text: []u8, text_len: usize, typed: widget.Change[str], text_error: str, ordered: bool, reorder: widget.Change[Reorder] }
+
+// (D1327) An ordered pair's handle drag: dropped, the row lands where the pointer
+// stands among the rows, measured from the first row's top (keyed `first`) by the
+// row pitch.
+type PairDrag = struct { runtime: *widget.Runtime, first: widget.Key, index: usize, count: usize, pitch: f32, move: widget.Change[Reorder] }
+
+fn pair_drag_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*PairDrag](ctx)
+    switch g {
+    case .DragEnd as at:
+        let (top, has_top) = keyed_bounds_of(d.runtime, d.first)
+        if !has_top || !(d.pitch > 0.0) || d.count == 0usize { ret ok }
+        var to = 0usize
+        if at.y > top.y { to = usize((at.y - top.y) / d.pitch) }
+        if to >= d.count { to = d.count - 1usize }
+        if to == d.index { ret ok }
+        ret widget.fire_change[Reorder](d.move, Reorder { from: d.index, to: to })
+    default:
+        ret ok
+    }
+}
 
 // (D1314) The pairs as text, one NAME=value a line, into `out`; how many bytes.
 fn pairs_text(out: []u8, pairs: []const Pair) -> usize {
@@ -4273,7 +4296,8 @@ fn joined(a: *mem.Arena, first: str, second: str, third: []const u8) -> (str, er
 // (D1260) A secret value has its Show value toggle and the Add button its glyph.
 // (D1314) Text mode and its switch (`KeyValueOptions.text_mode`, `pairs_text`,
 // `pairs_parse`).
-// ponytail: no ordered variant, removal with Undo, `code` names,
+// (D1327) The ordered variant (`KeyValueOptions.ordered`).
+// ponytail: no removal with Undo, `code` names,
 // the 30 s reveal limit or the touch list form.
 fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
     if pairs.len > 128usize { ret (zero, TooLarge) }
@@ -4285,7 +4309,10 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let field_h = control.if_else(dense, 32.0, 40.0)
     let gap = control.if_else(dense, 4.0, 8.0)
     let remove_w = control.if_else(dense, 32.0, 40.0)
-    let avail = control.max_zero(width - remove_w - 2.0 * gap)
+    // (D1327) An ordered editor's handle takes 24 and a gap from the fields.
+    var handle_w: f32 = 0.0
+    if options.ordered { handle_w = 24.0 + gap }
+    let avail = control.max_zero(width - remove_w - 2.0 * gap - handle_w)
     let name_w = avail * 0.4
     let value_w = avail - name_w
     let muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -4404,6 +4431,31 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
         if lined_error != ok { ret (zero, TooLarge) }
         lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, style.defaults(), cells[3usize..6usize])
+        if options.ordered {
+            // (D1327) The handle before the fields, a drag moving the row, and
+            // Alt+Up / Alt+Down on the row moving it by one; the row keyed
+            // `key + 2097152 + i`.
+            let (moves, moves_error) = mem.alloc[Nudging](a, 2usize)
+            let (drags, drags_error) = mem.alloc[PairDrag](a, 1usize)
+            let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 2usize)
+            let (handled, handled_error) = mem.alloc[widget.Node](a, 4usize)
+            if moves_error != ok || drags_error != ok || keys_error != ok || handled_error != ok { ret (zero, TooLarge) }
+            var no_swipe: *Swipe = zero
+            moves[0usize] = Nudging { item: key + 2097152u64 + u64(i), index: i, count: pairs.len, up: true, move: options.reorder, cell: no_swipe, has_cell: false }
+            moves[1usize] = Nudging { item: key + 2097152u64 + u64(i), index: i, count: pairs.len, up: false, move: options.reorder, cell: no_swipe, has_cell: false }
+            drags[0usize] = PairDrag { runtime: t.runtime, first: key + 2097152u64, index: i, count: pairs.len, pitch: field_h + gap, move: options.reorder }
+            var held_alt: input.Modifiers = zero
+            held_alt.alt = true
+            keys[0usize] = widget.Shortcut { key: 38u32, modifiers: held_alt, action: widget.Submit { ctx: ctx_of(&moves[0usize]), invoke: reorder_nudge } }
+            keys[1usize] = widget.Shortcut { key: 40u32, modifiers: held_alt, action: widget.Submit { ctx: ctx_of(&moves[1usize]), invoke: reorder_nudge } }
+            let (grip, grip_error) = control.icon_square(a, muted, .DragHandle, 24.0)
+            if grip_error != ok { ret (zero, grip_error) }
+            handled[3usize] = grip
+            handled[0usize] = widget.region(key + 3145728u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&drags[0usize]), invoke: pair_drag_gesture }, gestures: 2u8, enabled: true, focusable: false }, control.sized_style(24.0, field_h), handled[3usize..4usize])
+            handled[1usize] = lined[0usize]
+            handled[2usize] = widget.flex(key + 2097152u64 + u64(i), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, style.defaults(), handled[0usize..2usize])
+            lined[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: keys[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), handled[2usize..3usize])
+        }
         var row_sem: widget.Semantics = zero
         row_sem.role = 13u8
         row_sem.label = name_text

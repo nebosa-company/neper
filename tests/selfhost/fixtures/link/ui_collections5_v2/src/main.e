@@ -22,6 +22,7 @@ use e.ui.accessibility
 use e.algo.hash as hash
 use e.ui.collection
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.testing
@@ -71,6 +72,14 @@ fn on_remove(ctx: *void, value: usize) -> err {
     let log = mem.cast[*Log](ctx)
     log.removes += 1usize
     log.removed = value
+    ret ok
+}
+
+// (D1327) A move: counted in `adds`, its destination kept in `removed`.
+fn on_order(ctx: *void, value: collection.Reorder) -> err {
+    let log = mem.cast[*Log](ctx)
+    log.adds += 1usize
+    log.removed = value.to
     ret ok
 }
 
@@ -402,6 +411,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     texted_page[0usize] = texted
     if testing.pump(&harness, widget.box(0u64, control.sized_style(420.0, 700.0), texted_page[0usize..1usize]), time.Instant { nanos: 4300000000i64 }) != ok { os.exit(57i32) }
     if testing.by_key(&harness, 700u64 ^ hash.fnv1a64("kv-text")).count != 1usize || testing.by_key(&harness, 702u64).count != 0usize || testing.by_text(&harness, "Line 2 has no =").count == 0usize { os.exit(58i32) }
+    // (D1327) Ordered: each row has its handle; Alt+Down on the first row's name
+    // moves it to 1, and a handle dragged a row and a half down lands it at 1.
+    var order_log: Log = zero
+    var ordered_kv = collection.key_value_options()
+    ordered_kv.ordered = true
+    ordered_kv.reorder = widget.Change[collection.Reorder] { ctx: mem.cast[*void](&order_log), invoke: on_order }
+    f = mem.arena_from(storage)
+    let (ordered_editor, ordered_error) = collection.key_value_editor_of(&f, 1700u64, &theme, "Headers", pairs[0usize..2usize], widget.Change[collection.PairEdit] { ctx: mem.cast[*void](&edits), invoke: on_pair_edit }, zero, &adds[0usize], 400.0, ordered_kv)
+    let (ordered_page, ordered_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if ordered_error != ok || ordered_page_error != ok { os.exit(59i32) }
+    ordered_page[0usize] = ordered_editor
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(420.0, 700.0), ordered_page[0usize..1usize]), time.Instant { nanos: 4400000000i64 }) != ok { os.exit(60i32) }
+    if testing.by_key(&harness, 1700u64 + 3145728u64).count != 1usize || testing.by_key(&harness, 1700u64 + 3145729u64).count != 1usize { os.exit(61i32) }
+    var held_alt: input.Modifiers = zero
+    held_alt.alt = true
+    if widget.focus(&runtime, testing.by_key(&harness, 1701u64).element) != ok || testing.press_key(&harness, 40u32, held_alt) != ok || order_log.adds != 1usize || order_log.removed != 1usize { os.exit(62i32) }
+    let (first_grip, has_first_grip) = widget.bounds_of(&runtime, testing.by_key(&harness, 1700u64 + 3145728u64).element)
+    let (first_pair, has_first_pair) = widget.bounds_of(&runtime, testing.by_key(&harness, 1700u64 + 2097152u64).element)
+    if !has_first_grip || !has_first_pair { os.exit(63i32) }
+    let grip_at = geometry.Point { x: first_grip.x + 12.0, y: first_grip.y + first_grip.height * 0.5 }
+    if testing.drag(&harness, grip_at, geometry.Point { x: grip_at.x, y: first_pair.y + first_pair.height * 1.5 + 8.0 }, 4usize) != ok || order_log.adds != 2usize || order_log.removed != 1usize { os.exit(64i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui collections5 v2 ok\n")
     ret ok

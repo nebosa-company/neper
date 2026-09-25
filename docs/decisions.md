@@ -25596,3 +25596,19 @@ the same report. Drop targets are still to come.
 `ui_navigation2_v2` finds no chevron on a resting crumb; hovered, "lib" shows
 one whose press reports index 1; open, the menu lists docs and tests and a press
 on tests fires it, on Windows and Linux; `ui_content2_v2` still passes on both.
+
+## D1327 — Key-value editors have an ordered variant
+
+The KeyValueEditor spec's ordered variant, for HTTP headers and PATH entries:
+`KeyValueOptions.ordered` leads each row with a 24 `drag-handle` (a drag region
+keyed `key + 3145728 + i`) and keys the row `key + 2097152 + i`. A handle
+dropped among the rows moves its pair to where the pointer stands, measured
+from the first row's top by the row pitch (`PairDrag`), and Alt+Up and Alt+Down
+within a row move it by one (the reorderable list's `reorder_nudge`), each move
+reaching `reorder` as a `Reorder`. The fields give the handle 24 and a gap. A
+duplicate-name line under a row is not counted in the drop pitch, and there is
+no lifted look while dragging.
+
+`ui_collections5_v2` finds both handles, moves the first row down with
+Alt+Down, and drops the first row's handle a row and a half down onto index 1,
+on Windows and Linux; `ui_property` still passes on both.
