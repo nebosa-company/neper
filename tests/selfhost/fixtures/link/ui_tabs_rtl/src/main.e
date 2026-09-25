@@ -10,6 +10,7 @@ use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
 use e.ui.control
+use e.gfx.paint
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -246,6 +247,53 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (after_page, _) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 1048876u64).element)
     let paged_by = before_page - after_page
     if !(paged_by > 0.0) || (after_page > 0.5 && (paged_by - paged_view.width > 0.5 || paged_view.width - paged_by > 0.5)) { os.exit(45i32) }
+    // (D1281) Picking the third tab slides the indicator from the first: half way
+    // through it lies under the middle tab, and then under the third alone.
+    var slide_labels: [3]str = zero
+    slide_labels[0usize] = "One"
+    slide_labels[1usize] = "Two"
+    slide_labels[2usize] = "Three"
+    var slide_options = control.tabs_options()
+    slide_options.fixed = true
+    slide_options.width = 300.0
+    let slide_primary = style.color(&tokens, .Primary)
+    var slide_step = 0usize
+    while slide_step < 5usize {
+        var slide_at = 9000000000i64
+        var slide_pick = 0usize
+        if slide_step == 1usize { slide_at = 9016000000i64 }
+        if slide_step == 2usize {
+            slide_at = 9100000000i64
+            slide_pick = 2usize
+        }
+        if slide_step == 3usize {
+            slide_at = 9250000000i64
+            slide_pick = 2usize
+        }
+        if slide_step == 4usize {
+            slide_at = 9500000000i64
+            slide_pick = 2usize
+        }
+        if testing.begin(&harness, time.Instant { nanos: slide_at }) != ok { os.exit(47i32) }
+        frame = mem.arena_from(frame_bytes)
+        let (sliding, sliding_error) = control.tabs_of(&frame, 600u64, &theme, slide_labels[..], slide_pick, many_picks[0usize..3usize], slide_options)
+        let (sliding_page, sliding_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if sliding_error != ok || sliding_page_error != ok { os.exit(48i32) }
+        sliding_page[0usize] = sliding
+        var slide_ground = control.sized_style(320.0, 80.0)
+        slide_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.box(0u64, slide_ground, sliding_page[0usize..1usize]), time.Instant { nanos: slide_at }) != ok { os.exit(49i32) }
+        if slide_step >= 3usize {
+            let (middle_tab, has_middle_tab) = widget.bounds_of(&runtime, testing.by_key(&harness, 602u64).element)
+            let (slide_shot, slide_shot_error) = testing.snapshot(&harness, a)
+            if !has_middle_tab || slide_shot_error != ok { os.exit(50i32) }
+            let at_px = (usize(middle_tab.y + middle_tab.height - 2.0) * 320usize + usize(middle_tab.x + middle_tab.width * 0.5)) * 4usize
+            let lit = slide_shot.pixels[at_px + 2usize] > 150u8 && slide_shot.pixels[at_px] < 150u8
+            if slide_step == 3usize && !lit { os.exit(51i32) }
+            if slide_step == 4usize && lit { os.exit(52i32) }
+        }
+        slide_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui tabs rtl ok\n")
     ret ok
