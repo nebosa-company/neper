@@ -76,7 +76,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, texture: scene.Textu
     // Icons: 24 by default, 20 snapped to 18, a named error alert at 36, the same
     // disabled, and an unnamed one.
     var o = control.icon_options()
-    let (i1, e1) = control.icon_of(a, 10u64, t, .Person, o)
+    let (i1, e1) = control.icon_of(a, 10u64, t, .ChevronRight, o)
     if e1 != ok { ret (zero, e1) }
     n[0usize] = i1
     o.size = 20.0
@@ -95,7 +95,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, texture: scene.Textu
     let (i4, e4) = control.icon_of(a, 13u64, t, .Alert, o)
     if e4 != ok { ret (zero, e4) }
     n[3usize] = i4
-    let (i5, e5) = control.icon_of(a, 14u64, t, .Picture, control.icon_options())
+    let (i5, e5) = control.icon_of(a, 14u64, t, .ArrowBack, control.icon_options())
     if e5 != ok { ret (zero, e5) }
     n[4usize] = i5
     // Avatars: initials online at 40, a busy team square with the person mark at
@@ -230,7 +230,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 4u32)
     if renderer_error != ok { os.exit(3i32) }
     var renderer = r
-    let tokens = style.reference(.Light)
+    var tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1024usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 24u16, max_commands: 8192usize })
@@ -274,6 +274,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let i2 = bounds(&harness, &runtime, 11u64)
     let i3 = bounds(&harness, &runtime, 12u64)
     let i4 = bounds(&harness, &runtime, 13u64)
+    let i5 = bounds(&harness, &runtime, 14u64)
     if !near(i1.width, 24.0) || !near(i1.height, 24.0) { os.exit(14i32) }
     if !near(i2.width, 18.0) || !near(i2.height, 18.0) { os.exit(15i32) }
     if !near(i3.width, 36.0) || !near(i3.height, 36.0) { os.exit(16i32) }
@@ -351,6 +352,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if headings != 1usize { os.exit(48i32) }
     if !busy { os.exit(50i32) }
     if !said { os.exit(51i32) }
+    // Directional icons mirror in RTL; neutral icons above retain their shapes.
+    tokens.direction = .RightToLeft
+    let (rtl_root, rtl_error) = build(&fr, &theme, s, texture)
+    if rtl_error != ok || testing.pump(&harness, rtl_root, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(52i32) }
+    let (rtl_shot, rtl_shot_error) = testing.snapshot(&harness, a)
+    if rtl_shot_error != ok { os.exit(53i32) }
+    let rtl_chevron = bounds(&harness, &runtime, 10u64)
+    let rtl_back = bounds(&harness, &runtime, 14u64)
+    let directional = style.color(&tokens, .OnSurfaceVariant)
+    if !is_color(shot, at(i1.x + 14.0, i1.y + 12.0), directional) || is_color(shot, at(i1.x + 10.0, i1.y + 12.0), directional) { os.exit(54i32) }
+    if !is_color(rtl_shot, at(rtl_chevron.x + 10.0, rtl_chevron.y + 12.0), directional) || is_color(rtl_shot, at(rtl_chevron.x + 14.0, rtl_chevron.y + 12.0), directional) { os.exit(55i32) }
+    if is_color(shot, at(i5.x + 8.0, i5.y + 10.0), page) || !is_color(shot, at(i5.x + 16.0, i5.y + 10.0), page) { os.exit(56i32) }
+    if is_color(rtl_shot, at(rtl_back.x + 16.0, rtl_back.y + 10.0), page) || !is_color(rtl_shot, at(rtl_back.x + 8.0, rtl_back.y + 10.0), page) { os.exit(57i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui content v2 ok\n")
     ret ok

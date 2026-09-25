@@ -23301,3 +23301,13 @@ Left advances and Right goes back in right-to-left themes, while Home and End
 still select the caller's logical first and last tabs.
 
 `ui_tabs_rtl` holds both directions and both bounds on Windows and Linux.
+
+## D1164 — Directional Icons mirror in RTL
+
+`icon_of` now resolves the available directional glyphs from the theme:
+left/right chevrons swap and Back becomes the new mirrored Forward stroke in
+right-to-left layouts. Neutral icons keep their original shape, and semantic
+names are unchanged.
+
+`ui_content_v2` holds both chevrons and Back/Forward pixels on Windows and
+Linux. The Segoe review is `build/ux/icon-directional-rtl-segoe.png`.
