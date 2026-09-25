@@ -278,6 +278,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let crumb = widget.text_width(&frame, ten_a) + 16.0
     let full = 4.0 * crumb + widget.text_width(&frame, ten_current) + 16.0 + 64.0
     if crumb > 200.0 || navigation.breadcrumbs_fit(&frame, &theme, trail[..], full) != 0usize || navigation.breadcrumbs_fit(&frame, &theme, trail[..], full - 1.0) != 1usize || navigation.breadcrumbs_fit(&frame, &theme, trail[..], 1.0) != 2usize { os.exit(35i32) }
+    // (D1251) Two menus titled "aaaa" need 8 + 2 x (their width + 16).
+    var bar_menus: [2]navigation.BarMenu = zero
+    bar_menus[0usize].label = "aaaa"
+    bar_menus[1usize].label = "aaaa"
+    let bar_need = 8.0 + 2.0 * (four_width + 16.0)
+    if !navigation.menu_bar_fits(&frame, &theme, bar_menus[..], bar_need) || navigation.menu_bar_fits(&frame, &theme, bar_menus[..], bar_need - 1.0) { os.exit(36i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(28i32) }
     try io.print("ui content2 v2 ok\n")
     ret ok
