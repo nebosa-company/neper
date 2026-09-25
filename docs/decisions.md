@@ -23726,3 +23726,17 @@ behaviour. A step is a 60 Hz frame's share rather than measured time.
 the shifted start and the stop on release on Windows and Linux; a sweep of all
 103 `ui_*` fixtures on both hosts shows only the 12 pre-existing failures
 recorded in D1195.
+
+## D1200 — Swipe actions are the row's named accessibility actions
+
+SwipeActions' list item now names its tiles through D1197's named actions:
+the trailing labels, then the leading one, joined in the build arena that
+already holds the row's callback contexts. Performing a name runs the same
+command a revealed tile runs, the caller's action and then closing the row, so
+assistive technology reaches Archive or Delete without swiping. A name the row
+does not offer is refused.
+
+`ui_collections4_v2` finds the one list item naming Archive and Delete,
+performs Delete and refuses an unknown name on Windows and Linux;
+`ui_collections_v2`, `ui_collection` and `ui_accessibility` pass on both hosts.
+The host bridge still does not publish names (D1197).
