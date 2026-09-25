@@ -2020,10 +2020,22 @@ fn drawer_edge_swipe(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
 // `destination_rows` 56 tall, 16 in and 24 at the end, sections with their
 // headings and dividers. A modal dialog named "Navigation" round the list; a
 // successful destination pick, press on the scrim or Escape fires `dismiss`.
-// (D1270) `drawer_edge_swipe` opens it from the start edge.
-// ponytail: no open/close motion.
+// (D1270) `drawer_edge_swipe` opens it from the start edge; (D1286) it slides
+// in and out.
 fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    // (D1286) The drawer slides in from its edge over `duration-medium-2` with the
+    // scrim fading in, and out over `duration-short-4`, still built while it
+    // leaves (no longer modal, so the focus returns at once); it stands in a box
+    // keyed `key + 8192` that is there open or shut, so
+    // the slide is remembered. Reduced motion jumps.
+    var goal: f32 = 0.0
+    var span = t.tokens.durations.short4
+    if open {
+        goal = 1.0
+        span = t.tokens.durations.medium2
+    }
+    let shown = control.eased_on(t, key + 8192u64, key + 8193u64, goal, false, span)
+    if !open && shown <= 0.0 { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     if picks.len != items.len { ret (zero, TooLarge) }
     let (pick_contexts, pick_contexts_error) = mem.alloc[DrawerPick](a, picks.len)
     if pick_contexts_error != ok { ret (zero, TooLarge) }
@@ -2061,7 +2073,7 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), panel[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: open, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), panel[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 23u8
     sem.label = "Navigation"
@@ -2069,12 +2081,21 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     let (drawer, drawer_error) = mem.alloc[widget.Node](a, 1usize)
     if drawer_error != ok { ret (zero, TooLarge) }
     drawer[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    let rtl_slide = t.tokens.direction == .RightToLeft
+    if shown < 1.0 {
+        var dx = 0.0 - (1.0 - shown) * (wide + 24.0)
+        if rtl_slide { dx = 0.0 - dx }
+        let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
+        if sliding_error != ok { ret (zero, TooLarge) }
+        sliding[0usize] = drawer[0usize]
+        drawer[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
+    }
     // The scrim is an overlay of its own under the drawer: a press on it misses
     // the modal drawer, which dismisses it.
     var dim = style.defaults()
     dim.width = style.Length { Percent: 100.0 }
     dim.height = style.Length { Percent: 100.0 }
-    dim.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Scrim), t.tokens.states.scrim) }
+    dim.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Scrim), t.tokens.states.scrim * shown) }
     let (dims, dims_error) = mem.alloc[widget.Node](a, 1usize)
     if dims_error != ok { ret (zero, TooLarge) }
     dims[0usize] = widget.box(0u64, dim, zero)
@@ -2083,8 +2104,8 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     layers[0usize] = widget.overlay(0u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: false, dismiss: zero }, style.defaults(), dims[0usize..1usize])
     var placement: widget.Placement = .Left
     if rtl { placement = .Right }
-    layers[1usize] = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), drawer[0usize..1usize])
-    ret (widget.box(0u64, style.defaults(), layers[0usize..2usize]), ok)
+    layers[1usize] = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: open, dismiss: *dismiss }, style.defaults(), drawer[0usize..1usize])
+    ret (widget.box(key + 8192u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
 // (D1269) A standard drawer's state: shown, hidden (nothing), or collapsed to
