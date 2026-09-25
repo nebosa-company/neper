@@ -324,6 +324,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_first_row || !near(first_row.height, 47.0) || !is_color(shot, at(view.x + 150.0, view.y + 47.5), style.color(&tokens, .OutlineVariant)) { os.exit(31i32) }
     let half = style.mix(background, style.color(&tokens, .OnSurfaceVariant), 0.5)
     if !is_color(shot, at(view.x + 296.0, view.y + 16.0), half) || !is_color(shot, at(view.x + 299.5, view.y + 16.0), background) || is_color(shot, at(view.x + 296.0, view.y + 40.0), half) { os.exit(32i32) }
+    // (D1219) Under the pointer, the thumb's strip widens it to 8.
+    if is_color(shot, at(view.x + 291.0, view.y + 16.0), half) || testing.hover(&harness, view.x + 295.0, view.y + 100.0) != ok { os.exit(90i32) }
+    let (root_thumb, root_thumb_error) = build(&f, &theme, s)
+    if root_thumb_error != ok || testing.pump(&harness, root_thumb, now) != ok { os.exit(91i32) }
+    let (shot_thumb, shot_thumb_error) = testing.snapshot(&harness, a)
+    if shot_thumb_error != ok || !is_color(shot_thumb, at(view.x + 291.0, view.y + 16.0), half) || !is_color(shot_thumb, at(view.x + 296.0, view.y + 16.0), half) || !is_color(shot_thumb, at(view.x + 299.5, view.y + 16.0), background) { os.exit(92i32) }
+    if testing.hover(&harness, 1.0, 1.0) != ok { os.exit(93i32) }
     // Virtual-list keys move by stable source index. A target beyond the built
     // window asks for the minimum offset, then receives focus after the rebuild.
     if widget.focus(&runtime, testing.by_key(&harness, 4000u64).element) != ok { os.exit(45i32) }
