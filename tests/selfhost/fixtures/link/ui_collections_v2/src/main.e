@@ -688,6 +688,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_wifi || !has_sync || !wifi.state.checked || sync.state.checked { os.exit(159i32) }
     let control_presses = s.presses
     if !tap_key(&harness, &runtime, 991u64) || s.presses != control_presses + 1usize { os.exit(160i32) }
+    // (D1265) A thumbnail row is 72 tall with its 56 picture 16 in; an avatar row
+    // holds its picture in a 40 circle.
+    var pictured_rows: [2]collection.RowItem = zero
+    var picture_style = control.sized_style(56.0, 56.0)
+    picture_style.background = paint.Brush { Solid: style.color(&tokens, .Primary) }
+    pictured_rows[0usize] = collection.row_item("Screenshot")
+    pictured_rows[0usize].media_kind = .Thumbnail
+    pictured_rows[0usize].media = widget.box(996u64, picture_style, zero)
+    pictured_rows[1usize] = collection.row_item("Ada Lovelace")
+    pictured_rows[1usize].media_kind = .Avatar
+    pictured_rows[1usize].media = widget.box(997u64, control.sized_style(40.0, 40.0), zero)
+    var pictured_keys: [2]widget.Key = zero
+    pictured_keys[0usize] = 994u64
+    pictured_keys[1usize] = 995u64
+    f = mem.arena_from(frame_storage)
+    let (pictured_list, pictured_error) = collection.list_of(&f, 993u64, &theme, "Pictured", pictured_rows[..], pictured_keys[..], control_list)
+    let (pictured_page, pictured_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if pictured_error != ok || pictured_page_error != ok { os.exit(161i32) }
+    pictured_page[0usize] = pictured_list
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), pictured_page[0usize..1usize]), time.Instant { nanos: 8100000000i64 }) != ok { os.exit(162i32) }
+    let (thumb_row, has_thumb_row) = bounds(&harness, &runtime, 994u64)
+    let (thumb_pic, has_thumb_pic) = bounds(&harness, &runtime, 996u64)
+    let (avatar_pic, has_avatar_pic) = bounds(&harness, &runtime, 997u64)
+    if !has_thumb_row || !has_thumb_pic || !has_avatar_pic || !near(thumb_row.height, 72.0) || !near(thumb_pic.x, thumb_row.x + 16.0) || !near(avatar_pic.width, 40.0) { os.exit(163i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok

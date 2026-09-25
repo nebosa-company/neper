@@ -24651,3 +24651,17 @@ labelled switch draw the same part.
 `ui_collections_v2` holds a switch row and a checkbox row by role and state
 and a press on the switch row on Windows and Linux; the switch fixtures still
 pass.
+
+## D1265 — Rows can lead with an avatar or thumbnail
+
+`RowItem.media_kind` (`Avatar` or `Thumbnail`) with the caller's `media` node
+fills the Row spec's picture slots: a 40 circle (24 dense) or a 56 `radius-sm`
+thumbnail. Each is a clipping frame on `surface-container-highest`, so the
+space holds before the picture loads, at 38% when the row is disabled. A
+thumbnail row stands at least 72 tall to hold the picture with 8 above and
+below. Dense rows have no thumbnail, so their picture is the 24 circle. The
+caller builds the media (`avatar_of`, `framed_image`, a texture) as Tile
+media already works.
+
+`ui_collections_v2` holds the 72 thumbnail row with its picture 16 in and the
+40 avatar frame on Windows and Linux.

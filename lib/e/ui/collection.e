@@ -4143,7 +4143,11 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // and a trailing glyph, whether it is selected (and then marked with a trailing
 // check, for a single-select list), disabled, and its primary action. (D1236)
 // `commands` (empty for none) are the row's context menu.
-type RowItem = struct { headline: str, supporting: str, overline: str, meta: str, leading: control.GlyphKind, has_leading: bool, trailing: control.GlyphKind, has_trailing: bool, selected: bool, check: bool, disabled: bool, action: widget.Submit, commands: []const overlay.MenuCommand, has_checkbox: bool, control: RowControl, on: bool }
+type RowItem = struct { headline: str, supporting: str, overline: str, meta: str, leading: control.GlyphKind, has_leading: bool, trailing: control.GlyphKind, has_trailing: bool, selected: bool, check: bool, disabled: bool, action: widget.Submit, commands: []const overlay.MenuCommand, has_checkbox: bool, control: RowControl, on: bool, media: widget.Node, media_kind: RowMedia }
+
+// (D1265) A row's leading picture: the caller's `media` (an avatar or an image)
+// held in a 40 circle (24 dense), or a 56 `radius-sm` thumbnail.
+type RowMedia = enum u8 { None, Avatar, Thumbnail }
 
 // (D1264) A control row's control: a leading checkbox or radio, or a trailing
 // switch, `on` when checked; the whole row toggles it.
@@ -4240,9 +4244,13 @@ fn row_lines(item: *const RowItem) -> usize {
 // (D1264) A control row (`control`) leads with its checkbox or radio mark or
 // ends with its switch, is that control in the tree, Checked when `on`, and a
 // press anywhere on it (or Space) runs its action, which toggles it.
-// ponytail: no avatar or thumbnail leading slot, or selection animation; the focus ring is the runtime's, inset where the list clips it.
+// (D1265) `media_kind` leads with the caller's avatar or thumbnail, framed.
+// ponytail: no selection animation; the focus ring is the runtime's, inset where the list clips it.
 fn row_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32) -> (widget.Node, err) {
-    let (made, made_error) = row_sized(a, key, t, item, index, count, width, row_height(t, row_lines(item)))
+    var tall = row_height(t, row_lines(item))
+    // (D1265) A thumbnail row stands the 56 picture and its 8 above and below.
+    if item.media_kind == .Thumbnail && density_of(t) != 0usize && tall < 72.0 { tall = 72.0 }
+    let (made, made_error) = row_sized(a, key, t, item, index, count, width, tall)
     ret (made, made_error)
 }
 
@@ -4322,6 +4330,29 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
         let (mark, mark_error) = control.choice_mark(a, t, state, item.selected, false, false, enabled)
         if mark_error != ok { ret (zero, mark_error) }
         parts[p] = mark
+        p += 1usize
+    } else if item.media_kind != .None {
+        // (D1265) The picture's frame clips the caller's media; a dense row has
+        // no thumbnail, so its picture is the 24 avatar circle.
+        var side: f32 = 40.0
+        var round: f32 = 20.0
+        if item.media_kind == .Thumbnail && !dense {
+            side = 56.0
+            round = t.tokens.radii.sm
+        }
+        if dense {
+            side = 24.0
+            round = 12.0
+        }
+        var frame = control.sized_style(side, side)
+        frame.radius = round
+        frame.overflow = .Clip
+        frame.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+        if !enabled { frame.opacity = t.tokens.states.disabled_content }
+        let (pictured, pictured_error) = mem.alloc[widget.Node](a, 1usize)
+        if pictured_error != ok { ret (zero, TooLarge) }
+        pictured[0usize] = item.media
+        parts[p] = widget.box(0u64, frame, pictured[0usize..1usize])
         p += 1usize
     } else if item.has_leading {
         let (lead, lead_error) = control.icon_square(a, muted, item.leading, glyph_side)
