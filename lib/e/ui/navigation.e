@@ -3868,22 +3868,37 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         var name_node: widget.Node = zero
         let matched = match_starts.len == names.len && match_ends.len == names.len && match_starts[i] < match_ends[i] && match_ends[i] <= names[i].len
         if matched {
-            let (runs, runs_error) = mem.alloc[widget.Node](a, 3usize)
+            let (runs, runs_error) = mem.alloc[widget.Node](a, 5usize)
             if runs_error != ok { ret (none, TooLarge) }
             var strong = caption
             strong.role = .TitleSmall
             var match_ink = style.color(t.tokens, .Primary)
             if i == active { match_ink = ink }
-            let (before, before_error) = control.colored_text(a, 0u64, names[i][0usize..match_starts[i]], t, caption, ink)
+            var before_text = names[i][0usize..match_starts[i]]
+            var before_gap: f32 = 0.0
+            if before_text.len > 0usize && before_text[before_text.len - 1usize] == 32u8 {
+                before_text = before_text[0usize..before_text.len - 1usize]
+                before_gap = 4.0
+            }
+            var after_text = names[i][match_ends[i]..names[i].len]
+            var after_gap: f32 = 0.0
+            if after_text.len > 0usize && after_text[0usize] == 32u8 {
+                after_text = after_text[1usize..after_text.len]
+                after_gap = 4.0
+            }
+            let (before, before_error) = control.colored_text(a, 0u64, before_text, t, caption, ink)
             let (hit, hit_error) = control.colored_text(a, 0u64, names[i][match_starts[i]..match_ends[i]], t, strong, match_ink)
-            let (after, after_error) = control.colored_text(a, 0u64, names[i][match_ends[i]..names[i].len], t, caption, ink)
+            let (after, after_error) = control.colored_text(a, 0u64, after_text, t, caption, ink)
             if before_error != ok { ret (none, before_error) }
             if hit_error != ok { ret (none, hit_error) }
             if after_error != ok { ret (none, after_error) }
+            var empty_children: []const widget.Node = zero
             runs[0usize] = before
-            runs[1usize] = hit
-            runs[2usize] = after
-            name_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), runs[0usize..3usize])
+            runs[1usize] = widget.box(0u64, control.sized_style(before_gap, 0.0), empty_children)
+            runs[2usize] = hit
+            runs[3usize] = widget.box(0u64, control.sized_style(after_gap, 0.0), empty_children)
+            runs[4usize] = after
+            name_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), runs[0usize..5usize])
         } else {
             let (plain_name, name_error) = control.colored_text(a, 0u64, names[i], t, caption, ink)
             if name_error != ok { ret (none, name_error) }
@@ -4056,7 +4071,125 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 }
 
 type PaletteMode = enum u8 { Commands, Files, Symbols, Line }
-type PaletteCommand = struct { name: str, group: str, category: str, match_start: usize, match_end: usize, shortcut: str, unavailable: str }
+type PaletteCommand = struct { name: str, group: str, category: str, match_start: usize, match_end: usize, shortcut: str, unavailable: str, recency: u32 }
+
+type PaletteRanked = struct { command: PaletteCommand, source: usize, score: u64 }
+type PaletteIndexMap = struct { indices: []const usize, change: widget.Change[usize] }
+
+fn palette_mapped_change(ctx: *void, index: usize) -> err {
+    let mapped = mem.cast[*PaletteIndexMap](ctx)
+    if index >= mapped.indices.len { ret ok }
+    ret widget.fire_change[usize](mapped.change, mapped.indices[index])
+}
+
+fn palette_prefix(haystack: str, needle: str) -> bool {
+    ret needle.len > 0usize && needle.len <= haystack.len && string.compare(haystack[0usize..needle.len], needle) == 0i32
+}
+
+fn palette_word_match(haystack: str, needle: str) -> (usize, bool) {
+    if needle.len == 0usize || needle.len > haystack.len { ret (0usize, false) }
+    var i = 0usize
+    while i + needle.len <= haystack.len {
+        let boundary = i == 0usize || haystack[i - 1usize] == 32u8 || haystack[i - 1usize] == 45u8 || haystack[i - 1usize] == 95u8 || haystack[i - 1usize] == 47u8 || haystack[i - 1usize] == 58u8
+        if boundary && string.compare(haystack[i..i + needle.len], needle) == 0i32 { ret (i, true) }
+        i += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn palette_subsequence(haystack: str, needle: str, name_offset: usize) -> (usize, bool) {
+    if needle.len == 0usize { ret (0usize, true) }
+    var q = 0usize
+    var first_name = haystack.len
+    var i = 0usize
+    while i < haystack.len && q < needle.len {
+        if haystack[i] == needle[q] {
+            if i >= name_offset && first_name == haystack.len { first_name = i - name_offset }
+            q += 1usize
+        }
+        i += 1usize
+    }
+    if q != needle.len { ret (0usize, false) }
+    if first_name == haystack.len { first_name = 0usize }
+    ret (first_name, true)
+}
+
+fn palette_before(a: PaletteRanked, b: PaletteRanked) -> bool {
+    if a.score != b.score { ret a.score > b.score }
+    let names = string.compare(a.command.name, b.command.name)
+    if names != 0i32 { ret names < 0i32 }
+    ret a.source < b.source
+}
+
+// ponytail: insertion sort is enough for command lists; replace it if palettes
+// with thousands of commands make ranking measurable.
+fn palette_rank(a: *mem.Arena, commands: []const PaletteCommand, query: str) -> ([]PaletteRanked, err) {
+    var none: []PaletteRanked = zero
+    let (folded_query, query_error) = unicode.casefold(a, query)
+    if query_error != ok { ret (none, TooLarge) }
+    let (ranked, ranked_error) = mem.alloc[PaletteRanked](a, commands.len)
+    if ranked_error != ok { ret (none, TooLarge) }
+    var count = 0usize
+    var i = 0usize
+    while i < commands.len {
+        let (folded_name, name_error) = unicode.casefold(a, commands[i].name)
+        if name_error != ok { ret (none, TooLarge) }
+        let (folded_category, category_error) = unicode.casefold(a, commands[i].category)
+        if category_error != ok { ret (none, TooLarge) }
+        var tier = 0u64
+        var match_start = 0usize
+        var match_end = 0usize
+        if folded_query.len == 0usize {
+            tier = 1u64
+        } else if palette_prefix(folded_name, folded_query) || palette_prefix(folded_category, folded_query) {
+            tier = 4u64
+            if palette_prefix(folded_name, folded_query) { match_end = folded_query.len }
+        } else {
+            let (name_word, has_name_word) = palette_word_match(folded_name, folded_query)
+            let (_, has_category_word) = palette_word_match(folded_category, folded_query)
+            if has_name_word || has_category_word {
+                tier = 3u64
+                if has_name_word {
+                    match_start = name_word
+                    match_end = name_word + folded_query.len
+                }
+            } else {
+                let (category_gap, category_gap_error) = string.concat(a, folded_category, " ")
+                if category_gap_error != ok { ret (none, TooLarge) }
+                let (searchable, searchable_error) = string.concat(a, category_gap, folded_name)
+                if searchable_error != ok { ret (none, TooLarge) }
+                let (name_hit, has_subsequence) = palette_subsequence(searchable, folded_query, category_gap.len)
+                if has_subsequence {
+                    tier = 2u64
+                    if name_hit < folded_name.len {
+                        match_start = name_hit
+                        match_end = name_hit + 1usize
+                    }
+                }
+            }
+        }
+        if tier > 0u64 {
+            var command = commands[i]
+            command.match_start = match_start
+            command.match_end = match_end
+            ranked[count] = PaletteRanked { command: command, source: i, score: tier * 1000000u64 + u64(commands[i].recency) }
+            count += 1usize
+        }
+        i += 1usize
+    }
+    i = 1usize
+    while i < count {
+        var j = i
+        while j > 0usize && palette_before(ranked[j], ranked[j - 1usize]) {
+            let swap = ranked[j - 1usize]
+            ranked[j - 1usize] = ranked[j]
+            ranked[j] = swap
+            j -= 1usize
+        }
+        i += 1usize
+    }
+    ret (ranked[0usize..count], ok)
+}
 
 fn palette_mode_prefix(mode: PaletteMode) -> str {
     if mode == .Commands { ret ">" }
@@ -4192,8 +4325,8 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
 // `body-medium` `on-surface-variant`, centred. The footer is 32 tall, 16 at the
 // sides, below a 1px `outline-variant` line: "Up and Down to move, Enter to run"
 // in `body-small` `on-surface-variant`.
-// ponytail: no ranking or compact form; the caller still filters and stores
-// `active` while the palette requests its reset.
+// ponytail: no compact form; command_palette_ranked owns matching while the
+// source-compatible wrappers keep caller filtering.
 fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (made, made_error) = command_palette_mode(a, key, t, label, buffer, len, typed, .Commands, commands, active, open, activate, run, dismiss, width)
     ret (made, made_error)
@@ -4238,6 +4371,29 @@ fn command_palette_grouped_busy(a: *mem.Arena, key: widget.Key, t: *const contro
         i += 1usize
     }
     let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, categories, match_starts, match_ends, shortcuts, unavailable, active, busy, open, activate, run, dismiss, width)
+    ret (made, made_error)
+}
+
+fn command_palette_ranked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const PaletteCommand, active: usize, busy: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    var query_len = len
+    if query_len > buffer.len { query_len = buffer.len }
+    let (ranked, ranked_error) = palette_rank(a, commands, buffer[0usize..query_len])
+    if ranked_error != ok { ret (zero, ranked_error) }
+    let (shown, shown_error) = mem.alloc[PaletteCommand](a, ranked.len)
+    if shown_error != ok { ret (zero, TooLarge) }
+    let (indices, indices_error) = mem.alloc[usize](a, ranked.len)
+    if indices_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < ranked.len {
+        shown[i] = ranked[i].command
+        indices[i] = ranked[i].source
+        i += 1usize
+    }
+    let (maps, maps_error) = mem.alloc[PaletteIndexMap](a, 1usize)
+    if maps_error != ok { ret (zero, TooLarge) }
+    maps[0usize] = PaletteIndexMap { indices: indices, change: run }
+    let mapped_run = widget.Change[usize] { ctx: mem.cast[*void](&maps[0usize]), invoke: palette_mapped_change }
+    let (made, made_error) = command_palette_grouped_busy(a, key, t, label, buffer, query_len, typed, mode, shown, active, busy, open, activate, mapped_run, dismiss, width)
     ret (made, made_error)
 }
 

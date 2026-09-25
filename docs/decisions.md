@@ -22240,3 +22240,18 @@ without a second palette state store.
 
 `ui_overlays4_v2` types two characters and holds both reset requests plus the
 final query on Windows and Linux.
+
+## D1063 — Ranked palettes map display order back to command identity
+
+`command_palette_ranked` case-folds the query, filters category plus name, and
+orders exact prefixes before word starts before subsequences, with the caller's
+recency score breaking ties inside a tier and names breaking the rest. It owns
+the match range and preserves a source-index map, so Enter on ranked row zero
+still executes the original command. The source-compatible wrappers remain
+caller-filtered.
+
+The small insertion sort deliberately favors a short stable implementation for
+normal command lists; the source marks its measurable upgrade point.
+`ui_overlays4_v2` holds all three tiers, recency ordering and mapped execution on
+Windows and Linux. `palette-ranked.png` is the Segoe UI visual check and also
+holds spaces beside split match runs.
