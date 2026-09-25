@@ -22897,3 +22897,13 @@ no binding, so an outer scope or host remains free to handle the chord.
 
 `ui_navigation` and `ui_navigation_v2` pass on Windows and Linux. The reviewed
 surface is unchanged.
+
+## D1123 — Modal drawers inherit overlay focus ownership
+
+NavigationDrawer needs no component-specific focus store. The shared modal
+overlay saves the focused opener, moves focus to the first drawer destination,
+traps traversal there, and restores the saved element when the drawer leaves
+the tree.
+
+`ui_navigation3_v2` holds active-destination focus and exact opener restoration
+on Windows and Linux. The reviewed surface is unchanged.

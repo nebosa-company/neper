@@ -1454,8 +1454,7 @@ fn drawer_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header:
 // `destination_rows` 56 tall, 16 in and 24 at the end, sections with their
 // headings and dividers. A modal dialog named "Navigation" round the list; a
 // press on the scrim or Escape fires `dismiss`.
-// ponytail: no edge swipe, focus return, open/close motion or right-to-left
-// mirroring.
+// ponytail: no edge swipe, open/close motion or right-to-left mirroring.
 fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, header: str, items: []const Destination, selected: usize, picks: []const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var wide = width
