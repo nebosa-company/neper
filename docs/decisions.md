@@ -24732,3 +24732,18 @@ is still to come.
 
 `ui_navigation3_v2` holds a 35 drag that does not open and a 115 drag that
 does on Windows and Linux.
+
+## D1271 — The navigation stack moves the focus on push and pop
+
+`navigation_stack_of` keeps a `StackCell` across frames: its depth and, for
+each level, the key that held the focus when that level was pushed
+(`widget.focused_key`, new, walks up to the nearest keyed element). When the
+depth grows, it records the pusher and moves the focus to the new page's
+Back (`key + 2`). The spec asks for the heading, but a heading takes no focus,
+and Back is the first thing on the page. When the depth shrinks, the focus
+returns to the element that pushed the page. The cell exists once the stack
+has been built once, so it remembers from the stack's second frame. The page
+beneath is still not kept in the tree, so its scroll is the caller's.
+
+`ui_navigation_v2` holds the focus on Back after a push from a focused row and
+back on the row after the pop on Windows and Linux.

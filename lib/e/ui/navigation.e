@@ -758,6 +758,23 @@ fn back_scope(a: *mem.Arena, key: widget.Key, content: widget.Node, back: widget
     ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: keys[0usize..3usize], default_action: zero, cancel_action: back, keys: zero }, style.defaults(), held[0usize..1usize]), ok)
 }
 
+// (D1271) A stack's memory: its depth last frame and who pushed each level.
+type StackCell = struct { depth: usize, pushers: [16]widget.Key }
+
+fn stack_cell(t: *const control.Theme, key: widget.Key) -> (*StackCell, bool) {
+    var none: *StackCell = zero
+    if mem.address_of(t.runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: StackCell = zero
+    let (kept, _, kept_error) = widget.state[StackCell](&build, key, fresh)
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
 // v2 (D972, docs/ux/components/NavigationStack): the top page fills on `surface`
 // under the v2 app bar (48 with `title-medium` at pointer density, 64 with
 // `title-large` at touch), led while there is a page beneath by Back: an
@@ -766,11 +783,29 @@ fn back_scope(a: *mem.Arena, key: widget.Key, content: widget.Node, back: widget
 // breadcrumbs (keyed `key + 4`, the ancestors jumping to their levels) stand in
 // the bar in place of the title.
 // Alt+Left and Command+[ share Back and Escape's pop action.
-// ponytail: no push or pop transitions, predictive back, focus moves or discard
-// guard; the page beneath is not kept in the tree.
+// (D1271) The stack keeps, across frames, its depth and the key that held the
+// focus when each page was pushed: on a push the focus moves to the new page's
+// Back (keyed `key + 2`; its heading is not focusable), and on a pop it returns
+// to the element that pushed the page.
+// ponytail: no push or pop transitions, predictive back or discard guard; the
+// page beneath is not kept in the tree, so its scroll is the caller's.
 fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, jumps: []const widget.Submit, width: f32) -> (widget.Node, err) {
     if titles.len != pages.len || titles.len == 0usize { ret (zero, TooLarge) }
     let top = titles.len - 1usize
+    let (cell, has_cell) = stack_cell(t, key)
+    if has_cell {
+        if cell.depth > 0usize && titles.len > cell.depth {
+            let (pusher, has_pusher) = widget.focused_key(t.runtime)
+            if has_pusher && cell.depth - 1usize < 16usize { cell.pushers[cell.depth - 1usize] = pusher }
+            let moved = widget.focus_key(t.runtime, key + 2u64)
+            if moved != ok { ret (zero, moved) }
+        }
+        if titles.len < cell.depth && top < 16usize && cell.pushers[top] != 0u64 {
+            let returned = widget.focus_key(t.runtime, cell.pushers[top])
+            if returned != ok { ret (zero, returned) }
+        }
+        cell.depth = titles.len
+    }
     var bar_options = app_bar_options()
     if top > 0usize {
         let (named, named_error) = joined(a, "Back to ", titles[top - 1usize])
