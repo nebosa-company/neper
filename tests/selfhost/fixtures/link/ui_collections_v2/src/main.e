@@ -505,6 +505,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         icon_step += 1usize
     }
     if testing.hover(&harness, 1.0, 1.0) != ok { os.exit(111i32) }
+    // (D1316) A hovered tile's layer lies over its media too.
+    f = mem.arena_from(frame_storage)
+    let (root_hover, build_hover_error) = build(&f, &theme, s)
+    if build_hover_error != ok || testing.pump(&harness, root_hover, time.Instant { nanos: 1400000000i64 }) != ok { os.exit(190i32) }
+    let (tile_one, has_tile_one) = bounds(&harness, &runtime, 501u64)
+    if !has_tile_one || testing.hover(&harness, tile_one.x + 120.0, tile_one.y + 10.0) != ok { os.exit(191i32) }
+    f = mem.arena_from(frame_storage)
+    let (root_hovered, build_hovered_error) = build(&f, &theme, s)
+    if build_hovered_error != ok || testing.pump(&harness, root_hovered, time.Instant { nanos: 1400000001i64 }) != ok { os.exit(192i32) }
+    let (hover_shot, hover_shot_error) = testing.snapshot(&harness, a)
+    if hover_shot_error != ok || !is_color(hover_shot, at(tile_one.x + 120.0, tile_one.y + 10.0), style.layer(style.color(&tokens, .SurfaceContainerHighest), style.color(&tokens, .OnSurface), tokens.states.hover)) { os.exit(193i32) }
+    if testing.hover(&harness, 1.0, 1.0) != ok { os.exit(194i32) }
     // (D1240) A multi-select list reports its gestures: Space toggles, Shift+Down
     // extends and moves, Ctrl+A selects all, Escape clears, Ctrl-click toggles and
     // Shift-click extends; a plain click is the row's own action.
