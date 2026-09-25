@@ -158,6 +158,14 @@ fn same_text(a: str, b: str) -> bool {
     ret true
 }
 
+fn shift_key(down: bool) -> input.Event {
+    var held: input.Modifiers = zero
+    held.shift = down
+    let key = input.KeyEvent { window: zero, key: input.Key { physical: 65505u32, logical: 65505u32 }, modifiers: held, repeat: false }
+    if down { ret input.Event { KeyDown: key } }
+    ret input.Event { KeyUp: key }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -236,6 +244,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_2_error != ok || testing.pump(&harness, root_2, now) != ok { os.exit(17i32) }
     let (moved, has_moved) = bounds(&harness, &runtime, 2u64)
     if !has_moved || !near(moved.x, port_x) || !near(moved.width, 99.0) || !focus_on(&harness, 2u64) { os.exit(18i32) }
+    // A held host Shift key makes a pointer tap extend from the existing anchor.
+    if widget.dispatch(&runtime, shift_key(true)) != ok || !widget.modifiers(&runtime).shift || testing.tap(&harness, grid.x + 100.0, grid.y + 120.0) != ok || widget.dispatch(&runtime, shift_key(false)) != ok || widget.modifiers(&runtime).shift || store.last.kind != .Extend || store.state.row != 2usize || store.state.column != 0usize || store.state.anchor_row != 0usize || store.state.anchor_column != 1usize { os.exit(111i32) }
+    let (root_2s, build_2s_error) = build(&f, &theme, ctx, store)
+    if build_2s_error != ok || testing.pump(&harness, root_2s, now) != ok || testing.by_text(&harness, "6 cells selected").count != 1usize { os.exit(112i32) }
     // A second tap within 500 ms keeps both ordinary tap notifications and adds
     // edit mode for an editable cell.
     let double_at = time.Instant { nanos: 2200000000i64 }
