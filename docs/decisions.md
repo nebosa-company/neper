@@ -22188,3 +22188,14 @@ and command, so filtering and activation still use one row and one index.
 
 `ui_overlays4_v2` holds category text and the joined Option label on Windows and
 Linux. `palette-categories.png` is the Segoe UI visual check.
+
+## D1058 — Palette match ranges keep option identity
+
+`PaletteCommand.match_start` and `match_end` split one valid byte range in
+the command name into the same-size stronger title role, painted `primary`
+at rest and the selected row's ink when active. Invalid or empty ranges use
+the plain label. Categories, Option names, keys and activation indices are
+unchanged.
+
+`ui_overlays4_v2` holds valid and empty ranges plus the unchanged accessible
+label on Windows and Linux. `palette-match.png` is the Segoe UI visual check.
