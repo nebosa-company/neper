@@ -254,6 +254,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     f = mem.arena_from(frame_storage)
     let (root_4, root_4_error) = build(&f, &theme, ctx, columns[0usize..3usize])
     if root_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok || !focused_is(&harness, 1000u64) { os.exit(39i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(43i32) }
     // The data grid: a 40 header, 32 rows, the row numbers on
     // `surface-container-low` and a grid line after each cell.
     let (sheet_head, has_sheet_head) = bounds(&harness, &runtime, 301u64)

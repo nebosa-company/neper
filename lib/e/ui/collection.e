@@ -2326,7 +2326,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     }
     if !owned {
         let page = usize(body_height / row_extent)
-        let rove_error = virtual_roving(a, t, rows, KeySource { ctx: source.ctx, key: source.key }, first, total, page, offset, body_height, row_extent, change)
+        let rove_error = virtual_roving(a, t, rows, KeySource { ctx: source.ctx, key: source.key }, first, total, page, offset, body_height, row_extent, change, key + 1u64)
         if rove_error != ok { ret (zero, rove_error) }
     }
     i = 0usize
@@ -3559,7 +3559,7 @@ type KeySource = struct { ctx: *void, key: fn(*void, usize) -> widget.Key }
 
 // Vertical virtual focus: rows are addressed in the full source, not only the
 // built window, and every target is revealed through the caller's offset.
-fn virtual_roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, source: KeySource, first: usize, total: usize, page_size: usize, offset: f32, height: f32, extent: f32, change: widget.Change[f32]) -> err {
+fn virtual_roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, source: KeySource, first: usize, total: usize, page_size: usize, offset: f32, height: f32, extent: f32, change: widget.Change[f32], before: widget.Key) -> err {
     if nodes.len == 0usize || mem.address_of(t.runtime) == 0usize { ret ok }
     var page = page_size
     if page == 0usize { page = 1usize }
@@ -3574,6 +3574,8 @@ fn virtual_roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, 
         let index = first + i
         var previous = index
         if previous > 0usize { previous -= 1usize }
+        var previous_key = source.key(source.ctx, previous)
+        if index == 0usize && before != 0u64 { previous_key = before }
         var next = index
         if next + 1usize < total { next += 1usize }
         var page_up = index
@@ -3581,7 +3583,7 @@ fn virtual_roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, 
         var page_down = index + page
         if page_down >= total { page_down = total - 1usize }
         let base = 6usize * i
-        bind_virtual_move(moves, shortcuts, base, t.runtime, source.key(source.ctx, previous), previous, total, offset, height, extent, 38u32, change)
+        bind_virtual_move(moves, shortcuts, base, t.runtime, previous_key, previous, total, offset, height, extent, 38u32, change)
         bind_virtual_move(moves, shortcuts, base + 1usize, t.runtime, source.key(source.ctx, next), next, total, offset, height, extent, 40u32, change)
         bind_virtual_move(moves, shortcuts, base + 2usize, t.runtime, source.key(source.ctx, page_up), page_up, total, offset, height, extent, 33u32, change)
         bind_virtual_move(moves, shortcuts, base + 3usize, t.runtime, source.key(source.ctx, page_down), page_down, total, offset, height, extent, 34u32, change)
@@ -3846,7 +3848,7 @@ fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     }
     var page = usize(options.height / extent)
     if page > 1usize { page -= 1usize } else { page = 1usize }
-    let rove_error = virtual_roving(a, t, rows, KeySource { ctx: source.ctx, key: source.key }, first, total, page, options.offset, options.height, extent, options.change)
+    let rove_error = virtual_roving(a, t, rows, KeySource { ctx: source.ctx, key: source.key }, first, total, page, options.offset, options.height, extent, options.change, 0u64)
     if rove_error != ok { ret (zero, rove_error) }
     i = 0usize
     while i < count {
