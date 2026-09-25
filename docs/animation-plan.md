@@ -7,6 +7,9 @@ its components do not count toward the current widget KPI. To open it, add
 `next-release` to `resolved_blockers` in `docs/widget-plan.json` and remove the
 phase's `"release": "next"`.
 
+The full design (APIs, behaviours, the effect vocabulary, the reduced-motion
+policy and the testing plan) is [`animation-spec.md`](animation-spec.md).
+
 ## Where we are
 
 `e.ui.animation` (D800) is about 100 lines: a `Controller` (start, duration,
