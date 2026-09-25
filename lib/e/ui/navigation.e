@@ -81,7 +81,7 @@ type AppBarSize = enum u8 { Small, Center, Medium, Large }
 // toggles it; Back's name (set, an `arrow-back` action firing `back` leads;
 // `closing`, a `close` one, D974); and
 // a node standing in place of the title (`headed`), the bar still named by it.
-type AppBarOptions = struct { size: AppBarSize, scrolled: bool, contextual: str, clear: widget.Submit, more_open: bool, more: widget.Submit, back_label: str, back: widget.Submit, back_disabled: bool, closing: bool, heading: widget.Node, headed: bool }
+type AppBarOptions = struct { size: AppBarSize, scrolled: bool, contextual: str, clear: widget.Submit, more_open: bool, more: widget.Submit, back_label: str, back: widget.Submit, back_disabled: bool, closing: bool, heading: widget.Node, headed: bool, offset: f32 }
 
 fn app_bar_options() -> AppBarOptions {
     var out: AppBarOptions = zero
@@ -123,7 +123,10 @@ fn bar_group(items: []const widget.Node) -> widget.Node {
 // `more-vert` (keyed `key + 12`), its menu `key + 20`, items `key + 21 + index`.
 // The contextual bar leads with Clear selection (`key + 1`) and says its title
 // politely; Back, when named, leads as `arrow-back` (`key + 1`).
-// ponytail: no collapse or hiding on scroll and no motion; worded actions stay
+// (D1267) `options.offset` (the content's scroll) tints the bar and collapses a
+// medium or large one to the small row as the page scrolls.
+// ponytail: no hiding on scroll, no title cross-fade into the row before the
+// collapse ends, no contextual motion; worded actions stay
 // text buttons; a disabled action is dimmed rather than hidden.
 fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, options: AppBarOptions, width: f32) -> (widget.Node, err) {
     if leading.len > 8usize || trailing.len > 8usize { ret (zero, TooLarge) }
@@ -144,7 +147,8 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         row_height = 64.0
         role = .TitleLarge
     }
-    let tall = options.size == .Medium || options.size == .Large
+    let row_role = role
+    var tall = options.size == .Medium || options.size == .Large
     var height = row_height
     var above: f32 = 16.0
     if options.size == .Medium {
@@ -156,9 +160,30 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         role = .HeadlineMedium
         above = 28.0
     }
+    // (D1267) A medium or large bar collapses with the page's `offset`: it loses
+    // the offset's worth of height down to the small row, the headline fading as
+    // it goes, and at the row it is the small bar; with reduced motion it snaps
+    // at the collapse point.
+    var fade: f32 = 1.0
+    if tall && options.offset > 0.0 {
+        let span = height - row_height
+        var share: f32 = 1.0
+        if span > 0.0 { share = options.offset / span }
+        if share > 1.0 { share = 1.0 }
+        if t.tokens.motion.reduced {
+            share = 0.0
+            if options.offset >= span { share = 1.0 }
+        }
+        height = height - span * share
+        fade = 1.0 - share
+        if share >= 1.0 {
+            tall = false
+            role = row_role
+        }
+    }
     let contextual = options.contextual.len > 0usize
     var ground: style.ColorRole = .Background
-    if options.scrolled { ground = .SurfaceContainer }
+    if options.scrolled || options.offset > 0.0 { ground = .SurfaceContainer }
     var ink = style.color(t.tokens, .OnSurface)
     var muted = style.color(t.tokens, .OnSurfaceVariant)
     var named = title
@@ -258,6 +283,7 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
     var bottom = flat
     if tall { bottom = style.Length { Px: above } }
     title_style.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: flat, right: style.Length { Px: end_inset }, bottom: bottom }
+    if tall { title_style.opacity = fade }
     let title_box = widget.semantics(0u64, title_sem, title_style, titled[0usize..1usize])
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -265,6 +291,7 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
     parts[2usize] = bar_group(backs[0usize..back_count])
     var bar = control.sized_style(width, height)
     bar.background = paint.Brush { Solid: style.color(t.tokens, ground) }
+    bar.overflow = .Clip
     let ends = style.Length { Px: 4.0 }
     bar.padding = style.EdgeLengths { left: ends, top: flat, right: ends, bottom: flat }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)

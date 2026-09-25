@@ -231,6 +231,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (archive, has_archive) = find(tree_2, .MenuItem, "Archive")
     let (more_2, has_more_2) = find(tree_2, .Button, "More options")
     if !has_archive || !has_more_2 || !more_2.state.expanded { os.exit(30i32) }
+    // (D1267) A medium bar (112 at pointer density, its row 48) loses the page's
+    // scroll: 32 scrolled leaves 80, and past 64 it is the 48 small bar.
+    var no_actions: [1]navigation.Action = zero
+    var collapse_step = 0usize
+    while collapse_step < 3usize {
+        var collapsing = navigation.app_bar_options()
+        collapsing.size = .Medium
+        if collapse_step == 1usize { collapsing.offset = 32.0 }
+        if collapse_step == 2usize { collapsing.offset = 100.0 }
+        f = mem.arena_from(frame_storage)
+        let (collapsed_bar, collapsed_error) = navigation.app_bar_of(&f, 1900u64, &theme, "Projects", no_actions[0usize..0usize], no_actions[0usize..0usize], collapsing, 600.0)
+        let (collapsed_page, collapsed_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if collapsed_error != ok || collapsed_page_error != ok { os.exit(32i32) }
+        collapsed_page[0usize] = collapsed_bar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), collapsed_page[0usize..1usize]), time.Instant { nanos: 7000000000i64 + i64(collapse_step) }) != ok { os.exit(33i32) }
+        let (collapsed_box, has_collapsed_box) = bounds(&harness, &runtime, 1900u64)
+        var expected: f32 = 112.0
+        if collapse_step == 1usize { expected = 80.0 }
+        if collapse_step == 2usize { expected = 48.0 }
+        if !has_collapsed_box || !near(collapsed_box.height, expected) { os.exit(34i32) }
+        collapse_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation v2 ok\n")
     ret ok
