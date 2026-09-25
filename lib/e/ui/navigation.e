@@ -1049,9 +1049,66 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
 // Left/Right in the bottom bar or Up/Down in the rail and sidebar move focus,
 // Home and End jump, the pressable's Enter and Space activate it, and pointer
 // density binds Ctrl+1 through Ctrl+9 directly to the matching destination.
-// ponytail: no rail menu button or FAB slot, sidebar header, hiding on scroll or
-// pill growth; tabs rather than links in a navigation landmark (the spec allows
+// (D1266) `destination_bar_with` adds the rail's menu button and FAB and the
+// sidebar's header.
+// ponytail: no hiding on scroll or pill growth; tabs rather than links in a navigation landmark (the spec allows
 // tabs where the content changes without a URL).
+// (D1266) A destination bar's extras: the rail's `menu` button (firing `menu`,
+// which opens the modal drawer) and its FAB (`fab`, the caller's 56 button), and
+// the sidebar's `header` (the app or workspace name).
+type DestinationExtras = struct { menu: *const widget.Submit, fab: widget.Node, has_fab: bool, header: str }
+
+// (D1266, docs/ux/components/DestinationBar, rail and sidebar extras) The bar
+// with its extras above the destinations, outside the tab list: on the rail a 48
+// round `menu` icon button named "Open navigation" (keyed `key + 4096`) and the
+// FAB, 8 apart and 8 above the destinations, centred in the rail on `surface`;
+// on the sidebar the header in `title-medium` `on-surface`, 16 in, 16 above
+// and 8 below on `surface-container-low`. The bottom bar has none.
+fn destination_bar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Destination, selected: usize, picks: []const widget.Submit, form: DestinationForm, extent: f32, extras: DestinationExtras) -> (widget.Node, err) {
+    let (bar, bar_error) = destination_bar_of(a, key, t, items, selected, picks, form, extent)
+    if bar_error != ok || form == .Bottom { ret (bar, bar_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var top = style.defaults()
+    top.width = style.Length { Px: extent }
+    if form == .Sidebar {
+        if extras.header.len == 0usize { ret (bar, ok) }
+        var head = control.text_options()
+        head.role = .TitleMedium
+        head.wrap = .None
+        head.ellipsis = "..."
+        head.max_lines = 1u32
+        let (said, said_error) = control.colored_text(a, 0u64, extras.header, t, head, style.color(t.tokens, .OnSurface))
+        if said_error != ok { ret (zero, said_error) }
+        parts[n] = said
+        n += 1usize
+        top.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+        top.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 16.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 8.0 } }
+    } else {
+        if mem.address_of(extras.menu) == 0usize && !extras.has_fab { ret (bar, ok) }
+        if mem.address_of(extras.menu) != 0usize {
+            let (menu_button, menu_error) = control.glyph_action(a, key + 4096u64, t, .Menu, "Open navigation", extras.menu, 48.0, t.tokens.sizes.icon_md, style.color(t.tokens, .OnSurfaceVariant), true, 0u32, 0u32, 0u64)
+            if menu_error != ok { ret (zero, menu_error) }
+            parts[n] = menu_button
+            n += 1usize
+        }
+        if extras.has_fab {
+            parts[n] = extras.fab
+            n += 1usize
+        }
+        top.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        top.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 2usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    var cross: ui_layout.CrossAlign = .Center
+    if form == .Sidebar { cross = .Start }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: cross, gap: 8.0 }, top, parts[0usize..n])
+    column[1usize] = bar
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), column[0usize..2usize]), ok)
+}
+
 fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Destination, selected: usize, picks: []const widget.Submit, form: DestinationForm, extent: f32) -> (widget.Node, err) {
     if picks.len != items.len { ret (zero, TooLarge) }
     let (pick_actions, tab_stop, pick_actions_error) = destination_actions(a, key + 1u64, t, picks, selected)

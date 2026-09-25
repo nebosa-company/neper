@@ -274,6 +274,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (rtl_drawer, has_rtl_drawer) = testing.overlay_of(&harness, testing.by_key(&harness, 3400u64).element)
     if shot_4_error != ok || !has_rtl_drawer || !near(rtl_drawer.x, 340.0) || !near(rtl_drawer.width, 300.0) { os.exit(56i32) }
     if !is_color(shot_4, at(rtl_drawer.x + rtl_drawer.width - 4.0, rtl_drawer.y + 300.0), low) || is_color(shot_4, at(rtl_drawer.x + 1.5, rtl_drawer.y + 1.5), low) { os.exit(57i32) }
+    // (D1266) The rail's menu button and FAB stand above its destinations and the
+    // menu opens the drawer; the sidebar leads with its header.
+    var rail_extras: navigation.DestinationExtras = zero
+    rail_extras.menu = &s.dismiss
+    rail_extras.fab = widget.box(3590u64, control.sized_style(56.0, 56.0), zero)
+    rail_extras.has_fab = true
+    var side_extras: navigation.DestinationExtras = zero
+    side_extras.header = "neper workspace"
+    f = mem.arena_from(frame_storage)
+    let (extra_rail, extra_rail_error) = navigation.destination_bar_with(&f, 3500u64, &theme, s.places[0usize..3usize], 0usize, s.picks[0usize..3usize], .Rail, 80.0, rail_extras)
+    let (extra_side, extra_side_error) = navigation.destination_bar_with(&f, 3600u64, &theme, s.rows[0usize..3usize], 0usize, s.picks[0usize..3usize], .Sidebar, 260.0, side_extras)
+    let (extra_parts, extra_parts_error) = mem.alloc[widget.Node](&f, 2usize)
+    if extra_rail_error != ok || extra_side_error != ok || extra_parts_error != ok { os.exit(58i32) }
+    extra_parts[0usize] = extra_rail
+    extra_parts[1usize] = extra_side
+    var extra_page = control.sized_style(600.0, 600.0)
+    extra_page.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+    if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, extra_page, extra_parts[0usize..2usize]), time.Instant { nanos: 5000000000i64 }) != ok { os.exit(59i32) }
+    let (menu_box, has_menu_box) = bounds(&harness, &runtime, 7596u64)
+    let (fab_box, has_fab_box) = bounds(&harness, &runtime, 3590u64)
+    let (first_place, has_first_place) = bounds(&harness, &runtime, 3501u64)
+    if !has_menu_box || !has_fab_box || !has_first_place || !(menu_box.y < fab_box.y) || !(fab_box.y + fab_box.height <= first_place.y) { os.exit(60i32) }
+    let dismissals = s.counters[3usize].count
+    if testing.tap(&harness, menu_box.x + menu_box.width * 0.5, menu_box.y + menu_box.height * 0.5) != ok || s.counters[3usize].count != dismissals + 1usize { os.exit(61i32) }
+    if testing.by_text(&harness, "neper workspace").count == 0usize { os.exit(62i32) }
+    let (extra_tree, extra_tree_error) = testing.semantics(&harness)
+    let (_, has_open_nav) = find(extra_tree, .Button, "Open navigation")
+    if extra_tree_error != ok || !has_open_nav { os.exit(63i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation3 v2 ok\n")
     ret ok
