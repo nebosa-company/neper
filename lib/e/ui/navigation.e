@@ -81,10 +81,12 @@ type AppBarSize = enum u8 { Small, Center, Medium, Large }
 // toggles it; Back's name (set, an `arrow-back` action firing `back` leads;
 // `closing`, a `close` one, D974); and
 // a node standing in place of the title (`headed`), the bar still named by it.
-type AppBarOptions = struct { size: AppBarSize, scrolled: bool, contextual: str, clear: widget.Submit, more_open: bool, more: widget.Submit, back_label: str, back: widget.Submit, back_disabled: bool, closing: bool, heading: widget.Node, headed: bool, offset: f32 }
+type AppBarOptions = struct { size: AppBarSize, scrolled: bool, contextual: str, clear: widget.Submit, more_open: bool, more: widget.Submit, back_label: str, back: widget.Submit, back_disabled: bool, closing: bool, heading: widget.Node, headed: bool, offset: f32, shown: f32, hides: bool }
 
 fn app_bar_options() -> AppBarOptions {
     var out: AppBarOptions = zero
+    // (D1268) Fully shown until the caller hides it.
+    out.shown = 1.0
     ret out
 }
 
@@ -125,7 +127,8 @@ fn bar_group(items: []const widget.Node) -> widget.Node {
 // politely; Back, when named, leads as `arrow-back` (`key + 1`).
 // (D1267) `options.offset` (the content's scroll) tints the bar and collapses a
 // medium or large one to the small row as the page scrolls.
-// ponytail: no hiding on scroll, no title cross-fade into the row before the
+// (D1268) With `hides` it stands `shown` of its height, sliding away on scroll.
+// ponytail: no title cross-fade into the row before the
 // collapse ends, no contextual motion; worded actions stay
 // text buttons; a disabled action is dimmed rather than hidden.
 fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, options: AppBarOptions, width: f32) -> (widget.Node, err) {
@@ -313,6 +316,22 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = named
+    // (D1268) A bar that `hides` (compact only) stands `shown` (0..1) of its
+    // height: slid up under a clip as the content scrolls down, back on any
+    // upward scroll -- the caller eases `shown`. Hidden, it leaves the tree.
+    if options.hides && options.shown < 1.0 {
+        var share = options.shown
+        if share < 0.0 { share = 0.0 }
+        if t.tokens.motion.reduced { share = 0.0 }
+        if share <= 0.0 { ret (widget.box(key, control.sized_style(width, 0.0), zero), ok) }
+        let (slid, slid_error) = mem.alloc[widget.Node](a, 2usize)
+        if slid_error != ok { ret (zero, TooLarge) }
+        slid[1usize] = widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize])
+        slid[0usize] = widget.positioned(0u64, 0.0, 0.0 - height * (1.0 - share), style.defaults(), slid[1usize..2usize])
+        var window = control.sized_style(width, height * share)
+        window.overflow = .Clip
+        ret (widget.stack(key, window, slid[0usize..1usize]), ok)
+    }
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }
 

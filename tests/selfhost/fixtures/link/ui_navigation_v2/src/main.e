@@ -253,6 +253,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !has_collapsed_box || !near(collapsed_box.height, expected) { os.exit(34i32) }
         collapse_step += 1usize
     }
+    // (D1268) A hiding bar stands its shown share: half of 48 is 24; hidden, 0.
+    var hide_step = 0usize
+    while hide_step < 2usize {
+        var hiding = navigation.app_bar_options()
+        hiding.hides = true
+        hiding.shown = 0.5
+        if hide_step == 1usize { hiding.shown = 0.0 }
+        f = mem.arena_from(frame_storage)
+        let (hiding_bar, hiding_error) = navigation.app_bar_of(&f, 1950u64, &theme, "Inbox", no_actions[0usize..0usize], no_actions[0usize..0usize], hiding, 600.0)
+        let (hiding_page, hiding_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if hiding_error != ok || hiding_page_error != ok { os.exit(35i32) }
+        hiding_page[0usize] = hiding_bar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), hiding_page[0usize..1usize]), time.Instant { nanos: 7100000000i64 + i64(hide_step) }) != ok { os.exit(36i32) }
+        let (hiding_box, has_hiding_box) = bounds(&harness, &runtime, 1950u64)
+        var hiding_expected: f32 = 24.0
+        if hide_step == 1usize { hiding_expected = 0.0 }
+        if !has_hiding_box || !near(hiding_box.height, hiding_expected) { os.exit(37i32) }
+        hide_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation v2 ok\n")
     ret ok

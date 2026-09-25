@@ -24693,3 +24693,15 @@ and the contextual bar's motion are still to come.
 
 `ui_navigation_v2` holds a medium bar at 112, at 80 after 32 of scroll and at
 48 past its 64 of collapse on Windows and Linux.
+
+## D1268 — App bars can hide on scroll
+
+`AppBarOptions.hides` makes the bar stand `shown` (0 to 1, 1 by default) of
+its height: the whole bar slid up under a clip. The caller lowers `shown` as
+the content scrolls down and restores it on any upward scroll, easing it over
+frames as it wishes. At 0 the bar is an empty keyed box and leaves the tree.
+With reduced motion a hiding bar is either there or gone. The spec keeps this
+for compact windows, which is the caller's choice.
+
+`ui_navigation_v2` holds 24 of a 48 bar at half shown and 0 hidden on Windows
+and Linux.
