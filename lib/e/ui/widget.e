@@ -92,8 +92,9 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 // bits and codes; relationships name other elements by key (0 for none); `row` and
 // `column` place the element in a collection of `row_count` by `column_count`;
 // `level` is a heading's or a tree item's depth; a hidden element and its subtree
-// leave the tree. A platform action the element offers reaches `on_action` as its bit.
-type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
+// leave the tree. `focus_inset` moves the runtime ring inside an edge-to-edge
+// control; a platform action the element offers reaches `on_action` as its bit.
+type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, on_action: Change[u32] }
 // An overlay (D810, widget plan P0-07): its children leave the flow and paint at the
 // root level, last, stacked against the element `anchor` names by key (0: the
 // window) with `placement` and `offset`, kept inside the window. A modal overlay
@@ -2366,9 +2367,9 @@ fn intersect(a: geometry.Rect, b: geometry.Rect) -> geometry.Rect {
 }
 
 // The ring: a stroke `ring_width` wide whose outer edge is `ring_offset + ring_width`
-// outside the bounds, on the element's shape grown by the same. Menu rows and tabs
-// put its outer edge 3px inside their edge-to-edge bounds; otherwise a clip that
-// would cut the outside ring moves it just inside the bounds.
+// outside the bounds, on the element's shape grown by the same. A semantic inset,
+// menu rows and tabs put it inside edge-to-edge bounds; otherwise a clip that would
+// cut the outside ring moves it just inside the bounds.
 fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, element: usize, bounds: geometry.Rect, corner: style.Corners) -> err {
     let w = s.ring_width
     var grow = s.ring_offset + w * 0.5
@@ -2376,7 +2377,10 @@ fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, element: usize, bound
     let outer = geometry.Rect { x: bounds.x - reach, y: bounds.y - reach, width: bounds.width + 2.0 * reach, height: bounds.height + 2.0 * reach }
     let (_, menu_item) = menu_item_owner(s, element)
     let tab_item = semantic_owner(s, element, 19u8)
-    if menu_item || tab_item {
+    let inset = semantic_focus_inset(s, element)
+    if inset > 0.0 {
+        grow = 0.0 - inset - w * 0.5
+    } else if menu_item || tab_item {
         grow = 0.0 - 3.0 - w * 0.5
     } else if s.has_clip {
         let c = s.clip_rect
@@ -3321,6 +3325,16 @@ fn semantic_owner(s: *State, index: usize, role: u8) -> bool {
         let e = &s.elements[at]
         if e.has_semantics && e.sem.role == role { ret true }
         if !e.has_parent { ret false }
+        at = usize(e.parent)
+    }
+}
+
+fn semantic_focus_inset(s: *State, index: usize) -> f32 {
+    var at = index
+    while true {
+        let e = &s.elements[at]
+        if e.has_semantics && e.sem.focus_inset > 0.0 { ret e.sem.focus_inset }
+        if !e.has_parent { ret 0.0 }
         at = usize(e.parent)
     }
 }

@@ -413,8 +413,7 @@ fn status_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, sections:
 // under the `state-hover` layer. Only the first item, the message, is a polite
 // status named by its text. Pressable items share one roving Tab stop, with
 // Left/Right and Home/End moving in visual order.
-// ponytail: no narrowing rules or tooltips; the focus ring is the runtime's, not
-// inset 3.
+// ponytail: no narrowing rules or tooltips.
 type StatusMove = struct { runtime: *widget.Runtime, keys: []const widget.Key, backward: bool, edge: bool }
 
 fn status_move_fire(ctx: *void) -> err {
@@ -525,8 +524,17 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
             look.padding_y = 4.0
             look.min_height = 24.0
             look.min_width = 16.0
-            let (pressed, pressed_error) = control.pressable(a, key + 1u64 + u64(i), t, 3u8, item.text, look, true, false, &item.action, content)
+            let (built, pressed_error) = control.pressable(a, key + 1u64 + u64(i), t, 3u8, item.text, look, true, false, &item.action, content)
             if pressed_error != ok { ret (zero, pressed_error) }
+            var pressed = built
+            switch pressed.kind {
+            case .Semantics as pressed_sem:
+                var inset_sem = pressed_sem
+                inset_sem.focus_inset = 3.0
+                pressed.kind = widget.Kind { Semantics: inset_sem }
+            default:
+                pressed = built
+            }
             made = pressed
             if key + 1u64 + u64(i) != tab_key {
                 let (untabbed, untabbed_error) = untab_pressable(a, made)
