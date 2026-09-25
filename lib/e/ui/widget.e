@@ -3439,7 +3439,7 @@ fn menu_hover_tick(s: *State) -> err {
 
 fn semantic_label_element(s: *State, index: usize) -> (usize, bool) {
     let e = &s.elements[index]
-    if e.text_len > 0usize { ret (index, true) }
+    if e.text_len > 0usize && (!e.has_semantics || e.sem.role != 14u8) { ret (index, true) }
     var child = e.first_child
     var has_child = e.has_child
     while has_child {

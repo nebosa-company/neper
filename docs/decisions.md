@@ -22751,3 +22751,14 @@ record name their visual first cell already presents.
 
 `ui_collections2_v2`, `ui_collections3_v2` and `ui_accessibility` hold the shared
 path on Windows and Linux. The reviewed surfaces are unchanged.
+
+## D1108 — Table cells publish self-contained name and value
+
+Every table-family Cell carries its column title as label. When its value is not
+explicit, accessibility derives it from the rendered descendant content. This
+keeps the flat host record sufficient to announce pairs such as “Name, x” without
+adding a header-reference bridge that the hosts do not yet carry.
+
+Row naming and TreeGrid typeahead skip the Cell's header label and continue from
+its content. `ui_collections2_v2`, `ui_collections3_v2` and `ui_accessibility`
+hold both paths on Windows and Linux. The reviewed surfaces are unchanged.

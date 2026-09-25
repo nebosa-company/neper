@@ -352,6 +352,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tree_grids = 0usize
     var tree_grid_rows = 0usize
     var named_tree_grid_rows = 0usize
+    var named_tree_grid_cells = 0usize
     i = 0usize
     while i < tree_3.nodes.len {
         if tree_3.nodes[i].role == .TreeGrid && tree_3.nodes[i].position.row_count == 5u32 && tree_3.nodes[i].position.column_count == 2u32 { tree_grids += 1usize }
@@ -359,9 +360,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             tree_grid_rows += 1usize
             if tree_3.nodes[i].label.len == 1usize && tree_3.nodes[i].label[0usize] == 66u8 { named_tree_grid_rows += 1usize }
         }
+        if tree_3.nodes[i].role == .Cell && tree_3.nodes[i].label.len == 4usize && tree_3.nodes[i].label[0usize] == 78u8 && tree_3.nodes[i].value.len == 1usize && tree_3.nodes[i].value[0usize] == 66u8 { named_tree_grid_cells += 1usize }
         i += 1usize
     }
-    if tree_grids != 1usize || tree_grid_rows != 5usize || named_tree_grid_rows != 1usize || widget.focus(&runtime, testing.by_key(&harness, 1u64).element) != ok || testing.press_key(&harness, 66u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(54i32) }
+    if tree_grids != 1usize || tree_grid_rows != 5usize || named_tree_grid_rows != 1usize { os.exit(54i32) }
+    if named_tree_grid_cells != 1usize { os.exit(55i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 1u64).element) != ok || testing.press_key(&harness, 66u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(56i32) }
     if testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || testing.tap(&harness, table_a.x + 150.0, table_a.y + 20.0) != ok || logs[0usize].picks != 5usize || logs[0usize].toggles != 9usize || logs[0usize].toggled != 1u64 { os.exit(47i32) }
     logs[0usize].large = true
     let (large_rt, large_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 6000usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 16384usize })

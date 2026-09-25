@@ -1573,6 +1573,7 @@ fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column,
         framed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell_style, body[0usize..1usize])
         var cell_sem: widget.Semantics = zero
         cell_sem.role = 14u8
+        cell_sem.label = columns[c].title
         cell_sem.row = u32(index + 1usize)
         cell_sem.column = u32(c + 1usize)
         boxed[n] = widget.semantics(0u64, cell_sem, style.defaults(), framed[0usize..1usize])
