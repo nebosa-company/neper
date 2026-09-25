@@ -4489,8 +4489,46 @@ fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, se
 // label `on-surface`) rather than primary, and fixed (the tabs share `width`)
 // rather than scrollable (each as wide as its label, from the start inset).
 // (D1213) `disabled` marks tabs by index (shorter than the tabs: the rest are
-// enabled).
-type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool }
+// enabled). (D1226) `icons` puts a glyph above each label; `badges` holds a count
+// per tab ("" for none) and `badge_names` what each means in the tab's name
+// (the count itself when shorter).
+type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool, icons: []const GlyphKind, badges: []const str, badge_names: []const str }
+
+fn tab_badge(options: *const TabsOptions, i: usize) -> str {
+    if i >= options.badges.len { ret "" }
+    ret options.badges[i]
+}
+
+// (D1226) A tab's face: its label, under a 24 icon 2 above it when the bar has
+// icons, with the tab's count badge on the icon's top end corner -- or, with no
+// icon, 4 after the label.
+fn tab_face(a: *mem.Arena, t: *const Theme, options: *const TabsOptions, i: usize, label_node: widget.Node, ink: paint.Color) -> (widget.Node, err) {
+    let value = tab_badge(options, i)
+    let has_icon = i < options.icons.len
+    if !has_icon && value.len == 0usize { ret (label_node, ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    if has_icon {
+        let side = t.tokens.sizes.icon_md
+        let (glyph, glyph_error) = icon_square(a, ink, options.icons[i], side)
+        if glyph_error != ok { ret (zero, glyph_error) }
+        parts[0usize] = glyph
+        if value.len != 0usize {
+            let (mark, mark_error) = badge_of(a, 0u64, t, value, .Urgent)
+            if mark_error != ok { ret (zero, mark_error) }
+            let (anchored, anchored_error) = badge_anchor(a, 0u64, glyph, side, mark, false)
+            if anchored_error != ok { ret (zero, anchored_error) }
+            parts[0usize] = anchored
+        }
+        parts[1usize] = label_node
+        ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 2.0 }, style.defaults(), parts[0usize..2usize]), ok)
+    }
+    let (mark, mark_error) = badge_of(a, 0u64, t, value, .Urgent)
+    if mark_error != ok { ret (zero, mark_error) }
+    parts[0usize] = label_node
+    parts[1usize] = mark
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 4.0 }, style.defaults(), parts[0usize..2usize]), ok)
+}
 
 fn tab_enabled(options: *const TabsOptions, i: usize) -> bool {
     ret i >= options.disabled.len || !options.disabled[i]
@@ -4510,14 +4548,17 @@ fn tabs_options() -> TabsOptions {
 // rounded top corners, or 2px across the whole tab when secondary. A scrollable
 // bar starts 8 in (16 touch). (D1213) A disabled tab's label is `on-surface` at
 // 38%, it is neither pressable nor focusable, and Left, Right, Home and End
-// skip it.
-// ponytail: no icon tabs, badges, overflow button or horizontal scrolling; the
+// skip it. (D1226) With `icons` a tab is 16 taller (56 pointer, 64 touch) and
+// shows its icon 2 above the label; a count badge sits on the icon's top end
+// corner, or 4 after the label on a text-only tab, and joins the tab's name.
+// ponytail: no overflow button or horizontal scrolling; no dot badge; the
 // indicator does not slide between tabs.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var h = t.tokens.sizes.control_md
     if touch { h = t.tokens.sizes.control_lg }
+    if options.icons.len > 0usize { h += 16.0 }
     let sharing = options.fixed && options.width > 0.0
     var least: f32 = 48.0
     if sharing && labels.len > 0usize { least = max_of(90.0, options.width / f32(labels.len)) }
@@ -4548,8 +4589,18 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         caption.role = .TitleSmall
         caption.wrap = .None
         caption.align = .Center
-        let (label_node, label_error) = colored_text(a, 0u64, labels[i], t, caption, ink)
+        let (label_text, label_error) = colored_text(a, 0u64, labels[i], t, caption, ink)
         if label_error != ok { ret (zero, label_error) }
+        let (label_node, face_error) = tab_face(a, t, &options, i, label_text, ink)
+        if face_error != ok { ret (zero, face_error) }
+        var named = labels[i]
+        if tab_badge(&options, i).len != 0usize {
+            var meaning = tab_badge(&options, i)
+            if i < options.badge_names.len && options.badge_names[i].len != 0usize { meaning = options.badge_names[i] }
+            let (with_badge, with_badge_error) = badge_name(a, labels[i], meaning)
+            if with_badge_error != ok { ret (zero, with_badge_error) }
+            named = with_badge
+        }
         var mark = style.defaults()
         if chosen { mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) } }
         let sides = style.Length { Px: 16.0 }
@@ -4587,7 +4638,7 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..4usize])
         }
         if !enabled { look.background = with_alpha(ink, 0.0) }
-        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, enabled, chosen, 0u32, 0u32, 0u64, &picks[i], content)
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, named, look, enabled, chosen, 0u32, 0u32, 0u64, &picks[i], content)
         if tab_error != ok { ret (zero, tab_error) }
         items[i] = tab
         i += 1usize

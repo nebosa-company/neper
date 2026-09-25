@@ -24052,3 +24052,20 @@ authenticated record is never reused, so the warm build rebuilds `main` as
 `invalid-artifact` and `dep` as `no-artifact`. Both suites now expect that; the
 image still has to equal the clean build's. The rest of the hot-build section
 passes unchanged with D1224.
+
+## D1226 — Tabs take icons and count badges
+
+`TabsOptions` gains `icons`, `badges` and `badge_names`. With icons each tab is 16
+taller (56 at pointer density, 64 on touch) and draws its 24 icon in the label
+colour 2 above the label. A tab's count badge is the urgent `badge_of` pill; on an
+icon bar `badge_anchor` places it on the icon's top end corner, and on a text
+bar it stands 4 after the label. As the Badge spec asks, the badge is not a node
+of its own: its meaning joins the tab's accessible name through `badge_name`
+("Builds, 3 failed"), taken from `badge_names` or, when that is empty, the count
+itself.
+
+`ui_tabs_rtl` holds the 56 icon tab, the named badge and the text tab's count on
+Windows and Linux; its depth limit rises from 12 to 16 for the icon, badge and
+label face. A sweep of all 103 `ui_*` fixtures passes on both hosts. The
+overflow button, horizontal scrolling, dot badges and the sliding indicator stay
+open.
