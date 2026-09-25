@@ -22267,3 +22267,17 @@ the first frame independent of a previously measured host surface.
 `ui_overlays4_v2` holds the full bounds, Back dismissal, Busy semantics, row
 height, surface colour and removed desktop-only content on Windows and Linux.
 `palette-compact.png` is the 360px Segoe UI visual check.
+
+## D1065 — Switcher grid keeps tile identity separate from detail copy
+
+`SwitcherItem` gives `window_switcher_grid` the document name, context, state
+and optional caller-owned thumbnail. Up to six 136px tiles wrap at 8px gaps
+inside the centred surface-container-high modal over the shared scrim; each has
+a 120 by 84 framed thumbnail, 16px glyph caption and the selected tonal fill
+plus focus ring. The selected item is repeated once below as title-small name
+and muted context/state detail.
+
+The Option accessible name joins all three text fields while its index and
+activation stay in source order; decorative thumbnails stay out of the tree.
+`ui_overlays4_v2` holds geometry, modal/Listbox/Option semantics and selected
+detail on Windows and Linux. `switcher-grid.png` is the Segoe UI visual check.

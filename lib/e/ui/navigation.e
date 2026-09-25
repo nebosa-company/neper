@@ -4066,8 +4066,7 @@ fn compact_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // whatever chord its host lets it hear.
 // v2 (D978, docs/ux/components/WindowSwitcher, list form): the panel of
 // `centred_modal`, no scrim, the rows 4 above and below and 8 at the sides.
-// ponytail: the list form only -- no grid of thumbnails, hold-to-switch,
-// type-to-filter, Close on hover or Delete, or detail line.
+// ponytail: no hold-to-switch, type-to-filter, or Close on hover/Delete.
 fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var no_categories: []const str = zero
@@ -4090,6 +4089,193 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let (scoped, scoped_error) = choice_scope(a, key + 1u64, names.len, active, true, activate, pick, dismiss, list)
     if scoped_error != ok { ret (zero, scoped_error) }
     let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width, false)
+    ret (made, made_error)
+}
+
+type SwitcherItem = struct { name: str, context: str, state: str, thumbnail: scene.TextureId }
+
+fn switcher_item_label(a: *mem.Arena, item: SwitcherItem) -> (str, err) {
+    var label = item.name
+    if item.context.len > 0usize {
+        let (prefix, prefix_error) = string.concat(a, label, ", ")
+        if prefix_error != ok { ret ("", TooLarge) }
+        let (full_label, full_label_error) = string.concat(a, prefix, item.context)
+        if full_label_error != ok { ret ("", TooLarge) }
+        label = full_label
+    }
+    if item.state.len > 0usize {
+        let (prefix, prefix_error) = string.concat(a, label, ", ")
+        if prefix_error != ok { ret ("", TooLarge) }
+        let (full_label, full_label_error) = string.concat(a, prefix, item.state)
+        if full_label_error != ok { ret ("", TooLarge) }
+        label = full_label
+    }
+    ret (label, ok)
+}
+
+fn switcher_grid_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, items: []const SwitcherItem, active: usize, pick: widget.Change[usize]) -> ([]widget.Node, err) {
+    var none: []widget.Node = zero
+    let (tiles, tiles_error) = mem.alloc[widget.Node](a, items.len)
+    if tiles_error != ok { ret (none, TooLarge) }
+    let (picks, picks_error) = mem.alloc[IndexPick](a, items.len)
+    if picks_error != ok { ret (none, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, items.len)
+    if actions_error != ok { ret (none, TooLarge) }
+    var i = 0usize
+    while i < items.len {
+        picks[i] = IndexPick { index: i, pick: pick }
+        actions[i] = widget.Submit { ctx: mem.cast[*void](&picks[i]), invoke: index_pick_fire }
+        let row_key = first + u64(i)
+        var ink = style.color(t.tokens, .OnSurface)
+        var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        if i == active {
+            ink = style.color(t.tokens, .OnSecondaryContainer)
+            fill = style.color(t.tokens, .SecondaryContainer)
+        }
+        let (content, content_error) = mem.alloc[widget.Node](a, 2usize)
+        if content_error != ok { ret (none, TooLarge) }
+        let has_thumbnail = items[i].thumbnail.slot != 0u32 || items[i].thumbnail.generation != 0u32
+        var picture: widget.Node = zero
+        if has_thumbnail {
+            let (image_node, image_error) = control.image(a, 0u64, items[i].thumbnail, 120.0, 84.0, .Cover, "")
+            if image_error != ok { ret (none, image_error) }
+            picture = image_node
+        } else {
+            picture = widget.box(0u64, control.sized_style(120.0, 84.0), zero)
+        }
+        let (picture_body, picture_body_error) = mem.alloc[widget.Node](a, 1usize)
+        if picture_body_error != ok { ret (none, TooLarge) }
+        picture_body[0usize] = picture
+        var frame = control.sized_style(120.0, 84.0)
+        frame.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+        frame.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+        frame.radius = t.tokens.radii.sm
+        frame.overflow = .Clip
+        content[0usize] = widget.box(0u64, frame, picture_body[0usize..1usize])
+        let (caption, caption_error) = mem.alloc[widget.Node](a, 2usize)
+        if caption_error != ok { ret (none, TooLarge) }
+        let (icon, icon_error) = control.icon_square(a, ink, .Picture, 16.0)
+        if icon_error != ok { ret (none, icon_error) }
+        caption[0usize] = icon
+        var words = control.text_options()
+        words.role = .BodySmall
+        words.wrap = .None
+        words.ellipsis = "…"
+        let (name, name_error) = control.colored_text(a, 0u64, items[i].name, t, words, ink)
+        if name_error != ok { ret (none, name_error) }
+        caption[1usize] = name
+        content[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), caption[0usize..2usize])
+        let face = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 8.0 }, style.defaults(), content[0usize..2usize])
+        var look = style.resolve(t.tokens, .Plain, control.control_state(t, row_key, true, false))
+        look.background = style.layer(fill, ink, control.state_opacity(t, control.control_state(t, row_key, true, false)))
+        look.foreground = ink
+        look.border_width = 0.0
+        if i == active {
+            look.border_width = 3.0
+            look.border = style.color(t.tokens, .FocusRing)
+        }
+        look.radius = t.tokens.radii.md
+        look.custom_padding = true
+        look.padding = 8.0
+        look.padding_y = 8.0
+        look.min_width = 136.0
+        look.min_height = 120.0
+        let (semantic_label, semantic_label_error) = switcher_item_label(a, items[i])
+        if semantic_label_error != ok { ret (none, semantic_label_error) }
+        let (pressed, pressed_error) = control.pressable(a, row_key, t, 3u8, semantic_label, look, true, false, &actions[i], face)
+        if pressed_error != ok { ret (none, pressed_error) }
+        let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+        if wrapped_error != ok { ret (none, TooLarge) }
+        wrapped[0usize] = pressed
+        var sem: widget.Semantics = zero
+        sem.role = accessibility.ROLE_OPTION
+        sem.label = semantic_label
+        sem.row = u32(i + 1usize)
+        sem.row_count = u32(items.len)
+        if i == active { sem.states = accessibility.STATE_SELECTED }
+        tiles[i] = widget.semantics(0u64, sem, style.defaults(), wrapped[0usize..1usize])
+        i += 1usize
+    }
+    ret (tiles, ok)
+}
+
+fn window_switcher_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const SwitcherItem, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit) -> (widget.Node, err) {
+    if !open || items.len <= 1usize { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (tiles, tiles_error) = switcher_grid_rows(a, key + 2u64, t, items, active, pick)
+    if tiles_error != ok { ret (zero, tiles_error) }
+    var columns = items.len
+    if columns > 6usize { columns = 6usize }
+    let inner_width = f32(columns) * 136.0 + f32(columns - 1usize) * 8.0
+    var grid_style = style.defaults()
+    grid_style.width = style.Length { Px: inner_width }
+    let grid = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: 8.0 }, grid_style, tiles)
+    let (list_body, list_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if list_body_error != ok { ret (zero, TooLarge) }
+    list_body[0usize] = grid
+    var list_sem: widget.Semantics = zero
+    list_sem.role = accessibility.ROLE_LISTBOX
+    list_sem.label = label
+    list_sem.row_count = u32(items.len)
+    if active < items.len { list_sem.active = key + 2u64 + u64(active) }
+    let list = widget.semantics(0u64, list_sem, style.defaults(), list_body[0usize..1usize])
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = list
+    var part_count = 1usize
+    if active < items.len {
+        var title = control.text_options()
+        title.role = .TitleSmall
+        title.wrap = .None
+        let (name, name_error) = control.colored_text(a, 0u64, items[active].name, t, title, style.color(t.tokens, .OnSurface))
+        if name_error != ok { ret (zero, name_error) }
+        let (detail_parts, detail_parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if detail_parts_error != ok { ret (zero, TooLarge) }
+        detail_parts[0usize] = name
+        var detail = items[active].context
+        if items[active].state.len > 0usize {
+            if detail.len > 0usize {
+                let (prefix, prefix_error) = string.concat(a, detail, ", ")
+                if prefix_error != ok { ret (zero, TooLarge) }
+                let (full_detail, full_detail_error) = string.concat(a, prefix, items[active].state)
+                if full_detail_error != ok { ret (zero, TooLarge) }
+                detail = full_detail
+            } else {
+                detail = items[active].state
+            }
+        }
+        var small = control.text_options()
+        small.role = .BodySmall
+        small.wrap = .None
+        let (context, context_error) = control.colored_text(a, 0u64, detail, t, small, style.color(t.tokens, .OnSurfaceVariant))
+        if context_error != ok { ret (zero, context_error) }
+        detail_parts[1usize] = context
+        var detail_style = style.defaults()
+        detail_style.width = style.Length { Percent: 100.0 }
+        parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 12.0 }, detail_style, detail_parts[0usize..2usize])
+        part_count = 2usize
+    }
+    var panel = control.surface_style(t, control.surface_options(t))
+    panel.width = style.Length { Px: inner_width + 32.0 }
+    panel.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 16.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 16.0 } }
+    panel.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+    panel.border.width = 0.0
+    panel.radius = t.tokens.radii.xl
+    panel.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 3.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[3usize]) }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 12.0 }, panel, parts[0usize..part_count])
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, items.len, active, true, activate, pick, dismiss, content)
+    if scoped_error != ok { ret (zero, scoped_error) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = scoped
+    var sem: widget.Semantics = zero
+    sem.role = 23u8
+    sem.label = label
+    sem.states = accessibility.STATE_MODAL
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize])
+    let lifted = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize])
+    let (made, made_error) = overlay.with_scrim(a, t, lifted)
     ret (made, made_error)
 }
 

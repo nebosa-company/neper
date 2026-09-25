@@ -28,7 +28,7 @@ use e.ui.widget
 
 type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, typed: usize, dismisses: usize }
 
-type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, PaletteCompact, Empty, Switcher }
+type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, PaletteCompact, Empty, Switcher, SwitcherGrid }
 
 fn on_activate(ctx: *void, index: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -119,11 +119,26 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
         palette = made_palette
         e1 = made_palette_error
     } else {
-        let (made_palette, made_palette_error) = navigation.command_palette_mode(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, shown, active, which != .Switcher, activate, run, dismiss, 560.0)
+        let (made_palette, made_palette_error) = navigation.command_palette_mode(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, shown, active, which != .Switcher && which != .SwitcherGrid, activate, run, dismiss, 560.0)
         palette = made_palette
         e1 = made_palette_error
     }
-    let (switcher, e2) = navigation.window_switcher(a, 200u64, t, "Windows", names[..], active, which == .Switcher, activate, run, dismiss, 480.0)
+    var switcher: widget.Node = zero
+    var e2: err = ok
+    if which == .SwitcherGrid {
+        var windows: [4]navigation.SwitcherItem = zero
+        windows[0usize] = navigation.SwitcherItem { name: "main.e", context: "neper/src", state: "", thumbnail: zero }
+        windows[1usize] = navigation.SwitcherItem { name: "lower.e", context: "neper/src", state: "unsaved changes", thumbnail: zero }
+        windows[2usize] = navigation.SwitcherItem { name: "Build 4128 log", context: "CI", state: "", thumbnail: zero }
+        windows[3usize] = navigation.SwitcherItem { name: "Settings", context: "Application", state: "", thumbnail: zero }
+        let (made_switcher, made_switcher_error) = navigation.window_switcher_grid(a, 200u64, t, "Switch window", windows[..], active, true, activate, run, dismiss)
+        switcher = made_switcher
+        e2 = made_switcher_error
+    } else {
+        let (made_switcher, made_switcher_error) = navigation.window_switcher(a, 200u64, t, "Windows", names[..], active, which == .Switcher, activate, run, dismiss, 480.0)
+        switcher = made_switcher
+        e2 = made_switcher_error
+    }
     if e1 != ok || e2 != ok { ret (zero, e1) }
     items[0usize] = palette
     items[1usize] = switcher
@@ -316,6 +331,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].active != 1usize { os.exit(33i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].active != 2usize { os.exit(34i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].dismisses != 3usize { os.exit(35i32) }
+    // Grid form: four 136px tiles in a centred 600px modal over the scrim, with
+    // full option identity and the selected item's separate detail line.
+    let (root_grid, build_grid_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .SwitcherGrid, 1usize)
+    if build_grid_error != ok || testing.pump(&harness, root_grid, time.Instant { nanos: 1400000000i64 }) != ok { os.exit(59i32) }
+    let (grid_shot, grid_shot_error) = testing.snapshot(&harness, a)
+    if grid_shot_error != ok { os.exit(60i32) }
+    let (grid_panel, has_grid_panel) = lifted(&harness, 200u64)
+    let (grid_first, has_grid_first) = bounds(&harness, &runtime, 202u64)
+    let (grid_tree, grid_tree_error) = testing.semantics(&harness)
+    if grid_tree_error != ok { os.exit(61i32) }
+    let (grid_dialog, has_grid_dialog) = find(grid_tree, .Dialog, "Switch window")
+    let (grid_list, has_grid_list) = find(grid_tree, .Listbox, "Switch window")
+    let (selected_window, has_selected_window) = find(grid_tree, .Option, "lower.e, neper/src, unsaved changes")
+    if !has_grid_panel || !near(grid_panel.x, 20.0) || !near(grid_panel.width, 600.0) || !has_grid_first || !near(grid_first.width, 136.0) || !has_grid_dialog || !grid_dialog.state.modal || !has_grid_list || !has_selected_window || !selected_window.state.selected { os.exit(62i32) }
+    if !is_color(grid_shot, at(5.0, 5.0), dimmed) || testing.by_text(&harness, "lower.e").count != 2usize || testing.by_text(&harness, "neper/src, unsaved changes").count != 1usize { os.exit(63i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(36i32) }
     try io.print("ui overlays4 v2 ok\n")
     ret ok
