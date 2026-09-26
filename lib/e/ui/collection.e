@@ -3925,8 +3925,13 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             let (drawn, drawn_error) = mem.alloc[widget.Node](a, 2usize)
             if drawn_error != ok { ret (none, TooLarge) }
             drawn[1usize] = chevron
-            var rotation: f32 = 0.0
-            if open && !t.tokens.motion.reduced { rotation = 1.5707963 }
+            // (D1437, docs/ux/components/TreeTable, motion) The twisty turns a
+            // quarter over `duration-short-3` on `ease-standard` as its branch
+            // opens or closes (kept on the twisty, slot `+ 1048596`).
+            var open_goal: f32 = 0.0
+            if open && !t.tokens.motion.reduced { open_goal = 1.0 }
+            let twisty_key = key + 1u64 + 2u64 * u64(i)
+            let rotation = 1.5707963 * control.eased_on(t, twisty_key, twisty_key + 1048596u64, open_goal, false, t.tokens.durations.short3)
             drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: rotation, offset: zero }, style.defaults(), drawn[1usize..2usize])
             var box_style = control.sized_style(24.0, 24.0)
             let around = style.Length { Px: 4.5 }
