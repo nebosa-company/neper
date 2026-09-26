@@ -27517,3 +27517,9 @@ Only a stable module is decoded, because a module that becomes edge-changed late
 Two bootstrap limits shaped the code. The C bootstrap that builds `src/` takes no `else if` and no qualified struct literal, and the self-hosted compiler refuses `target` as a parameter name. A decoded declaration carries no source span, so a diagnostic about it points at the module's start.
 
 Verified on Windows and Linux. On a copy of the compiler's sources, a body edit to `main.e` decodes 34 of the 37 modules, and a body edit to `check.e` decodes 11; each warm debug incremental image is byte-identical to a clean build of the edited copy. The counts come from a temporary trace, removed before this commit. The incremental fixture's warm debug builds match clean builds after body, comment, inlined-body and paired signature edits and after the revert. `emit-em-all` still keeps every module warm, and the self-hosted compiler reaches its fixed point. The full suites were not run through, for the stale conformance goldens D1510 records.
+
+## D1512 — A grid's rubber band starts on the empty area only
+
+The GridView spec: "Rubber-band selection with a pointer drag on the empty area (desktop)". D1385's band took a drag from anywhere in a multi-select grid, so a drag that began on a tile drew a band and replaced the selection. Now `grid_band_gesture` checks where the drag began: on a tile's bounds, the band stays inactive, and its moves and release are ignored, leaving the drag to the tile. From the empty area, including the gaps between tiles, it draws and selects as before.
+
+`ui_collections_v2` checks this on Windows and Linux. A drag that starts on Alpha selects nothing. A drag from the gap between Alpha and Beta into Beta clears the selection and toggles Beta alone. Against the old collection the tile drag selects (exit 112).

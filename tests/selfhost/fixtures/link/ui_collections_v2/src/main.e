@@ -613,10 +613,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_gamma_tile || widget.dispatch(&runtime, input.Event { KeyDown: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: control_only, repeat: false } }) != ok { os.exit(140i32) }
     if testing.tap(&harness, gamma_tile.x + gamma_tile.width * 0.5, gamma_tile.y + gamma_tile.height * 0.5) != ok || grid_chosen.kind != .Toggle || grid_chosen.index != 2usize { os.exit(141i32) }
     if widget.dispatch(&runtime, input.Event { KeyUp: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(142i32) }
-    // (D1385) A pointer drag from Alpha to Beta draws a band over both and, let
-    // go, clears the selection and toggles tiles 0 and 1.
+    // (D1385) A pointer drag on the empty area draws a band and, let go, clears the
+    // selection and toggles the tiles it touches: (D1512) from the gap between
+    // Alpha and Beta into Beta, Beta alone; a drag that starts on a tile is the
+    // tile's, and selects nothing.
     var band_step = 0usize
-    while band_step < 3usize {
+    while band_step < 5usize {
         f = mem.arena_from(frame_storage)
         let (band_tiles, band_tiles_error) = collection.grid_view_of(&f, 950u64, &theme, "Pick tiles", s.tiles[0usize..3usize], grid_keys[..], multi_grid)
         let (band_page, band_page_error) = mem.alloc[widget.Node](&f, 1usize)
@@ -630,8 +632,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(band_alpha.x + 20.0, band_alpha.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(band_alpha.x + 40.0, band_alpha.y + 30.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(band_beta.x + 20.0, band_beta.y + 40.0) }) != ok { os.exit(209i32) }
         }
         if band_step == 2usize {
+            let before_tile_drag = grid_chosen.count
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(band_beta.x + 20.0, band_beta.y + 40.0) }) != ok || grid_chosen.count != before_tile_drag { os.exit(112i32) }
+        }
+        if band_step == 3usize {
+            let gap_x = (band_alpha.x + band_alpha.width + band_beta.x) * 0.5
+            if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(gap_x, band_alpha.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(gap_x + 20.0, band_alpha.y + 30.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(band_beta.x + 20.0, band_beta.y + 40.0) }) != ok { os.exit(209i32) }
+        }
+        if band_step == 4usize {
             let before_band = grid_chosen.count
-            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(band_beta.x + 20.0, band_beta.y + 40.0) }) != ok || grid_chosen.count != before_band + 3usize || grid_chosen.kind != .Toggle || grid_chosen.index != 1usize { os.exit(210i32) }
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(band_beta.x + 20.0, band_beta.y + 40.0) }) != ok || grid_chosen.count != before_band + 2usize || grid_chosen.kind != .Toggle || grid_chosen.index != 1usize { os.exit(210i32) }
         }
         band_step += 1usize
     }
