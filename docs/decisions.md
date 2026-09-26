@@ -27446,3 +27446,9 @@ The TableRow spec: "Loading row: skeleton bars in each cell at the row height". 
 The Outline spec: the current heading's marker is "a 3px `primary` bar at the pane's leading edge ... square on the pane side". D981 drew it at the start of the current row, which a tree insets 8 from the pane, so the bar floated 8 in. A tree row's bar now stands 8 before the row, on the pane's edge. A tree table's rows, which are not inset, keep theirs at 0.
 
 `ui_collections3_v2` checks this on Windows and Linux. The bar's colour stands 6.5 before the current row and no longer at its start. D1452's sliding-marker check now sums its pixels from the pane's edge. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1503 — Trees can virtualise their rows
+
+A tree built every visible row, so a folder of thousands built thousands of rows each frame. The Tree spec expects large trees to virtualise, as lists and tables do. `TreeOptions` gains `height`, `offset` and `scrolled`. With a height, `tree_rows` flattens the visible nodes as before but builds only the rows in view, one either side, through `widget.visible_range`. The tree stands in a virtual viewport (`virtual_first`, `virtual_count`, `virtual_extent`) that places them among all the rows. Up, Down, Home and End move through `VirtualMove`: each asks the viewport for the offset that reveals its row, then focuses it once built. `tree_rows` reports the window through two out-parameters, and the tree table passes them and ignores them. A virtual tree assumes one row height, and a loading child's row under an open node makes that row taller.
+
+`ui_collections3_v2` checks this on Windows and Linux. The 513-node tree in a 200 tall virtual tree builds its first row but not the 21st or the last. End on the first row asks for an offset past 16000, the last row's reveal. All 103 `ui_*` fixtures pass on both hosts.

@@ -3942,7 +3942,9 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // drop look (a 2px `primary` outline over `primary` at 8%) and a drop on it
 // reports a `TreeMove`.
 // (D1373) A drag held 700 ms over a shut branch opens it (`toggle`).
-// ponytail: rows are not virtualised, and a tree table's rows do not drag.
+// (D1503) `TreeOptions.height` virtualises the rows.
+// ponytail: a tree table's rows do not drag; a virtual tree assumes one row
+// height (a loading child row makes its row taller).
 // (D1330) A tree's per-node states, by key: `disabled` nodes are drawn at 38%,
 // take focus but no pick and say Disabled; an open node in `loading` is Busy and
 // its children wait under a "Loading" row.
@@ -3951,7 +3953,10 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // caller's `name` (`name_len` long, told through `typed`), Enter firing
 // `commit` and Escape `cancel`.
 // (D1372) `move`, when set, lets a tree's rows be dragged onto its branches.
-type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove] }
+// (D1503) With `height` above 0 the tree stands in a virtual viewport that tall,
+// scrolled to `offset` (reported through `scrolled`): only the rows in view (and
+// one either side) are built, and the arrows reveal the rows they move to.
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32] }
 
 // (D1372) A row dropped on a branch: the dragged node and the branch it goes into.
 type TreeMove = struct { node: widget.Key, into: widget.Key }
@@ -3994,9 +3999,11 @@ fn tree_rename_fire(ctx: *void) -> err {
     ret widget.fire_change[widget.Key](r.pick, r.key)
 }
 
-fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key, options: TreeOptions) -> ([]widget.Node, err) {
+fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key, options: TreeOptions, window_first: *usize, window_total: *usize) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
     let count = visible_tree_count(source, expanded, 0u64)
+    *window_total = count
+    *window_first = 0usize
     let (visible, visible_error) = mem.alloc[TreeRow](a, count)
     if visible_error != ok { ret (none, TooLarge) }
     if flatten(source, expanded, 0u64, 0usize, visible, 0usize) != count { ret (none, TooLarge) }
@@ -4048,8 +4055,23 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     }
     var marker_at = f32(current_at)
     if has_current { marker_at = control.eased_on(t, key, key + 1048611u64, f32(current_at), false, t.tokens.durations.medium2) }
-    var i = 0usize
-    while i < count {
+    // (D1503) A virtual tree builds the rows in view only.
+    let virtual = options.height > 0.0
+    var first = 0usize
+    var stop = count
+    if virtual {
+        let (view_first, view_count) = widget.visible_range(options.offset, options.height, count, row_extent)
+        first = view_first
+        stop = view_first + view_count
+        if stop > count { stop = count }
+        *window_first = first
+    }
+    let (reveals, reveals_error) = mem.alloc[VirtualMove](a, 4usize * count)
+    if reveals_error != ok { ret (none, TooLarge) }
+    let (reveal_keys, reveal_keys_error) = mem.alloc[widget.Shortcut](a, 4usize * count)
+    if reveal_keys_error != ok { ret (none, TooLarge) }
+    var i = first
+    while i < stop {
         let entry = visible[i]
         let open = entry.open
         let chosen = is_selected(selected, entry.key)
@@ -4232,7 +4254,25 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         shortcuts[base + 1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_expand } }
         // Up, Down, Home and End in the same scope: a level fewer than `roving`.
         var bound = base + 2usize
-        if mem.address_of(t.runtime) != 0usize {
+        if mem.address_of(t.runtime) != 0usize && virtual {
+            // (D1503) A virtual tree's arrows reveal the row they move to.
+            let r = 4usize * i
+            if i > 0usize {
+                bind_virtual_move(reveals, reveal_keys, r, t.runtime, visible[i - 1usize].key, i - 1usize, count, options.offset, options.height, row_extent, 38u32, options.scrolled)
+                shortcuts[bound] = reveal_keys[r]
+                bound += 1usize
+            }
+            if i + 1usize < count {
+                bind_virtual_move(reveals, reveal_keys, r + 1usize, t.runtime, visible[i + 1usize].key, i + 1usize, count, options.offset, options.height, row_extent, 40u32, options.scrolled)
+                shortcuts[bound] = reveal_keys[r + 1usize]
+                bound += 1usize
+            }
+            bind_virtual_move(reveals, reveal_keys, r + 2usize, t.runtime, visible[0usize].key, 0usize, count, options.offset, options.height, row_extent, 36u32, options.scrolled)
+            shortcuts[bound] = reveal_keys[r + 2usize]
+            bind_virtual_move(reveals, reveal_keys, r + 3usize, t.runtime, visible[count - 1usize].key, count - 1usize, count, options.offset, options.height, row_extent, 35u32, options.scrolled)
+            shortcuts[bound + 1usize] = reveal_keys[r + 3usize]
+            bound += 2usize
+        } else if mem.address_of(t.runtime) != 0usize {
             if i > 0usize {
                 bind_move(moves, shortcuts, bound, t.runtime, visible[i - 1usize].key, 38u32)
                 bound += 1usize
@@ -4308,8 +4348,8 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         i += 1usize
     }
     if tabled {
-        i = 0usize
-        while i + 1usize < count {
+        i = first
+        while i + 1usize < stop {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (none, TooLarge) }
             pair[0usize] = rows[i]
@@ -4321,7 +4361,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             i += 1usize
         }
     }
-    ret (rows[0usize..count], ok)
+    ret (rows[first..stop], ok)
 }
 
 // A tree: the visible rows (the expanded nodes' children only) in a column
@@ -4398,8 +4438,28 @@ fn tree_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 fn treed_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, extent: f32, width: f32, current: widget.Key, options: TreeOptions) -> (widget.Node, err) {
     var no_columns: []const Column = zero
     var none_ctx: *void = zero
-    let (rows, rows_error) = tree_rows(a, key, t, source, expanded, selected, toggle, pick, guides, no_columns, CellSource { ctx: none_ctx, cell: no_cell }, extent, width, current, options)
+    var window_first = 0usize
+    var window_total = 0usize
+    let (rows, rows_error) = tree_rows(a, key, t, source, expanded, selected, toggle, pick, guides, no_columns, CellSource { ctx: none_ctx, cell: no_cell }, extent, width, current, options, &window_first, &window_total)
     if rows_error != ok { ret (zero, rows_error) }
+    // (D1503) A virtual tree: its built rows in a viewport `options.height` tall
+    // that positions them among all the visible rows.
+    if options.height > 0.0 {
+        var row_extent = extent
+        if !(row_extent > 0.0) { row_extent = control.if_else(density_of(t) == 2usize, 48.0, 32.0) }
+        var view_style = style.defaults()
+        view_style.width = style.Length { Px: width }
+        view_style.height = style.Length { Px: options.height }
+        view_style.overflow = .Clip
+        view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        let (viewed, viewed_error) = mem.alloc[widget.Node](a, 1usize)
+        if viewed_error != ok { ret (zero, TooLarge) }
+        viewed[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.scrolled, virtual_first: window_first, virtual_count: window_total, virtual_extent: row_extent, fades: false }, view_style, rows)
+        var view_sem: widget.Semantics = zero
+        view_sem.role = 28u8
+        view_sem.label = label
+        ret (widget.semantics(0u64, view_sem, style.defaults(), viewed[0usize..1usize]), ok)
+    }
     var column_style = style.defaults()
     column_style.width = style.Length { Px: width }
     column_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
@@ -4432,7 +4492,9 @@ fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         c += 1usize
     }
     var plain_tree: TreeOptions = zero
-    let (rows, rows_error) = tree_rows(a, key + 128u64, t, source, expanded, selected, toggle, pick, false, columns, cells_of, extent, width, 0u64, plain_tree)
+    var table_first = 0usize
+    var table_total = 0usize
+    let (rows, rows_error) = tree_rows(a, key + 128u64, t, source, expanded, selected, toggle, pick, false, columns, cells_of, extent, width, 0u64, plain_tree, &table_first, &table_total)
     if rows_error != ok { ret (zero, rows_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, rows.len + 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
