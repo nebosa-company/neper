@@ -2295,11 +2295,14 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     target_style.min_width = style.Length { Px: t.tokens.metrics.hit_target }
     target_style.min_height = style.Length { Px: t.tokens.metrics.hit_target }
     target_style.radius = t.tokens.radii.xs
-    if active {
-        var opacity = t.tokens.states.hover
-        if state.pressed { opacity = t.tokens.states.pressed }
-        target_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .Primary), opacity) }
-    }
+    // (D1435, docs/ux/components/Link, motion) The wash fades to its state's
+    // opacity over `duration-short-2` on `ease-standard` (kept on the link, slot
+    // `key + 1048594`); reduced motion changes at once.
+    var opacity: f32 = 0.0
+    if state.hovered { opacity = t.tokens.states.hover }
+    if state.pressed { opacity = t.tokens.states.pressed }
+    let washed = eased_on(t, key, key + 1048594u64, opacity, false, t.tokens.durations.short2)
+    target_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .Primary), washed) }
     inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, target_style, body[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = ROLE_LINK

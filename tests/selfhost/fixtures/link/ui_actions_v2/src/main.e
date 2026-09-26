@@ -113,7 +113,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 160usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 12u16, max_commands: 1024usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 160usize, max_states: 32usize, state_bytes: 1024usize, state_classes: 2u16, max_depth: 12u16, max_commands: 1024usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -185,10 +185,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // The link, hovered: the primary wash at the hover opacity behind it.
     let (link, has_link) = bounds(&harness, &runtime, 3u64)
     if !has_link { os.exit(22i32) }
+    // (D1435) One more build first, so the link's eased wash has its cell.
+    let (_, warm_error) = frame(&harness, a, &f, &theme, &stores[0usize], false)
+    if warm_error != ok { os.exit(23i32) }
     if testing.hover(&harness, link.x + link.width * 0.5, link.y + link.height * 0.5) != ok { os.exit(23i32) }
     let (hovered, hovered_error) = frame(&harness, a, &f, &theme, &stores[0usize], false)
     if hovered_error != ok { os.exit(24i32) }
-    if !is_color(hovered, at(link.x + 2.0, link.y + 2.0), over(page, style.color(&tokens, .Primary), tokens.states.hover)) { os.exit(25i32) }
+    // (D1435) The wash fades in over `duration-short-2`: on the hover's own frame
+    // it is not yet there, 500 ms on it is.
+    let full_wash = over(page, style.color(&tokens, .Primary), tokens.states.hover)
+    if is_color(hovered, at(link.x + 2.0, link.y + 2.0), full_wash) { os.exit(25i32) }
+    if testing.begin(&harness, time.Instant { nanos: 1500000000i64 }) != ok { os.exit(24i32) }
+    let (washed_root, washed_root_error) = build(&f, &theme, &stores[0usize], false)
+    if washed_root_error != ok || testing.pump(&harness, washed_root, time.Instant { nanos: 1500000000i64 }) != ok { os.exit(24i32) }
+    let (washed, washed_error) = testing.snapshot(&harness, a)
+    if washed_error != ok || !is_color(washed, at(link.x + 2.0, link.y + 2.0), full_wash) { os.exit(95i32) }
     // The speed dial open: its items are 56-tall pills, the head the primary circle.
     let (opened, opened_error) = frame(&harness, a, &f, &theme, &stores[0usize], true)
     if opened_error != ok { os.exit(26i32) }
