@@ -270,6 +270,8 @@ type Element = struct {
     state_count: usize,
     text: [64]u8,
     text_len: usize,
+    // (D1505) A text node's colour as last built, for a test to read.
+    text_ink: paint.Color,
     invalid: bool,
     // A region's gesture action and mask; a scope's shortcuts and its two actions.
     gesture: GestureAction,
@@ -1317,6 +1319,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
             i += 1usize
         }
         e.text_len = n
+        e.text_ink = t.color
     case .Scroll as sc:
         e.scroll_axis = sc.axis
         if sc.offset != e.node_offset { e.scroll_offset = sc.offset }
@@ -5827,6 +5830,16 @@ fn find_by_key(s: *State, key: Key) -> (ElementId, usize) {
         i += 1usize
     }
     ret (found, count)
+}
+
+// (D1505) The colour of the first live text element showing `value` as last
+// built; none when no text shows it.
+fn text_ink_of(widget_runtime: *const Runtime, value: str) -> (paint.Color, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize { ret (zero, false) }
+    let (found, count) = find_by_text(s, value)
+    if count == 0usize { ret (zero, false) }
+    ret (s.elements[usize(found.slot)].text_ink, true)
 }
 
 fn find_by_text(s: *State, value: str) -> (ElementId, usize) {
