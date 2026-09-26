@@ -103,9 +103,16 @@ view rule exists), cancellation.
   a pointer local bound from `&x` is followed
   (D393), as is a slice bound from a place of `x` (D395) and a struct local holding `&x` in a field, through that field (D413): a read or a store
   through it while `x` is lent is refused, and `&p.f` is an address like `&x.f`;
-  a pointer that came from anywhere else is not.
-- Globals: a module-scope `var` read by both is not tracked; it is the program's
-  to protect with an atomic or a lock.
+  a pointer that came from anywhere else is not. A context holding a slice from a
+  parameter or a call in a field lends that slice local with it (D1556), so the
+  parent cannot read or write through the slice before the join, even though the
+  storage behind it is unknown. A context pointer held in a field is still not
+  followed that way.
+- Globals (D1556): a module-scope `var` that the thread's entry function names, or
+  a function of the same module it calls (four deep), is refused in the parent
+  between the start and the join (E-SAFETY-0016), unless it is of an atomic or
+  lock type or the parent holds a guard at the access. Still outside: a function
+  of another module, and a `mod.var` spelling.
 - Partial spawn failure: a loop that starts N threads and fails at the K-th owes
   the K-1 joins, which H01's exit audit enforces for locals and not for arrays.
   `thread.Group` (D434) is the library's answer: `spawn_all` starts one thread

@@ -429,6 +429,9 @@ type Resource = struct {
     // token the lending started at.
     lent_to: usize,
     lent_at: usize,
+    // (D1556, H04) A thread handle's entry function plus one, while the thread is
+    // unjoined: what module-scope variables the thread may touch.
+    thread_entry: usize,
 }
 
 // Pointer-bearing fields past a named aggregate's two inline aliases (D696),
@@ -6607,7 +6610,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     var no_fields: []u8 = zero
     var no_elements_acquired: []usize = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "", slice_offset: 0usize, slice_offset_known: false }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, thread_entry: 0usize, points_to: 0usize, points_to_field: "", slice_offset: 0usize, slice_offset_known: false }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -16284,7 +16287,7 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     }
     if node.kind == .NameExpr {
         let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
-        if !is_resource { ret ok }
+        if !is_resource { ret thread_global_use(c, g, module_index, node) }
         let state = c.resources[local_index].state
         if c.resources[local_index].lent_to != 0usize {
             record_failure_related(c, module_index, node, .ThreadShared, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].lent_at), c.resources[local_index].lent_at)
@@ -16514,6 +16517,101 @@ fn lend_thread_storage(c: *Checker, module_index: usize, thread_local: usize, po
         c.resources[pointed].lent_to = thread_local + 1usize
         c.resources[pointed].lent_at = token
         record_explain_origin(c, module_index, token, c.locals[pointed].name, c.locals[thread_local].name, 2u8)
+        lend_alias_targets(c, module_index, thread_local, pointed, token)
+    }
+}
+
+// (D1556, H04) A module-scope variable named in this frame while a thread started
+// here is unjoined, when the thread's entry function -- or a function of its
+// module it calls, four deep -- names it too: the two race, as a lent local's
+// readers do (E-SAFETY-0016). A variable of an atomic or lock type is exempt (it is
+// the protection), and so is an access while this frame holds a guard.
+// ponytail: the thread side is read by name within its own module only (another
+// module's functions and `mod.var` spellings are not followed), and a guard held
+// here is trusted to be the lock the thread takes.
+fn thread_global_use(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node) -> err {
+    var thread_at = c.local_count
+    var at = 0usize
+    while at < c.local_count {
+        if c.resources[at].thread_entry != 0usize && c.resources[at].state == resource_owned { thread_at = at }
+        at += 1usize
+    }
+    if thread_at == c.local_count { ret ok }
+    if usize(node.token_start) >= c.token_count { ret ok }
+    let token = c.tokens[usize(node.token_start)]
+    if token.kind != .Identifier { ret ok }
+    let name = g.modules[module_index].text[token.start..token.end]
+    let (_, is_local) = find_local(c, name)
+    if is_local { ret ok }
+    let (global_index, is_global) = find_global(c, module_index, name)
+    if !is_global { ret ok }
+    let global_type = c.globals[global_index].ty.name
+    if (global_type.len >= 6usize && same(global_type[0usize..6usize], "Atomic")) || same(global_type, "Mutex") || same(global_type, "RwLock") || same(global_type, "SpinLock") || same(global_type, "Once") || same(global_type, "Condition") || same(global_type, "Barrier") || same(global_type, "Event") { ret ok }
+    at = 0usize
+    while at < c.local_count {
+        let held = c.locals[at].ty.name
+        if c.resources[at].state == resource_owned && (same(held, "Guard") || same(held, "DataGuard") || same(held, "ReadGuard") || same(held, "WriteGuard")) { ret ok }
+        at += 1usize
+    }
+    at = 0usize
+    while at < c.local_count {
+        if c.resources[at].thread_entry != 0usize && c.resources[at].state == resource_owned && function_names_text(c, g, c.resources[at].thread_entry - 1usize, name, 0usize) {
+            record_failure_related(c, module_index, node, .ThreadShared, name, line_detail(c, g, module_index, c.resources[at].acquired), c.resources[at].acquired)
+            ret ResourceViolation
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// (D1556) Whether a function of the module being checked names `name` in its body,
+// directly or through a function of the same module it names, four deep.
+fn function_names_text(c: *Checker, g: *graph.Graph, function_index: usize, name: str, depth: usize) -> bool {
+    if depth >= 4usize || function_index >= c.function_count { ret false }
+    let function = c.functions[function_index]
+    if function.module_index >= g.count { ret false }
+    let text = g.modules[function.module_index].text
+    var at = 0usize
+    while at < c.token_count {
+        let token = c.tokens[at]
+        if token.start >= function.source_start && token.end <= function.source_end && token.kind == .Identifier {
+            let spelled = text[token.start..token.end]
+            if same(spelled, name) { ret true }
+            let (callee, is_function) = find_function(c, function.module_index, spelled)
+            if is_function && callee != function_index && function_names_text(c, g, callee, name, depth + 1usize) { ret true }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+// (D1556, H04) What a lent context aliases is lent with it when it is a slice local
+// held in a field, at any recorded depth (D413, D705) -- storage that came from a
+// parameter or a call, whose backing the rule does not know: it is read or written
+// by nobody but the thread until the join, as the context itself is. An array or
+// an aggregate local the context points into is D686-D714's to lend, by the
+// address the start was given; lending it here too refused read-only sharing the
+// fixtures rely on.
+fn lend_alias_targets(c: *Checker, module_index: usize, thread_local: usize, carrier: usize, token: usize) {
+    var candidate = 0usize
+    while candidate < c.local_count {
+        var aliased = false
+        if candidate != carrier && candidate != thread_local {
+            if c.resources[carrier].points_to == candidate + 1usize { aliased = true }
+            if c.resources[carrier].slice_offset_known && c.resources[carrier].slice_offset == candidate + 1usize { aliased = true }
+            var at = 0usize
+            while !aliased && at < c.resource_alias_count {
+                if c.resource_aliases[at].carrier == carrier && c.resource_aliases[at].pointed == candidate { aliased = true }
+                at += 1usize
+            }
+        }
+        if aliased && c.locals[candidate].ty.kind == .Slice && c.resources[candidate].lent_to != thread_local + 1usize {
+            if c.resources[candidate].state == resource_plain { region_tag(c, candidate, token) }
+            c.resources[candidate].lent_to = thread_local + 1usize
+            c.resources[candidate].lent_at = token
+            record_explain_origin(c, module_index, token, c.locals[candidate].name, c.locals[thread_local].name, 2u8)
+        }
+        candidate += 1usize
     }
 }
 
@@ -16574,6 +16672,15 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         // A thread started over the address of this frame's storage (D357): an
         // argument `&x` where `x` is a local that is not a slice or a pointer.
         if seeded_handle(c, c.locals[local_index].ty) && same(c.locals[local_index].ty.name, "Thread") {
+            // (D1556) The entry function, named as the first argument, for the
+            // module-scope variables it touches.
+            c.resources[local_index].thread_entry = 0usize
+            let (entry_index, has_entry) = call_argument_node(tree, tree.nodes[initializer_index], 0usize)
+            if has_entry && tree.nodes[entry_index].kind == .NameExpr {
+                let entry_token = c.tokens[usize(tree.nodes[entry_index].token_start)]
+                let (entry_function, found_entry) = find_function(c, module_index, g.modules[module_index].text[entry_token.start..entry_token.end])
+                if found_entry { c.resources[local_index].thread_entry = entry_function + 1usize }
+            }
             var argument_at = 0usize
             while true {
                 let (argument_index, has_argument) = call_argument_node(tree, tree.nodes[initializer_index], argument_at)
