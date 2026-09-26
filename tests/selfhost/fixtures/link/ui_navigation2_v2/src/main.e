@@ -598,7 +598,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // dropped there, the trail reports crumb 1 and the payload.
     var drop_log: CrumbLog = zero
     var carry_step = 0usize
-    while carry_step < 2usize {
+    let lib_visits = s.counters[1usize].count
+    while carry_step < 3usize {
         var dropping = navigation.breadcrumbs_options()
         dropping.drop = widget.Change[navigation.CrumbDrop] { ctx: mem.cast[*void](&drop_log), invoke: on_crumb_drop }
         f = mem.arena_from(frame_storage)
@@ -610,7 +611,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (carry_page, carry_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if carry_page_error != ok { os.exit(113i32) }
         carry_page[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 40.0 }, control.sized_style(640.0, 400.0), carry_parts[0usize..2usize])
-        if testing.pump(&harness, carry_page[0usize], time.Instant { nanos: 7200000000i64 + i64(carry_step) }) != ok { os.exit(114i32) }
+        if testing.pump(&harness, carry_page[0usize], time.Instant { nanos: 7200000000i64 + i64(carry_step) * 1000000000i64 }) != ok { os.exit(114i32) }
         let (lib_target, has_lib_target) = bounds(&harness, &runtime, 2901u64)
         let (source, has_source) = bounds(&harness, &runtime, 2690u64)
         if !has_lib_target || !has_source { os.exit(115i32) }
@@ -618,7 +619,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if carry_step == 0usize {
             if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(source.x + 40.0, source.y + 40.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(source.x + 40.0, source.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(over.x, over.y) }) != ok { os.exit(116i32) }
         }
-        if carry_step == 1usize {
+        // (D1374) Held over "lib" a second, the trail goes there.
+        if carry_step == 2usize && s.counters[1usize].count == lib_visits { os.exit(119i32) }
+        if carry_step == 2usize {
             let (carry_shot, carry_shot_error) = testing.snapshot(&harness, a)
             let fill = style.color(&tokens, .PrimaryContainer)
             if carry_shot_error != ok || !is_color(carry_shot, at(lib_target.x + 2.0, lib_target.y + lib_target.height * 0.5), fill) { os.exit(117i32) }
