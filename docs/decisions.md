@@ -27759,3 +27759,13 @@ Half the workers keep the wall time within a few per cent while nearly halving t
 The default stays eight workers with no budget. D339 measured the two-million-line workload at a 4.8 GB peak commit, which is what "measured at four" had been about before D339, and nothing here argues for a lower default: the budget is how a caller with less memory asks for less.
 
 Both suites build a program under `--memory-budget 1g` to the default image and refuse `--memory-budget 1m` by name. The compiler's budget sweep and the dry-worker fallback (300 MB, 512 MB) were run on Windows and Linux, with every image identical to the default and the fixed point holding. C047's three lines have now landed, and it closes at 1.
+
+## D1528 — Provenance through inlining in a selection diagnostic
+
+D519 and D565 gave a copied instruction its provenance in backtraces and `dis`. C048's last line was provenance through inlining in diagnostics. The checker's diagnostics come before inlining, and a lowering failure inside an oracle's body is reported on that body. The one diagnostic that can land on a copy is a selection failure, and it was wrong in two ways. Its span took the failing instruction's token but the path, text and line table of the function being selected, so a copy of `deep.pick` inside `main.main` was reported at `main.e` with `deep.e`'s offsets. Its message named only `main`.
+
+A selection failure on a copied instruction now walks the instruction's origin chain (D565). The span is the innermost body's, under that body's module. The message names that body, the function it was inlined into, and the bodies it came through from the innermost intermediate outward, the order `dis` uses: ``cannot select machine code for `deep.inner` inlined into `main.main` through `deep.outer` ``. An instruction that is not a copy reads as before.
+
+Selection fails only when a table fills, so a fault makes the case reproducible, as `--fault-write` does for publication. `--fault-select-inlined DEPTH` refuses the first copied instruction whose chain is at least DEPTH bodies deep, with its own reason in the message. The corpus gains `select_inlined`: `main` calls `deep.outer`, which calls `deep.inner`, and a release build under `--fault-select-inlined 2 -j 1` gives one diagnostic at `deep.e:2:9` naming `main.main` and `deep.outer`. The golden is the same on both hosts, both suites pin it, and it validates against the schema. At depth 1, the diagnostic lands on `deep.outer`'s own line.
+
+A selection failure is still printed from the worker that meets it. Two workers failing at once can interleave their output, which the fault shows without `-j 1`. That path predates this row and is left as it stands. The fixed point holds on both hosts, and C048 closes at 1.

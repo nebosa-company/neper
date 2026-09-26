@@ -486,6 +486,9 @@ type Builder = struct {
     emission: []usize,
     emission_first: usize,
     emission_end: usize,
+    // (D1528) `--fault-select-inlined DEPTH`: selection refuses the first copied
+    // instruction at least DEPTH bodies deep; zero for no fault.
+    fault_select_inlined: usize,
     // What the verifier refused, for the diagnostic: the instruction and the operand.
     verify_instruction: usize,
     verify_operand: usize,

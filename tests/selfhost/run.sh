@@ -4860,6 +4860,12 @@ cmp -s "$run_trap_actual" "$conformance_root/tools/run_trap.expected.jsonl" || {
 # `run --json --capture N` (D370, H18): a bounded record, the whole output in the file.
 (cd "$test_build" && ./neper-self run ../../../../tests/conformance/tools/run_flood.e "$repo" x64 linux conformance-tools-run-flood.out --json --capture 50 > "conformance-tools-run-flood.jsonl")
 cmp -s "$test_build/conformance-tools-run-flood.jsonl" "$conformance_root/tools/run_flood.expected.jsonl" || { echo "run --json --capture differs from the conformance corpus"; exit 1; }
+# Provenance through inlining in a diagnostic (D1528, H19): selection made to fail at
+# a copy two bodies deep names the innermost source, the caller and the body between.
+select_status=0
+(cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/select_inlined/src/main.e "$repo" x64 linux conformance-tools-select-inlined.out --release --json -j 1 --fault-select-inlined 2 > "conformance-tools-select-inlined.jsonl") || select_status=$?
+[ "$select_status" -eq 1 ]
+cmp -s "$test_build/conformance-tools-select-inlined.jsonl" "$conformance_root/tools/select_inlined.expected.jsonl" || { echo "the inlined selection diagnostic differs from the conformance corpus" >&2; exit 1; }
 # A memory budget (D1527, H16): the workers admitted under it build the default
 # image, and a budget below one worker's need is refused by name, exit 1.
 (cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/run_flood.e "$repo" x64 linux budget-default.out > /dev/null)
