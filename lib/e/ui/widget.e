@@ -443,6 +443,9 @@ type State = struct {
     // (D1469) Where an editor was last pressed: a second press counts as a double
     // only within 4 px of it, as the host's double-click rectangle does.
     last_press: geometry.Point,
+    // (D1470) When edge auto-scroll last stepped, so a step covers the time since.
+    edge_scrolled_at: time.Instant,
+    has_edge_scrolled: bool,
     // Editing: a scratch region for hit-test layouts, the composition (preedit) of
     // the focused editor, the fallback clipboard for a host without one, and the
     // undo history -- entries and their byte pool -- with the redo point.
@@ -3321,7 +3324,7 @@ fn settle_scrolls(s: *State) -> err {
 // (D1199) How far a frame of edge auto-scroll moves the viewport above the
 // dragged region `candidate`: from 48 in from either end of the viewport the
 // speed rises to one viewport a second at the edge and past it; 0 elsewhere.
-// ponytail: a step is a 60 Hz frame's share, not measured time.
+// That is a 60 Hz frame's share; `edge_scroll` scales it by the measured frame.
 fn edge_scroll_step(s: *State, candidate: usize) -> (usize, f32) {
     let (viewport, has_viewport) = scroll_ancestor(s, candidate)
     if !has_viewport { ret (0usize, 0.0) }
@@ -3350,8 +3353,19 @@ fn edge_scroll(s: *State) -> err {
     let candidate = usize(s.arena_state.candidate)
     let e = &s.elements[candidate]
     if !e.live || e.kind != REGION_TAG || (e.gestures & GESTURE_DRAG) == 0u8 { ret ok }
-    let (viewport, step) = edge_scroll_step(s, candidate)
-    if step == 0.0 { ret ok }
+    let (viewport, share) = edge_scroll_step(s, candidate)
+    if share == 0.0 {
+        s.has_edge_scrolled = false
+        ret ok
+    }
+    // (D1470) The step covers the time since the last one (a 60 Hz frame's at
+    // the first, and at most 100 ms after a stall).
+    var frames: f32 = 1.0
+    let since = s.animation_time.nanos - s.edge_scrolled_at.nanos
+    if s.has_edge_scrolled && since > 0i64 && since <= 100000000i64 { frames = f32(since) * 60.0 / 1000000000.0 }
+    s.edge_scrolled_at = s.animation_time
+    s.has_edge_scrolled = true
+    let step = share * frames
     let v = &s.elements[viewport]
     let before = v.scroll_offset
     try scroll_by(s, viewport, step, false)

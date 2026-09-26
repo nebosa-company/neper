@@ -27234,3 +27234,9 @@ The FontPicker spec opens its panel from a trigger in compact layouts and forms:
 The TextField and SelectableText specs select a word on a double click. Every editor now does this. A second press in the same editor within the 500 ms tap window and 4 px of the first sets the selection to the run round the caret, so typing replaces it. That run is the word bytes (ASCII letters, digits, `_`, and every byte of a multi-byte character), or the other bytes when the caret stands on none, and it stops at a newline. The editor's press path records the press point and time in the same last-tap fields `pointer_tap` uses, so a third press starts a new count. Without the 4 px limit, `ui_edit`'s presses along one line, in frozen fixture time, read as double presses. A triple press for the line, touch handles and the selection toolbar are still not done.
 
 `ui_field` checks this on Windows and Linux: after "Ann" is typed, a second press selects it, and typing "Ann" leaves three bytes. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1470 — Edge auto-scroll steps by measured time
+
+D1199's edge auto-scroll set its speed per second but moved a 60 Hz frame's share on every Frame. On a slower or faster host, or after a stall, the viewport moved at the wrong speed. The runtime now records when the last step ran. Each step covers the time since then, the first one frame's share and a gap past 100 ms capped at 100 ms, so a stall does not throw the viewport. The record clears when the drag leaves the edge band.
+
+`ui_gesture` checks this on Windows and Linux: a Frame 33.3 ms after the first moves the viewport two frames' share, three in all. Against the old runtime the check fails (exit 60). All 103 `ui_*` fixtures pass on both hosts.
