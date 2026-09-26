@@ -27386,3 +27386,9 @@ Select's spec: "Reduced motion: menus and sheets cross-fade". D1491 pinned the s
 The Snackbar spec gives the toast "a 32 status well with an icon, a `title-small` title, a `body-medium` message". The well takes the severity's container and glyph, and "Error toasts use an alert (assertive)". `Notice` has only text and one action. A struct literal must name every field, so adding fields would break every caller's queue. That includes the gallery example, which holds another session's uncommitted edits. Instead, `toast_with` takes `ToastOptions { title, severity }` for the head notice. The title stands over the message in `title-small` `on-surface`, the well is `severity_well` for that severity, and an `Error` toast's status is assertive. `toast` and `snackbar` pass empty options through the shared `noticed_with`.
 
 `ui_status4_v2` checks this on Windows and Linux: a toast titled "Build 4128 failed" with the Error severity shows the title, and its status is assertive. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1494 — Toasts behind the head collapse into a count
+
+The Snackbar spec: "Toasts stack up to 3; older ones collapse into '2 more notifications'". A toast showed only its queue's head, and nothing said more were waiting. Under the head, a toast now shows the rest of its queue as "N more notifications" ("1 more notification" for one): `body-small` `on-surface-variant` on a `surface-container-high` pill (`radius-md`, 12 by 6 in, keyed `key + 3`), 8 below and end-aligned. The toast always stands in that column, so the count appearing does not remake the head or its focused action. The stack of three full toasts over the count is still not drawn.
+
+`ui_status4_v2` checks this on Windows and Linux. With two notices queued, "1 more notification" stands below the head's close button. With one queued there is no count. Against the old control the check fails (exit 54). All 103 `ui_*` fixtures pass on both hosts.
