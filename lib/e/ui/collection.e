@@ -2988,7 +2988,65 @@ fn within(v: usize, a: usize, b: usize) -> bool {
 }
 
 // What `data_grid_of` hands its table: the caller's source, state and change.
-type GridBuild = struct { source: GridSource, t: *const control.Theme, state: GridState, change: widget.Change[GridEvent], holder: widget.Key, key: widget.Key, columns: usize }
+// (D1505) `fade_row` and `fade_column` name the cell whose value is fading in
+// at `fade_share` (1: none).
+type GridBuild = struct { source: GridSource, t: *const control.Theme, state: GridState, change: widget.Change[GridEvent], holder: widget.Key, key: widget.Key, columns: usize, fade_row: usize, fade_column: usize, fade_share: f32 }
+
+// (D1505) A grid's edit, kept on the grid: whether it was editing last frame,
+// which cell, its text then (64 bytes at most), and the fade of a changed value.
+type GridFade = struct { editing: bool, row: usize, column: usize, text: [64]u8, text_len: usize, fading: bool, fade_row: usize, fade_column: usize, since: i64 }
+
+// (D1505, docs/ux/components/DataGrid, motion) The cell whose edit just ended
+// with a new value fades it in over `duration-short-2`; reduced motion shows it
+// at once. Answers the cell and the share.
+fn grid_fade(t: *const control.Theme, key: widget.Key, source: GridSource, state: GridState) -> (usize, usize, f32) {
+    if mem.address_of(t.runtime) == 0usize { ret (0usize, 0usize, 1.0) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (0usize, 0usize, 1.0) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (0usize, 0usize, 1.0) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: GridFade = zero
+    let (fade, _, fade_error) = widget.state[GridFade](&build, key + 1048613u64, fresh)
+    if fade_error != ok { ret (0usize, 0usize, 1.0) }
+    let now = widget.frame_time(t.runtime).nanos
+    if fade.editing && !state.editing && fade.row < source.count(source.ctx) {
+        let after = source.cell(source.ctx, fade.row, fade.column).text
+        let before = fade.text[0usize..fade.text_len]
+        var same = after.len == before.len
+        var k = 0usize
+        while same && k < after.len {
+            if after[k] != before[k] { same = false }
+            k += 1usize
+        }
+        if !same && !t.tokens.motion.reduced {
+            fade.fading = true
+            fade.fade_row = fade.row
+            fade.fade_column = fade.column
+            fade.since = now
+        }
+    }
+    if state.editing && !fade.editing && state.row < source.count(source.ctx) {
+        let was = source.cell(source.ctx, state.row, state.column).text
+        var n = 0usize
+        while n < was.len && n < 64usize {
+            fade.text[n] = was[n]
+            n += 1usize
+        }
+        fade.text_len = n
+        fade.row = state.row
+        fade.column = state.column
+    }
+    fade.editing = state.editing
+    if !fade.fading { ret (0usize, 0usize, 1.0) }
+    let span = i64(t.tokens.durations.short2) * 1000000i64
+    if span <= 0i64 || now - fade.since >= span {
+        fade.fading = false
+        ret (0usize, 0usize, 1.0)
+    }
+    widget.request_animation_frame(t.runtime)
+    ret (fade.fade_row, fade.fade_column, animation.ease(.EaseInOut, f32(now - fade.since) / f32(span)))
+}
 
 fn grid_count(ctx: *void) -> usize {
     let b = back_of[GridBuild](ctx)
@@ -3018,6 +3076,8 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     if value.read_only { ink = style.color(t.tokens, .OnSurfaceVariant) }
     if ranged { ink = style.color(t.tokens, .OnPrimaryContainer) }
     if s.disabled { ink = control.with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
+    // (D1505) An edited value fades in.
+    if b.fade_share < 1.0 && index == b.fade_row && at == b.fade_column { ink = control.with_alpha(ink, ink.alpha * b.fade_share) }
     let (inner, inner_error) = mem.alloc[widget.Node](a, 6usize)
     if inner_error != ok { ret TooLarge }
     var n = 0usize
@@ -3302,7 +3362,8 @@ fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
 // Every change reaches `change` as a `GridEvent` carrying the next state.
 // (D1284) `grid_paste_size` and `grid_paste_cell` read a Paste's text.
 // (D1402) On touch a tapped row reports `EditRow`, and `grid_row_sheet` edits it.
-// ponytail: the model's mutation and undo are the caller's; no cross-fade.
+// (D1505) An edited value fades in (`grid_fade`).
+// ponytail: the model's mutation and undo are the caller's.
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
     var row_extent = extent
@@ -3310,7 +3371,8 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     let total = source.count(source.ctx)
     let (builds, builds_error) = mem.alloc[GridBuild](a, 1usize)
     if builds_error != ok { ret (zero, TooLarge) }
-    builds[0usize] = GridBuild { source: source, t: t, state: state, change: change, holder: key + 1u64, key: key, columns: columns.len }
+    let (fade_row, fade_column, fade_share) = grid_fade(t, key, source, state)
+    builds[0usize] = GridBuild { source: source, t: t, state: state, change: change, holder: key + 1u64, key: key, columns: columns.len, fade_row: fade_row, fade_column: fade_column, fade_share: fade_share }
     let table_source = TableSource { ctx: ctx_of(&builds[0usize]), count: grid_count, key: grid_row_key, cell: grid_cell }
     let (column_menus, column_menus_error) = mem.alloc[GridColumnMenu](a, 1usize)
     if column_menus_error != ok { ret (zero, TooLarge) }

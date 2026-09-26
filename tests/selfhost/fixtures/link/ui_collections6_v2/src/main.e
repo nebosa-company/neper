@@ -48,6 +48,20 @@ fn cell_text(row: usize, column: usize) -> str {
     ret "Enabled"
 }
 
+// (D1505) A two-row grid whose first cell's value the test changes.
+type FadeModel = struct { value: str }
+
+fn fade_count(ctx: *void) -> usize {
+    ret 2usize
+}
+
+fn fade_cell(ctx: *void, row: usize, column: usize) -> collection.GridCell {
+    let model = mem.cast[*FadeModel](ctx)
+    var text = "x"
+    if row == 0usize && column == 0usize { text = model.value }
+    ret collection.GridCell { text: text, message: "", kind: .Text, checked: false, dirty: false, read_only: false, saving: false }
+}
+
 fn grid_count(ctx: *void) -> usize {
     ret 5usize
 }
@@ -525,6 +539,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     sheet_page[0usize] = row_sheet
     if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 600.0), sheet_page[0usize..1usize]), time.Instant { nanos: 91000000000i64 }) != ok { os.exit(167i32) }
     if testing.by_key(&harness, 916u64).count != 1usize || testing.by_key(&harness, 917u64).count != 1usize || testing.by_text(&harness, "Save").count == 0usize { os.exit(168i32) }
+    // (D1505) An edit that ends with a new value fades it in: 30 ms on the new
+    // value's ink is not yet opaque, a second on it is.
+    var fade_model = FadeModel { value: "old" }
+    var fade_state: collection.GridState = zero
+    var fade_columns: [2]collection.Column = zero
+    fade_columns[0usize] = collection.Column { title: "Name", width: 120.0 }
+    fade_columns[1usize] = collection.Column { title: "Port", width: 80.0 }
+    let (fade_draft, fade_draft_error) = mem.alloc[u8](a, 16usize)
+    if fade_draft_error != ok { os.exit(171i32) }
+    var fade_step = 0usize
+    while fade_step < 5usize {
+        var fade_at = 80000000000i64 + i64(fade_step)
+        fade_state.editing = fade_step < 2usize
+        if fade_step >= 2usize { fade_model.value = "new" }
+        if fade_step == 2usize { fade_at = 80100000000i64 }
+        if fade_step == 3usize { fade_at = 80130000000i64 }
+        if fade_step == 4usize { fade_at = 81100000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: fade_at }) != ok { os.exit(172i32) }
+        f = mem.arena_from(storage)
+        let fade_source = collection.GridSource { ctx: mem.cast[*void](&fade_model), count: fade_count, cell: fade_cell }
+        let (fade_grid, fade_grid_error) = collection.data_grid_of(&f, 7000u64, &theme, "Fading", fade_columns[..], fade_source, fade_state, fade_draft, zero, 0.0, 0.0, zero, 200.0)
+        let (fade_page, fade_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if fade_grid_error != ok || fade_page_error != ok { os.exit(173i32) }
+        fade_page[0usize] = fade_grid
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 300.0), fade_page[0usize..1usize]), time.Instant { nanos: fade_at }) != ok { os.exit(174i32) }
+        if fade_step >= 3usize {
+            let (new_ink, has_new_ink) = testing.text_color(&harness, "new")
+            if !has_new_ink { os.exit(175i32) }
+            if fade_step == 3usize && !(new_ink.alpha < 0.99) { os.exit(176i32) }
+            if fade_step == 4usize && !(new_ink.alpha > 0.99) { os.exit(177i32) }
+        }
+        fade_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(54i32) }
     try io.print("ui collections6 v2 ok\n")
     ret ok

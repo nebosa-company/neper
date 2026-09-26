@@ -95,6 +95,14 @@ fn by_key(h: *const Harness, key: widget.Key) -> Match {
     ret Match { element: element, count: count }
 }
 
+// (D1505) The colour the first text showing `text` was last built in.
+fn text_color(h: *const Harness, text: str) -> (paint.Color, bool) {
+    let (s, state_error) = state_of(h)
+    if state_error != ok { ret (zero, false) }
+    let (ink, has_ink) = widget.text_ink_of(s.runtime, text)
+    ret (ink, has_ink)
+}
+
 fn by_text(h: *const Harness, text: str) -> Match {
     let (s, state_error) = state_of(h)
     if state_error != ok { ret Match { element: zero, count: 0usize } }

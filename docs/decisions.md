@@ -27458,3 +27458,11 @@ A tree built every visible row, so a folder of thousands built thousands of rows
 A tree table stacked every visible row under its header with no viewport of its own. The new `tree_table_with` takes D1503's `TreeOptions`. With `height`, the rows stand under the header in a virtual viewport that tall (keyed `key + 2`). Only those in view are built, each a table row with its divider, `virtual_extent` the table row's height. The arrows reveal their targets as a virtual tree's do. The grid's row count is now the whole visible count, not the rows built. `tree_table` passes empty options.
 
 `ui_collections3_v2` checks this on Windows and Linux: the 513-node tree as a 200 tall tree table builds its first row but not the 21st, and End asks for an offset past 16000. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1505 — A data grid's edited value fades in
+
+The DataGrid spec: "edited values cross-fade in `duration-short-2`. Reduced motion: no cross-fade". A committed value replaced the old in one frame. The grid now keeps a `GridFade` on itself: whether it was editing, which cell, and that cell's text as editing began (64 bytes at most). When editing ends and the cell's text differs, its value's ink fades in over `duration-short-2` on `ease-standard`, carried to `grid_cell` through `GridBuild`. Reduced motion shows it at once.
+
+To see a text's colour in a test without fonts, the runtime now records each text node's colour on its element (`Element.text_ink`). `testing.text_color(harness, text)` reads it, through `widget.text_ink_of`.
+
+`ui_collections6_v2` checks this on Windows and Linux: 30 ms after an edit turns "old" into "new", the new value's ink is not yet opaque, and a second on it is. Against the old collection the check fails (exit 176). All 103 `ui_*` fixtures pass on both hosts.
