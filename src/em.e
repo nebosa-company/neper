@@ -2994,10 +2994,20 @@ fn emission_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, func
     if prefix_error != ok { ret (0usize, prefix_error) }
     let nir_error = write_nir_canonical(c, g, builder, function_index, scratch)
     if nir_error != ok { ret (0usize, nir_error) }
+    // An inline origin indexes the module's table of inlined bodies, which an edit to
+    // an earlier function shifts; selection only compares two origins, so each is
+    // taken from the function's least (D1516).
+    var origin_base = 0usize
     var at = function.first_instruction
     while at < function.first_instruction + function.instruction_count {
+        let origin = usize(builder.instructions[at].inline_origin)
+        if origin != 0usize && (origin_base == 0usize || origin < origin_base) { origin_base = origin }
+        at += 1usize
+    }
+    at = function.first_instruction
+    while at < function.first_instruction + function.instruction_count {
         let instruction = builder.instructions[at]
-        let site_error = emission_site(builder, instruction, scratch)
+        let site_error = emission_site(builder, instruction, origin_base, scratch)
         if site_error != ok { ret (0usize, site_error) }
         at += 1usize
     }
@@ -3018,10 +3028,12 @@ fn emission_prefix(builder: *nir.Builder, function: nir.Function, scratch: *bina
     ret binary.little_u32(scratch, builder.cpu_level)
 }
 
-fn emission_site(builder: *nir.Builder, instruction: nir.Instruction, scratch: *binary.Buffer) -> err {
+fn emission_site(builder: *nir.Builder, instruction: nir.Instruction, origin_base: usize, scratch: *binary.Buffer) -> err {
     try binary.little_u32(scratch, instruction.site.line)
     try binary.little_u32(scratch, instruction.site.column)
-    try binary.little_u32(scratch, usize(instruction.inline_origin))
+    var origin = usize(instruction.inline_origin)
+    if origin != 0usize { origin = origin - origin_base + 1usize }
+    try binary.little_u32(scratch, origin)
     try canonical_text(scratch, instruction.path)
     if (instruction.opcode == .Call || instruction.opcode == .FunctionAddress) && instruction.immediate < builder.function_ref_count {
         let reference = builder.function_refs[instruction.immediate]

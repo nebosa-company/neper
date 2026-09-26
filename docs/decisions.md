@@ -27553,3 +27553,13 @@ Trap stubs are the one piece of module state (D927). They are named `trap.N` in 
 `--stats` gains `functions reused`. After a body edit to the compiler's `main.e`, 298 of its 301 lowered functions are reused, selection time falls from 33 to 4 ms, and the warm image is byte-identical to a clean build. A function that traps, placed on a blank line before `main.e`'s first function, asks for its stubs before every other function. The next warm build reuses 301 of 302 functions under the renumbered stubs, and its image is the clean build's. Reusing without the replay fails that build. The hot fixture cases, the globals program and the self-host fixed point hold on Windows and Linux, and both suites expect format 17.
 
 D1514's list of what was not yet done named string and float constants. The checker's constants are integer and bool only (`evaluate_constant` refuses any other type), so that gap does not exist.
+
+## D1516 — Emission reuse in release and for edge-changed modules
+
+D1515 reused emission only in a debug build, and only for a module whose source changed. The emission identity makes neither limit necessary: it covers everything selection reads, whatever the reason the module is rebuilt and whether or not bodies were inlined into it.
+
+A module rebuilt because an edge did not hold (`edge-changed`) now keeps its artifact aside too. That is the artifact the hot load verified against the manifest when it read the module as unchanged. Emission reuse also runs in release.
+
+One input was indexed module-wide. An instruction's inline origin is the head of its chain in the module's table of inlined bodies, and an edit that changes what an earlier function inlines shifts every later origin. Selection only compares two origins (a line row is new when its origin differs from the last row's), so the identity now takes each origin relative to the function's least. That preserves every comparison selection makes.
+
+The compiler builds itself in release. A body edit to `lex.column_of`, which `main` and `tool` inline, rebuilds `lex` for its source and the other two for their body edges. 554 of their 561 lowered functions are reused: 471 of 561 before origins were taken relative. The two `main.e` edits of D1515 reuse the same counts in release as in debug. Each warm image is byte-identical to a clean build of the same mode, on Windows and Linux. The hot fixture cases hold in both modes, and the self-host fixed point holds on both hosts.

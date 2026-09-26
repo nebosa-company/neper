@@ -5503,6 +5503,8 @@ fn settle_hot(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, triple: str, mo
                 try settle_index(a, &s, fresh, module_index)
                 continue
             }
+            // (D1516) Its artifact, verified at the load, stays aside for emission reuse.
+            if module_index < g.previous.len { g.previous[module_index] = held[module_index] }
             held[module_index] = no_bytes
             hot.reason[module_index] = 5u8
             try declare_late(a, c, g, module_index, list, listed)
@@ -9353,12 +9355,13 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     w.relocation_count = 0usize
     w.line_count = 0usize
     var no_fold: Fold = zero
-    // (D1515) What the artifact records for the next build to reuse, and, in a debug
-    // hot build of a module whose source changed, the previous artifact's emission.
+    // (D1515) What the artifact records for the next build to reuse, and, in a hot
+    // build of a module rebuilt with a previous artifact (a source change; D1516: an
+    // edge that did not hold, and a release build), that artifact's emission.
     var reuse: Reuse = zero
     if w.hot.on {
         try note_emission(w, a, first)
-        if !w.hot.release && !w.builder.explain && module_index < w.loaded.previous.len && w.loaded.previous[module_index].len != 0usize { try reuse_open(a, w.loaded.previous[module_index], module_index, &reuse) }
+        if !w.builder.explain && module_index < w.loaded.previous.len && w.loaded.previous[module_index].len != 0usize { try reuse_open(a, w.loaded.previous[module_index], module_index, &reuse) }
     }
     try codegen_functions(a, &w.report, w.loaded, &w.builder, &w.context, first, w.stage_offsets, true, &no_fold, &reuse)
     w.functions_reused += reuse.reused
