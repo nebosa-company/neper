@@ -11,8 +11,12 @@ language: it costs the host and lands no code. Python's own row is project scrip
 .py files inside a repo, outside scratch and build folders. Three sections follow, each
 with its columns explained beneath it.
 """
-import ast, json, glob, os, re, ntpath, warnings, statistics, collections as C
+import ast, json, glob, os, re, sys, ntpath, warnings, statistics, collections as C
 from datetime import datetime
+
+COLOR = sys.stdout.isatty() or '--color' in sys.argv
+if COLOR and os.name == 'nt': os.system('')  # switches the console to honour ANSI escapes
+GREEN, RED, END = ('\033[32m', '\033[31m', '\033[0m') if COLOR else ('', '', '')
 
 warnings.filterwarnings('ignore', category=SyntaxWarning)  # transcript scripts are parsed, not run
 
@@ -199,17 +203,36 @@ ROWS = [L for L in ROWS if merged(L)[4] >= FLOOR]
 if thin: print('under %d KB of landed source, not shown: %s\n' % (FLOOR // 1024, ', '.join(thin)))
 
 
-print('COST  (KB is kibibytes of source text landed in files, never tokens)')
-print('%-7s %7s %6s %6s %6s %7s %6s %6s %7s %9s %8s' % ('lang', 'KB', 'tok/B', 'thk/B', 'edit%', 'builds', 'fail%', 'ed/fil', 'script%', 'cost/B', '$/KB'))
+def table(title, cols, rows):
+    """cols are (name, width, format, better) with better 'low', 'high' or None for a column that
+    is a sample size rather than a quality; rows are (label, values). The best value in a judged
+    column is green, the worst red; a None value prints as - and is not judged."""
+    print(title + ('   (%sbest%s / %sworst%s per column)' % (GREEN, END, RED, END) if COLOR else '   (--color marks best and worst per column)'))
+    print('%-7s ' % 'lang' + ' '.join('%*s' % (w, n) for n, w, _, _ in cols))
+    for label, vals in rows:
+        cells = []
+        for c, (_, w, fmt, better) in enumerate(cols):
+            v = vals[c]; text = '-' if v is None else fmt % v
+            judged = [r[1][c] for r in rows if r[1][c] is not None]
+            if better and v is not None and len(judged) > 1 and min(judged) < max(judged):
+                best, worst = (min(judged), max(judged)) if better == 'low' else (max(judged), min(judged))
+                if v == best: text = GREEN + text + END
+                elif v == worst: text = RED + text + END
+            cells.append(' ' * (w - len('-' if v is None else fmt % v)) + text)
+        print('%-7s ' % label + ' '.join(cells))
+
+
+rows = []
 for L in ROWS:
     d, s, h, t, kb = merged(L)
-    if not kb: continue
     files = sum(1 for k in list(d) + list(s) if k.startswith('files:'))
     cost_b = t['cost'] / kb
-    print('%-7s %7d %6.3f %6.3f %6.1f %7d %6.1f %6.1f %6.0f%% %9.1f %8.3f' % (
-        L, kb // 1024, d['d_vis'] / max(d['d_bytes'], 1), d['d_think'] / max(d['d_bytes'], 1),
-        100 * (d['apply_err'] + s['apply_err']) / max(d['applied'] + s['applied'], 1), h['builds'],
-        100 * h['build_fail'] / max(h['builds'], 1), (d['edits'] + s['edits']) / max(files, 1), 100 * s['bytes'] / kb, cost_b, cost_b * USD * 1024))
+    rows.append((L, (kb // 1024, d['d_vis'] / max(d['d_bytes'], 1), d['d_think'] / max(d['d_bytes'], 1),
+                     100 * (d['apply_err'] + s['apply_err']) / max(d['applied'] + s['applied'], 1), h['builds'],
+                     100 * h['build_fail'] / max(h['builds'], 1), (d['edits'] + s['edits']) / max(files, 1), 100 * s['bytes'] / kb, cost_b, cost_b * USD * 1024)))
+table('COST  (KB is kibibytes of source text landed in files, never tokens)',
+      [('KB', 7, '%d', None), ('tok/B', 6, '%.3f', 'low'), ('thk/B', 6, '%.3f', 'low'), ('edit%', 6, '%.1f', 'low'), ('builds', 7, '%d', None),
+       ('fail%', 6, '%.1f', 'low'), ('ed/fil', 6, '%.1f', 'low'), ('script%', 7, '%.0f%%', 'low'), ('cost/B', 9, '%.1f', 'low'), ('$/KB', 8, '%.3f', 'low')], rows)
 
 print('''
 KB       kibibytes (1024 bytes) of UTF-8 source text that landed in files of this language: the
@@ -228,17 +251,17 @@ cost/B   input-token equivalents spent per byte of source landed, counting every
          write x2, 5m cache write x1.25, cache read x0.1, output x5
 $/KB     cost/B priced at $5 per million input-token equivalents (Opus 5 list), per KB of source''')
 
-print('\nPROCESS  (how the code got written)')
-print('%-7s %9s %8s %8s %9s %9s %11s %8s %8s %8s' % ('lang', 'outK/KB', 'ctx Ktk', 'read/KB', 'turns/ed', '1st-ok%', 'build s', 'cmpl%', 'mdl s/KB', 'tool s/KB'))
+rows = []
 for L in ROWS:
     d, s, h, t, kb = merged(L)
-    if not kb: continue
     bs = sorted(build_s[L]) or [0]
-    print('%-7s %9.1f %8.0f %8.1f %9.1f %9.1f %5.0f/%-5.0f %8.1f %8.0f %8.0f' % (
-        L, t['out'] / kb, statistics.median(ctx_tok[L]) / 1000 if ctx_tok[L] else 0, t['read_b'] / kb,
-        t['turns'] / max(d['applied'] + s['applied'], 1), 100 * h['fb_ok'] / max(h['fb_n'], 1),
-        statistics.median(bs), bs[int(len(bs) * 0.9)] if len(bs) > 1 else bs[0], 100 * h['compile_err'] / max(h['build_fail'], 1),
-        t['model_s'] / kb * 1024, t['tool_s'] / kb * 1024))
+    rows.append((L, (t['out'] / kb, statistics.median(ctx_tok[L]) / 1000 if ctx_tok[L] else 0, t['read_b'] / kb,
+                     t['turns'] / max(d['applied'] + s['applied'], 1), 100 * h['fb_ok'] / max(h['fb_n'], 1),
+                     statistics.median(bs) * 1000, (bs[int(len(bs) * 0.9)] if len(bs) > 1 else bs[0]) * 1000, 100 * h['compile_err'] / max(h['build_fail'], 1),
+                     t['model_s'] / kb * 1024, t['tool_s'] / kb * 1024)))
+table('\nPROCESS  (how the code got written)',
+      [('outK/KB', 8, '%.1f', 'low'), ('ctx Ktk', 8, '%.0f', 'low'), ('read/KB', 8, '%.1f', 'low'), ('turns/ed', 8, '%.1f', 'low'), ('1st-ok%', 8, '%.1f', 'high'),
+       ('bld ms', 8, '%.0f', 'low'), ('p90 ms', 8, '%.0f', 'low'), ('cmpl%', 6, '%.1f', None), ('mdl s/KB', 9, '%.0f', 'low'), ('tool s/KB', 9, '%.0f', 'low')], rows)
 
 print('''
 outK/KB   thousand output tokens (visible + thinking) generated per KB of source landed; the raw
@@ -249,8 +272,9 @@ read/KB   bytes of tool output the model pulled into context per byte of source 
           and Glob results plus shell commands that only looked (cat, sed, tgrep, git, ls)
 turns/ed  assistant replies per edit application: reading, thinking and testing turns between edits
 1st-ok%   edit applications whose first following build/test command passed
-build s   wall-clock seconds of a build/test command, median/90th percentile, from the tool call's
-          timestamp to its result's (foreground commands only, capped at 1800 s)
+bld ms    wall-clock milliseconds of a build/test command, median, from the tool call's timestamp to
+          its result's (foreground commands only, capped at 1800 s)
+p90 ms    the same, 90th percentile
 cmpl%     share of the failed build/test commands whose output carries this language's compiler
           diagnostics (Neper E-XXXX-nnnn, Rust error[E], Dart Error:, TS error TS, JS/Python
           exception names): a compile failure rather than a test or runtime failure
@@ -258,10 +282,16 @@ mdl s/KB  seconds the model spent generating (user record to last assistant bloc
           per KB of source landed
 tool s/KB seconds tools ran (call to result) per KB of source landed''')
 
-print('\nDELIVERY  ($/KB of source landed, and visible output tokens per byte in single-edit replies)')
+rows = []
 for L in ROWS:
     d, s, h, t, kb = merged(L)
-    if not d['bytes']: continue
-    print('%-7s direct %5.3f $/KB %5.2f tok/B   via python scripts %5.3f $/KB %5.2f tok/B   helper python (oracles, analysis, docs) $%.0f' % (
-        L, d['cost'] / max(d['bytes'], 1) * USD * 1024, d['d_vis'] / max(d['d_bytes'], 1),
-        s['cost'] / max(s['bytes'], 1) * USD * 1024, s['d_vis'] / max(s['d_bytes'], 1), h['cost'] * USD))
+    rows.append((L, (d['cost'] / max(d['bytes'], 1) * USD * 1024, d['d_vis'] / max(d['d_bytes'], 1),
+                     s['cost'] / s['bytes'] * USD * 1024 if s['bytes'] else None, s['d_vis'] / s['d_bytes'] if s['d_bytes'] else None, h['cost'] * USD)))
+table('\nDELIVERY  (how the code reached the file)',
+      [('direct $/KB', 11, '%.3f', 'low'), ('direct tok/B', 12, '%.2f', 'low'), ('script $/KB', 11, '%.3f', 'low'), ('script tok/B', 12, '%.2f', 'low'), ('helper $', 9, '%.0f', None)], rows)
+print('''
+direct    code the Write/Edit tools or a cat heredoc put in the file: $ per KB of that source, and
+          visible output tokens per byte of it in replies that were exactly one such edit
+script    code that arrived as the new side of a Python patch/generator script: the same two figures,
+          per KB and per byte of the new code only (the script's anchors and boilerplate are cost)
+helper $  dollars spent on Python that landed no code: test oracles, analysis, doc patches''')
