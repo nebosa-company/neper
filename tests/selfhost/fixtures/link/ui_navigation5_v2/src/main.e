@@ -450,6 +450,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if ghosted != 1usize || !has_ghost_box || !has_notes_under || ghost_box.x < notes_under.x - 5.0 || ghost_box.x > notes_under.x - 3.0 { os.exit(105i32) }
         }
         if drag_step == 2usize && ghosted != 0usize { os.exit(106i32) }
+        // (D1479) The drop line is repeated over the ghost, on its own place.
+        if drag_step == 1usize {
+            let (line_under, has_line_under) = bounds(&harness, &runtime, 5900u64 + 131u64)
+            let (line_over, has_line_over) = bounds(&harness, &runtime, 5900u64 + 133u64)
+            if !has_line_under || !has_line_over || line_over.x < line_under.x - 0.5 || line_over.x > line_under.x + 0.5 || line_over.y < line_under.y - 0.5 || line_over.y > line_under.y + 0.5 || line_over.width < 1.5 || line_over.width > 2.5 { os.exit(107i32) }
+        }
         if drag_step == 1usize {
             let (notes_now, has_notes_now) = bounds(&harness, &runtime, 5905u64)
             if lined != 1usize || !has_notes_now || testing.send(&harness, input.Event { PointerUp: testing.pointer_at(notes_now.x + 20.0, notes_now.y + 10.0) }) != ok { os.exit(97i32) }

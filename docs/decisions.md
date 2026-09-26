@@ -27288,3 +27288,9 @@ D1344 lifted a dragged document tab in place and drew a drop line where it would
 The HeaderRow spec: "the dragged cell lifts (`surface-container-highest`, `elevation-4`) and follows the pointer; a 2px `primary` line marks the landing edge". D1345 lifted the header in place. As with D1477's document tabs, the header row now draws a ghost of the lifted header: its lifted look, its width and height from the last frame, and its title in `title-small`. The ghost is an overlay (keyed `key + 1048600`) moved by the pointer's travel since the press. It can cover the landing line, which lives in the handle between headers, so that line is repeated in an overlay after the ghost (`key + 1048601`, 2 x the header's height, 3 in from the handle's start). The first check of this caught the old line hidden under the ghost. An overlay paints only its children, so the repeated line is a child box, not the overlay's own style.
 
 `ui_collections2_v2` checks this on Windows and Linux. Mid-drag, the ghost stands 40 on where the pointer carried it, and it is gone after the release. D1357's landing line is still lit while the ghost stands over it. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1479 — The tab strip's drop line stands over the ghost
+
+D1477's ghost follows the pointer over the strip, and so it stands over D1344's drop line, which marks where the tab would land. D1478 found the same cover on table headers. As there, the drop line is repeated in an overlay after the ghost (keyed `key + 133`), anchored to the line itself, a 2 x 28 `primary` child box, so the mark shows on top.
+
+`ui_navigation5_v2` checks this on Windows and Linux: mid-drag the repeated line stands on the line's own place, 2 wide. `ui_workspace` still passes.

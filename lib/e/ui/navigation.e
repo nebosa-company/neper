@@ -3038,7 +3038,8 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // (D1344) A dragged tab lifts and a drop line stands where it would land.
 // (D1453) A preview tab's title is italic where the theme has the face.
 // (D1477) A ghost of the lifted tab follows the pointer along the strip (an
-// overlay keyed `key + 132`); the tab keeps its place until the drop.
+// overlay keyed `key + 132`); the tab keeps its place until the drop. (D1479)
+// The drop line is repeated over the ghost (`key + 133`).
 // (D1233) A document strip's tab menu, kept across frames on the strip: whether
 // it is open and for which tab.
 type TabMenu = struct { open: bool, index: usize }
@@ -3498,7 +3499,7 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     // over while another is dragged (keyed `key + 131`); the tabs part for it.
     var strip_tabs = tabs[0usize..documents.len]
     if lifted < documents.len {
-        let (with_line, with_line_error) = mem.alloc[widget.Node](a, documents.len + 3usize)
+        let (with_line, with_line_error) = mem.alloc[widget.Node](a, documents.len + 4usize)
         if with_line_error != ok { ret (zero, TooLarge) }
         var drop_line = control.sized_style(2.0, 28.0)
         drop_line.radius = 1.0
@@ -3536,6 +3537,14 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             ghost[1usize] = widget.aligned(0u64, .Center, .Center, ghost_look, ghost[0usize..1usize])
             with_line[w] = widget.overlay(key + 132u64, widget.Overlay { anchor: lifted_key, placement: .Below, offset: geometry.Point { x: lift_shift, y: 0.0 - lifted_box.height }, modal: false, dismiss: zero }, style.defaults(), ghost[1usize..2usize])
             w += 1usize
+            // (D1479) The drop line over the ghost, on the line's own place.
+            if landing < documents.len && landing != lifted {
+                let (line_node, line_node_error) = mem.alloc[widget.Node](a, 1usize)
+                if line_node_error != ok { ret (zero, TooLarge) }
+                line_node[0usize] = widget.box(0u64, drop_line, zero)
+                with_line[w] = widget.overlay(key + 133u64, widget.Overlay { anchor: key + 131u64, placement: .Below, offset: geometry.Point { x: 0.0, y: 0.0 - 28.0 }, modal: false, dismiss: zero }, style.defaults(), line_node[0usize..1usize])
+                w += 1usize
+            }
         }
         strip_tabs = with_line[0usize..w]
     }
