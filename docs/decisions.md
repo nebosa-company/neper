@@ -26674,3 +26674,18 @@ transform, so the tree keeps its shape.
 `ui_collections_v2` narrows a grid from 600 to 380: 50 ms in, the third tile's
 new place does not yet show what it shows once settled. `ui_ripple_v2` still
 passes, on Windows and Linux.
+
+## D1402 — Touch data grids edit rows in a sheet
+
+The DataGrid spec edits on touch hosts through sheets: tapping a row opens its
+fields in a bottom sheet, and Save validates and commits. On touch density a
+tap on a grid cell (not a checkbox, not in a disabled grid) now reports the
+new `GridEventKind.EditRow` with the row, in place of moving the active cell.
+`grid_row_sheet` is that sheet: a modal bottom sheet titled by the caller,
+with a text field per column labelled by its title over the caller's
+`RowDraft` buffers (keyed `key + 16 + column`, typing reaching `typed` as a
+`RowFieldEdit`), then Cancel and Save. The caller fills the drafts from the
+row and validates on Save.
+
+`ui_collections6_v2` taps a touch grid's row (reported as `EditRow`) and lays
+out the row sheet with both fields and Save, on Windows and Linux.
