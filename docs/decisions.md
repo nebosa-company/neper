@@ -25913,3 +25913,14 @@ Dropping on a strip's empty space is still to come.
 second tab: a Transfer from group 0, document 0, to group 1 at 1. This passes
 on Windows and Linux, and `ui_navigation5_v2`, `ui_workspace`,
 `ui_containers2_v2` and `ui_drag_drop` still pass on both.
+
+## D1348 — Touch carousels show all
+
+The Carousel spec's touch header: with `CarouselOptions.show_all` set, a touch
+carousel has a header of its `title-medium` title and a Show all text button
+(keyed `key + 3`) at the end, firing `show_all` -- where a pointer host has
+Previous and Next. Free scrolling with snapping and the items' growth past the
+leading edge are still to come.
+
+`ui_collections4_v2` builds a touch carousel: Show all stands, Previous does
+not, and a tap presses it, on Windows and Linux.

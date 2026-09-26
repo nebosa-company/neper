@@ -686,6 +686,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
         spin_step += 1usize
     }
     if spin_sums[0usize] == spin_sums[1usize] { os.exit(182i32) }
+    // (D1348) On touch the carousel's header has Show all, which presses.
+    var all_slide_keys: [5]widget.Key = zero
+    var sk = 0usize
+    while sk < 5usize {
+        all_slide_keys[sk] = 7011u64 + u64(sk)
+        sk += 1usize
+    }
+    var touch_browsing = collection.carousel_options()
+    touch_browsing.title = "Recent"
+    touch_browsing.width = 360.0
+    touch_browsing.show_all = s.press
+    f = mem.arena_from(frame_storage)
+    let (touch_strip, touch_strip_error) = collection.carousel_of(&f, 7000u64, &touch, "Recent", s.slides[0usize..5usize], all_slide_keys[..], 0usize, zero, touch_browsing)
+    let (touch_strip_page, touch_strip_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if touch_strip_error != ok || touch_strip_page_error != ok { os.exit(183i32) }
+    touch_strip_page[0usize] = touch_strip
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), touch_strip_page[0usize..1usize]), time.Instant { nanos: 90000000000i64 }) != ok { os.exit(184i32) }
+    let (show_all, has_show_all) = bounds(&harness, &runtime, 7003u64)
+    let presses_before_all = s.presses
+    if !has_show_all || testing.by_key(&harness, 7001u64).count != 0usize || testing.tap(&harness, show_all.x + show_all.width * 0.5, show_all.y + show_all.height * 0.5) != ok || s.presses != presses_before_all + 1usize { os.exit(185i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(68i32) }
     try io.print("ui collections4 v2 ok\n")
     ret ok
