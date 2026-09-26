@@ -233,6 +233,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_remove || testing.tap(&harness, remove_at.x, remove_at.y) != ok || logs[0usize].removes != 1usize || logs[0usize].removed != 1usize { os.exit(29i32) }
     let (add_at, has_add) = centre_of(&harness, &runtime, 500u64 + 6u64 + 4u64)
     if !has_add || testing.tap(&harness, add_at.x, add_at.y) != ok || logs[0usize].adds != 1usize { os.exit(30i32) }
+    // (D1438) Opened again, Person's chevron turns a quarter over
+    // `duration-short-3`: on the open's first frame its left 24 differ from how
+    // they settle a second on.
+    let person_heading = collection.property_group_heading_key(1u64, "Person")
+    var chevron_sums: [2]u32 = zero
+    var chevron_step = 0usize
+    while chevron_step < 4usize {
+        var chevron_at = 5000000000i64
+        if chevron_step == 1usize { chevron_at = 5000000001i64 }
+        if chevron_step == 2usize { chevron_at = 5100000000i64 }
+        if chevron_step == 3usize { chevron_at = 6100000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: chevron_at }) != ok { os.exit(32i32) }
+        frame = mem.arena_from(frame_storage)
+        var shut = collapsed[0usize..1usize]
+        if chevron_step >= 2usize { shut = collapsed[0usize..0usize] }
+        let (chevron_root, chevron_root_error) = build(&frame, &theme, ctx, source, shut, pairs[0usize..2usize], &handlers[0usize])
+        if chevron_root_error != ok || testing.pump(&harness, chevron_root, time.Instant { nanos: chevron_at }) != ok { os.exit(32i32) }
+        if chevron_step >= 2usize {
+            let (heading, has_heading) = widget.bounds_of(&runtime, testing.by_key(&harness, person_heading).element)
+            let (chevron_shot, chevron_shot_error) = testing.snapshot(&harness, a)
+            if !has_heading || chevron_shot_error != ok { os.exit(33i32) }
+            var sum = 0u32
+            var y = 0usize
+            while y < usize(heading.height * 0.5) {
+                var x = 0usize
+                while x < 28usize {
+                    sum += u32(chevron_shot.pixels[((usize(heading.y) + y) * usize(chevron_shot.width) + usize(heading.x) + x) * 4usize + 1usize])
+                    x += 1usize
+                }
+                y += 1usize
+            }
+            chevron_sums[chevron_step - 2usize] = sum
+        }
+        chevron_step += 1usize
+    }
+    if chevron_sums[0usize] == chevron_sums[1usize] { os.exit(34i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui property ok\n")
     ret ok

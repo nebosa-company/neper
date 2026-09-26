@@ -511,6 +511,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if twisty_count < 3usize || expanded_twisties != 1usize { os.exit(96i32) }
     let (gamma_twisty, has_gamma_twisty) = bounds(&harness, &runtime, 1003u64 ^ hash.fnv1a64("row-disclose"))
     if !has_gamma_twisty || testing.tap(&harness, gamma_twisty.x + 12.0, gamma_twisty.y + 12.0) != ok || expand_log.count != 1usize || expand_log.ask.row != 1003u64 { os.exit(97i32) }
+    // (D1438) Opened, a row's chevron turns a quarter over `duration-short-3`: on
+    // the open's first frame its disclosure differs from how it settles.
+    var turn_open: [1]widget.Key = zero
+    turn_open[0usize] = 1001u64
+    var turn_sums: [2]u32 = zero
+    var turn_step = 0usize
+    while turn_step < 4usize {
+        var turn_at = 5300000000i64
+        if turn_step == 1usize { turn_at = 5300000001i64 }
+        if turn_step == 2usize { turn_at = 5400000000i64 }
+        if turn_step == 3usize { turn_at = 6400000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: turn_at }) != ok { os.exit(133i32) }
+        var turn_options = open_options
+        turn_options.expanded = turn_open[0usize..0usize]
+        if turn_step >= 2usize { turn_options.expanded = turn_open[0usize..1usize] }
+        f = mem.arena_from(frame_storage)
+        let turn_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        let (turning_table, turning_table_error) = collection.table_with(&f, 9u64, &theme, "Files", columns[0usize..3usize], turn_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, turn_options)
+        let (turn_page, turn_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if turning_table_error != ok || turn_page_error != ok { os.exit(133i32) }
+        turn_page[0usize] = turning_table
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), turn_page[0usize..1usize]), time.Instant { nanos: turn_at }) != ok { os.exit(133i32) }
+        if turn_step >= 2usize {
+            let (turn_box, has_turn_box) = bounds(&harness, &runtime, 1001u64 ^ hash.fnv1a64("row-disclose"))
+            let (turn_shot, turn_shot_error) = testing.snapshot(&harness, a)
+            if !has_turn_box || turn_shot_error != ok { os.exit(134i32) }
+            var sum = 0u32
+            var y = 0usize
+            while y < 12usize {
+                var x = 0usize
+                while x < 24usize {
+                    sum += u32(turn_shot.pixels[at(turn_box.x + f32(x), turn_box.y + f32(y)) + 1usize])
+                    x += 1usize
+                }
+                y += 1usize
+            }
+            turn_sums[turn_step - 2usize] = sum
+        }
+        turn_step += 1usize
+    }
+    if turn_sums[0usize] == turn_sums[1usize] { os.exit(135i32) }
     // (D1328) A numeric third column: its cells end at the column's end, 16 in.
     var numbers_only: [3]bool = zero
     numbers_only[2usize] = true

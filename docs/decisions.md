@@ -27002,3 +27002,13 @@ The HeaderRow spec rotates the sort arrow when it flips, over `duration-short-3`
 The TreeTable spec rotates the twisty over `duration-short-3`, and Tree and TreeTable expand as one. A tree row's twisty already stood in a turning wrapper, set straight to a quarter turn while open. It now eases that quarter on the twisty, under slot `twisty_key + 1048596`. Reduced motion still swaps to the down chevron at once. The children's height and fade on expand and collapse are still not drawn.
 
 `ui_collections3_v2` opens a branch, on Windows and Linux. On the open's first frame the twisty's upper half differs from how it settles a second later. With the old instant turn the two would match. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1438 — Row and group chevrons turn as they open
+
+The TableRow spec rotates the detail chevron over `duration-short-3`, and the PropertyGrid spec gives its groups emphasized expansion. An expandable table row's disclosure now always draws the end-pointing chevron. It turns that chevron a quarter toward down on its own slot, `disclose_key + 1048597` (the other way round right to left). A property group's heading does the same with its chevron (`heading_key + 1048597`). Reduced motion turns at once. The detail row's height and the group's expansion still change at once.
+
+Checks on Windows and Linux:
+
+- `ui_collections2_v2` opens a row. On the open's first frame the disclosure's upper half differs from how it settles.
+- `ui_property` reopens Person. On the open's first frame the heading's leading 28 columns differ from how they settle.
+- All 103 `ui_*` fixtures pass.
