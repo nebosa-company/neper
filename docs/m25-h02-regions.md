@@ -176,10 +176,12 @@ both hosts.
 measurement over the compiler and the library; the closure record.
 
 **Later:** arbitrary retention through dynamic containers;
-non-lexical liveness if the measurement asks for it;
-and generation-tagged handles for the dynamic containers
-that want them, with the owner identity, generation-wrap policy and per-access cost
-H02 lists.
+non-lexical liveness if the measurement asks for it.
+
+Delivered since: casts keep provenance (D1558); `list.Builder` builds, then
+freezes (D1559); `slot_map` keys are generation-tagged handles with an owner
+identity, a slot retiring rather than wrapping, and three compares per protected
+access (D1560).
 
 ## 8. Implementation record
 

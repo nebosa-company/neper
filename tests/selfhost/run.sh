@@ -5651,6 +5651,12 @@ list_freeze_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$list_freeze_written" = 'executable written' ]
 chmod +x "$list_freeze_path"
 "$list_freeze_path"
+# Generation-tagged handles with their owner (D1560, H02).
+slot_map_owner_path="$test_build/slot-map-owner-selfhost"
+slot_map_owner_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/slot_map_owner/src/main.e" "$repo" x64 linux "$slot_map_owner_path")
+[ "$slot_map_owner_written" = 'executable written' ]
+chmod +x "$slot_map_owner_path"
+"$slot_map_owner_path"
 # A group of threads as one resource (D434, H04).
 thread_group_path="$test_build/thread-group-selfhost"
 thread_group_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/thread_group/src/main.e" "$repo" x64 linux "$thread_group_path")

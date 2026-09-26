@@ -125,7 +125,7 @@ fn slot_maps(a: *mem.Arena) {
     // A slot at its last generation retires instead of coming back.
     let s = mem.cast[*slots.State[i64]](m.state)
     s.generations[usize(k1.slot)] = 4294967295u32
-    let k1_last = slots.Key { slot: k1.slot, generation: 4294967295u32 }
+    let k1_last = slots.Key { slot: k1.slot, generation: 4294967295u32, owner: k1.owner }
     let (_, removed_last) = slots.remove[i64](&m, k1_last)
     if !removed_last || slots.len[i64](&m) != 2usize { os.exit(43) }
     let (k5, e5) = slots.insert[i64](&m, 500i64)
