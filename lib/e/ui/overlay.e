@@ -5166,6 +5166,36 @@ fn dial_turn_gesture(ctx: *void, g: widget.Gesture) -> err {
     }
 }
 
+// (D1420) The goal a dial's hand last turned to, unwrapped so each turn takes
+// the short way round.
+type DialSweep = struct { goal: f32, set: bool }
+
+// (D1420, docs/ux/components/TimePicker, motion) The angle a dial's hand and
+// knob stand at this frame: they sweep the short way to each new `angle` over
+// `duration-medium-2` on `ease-standard` (kept on the ring `face_key`), and follow
+// at once while the ring is pressed (a drag) or under reduced motion.
+fn dial_swept(t: *const control.Theme, face_key: widget.Key, angle: f32) -> f32 {
+    if mem.address_of(t.runtime) == 0usize { ret angle }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret angle }
+    let (id, found) = widget.find_by_key(s, face_key)
+    if found != 1usize { ret angle }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: DialSweep = zero
+    let (sweep, _, sweep_error) = widget.state[DialSweep](&build, face_key + 1048577u64, fresh)
+    if sweep_error != ok { ret angle }
+    var goal = angle
+    if sweep.set {
+        while goal - sweep.goal > 3.1415927 { goal -= 6.2831855 }
+        while sweep.goal - goal > 3.1415927 { goal += 6.2831855 }
+    }
+    sweep.goal = goal
+    sweep.set = true
+    var millis = t.tokens.durations.medium2
+    if control.control_state(t, face_key, true, false).pressed { millis = 0u32 }
+    ret control.eased_on(t, face_key, face_key + 1048578u64, goal, false, millis)
+}
+
 fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, minute: u8, editing_minute: bool, twelve: bool, change: widget.Change[TimeChoice], choices: []TimeChoosing, presses: []widget.Submit) -> (widget.Node, err) {
     let (layers, layers_error) = mem.alloc[widget.Node](a, 40usize)
     if layers_error != ok { ret (zero, TooLarge) }
@@ -5184,6 +5214,7 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     // (D1419, docs/ux/components/TimePicker, dial) Between the five-minute marks
     // the hand points at the exact minute (6 degrees a minute).
     if !on_number { angle = f32(minute % 60u8) * 0.10471976 }
+    angle = dial_swept(t, key + 7u64, angle)
     let knob_x = 112.0 + 88.0 * math.sin[f32](angle)
     let knob_y = 112.0 - 88.0 * math.cos[f32](angle)
     // The hand: a 2 wide bar from the centre to the knob, turned by the angle.
