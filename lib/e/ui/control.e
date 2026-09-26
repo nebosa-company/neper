@@ -6346,7 +6346,8 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
 // (D1406) `split_view_with` adds snap points and F6 cycling.
 // (D1464) `SplitOptions.stack` folds it into a stack where both minimums do not
 // fit.
-// ponytail: no ratio across window resizes or empty-detail slot.
+// (D1472) `SplitOptions.ratio` keeps the divider's share across resizes.
+// ponytail: no empty-detail slot.
 fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err) {
     var plain: SplitOptions = zero
     let (made, made_error) = split_view_with(a, key, t, label, axis, first, second, position, min_first, min_second, change, width, height, plain)
@@ -6361,9 +6362,18 @@ fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // (D1464) With `stack`, a split whose two minimums do not fit stacks: `first`
 // alone, or, while `showing_second`, `second` under a 56 bar with Back (firing
 // `back`) and `second_title`.
-type SplitOptions = struct { snaps: bool, first_focus: widget.Key, second_focus: widget.Key, points: []const f32, stack: bool, showing_second: bool, back: widget.Submit, second_title: str }
+// (D1472, docs/ux/components/SplitView, ratio) With `ratio`, `position` and the
+// sizes `change` reports are shares of the view's length (0.5 is half), so the
+// divider keeps its share as the window resizes; `points` stay in pixels.
+type SplitOptions = struct { snaps: bool, first_focus: widget.Key, second_focus: widget.Key, points: []const f32, stack: bool, showing_second: bool, back: widget.Submit, second_title: str, ratio: bool }
 
 type SplitSnap = struct { total: f32, change: widget.Change[f32], points: []const f32 }
+
+// (D1472) A ratio split's size, reported as its share of the view's length.
+fn split_share_fire(ctx: *void, value: f32) -> err {
+    let s = mem.cast[*SplitSnap](ctx)
+    ret widget.fire_change[f32](s.change, value / s.total)
+}
 
 fn split_snap_fire(ctx: *void, value: f32) -> err {
     let s = mem.cast[*SplitSnap](ctx)
@@ -6442,15 +6452,23 @@ fn split_view_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var sized_change = change
+    var placed = position
+    if options.ratio && along > 0.0 {
+        placed = position * along
+        let (shares, shares_error) = mem.alloc[SplitSnap](a, 1usize)
+        if shares_error != ok { ret (zero, TooLarge) }
+        shares[0usize] = SplitSnap { total: along, change: change, points: zero }
+        sized_change = widget.Change[f32] { ctx: mem.cast[*void](&shares[0usize]), invoke: split_share_fire }
+    }
     if options.snaps {
         let (snaps, snaps_error) = mem.alloc[SplitSnap](a, 1usize)
         if snaps_error != ok { ret (zero, TooLarge) }
         var total = width
         if axis == .Vertical { total = height }
-        snaps[0usize] = SplitSnap { total: total, change: change, points: options.points }
+        snaps[0usize] = SplitSnap { total: total, change: sized_change, points: options.points }
         sized_change = widget.Change[f32] { ctx: mem.cast[*void](&snaps[0usize]), invoke: split_snap_fire }
     }
-    let (pane, pane_error) = pane_with_reserve(a, key + 1u64, t, label, axis, position, min_first, 0.0, key, min_second, sized_change, first, false)
+    let (pane, pane_error) = pane_with_reserve(a, key + 1u64, t, label, axis, placed, min_first, 0.0, key, min_second, sized_change, first, false)
     if pane_error != ok { ret (zero, pane_error) }
     parts[0usize] = pane
     let (rest, rest_error) = mem.alloc[widget.Node](a, 1usize)

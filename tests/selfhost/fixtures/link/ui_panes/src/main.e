@@ -367,6 +367,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if cycled_to != 992u64 || testing.press_key(&harness, 65475u32, zero) != ok { os.exit(87i32) }
     let (cycled_back, _) = widget.focused_key(&runtime)
     if cycled_back != 991u64 { os.exit(88i32) }
+    // (D1472) A ratio split: a quarter of 400 is 100 (108 with its sash); dragged 100 on it reports a
+    // half, and a half of a 200 wide window is 100 again.
+    var ratio_step = 0usize
+    var ratio_at: f32 = 0.25
+    var ratio_width: f32 = 400.0
+    while ratio_step < 5usize {
+        if ratio_step == 3usize {
+            ratio_at = logs[0usize].last_size
+            ratio_width = 200.0
+        }
+        frame = mem.arena_from(frame_storage)
+        let (ratio_parts, ratio_parts_error) = mem.alloc[widget.Node](&frame, 2usize)
+        if ratio_parts_error != ok { os.exit(94i32) }
+        ratio_parts[0usize] = widget.box(0u64, control.sized_style(20.0, 20.0), zero)
+        ratio_parts[1usize] = widget.box(0u64, control.sized_style(20.0, 20.0), zero)
+        var sharing: control.SplitOptions = zero
+        sharing.ratio = true
+        let (ratio_split, ratio_split_error) = control.split_view_with(&frame, 2980u64, &theme, "Share", .Horizontal, ratio_parts[0usize], ratio_parts[1usize], ratio_at, 40.0, 40.0, widget.Change[f32] { ctx: ctx, invoke: on_size }, ratio_width, 60.0, sharing)
+        let (ratio_page, ratio_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if ratio_split_error != ok || ratio_page_error != ok { os.exit(95i32) }
+        ratio_page[0usize] = ratio_split
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(ratio_width, 60.0), ratio_page[0usize..1usize]), time.Instant { nanos: 31000000000i64 + i64(ratio_step) }) != ok { os.exit(96i32) }
+        if ratio_step == 1usize {
+            let (quarter, has_quarter) = widget.bounds_of(&runtime, testing.by_key(&harness, 2981u64).element)
+            if !has_quarter || !near(quarter.width, 108.0) { os.exit(97i32) }
+            let (ratio_grip, has_ratio_grip) = centre_of(&harness, &runtime, 2983u64)
+            if !has_ratio_grip || testing.drag(&harness, ratio_grip, geometry.Point { x: ratio_grip.x + 100.0, y: ratio_grip.y }, 3usize) != ok || !near(logs[0usize].last_size, 0.5) { os.exit(98i32) }
+        }
+        ratio_step += 1usize
+    }
+    let (half, has_half) = widget.bounds_of(&runtime, testing.by_key(&harness, 2981u64).element)
+    if !has_half || !near(half.width, 108.0) { os.exit(99i32) }
     // (D1464) 300 wide for minimums of 240 and 320, the split stacks: the first
     // pane alone; showing the second, it stands under a Back that fires.
     var stack_step = 0usize
