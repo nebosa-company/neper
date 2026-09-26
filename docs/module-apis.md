@@ -1930,14 +1930,27 @@ mark kept points with 1 in `keep`.
 error Invalid
 
 fn clip(x: f64, lo: f64, hi: f64) -> f64
-fn laplace_noise(b: f64, r: *rand.Pcg64) -> f64
-fn laplace(value: f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (f64, err)
-fn laplace_vector(values: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64, out: []f64) -> err
+fn random_u64() -> (u64, err)
+fn random_uniform() -> (f64, err)
+fn random_uniform_open() -> (f64, err)
+fn random_normal() -> (f64, err)
+fn laplace_from_uniform(b: f64, u: f64) -> f64
+fn laplace_noise(b: f64) -> (f64, err)
+fn laplace_noise_seeded(b: f64, r: *rand.Pcg64) -> f64
+fn laplace(value: f64, sensitivity: f64, epsilon: f64) -> (f64, err)
+fn laplace_seeded(value: f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (f64, err)
+fn laplace_vector(values: []const f64, sensitivity: f64, epsilon: f64, out: []f64) -> err
+fn laplace_vector_seeded(values: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64, out: []f64) -> err
 fn gaussian_sigma(sensitivity: f64, epsilon: f64, delta: f64) -> (f64, err)
-fn gaussian(value: f64, sensitivity: f64, epsilon: f64, delta: f64, r: *rand.Pcg64) -> (f64, err)
-fn exponential(scores: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (usize, err)
-fn report_noisy_max(scores: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (usize, err)
-fn randomized_response(bit: bool, p: f64, r: *rand.Pcg64) -> bool
+fn gaussian(value: f64, sensitivity: f64, epsilon: f64, delta: f64) -> (f64, err)
+fn gaussian_seeded(value: f64, sensitivity: f64, epsilon: f64, delta: f64, r: *rand.Pcg64) -> (f64, err)
+fn exponential_from_uniform(scores: []const f64, sensitivity: f64, epsilon: f64, draw: f64) -> usize
+fn exponential(scores: []const f64, sensitivity: f64, epsilon: f64) -> (usize, err)
+fn exponential_seeded(scores: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (usize, err)
+fn report_noisy_max(scores: []const f64, sensitivity: f64, epsilon: f64) -> (usize, err)
+fn report_noisy_max_seeded(scores: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (usize, err)
+fn randomized_response(bit: bool, p: f64) -> (bool, err)
+fn randomized_response_seeded(bit: bool, p: f64, r: *rand.Pcg64) -> bool
 fn randomized_response_estimate(count_ones: usize, n: usize, p: f64) -> f64
 fn compose_basic(epsilons: []const f64) -> f64
 fn compose_advanced(epsilon: f64, k: usize, delta_prime: f64) -> (f64, err)
@@ -1945,7 +1958,10 @@ fn compose_advanced(epsilon: f64, k: usize, delta_prime: f64) -> (f64, err)
 
 Differential privacy: `laplace` and `laplace_vector`, `gaussian` with `gaussian_sigma`
 (the analytic bound), `exponential` and `report_noisy_max`, `randomized_response` with
-Warner's estimate, `compose_basic` and `compose_advanced`, `clip`.
+Warner's estimate, `compose_basic` and `compose_advanced`, `clip`. The mechanisms draw
+from the operating system's randomness (`random_u64` and the uniform and normal draws
+over it); each `_seeded` form takes a caller's `rand.Pcg64` for reproducible tests, and
+`laplace_from_uniform` and `exponential_from_uniform` are the draws' pure halves.
 
 ### `e.algo.query`
 
@@ -5200,12 +5216,13 @@ fn gf_mul(a: u8, b: u8) -> u8
 fn gf_inv(a: u8) -> u8
 fn share_size(len: usize, n: u8) -> usize
 fn split(secret: []const u8, n: u8, k: u8, coefficients: []const u8, shares: []u8) -> err
-fn split_random(secret: []const u8, n: u8, k: u8, rng: *rand.Pcg64, shares: []u8) -> err
+fn split_random(secret: []const u8, n: u8, k: u8, shares: []u8) -> err
+fn split_random_seeded(secret: []const u8, n: u8, k: u8, rng: *rand.Pcg64, shares: []u8) -> err
 fn combine(xs: []const u8, shares: []const u8, len: usize, out: []u8) -> err
 ```
 
 Shamir secret sharing byte-wise over GF(2^8) with the AES polynomial: `split` with
-caller coefficients, `split_random` over a PCG stream, `combine` by Lagrange
+caller coefficients, `split_random` over the operating system's randomness (`split_random_seeded` over a caller's PCG stream), `combine` by Lagrange
 interpolation at zero; `gf_mul`, `gf_inv`, `share_size`.
 
 ### `e.crypto.sign`
@@ -8331,15 +8348,17 @@ error BadClientData
 error BadSignature
 
 fn unreserved(index: u64) -> u8
-fn pkce_verifier(rng: *rand.Pcg64, dst: []u8) -> (str, err)
+fn pkce_verifier(dst: []u8) -> (str, err)
+fn pkce_verifier_seeded(rng: *rand.Pcg64, dst: []u8) -> (str, err)
 fn pkce_challenge(verifier: str, dst: []u8) -> (str, err)
-fn pkce(rng: *rand.Pcg64, verifier_dst: []u8, challenge_dst: []u8) -> (str, str, err)
+fn pkce(verifier_dst: []u8, challenge_dst: []u8) -> (str, str, err)
 fn parse_authenticator_data(auth_data: []const u8) -> (Assertion, err)
 fn client_string(client_data: str, name: str) -> (str, err)
 fn webauthn_verify(auth_data: []const u8, client_data: []const u8, signature: []const u8, key: Key, rp_id: str, challenge: str, origin: str, scratch: []u8) -> (Assertion, err)
 ```
 
-RFC 7636 PKCE (`pkce_verifier`, `pkce_challenge`, `pkce`) and WebAuthn assertion verification
+RFC 7636 PKCE (`pkce_verifier` from the operating system's randomness, `pkce_verifier_seeded`
+from a caller's generator for tests, `pkce_challenge`, `pkce`) and WebAuthn assertion verification
 (`parse_authenticator_data`, `webauthn_verify` over ES256 or EdDSA keys with the rpId hash,
 user-presence flag, sign count and client-data type, challenge and origin checked).
 
