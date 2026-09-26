@@ -314,7 +314,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var clock_text = ClockText { bytes: loose_clock, len: loose_words.len }
     var clock_step = 0usize
-    while clock_step < 4usize {
+    while clock_step < 5usize {
         f = mem.arena_from(frame_storage)
         let (loose_field, loose_field_error) = overlay.time_field(&f, 1900u64, &theme, "Starts", loose_clock, clock_text.len, widget.Change[str] { ctx: mem.cast[*void](&clock_text), invoke: on_clock_text }, false, &s.press, s.times[0usize..8usize], s.offsets[0usize..8usize], 3usize, s.picks[0usize..8usize], "", filter_options)
         let (clock_page, clock_page_error) = mem.alloc[widget.Node](&f, 2usize)
@@ -327,6 +327,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         clock_step += 1usize
     }
     if !testing.same_text(loose_clock[0usize..clock_text.len], "14:30") { os.exit(104i32) }
+    // (D1368) Focused with the caret at the end, Up makes 14:31; at the start, Up
+    // steps the hour to 15:31 (the field reads the caller's buffer).
+    if widget.focus(&runtime, testing.by_key(&harness, 1900u64).element) != ok || testing.press_key(&harness, 35u32, zero) != ok || testing.press_key(&harness, 38u32, zero) != ok { os.exit(105i32) }
+    if !testing.same_text(loose_clock[0usize..clock_text.len], "14:31") { os.exit(106i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || testing.press_key(&harness, 38u32, zero) != ok { os.exit(107i32) }
+    if !testing.same_text(loose_clock[0usize..clock_text.len], "15:31") { os.exit(108i32) }
     // (D1294) The dial picker at 14:30 on a 12-hour clock: the hour box says 02
     // and PM is chosen; the dial's 3 sets 15, the minute box asks to be edited,
     // and on the minute dial the sixth number sets 30.

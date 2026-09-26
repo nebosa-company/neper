@@ -4999,7 +4999,8 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
 // overlay keyed `key + 3`, its viewport `key + 4`, rows `key + 5 + index`), each
 // row a time the caller wrote (`write_clock`) with its offset ("30 min", or empty),
 // firing its own pick. Alt+Down opens a closed list; Escape is `toggle`, Enter
-// the selected pick. The caller keeps the text and parses it. (D1367) The build
+// the selected pick. (D1368) Shut, Up and Down step the hour or minute under the
+// caret. The caller keeps the text and parses it. (D1367) The build
 // after the field loses the focus, a time `parse_clock` reads is rewritten in
 // the locale's clock (`write_clock_in`) through `typed`.
 // v2 (D960, docs/ux/components/TimePicker, field with time list): the list is a
@@ -5059,12 +5060,20 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     var default_action: widget.Submit = zero
     var list_keys: []const widget.Shortcut = zero
     if !open {
-        let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 1usize)
-        if keys_error != ok { ret (zero, TooLarge) }
+        let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 3usize)
+        let (steps, steps_error) = mem.alloc[ClockStep](a, 2usize)
+        if keys_error != ok || steps_error != ok { ret (zero, TooLarge) }
         var alt: input.Modifiers = zero
         alt.alt = true
         keys[0usize] = widget.Shortcut { key: 40u32, modifiers: alt, action: *toggle }
-        list_keys = keys[0usize..1usize]
+        // (D1368, docs/ux/components/TimePicker, field) Shut, Up and Down step the
+        // part under the caret -- the hour before the ":", the minute after it --
+        // by one, wrapping, and rewrite the text in the locale's clock.
+        steps[0usize] = ClockStep { runtime: t.runtime, key: key, text: text, language: t.language, typed: typed, up: true }
+        steps[1usize] = ClockStep { runtime: t.runtime, key: key, text: text, language: t.language, typed: typed, up: false }
+        keys[1usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[0usize]), invoke: clock_step_fire } }
+        keys[2usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[1usize]), invoke: clock_step_fire } }
+        list_keys = keys[0usize..3usize]
     }
     if listing {
         let row_height = t.tokens.sizes.control_sm
@@ -5276,6 +5285,39 @@ fn uses_12_hour(language: str) -> bool {
         at += 1usize
     }
     ret false
+}
+
+// (D1368) A step of a time field's text: the part under the caret, up or down.
+type ClockStep = struct { runtime: *widget.Runtime, key: widget.Key, text: str, language: str, typed: widget.Change[str], up: bool }
+
+fn clock_step_fire(ctx: *void) -> err {
+    let c = mem.cast[*ClockStep](ctx)
+    let (clock, read) = parse_clock(c.text)
+    if !read || mem.address_of(c.runtime) == 0usize { ret ok }
+    let (s, state_error) = widget.state_of(c.runtime)
+    if state_error != ok { ret ok }
+    let (id, found) = widget.find_by_key(s, c.key)
+    if found != 1usize { ret ok }
+    let (_, caret, has_caret) = widget.edit_selection(c.runtime, id)
+    var colon = c.text.len
+    var i = 0usize
+    while i < c.text.len {
+        if c.text[i] == 58u8 || c.text[i] == 46u8 {
+            colon = i
+            break
+        }
+        i += 1usize
+    }
+    var moved = clock
+    let on_minute = has_caret && caret > colon
+    if on_minute {
+        if c.up { moved.minute = u8((u32(clock.minute) + 1u32) % 60u32) } else { moved.minute = u8((u32(clock.minute) + 59u32) % 60u32) }
+    } else {
+        if c.up { moved.hour = u8((u32(clock.hour) + 1u32) % 24u32) } else { moved.hour = u8((u32(clock.hour) + 23u32) % 24u32) }
+    }
+    var out: [16]u8 = zero
+    let n = write_clock_in(out[..], moved, c.language)
+    ret widget.fire_change[str](c.typed, out[0usize..n])
 }
 
 // (D1230) A time of day in the locale's clock: "14:30" on a 24-hour clock, or
