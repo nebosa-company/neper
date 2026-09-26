@@ -27846,3 +27846,19 @@ The KeyValueEditor spec says a secret value's Show value toggle "reveals for as 
 `reveal_timeout` keeps a `RevealTimer` at the Show value toggle (`key + 1048576 + i`). While the value is shown it counts the frame time that passes while the value field (`key + 2 + 3i`) does not hold focus, and asks for frames meanwhile. At 30 s it fires the editor's `reveal` with the pair, once, so the caller hides it the way a press would. A hidden value starts the count over. The library cannot hide the value itself, because `shown` is the caller's.
 
 `ui_collections5_v2` checks this on Windows and Linux. With pair 1 shown and its value field unfocused, nothing fires at 20 s; past 30 s the reveal fires with index 1, and a later build does not fire it again. With the timer disabled, the check fails (exit 72). All 103 ui_* fixtures pass on both hosts. The removed row's collapse and the touch list form remain under the marker.
+
+## D1537 — A refresh's outcome snackbar
+
+The PullToRefresh spec closes a refresh in one of three ways. New rows above the viewport raise a snackbar counting them ("1 new build"). Nothing new raises "Up to date", and only when the refresh took over 2 s. A failure raises "Couldn't refresh. Check your connection" with Retry. `pull_to_refresh_of`'s `ponytail:` marker said there was no outcome snackbar and no new-row tag.
+
+`refresh_outcome_notice(a, added, above, took, failed, one, many, retry, dismiss)` answers the `control.Notice` for the caller's snackbar queue, and whether there is one. Failed gives the failure with Retry. Added rows above give their count, using `one` or `many` for the noun. Nothing added gives "Up to date" past 2 s. Rows added in view, or a quick refresh with nothing new, give no notice. The "New" tag is `control.status_label(.., "New", .Neutral, false)`, the `nu-tag` secondary pair, on the caller's rows, and clearing it stays with the caller.
+
+`ui_collections6_v2` checks all five outcomes on Windows and Linux. With the 2 s rule removed, the quick refresh raises a notice and the check fails (exit 180). The failure is announced politely like every snackbar, not assertively as the spec asks; that remains under the marker.
+
+## D1538 — Outline filter
+
+The Outline spec's header takes an optional filter field. Typing narrows the outline to the matches and their ancestors, a count closes it ("2 of 38 headings", announced politely), and no match shows "No headings match" with Clear. D1534 left the filter under `outline_of`'s marker.
+
+`TreeOptions` gains `filter`, `filter_len`, `filtering` and `has_filter`. With `has_filter`, `outline_with` stands a 32 outlined "Filter headings" field under the header, 12 in, keyed `key + 4194304`: `key + 3` was taken by the second row's twisty (`key + 1 + 2i`). With text in the field, a `FilteredTree` source wraps the caller's the way D1533's `SortedTree` does. A node stays when its text (`sort_text`, column 0, folded) holds the filter or a descendant stays. A walk of the whole tree counts the headings and matches and opens every kept branch, so the results stand expanded whatever `expanded` says. The count line is `body-small` `on-surface-variant`, 40 tall and centred, a polite status. With no match it reads "No headings match" beside a Clear (`key + 4194305`) that reports an empty filter through `filtering`.
+
+`ui_collections3_v2` checks this on Windows and Linux. Filtered by "a1" with nothing expanded, A and A1a stand, A2 and B do not, and "2 of 6 headings" shows. By "zz", "No headings match" shows and Clear reports an empty filter. Without `has_filter` the field is absent (exit 111). All 103 ui_* fixtures pass on both hosts. Still under the marker: dimmed ancestors and a bold matched text (the rows are the caller's), Down into the results, Enter to the first match, and the O(nodes x depth) walk per row.

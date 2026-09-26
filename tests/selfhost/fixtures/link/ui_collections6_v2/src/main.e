@@ -572,6 +572,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         fade_step += 1usize
     }
+    // (D1537) A refresh's outcome: failed with Retry, new rows above counted, up
+    // to date only past 2 s, and nothing for rows in view or a quick refresh.
+    let (failed_notice, failed_shown, failed_error) = collection.refresh_outcome_notice(a, 0usize, false, 0i64, true, "build", "builds", zero, zero)
+    if failed_error != ok || !failed_shown || !same_text(failed_notice.text, "Couldn't refresh. Check your connection") || !same_text(failed_notice.action_label, "Retry") { os.exit(178i32) }
+    let (one_notice, one_shown, one_error) = collection.refresh_outcome_notice(a, 1usize, true, 0i64, false, "build", "builds", zero, zero)
+    let (many_notice, many_shown, many_error) = collection.refresh_outcome_notice(a, 12usize, true, 0i64, false, "build", "builds", zero, zero)
+    if one_error != ok || many_error != ok || !one_shown || !many_shown || !same_text(one_notice.text, "1 new build") || !same_text(many_notice.text, "12 new builds") { os.exit(179i32) }
+    let (_, in_view_shown, _) = collection.refresh_outcome_notice(a, 3usize, false, 0i64, false, "build", "builds", zero, zero)
+    let (_, quick_shown, _) = collection.refresh_outcome_notice(a, 0usize, false, 1000000000i64, false, "build", "builds", zero, zero)
+    let (slow_notice, slow_shown, _) = collection.refresh_outcome_notice(a, 0usize, false, 3000000000i64, false, "build", "builds", zero, zero)
+    if in_view_shown || quick_shown || !slow_shown || !same_text(slow_notice.text, "Up to date") { os.exit(180i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(54i32) }
     try io.print("ui collections6 v2 ok\n")
     ret ok

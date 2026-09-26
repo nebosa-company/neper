@@ -146,6 +146,16 @@ fn same_color(x: paint.Color, y: paint.Color) -> bool {
     ret dr < 0.01 && dr > -0.01 && dg < 0.01 && dg > -0.01 && db < 0.01 && db > -0.01
 }
 
+// (D1538) The outline filter's reports: how many, and the last text's length.
+type FilterLog = struct { count: usize, len: usize }
+
+fn on_filter(ctx: *void, value: str) -> err {
+    let log = mem.cast[*FilterLog](ctx)
+    log.count += 1usize
+    log.len = value.len
+    ret ok
+}
+
 // (D1533) A row's name, which the sorted tree table orders siblings by.
 fn tree_sort_text(ctx: *void, key: widget.Key, column: usize) -> str {
     if key == 1u64 { ret "A" }
@@ -744,6 +754,46 @@ fn main(a: *mem.Arena, args: []str) -> err {
     tops[1usize] = 100.0
     tops[2usize] = 300.0
     if collection.outline_follow(tops[..], 0.0, 400.0) != 1usize || collection.outline_follow(tops[..], 250.0, 400.0) != 2usize || collection.outline_follow(tops[..], 0.0, 200.0) != 0usize { os.exit(109i32) }
+    // (D1538) Filtered by "a1": A1 and A1a with their ancestor A, open though
+    // nothing is expanded; A2 and B gone; "2 of 6 headings" under them. By "zz":
+    // "No headings match", whose Clear empties the filter.
+    var filter_bytes: [8]u8 = zero
+    filter_bytes[0usize] = 97u8
+    filter_bytes[1usize] = 49u8
+    var filter_log: FilterLog = zero
+    var filter_step = 0usize
+    while filter_step < 2usize {
+        if filter_step == 1usize {
+            filter_bytes[0usize] = 122u8
+            filter_bytes[1usize] = 122u8
+        }
+        f = mem.arena_from(frame_storage)
+        var filter_options: collection.TreeOptions = zero
+        filter_options.has_filter = true
+        filter_options.filter = filter_bytes[..]
+        filter_options.filter_len = 2usize
+        filter_options.filtering = widget.Change[str] { ctx: mem.cast[*void](&filter_log), invoke: on_filter }
+        filter_options.sort_ctx = sorted_ctx
+        filter_options.sort_text = tree_sort_text
+        var none_open: []widget.Key = zero
+        let (filtered, filtered_error) = collection.outline_with(&f, 800u64, &theme, "Outline", sorted_source, none_open, sorted_chosen[..], widget.Change[widget.Key] { ctx: sorted_ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: sorted_ctx, invoke: on_pick }, 0u64, &fold_all[0usize], 0.0, 240.0, filter_options)
+        let (filtered_page, filtered_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if filtered_error != ok || filtered_page_error != ok { os.exit(110i32) }
+        filtered_page[0usize] = filtered
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 300.0), filtered_page[0usize..1usize]), time.Instant { nanos: 2700000000i64 + i64(filter_step) }) != ok { os.exit(110i32) }
+        let (_, kept_a) = bounds(&harness, &runtime, 1u64)
+        let (_, kept_a1a) = bounds(&harness, &runtime, 111u64)
+        let (_, kept_a2) = bounds(&harness, &runtime, 12u64)
+        let (_, kept_b) = bounds(&harness, &runtime, 2u64)
+        if testing.by_key(&harness, 4195104u64).count == 0usize { os.exit(111i32) }
+        if filter_step == 0usize && (!kept_a || !kept_a1a || kept_a2 || kept_b || testing.by_text(&harness, "2 of 6 headings").count == 0usize) { os.exit(112i32) }
+        if filter_step == 1usize {
+            let (clear, has_clear) = bounds(&harness, &runtime, 4195105u64)
+            if kept_a || testing.by_text(&harness, "No headings match").count == 0usize || !has_clear { os.exit(113i32) }
+            if testing.tap(&harness, clear.x + clear.width * 0.5, clear.y + clear.height * 0.5) != ok || filter_log.count != 1usize || filter_log.len != 0usize { os.exit(114i32) }
+        }
+        filter_step += 1usize
+    }
     if testing.close(&large_harness) != ok || widget.close(&large_runtime) != ok || testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
     try io.print("ui collections3 v2 ok\n")
     ret ok
