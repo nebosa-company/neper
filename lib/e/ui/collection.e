@@ -6746,6 +6746,12 @@ type ReflowCell = struct { set: bool, columns: usize, from: usize, since: i64 }
 // (D1401) The column count the tiles are moving from and the share of the move
 // still to come (0 when settled), asking for frames while it runs.
 fn reflow_share(t: *const control.Theme, key: widget.Key, columns: usize) -> (usize, f32) {
+    let (from, left) = reflow_share_over(t, key, columns, t.tokens.durations.medium1)
+    ret (from, left)
+}
+
+// (D1448) `reflow_share` over `millis`.
+fn reflow_share_over(t: *const control.Theme, key: widget.Key, columns: usize, millis: u32) -> (usize, f32) {
     if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret (columns, 0.0) }
     let (s, state_error) = widget.state_of(t.runtime)
     if state_error != ok { ret (columns, 0.0) }
@@ -6768,7 +6774,7 @@ fn reflow_share(t: *const control.Theme, key: widget.Key, columns: usize) -> (us
         reflow.since = now
     }
     if reflow.from == columns { ret (columns, 0.0) }
-    let span = i64(t.tokens.durations.medium1) * 1000000i64
+    let span = i64(millis) * 1000000i64
     var gone: f32 = 1.0
     if span > 0i64 && now >= reflow.since { gone = f32(now - reflow.since) / f32(span) }
     if gone >= 1.0 {
@@ -7157,6 +7163,24 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         cells[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..base + 8usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
         i += 1usize
     }
+    // (D1448, docs/ux/components/VirtualGrid, motion) A change of width that
+    // changes the columns moves each built tile from where it stood to its new
+    // place over `duration-medium-2` on `ease-standard` (`reflow_share_over`,
+    // kept on the grid); every tile stands in its moving wrapper, and reduced
+    // motion moves them at once.
+    let (old_columns, reflow_left) = reflow_share_over(t, key, columns, t.tokens.durations.medium2)
+    let (moved_cells, moved_cells_error) = mem.alloc[widget.Node](a, built)
+    if moved_cells_error != ok { ret (zero, TooLarge) }
+    var m = 0usize
+    while m < built {
+        let index = built_first + m
+        var shift: geometry.Point = zero
+        if reflow_left > 0.0 && old_columns > 0usize {
+            shift = geometry.Point { x: (f32(index % old_columns) - f32(index % columns)) * (side + 4.0) * reflow_left, y: (f32(index / old_columns) - f32(index / columns)) * extent * reflow_left }
+        }
+        moved_cells[m] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: shift }, style.defaults(), cells[m..m + 1usize])
+        m += 1usize
+    }
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (zero, TooLarge) }
     var r = 0usize
@@ -7170,7 +7194,7 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         line.width = style.Length { Px: options.width }
         line.height = style.Length { Px: extent }
         line.padding = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
-        rows[r] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 4.0 }, line, cells[from..to])
+        rows[r] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 4.0 }, line, moved_cells[from..to])
         made_rows += 1usize
         r += 1usize
     }
