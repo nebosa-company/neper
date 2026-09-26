@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C051",
-      "category": "compiler",
-      "group": "Front end and language",
-      "order": 51,
-      "title": "Tokenizer grounding (v1 precursor for T2 H26)",
-      "score": 0.6,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "`benchmarks/tokens/profile.py` writes a grammar-versioned vocabulary table per public tokenizer (cl100k_base, o200k_base): the model-token cost of every grammar terminal and the frequent composite forms, and `--measure` reproduces the corpus numbers from it -- 1.27 model tokens per lexical token on the conformance corpus, keywords one token each, fixed-width type names two, a typed literal three (D375); the card carries the table, rendered from the profiles and refused when a profile is of another grammar revision (D429). Not yet: families without a public tokenizer, the profile in the build manifest"
-    },
-    {
       "id": "C052",
       "category": "compiler",
       "group": "Front end and language",
