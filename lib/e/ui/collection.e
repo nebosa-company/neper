@@ -3563,8 +3563,8 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // (`surface-container-high`, elevation 4); a branch under the pointer takes the
 // drop look (a 2px `primary` outline over `primary` at 8%) and a drop on it
 // reports a `TreeMove`.
-// ponytail: rows are not virtualised; a held drag does not expand a branch, and
-// a tree table's rows do not drag.
+// (D1373) A drag held 700 ms over a shut branch opens it (`toggle`).
+// ponytail: rows are not virtualised, and a tree table's rows do not drag.
 // (D1330) A tree's per-node states, by key: `disabled` nodes are drawn at 38%,
 // take focus but no pick and say Disabled; an open node in `loading` is Busy and
 // its children wait under a "Loading" row.
@@ -3756,12 +3756,26 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
                 fill = style.color(t.tokens, .SurfaceContainerHigh)
                 row_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
             }
+            var drop_over = false
             if moving && has_lifted_row && lifted_row != i && entry.branch {
                 let (row_box, has_row_box) = widget.bounds_for_key(t.runtime, entry.key)
                 let at = widget.pointer_position(t.runtime)
                 if has_row_box && at.x >= row_box.x && at.x < row_box.x + row_box.width && at.y >= row_box.y && at.y < row_box.y + row_box.height {
                     fill = control.with_alpha(style.color(t.tokens, .Primary), 0.08)
                     row_style.border = style.Border { width: 2.0, color: style.color(t.tokens, .Primary) }
+                    drop_over = true
+                }
+            }
+            // (D1373, docs/ux/components/Tree, dragged) Held there 700 ms, a shut
+            // branch opens: the hold is an ease on the row (asked every frame a
+            // tree moves, so it starts from rest) that fires `toggle` on arriving.
+            if moving && entry.branch {
+                var hold_goal: f32 = 0.0
+                if drop_over && !open { hold_goal = 1.0 }
+                let held = control.eased_on(t, entry.key, entry.key ^ hash.fnv1a64("tree-hold"), hold_goal, true, 700u32)
+                if drop_over && !open && !(held < 1.0) {
+                    let opened = widget.fire_change[widget.Key](toggle, entry.key)
+                    if opened != ok { ret (none, opened) }
                 }
             }
             row_style.background = paint.Brush { Solid: fill }

@@ -26257,3 +26257,16 @@ drops are not announced, and a tree table's rows do not drag.
 
 `ui_collections3_v2` drags A2 onto B: B's top edge turns `primary`, and the
 drop reports A2 into B, on Windows and Linux.
+
+## D1373 — A held drag opens a tree branch
+
+The Tree spec opens a folder a drag hovers for 700 ms. While a tree moves, each
+branch row keeps a hold ease (`eased_on` on the row, slot keyed by
+`fnv1a64("tree-hold")`, 700 ms, forward only). Its goal is 1 while a drag's
+pointer is over the shut branch and 0 otherwise. The ease is asked every
+frame, so it starts from rest, and arriving at 1 fires `toggle` for that
+branch during the build, as D1278's notice timeout fires. A caller that ignores
+the toggle is asked again each frame until the drag leaves.
+
+`ui_collections3_v2` holds A2's drag over B for a second: B is asked to open,
+and the drop still reports A2 into B, on Windows and Linux.
