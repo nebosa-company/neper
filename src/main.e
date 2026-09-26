@@ -10517,7 +10517,10 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
 // The query's header, held until a record needs it (D521): the query's own writer
 // puts its header out itself, so the held one is dropped before it runs.
 fn hold_query_header(a: *mem.Arena, report: *Sink, kind: usize) -> err {
-    let name = query_command_name(kind)
+    ret hold_header_named(a, report, query_command_name(kind))
+}
+
+fn hold_header_named(a: *mem.Arena, report: *Sink, name: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, 256usize)
     if storage_error != ok { ret storage_error }
     var at = tool.nptest_copy(storage[..], 0usize, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"")
@@ -10660,7 +10663,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     // line of the batch file answered from it as its own stream, in order.
     if kind == 7usize {
         let batch_checks = image_checks_after(args, 9usize)
-        query_error = query_batch(a, &checker, &loaded, args[8usize], target_text, batch_checks)
+        query_error = query_batch(a, &checker, &loaded, args, target_text, batch_checks)
     }
     if kind == 8usize { query_error = tool.plan_replace_json(a, &checker, &loaded, args[8usize], args[10usize]) }
     if kind == 9usize { query_error = tool.plan_signature_json(a, &checker, &loaded, args[8usize], args[10usize]) }
@@ -10684,10 +10687,27 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
 // the line's order, so a harness splits the output at the headers; a blank line is
 // passed over, a line no query reads gets a diagnostic stream of its own. A refused
 // query or an unreadable line makes the process exit 2 once every line is answered.
-fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, batch_path: str, target_text: str, checks: str) -> err {
+fn query_batch(a: *mem.Arena, base_checker: *check.Checker, base_loaded: *graph.Graph, args: []str, target_text: str, checks: str) -> err {
     // The checked graph and checker are the reusable snapshot. The batch input is
     // session storage; each line after it is temporary request storage (D558, H16).
     let snapshot_used = mem.stats(a).used
+    let batch_path = args[8usize]
+    // (D1526) The snapshot slots, session storage: slot 0 is the base, pinned.
+    let (slots, slots_error) = mem.alloc[BatchSnapshot](a, BATCH_SLOTS)
+    if slots_error != ok { ret slots_error }
+    var slot_at = 0usize
+    while slot_at < slots.len {
+        var empty_slot: BatchSnapshot = zero
+        slots[slot_at] = empty_slot
+        slot_at += 1usize
+    }
+    slots[0usize].valid = true
+    slots[0usize].pinned = true
+    var session: BatchSession = zero
+    session.slots = slots
+    session.budget = 2usize
+    session.base_loaded = base_loaded
+    session.base_checker = base_checker
     var batch = ""
     if same(batch_path, "-") {
         let (from_stdin, stdin_error) = source.load_stdin(a)
@@ -10742,6 +10762,16 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
             known = true
             line_error = tool.batch_memory(a, snapshot_used, session_used, request_peak, queries_completed)
         }
+        if word_count >= 1usize && !known {
+            let (snapshot_line, snapshot_error) = batch_snapshot_line(a, &session, args, words[0usize..word_count])
+            if snapshot_line {
+                known = true
+                line_error = snapshot_error
+            }
+        }
+        // The current snapshot, taken after any line that moved it.
+        let checker = batch_checker(&session)
+        let loaded = batch_loaded(&session)
         if word_count >= 2usize && same(words[0usize], "context") {
             known = true
             query = true
@@ -10776,6 +10806,362 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
     }
     if refused { ret tool.Refused }
     ret ok
+}
+
+// (D1526, H16) A batch's snapshots: the base one query-batch checked, and up to
+// `budget - 1` more, each the program under one set of edits, checked into an arena
+// of its own. `edit PATH FILE` and `revert PATH` move the batch to the snapshot of
+// the edited set, found in a slot when one holds exactly that set (a hit) or checked
+// into a slot (a miss) -- a free one, else the least recently used one not pinned,
+// whose arena is reset (an eviction). `pin` and `unpin` hold or
+// release the current snapshot; `use KEY` goes back to a snapshot by its key, and a
+// key that was evicted is refused as stale. `snapshots` reports the slots. A queried
+// snapshot is always the current one, so no query outlives its storage.
+const BATCH_SLOTS: usize = 8usize
+const BATCH_EDITS: usize = 16usize
+
+type BatchSnapshot = struct {
+    arena: mem.Arena,
+    has_arena: bool,
+    loaded: graph.Graph,
+    resolver: resolve.Resolver,
+    checker: check.Checker,
+    valid: bool,
+    pinned: bool,
+    used_at: usize,
+    key: usize,
+    // The edits it was checked under, in its own arena.
+    edit_paths: [BATCH_EDITS]str,
+    edit_texts: [BATCH_EDITS]str,
+    edit_count: usize,
+}
+
+type BatchSession = struct {
+    slots: []BatchSnapshot,
+    budget: usize,
+    current: usize,
+    tick: usize,
+    hits: usize,
+    misses: usize,
+    evictions: usize,
+    base_loaded: *graph.Graph,
+    base_checker: *check.Checker,
+}
+
+// The key of an edit set: its paths and texts hashed, order-free. A candidate only:
+// a hit is proved by comparing the texts (H15).
+fn edit_set_key(paths: []str, texts: []str) -> usize {
+    var key = 0usize
+    var at = 0usize
+    while at < paths.len {
+        let (path_hash, path_error) = artifact_hash.xxhash64(paths[at])
+        let (text_hash, text_error) = artifact_hash.xxhash64(texts[at])
+        key = key +% ((path_hash *% 1099511628211usize) ^ text_hash)
+        at += 1usize
+    }
+    ret key
+}
+
+fn same_edit_set(slot: *BatchSnapshot, paths: []str, texts: []str) -> bool {
+    if slot.edit_count != paths.len { ret false }
+    var at = 0usize
+    while at < paths.len {
+        var found = false
+        var scan = 0usize
+        while scan < slot.edit_count {
+            if same(slot.edit_paths[scan], paths[at]) && same(slot.edit_texts[scan], texts[at]) { found = true }
+            scan += 1usize
+        }
+        if !found { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// The slot of the current snapshot's edit set changed at `path`: `text` in place of
+// the old, or the path dropped when `text` is empty and `drop` is set; checked into
+// a slot on a miss. The index of the slot, and whether there was one to use.
+fn batch_move(a: *mem.Arena, session: *BatchSession, args: []str, path: str, text: str, drop: bool) -> (usize, bool, err) {
+    var paths: [BATCH_EDITS]str = zero
+    var texts: [BATCH_EDITS]str = zero
+    var count = 0usize
+    let from = session.slots[session.current]
+    var at = 0usize
+    while at < from.edit_count {
+        if !same(from.edit_paths[at], path) {
+            paths[count] = from.edit_paths[at]
+            texts[count] = from.edit_texts[at]
+            count += 1usize
+        }
+        at += 1usize
+    }
+    if !drop {
+        if count == paths.len { ret (0usize, false, ok) }
+        paths[count] = path
+        texts[count] = text
+        count += 1usize
+    }
+    session.tick += 1usize
+    // The base snapshot is the empty set.
+    if count == 0usize {
+        session.hits += 1usize
+        session.slots[0usize].used_at = session.tick
+        ret (0usize, true, ok)
+    }
+    let key = edit_set_key(paths[0usize..count], texts[0usize..count])
+    var slot_at = 1usize
+    while slot_at < session.budget {
+        if session.slots[slot_at].valid && session.slots[slot_at].key == key && same_edit_set(&session.slots[slot_at], paths[0usize..count], texts[0usize..count]) {
+            session.hits += 1usize
+            session.slots[slot_at].used_at = session.tick
+            ret (slot_at, true, ok)
+        }
+        slot_at += 1usize
+    }
+    // A miss: a free slot, else the least recently used one neither pinned nor
+    // current, else the current one when it is not pinned -- the batch is leaving it,
+    // and no query is open across lines.
+    var chosen = session.budget
+    slot_at = 1usize
+    while slot_at < session.budget {
+        if !session.slots[slot_at].valid && chosen == session.budget { chosen = slot_at }
+        slot_at += 1usize
+    }
+    if chosen == session.budget {
+        slot_at = 1usize
+        while slot_at < session.budget {
+            let candidate = session.slots[slot_at]
+            if !candidate.pinned && slot_at != session.current && (chosen == session.budget || candidate.used_at < session.slots[chosen].used_at) { chosen = slot_at }
+            slot_at += 1usize
+        }
+        if chosen == session.budget && session.current != 0usize && !session.slots[session.current].pinned { chosen = session.current }
+        if chosen == session.budget { ret (0usize, false, ok) }
+        session.evictions += 1usize
+    }
+    session.misses += 1usize
+    var command = "edit"
+    if drop { command = "revert" }
+    let check_error = batch_check(a, &session.slots[chosen], args, paths[0usize..count], texts[0usize..count], command)
+    // An edit that does not check makes no snapshot (H16). When it took the current
+    // slot, the batch is back at the base snapshot, which is always there.
+    if check_error != ok {
+        if chosen == session.current { session.current = 0usize }
+        ret (chosen, false, check_error)
+    }
+    session.slots[chosen].key = key
+    session.slots[chosen].used_at = session.tick
+    ret (chosen, true, ok)
+}
+
+// The program under the edits, checked into the slot's own arena, reset first. A
+// program that does not check leaves the slot empty: no snapshot stands for it.
+fn batch_check(a: *mem.Arena, slot: *BatchSnapshot, args: []str, paths: []str, texts: []str, command: str) -> err {
+    slot.valid = false
+    slot.pinned = false
+    if !slot.has_arena {
+        let (arena, arena_error) = graph.reserved_arena(a)
+        if arena_error != ok { ret arena_error }
+        slot.arena = arena
+        slot.has_arena = true
+    }
+    let sa = &slot.arena
+    mem.reset(sa, 0usize)
+    var no_graph: graph.Graph = zero
+    slot.loaded = no_graph
+    var no_resolver: resolve.Resolver = zero
+    slot.resolver = no_resolver
+    var no_checker: check.Checker = zero
+    slot.checker = no_checker
+    slot.edit_count = 0usize
+    var at = 0usize
+    while at < paths.len {
+        let (path_copy, path_error) = copy_text(sa, paths[at])
+        if path_error != ok { ret path_error }
+        let (text_copy, text_error) = copy_text(sa, texts[at])
+        if text_error != ok { ret text_error }
+        slot.edit_paths[at] = path_copy
+        slot.edit_texts[at] = text_copy
+        at += 1usize
+    }
+    slot.edit_count = paths.len
+    var report = json_sink()
+    try hold_header_named(sa, &report, command)
+    try init_cli_graph(sa, &slot.loaded)
+    try load_overlays(sa, args, &slot.loaded)
+    at = 0usize
+    while at < slot.edit_count {
+        if slot.loaded.overlay_count == slot.loaded.overlay_paths.len { ret tool_usage() }
+        slot.loaded.overlay_paths[slot.loaded.overlay_count] = slot.edit_paths[at]
+        slot.loaded.overlay_texts[slot.loaded.overlay_count] = slot.edit_texts[at]
+        slot.loaded.overlay_count += 1usize
+        at += 1usize
+    }
+    try load_graph(sa, &report, &slot.loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+    try init_cli_resolver(sa, &slot.resolver, &slot.loaded, &report)
+    let resolve_error = resolve.collect(&slot.resolver, &slot.loaded)
+    if resolve_error != ok {
+        try print_resolve_diagnostic(&report, &slot.loaded, &slot.resolver, resolve_error)
+        try finish_report(&report)
+        ret tool.Refused
+    }
+    try init_cli_checker(sa, &slot.checker, &slot.loaded, &report)
+    slot.checker.arena = sa
+    let (explains, explains_error) = mem.alloc[check.Explain](sa, 524288usize)
+    if explains_error != ok { ret explains_error }
+    slot.checker.explains = explains
+    let check_error = check.run(&slot.checker, &slot.resolver, &slot.loaded)
+    if check_error != ok {
+        try print_check_diagnostic(&report, &slot.loaded, &slot.checker, check_error)
+        try finish_report(&report)
+        ret tool.Refused
+    }
+    slot.valid = true
+    ret ok
+}
+
+fn copy_text(a: *mem.Arena, text: str) -> (str, err) {
+    let (bytes, bytes_error) = mem.alloc[u8](a, text.len + 1usize)
+    if bytes_error != ok { ret ("", bytes_error) }
+    let copied = nptest_append(bytes, 0usize, text)
+    ret (bytes[0usize..copied], ok)
+}
+
+// The batch's current program, as the queries read it.
+fn batch_loaded(session: *BatchSession) -> *graph.Graph {
+    if session.current == 0usize { ret session.base_loaded }
+    ret &session.slots[session.current].loaded
+}
+
+fn batch_checker(session: *BatchSession) -> *check.Checker {
+    if session.current == 0usize { ret session.base_checker }
+    ret &session.slots[session.current].checker
+}
+
+// A snapshot line's answer: one stream, `snapshot` records none, the result data
+// the current key, the slots and the counts.
+fn batch_snapshot_result(session: *BatchSession, command: str, ok_line: bool, reason: str) -> err {
+    var out = json_sink()
+    try write_all(&out, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"")
+    try write_all(&out, command)
+    try write_all(&out, "\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
+    if !ok_line {
+        try emit_command_diagnostic(&out, "E-TOOL-0003", reason)
+        ret write_all(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
+    }
+    try write_all(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"snapshot\":\"")
+    try write_hex16(&out, session.slots[session.current].key)
+    try write_all(&out, "\",\"pinned\":")
+    if session.slots[session.current].pinned { try write_all(&out, "true") } else { try write_all(&out, "false") }
+    try write_all(&out, ",\"budget\":")
+    try write_usize(&out, session.budget)
+    var live = 0usize
+    var pinned = 0usize
+    var arena_used = 0usize
+    var at = 0usize
+    while at < session.budget {
+        if session.slots[at].valid { live += 1usize }
+        if session.slots[at].valid && session.slots[at].pinned { pinned += 1usize }
+        if at != 0usize && session.slots[at].has_arena { arena_used += mem.stats(&session.slots[at].arena).used }
+        at += 1usize
+    }
+    try write_all(&out, ",\"live\":")
+    try write_usize(&out, live)
+    try write_all(&out, ",\"pinned_count\":")
+    try write_usize(&out, pinned)
+    try write_all(&out, ",\"hits\":")
+    try write_usize(&out, session.hits)
+    try write_all(&out, ",\"misses\":")
+    try write_usize(&out, session.misses)
+    try write_all(&out, ",\"evictions\":")
+    try write_usize(&out, session.evictions)
+    try write_all(&out, ",\"snapshot_arena_used\":")
+    try write_usize(&out, arena_used)
+    ret write_all(&out, "}}\n")
+}
+
+fn write_hex16(out: *Sink, value: usize) -> err {
+    let digits = "0123456789abcdef"
+    var text: [16]u8 = zero
+    var at = 0usize
+    while at < 16usize {
+        text[at] = digits[(value >> ((15usize - at) * 4usize)) & 15usize]
+        at += 1usize
+    }
+    ret write_all(out, text[..])
+}
+
+// `edit`, `revert`, `pin`, `unpin`, `use`, `budget` and `snapshots` lines.
+fn batch_snapshot_line(a: *mem.Arena, session: *BatchSession, args: []str, words: []str) -> (bool, err) {
+    let verb = words[0usize]
+    if same(verb, "snapshots") && words.len == 1usize { ret (true, batch_snapshot_result(session, "snapshots", true, "")) }
+    if same(verb, "pin") && words.len == 1usize {
+        session.slots[session.current].pinned = true
+        ret (true, batch_snapshot_result(session, "pin", true, ""))
+    }
+    if same(verb, "unpin") && words.len == 1usize {
+        // The base snapshot is the batch's own and stays pinned.
+        if session.current != 0usize { session.slots[session.current].pinned = false }
+        ret (true, batch_snapshot_result(session, "unpin", true, ""))
+    }
+    if same(verb, "budget") && words.len == 2usize && decimal_ok(words[1usize]) {
+        let asked = decimal_value(words[1usize])
+        if asked < 1usize || asked > BATCH_SLOTS || asked < session.budget {
+            let refused = batch_snapshot_result(session, "budget", false, "a snapshot budget is from the slots in use up to eight")
+            ret (true, tool.Refused)
+        }
+        session.budget = asked
+        ret (true, batch_snapshot_result(session, "budget", true, ""))
+    }
+    if same(verb, "use") && words.len == 2usize {
+        var at = 0usize
+        while at < session.budget {
+            if session.slots[at].valid {
+                let slot_key = session.slots[at].key
+                if hex16_is(words[1usize], slot_key) {
+                    session.current = at
+                    session.tick += 1usize
+                    session.slots[at].used_at = session.tick
+                    ret (true, batch_snapshot_result(session, "use", true, ""))
+                }
+            }
+            at += 1usize
+        }
+        let stale = batch_snapshot_result(session, "use", false, "the snapshot is stale: no slot holds it, it was evicted or never made")
+        ret (true, tool.Refused)
+    }
+    if (same(verb, "edit") && words.len == 3usize) || (same(verb, "revert") && words.len == 2usize) {
+        var text = ""
+        let drop = same(verb, "revert")
+        if !drop {
+            let (loaded_text, load_error) = source.load(a, words[2usize])
+            if load_error != ok {
+                let unreadable = batch_snapshot_result(session, verb, false, "the edit's file cannot be read")
+                ret (true, tool.Refused)
+            }
+            text = loaded_text
+        }
+        let (slot, found, move_error) = batch_move(a, session, args, words[1usize], text, drop)
+        if move_error == tool.Refused { ret (true, tool.Refused) }
+        if move_error != ok { ret (true, move_error) }
+        if !found {
+            let full = batch_snapshot_result(session, verb, false, "no snapshot slot is free: every one is pinned, or the edit set is full")
+            ret (true, tool.Refused)
+        }
+        session.current = slot
+        ret (true, batch_snapshot_result(session, verb, true, ""))
+    }
+    ret (false, ok)
+}
+
+fn hex16_is(text: str, value: usize) -> bool {
+    if text.len != 16usize { ret false }
+    let digits = "0123456789abcdef"
+    var at = 0usize
+    while at < 16usize {
+        if text[at] != digits[(value >> ((15usize - at) * 4usize)) & 15usize] { ret false }
+        at += 1usize
+    }
+    ret true
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

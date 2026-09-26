@@ -463,6 +463,36 @@ before this memory report. Thus a report after warmup shows both the completed
 work, its peak, and that live memory
 returned to the session baseline instead of merely relying on process exit.
 
+A batch holds **snapshots** (D1526, H16). The first is the program `query-batch`
+checked. The lines below move the batch between snapshots, and every query answers
+from the current one:
+
+- `edit PATH FILE` replaces a module's text (`PATH` spelled as `--overlay` spells
+  it) with the file's.
+- `revert PATH` drops that replacement.
+- `budget N` sets how many snapshots may be held, one to eight, the base included.
+  It is two by default, and a budget cannot shrink below the slots in use.
+- `pin` holds the current snapshot against eviction, and `unpin` releases it. The
+  base snapshot is always pinned.
+- `use KEY` returns to a held snapshot by its key.
+- `snapshots` reports the slots.
+
+An edit's result carries the current `snapshot` key, whether it is `pinned`, the
+`budget`, the `live` and `pinned_count` snapshots, the `hits`, `misses` and
+`evictions` so far, and `snapshot_arena_used`.
+
+A snapshot is found again when a slot holds exactly the same edit set, compared
+text for text, not by its hash alone. Otherwise the set is checked into a slot of
+its own arena: a free one, else the least recently used snapshot that is neither
+pinned nor current, else the current one when it is not pinned. The chosen slot's
+arena is reset and counted as an eviction. An edit whose program does not check is
+refused with its diagnostic and makes no snapshot. If it had taken the current slot,
+the batch returns to the base snapshot. A key no slot holds is refused as stale.
+With every slot pinned, an edit is refused. A program that does not parse ends the
+batch as a failing load does. Ten thousand edit/query/revert cycles under the
+default budget make one miss, then hit every time, with the live arena back at the
+session baseline and the snapshot storage unchanged.
+
 `signature SYMBOL ORDER` (D562, H10/H29) is the batch form of
 `plan-change-signature-file`: `ORDER` is the same comma-separated list of old
 parameter indices. It lets a transformation request many independent signature
