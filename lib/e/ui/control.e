@@ -5057,6 +5057,36 @@ fn tab_strip_offset(runtime: *widget.Runtime, strip_key: widget.Key, tab_key: wi
     ret offset
 }
 
+// (D1375) A clipped edge's fade: the ground at the edge side, clear toward the
+// content (`forward` fades toward the end).
+type EdgeFade = struct { stops: [2]paint.Stop, forward: bool }
+
+fn edge_fade(ground: paint.Color, forward: bool) -> EdgeFade {
+    var out: EdgeFade = zero
+    out.forward = forward
+    out.stops[0usize] = paint.Stop { offset: 0.0, color: ground }
+    out.stops[1usize] = paint.Stop { offset: 1.0, color: with_alpha(ground, 0.0) }
+    if forward {
+        out.stops[0usize] = paint.Stop { offset: 0.0, color: with_alpha(ground, 0.0) }
+        out.stops[1usize] = paint.Stop { offset: 1.0, color: ground }
+    }
+    ret out
+}
+
+fn edge_fade_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let f = mem.cast[*EdgeFade](ctx)
+    let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: area.x, y: area.y }, end: geometry.Point { x: area.x + area.width, y: area.y }, stops: f.stops[0usize..2usize] } }
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: area, brush: brush } })
+}
+
+fn fade_node(a: *mem.Arena, fade: *EdgeFade, width: f32, height: f32) -> ([]const widget.Node, err) {
+    var none: []const widget.Node = zero
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret (none, TooLarge) }
+    one[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](fade), measure: mark_measure, paint: edge_fade_paint, state: widget.bytes_of[EdgeFade](fade) } }, style: sized_style(width, height), children: none }
+    ret (one[0usize..1usize], ok)
+}
+
 // (D1255) A chevron's page: the strip moved by `step`.
 type TabPage = struct { runtime: *widget.Runtime, strip: widget.Key, step: f32 }
 
@@ -5175,7 +5205,7 @@ fn tabs_options() -> TabsOptions {
 // (D1255) On a pointer host its chevrons page it.
 // (D1281) The indicator slides between tabs (`tab_slide`).
 // (D1309) The sliding indicator (keyed `key + 1048574`) eases its width as well.
-// ponytail: no edge fade.
+// (D1375) Beside each chevron the clipped edge fades into the bar.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -5299,7 +5329,10 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         let back_page = paging && offset > 0.5
         let forward_page = paging && offset + shown < content - 0.5
         let chevron_side = t.tokens.sizes.control_md
-        let (strips, strips_error) = mem.alloc[widget.Node](a, 6usize)
+        let (strips, strips_error) = mem.alloc[widget.Node](a, 8usize)
+        let (fades, fades_error) = mem.alloc[EdgeFade](a, 2usize)
+        if fades_error != ok { ret (zero, TooLarge) }
+        let ground = style.color(t.tokens, .Background)
         if strips_error != ok { ret (zero, TooLarge) }
         let (pages, pages_error) = mem.alloc[TabPage](a, 2usize)
         if pages_error != ok { ret (zero, TooLarge) }
@@ -5317,6 +5350,13 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             let (back_button, back_error) = glyph_action(a, key + 1048577u64, t, .ChevronLeft, "Scroll tabs back", &page_presses[0usize], chevron_side, t.tokens.sizes.icon_sm, style.color(t.tokens, .OnSurfaceVariant), true, 0u32, 0u32, 0u64)
             if back_error != ok { ret (zero, back_error) }
             strips[4usize] = back_button
+            // (D1375, docs/ux/components/Tabs, overflow) A 24 fade from the bar's
+            // ground into the tabs beside the chevron (keyed `key + 1048579`).
+            fades[0usize] = edge_fade(ground, false)
+            let (back_fade, back_fade_error) = fade_node(a, &fades[0usize], 24.0, h)
+            if back_fade_error != ok { ret (zero, back_fade_error) }
+            strips[at] = widget.positioned(key + 1048579u64, chevron_side, 0.0, style.defaults(), back_fade)
+            at += 1usize
             strips[at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), strips[4usize..5usize])
             at += 1usize
         }
@@ -5326,6 +5366,12 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             let (forward_button, forward_error) = glyph_action(a, key + 1048578u64, t, .ChevronRight, "Scroll tabs forward", &page_presses[1usize], chevron_side, t.tokens.sizes.icon_sm, style.color(t.tokens, .OnSurfaceVariant), true, 0u32, 0u32, 0u64)
             if forward_error != ok { ret (zero, forward_error) }
             strips[5usize] = forward_button
+            // (D1375) The forward fade (keyed `key + 1048580`).
+            fades[1usize] = edge_fade(ground, true)
+            let (forward_fade, forward_fade_error) = fade_node(a, &fades[1usize], 24.0, h)
+            if forward_fade_error != ok { ret (zero, forward_fade_error) }
+            strips[at] = widget.positioned(key + 1048580u64, max_zero(options.width - chevron_side - 24.0), 0.0, style.defaults(), forward_fade)
+            at += 1usize
             strips[at] = widget.positioned(0u64, options.width - chevron_side, 0.0, style.defaults(), strips[5usize..6usize])
             at += 1usize
         }
