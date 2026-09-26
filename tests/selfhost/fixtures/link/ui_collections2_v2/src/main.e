@@ -700,6 +700,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     off_keys[0usize] = 1000u64
     var off_options: collection.TableOptions = zero
     off_options.disabled = off_keys[..]
+    // (D1501) The third row (key 1002) pending: Busy in the tree.
+    var pending_keys: [1]widget.Key = zero
+    pending_keys[0usize] = 1002u64
+    off_options.pending = pending_keys[..]
     var off_step = 0usize
     while off_step < 2usize {
         f = mem.arena_from(frame_storage)
@@ -725,6 +729,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         off_at += 1usize
     }
     if !off_disabled { os.exit(155i32) }
+    var busy_at = 0usize
+    var third_busy = false
+    var second_busy = false
+    while busy_at < off_tree.nodes.len {
+        if off_tree.nodes[busy_at].role == .Row && off_tree.nodes[busy_at].position.row == 3u32 && off_tree.nodes[busy_at].state.busy { third_busy = true }
+        if off_tree.nodes[busy_at].role == .Row && off_tree.nodes[busy_at].position.row == 2u32 && off_tree.nodes[busy_at].state.busy { second_busy = true }
+        busy_at += 1usize
+    }
+    if !third_busy || second_busy { os.exit(156i32) }
     // (D1383) A touch held 600 ms on the first row of a selectable table with
     // nothing selected toggles it into the selection; the release picks nothing.
     var held_chose: Chosen = zero

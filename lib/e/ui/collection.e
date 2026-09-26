@@ -2112,20 +2112,27 @@ fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, ce
 // (D1246) `check`, when given, is the row's selection cell, first.
 // (D1312) A table's row actions come from `TableOptions.row_actions`.
 // (D1313) Its disclosure and detail rows from `TableOptions.expandable`.
-// (D1500) `table_row_full` adds the disabled look.
+// (D1500) `table_row_full` adds the disabled look; (D1501) and a loading row's
+// Busy state.
 // ponytail: an open row's detail is not counted by the virtual range (it scrolls
-// as part of its row); no dragged or loading looks; the caller's cells keep their
-// own colours when the row is selected.
+// as part of its row); no dragged look; the caller's cells keep their own
+// colours when the row is selected.
 // (D1246) `has_check` puts `check` (a selection cell) first.
 fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool) -> (widget.Node, err) {
-    let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, count, extent, selected, pick, double, has_double, role, pad, grid, owned, check, has_check, false)
+    let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, count, extent, selected, pick, double, has_double, role, pad, grid, owned, check, has_check, 0u32)
     ret (made, made_error)
 }
+
+// (D1500, D1501) A table row's conditions: disabled, and loading (its cells are
+// skeletons and it is Busy in the tree).
+const ROW_DISABLED: u32 = 1u32
+const ROW_LOADING: u32 = 2u32
 
 // (D1500, docs/ux/components/TableRow, disabled) A `disabled` row: its content
 // (and its selection cell) at 38%, under no state layer, taking no pick, still
 // focusable so its words can be read, and Disabled in the tree.
-fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool, disabled: bool) -> (widget.Node, err) {
+fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool, conditions: u32) -> (widget.Node, err) {
+    let disabled = (conditions & ROW_DISABLED) != 0u32
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
     let sides = style.Length { Px: pad }
@@ -2217,6 +2224,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     }
     if selected { sem.states = accessibility.STATE_SELECTED }
     if disabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    if (conditions & ROW_LOADING) != 0u32 { sem.states = sem.states | accessibility.STATE_BUSY }
     ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
 }
 
@@ -2247,7 +2255,9 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // (D1341) `groups` spans titles over runs of columns: the header's upper tier.
 // (D1500) `disabled` marks rows (by key) that take no action: drawn at 38%,
 // their selection cell inert, still focusable and Disabled in the tree.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key }
+// (D1501) `pending` marks rows (by key) whose data has not come: each cell is a
+// skeleton line (60% of the cell, 12 tall) and the row is Busy in the tree.
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -3672,6 +3682,24 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         let row_tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
         let chosen = is_selected(selected, row_key)
         let row_disabled = is_selected(selection.disabled, row_key)
+        let row_pending = is_selected(selection.pending, row_key)
+        // (D1501, docs/ux/components/TableRow, loading) A pending row's cells are
+        // skeleton lines.
+        if row_pending {
+            var pc = 0usize
+            while pc < columns.len {
+                var line_options = control.skeleton_options()
+                line_options.shape = .Line
+                let line_width = control.max_zero(columns[pc].width - 2.0 * pad) * 0.6
+                let (line_node, line_error) = control.skeleton_of(a, 0u64, t, line_width, 12.0, line_options)
+                if line_error != ok { ret (zero, line_error) }
+                cells[pc] = line_node
+                pc += 1usize
+            }
+        }
+        var row_conditions = 0u32
+        if row_disabled { row_conditions = row_conditions | ROW_DISABLED }
+        if row_pending { row_conditions = row_conditions | ROW_LOADING }
         var row_pick = pick
         var check: widget.Node = zero
         if selecting {
@@ -3693,7 +3721,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 if hold_error != ok { ret (zero, hold_error) }
             }
         }
-        let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_disabled)
+        let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_conditions)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
