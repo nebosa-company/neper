@@ -16,12 +16,15 @@ model's few-shot success or repair loop -- that is the H12 evaluation in
 requires baselines. The sibling [`llm_edit`](../llm_edit/README.md) suite measures the
 different claim in spec §14 (search/edit reliability).
 
-## Result (2026-09-13, x64-windows, 3 trials, both languages in debug mode)
+## Result (2026-09-26, x64-windows, 3 trials, both languages in debug mode)
 
 | | tokens (10 tasks) | correct | median compile | median run | median executable |
 |---|---:|:-:|---:|---:|---:|
-| Neper (`neper-try`, C bootstrap) | **876** | 10/10 | 495 ms | 9.6 ms | **24 KB** |
-| Rust (`rustc` 1.98) | **431** | 10/10 | 399 ms | 11.8 ms | 4.97 MB |
+| Neper (`neper-try`, C bootstrap) | **868** | 10/10 | 195 ms | 14.7 ms | **21.5 KB** |
+| Rust (`rustc` 1.98) | **431** | 10/10 | 247 ms | 16.1 ms | 4.97 MB |
+
+(The 2026-09-13 run read 876 tokens, 495 ms compile and 24 KB; `fizzbuzz` was then written as
+nested `} else { if`, and the bootstrap has since shrunk its runtime prefix.)
 
 **The "fewer tokens" hypothesis does not hold here: Neper costs about twice the source tokens of
 Rust for the same programs (~2.0x).** The tax is concrete and mostly fixed-cost, so it dominates
@@ -34,9 +37,11 @@ tiny programs and would shrink on larger ones:
   requires a suffix only where nothing supplies a type (an unannotated `var x = 0i32`, a range
   with two untyped bounds). The first cut of these programs was over-suffixed; writing them
   idiomatically saved 65 tokens (941 -> 876), about 7%.
-- No `else if` (nested `} else { if`), and no iterator combinators, so `(1..=100).sum()` or
-  `.chars().filter(..).count()` become explicit loops. This partly measures library richness,
-  not syntax.
+- No iterator combinators, so `(1..=100).sum()` or `.chars().filter(..).count()` become explicit
+  loops. This partly measures library richness, not syntax. (`else if` exists -- `grammar.ebnf`
+  `if_stmt`, spec §6, 115 files under `src` and `lib` -- but the `else` must follow the `}` on the
+  same line, since a statement ends at a newline; the first cut of `fizzbuzz` nested `} else { if`
+  instead, and writing it as `} else if` saved 8 tokens, under 1% of the total.)
 - Tokenizer bias: `cl100k_base` was trained on a great deal of Rust-shaped code and none of
   Neper's, so Neper's spellings may tokenize less efficiently. Re-run with Claude's tokenizer
   before treating the ratio as exact.
@@ -49,7 +54,11 @@ the array literal (`[_]i32{ 3i32, 9i32 }`, not `[3, 9]`), the shape a Rust-train
 reaches for. Rust is in every model's training data; Neper is in none, which is the confound
 the full evaluation exists to control.
 
-The cheapest remaining token win is a language decision, not benchmark work: `else if`.
-Literal inference already exists and deliberately stops short of a default type and of
-non-local inference (D27), so that where an expression wraps under §11 is legible from its
-own line -- that is a safety choice, not a gap.
+What remains of the 437-token gap is mostly the fixed `main` cost (about 300 tokens over ten
+programs) and the explicit loops; the only language decision that would move it is a shorter
+entry form, which H26 gates behind measured per-tokenizer budgets. Literal inference already
+exists and deliberately stops short of a default type and of non-local inference (D27), so
+that where an expression wraps under §11 is legible from its own line -- that is a safety
+choice, not a gap. On real edits rather than ten-line programs, `scripts/lang-stats.py` finds
+Neper and Rust within 3% of each other in visible output tokens per source byte (0.479 vs
+0.490), which is what the fixed-cost reading predicts.
