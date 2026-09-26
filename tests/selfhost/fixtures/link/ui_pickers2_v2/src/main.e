@@ -396,6 +396,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // (D1306) On the minute dial Page Up sets 35 and Left 29.
             if widget.focus(&runtime, testing.by_key(&harness, 1307u64).element) != ok || testing.press_key(&harness, 33u32, zero) != ok || chose.kind != .Minute || chose.value != 35u8 { os.exit(69i32) }
             if testing.press_key(&harness, 37u32, zero) != ok || chose.value != 29u8 { os.exit(70i32) }
+            // (D1403) A fast drag to seven past snaps to 5; a slow nudge there picks 7.
+            let (minute_ring, has_minute_ring) = bounds(&harness, &runtime, 1307u64)
+            if !has_minute_ring { os.exit(117i32) }
+            let minute_hub = geometry.Point { x: minute_ring.x + minute_ring.width * 0.5, y: minute_ring.y + minute_ring.height * 0.5 }
+            let seven = geometry.Point { x: minute_hub.x + 33.46, y: minute_hub.y - 37.16 }
+            if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(minute_hub.x, minute_hub.y - 50.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(minute_hub.x + 10.0, minute_hub.y - 50.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(seven.x, seven.y) }) != ok { os.exit(118i32) }
+            if chose.kind != .Minute || chose.value != 5u8 { os.exit(119i32) }
+            if testing.send(&harness, input.Event { PointerMove: testing.pointer_at(seven.x + 1.0, seven.y + 1.0) }) != ok || chose.value != 7u8 { os.exit(120i32) }
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(seven.x + 1.0, seven.y + 1.0) }) != ok { os.exit(121i32) }
         }
         dial_step += 1usize
     }

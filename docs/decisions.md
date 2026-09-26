@@ -26689,3 +26689,13 @@ row and validates on Save.
 
 `ui_collections6_v2` taps a touch grid's row (reported as `EditRow`) and lays
 out the row sheet with both fields and Save, on Windows and Linux.
+
+## D1403 — Fast dial drags snap minutes to the fives
+
+The TimePicker spec's minutes snap to 5 unless dragged slowly (1-minute
+resolution). D1362's dial drag now reads each move's travel (`widget.Drag`'s
+delta). On the minute dial, a move over 4 snaps the minute to the nearest five,
+and a slower one picks the whole minute; hours are unchanged.
+
+`ui_pickers2_v2` drags the minute dial quickly to seven past (5), then nudges
+it slowly (7), on Windows and Linux.
