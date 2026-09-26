@@ -27042,3 +27042,9 @@ The RichText spec fades the link hover wash in over `duration-short-2` with `eas
 The Breadcrumbs spec cross-fades the edit field in over `duration-short-3` with `ease-standard`. A trail now keeps an editing share on itself, under slot `key + 1048602`. While editing, the path field and its message stand at that share's opacity, inside a column that is always there in that mode. Reduced motion shows the field at once. The trail going out is not drawn fading.
 
 `ui_navigation2_v2` switches a trail to editing, on Windows and Linux: on that frame the field stands part way in, and a second later it is whole. The other breadcrumb fixtures (`ui_collections6_v2`, `ui_adaptive`, `ui_content2_v2`, `ui_navigation_v2`) pass on both hosts.
+
+## D1444 — Colour picker thumbs ease on keyboard steps
+
+The ColorPicker spec says that "thumbs move without animation while dragged and with `duration-short-3` `ease-standard` on keyboard steps". The colour field's panel now eases each thumb's value: saturation and brightness on the spectrum, hue on its strip and alpha on its strip. The values are kept on the field itself (slots `key + 1048603..1048606`), because the spectrum and strips are remade whenever their colours change. `thumb_eased` moves a thumb at once while its own area is pressed, so a drag follows the pointer. Reduced motion also moves at once. The panel still opens as the D1429 flyout does, not as its own Flyout motion.
+
+`ui_pickers3_v2` sets a new colour, on Windows and Linux. On the change's frame the hue strip differs from how it settles a second later, and it matches without the change. The fixture's limits rise to 64 states, 4096 bytes and 32 classes. `ui_pickers` still passes on both hosts.
