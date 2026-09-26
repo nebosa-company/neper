@@ -6598,7 +6598,8 @@ fn find_local(c: *Checker, name: str) -> (usize, bool) {
     var at = c.local_count
     while at > 0usize {
         at = at - 1usize
-        if same(c.locals[at].name, name) { ret (at, true) }
+        // (D1563) The length first, without a call: most locals differ in it.
+        if c.locals[at].name.len == name.len && same(c.locals[at].name, name) { ret (at, true) }
     }
     ret (0usize, false)
 }
@@ -15783,7 +15784,28 @@ fn producer_borrowed(c: *Checker, function: Function) -> bool {
 
 // The lent local a place reaches through a pointer alias (D393): the base name of
 // the place, a local bound from `&x`, with `x` lent to a running thread.
+// (D1563) Whether any local is lent to a thread, or dangling: the alias questions
+// answer only with such a local, and every field, index and `*` asks both.
+fn any_lent_local(c: *Checker) -> bool {
+    var at = 0usize
+    while at < c.local_count {
+        if c.resources[at].lent_to != 0usize { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn any_dangling_local(c: *Checker) -> bool {
+    var at = 0usize
+    while at < c.local_count {
+        if c.resources[at].dangling != 0u8 { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    if !any_lent_local(c) { ret (0usize, false) }
     let (pointed, has_target) = alias_target(c, g, tree, module_index, node_index)
     if has_target && c.resources[pointed].lent_to != 0usize { ret (pointed, true) }
     var wanted = 0usize
@@ -16155,9 +16177,27 @@ fn local_field_path(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     ret (local_index, member_count, found)
 }
 
+// (D1563) A place with no field, index or `*` step: its member path is empty, so the
+// 2 KB path buffer need not be cleared. Most places the resource walk asks about
+// are bare names.
+fn bare_path(tree: *parse.Tree, node_index: usize) -> bool {
+    let kind = tree.nodes[node_index].kind
+    ret kind != .FieldExpr && kind != .BracketPostfix && kind != .UnaryExpr
+}
+
 fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    if bare_path(tree, node_index) {
+        var none: [1]str = zero
+        let (bare_local, bare_found) = alias_target_in(c, g, tree, module_index, node_index, none[0usize..0usize])
+        ret (bare_local, bare_found)
+    }
     var members: [128]str = zero
-    let (pointer_local, member_count, found) = local_field_path(c, g, tree, module_index, node_index, members[0usize..members.len])
+    let (pointed, found) = alias_target_in(c, g, tree, module_index, node_index, members[0usize..members.len])
+    ret (pointed, found)
+}
+
+fn alias_target_in(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, members: []str) -> (usize, bool) {
+    let (pointer_local, member_count, found) = local_field_path(c, g, tree, module_index, node_index, members)
     if !found { ret (0usize, false) }
     if c.resources[pointer_local].points_to != 0usize && c.resources[pointer_local].points_to_field.len == 0usize {
         let pointed = c.resources[pointer_local].points_to - 1usize
@@ -16171,6 +16211,7 @@ fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
 }
 
 fn dynamic_alias_candidate(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, wanted: usize) -> (usize, bool) {
+    if bare_path(tree, node_index) { ret (0usize, false) }
     var members: [128]str = zero
     let (carrier, member_count, found) = local_field_path(c, g, tree, module_index, node_index, members[0usize..members.len])
     if !found || !resource_members_dynamic(members[0usize..member_count]) { ret (0usize, false) }
@@ -16180,6 +16221,7 @@ fn dynamic_alias_candidate(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modu
 }
 
 fn has_dynamic_alias_path(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> bool {
+    if bare_path(tree, node_index) { ret false }
     var members: [128]str = zero
     let (_, member_count, found) = local_field_path(c, g, tree, module_index, node_index, members[0usize..members.len])
     ret found && resource_members_dynamic(members[0usize..member_count])
@@ -16225,6 +16267,7 @@ fn literal_address_field_after(c: *Checker, g: *graph.Graph, tree: *parse.Tree, 
 
 // The alias's target when a region reset or a container's change made it dangle (D394).
 fn alias_of_dangling(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    if !any_dangling_local(c) { ret (0usize, false) }
     let (pointed, has_target) = alias_target(c, g, tree, module_index, node_index)
     if has_target && c.resources[pointed].dangling != 0u8 {
         let state = c.resources[pointed].state
@@ -17691,6 +17734,9 @@ fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // A returned value that names a resource local: moved out to the caller, whatever
 // its state but moved -- an unchecked one goes with the error it was bound beside.
 fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
+    // (D1563) A region value, a view and a resource all leave a local that is not
+    // plain; with none, a returned value escapes and transfers nothing.
+    if !any_affine_local(c) { ret ok }
     var (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
     // (D1555, H04) A view of a local whose release is deferred cannot be returned:
     // the deferred call runs as this `ret` leaves, so the caller would hold a view
