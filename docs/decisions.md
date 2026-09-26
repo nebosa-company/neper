@@ -26740,3 +26740,17 @@ across window resizes are still missing.
 `ui_panes` drags a snapping 300-wide split's divider from 100 to 142 (it
 reports 150) and cycles the focus with F6 both ways; `ui_containers2_v2` still
 passes, on Windows and Linux.
+
+## D1407 — Font pickers list recent families first
+
+The FontPicker spec groups the family list under subheaders, recently used
+families first (up to 5). `font_panel_with` is `font_panel` with `recent`
+(indices into `families`). When it names any, the family column becomes a
+"Recent" subheader over a list of those families (keyed `key + 1048600`, each
+row firing its family's own pick) and an "All fonts" subheader over the whole
+list. The subheaders are `title-small` `primary`, 8 above, 4 below and 16 in
+(`font_subheader`). `font_panel` is it with no recent families. The Monospace
+group is still missing.
+
+`ui_pickers3_v2` lists family 2 as recent: "Recent" and "All fonts" stand, and
+a press on the recent row picks family 2, on Windows and Linux.
