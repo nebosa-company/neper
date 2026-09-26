@@ -98,6 +98,16 @@ fn tree_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key {
     ret 21u64
 }
 
+// (D1372) A tree move, kept.
+type TreeMoveLog = struct { node: widget.Key, into: widget.Key }
+
+fn on_tree_move(ctx: *void, value: collection.TreeMove) -> err {
+    let kept = mem.cast[*TreeMoveLog](ctx)
+    kept.node = value.node
+    kept.into = value.into
+    ret ok
+}
+
 fn tree_has_children(ctx: *void, key: widget.Key) -> bool {
     let log = mem.cast[*Log](ctx)
     if log.large { ret false }
@@ -457,6 +467,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if widget.focus(&runtime, testing.by_key(&harness, field_key).element) != ok || testing.press_key(&harness, 27u32, zero) != ok || rename_log[2usize] != 1usize { os.exit(69i32) }
         }
         rename_step += 1usize
+    }
+    // (D1372) A2 dragged onto B: B takes the drop look (its top edge `primary`)
+    // and the drop reports A2 into B.
+    var moved_log = TreeMoveLog { node: 0u64, into: 0u64 }
+    var move_step = 0usize
+    while move_step < 2usize {
+        var moving: collection.TreeOptions = zero
+        moving.move = widget.Change[collection.TreeMove] { ctx: mem.cast[*void](&moved_log), invoke: on_tree_move }
+        f = mem.arena_from(frame_storage)
+        let move_source = collection.TreeSource { ctx: ctx, count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
+        let (moving_tree, moving_tree_error) = collection.tree_with(&f, 700u64, &theme, "Move", move_source, with_open[0usize..1usize], no_chosen[0usize..0usize], widget.Change[widget.Key] { ctx: ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, 240.0, moving)
+        let (move_page, move_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if moving_tree_error != ok || move_page_error != ok { os.exit(73i32) }
+        var move_ground = control.sized_style(320.0, 360.0)
+        move_ground.background = paint.Brush { Solid: style.color(&tokens, .Surface) }
+        move_page[0usize] = moving_tree
+        if testing.pump(&harness, widget.box(0u64, move_ground, move_page[0usize..1usize]), time.Instant { nanos: 1600000000i64 + i64(move_step) }) != ok { os.exit(74i32) }
+        let (a2_row, has_a2_row) = bounds(&harness, &runtime, 12u64)
+        let (b_row, has_b_row) = bounds(&harness, &runtime, 2u64)
+        if !has_a2_row || !has_b_row { os.exit(75i32) }
+        if move_step == 0usize {
+            if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(a2_row.x + 60.0, a2_row.y + a2_row.height * 0.5) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(a2_row.x + 60.0, a2_row.y + a2_row.height * 0.5 + 10.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(b_row.x + 60.0, b_row.y + b_row.height * 0.5) }) != ok { os.exit(76i32) }
+        }
+        if move_step == 1usize {
+            let (move_shot, move_shot_error) = testing.snapshot(&harness, a)
+            if move_shot_error != ok || !is_color(move_shot, at(b_row.x + b_row.width * 0.5, b_row.y + 0.5), style.color(&tokens, .Primary)) { os.exit(77i32) }
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(b_row.x + 60.0, b_row.y + b_row.height * 0.5) }) != ok || moved_log.node != 12u64 || moved_log.into != 2u64 { os.exit(78i32) }
+        }
+        move_step += 1usize
     }
     logs[0usize].large = true
     let (large_rt, large_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 6000usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 16384usize })
