@@ -27,6 +27,20 @@ use e.ui.style
 use e.ui.testing
 use e.ui.widget
 
+// (D1366) A field's text rewritten through its change, kept in its bytes.
+type Rewritten = struct { bytes: []u8, len: usize }
+
+fn on_rewrite(ctx: *void, value: str) -> err {
+    let r = mem.cast[*Rewritten](ctx)
+    var i = 0usize
+    while i < value.len && i < r.bytes.len {
+        r.bytes[i] = value[i]
+        i += 1usize
+    }
+    r.len = i
+    ret ok
+}
+
 type Store = struct { press: widget.Submit, picks: [3]widget.Submit, words: [3]str, dates: usize, last_date: time.Date, toggles: usize }
 
 fn on_press(ctx: *void) -> err {
@@ -361,6 +375,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if typed_step == 1usize && testing.by_text(&harness, "Enter a date as mm/dd/yyyy").count == 0usize { os.exit(97i32) }
         typed_step += 1usize
     }
+    // (D1366) "25 sep" typed and the focus moved away: the field is rewritten
+    // "9/25/2026".
+    let (loose_bytes, loose_bytes_error) = mem.alloc[u8](a, 32usize)
+    if loose_bytes_error != ok { os.exit(136i32) }
+    let loose_text = "25 sep"
+    var lb = 0usize
+    while lb < loose_text.len {
+        loose_bytes[lb] = loose_text[lb]
+        lb += 1usize
+    }
+    var rewritten = Rewritten { bytes: loose_bytes, len: loose_text.len }
+    var loose_step = 0usize
+    while loose_step < 4usize {
+        f = mem.arena_from(frame_storage)
+        let (loose, loose_error) = overlay.date_entry(&f, 990u64, &us_theme, "Release date", loose_bytes, rewritten.len, widget.Change[str] { ctx: mem.cast[*void](&rewritten), invoke: on_rewrite }, picked_dates, typed_today, 280.0)
+        let (loose_page, loose_page_error) = mem.alloc[widget.Node](&f, 2usize)
+        if loose_error != ok || loose_page_error != ok { os.exit(137i32) }
+        loose_page[0usize] = loose
+        loose_page[1usize] = widget.region(995u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, control.sized_style(40.0, 40.0), zero)
+        if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, control.sized_style(600.0, 720.0), loose_page[0usize..2usize]), time.Instant { nanos: 3250000000i64 + i64(loose_step) }) != ok { os.exit(138i32) }
+        if loose_step == 1usize && widget.focus(&runtime, testing.by_key(&harness, 990u64).element) != ok { os.exit(139i32) }
+        if loose_step == 2usize && widget.focus(&runtime, testing.by_key(&harness, 995u64).element) != ok { os.exit(140i32) }
+        loose_step += 1usize
+    }
+    if !testing.same_text(loose_bytes[0usize..rewritten.len], "9/25/2026") { os.exit(141i32) }
     // (D1258) The open picker's footer: Today picks today, Clear clears.
     let footer_today = time.Date { year: 2026i32, month: 9u8, day: 25u8 }
     var footer_marks: overlay.DateFooter = zero

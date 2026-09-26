@@ -26157,3 +26157,17 @@ helpers, `opening_share` (the eased share kept on the box `key + 8192`) and
 `ui_overlays2_v2` opens a search view: 50 ms in, its surface is not yet the
 colour it settles on, and D1364's popup check still holds; `ui_presentation`
 passes, on Windows and Linux.
+
+## D1366 — Typed dates are rewritten on blur
+
+The DatePicker spec's input mode reformats a readable date when the field loses
+the focus. Elements report no focus loss, so `date_entry` remembers on its
+field whether it held the focus at the last build (`focus_memo`, a
+`FocusMemo` kept at slot `key + 4099`). The build after the focus leaves, a
+date that `parse_date` reads is written in the locale's form (`write_date_in`)
+and passed through `change` when it differs from the text. The caller copies it
+back as it does with typing. Firing during a build follows D1278's notice
+timeout.
+
+`ui_pickers_v2` types "25 sep" in en-US, focuses the field and then a
+neighbour: the text becomes "9/25/2026", on Windows and Linux.
