@@ -106,6 +106,27 @@ fn find_table(font: Font, tag: u32) -> (Table, bool) {
     ret (zero, false)
 }
 
+// (D1453) What a face says of itself: its weight class (100-900; 400 when it
+// has no `OS/2` table), whether `OS/2` fsSelection marks it italic, and whether
+// `post` says it is fixed-pitch.
+type FaceTraits = struct { weight: u32, italic: bool, mono: bool }
+
+const TAG_OS2: u32 = 1330851634u32
+const TAG_POST: u32 = 1886352244u32
+
+fn face_traits(font: Font) -> FaceTraits {
+    var out = FaceTraits { weight: 400u32, italic: false, mono: false }
+    let (os2, has_os2) = find_table(font, TAG_OS2)
+    if has_os2 && os2.len >= 64usize {
+        let weight = u16_at(font.data, os2.at + 4usize)
+        if weight >= 1u32 && weight <= 1000u32 { out.weight = weight }
+        out.italic = (u16_at(font.data, os2.at + 62usize) & 1u32) != 0u32
+    }
+    let (post, has_post) = find_table(font, TAG_POST)
+    if has_post && post.len >= 16usize { out.mono = u32_at(font.data, post.at + 12usize) != 0u32 }
+    ret out
+}
+
 fn validate_font(font: Font) -> err {
     if font.data.len < 12usize { ret InvalidFont }
     let (base, base_error) = face_offset(font)

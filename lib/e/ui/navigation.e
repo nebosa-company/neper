@@ -3025,7 +3025,8 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // (D1336) With `width`, overflow scrolling and Show all open files.
 // (D1337) The menu's further commands from `DocumentTabsOptions.more`.
 // (D1344) A dragged tab lifts and a drop line stands where it would land.
-// ponytail: a preview tab's title is upright (no italic face); the lifted tab
+// (D1453) A preview tab's title is italic where the theme has the face.
+// ponytail: the lifted tab
 // stays in its place rather than following the pointer.
 // (D1233) A document strip's tab menu, kept across frames on the strip: whether
 // it is open and for which tab.
@@ -3281,6 +3282,8 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         caption.wrap = .None
         caption.ellipsis = "..."
         caption.max_lines = 1u32
+        // (D1453) A preview tab's title asks for the theme's italic face.
+        caption.italic = options.preview == i + 1usize
         let (title_node, title_node_error) = control.colored_text(a, 0u64, d.title, t, caption, ink)
         if title_node_error != ok { ret (zero, title_node_error) }
         let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)

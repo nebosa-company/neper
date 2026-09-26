@@ -27113,3 +27113,20 @@ The DockLayout spec fades the guide and preview in over `duration-short-3` with 
 The Outline spec says "the current marker slides between items over `duration-medium-2` with `ease-standard`". `tree_rows` now finds the current row's place among the visible rows and eases that place on the outline (slot `key + 1048611`). The 3 px `primary` bar is still drawn in the current row, but offset toward where it came from by the part of the move still to come, times the row extent. Reduced motion moves it at once. Smooth scrolling on jumps (`duration-long-2`) is still not done.
 
 `ui_collections3_v2` moves the current heading from the first row to the second, on Windows and Linux. On the change's frame the rows' leading 16 columns differ from how they settle a second later; the check fails without the change. `ui_tabular` still passes on both hosts.
+
+## D1453 — Text picks weight, italic and fixed-pitch faces
+
+Several specs ask for faces the text system could not choose: a modified property's name at weight 600, italic emphasis and preview-tab titles, and fixed-pitch code. A theme's fonts were only a fallback chain.
+
+**Face traits.** `shape.face_traits(font)` reads what a face says of itself: `OS/2` `usWeightClass` (400 when the face has no `OS/2`), the fsSelection italic bit, and `post` `isFixedPitch`.
+
+**Options.** `control.TextOptions` gains `weight` (0 means the face's own), `italic` and `mono`. `text_style_faced` puts the best-matching face at the head of the fallback chain and keeps the rest behind it. A missing italic costs 2000 and a missing fixed pitch 4000, more than any weight gap; ties keep the theme's order. `colored_text` and the rich paragraph's measuring (`run_metrics_faced`) use it.
+
+**Callers.** Emphasis spans ask for italic and code and key spans for mono (`span_options`). `FieldOptions.mono` sets typed text fixed-pitch, and the key-value text area uses it. A modified property name asks for 600, and a preview tab's title for italic. A theme with one face, like every fixture's, is unchanged.
+
+`text_shape` builds synthetic faces with only `OS/2` and `post`, on Windows and Linux:
+
+- It reads 700, italic, fixed-pitch, and 400 upright proportional from a face without the tables.
+- A 600 request leads with the 700 face, italic with the italic face, mono with the mono face; plain text keeps the theme's order.
+
+`text_layout` and all 103 `ui_*` fixtures pass on both hosts.
