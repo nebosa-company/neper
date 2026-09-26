@@ -3495,11 +3495,22 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // Left collapses or returns to the parent, and `*` expands siblings.
 // (D1330) Disabled and loading nodes from `tree_with`; the icon and meta are the
 // caller's content (`build`).
-// ponytail: rows are not virtualised; no rename, drag and drop.
+// (D1342) F2 and the rename field from `TreeOptions`.
+// ponytail: rows are not virtualised; no drag and drop.
 // (D1330) A tree's per-node states, by key: `disabled` nodes are drawn at 38%,
 // take focus but no pick and say Disabled; an open node in `loading` is Busy and
 // its children wait under a "Loading" row.
-type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key }
+// (D1342) F2 on a node asks, through `rename`, to rename it; while `renaming`
+// names a node (0: none) its content is a 24 tall outlined field over the
+// caller's `name` (`name_len` long, told through `typed`), Enter firing
+// `commit` and Escape `cancel`.
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit }
+
+// (D1342) F2's report: the node.
+fn tree_rename_fire(ctx: *void) -> err {
+    let r = mem.cast[*RowPick](ctx)
+    ret widget.fire_change[widget.Key](r.pick, r.key)
+}
 
 fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32, current: widget.Key, options: TreeOptions) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
@@ -3517,9 +3528,11 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     if keys_error != ok { ret (none, TooLarge) }
     let (siblings, siblings_error) = mem.alloc[TreeSiblings](a, count)
     if siblings_error != ok { ret (none, TooLarge) }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 8usize * count)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 9usize * count)
     if shortcuts_error != ok { ret (none, TooLarge) }
-    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 8usize * count)
+    let (renames, renames_error) = mem.alloc[RowPick](a, count)
+    if renames_error != ok { ret (none, TooLarge) }
+    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 9usize * count)
     if moves_error != ok { ret (none, TooLarge) }
     let tabled = columns.len > 0usize
     let touch = density_of(t) == 2usize
@@ -3562,6 +3575,18 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         var built: widget.Node = zero
         let built_error = source.build(source.ctx, a, entry.key, &built)
         if built_error != ok { ret (none, built_error) }
+        // (D1342) The node being renamed shows the rename field in its content's place.
+        if options.renaming != 0u64 && entry.key == options.renaming {
+            var rename_field = control.field_options()
+            rename_field.height = 24.0
+            rename_field.width = control.max_zero(width - 16.0 - start - f32(entry.depth + 1usize) * step - 40.0)
+            let (field_node, field_error) = control.text_field(a, entry.key ^ hash.fnv1a64("tree-rename"), t, "Name", options.name, options.name_len, options.typed, options.commit, rename_field)
+            if field_error != ok { ret (none, field_error) }
+            let (field_held, field_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if field_held_error != ok { ret (none, TooLarge) }
+            field_held[0usize] = field_node
+            built = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: options.cancel, keys: zero }, style.defaults(), field_held[0usize..1usize])
+        }
         // The indent, with an outline's guides through each ancestor's twisty.
         let indent_width = start + f32(entry.depth) * step
         var indent = widget.box(0u64, control.sized_style(indent_width, tall), zero)
@@ -3653,7 +3678,9 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         var child_key: widget.Key = 0u64
         if has_child { child_key = visible[i + 1usize].key }
         keys[i] = TreeKeys { key: entry.key, open: open, branch: entry.branch, has_parent: has_parent, has_child: has_child, parent: control.FocusTo { runtime: t.runtime, key: parent_key }, child: control.FocusTo { runtime: t.runtime, key: child_key }, toggle: toggle, pick: pick }
-        let base = 8usize * i
+        // (D1342) F2 asks to rename the node.
+        renames[i] = RowPick { key: entry.key, pick: options.rename, double: zero, has_double: false }
+        let base = 9usize * i
         shortcuts[base] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_collapse } }
         shortcuts[base + 1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&keys[i]), invoke: tree_expand } }
         // Up, Down, Home and End in the same scope: a level fewer than `roving`.
@@ -3678,6 +3705,12 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         shortcuts[bound] = widget.Shortcut { key: 56u32, modifiers: shifted, action: expand_siblings }
         shortcuts[bound + 1usize] = widget.Shortcut { key: 42u32, modifiers: shifted, action: expand_siblings }
         bound += 2usize
+        // F2 as the hosts report it: X11's function-key range (the Windows host
+        // maps VK_F2 there too), which `key_code` folds to 113.
+        if widget.change_set[widget.Key](options.rename.invoke) {
+            shortcuts[bound] = widget.Shortcut { key: 65471u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&renames[i]), invoke: tree_rename_fire } }
+            bound += 1usize
+        }
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
         if scoped_error != ok { ret (none, TooLarge) }
         scoped[0usize] = made

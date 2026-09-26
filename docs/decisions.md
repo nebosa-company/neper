@@ -25808,3 +25808,18 @@ a column header in the tree named by its title. The body gives the tier its
 `ui_collections2_v2` groups Size and Kind under Detail: the Detail header is
 180 wide, starts over Size, and stands above the header row, on Windows and
 Linux; `ui_tabular` still passes on both.
+
+## D1342 — Tree nodes rename in place
+
+The Tree spec's rename: `TreeOptions` gains `rename`, `renaming`, `name`,
+`name_len`, `typed`, `commit` and `cancel`. F2 on a focused node reports it
+through `rename`. While `renaming` names a node, its content is a 24 tall
+outlined field (keyed `node ^ fnv1a64("tree-rename")`) over the caller's name
+buffer, Enter firing `commit` and Escape `cancel`; the caller renames its
+model. The shortcut is bound as the hosts report F2 -- X11's function-key
+range, where the Windows host maps VK_F2 too -- since a bare 113 folds to `Q`
+in `key_code`. Drag and drop is still to come.
+
+`ui_collections3_v2` presses F2 on A2 (reported as 12), then renames it: the
+field stands, Enter commits and Escape cancels, on Windows and Linux;
+`ui_tabular` still passes on both.

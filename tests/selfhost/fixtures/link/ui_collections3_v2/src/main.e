@@ -40,6 +40,19 @@ fn on_toggle(ctx: *void, value: widget.Key) -> err {
     ret ok
 }
 
+// (D1342) A rename ask, kept as the node's key; and a count bumped.
+fn on_rename(ctx: *void, value: widget.Key) -> err {
+    let seen = mem.cast[*usize](ctx)
+    *seen = usize(value)
+    ret ok
+}
+
+fn on_bump(ctx: *void) -> err {
+    let seen = mem.cast[*usize](ctx)
+    *seen += 1usize
+    ret ok
+}
+
 fn on_pick(ctx: *void, value: widget.Key) -> err {
     let log = mem.cast[*Log](ctx)
     log.picks += 1usize
@@ -403,6 +416,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
         sn += 1usize
     }
     if disabled_items != 1usize || busy_items == 0usize { os.exit(62i32) }
+    // (D1342) F2 on A2 asks to rename it; renaming, its content is the field,
+    // Enter commits and Escape cancels.
+    let (rename_bytes, rename_bytes_error) = mem.alloc[u8](a, 16usize)
+    if rename_bytes_error != ok { os.exit(63i32) }
+    rename_bytes[0usize] = 65u8
+    rename_bytes[1usize] = 50u8
+    var rename_log: [3]usize = zero
+    let (rename_submits, rename_submits_error) = mem.alloc[widget.Submit](a, 2usize)
+    if rename_submits_error != ok { os.exit(64i32) }
+    rename_submits[0usize] = widget.Submit { ctx: mem.cast[*void](&rename_log[1usize]), invoke: on_bump }
+    rename_submits[1usize] = widget.Submit { ctx: mem.cast[*void](&rename_log[2usize]), invoke: on_bump }
+    var rename_step = 0usize
+    while rename_step < 3usize {
+        var renamed: collection.TreeOptions = zero
+        renamed.rename = widget.Change[widget.Key] { ctx: mem.cast[*void](&rename_log[0usize]), invoke: on_rename }
+        renamed.name = rename_bytes
+        renamed.name_len = 2usize
+        renamed.commit = rename_submits[0usize]
+        renamed.cancel = rename_submits[1usize]
+        if rename_step >= 1usize { renamed.renaming = 12u64 }
+        f = mem.arena_from(frame_storage)
+        let rename_source = collection.TreeSource { ctx: ctx, count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
+        let (renaming_tree, renaming_tree_error) = collection.tree_with(&f, 600u64, &theme, "Rename", rename_source, with_open[0usize..1usize], no_chosen[0usize..0usize], widget.Change[widget.Key] { ctx: ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, 240.0, renamed)
+        let (rename_page, rename_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if renaming_tree_error != ok || rename_page_error != ok { os.exit(65i32) }
+        rename_page[0usize] = renaming_tree
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 360.0), rename_page[0usize..1usize]), time.Instant { nanos: 1500000000i64 + i64(rename_step) }) != ok { os.exit(66i32) }
+        let field_key = 12u64 ^ hash.fnv1a64("tree-rename")
+        if rename_step == 0usize {
+            if testing.by_key(&harness, field_key).count != 0usize { os.exit(70i32) }
+            if widget.focus(&runtime, testing.by_key(&harness, 12u64).element) != ok { os.exit(71i32) }
+            if testing.press_key(&harness, 65471u32, zero) != ok { os.exit(72i32) }
+            if rename_log[0usize] != 12usize { os.exit(67i32) }
+        }
+        if rename_step == 1usize {
+            if testing.by_key(&harness, field_key).count != 1usize || widget.focus(&runtime, testing.by_key(&harness, field_key).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || rename_log[1usize] != 1usize { os.exit(68i32) }
+        }
+        if rename_step == 2usize {
+            if widget.focus(&runtime, testing.by_key(&harness, field_key).element) != ok || testing.press_key(&harness, 27u32, zero) != ok || rename_log[2usize] != 1usize { os.exit(69i32) }
+        }
+        rename_step += 1usize
+    }
     logs[0usize].large = true
     let (large_rt, large_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 6000usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 16384usize })
     if large_runtime_error != ok { os.exit(53i32) }
