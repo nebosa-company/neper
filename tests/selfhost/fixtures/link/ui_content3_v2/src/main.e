@@ -291,7 +291,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (p3, has_p3) = widget.bounds_of(&runtime, testing.by_key(&harness, 30u64).element)
     if !has_p3 { os.exit(27i32) }
     if !is_color(shot, px(p3.x, p3.y + 10.0), style.color(&tokens, .OutlineVariant)) || !is_color(shot, px(p3.x + 2.0, p3.y + 10.0), style.color(&tokens, .SurfaceContainerLowest)) { os.exit(28i32) }
-    let visited_x = p3.x + 2.0 * code_step + 8.0 + 2.0 * step
+    // (D1482) The key is 24 tall: down the cap's last padding column (clear of its corners), one row of the
+    // edge above the fill and two of the foot below it.
+    let lowest = style.color(&tokens, .SurfaceContainerLowest)
+    let edge_ink = style.color(&tokens, .OutlineVariant)
+    var cap_top = p3.y + 10.0
+    while cap_top > p3.y - 12.0 && is_color(shot, px(p3.x + 4.0, cap_top - 1.0), lowest) { cap_top -= 1.0 }
+    var cap_bottom = p3.y + 10.0
+    while cap_bottom < p3.y + 30.0 && is_color(shot, px(p3.x + 4.0, cap_bottom + 1.0), lowest) { cap_bottom += 1.0 }
+    if !is_color(shot, px(p3.x + 4.0, cap_top - 1.0), edge_ink) || is_color(shot, px(p3.x + 4.0, cap_top - 2.0), edge_ink) { os.exit(38i32) }
+    if !is_color(shot, px(p3.x + 4.0, cap_bottom + 1.0), edge_ink) || !is_color(shot, px(p3.x + 4.0, cap_bottom + 2.0), edge_ink) || is_color(shot, px(p3.x + 4.0, cap_bottom + 3.0), edge_ink) { os.exit(39i32) }
+    if !near(cap_bottom + 2.0 - (cap_top - 1.0) + 1.0, 24.0) { os.exit(40i32) }
+    let visited_x = p3.x + 2.0 * code_step + 10.0 + 2.0 * step
     if !is_color(shot, px(visited_x + 5.0, p3.y + 8.0), style.color(&tokens, .LinkVisited)) { os.exit(29i32) }
     // Hovered, the next frame washes the link and thickens its underline.
     // (D1442) One more build first, so the link's eased wash has its cell.
