@@ -79,6 +79,8 @@ type Build = struct {
     // over a stable cache does none of it.
     bodies_checked: usize,
     declarations_checked: usize,
+    // (D1514) The modules declared from their artifact's Interface, never lexed.
+    modules_decoded: usize,
     modules_lowered: usize,
     functions_lowered: usize,
     ran: bool,
@@ -481,6 +483,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try row_number(b, "unreached functions", b.unreached_functions)
     try row_unit(b, "", "unreached code", b.unreached_bytes, "bytes", "_bytes")
     try row_number(b, "declarations checked", b.declarations_checked)
+    try row_number(b, "modules decoded", b.modules_decoded)
     try row_number(b, "bodies checked", b.bodies_checked)
     try row_number(b, "modules lowered", b.modules_lowered)
     try row_number(b, "functions lowered", b.functions_lowered)

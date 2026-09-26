@@ -116,7 +116,8 @@ type CodeRelocation = struct {
 }
 
 // (D1510) Format 15: function and aggregate records carry an attribute tail.
-fn format_version() -> usize { ret 15usize }
+// (D1514) Format 16: the Globals section carries each global's type after its records.
+fn format_version() -> usize { ret 16usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -1337,6 +1338,12 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
             let (global_name, global_name_error) = intern(table, builder.globals[global_at].name)
             if global_name_error != ok { ret global_name_error }
         }
+        global_at += 1usize
+    }
+    // (D1514) The strings of the globals' types.
+    global_at = 0usize
+    while global_at < c.global_count {
+        if c.globals[global_at].module_index == module_index { try collect_type_strings(c, g, table, c.globals[global_at].ty) }
         global_at += 1usize
     }
     ret ok
@@ -2601,7 +2608,7 @@ fn artifact_line_row_total(bytes: []const u8) -> (usize, err) {
     ret (total, ok)
 }
 
-fn write_globals(builder: *nir.Builder, c: *check.Checker, module_index: usize, table: *StringTable, output: *binary.Buffer) -> err {
+fn write_globals(builder: *nir.Builder, c: *check.Checker, g: *graph.Graph, module_index: usize, table: *StringTable, output: *binary.Buffer) -> err {
     var count = 0usize
     let (first, end) = span_of(c, span_globals(), module_index)
     var at = first
@@ -2626,6 +2633,18 @@ fn write_globals(builder: *nir.Builder, c: *check.Checker, module_index: usize, 
         }
         at += 1usize
     }
+    // (D1514) Each global's type, in the records' order -- the checker's, which
+    // `lower.declare_globals` adds them in -- so an importer declares from them.
+    var typed = 0usize
+    at = 0usize
+    while at < c.global_count {
+        if c.globals[at].module_index == module_index {
+            try write_type_indexed(c, g, table, c.globals[at].ty, output)
+            typed += 1usize
+        }
+        at += 1usize
+    }
+    if typed != count { ret InvalidArtifact }
     ret ok
 }
 
@@ -2916,7 +2935,7 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     try write_debug(c, g, module_index, strings, scratch, output)
     try end_section(&writer)
     try begin_section(&writer, globals_kind(), required_flag())
-    try write_globals(builder, c, module_index, strings, output)
+    try write_globals(builder, c, g, module_index, strings, output)
     try end_section(&writer)
     try begin_section(&writer, lines_kind(), required_flag())
     try write_lines(builder, c, module_index, strings, machine, function_offsets, lines, line_count, output)
@@ -3542,7 +3561,14 @@ fn artifact_global_at(bytes: []const u8, index: usize) -> (GlobalRecord, err) {
     if index >= count { ret (empty, InvalidArtifact) }
     let (section, found, section_error) = find_section_unchecked(bytes, globals_kind())
     if section_error != ok || !found { ret (empty, InvalidArtifact) }
-    let record = section.offset + 4usize + index * global_record_size()
+    let (record, record_error) = global_record_from(bytes, section.offset + 4usize + index * global_record_size())
+    ret (record, record_error)
+}
+
+// One Globals record at its offset, unvalidated beyond itself (the D1514 decode
+// reads every record of an artifact already validated once).
+fn global_record_from(bytes: []const u8, record: usize) -> (GlobalRecord, err) {
+    let empty = GlobalRecord { name_index: 0usize, size: 0usize, alignment: 0usize, has_initial: false, initial: 0usize }
     let (name_index, name_error) = binary.read_u32(bytes, record)
     let (size, size_error) = binary.read_u32(bytes, record + 4usize)
     let (alignment, alignment_error) = binary.read_u32(bytes, record + 8usize)
@@ -4354,10 +4380,47 @@ fn interface_decodable(bytes: []const u8) -> bool {
         cursor = next
         at += 1usize
     }
+    // (D1514) Globals declare from the Globals section's types.
     let (globals, found_globals, globals_error) = find_section_unchecked(bytes, globals_kind())
-    if globals_error != ok || !found_globals || globals.length < 4usize { ret false }
-    let (global_count, global_count_error) = binary.read_u32(bytes, globals.offset)
-    ret global_count_error == ok && global_count == 0usize
+    ret globals_error == ok && found_globals && globals.length >= 4usize
+}
+
+// (D1514) The Globals section of an artifact validated once: how many records,
+// where the first starts and where the section ends.
+fn interface_globals(bytes: []const u8) -> (usize, usize, usize, err) {
+    let (section, found, section_error) = find_section_unchecked(bytes, globals_kind())
+    if section_error != ok || !found || section.length < 4usize { ret (0usize, 0usize, 0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, section.offset)
+    if count_error != ok || count > (section.length - 4usize) / global_record_size() { ret (0usize, 0usize, 0usize, InvalidArtifact) }
+    ret (count, section.offset + 4usize, section.offset + section.length, ok)
+}
+
+// (D1514) A kept module's globals from its Globals section: each record's name and
+// the type the section carries after the records, in the checker's order. Their
+// initial values stay in the artifact the link reads; the checker needs the types.
+fn decode_globals(c: *check.Checker, g: *graph.Graph, module_index: usize, bytes: []const u8) -> err {
+    let (count, first, end, open_error) = interface_globals(bytes)
+    if open_error != ok { ret open_error }
+    var next = first + count * global_record_size()
+    var at = 0usize
+    while at < count {
+        if c.global_count == c.globals.len { ret check.Capacity }
+        let (record, record_error) = global_record_from(bytes, first + at * global_record_size())
+        if record_error != ok { ret record_error }
+        let (name, name_error) = artifact_string(bytes, record.name_index)
+        if name_error != ok { ret name_error }
+        let (ty, typed_end, type_error) = decode_type(c, g, bytes, next, end, module_index, 0usize)
+        if type_error != ok { ret type_error }
+        var item: check.Global = zero
+        item.name = name
+        item.module_index = module_index
+        item.ty = ty
+        c.globals[c.global_count] = item
+        c.global_count += 1usize
+        next = typed_end
+        at += 1usize
+    }
+    ret ok
 }
 
 // A resolver symbol with no token span (the bootstrap takes no qualified literal).
@@ -4401,11 +4464,23 @@ fn declare_interface_symbols(r: *resolve.Resolver, g: *graph.Graph, module_index
         }
         if declaration.kind == declaration_constant_kind() { kind = .Const }
         if declaration.kind == declaration_error_kind() { kind = .Error }
-        // A seeded intrinsic (`e.mem.alloc`, `e.str.format`) is in the Interface as
-        // the checker keeps it, and in the resolver already.
+        // A seeded intrinsic (`e.mem.alloc`, `e.str.format`) or error (`e.os.NotFound`)
+        // is in the Interface as the checker keeps it, and in the resolver already.
         let (prior, seeded) = resolve.find(r, module_index, name, space)
-        if !(seeded && r.symbols[prior].kind == .Intrinsic) { try resolve.add(r, interface_symbol(name, kind, space, module_index, module_index)) }
+        if !seeded { try resolve.add(r, interface_symbol(name, kind, space, module_index, module_index)) }
         cursor = next
+        at += 1usize
+    }
+    // (D1514) Its globals, by the Globals section's names.
+    let (global_count, global_first, global_end, globals_error) = interface_globals(bytes)
+    if globals_error != ok { ret globals_error }
+    at = 0usize
+    while at < global_count {
+        let (record, record_error) = global_record_from(bytes, global_first + at * global_record_size())
+        if record_error != ok { ret record_error }
+        let (global_name, global_name_error) = artifact_string(bytes, record.name_index)
+        if global_name_error != ok { ret global_name_error }
+        try resolve.add(r, interface_symbol(global_name, .Var, .Value, module_index, module_index))
         at += 1usize
     }
     ret ok
@@ -4445,6 +4520,8 @@ fn declare_interface_records(c: *check.Checker, g: *graph.Graph, module_index: u
             cursor = next
             at += 1usize
         }
+        // Globals follow the constants, as `check.declarations_module` collects them.
+        if pass == 1usize { try decode_globals(c, g, module_index, bytes) }
         pass += 1usize
     }
     ret ok

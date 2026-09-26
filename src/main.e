@@ -8035,6 +8035,17 @@ fn declared_from_interface(loaded: *graph.Graph, module_index: usize) -> bool {
     ret module_index < loaded.from_interface.len && loaded.from_interface[module_index] && module_index < loaded.interfaces.len
 }
 
+// (D1514) How many modules declared from their Interface.
+fn decoded_count(loaded: *graph.Graph) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < loaded.count {
+        if declared_from_interface(loaded, at) { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
 // The body sweep, and the first inlining oracle inside it (D313): a module's bodies
 // are checked and its short functions lowered into the oracle on the one parse, in
 // graph order, which is the order both oracles walk. An oracle error is a lowering
@@ -10658,6 +10669,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if check_error == ok { try verify_runtime_arena(&report, &checker, &loaded) }
         // The declarations collected (D446, H14): every module's, from lexed trees.
         report.build.declarations_checked = checker.signature_function_count + checker.aggregate_count + checker.constant_count + checker.global_count
+        report.build.modules_decoded = decoded_count(&loaded)
         var artifact_dir = ""
         if args.len > 6usize { artifact_dir = args[6usize] }
         if hot_build {
