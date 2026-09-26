@@ -564,6 +564,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         glyph_row += 1usize
     }
+    // (D1532) Icon buttons: a count badge on the icon joins the name, a dot says
+    // "new", and a selected toggle's glyph is its filled form.
+    fr = mem.arena_from(frame_storage)
+    let (buttons, buttons_error) = mem.alloc[widget.Node](&fr, 3usize)
+    if buttons_error != ok { os.exit(116i32) }
+    let (counted, counted_error) = control.glyph_button_badged(&fr, 770u64, &theme, .Alert, "Notifications", &s.retry, 40.0, 24.0, "3", "3 unread", false)
+    let (dotted, dotted_error) = control.glyph_button_badged(&fr, 771u64, &theme, .Refresh, "Updates", &s.retry, 40.0, 24.0, "", "", true)
+    let (toggled, toggled_error) = control.glyph_toggle(&fr, 772u64, &theme, .Person, "Profile", &s.retry, 40.0, 24.0, true)
+    if counted_error != ok || dotted_error != ok || toggled_error != ok { os.exit(117i32) }
+    buttons[0usize] = counted
+    buttons[1usize] = dotted
+    buttons[2usize] = toggled
+    if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 16.0 }, forms_page, buttons[0usize..3usize]), time.Instant { nanos: 7100000000i64 }) != ok { os.exit(118i32) }
+    if testing.by_label(&harness, "Notifications, 3 unread").count == 0usize || testing.by_label(&harness, "Updates, new").count == 0usize || testing.by_text(&harness, "3").count == 0usize { os.exit(119i32) }
+    let counted_box = bounds(&harness, &runtime, 770u64)
+    if counted_box.width < 39.5 || counted_box.width > 40.5 || counted_box.height < 39.5 || counted_box.height > 40.5 { os.exit(120i32) }
+    let (buttons_shot, buttons_shot_error) = testing.snapshot(&harness, a)
+    if buttons_shot_error != ok { os.exit(121i32) }
+    let toggled_box = bounds(&harness, &runtime, 772u64)
+    if !is_color(buttons_shot, at(toggled_box.x + 20.0, toggled_box.y + 16.6), style.color(&tokens, .OnSecondaryContainer)) { os.exit(122i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui content v2 ok\n")
     ret ok

@@ -27806,3 +27806,11 @@ The navigation drawer and the destination bar (bar, rail and sidebar) draw the s
 D1226 put icons on tabs, drawn in outline whether or not the tab was selected. The Icon spec draws the selected or "on" form filled, as iOS tab bars do. `tab_face` now takes the tab's selection and draws the selected tab's icon in its filled form (D1530), cut in the bar's `surface`, in the active ink. Unselected tabs keep the outline, and a glyph without a body is unchanged.
 
 `ui_tabs_rtl` checks this on Windows and Linux. With the icon bar selected on Overview, the fixture finds the picture from its active ink and requires a pixel inside its frame, clear of the hills, to be that ink. With the selection not passed, that check fails (exit 60). All 103 ui_* fixtures pass on both hosts.
+
+## D1532 — Icon buttons: a badge on the icon, a filled selected toggle
+
+The IconButton spec anchors an optional badge to the icon, with the count at top -2 and end -12, folds it into the button's name ("Notifications, 3 unread"), and draws a selected toggle's icon filled. The drawn icon buttons had neither.
+
+`glyph_button_badged` adds the badge. Given a count (`badge_of`, so "99+" at most, in the urgent colour) or a dot, it stands the badge on the glyph through `badge_anchor`, where the tabs and destinations already put theirs. The circle keeps its side: the anchor's 2 of overhang comes out of the vertical padding. The name gains what the badge means: the caller's words, else the count, else "new" for a dot. With neither a count nor a dot, it is the plain glyph button. `glyph_toggle`, selected, draws its glyph in the filled "on" form (D1530), cut in `secondary-container`.
+
+`ui_content_v2` checks all three on Windows and Linux: a count badge on a 40 button named "Notifications, 3 unread" that stays 40 by 40 with the "3" drawn, a dot on "Updates, new", and a selected Profile toggle whose head centre is `on-secondary-container`. With the toggle unfilled, that check fails (exit 122). All 103 ui_* fixtures pass on both hosts.
