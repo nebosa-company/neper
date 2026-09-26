@@ -1872,7 +1872,8 @@ fn navigation_split_options() -> NavigationSplitOptions {
 // under a v2 app bar (keyed `key + 4`) led by Back (`key + 5`) named "Back to
 // <the list>"; Escape and Alt+Left share its `pop` action.
 // ponytail: the touch divider is D966's sash, not the 24 gutter with its 4 x 48
-// handle; no supporting pane or push motion. (D1411) Escape in the detail
+// handle; no supporting pane or Back motion. (D1412) A push slides the detail
+// in. (D1411) Escape in the detail
 // returns the focus to the list. (D1409) On touch the
 // list snaps to 360 and half.
 fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, primary: widget.Node, detail: widget.Node, showing_detail: bool, position: f32, change: widget.Change[f32], width: f32, height: f32, options: NavigationSplitOptions) -> (widget.Node, err) {
@@ -2013,6 +2014,21 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             column.height = style.Length { Px: height }
             body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column, stacked[0usize..2usize])
         }
+    }
+    // (D1412, docs/ux/components/NavigationSplit, motion) In a single pane the
+    // detail pushes in from the end over `duration-medium-2` on
+    // `ease-emphasized-decelerate` (kept on the page, slot `key + 1048003`);
+    // Back and reduced motion change at once.
+    var push_goal: f32 = 0.0
+    if showing_detail { push_goal = 1.0 }
+    let pushed = control.eased_emphasized(t, key, key + 1048003u64, push_goal, true, t.tokens.durations.medium2)
+    if showing_detail && pushed < 1.0 {
+        let (pushing, pushing_error) = mem.alloc[widget.Node](a, 1usize)
+        if pushing_error != ok { ret (zero, TooLarge) }
+        var toward = width * (1.0 - pushed)
+        if t.tokens.direction == .RightToLeft { toward = 0.0 - toward }
+        pushing[0usize] = body[0usize]
+        body[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: toward, y: 0.0 } }, style.defaults(), pushing[0usize..1usize])
     }
     var page = control.sized_style(width, height)
     page.overflow = .Clip

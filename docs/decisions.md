@@ -26798,3 +26798,15 @@ stands in a scope whose cancel action focuses `list_focus`.
 
 `ui_navigation4_v2` presses Escape in the detail after D1410's F6: the focus
 returns to the list, and `ui_adaptive` still passes, on Windows and Linux.
+
+## D1412 — Single-pane splits push the detail in
+
+The NavigationSplit spec's single pane pushes the detail in from the end with
+`ease-emphasized-decelerate` over `duration-medium-2`. The split keeps a push
+share on its page (`eased_emphasized`, slot `key + 1048003`, forward only).
+While the detail is part way in, it is painted offset toward the end (mirrored
+right to left) by the share still to come. Back and reduced motion change at
+once, and the list's 30% shift and fade are not drawn.
+
+`ui_navigation4_v2` shows a narrow split's detail: 50 ms in, the page's start is
+not yet what it settles to, on Windows and Linux; `ui_adaptive` still passes.
