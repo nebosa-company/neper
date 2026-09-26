@@ -27647,3 +27647,22 @@ Nothing had shown the facts doing their work across a decoded module. `build/ux/
 - A `main` whose own `@noescape("b")` parameter is passed on to `dep.measure` is accepted, and the image is the clean build's.
 
 The same script against a compiler whose decode drops the two strings fails both ways. That warm build accepts the use of the stale view, a wrong program, and rejects the valid forward. So the serialized facts are what the checker relies on, not an unused copy.
+
+## D1523 — Lazy `.em` section access, defined and measured
+
+H20 asks for lazy access to `.em` sections "where useful". This row defines that access and measures where it would pay.
+
+The unit of trust is the whole artifact. A kept artifact is reused only when its CRC is whole (D213) and its SHA-256 is the one the authenticated manifest recorded (D1028). Every byte is therefore read and hashed once when a build reuses it, and no reader can trust a section it did not verify as part of the file. Within the verified bytes, access is already lazy: the directory at the header gives each section's offset and length, `find_section_unchecked` goes straight to one section, and no reader parses the sections it does not use.
+
+- The hot load reads Imports, Interface and Deps.
+- An Interface decode reads Interface, Strings and Globals.
+- Emission reuse reads Code, Lines and Emission.
+- The link reads Code, Lines and Globals.
+
+The readers that take a whole module's records (`read_code_functions`, `code_lines_index`, `interface_globals`) walk their section once. The per-record readers that re-walk it (`artifact_code_function_at`, `read_code_lines`) are for tools reading one record, not for build loops (D155).
+
+A finer laziness, such as reading only the header and directory and then the sections a phase wants, would have to give up the whole-file SHA-256. Measured on the compiler's own debug build on Windows, a fully warm build over its 37 artifacts (9.9 MB) spends 17-18 ms in `load and parse`. That covers reading and verifying every artifact and reading and hashing every source. The link from artifacts spends 32 ms, and it needs every Code and Lines section it links. A section-lazy read could save a share of those 17 ms and would weaken the cache's integrity rule, so it is not useful at this scale and is not done.
+
+On Linux under WSL, where the tree sits on a Windows drive, the same load takes 0.9-1.3 s. That is the cost of file reads through the 9P mount, and it falls on the sources as much as the artifacts; laziness inside an artifact does not remove it.
+
+This is the definition H20 asked for, with the measurement behind it. The line closes without new reading code.
