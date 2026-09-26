@@ -181,6 +181,34 @@ fn at_cell(store: *const Store, row: usize, column: usize) -> bool {
     ret store.state.row == row && store.state.column == column && !store.state.editing
 }
 
+// (D1540) A virtual grid's asks: pages, zooms and the last level.
+type GridLog = struct { pages: usize, zooms: usize, level: usize }
+
+fn wall_count(ctx: *void) -> usize {
+    ret 10usize
+}
+
+fn wall_key(ctx: *void, index: usize) -> widget.Key {
+    ret 8100u64 + u64(index)
+}
+
+fn wall_tile(ctx: *void, index: usize) -> collection.Tile {
+    ret collection.tile_of_name("Photo")
+}
+
+fn on_grid_page(ctx: *void) -> err {
+    let log = mem.cast[*GridLog](ctx)
+    log.pages += 1usize
+    ret ok
+}
+
+fn on_grid_zoom(ctx: *void, value: usize) -> err {
+    let log = mem.cast[*GridLog](ctx)
+    log.zooms += 1usize
+    log.level = value
+    ret ok
+}
+
 // (D1539) The toolbar's filter removals: how many, and the last index.
 type UnfilterLog = struct { count: usize, index: usize }
 
@@ -624,6 +652,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if toolbar_step == 1usize && testing.by_key(&harness, 9002u64).count != 0usize { os.exit(185i32) }
         toolbar_step += 1usize
     }
+    // (D1540) A virtual grid: its first row 12 below the top; all ten tiles in
+    // view, it asks for the next page once (not on the build that found it
+    // first, nor again for the same count); Ctrl+plus and Ctrl+minus report the
+    // levels either side of 1.
+    var grid_log = GridLog { pages: 0usize, zooms: 0usize, level: 0usize }
+    var grid_levels: [3]f32 = zero
+    grid_levels[0usize] = 112.0
+    grid_levels[1usize] = 160.0
+    grid_levels[2usize] = 240.0
+    var grid_step = 0usize
+    while grid_step < 3usize {
+        var wall = collection.virtual_grid_options()
+        wall.width = 400.0
+        wall.height = 500.0
+        wall.levels = grid_levels[..]
+        wall.level = 1usize
+        wall.zoom = widget.Change[usize] { ctx: mem.cast[*void](&grid_log), invoke: on_grid_zoom }
+        wall.near_end = widget.Submit { ctx: mem.cast[*void](&grid_log), invoke: on_grid_page }
+        f = mem.arena_from(storage)
+        let (wall_node, wall_error) = collection.virtual_grid_of(&f, 8000u64, &theme, "Photos", collection.TileSource { ctx: mem.cast[*void](&grid_log), count: wall_count, key: wall_key, tile: wall_tile }, wall)
+        let (wall_page, wall_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if wall_error != ok || wall_page_error != ok { os.exit(186i32) }
+        wall_page[0usize] = wall_node
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 600.0), wall_page[0usize..1usize]), time.Instant { nanos: 96000000000i64 + i64(grid_step) }) != ok { os.exit(186i32) }
+        if grid_step == 0usize && grid_log.pages != 0usize { os.exit(187i32) }
+        if grid_step >= 1usize && grid_log.pages != 1usize { os.exit(187i32) }
+        grid_step += 1usize
+    }
+    let (wall_box, has_wall_box) = bounds(&harness, &runtime, 8000u64)
+    let (first_tile, has_first_tile) = bounds(&harness, &runtime, 8100u64)
+    if !has_wall_box || !has_first_tile || !(first_tile.y - wall_box.y > 11.5) || !(first_tile.y - wall_box.y < 12.5) { os.exit(188i32) }
+    var grid_ctrl: input.Modifiers = zero
+    grid_ctrl.control = true
+    if widget.focus(&runtime, testing.by_key(&harness, 8100u64).element) != ok || testing.press_key(&harness, 187u32, grid_ctrl) != ok || grid_log.zooms != 1usize || grid_log.level != 2usize { os.exit(189i32) }
+    if testing.press_key(&harness, 109u32, grid_ctrl) != ok || grid_log.zooms != 2usize || grid_log.level != 0usize { os.exit(190i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(54i32) }
     try io.print("ui collections6 v2 ok\n")
     ret ok

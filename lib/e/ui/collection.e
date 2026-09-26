@@ -8100,7 +8100,12 @@ type TileSource = struct { ctx: *void, count: fn(*void) -> usize, key: fn(*void,
 
 // A virtual grid's form (D979): the least tile width (0: 112 with a pointer, 96
 // on touch), selecting, the viewport's size, the offset and whom to tell.
-type VirtualGridOptions = struct { min_width: f32, selecting: bool, width: f32, height: f32, offset: f32, change: widget.Change[f32] }
+// (D1540) `levels` are the tile sizes (least widths, smallest first) that
+// `level` picks from, stepped through `zoom`; `near_end` asks for the next page.
+type VirtualGridOptions = struct { min_width: f32, selecting: bool, width: f32, height: f32, offset: f32, change: widget.Change[f32], levels: []const f32, level: usize, zoom: widget.Change[usize], near_end: widget.Submit }
+
+// (D1540) The tile count a grid last asked the next page at.
+type PageAsk = struct { total: usize }
 
 fn virtual_grid_options() -> VirtualGridOptions {
     var out: VirtualGridOptions = zero
@@ -8115,11 +8120,17 @@ fn virtual_grid_options() -> VirtualGridOptions {
 // runtime's rounded thumb in `on-surface-variant` at 50%; arrows, Page Up,
 // Page Down, Home and End move by stable source key and request the minimum
 // revealing offset. A grid named `label` with its counts.
-// ponytail: rows are keyed by position, not by the tiles they hold; no 12 top
-// padding, sticky section headers, placeholders, paging, scrub label or size
-// levels.
+// (D1540, docs/ux/components/VirtualGrid) 12 above the first row; with `levels`,
+// Ctrl+plus and Ctrl+minus (either key row's) report the next larger or smaller
+// level through `zoom`; a build window that reaches the last row fires
+// `near_end` once for each count of tiles. A tile with no media is the
+// placeholder (`tile_node`).
+// ponytail: rows are keyed by position, not by the tiles they hold; no sticky
+// section headers, scrub label, pinch or Ctrl+wheel zoom (the host's plus and
+// minus keys are not mapped on Linux).
 fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TileSource, options: VirtualGridOptions) -> (widget.Node, err) {
     var least = options.min_width
+    if options.level < options.levels.len { least = options.levels[options.level] }
     if !(least > 0.0) { least = control.if_else(density_of(t) == 2usize, 96.0, 112.0) }
     let total = source.count(source.ctx)
     let usable = control.max_zero(options.width - 24.0)
@@ -8128,6 +8139,8 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let row_total = (total + columns - 1usize) / columns
     let extent = side + 4.0
     let (first, count) = virtual_range(options.offset, options.height, row_total, extent)
+    let asked_error = grid_page_ask(t, key, first + count >= row_total, total, options.near_end)
+    if asked_error != ok { ret (zero, asked_error) }
     var built_first = first * columns
     var built = count * columns
     if built_first > total { built_first = total }
@@ -8229,15 +8242,55 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var view_style = control.sized_style(options.width, options.height)
     view_style.overflow = .Clip
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    let flat = style.Length { Px: 0.0 }
+    view_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: 12.0 }, right: flat, bottom: flat }
+    let (body, body_error) = mem.alloc[widget.Node](a, 2usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.change, virtual_first: first, virtual_count: row_total, virtual_extent: extent, fades: false }, view_style, rows[0usize..made_rows])
+    if options.levels.len > 1usize {
+        let (steps, steps_error) = mem.alloc[PairRemove](a, 2usize)
+        let (presses, presses_error) = mem.alloc[widget.Submit](a, 2usize)
+        let (zooms, zooms_error) = mem.alloc[widget.Shortcut](a, 4usize)
+        if steps_error != ok || presses_error != ok || zooms_error != ok { ret (zero, TooLarge) }
+        var larger = options.level
+        if larger + 1usize < options.levels.len { larger += 1usize }
+        var smaller = options.level
+        if smaller > 0usize { smaller -= 1usize }
+        steps[0usize] = PairRemove { index: larger, remove: options.zoom }
+        steps[1usize] = PairRemove { index: smaller, remove: options.zoom }
+        presses[0usize] = widget.Submit { ctx: ctx_of(&steps[0usize]), invoke: pair_remove_fire }
+        presses[1usize] = widget.Submit { ctx: ctx_of(&steps[1usize]), invoke: pair_remove_fire }
+        var ctrl: input.Modifiers = zero
+        ctrl.control = true
+        zooms[0usize] = widget.Shortcut { key: 187u32, modifiers: ctrl, action: presses[0usize] }
+        zooms[1usize] = widget.Shortcut { key: 107u32, modifiers: ctrl, action: presses[0usize] }
+        zooms[2usize] = widget.Shortcut { key: 189u32, modifiers: ctrl, action: presses[1usize] }
+        zooms[3usize] = widget.Shortcut { key: 109u32, modifiers: ctrl, action: presses[1usize] }
+        body[1usize] = body[0usize]
+        body[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: zooms[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), body[1usize..2usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = 30u8
     sem.label = label
     sem.column_count = u32(columns)
     sem.row_count = u32(row_total)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// (D1540) A grid whose build window reaches its last row asks for the next page,
+// once for each count of tiles (kept at the grid's own element).
+fn grid_page_ask(t: *const control.Theme, key: widget.Key, at_end: bool, total: usize, near_end: widget.Submit) -> err {
+    if !at_end || !widget.submit_set(near_end.invoke) || mem.address_of(t.runtime) == 0usize { ret ok }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret ok }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret ok }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: PageAsk = zero
+    let (asked, _, asked_error) = widget.state[PageAsk](&build, key, fresh)
+    if asked_error != ok || asked.total == total + 1usize { ret ok }
+    asked.total = total + 1usize
+    ret widget.fire_submit(near_end)
 }
 
 // --------------------------------------------- v2 paged and gestured collections (D982)
