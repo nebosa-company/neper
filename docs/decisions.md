@@ -27434,3 +27434,9 @@ The NavigationStack spec pops by sliding the top page away to the end while the 
 The TableRow spec: "Disabled (not actionable, e.g. queued behind a lock): content at 38%, tags at 38% opacity, checkbox disabled, still focusable for reading". A table had no way to mark a row so. `TableOptions.disabled` names rows by key, as `selected` does. Through the new `table_row_full`, such a row draws its content, and its selection cell, at `disabled-content` (38%), under no state layer. Its pick and double pick are inert, and so is its selection checkbox. It stays focusable, and it is Disabled in the tree, with no Press action. `table_row_of` keeps its signature and passes `false`. Space and the Shift arrows through the selection scopes still reach a disabled row.
 
 `ui_collections2_v2` checks this on Windows and Linux: with the first row disabled, a tap on it does not pick, a tap on the second does, and the first row is Disabled in the tree. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1501 — Table rows can be loading
+
+The TableRow spec: "Loading row: skeleton bars in each cell at the row height". A virtual table whose rows arrive a page at a time had no way to show a row still coming. `TableOptions.pending` names such rows by key. Each of their cells is a `skeleton_of` text line, 60% of the cell's inner width and 12 tall, and the row is Busy in the tree. `table_row_full` now takes its conditions as bits (`ROW_DISABLED`, `ROW_LOADING`).
+
+`ui_collections2_v2` checks this on Windows and Linux: with the third row pending, that row is Busy in the tree and the second is not. All 103 `ui_*` fixtures pass on both hosts.
