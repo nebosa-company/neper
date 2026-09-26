@@ -154,6 +154,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.type_text(&harness, "Ann") != ok || logs[0usize].name_len != 3usize { os.exit(17i32) }
     let (typed, has_typed) = widget.edit_value(&runtime, name)
     if !has_typed || !same(typed, "Ann") || !same(buffers[0usize].name[0usize..3usize], "Ann") { os.exit(18i32) }
+    // (D1469) A second tap in the field selects the word, so typing replaces it.
+    if testing.tap(&harness, name_bounds.x + 2.0, name_bounds.y + 2.0) != ok || testing.type_text(&harness, "Ann") != ok || logs[0usize].name_len != 3usize { os.exit(60i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].submits != 1usize { os.exit(19i32) }
     let (root_2, build_2_error) = build(&frame, &theme, &buffers[0usize], &logs[0usize], ctx, &clears[0usize], true)
     if build_2_error != ok { os.exit(20i32) }

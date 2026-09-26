@@ -27228,3 +27228,9 @@ The Snackbar spec has a two-line form: "a result that needs a sentence of reason
 The FontPicker spec opens its panel from a trigger in compact layouts and forms: "a field showing 'Family, size'... with a trailing chevron", and, for a saved family that is not installed, a `warning` and "Not installed, using <fallback>". The new `font_trigger` builds it on the select's field head (keyed `key`): the label in the notch, "Inter, 12" as the value, and the chevron. A press fires `toggle`, and the field says Expanded while `open`. The caller anchors the panel to it. With `missing`, a `warning` mark and the error note stand under the field in `body-small` `error` (keyed `key + 1`). The value is not yet set in the chosen family's face, and there are still no feature chips or sheet form.
 
 `ui_pickers3_v2` checks this on Windows and Linux: "Inter, 12" and "Not installed, using Segoe UI" show, and a tap on the trigger fires its toggle once.
+
+## D1469 — A double press selects a word in a text editor
+
+The TextField and SelectableText specs select a word on a double click. Every editor now does this. A second press in the same editor within the 500 ms tap window and 4 px of the first sets the selection to the run round the caret, so typing replaces it. That run is the word bytes (ASCII letters, digits, `_`, and every byte of a multi-byte character), or the other bytes when the caret stands on none, and it stops at a newline. The editor's press path records the press point and time in the same last-tap fields `pointer_tap` uses, so a third press starts a new count. Without the 4 px limit, `ui_edit`'s presses along one line, in frozen fixture time, read as double presses. A triple press for the line, touch handles and the selection toolbar are still not done.
+
+`ui_field` checks this on Windows and Linux: after "Ann" is typed, a second press selects it, and typing "Ann" leaves three bytes. All 103 `ui_*` fixtures pass on both hosts.
