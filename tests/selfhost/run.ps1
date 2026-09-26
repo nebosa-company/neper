@@ -5376,6 +5376,10 @@ $batchMemory = & $compiler query-batch (Join-Path $conformanceRoot 'tools/contra
 if ($LASTEXITCODE -ne 0) { throw "query-batch with memory lines failed" }
 $batchMemoryRecords = @($batchMemory | Where-Object { $_ -match '"arena_used"' } | ForEach-Object { ($_ | ConvertFrom-Json).data })
 if ($batchMemoryRecords.Count -ne 2 -or $batchMemoryRecords[0].request_peak -ne 0 -or $batchMemoryRecords[1].request_peak -le 0 -or $batchMemoryRecords[0].session_used -ne $batchMemoryRecords[1].session_used -or $batchMemoryRecords[1].arena_used -ne $batchMemoryRecords[1].session_used -or $batchMemoryRecords[1].snapshot_used -ge $batchMemoryRecords[1].session_used -or $batchMemoryRecords[1].arena_capacity -lt $batchMemoryRecords[1].arena_used) { throw "the batch retained request memory or reported the wrong accounting ($($batchMemoryRecords | ConvertTo-Json -Compress))" }
+# Snapshots in a batch (D1526, H16): ten thousand edit/query/revert cycles under a
+# budget of two, eviction, a stale key, a failed check and pins.
+& python (Join-Path $repo 'scripts/check_batch_snapshots.py') $compiler $repo 'x64' 'windows' (Join-Path $testBuild 'batch-snapshots')
+if ($LASTEXITCODE -ne 0) { throw 'query-batch snapshots do not hold their contract' }
 # Ten thousand queries under one fixed snapshot (D559, H16): all complete, the
 # largest request is reported, and live allocation returns to the session baseline.
 $batchSoakInput = Join-Path $testBuild 'batch-soak.txt'

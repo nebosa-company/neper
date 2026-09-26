@@ -4976,6 +4976,9 @@ batch_broken_status=0
 cmp -s "$test_build/conformance-tools-batch-broken.jsonl" "$conformance_root/tools/batch_broken.expected.jsonl" || { echo "query-batch over a program that does not check differs from the conformance corpus" >&2; exit 1; }
 # A batch retains nothing between lines (D410, D558, H16): `memory` separates
 # the checked snapshot, the session baseline and the largest temporary request.
+# Snapshots in a batch (D1526, H16): ten thousand edit/query/revert cycles under a
+# budget of two, eviction, a stale key, a failed check and pins.
+python3 "$repo/scripts/check_batch_snapshots.py" "$test_build/neper-self" "$repo" x64 linux "$test_build/batch-snapshots"
 batch_memory=$($test_build/neper-self query-batch "$conformance_root/tools/contract.e" "$repo" x64 linux --json --batch "$conformance_root/tools/batch_memory.txt")
 printf '%s\n' "$batch_memory" | python3 -c "import json,sys; rows=[json.loads(line)['data'] for line in sys.stdin if '\"arena_used\"' in line]; assert len(rows)==2; assert rows[0]['request_peak']==0 and rows[1]['request_peak']>0; assert rows[0]['session_used']==rows[1]['session_used']==rows[1]['arena_used']; assert rows[1]['snapshot_used']<rows[1]['session_used']; assert rows[1]['arena_capacity']>=rows[1]['arena_used']"
 # Ten thousand queries under one fixed snapshot (D559, H16): all complete and

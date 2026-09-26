@@ -27703,3 +27703,25 @@ Nothing changes without the flag.
 The chunks are emitted when the child has exited, not while it runs. The capture is two files, not pipes, so a flooding child never blocks. The bootstrap's fixed OS surface has no sleep or timed wait, so a live reader would have to spin on the files for the child's whole life. Sequence order is H18's other open line, and its progress half landed in D561: every `progress` record carries a contiguous `sequence`. The output records add a `sequence` per stream, and the `result` stays the last record, holding the final status.
 
 The schema gains the `output` record. The conformance corpus gains `run_chunked`: `run_flood` under `--capture 50 --chunked`, one golden for both hosts and pinned by both suites, validated against the schema. `build/ux/c045_chunks.sh` covers a 6,003-byte stream whose 4,096th byte falls inside a character, five binary bytes on stderr, and the same run under `--capture 5000`. The chunks reassemble to each stream's captured prefix, the sequences and offsets are contiguous, the split character moves whole to the second chunk, stderr is base64, the end records match the files, and a run without the flag has no `output` records. All of it passes on Windows and Linux, and the fixed point holds on both.
+
+## D1526 — A batch's snapshots: edits, pins, eviction and stale keys
+
+H16 asks who pins a snapshot, when a pin is released, what a stale handle returns, and that storage still referenced is never evicted. Its acceptance list asks for ten thousand edit/query/revert cycles under a fixed cache budget, and eviction with pinned and unpinned snapshots. `query-batch` held one snapshot, the program it checked, for the life of the process (D409, D410).
+
+A batch now holds up to eight snapshots, two by default.
+
+- **Slots.** Slot 0 is the base snapshot, always pinned. Every other slot has an arena of its own, a reservation like a worker's (D339), holding the checked graph, resolver, checker and explain table of the program under one set of edits, plus that set's texts.
+- **Moving.** `edit PATH FILE` and `revert PATH` move the batch to the snapshot of the changed set. A slot holding exactly that set is a hit. Its key is an order-free hash of paths and texts, but the texts themselves are compared, so the hash is only a candidate (H15).
+- **Misses and eviction.** On a miss the set is checked into a free slot. Failing that, it goes into the least recently used slot that is neither pinned nor current, and failing that into the current slot if it is unpinned: the batch is leaving it, and no query stays open across lines. The chosen slot's arena is reset and counted as an eviction. A pinned slot is never taken, and when every slot is pinned the edit is refused.
+- **Failed edits.** An edit whose program does not check makes no snapshot: its diagnostic stream stands under the `edit` header and the line is refused. If the failed check took the current slot, the batch falls back to the base snapshot.
+- **Other lines.** `pin` and `unpin` hold and release the current snapshot. `use KEY` returns to a held snapshot, and a key no slot holds is refused as stale. `budget N` changes the budget within the slots in use. `snapshots` reports the current key, the budget, the live and pinned counts, hits, misses, evictions and the snapshot arenas' use.
+- **Queries.** Every query answers from the current snapshot, and its subject record already carries that snapshot's identity (D407).
+
+A program that does not parse still ends the batch, as a failing load does. The loader has no recovering path yet, which this row leaves open.
+
+`scripts/check_batch_snapshots.py` holds this contract and runs in both suites.
+
+- **Soak.** Ten thousand edit/query/revert cycles under the default budget make one miss and 19,999 hits. All 20,000 answers are the right snapshot's. Live arena memory is back at the session baseline with `queries_completed` at 20,000, and snapshot storage is unchanged after the first check.
+- **Eviction batch.** An edit past the budget evicts, and the evicted key is then refused as stale. A failing edit leaves the current snapshot when a free slot takes the check. With every slot pinned, an edit is refused.
+
+The same checks pass on Windows and Linux, with the bootstrap-built and the self-built compiler, and the fixed point holds.
