@@ -2588,6 +2588,12 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     path_actions[1usize] = options.go
     path_actions[2usize] = options.cancel
     let editable = widget.submit_set(options.edit.invoke)
+    // (D1443, docs/ux/components/Breadcrumbs, motion) The edit field fades in over
+    // `duration-short-3` on `ease-standard` (a share kept on the trail, slot `key
+    // + 1048602`); reduced motion shows it at once.
+    var edit_goal: f32 = 0.0
+    if options.editing { edit_goal = 1.0 }
+    let edit_share = control.eased_on(t, key, key + 1048602u64, edit_goal, false, t.tokens.durations.short3)
     if options.editing {
         // (D1308) The path as editable text in the trail's place.
         var field = control.field_options()
@@ -2607,7 +2613,9 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
         }
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
-        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), edited[0usize..edited_count])
+        var fading = style.defaults()
+        fading.opacity = edit_share
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, fading, edited[0usize..edited_count])
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
         if scoped_error != ok { ret (zero, TooLarge) }
         // (D1396, docs/ux/components/Breadcrumbs, editing) With `complete`, Tab

@@ -27036,3 +27036,9 @@ The FormField spec cross-fades messages in place (`duration-short-2`, `ease-stan
 The RichText spec fades the link hover wash in over `duration-short-2` with `ease-standard`. A live link fragment in a `paragraph` now eases its wash toward its state's opacity (hover 8%, pressed 10%) on the link, under slot `link_key + 1048601`. The wash is always drawn, at 0 at rest. A link broken over two lines has two elements under its key, so it falls back to changing at once, as reduced motion does.
 
 `ui_content3_v2` checks this on Windows and Linux: on the hover's own frame the wash is not yet at 8%, and 500 ms later it is. The fixture builds once more before hovering so the cell exists, and its limits rise to 32 states, 1024 bytes and 8 classes. Its old hover check had passed only because the cell could not be kept. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1443 — The breadcrumb path field fades in
+
+The Breadcrumbs spec cross-fades the edit field in over `duration-short-3` with `ease-standard`. A trail now keeps an editing share on itself, under slot `key + 1048602`. While editing, the path field and its message stand at that share's opacity, inside a column that is always there in that mode. Reduced motion shows the field at once. The trail going out is not drawn fading.
+
+`ui_navigation2_v2` switches a trail to editing, on Windows and Linux: on that frame the field stands part way in, and a second later it is whole. The other breadcrumb fixtures (`ui_collections6_v2`, `ui_adaptive`, `ui_content2_v2`, `ui_navigation_v2`) pass on both hosts.
