@@ -10040,9 +10040,10 @@ fn joined(a: *mem.Arena, head: str, tail: str) -> (str, err) {
 // (D1303) Three or more notices in a row from one `source` in one day fold into
 // one row (keyed `key + 256 + index` of the first) that opens to show them.
 // (D1359) New notices slide in at the top as `inserted` grows.
-// ponytail: Up and Down aim at a folded row's hidden notices; a slide is 72 a
-// notice whatever the rows' heights, on the standard curve, and runs even when
-// the list is scrolled.
+// (D1488) A shut fold stands in for its notices: Up and Down reach it, and from
+// it the rows either side.
+// ponytail: a slide is 72 a notice whatever the rows' heights, on the standard
+// curve, and runs even when the list is scrolled.
 fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
     var options: NotificationListOptions = zero
     let (node, node_error) = notification_list_with(a, key, t, label, items, mark_read, width, height, options)
@@ -10105,9 +10106,28 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
             if run >= 3usize {
                 let (fold, fold_open, fold_error) = notification_fold_row(a, key + 256u64 + u64(i), t, item, run, inner)
                 if fold_error != ok { ret (zero, fold_error) }
-                rows[n] = fold
+                // (D1488) The fold row's own Up and Down go to the rows either
+                // side of its run; shut, its notices' targets are the fold row
+                // itself (the shortcuts read them when pressed).
+                var before_run = i
+                if i > 0usize { before_run = i - 1usize }
+                var after_run = i + run - 1usize
+                if i + run < items.len { after_run = i + run }
+                let (fold_keys, fold_keys_error) = mem.alloc[widget.Shortcut](a, 2usize)
+                if fold_keys_error != ok { ret (zero, TooLarge) }
+                fold_keys[0usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[before_run]), invoke: focus_to_fire } }
+                fold_keys[1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[after_run]), invoke: focus_to_fire } }
+                let (fold_held, fold_held_error) = mem.alloc[widget.Node](a, 1usize)
+                if fold_held_error != ok { ret (zero, TooLarge) }
+                fold_held[0usize] = fold
+                rows[n] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: fold_keys[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), fold_held[0usize..1usize])
                 n += 1usize
                 if !fold_open {
+                    var hidden = 0usize
+                    while hidden < run {
+                        targets[i + hidden].key = key + 256u64 + u64(i)
+                        hidden += 1usize
+                    }
                     var skipped = 1usize
                     while skipped < run {
                         if items[i + skipped].unread { unread += 1usize }
