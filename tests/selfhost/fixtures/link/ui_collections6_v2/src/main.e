@@ -181,6 +181,16 @@ fn at_cell(store: *const Store, row: usize, column: usize) -> bool {
     ret store.state.row == row && store.state.column == column && !store.state.editing
 }
 
+// (D1539) The toolbar's filter removals: how many, and the last index.
+type UnfilterLog = struct { count: usize, index: usize }
+
+fn on_unfilter(ctx: *void, value: usize) -> err {
+    let log = mem.cast[*UnfilterLog](ctx)
+    log.count += 1usize
+    log.index = value
+    ret ok
+}
+
 fn same_text(a: str, b: str) -> bool {
     if a.len != b.len { ret false }
     var i = 0usize
@@ -583,6 +593,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, quick_shown, _) = collection.refresh_outcome_notice(a, 0usize, false, 1000000000i64, false, "build", "builds", zero, zero)
     let (slow_notice, slow_shown, _) = collection.refresh_outcome_notice(a, 0usize, false, 3000000000i64, false, "build", "builds", zero, zero)
     if in_view_shown || quick_shown || !slow_shown || !same_text(slow_notice.text, "Up to date") { os.exit(180i32) }
+    // (D1539) A table toolbar: the title, a chip per active filter whose remove
+    // reports its index, Clear filters while any stands, the search and Columns.
+    var unfilter_log = UnfilterLog { count: 0usize, index: 0usize }
+    let (query_bytes, query_bytes_error) = mem.alloc[u8](a, 16usize)
+    if query_bytes_error != ok { os.exit(181i32) }
+    var active_filters: [2]str = zero
+    active_filters[0usize] = "Failed"
+    active_filters[1usize] = "This week"
+    var toolbar_step = 0usize
+    while toolbar_step < 2usize {
+        var bar: collection.TableToolbar = zero
+        bar.title = "Builds"
+        bar.query = query_bytes
+        if toolbar_step == 0usize { bar.filters = active_filters[..] }
+        bar.unfilter = widget.Change[usize] { ctx: mem.cast[*void](&unfilter_log), invoke: on_unfilter }
+        bar.has_columns = true
+        f = mem.arena_from(storage)
+        let (toolbar, toolbar_error) = collection.table_toolbar(&f, 9000u64, &theme, bar, 640.0)
+        let (toolbar_page, toolbar_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if toolbar_error != ok || toolbar_page_error != ok { os.exit(181i32) }
+        toolbar_page[0usize] = toolbar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 600.0), toolbar_page[0usize..1usize]), time.Instant { nanos: 95000000000i64 + i64(toolbar_step) }) != ok { os.exit(181i32) }
+        if testing.by_text(&harness, "Builds").count == 0usize || testing.by_key(&harness, 9001u64).count == 0usize || testing.by_key(&harness, 9003u64).count == 0usize { os.exit(182i32) }
+        if toolbar_step == 0usize {
+            let (dropper, has_dropper) = bounds(&harness, &runtime, 9019u64)
+            if testing.by_key(&harness, 9002u64).count == 0usize || !has_dropper || testing.by_text(&harness, "This week").count == 0usize { os.exit(183i32) }
+            if testing.tap(&harness, dropper.x + dropper.width * 0.5, dropper.y + dropper.height * 0.5) != ok || unfilter_log.count != 1usize || unfilter_log.index != 1usize { os.exit(184i32) }
+        }
+        if toolbar_step == 1usize && testing.by_key(&harness, 9002u64).count != 0usize { os.exit(185i32) }
+        toolbar_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(54i32) }
     try io.print("ui collections6 v2 ok\n")
     ret ok
