@@ -3024,6 +3024,11 @@ fn within_range(d: time.Date, from: time.Date, to: time.Date) -> bool {
     ret n >= lo && n <= hi
 }
 
+// (D1395) Whether `a` falls before `b`.
+fn date_before(a: time.Date, b: time.Date) -> bool {
+    ret time.days_from_civil(i64(a.year), i64(a.month), i64(a.day)) < time.days_from_civil(i64(b.year), i64(b.month), i64(b.day))
+}
+
 fn same_date(a: time.Date, b: time.Date) -> bool {
     ret a.year == b.year && a.month == b.month && a.day == b.day
 }
@@ -3063,7 +3068,7 @@ fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // Monday by default, Sunday for "en-US", Saturday for "ar-EG".
 // (D1307) `CalendarMarks.toggle_years` makes the title the month button and
 // `year_view` shows the years (`year_grid`).
-// ponytail: English month and weekday names.
+// (D1388) German, French and Spanish names, English otherwise.
 fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     var marks: CalendarMarks = zero
     let (made, made_error) = calendar_with(a, key, t, label, shown, selected, has_selected, ranged, from, to, today, has_today, show, pick, marks)
@@ -3238,7 +3243,7 @@ fn iso_week_of(count: i64) -> i64 {
 // calls it disabled, though arrow keys still reach it.
 // (D1276) A day's name is its full date ("Tuesday, 10 March 2026").
 // (D1277) Up and Down skip a week whose every day is unavailable.
-// ponytail: English names only.
+// (D1388) Its names follow the theme language (de, fr, es; English otherwise).
 fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], marks: CalendarMarks) -> (widget.Node, err) {
     let year = i64(shown.year)
     let month = i64(shown.month)
@@ -3851,8 +3856,28 @@ fn date_commit_fire(ctx: *void) -> err {
 // (D1366) The build after the field loses the focus, a date it reads is
 // rewritten in the locale's form through `change` ("25 sep" becomes
 // "9/25/2026" in en-US).
-// ponytail: no minimum or maximum message.
+// (D1395) `date_entry_within` adds the earliest and latest date and their message.
 fn date_entry(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], picked: widget.Change[time.Date], today: time.Date, width: f32) -> (widget.Node, err) {
+    var open_end: time.Date = zero
+    let (made, made_error) = date_entry_within(a, key, t, label, buffer, len, change, picked, today, width, open_end, open_end)
+    ret (made, made_error)
+}
+
+// (D1395) "September 8, 2026" in the theme language's month names.
+fn write_long_date(out: []u8, d: time.Date, language: str) -> usize {
+    var n = control.copy_text(out, month_name_in(i64(d.month), language))
+    n += control.copy_text(out[n..out.len], " ")
+    n += control.write_i64(out[n..out.len], i64(d.day))
+    n += control.copy_text(out[n..out.len], ", ")
+    n += control.write_i64(out[n..out.len], i64(d.year))
+    ret n
+}
+
+// (D1395, docs/ux/components/DatePicker, invalid) `date_entry` held to
+// `earliest` and `latest` (a year of 0 for no bound): a date read outside them,
+// once the field has lost the focus, turns the field `error` with "Choose a date
+// from September 8, 2026", "... up to ...", or "... from ... to ...".
+fn date_entry_within(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], picked: widget.Change[time.Date], today: time.Date, width: f32, earliest: time.Date, latest: time.Date) -> (widget.Node, err) {
     let text = buffer[0usize..len]
     let (day, read) = parse_date(text, t.language, today)
     var focused = false
@@ -3873,13 +3898,18 @@ fn date_entry(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         memo.held = focused
     }
     let wrong = len > 0usize && !read && !focused
+    let has_earliest = earliest.year != 0i32
+    let has_latest = latest.year != 0i32
+    let too_early = has_earliest && date_before(day, earliest)
+    let too_late = has_latest && date_before(latest, day)
+    let outside = read && !focused && (too_early || too_late)
     let hint = date_format_hint(t.language)
     let (commits, commits_error) = mem.alloc[DateCommit](a, 1usize)
     if commits_error != ok { ret (zero, TooLarge) }
     commits[0usize] = DateCommit { text: text, language: t.language, today: today, picked: picked }
     var options = control.field_options()
     options.width = width
-    options.invalid = wrong
+    options.invalid = wrong || outside
     options.placeholder = hint
     let (field_node, field_error) = control.text_field(a, key, t, label, buffer, len, change, widget.Submit { ctx: mem.cast[*void](&commits[0usize]), invoke: date_commit_fire }, options)
     if field_error != ok { ret (zero, field_error) }
@@ -3889,6 +3919,20 @@ fn date_entry(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         if said_error != ok { ret (zero, TooLarge) }
         var at = control.copy_text(said, "Enter a date as ")
         at += control.copy_text(said[at..said.len], hint)
+        line = control.Message { validity: .Invalid, text: said[0usize..at] }
+    }
+    if outside {
+        let (said, said_error) = mem.alloc[u8](a, 96usize)
+        if said_error != ok { ret (zero, TooLarge) }
+        var at = control.copy_text(said, "Choose a date ")
+        if has_earliest {
+            at += control.copy_text(said[at..said.len], "from ")
+            at += write_long_date(said[at..said.len], earliest, t.language)
+            if has_latest { at += control.copy_text(said[at..said.len], " to ") }
+        } else {
+            at += control.copy_text(said[at..said.len], "up to ")
+        }
+        if has_latest { at += write_long_date(said[at..said.len], latest, t.language) }
         line = control.Message { validity: .Invalid, text: said[0usize..at] }
     }
     let (message, message_error) = control.field_message(a, key + 1u64, t, line, key)
@@ -4777,8 +4821,8 @@ fn date_wheel_fire(ctx: *void, index: usize) -> err {
 // name (120 wide), the day (1 to the month's last, 56) and the year (the date's
 // year and 50 either side, 80), 8 apart (keyed `key`, `key + 16`, `key + 32`); a
 // turn reports the whole date, its day kept in its month.
-// ponytail: English month names; the order is month, day, year whatever the
-// locale.
+// (D1388) Its months follow the theme language.
+// ponytail: the order is month, day, year whatever the locale.
 fn date_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, date: time.Date, change: widget.Change[time.Date]) -> (widget.Node, err) {
     if date.month < 1u8 || date.month > 12u8 { ret (zero, TooLarge) }
     let days = usize(time.days_in_month(i64(date.year), i64(date.month)))
