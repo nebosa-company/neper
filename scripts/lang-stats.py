@@ -3,14 +3,10 @@
 Reads every Claude Code transcript under ~/.claude/projects and attributes each code
 edit to a language by file extension. Python patch or generator scripts written in
 neper sessions that carry Neper code count as Neper (only their new code counts as
-bytes); scripts that carry docs are kept apart.
-
-Columns: KB of new code; visible and thinking output tokens per byte (from replies
-that are exactly one code edit); edit error %; build/test commands and their fail %;
-edits per file; cost per byte in input-token equivalents (output x5, 1h cache write
-x2, 5m cache write x1.25, cache read x0.1); USD per KB at $5 per million input tokens.
+bytes); scripts that carry docs are kept apart. The columns are explained below the
+table it prints.
 """
-import json, glob, os, re, ntpath, collections as C
+import json, glob, os, re, collections as C
 
 ROOT = os.path.expanduser('~/.claude/projects')
 # every language, not just the four reported: an edit in another language absorbs the work leading up to it
@@ -110,3 +106,16 @@ for g, ks in GROUPS.items():
         g, code // 1024, t['d_vis'] / max(t['d_bytes'], 1), t['d_think'] / max(t['d_bytes'], 1),
         100 * t['edit_err'] / t['edits'], t['builds'], 100 * t['build_fail'] / max(t['builds'], 1),
         t['edits'] / files, cost_b, cost_b * 5e-6 * 1024))
+
+print('''
+KB      new code written, in KB (Neper includes the new half of Python patch scripts)
+tok/B   visible output tokens per byte of code, from replies that are exactly one code edit
+thk/B   thinking tokens per byte of code, from the same replies
+edit%   Write/Edit calls that failed to apply
+builds  build and test commands run for the language
+fail%   those commands that failed
+ed/fil  edits per distinct file, a measure of rework
+cost/B  tokens spent per byte, in input-token equivalents: all the reading, thinking and
+        testing that led to the edit (output x5, 1h cache write x2, 5m cache write x1.25,
+        cache read x0.1)
+$/KB    cost/B in USD per KB at $5 per million input tokens (Opus 5 list price)''')
