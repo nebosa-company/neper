@@ -25967,3 +25967,15 @@ order is month, day, year whatever the locale.
 
 `ui_pickers2_v2` sets the wheels on 31 January 2026: Down on the month gives 28
 February, and Up on the year gives 2025, on Windows and Linux.
+
+## D1352 — Durations have unit boxes on touch
+
+The DurationPicker spec's touch form: `overlay.duration_boxes` sets three typed
+boxes, Hours, Minutes and Seconds (keyed `key + 1` to `key + 3`), each the time
+picker's `typed_time_box` with its unit under it, and a display-small colon
+between. `overlay.duration_roll` rolls typed units over: seconds past 59 go
+into minutes and minutes past 59 into hours (75 min is 1 h 15 min), with the
+hours held to a caller's limit. Focus does not move on after two digits.
+
+`ui_pickers2_v2` finds the three boxes editable, rolls 75 min to 1 h 15 min, and
+holds 30 h 90 min at 24 h, on Windows and Linux.
