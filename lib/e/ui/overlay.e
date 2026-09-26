@@ -5224,6 +5224,32 @@ fn read_percent(text: str) -> (f32, bool) {
     ret (f32(value) / 100.0, true)
 }
 
+// (D1343) A touch colour panel's mode, kept on the field: the spectrum rather
+// than the swatches; and a mode segment's press.
+type ColorMode = struct { spectrum: bool }
+type ColorModePick = struct { runtime: *widget.Runtime, cell: *ColorMode, spectrum: bool }
+
+fn color_mode_fire(ctx: *void) -> err {
+    let p = mem.cast[*ColorModePick](ctx)
+    p.cell.spectrum = p.spectrum
+    widget.request_animation_frame(p.runtime)
+    ret ok
+}
+
+fn color_mode(t: *const control.Theme, key: widget.Key) -> (*ColorMode, bool) {
+    var none: *ColorMode = zero
+    if mem.address_of(t.runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: ColorMode = zero
+    let (kept, _, kept_error) = widget.state[ColorMode](&build, key + 4194304u64, fresh)
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
 // (D1322) A format segment's press.
 type FormatPick = struct { format: ColorFormat, pick: widget.Change[ColorFormat] }
 
@@ -5567,7 +5593,8 @@ fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
 // saturation too.
 // (D1338) Thumbs are 28 on touch and grow to 24 hovered.
 // (D1339) `color_field_typed` makes the opacity readout a field.
-// ponytail: no sheet or mode switch for touch, no host panel.
+// (D1343) On touch a Swatches / Spectrum switch shows one part at a time.
+// ponytail: no sheet for touch, no host panel.
 fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     var no_recent: []const paint.Color = zero
     let (made, made_error) = color_field_with(a, key, t, label, value, with_alpha, change, open, toggle, swatches, no_recent, hex, hex_len, typed, width)
@@ -5756,6 +5783,8 @@ fn color_field_typed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
         }
         blocks[used] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), channel_row[0usize..channel_count])
         used += 1usize
+        // (D1343) Where the spectrum's blocks end and the swatches' begin.
+        let spectrum_end = used
         var section_at = 0usize
         while section_at < 2usize {
             var list = swatches
@@ -5830,7 +5859,44 @@ fn color_field_typed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
         raised_style.overflow = .Visible
         let (panel_body, panel_error) = mem.alloc[widget.Node](a, 1usize)
         if panel_error != ok { ret (zero, TooLarge) }
-        panel_body[0usize] = widget.flex(key + 7u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, raised_style, blocks[0usize..used])
+        var shown_blocks = blocks[0usize..used]
+        if touch {
+            // (D1343, docs/ux/components/ColorPicker, touch) A Swatches / Spectrum
+            // segmented switch (keyed `key + 4200`, the swatches first) shows one
+            // part at a time, the choice kept on the field.
+            let (mode_cell, has_mode_cell) = color_mode(t, key)
+            let spectrum_shown = has_mode_cell && mode_cell.spectrum
+            let (mode_labels, mode_labels_error) = mem.alloc[str](a, 2usize)
+            let (mode_picks, mode_picks_error) = mem.alloc[ColorModePick](a, 2usize)
+            let (mode_presses, mode_presses_error) = mem.alloc[widget.Submit](a, 2usize)
+            let (moded, moded_error) = mem.alloc[widget.Node](a, used + 1usize)
+            if mode_labels_error != ok || mode_picks_error != ok || mode_presses_error != ok || moded_error != ok { ret (zero, TooLarge) }
+            mode_labels[0usize] = "Swatches"
+            mode_labels[1usize] = "Spectrum"
+            var chosen_mode = 0usize
+            if spectrum_shown { chosen_mode = 1usize }
+            if has_mode_cell {
+                mode_picks[0usize] = ColorModePick { runtime: t.runtime, cell: mode_cell, spectrum: false }
+                mode_picks[1usize] = ColorModePick { runtime: t.runtime, cell: mode_cell, spectrum: true }
+                mode_presses[0usize] = widget.Submit { ctx: mem.cast[*void](&mode_picks[0usize]), invoke: color_mode_fire }
+                mode_presses[1usize] = widget.Submit { ctx: mem.cast[*void](&mode_picks[1usize]), invoke: color_mode_fire }
+            }
+            let (switch_node, switch_error) = control.segmented_control(a, key + 4200u64, t, "Colour mode", mode_labels[0usize..2usize], chosen_mode, mode_presses[0usize..2usize], true)
+            if switch_error != ok { ret (zero, switch_error) }
+            moded[0usize] = switch_node
+            var m = 1usize
+            var b = 0usize
+            if !spectrum_shown { b = spectrum_end }
+            var b_end = used
+            if spectrum_shown { b_end = spectrum_end }
+            while b < b_end {
+                moded[m] = blocks[b]
+                m += 1usize
+                b += 1usize
+            }
+            shown_blocks = moded[0usize..m]
+        }
+        panel_body[0usize] = widget.flex(key + 7u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, raised_style, shown_blocks)
         let (made, made_error) = dismissable(a, key + 1u64, key, .Below, label, panel_body[0usize], toggle, 4.0)
         if made_error != ok { ret (zero, made_error) }
         parts[1usize] = made
