@@ -2327,6 +2327,7 @@
         "tool_version",
         "language_version",
         "grammar_revision",
+        "tokenizer_profiles",
         "target",
         "mode",
         "root_module",
@@ -2360,6 +2361,30 @@
         "grammar_revision": {
           "type": "integer",
           "minimum": 1
+        },
+        "tokenizer_profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "encoding",
+              "grammar_revision",
+              "sha256"
+            ],
+            "properties": {
+              "encoding": {
+                "type": "string"
+              },
+              "grammar_revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
         },
         "target": {
           "type": "string"
