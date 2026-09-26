@@ -838,7 +838,7 @@ fn navigation_stack_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme
 }
 
 // (D1271) A stack's memory: its depth last frame and who pushed each level.
-type StackCell = struct { depth: usize, pushers: [16]widget.Key }
+type StackCell = struct { depth: usize, pushers: [16]widget.Key, popped: bool }
 
 fn stack_cell(t: *const control.Theme, key: widget.Key) -> (*StackCell, bool) {
     var none: *StackCell = zero
@@ -854,9 +854,13 @@ fn stack_cell(t: *const control.Theme, key: widget.Key) -> (*StackCell, bool) {
     ret (kept, true)
 }
 
-// (D1319) A stack's depth eased over `duration-medium-2`, kept on the stack.
-fn eased_on_depth(t: *const control.Theme, key: widget.Key, depth: usize) -> f32 {
-    ret control.eased_on(t, key, key + 1048576u64, f32(depth), false, t.tokens.durations.medium2)
+// (D1319) A stack's depth eased, kept on the stack. (D1445) A push eases over
+// `duration-medium-2` on `ease-emphasized-decelerate`, a pop over
+// `duration-medium-1` on `ease-emphasized-accelerate`.
+fn eased_on_depth(t: *const control.Theme, key: widget.Key, depth: usize, popping: bool) -> f32 {
+    var millis = t.tokens.durations.medium2
+    if popping { millis = t.tokens.durations.medium1 }
+    ret control.eased_emphasized(t, key, key + 1048576u64, f32(depth), false, millis)
 }
 
 // v2 (D972, docs/ux/components/NavigationStack): the top page fills on `surface`
@@ -882,7 +886,11 @@ fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if titles.len != pages.len || titles.len == 0usize { ret (zero, TooLarge) }
     let top = titles.len - 1usize
     let (cell, has_cell) = stack_cell(t, key)
+    var popping = false
     if has_cell {
+        // (D1445) Which way the depth last moved, so the ease keeps its duration.
+        if titles.len != cell.depth { cell.popped = titles.len < cell.depth }
+        popping = cell.popped
         if cell.depth > 0usize && titles.len > cell.depth {
             let (pusher, has_pusher) = widget.focused_key(t.runtime)
             if has_pusher && cell.depth - 1usize < 16usize { cell.pushers[cell.depth - 1usize] = pusher }
@@ -928,8 +936,11 @@ fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     parts[1usize] = widget.semantics(key + 3u64, page_sem, grow, body[0usize..1usize])
     // (D1319) The page slides as the depth eases to its new value: still to come
     // on a push (from the end), past on a pop (a 30% parallax from the start).
-    let depth_now = eased_on_depth(t, key, titles.len)
+    let depth_now = eased_on_depth(t, key, titles.len, popping)
     let left = f32(titles.len) - depth_now
+    // ponytail: the slide's wrapper stands only while the page moves, so content
+    // focused inside the page is remade when the slide ends (the Back that takes
+    // the focus is in the bar, outside it); always wrapping moved the page's layout.
     if left != 0.0 {
         var dx = left * width
         if left < 0.0 { dx = left * width * 0.3 }

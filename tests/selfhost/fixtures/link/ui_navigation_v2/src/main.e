@@ -346,6 +346,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         slide_step += 1usize
     }
+    // (D1445) A pop eases on `ease-emphasized-accelerate` over `duration-medium-1`:
+    // 200 ms after it the page beneath (a full-width block) is still well short
+    // of its place returning from 30% towards the start, so 530 in is not yet
+    // reached (the old standard curve had it there); a second on it is.
+    var wide_block = control.sized_style(600.0, 100.0)
+    wide_block.background = paint.Brush { Solid: style.color(&tokens, .Primary) }
+    var pop_step = 0usize
+    while pop_step < 6usize {
+        var pop_at = 13000000000i64
+        var pop_depth = 2usize
+        if pop_step == 1usize { pop_at = 13000000001i64 }
+        if pop_step == 2usize { pop_at = 13500000000i64 }
+        if pop_step == 3usize {
+            pop_at = 14000000000i64
+            pop_depth = 1usize
+        }
+        if pop_step == 4usize {
+            pop_at = 14200000000i64
+            pop_depth = 1usize
+        }
+        if pop_step == 5usize {
+            pop_at = 15000000000i64
+            pop_depth = 1usize
+        }
+        if testing.begin(&harness, time.Instant { nanos: pop_at }) != ok { os.exit(65i32) }
+        f = mem.arena_from(frame_storage)
+        var pop_pages: [2]widget.Node = zero
+        pop_pages[0usize] = widget.box(0u64, wide_block, zero)
+        pop_pages[1usize] = widget.box(0u64, control.sized_style(100.0, 100.0), zero)
+        let (popping_stack, popping_stack_error) = navigation.navigation_stack_of(&f, 2850u64, &theme, slide_titles[0usize..pop_depth], pop_pages[0usize..pop_depth], &s.subs[3usize], no_jumps(), 600.0)
+        if popping_stack_error != ok || testing.pump(&harness, popping_stack, time.Instant { nanos: pop_at }) != ok { os.exit(65i32) }
+        if pop_step >= 4usize {
+            let (pop_page, has_pop_page) = bounds(&harness, &runtime, 2853u64)
+            let (pop_shot, pop_shot_error) = testing.snapshot(&harness, a)
+            if !has_pop_page || pop_shot_error != ok { os.exit(66i32) }
+            let reached = is_color(pop_shot, at(pop_page.x + 530.0, pop_page.y + 50.0), style.color(&tokens, .Primary))
+            if pop_step == 4usize && reached { os.exit(67i32) }
+            if pop_step == 5usize && !reached { os.exit(68i32) }
+        }
+        pop_step += 1usize
+    }
     // (D1272) A dirty page's Back asks instead of popping; the open question's
     // Discard pops.
     var guarded: navigation.StackGuard = zero
