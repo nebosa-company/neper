@@ -3307,8 +3307,8 @@ fn progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, val
 // growing segments travel the track on the shared two-second clock and the tree
 // says busy; under reduced motion two fixed segments pulse in place. Determinate,
 // the value is the percent ("30%"). A progress role named `label`.
-// ponytail: the label row, detail line and completion icon compose with Text
-// beside the bar.
+// (D1390) `progress_labelled` is the bar with its label row, detail line and
+// status icon.
 // (D1279) An eased share, kept across frames on the element keyed `key`: where it
 // eases from, to, since when, and where it stood last frame.
 type EaseCell = struct { from: f32, to: f32, since: i64, shown: f32, set: bool }
@@ -3383,6 +3383,109 @@ fn eased_on_curve(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32,
     cell.shown = cell.from + (cell.to - cell.from) * animation.ease(curve, progress)
     widget.request_animation_frame(t.runtime)
     ret cell.shown
+}
+
+// (D1390) A labelled bar's words: the detail line, whether the task is done, and
+// the action (Retry, Resume) at the label row's end with its label.
+type ProgressWords = struct { detail: str, done: bool, action_label: str, action: widget.Submit }
+
+// (D1390, docs/ux/components/ProgressBar, label row and detail line) The bar
+// under its label row -- the task in `body-medium` `on-surface`, led by an 18
+// status icon when done (`check-circle` in `success`), failed (`alert` in
+// `error`) or paused (`info` in `on-surface-variant`), a failed task's label
+// ending " failed" and a paused one's " paused", and the percent at the end in
+// `on-surface-variant` (determinate), or the action as a text button (keyed
+// `key + 3`) -- 8 above it, and the detail line in `body-small`
+// `on-surface-variant` (`error` when failed) 8 below it.
+fn progress_labelled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, words: ProgressWords, options: ProgressOptions) -> (widget.Node, err) {
+    let (bar, bar_error) = progress_bar_of(a, key, t, label, value, indeterminate, width, options)
+    if bar_error != ok { ret (zero, bar_error) }
+    let (head, head_error) = mem.alloc[widget.Node](a, 4usize)
+    let (column, column_error) = mem.alloc[widget.Node](a, 3usize)
+    if head_error != ok || column_error != ok { ret (zero, TooLarge) }
+    var h = 0usize
+    var has_icon = false
+    var icon_kind: GlyphKind = .CheckCircle
+    var icon_color = style.color(t.tokens, .Success)
+    var said = label
+    if words.done { has_icon = true }
+    if options.tone == .Error {
+        has_icon = true
+        icon_kind = .Alert
+        icon_color = style.color(t.tokens, .Error)
+        let (failed, failed_error) = joined_words(a, label, " failed")
+        if failed_error != ok { ret (zero, failed_error) }
+        said = failed
+    }
+    if options.tone == .Paused {
+        has_icon = true
+        icon_kind = .Info
+        icon_color = style.color(t.tokens, .OnSurfaceVariant)
+        let (paused, paused_error) = joined_words(a, label, " paused")
+        if paused_error != ok { ret (zero, paused_error) }
+        said = paused
+    }
+    if has_icon {
+        let (status_icon, status_icon_error) = icon_square(a, icon_color, icon_kind, 18.0)
+        if status_icon_error != ok { ret (zero, status_icon_error) }
+        head[h] = status_icon
+        h += 1usize
+    }
+    var body = text_options()
+    body.role = .BodyMedium
+    body.wrap = .None
+    let (named, named_error) = colored_text(a, 0u64, said, t, body, style.color(t.tokens, .OnSurface))
+    if named_error != ok { ret (zero, named_error) }
+    head[h] = named
+    h += 1usize
+    head[h] = widget.spacer(0u64, 1.0)
+    h += 1usize
+    if words.action_label.len > 0usize && widget.submit_set(words.action.invoke) {
+        let (acts, acts_error) = mem.alloc[widget.Submit](a, 1usize)
+        if acts_error != ok { ret (zero, TooLarge) }
+        acts[0usize] = words.action
+        var plain = button_options()
+        plain.variant = .Plain
+        let (act, act_error) = button(a, key + 3u64, t, words.action_label, &acts[0usize], plain)
+        if act_error != ok { ret (zero, act_error) }
+        head[h] = act
+        h += 1usize
+    } else if !indeterminate {
+        let (digits, digits_error) = mem.alloc[u8](a, 8usize)
+        if digits_error != ok { ret (zero, TooLarge) }
+        var n = write_i64(digits, i64(clamp_share(value) * 100.0 + 0.5))
+        digits[n] = 37u8
+        n += 1usize
+        let (percent, percent_error) = colored_text(a, 0u64, digits[0usize..n], t, body, style.color(t.tokens, .OnSurfaceVariant))
+        if percent_error != ok { ret (zero, percent_error) }
+        head[h] = percent
+        h += 1usize
+    }
+    var head_style = style.defaults()
+    head_style.width = style.Length { Px: width }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, head_style, head[0usize..h])
+    column[1usize] = bar
+    var c = 2usize
+    if words.detail.len > 0usize {
+        var small = text_options()
+        small.role = .BodySmall
+        var detail_color = style.color(t.tokens, .OnSurfaceVariant)
+        if options.tone == .Error { detail_color = style.color(t.tokens, .Error) }
+        let (detail, detail_error) = colored_text(a, 0u64, words.detail, t, small, detail_color)
+        if detail_error != ok { ret (zero, detail_error) }
+        column[2usize] = detail
+        c = 3usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), column[0usize..c]), ok)
+}
+
+// (D1390) `first` then `second`, in the arena.
+fn joined_words(a: *mem.Arena, first: str, second: str) -> (str, err) {
+    let (out, out_error) = mem.alloc[u8](a, first.len + second.len)
+    if out_error != ok { ret ("", TooLarge) }
+    var n = copy_text(out, first)
+    n += copy_text(out[n..out.len], second)
+    ret (out[0usize..n], ok)
 }
 
 fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {

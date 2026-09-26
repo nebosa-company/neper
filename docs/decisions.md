@@ -26512,3 +26512,20 @@ two-row drag is unchanged.
 `ui_pickers2_v2` flicks the duration hours up 90 in three moves of 30: three rows
 with the finger and three more coasting take 1 to 7, and the earlier wheel
 checks still pass, on Windows and Linux.
+
+## D1390 — Progress bars carry their label row and detail line
+
+The ProgressBar spec's optional label row and detail line were left to callers.
+`progress_labelled` builds them round `progress_bar_of`. The label row holds
+the task in `body-medium` `on-surface`, led by an 18 status icon when done
+(`check-circle`, `success`), failed (`alert`, `error`, the label ending
+" failed") or paused (`info`, the label ending " paused"). At its end stands
+the percent in `on-surface-variant` for a determinate bar, or the caller's
+action (Retry, Resume) as a text button keyed `key + 3`. The row is 8 above
+the bar, and the detail line in `body-small` is 8 below, `on-surface-variant`
+(`error` when failed). `ProgressWords` carries the detail, done, and the
+action.
+
+`ui_progress` shows an upload at 62% ("Uploading", "62%", "About 20 s left")
+and a failed one ("Upload failed" with Retry), on Windows and Linux;
+`ui_status_v2` still passes.
