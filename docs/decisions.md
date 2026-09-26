@@ -28186,3 +28186,29 @@ Result, instructions under `check_function`, with resources against without:
 `sc500k`, the row D352 judged, is inside +10%. On the compiler's own source the pass is still +15.4% in instructions and about +10.4% in wall-clock. The remaining 255M is spread thin across the hooks: name lookups for the per-statement walk, the snapshot and join at every branch, alias recording at every binding and assignment, and the affine classification of every new local. No single hook holds more than 8% of it. The compiler holds an unchecked error in nearly every function, so the "any affine local" gate rarely saves anything there. What would close the row is a per-statement answer the walk shares, not another gate.
 
 Sweeps against D1562's compiler: none of 608 accept sources and 158 reject answers changed. Stage 2 equals stage 3 on both hosts.
+
+## D1564 — H01 inside its check-bodies budget
+
+D1563 left the compiler's own source over H01's +10% check-bodies budget: +15.4% in instructions. Four more exact cuts, each found by diffing callgrind's per-function counts against the same compiler built without resource checking:
+
+- **The opacity check asks for the module first.** Every field read ran `resource_type` on its base, a hash lookup, before asking whether the base's module is another one. A read in the declaring module cannot be refused (D348), and the module comparison is free. This saved 25M instructions.
+- **`add_local` keeps the "is any local affine" answer.** It used to discard the cache, so the next statement rescanned every local. Now the cached answer extends by the one local added. The four sites that make a local owned or moved set the answer to yes; a stale yes after a pop only asks more.
+- **`thread_global_use` is skipped until a thread is running.** It scanned the locals for a running thread at every plain name read. It now returns at once while `threads_started`, counted where a `Thread` binding records its entry function, is zero.
+- **`resource_assign` asks what is stored before building the place's path.** A store through a field or index built the place's member path, a cleared 2 KB buffer and a walk, before asking whether the stored value is an address or a literal, the only values that record a path. The value is asked first now.
+
+Two candidates were measured and dropped:
+
+- A 16-entry cache of `find_local` answers, keyed by the name, the local count and an epoch `add_local` advances. Misses outnumbered hits, and both builds got slower (the one without resource checking by 18M instructions).
+- Reading the audit's `Resource` fields in place instead of through `let`. It changed nothing: the binding was not a copy.
+
+Result, check-bodies with resource checking against without:
+
+| workload | measure | D1563 | D1564 |
+|---|---|---|---|
+| `sc500k` | instructions under `check_function` | +9.1% | +7.4% (8,388M / 7,813M) |
+| compiler source | instructions under `check_function` | +15.4% | +12.9% (1,867M / 1,653M) |
+| compiler source | wall-clock median, 15 alternating runs, 1 worker | +10.4% | +9.2% (238 / 218 ms) |
+
+D352's budget is wall-clock, +10% on the debug rows, and both rows are now inside it: `sc500k` by the deterministic count, and the compiler source by the median. The count is still +12.9% on the compiler source, because its functions hold an unchecked error almost everywhere, and those errors are resources. The remainder is the per-statement walk, alias and region recording at bindings, and branch snapshots. A wall-clock budget on a busy host has no margin to spare at 9.2%, so this row should be re-measured whenever the pass grows.
+
+Sweeps against D1563's compiler: none of 608 accept sources and 158 reject answers changed. Stage 2 equals stage 3 on both hosts.
