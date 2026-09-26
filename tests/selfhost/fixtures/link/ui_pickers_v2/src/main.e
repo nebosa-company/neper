@@ -469,6 +469,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     locale_page[1usize] = french_month
     if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, control.sized_style(600.0, 720.0), locale_page[0usize..2usize]), time.Instant { nanos: 3360000000i64 }) != ok { os.exit(150i32) }
     if testing.by_text(&harness, "März 2026").count != 1usize || testing.by_text(&harness, "Di").count == 0usize || testing.by_text(&harness, "mars 2026").count != 1usize { os.exit(151i32) }
+    // (D1395) Held from September 8, "9/1/2026" says to choose a date from then.
+    let (early_bytes, early_bytes_error) = mem.alloc[u8](a, 16usize)
+    if early_bytes_error != ok { os.exit(152i32) }
+    let early_text = "9/1/2026"
+    var eb = 0usize
+    while eb < early_text.len {
+        early_bytes[eb] = early_text[eb]
+        eb += 1usize
+    }
+    var no_latest: time.Date = zero
+    f = mem.arena_from(frame_storage)
+    let (bounded, bounded_error) = overlay.date_entry_within(&f, 3300u64, &us_theme, "Start", early_bytes, early_text.len, zero, picked_dates, typed_today, 280.0, time.Date { year: 2026i32, month: 9u8, day: 8u8 }, no_latest)
+    let (bounded_page, bounded_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if bounded_error != ok || bounded_page_error != ok { os.exit(153i32) }
+    bounded_page[0usize] = bounded
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), bounded_page[0usize..1usize]), time.Instant { nanos: 3370000000i64 }) != ok { os.exit(154i32) }
+    if testing.by_label(&harness, "Choose a date from September 8, 2026").count == 0usize { os.exit(155i32) }
     // (D1277) With the week of the 16th to the 22nd unavailable, Down from the
     // 11th goes to the 25th.
     var closed_week: [7]time.Date = zero

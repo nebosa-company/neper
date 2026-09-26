@@ -26580,3 +26580,18 @@ The first frame cannot see the window yet, so it lays out as a wide window's.
 `ui_status4_v2` opens a second, 360-wide runtime and harness: the snackbar's
 surface covers 20 and 340 across and leaves 8, on Windows and Linux;
 `ui_status5_v2` still passes.
+
+## D1395 — Typed dates outside their bounds say which dates to choose
+
+The DatePicker spec's invalid message names the fix ("Choose a date from Sep 8,
+2026"). `date_entry_within` is `date_entry` held to `earliest` and `latest`,
+where a year of 0 means no bound; `date_entry` is it with neither. Once the
+field has lost the focus, a date it reads that falls outside turns the field
+`error` with "Choose a date from September 8, 2026", "... up to ...", or "...
+from ... to ...". The date is written by `write_long_date` in the theme
+language's month names, and `date_before` compares days. The calendar's and
+the wheels' English-only notes now point at D1388.
+
+`ui_pickers_v2` types "9/1/2026" into a field held from September 8, 2026: it
+says "Choose a date from September 8, 2026". `ui_pickers2_v2` still passes, on
+Windows and Linux.
