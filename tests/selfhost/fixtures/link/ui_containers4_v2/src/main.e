@@ -244,6 +244,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !frame(&harness, &f, &theme, s) || testing.by_key(&harness, 200u64 + 1048700u64).count != 1usize { os.exit(55i32) }
     let (right_target, has_right_target) = bounds(&harness, &runtime, 200u64 + 1048802u64)
     if !has_right_target { os.exit(56i32) }
+    // (D1451) The guide fades in over `duration-short-3`: at the drag's frozen
+    // start its edge beyond the right target is not yet `surface-container-high`;
+    // two frames on (the first stamps its start), 600 ms in, it is.
+    let (guide_early, guide_early_error) = testing.snapshot(&harness, a)
+    let guide_high = style.color(&tokens, .SurfaceContainerHigh)
+    if guide_early_error != ok || is_color(guide_early, at(right_target.x + 34.0, right_target.y + 16.0), guide_high) { os.exit(67i32) }
+    var guide_step = 0i64
+    while guide_step < 2i64 {
+        let guide_at = time.Instant { nanos: 1100000000i64 + guide_step * 500000000i64 }
+        if testing.begin(&harness, guide_at) != ok { os.exit(67i32) }
+        f = mem.arena_from(frame_storage)
+        let (guide_root, guide_root_error) = build(&f, &theme, s)
+        if guide_root_error != ok || testing.pump(&harness, guide_root, guide_at) != ok { os.exit(67i32) }
+        guide_step += 1i64
+    }
+    let (guide_late, guide_late_error) = testing.snapshot(&harness, a)
+    if guide_late_error != ok || !is_color(guide_late, at(right_target.x + 34.0, right_target.y + 16.0), guide_high) { os.exit(68i32) }
     // (D1358) The guide stands over the left slot, where the pointer is.
     let (left_slot, has_left_slot) = bounds(&harness, &runtime, 240u64)
     let target_mid = right_target.x + 16.0
