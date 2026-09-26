@@ -27408,3 +27408,9 @@ The Badge spec: "Appear: scales from 0 to 1 over `duration-short-3` with `ease-e
 A count badge keeps its last two counts (`BadgeCounts`, up to four bytes each, slot `key + 8197`). At each change a flag flips and restarts the fade (`+ 8199`). While it runs, the new count stands over the old, each at its share, and the pill's width eases to the new count's (`+ 8198`) when the fonts can measure it. A first try kept the state on the pill itself, and the pill's change of shape during the fade remade it and lost the counts. That is why the state lives on the scale. The disappear scale is still not drawn: a badge the caller stops building has nothing left to shrink.
 
 `ui_status3_v2` checks this on Windows and Linux. 15 ms after a count badge's first frame the end of its pill is not yet `error`, and a second on it is. 30 ms after its count changes from 3 to 12 both counts stand, and a second later only 12 does. The fixture's font cannot measure the digits, so the width ease is unverified. The fixture's state pool (64 states, 256 bytes, 2 classes) is raised to 128, 4096 and 8. Against the old sources the appear check fails (exit 55).
+
+## D1497 — A list's page is its viewport's height
+
+D1211's Page Up and Page Down moved a list's focus by the window's height over the first row's. That is right for a list that fills the window and wrong for one in a smaller viewport: in a 150 tall viewport Page Down leapt past everything shown. A new `widget.viewport_extent_around(runtime, key)` gives the extent of the nearest scroll viewport around a keyed element, as last laid out. `list_of` measures its page from the viewport around its first row, and from the window outside one.
+
+`ui_collections_v2` checks this on Windows and Linux: in a list of twenty in a 150 tall viewport, Page Down from the first row focuses the row a viewport's height of rows on. Against the old sources it leaps a window's worth (exit 255).

@@ -3270,6 +3270,18 @@ fn scroll_by(s: *State, element: usize, delta: f32, soft: bool) -> err {
     ret fire_change[f32](e.scroll_change, next)
 }
 
+// (D1497) The extent of the nearest scroll viewport around the element keyed
+// `key`, as last laid out (its height when vertical); none outside one.
+fn viewport_extent_around(widget_runtime: *const Runtime, key: Key) -> (f32, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret (0.0, false) }
+    let (found, count) = find_by_key(s, key)
+    if count == 0usize { ret (0.0, false) }
+    let (viewport, has_viewport) = scroll_ancestor(s, usize(found.slot))
+    if !has_viewport || s.elements[viewport].viewport_extent <= 0.0 { ret (0.0, false) }
+    ret (s.elements[viewport].viewport_extent, true)
+}
+
 // The nearest scroll viewport at or above `index`, or none.
 fn scroll_ancestor(s: *State, index: usize) -> (usize, bool) {
     var at = index
