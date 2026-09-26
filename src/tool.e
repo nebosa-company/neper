@@ -2630,7 +2630,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
         first = false
         last = e
         // Calls, values and field accesses (D420) are `uses-file`'s and `context-file`'s.
-        if e.module_index >= g.count || e.kind == 4u8 || e.kind == 5u8 || e.kind == 6u8 || e.kind == 7u8 || e.kind == 9u8 || e.kind == 10u8 || e.kind == 11u8 { continue }
+        if e.module_index >= g.count || e.kind == 4u8 || e.kind == 5u8 || e.kind == 6u8 || e.kind == 7u8 || e.kind == 9u8 || e.kind == 10u8 || e.kind == 11u8 || e.kind == 12u8 { continue }
         let module = g.modules[e.module_index]
         let (root, relative) = source_identity_of(g, module.path)
         let (path, path_error) = manifest_slashes(a, relative)
@@ -4141,6 +4141,23 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
             try text(&out, "\"borrow\",\"provenance\":\"compiler-proved\",\"value\":\"")
             try text(&out, e.reason_name)
             if e.reason_kind == 1u8 { try text(&out, " views nothing from here: the region it was taken in is reset\"") } else { try text(&out, " views nothing from here: what it views is given to a call by pointer\"") }
+        }
+        // A borrow's origin (D1553, H08): the region a local was taken in, or the
+        // thread a local is lent to.
+        if e.kind == 12u8 {
+            try text(&out, "\"borrow\",\"provenance\":\"compiler-proved\",\"value\":\"")
+            try text(&out, e.reason_name)
+            if e.reason_kind == 1u8 {
+                try text(&out, " is taken in the region ")
+                try text(&out, e.protocol)
+                try text(&out, " marks from here: a reset to ")
+                try text(&out, e.protocol)
+                try text(&out, " ends it\"")
+            } else {
+                try text(&out, " is lent to ")
+                try text(&out, e.protocol)
+                try text(&out, " from here: nobody else reads or writes it until the join\"")
+            }
         }
         // A view taken (D487, H17): the local and the local it views.
         if e.kind == 10u8 {

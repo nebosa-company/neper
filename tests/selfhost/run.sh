@@ -4978,7 +4978,7 @@ cmp -s "$contract_actual" "$conformance_root/tools/contract.x64-linux.expected.j
 # (D821): the thread start's call fact and the threads fact stand although
 # `helper.fill[u8]` landed at the index the function count had.
 nested_actual="$test_build/conformance-tools-nested-instance.jsonl"
-(cd "$conformance_root/tools/nested_instance" && $test_build/neper-self context-file src/main.e "$repo" x64 linux --json --symbol main.main --budget 16 > "$nested_actual")
+(cd "$conformance_root/tools/nested_instance" && $test_build/neper-self context-file src/main.e "$repo" x64 linux --json --symbol main.main --budget 20 > "$nested_actual")
 cmp -s "$nested_actual" "$conformance_root/tools/nested_instance.x64-linux.expected.jsonl" || { printf '%s\n' "context-file --json over a call before the first instance differs from the conformance corpus" >&2; exit 1; }
 # `query-batch --json --batch FILE` (D409, H16): six queries over one check, two refused.
 batch_status=0

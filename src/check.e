@@ -10390,6 +10390,21 @@ fn record_explain_view_end(c: *Checker, module_index: usize, node: syntax.Node, 
     c.explain_count += 1usize
 }
 
+// A borrow's origin (D1553, H08/H17): a local taken in the region a mark opened
+// (1, `of` the mark), or a local lent to a thread until its join (2, `of` the
+// thread), at the token `token`, for `context-file`'s `borrow` facts.
+fn record_explain_origin(c: *Checker, module_index: usize, token: usize, name: str, of: str, how: u8) {
+    if c.explains.len == 0usize { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    var offset = 0usize
+    if token < c.token_count { offset = c.tokens[token].start }
+    c.explains[c.explain_count] = Explain { kind: 12u8, module_index: module_index, offset: offset, protocol: of, receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: how, reason_name: name, reason_type: invalid_type() }
+    c.explain_count += 1usize
+}
+
 // The first request of an instance (D466): kept as its site; later requests of the
 // same instance leave it.
 fn note_instance_site(c: *Checker, instance_index: usize, module_index: usize, node: syntax.Node) {
@@ -14941,6 +14956,7 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
             mark_at = mark_at - 1usize
             if mark_at != local_index && c.resources[mark_at].mark_arena.len != 0usize && c.resources[mark_at].points_to == 0usize && c.resources[mark_at].state == resource_owned && same(c.resources[mark_at].mark_arena, arena_text) {
                 c.resources[local_index].region = mark_at + 1usize
+                record_explain_origin(c, module_index, usize(statement.token_start), c.locals[local_index].name, c.locals[mark_at].name, 1u8)
                 break
             }
         }
@@ -16366,7 +16382,7 @@ fn resource_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     ret ok
 }
 
-fn lend_thread_storage(c: *Checker, thread_local: usize, pointed_index: usize, token: usize) {
+fn lend_thread_storage(c: *Checker, module_index: usize, thread_local: usize, pointed_index: usize, token: usize) {
     var pointed = pointed_index
     if c.resources[pointed].points_to != 0usize && (c.locals[pointed].ty.kind == .Slice || c.locals[pointed].ty.kind == .Pointer) {
         pointed = c.resources[pointed].points_to - 1usize
@@ -16378,6 +16394,7 @@ fn lend_thread_storage(c: *Checker, thread_local: usize, pointed_index: usize, t
         if c.resources[pointed].state == resource_plain { region_tag(c, pointed, token) }
         c.resources[pointed].lent_to = thread_local + 1usize
         c.resources[pointed].lent_at = token
+        record_explain_origin(c, module_index, token, c.locals[pointed].name, c.locals[thread_local].name, 2u8)
     }
 }
 
@@ -16447,7 +16464,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                     while true {
                         let (pointed, found) = dynamic_alias_candidate(c, g, tree, module_index, argument_index, wanted)
                         if !found { break }
-                        lend_thread_storage(c, local_index, pointed, usize(statement.token_start))
+                        lend_thread_storage(c, module_index, local_index, pointed, usize(statement.token_start))
                         wanted += 1usize
                     }
                 } else {
@@ -16459,7 +16476,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                     if !is_address { (pointed, is_address) = address_argument_local(c, g, tree, module_index, argument_index) }
                     // What the thread was given is its until the join (D365): the
                     // parent neither reads nor writes it, except through an address.
-                    if is_address { lend_thread_storage(c, local_index, pointed, usize(statement.token_start)) }
+                    if is_address { lend_thread_storage(c, module_index, local_index, pointed, usize(statement.token_start)) }
                 }
                 argument_at += 1usize
             }
