@@ -4019,7 +4019,110 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // (D1503) With `height` above 0 the tree stands in a virtual viewport that tall,
 // scrolled to `offset` (reported through `scrolled`): only the rows in view (and
 // one either side) are built, and the arrows reveal the rows they move to.
-type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32] }
+// (D1533) A tree table sorts within each parent when `sorts`: `sort_text` gives a
+// row's text in a column (by the row's key), siblings ordered by it, folded, in
+// the header's direction -- branches first with `folders_first` -- and the
+// hierarchy never flattens. With `footer` a counts line closes the table.
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool }
+
+// (D1533) A tree source whose siblings come in sorted order: each parent's order
+// is worked out once, when its first child is asked for, and kept on a stack as
+// deep as the walk goes, since `flatten` visits a parent's children depth first.
+type SortedTree = struct { inner: TreeSource, ctx: *void, text: fn(*void, widget.Key, usize) -> str, column: usize, descending: bool, folders_first: bool, arena: *mem.Arena, parents: [32]widget.Key, orders: [32][]usize, depth: usize }
+
+fn sorted_count(ctx: *void, parent: widget.Key) -> usize {
+    let s = mem.cast[*SortedTree](ctx)
+    ret s.inner.count(s.inner.ctx, parent)
+}
+
+fn sorted_has_children(ctx: *void, node: widget.Key) -> bool {
+    let s = mem.cast[*SortedTree](ctx)
+    ret s.inner.has_children(s.inner.ctx, node)
+}
+
+fn sorted_build(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> err {
+    let s = mem.cast[*SortedTree](ctx)
+    ret s.inner.build(s.inner.ctx, a, node, out)
+}
+
+// Whether sibling `left` (by its source index) goes before `right`.
+fn sorted_before(s: *SortedTree, parent: widget.Key, left: usize, right: usize) -> bool {
+    let left_key = s.inner.key(s.inner.ctx, parent, left)
+    let right_key = s.inner.key(s.inner.ctx, parent, right)
+    if s.folders_first {
+        let left_branch = s.inner.has_children(s.inner.ctx, left_key)
+        let right_branch = s.inner.has_children(s.inner.ctx, right_key)
+        if left_branch != right_branch { ret left_branch }
+    }
+    let left_text = s.text(s.ctx, left_key, s.column)
+    let right_text = s.text(s.ctx, right_key, s.column)
+    var at = 0usize
+    while at < left_text.len && at < right_text.len {
+        let x = folded(left_text[at])
+        let y = folded(right_text[at])
+        if x != y {
+            if s.descending { ret x > y }
+            ret x < y
+        }
+        at += 1usize
+    }
+    if left_text.len == right_text.len { ret left < right }
+    if s.descending { ret left_text.len > right_text.len }
+    ret left_text.len < right_text.len
+}
+
+fn sorted_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key {
+    let s = mem.cast[*SortedTree](ctx)
+    var slot = 0usize
+    var found = false
+    while slot < s.depth {
+        if s.parents[slot] == parent {
+            found = true
+            break
+        }
+        slot += 1usize
+    }
+    if !found {
+        let count = s.inner.count(s.inner.ctx, parent)
+        let (order, order_error) = mem.alloc[usize](s.arena, count + 1usize)
+        if order_error != ok || s.depth == s.parents.len { ret s.inner.key(s.inner.ctx, parent, index) }
+        // Insertion into a sorted prefix, stable for equal texts.
+        var placed = 0usize
+        while placed < count {
+            var at = placed
+            while at > 0usize && sorted_before(s, parent, placed, order[at - 1usize]) {
+                order[at] = order[at - 1usize]
+                at = at - 1usize
+            }
+            order[at] = placed
+            placed += 1usize
+        }
+        slot = s.depth
+        s.parents[slot] = parent
+        s.orders[slot] = order[0usize..count]
+        s.depth += 1usize
+    }
+    let order = s.orders[slot]
+    if index >= order.len { ret s.inner.key(s.inner.ctx, parent, index) }
+    ret s.inner.key(s.inner.ctx, parent, order[index])
+}
+
+// The source in sorted form, when the options ask for it.
+fn sorted_source(a: *mem.Arena, source: TreeSource, column: usize, descending: bool, options: TreeOptions) -> (TreeSource, err) {
+    if !options.sorts { ret (source, ok) }
+    let (held, held_error) = mem.alloc[SortedTree](a, 1usize)
+    if held_error != ok { ret (source, TooLarge) }
+    var s: SortedTree = zero
+    s.inner = source
+    s.ctx = options.sort_ctx
+    s.text = options.sort_text
+    s.column = column
+    s.descending = descending
+    s.folders_first = options.folders_first
+    s.arena = a
+    held[0usize] = s
+    ret (TreeSource { ctx: mem.cast[*void](&held[0usize]), count: sorted_count, key: sorted_key, has_children: sorted_has_children, build: sorted_build }, ok)
+}
 
 // (D1372) A row dropped on a branch: the dragged node and the branch it goes into.
 type TreeMove = struct { node: widget.Key, into: widget.Key }
@@ -4561,7 +4664,7 @@ fn treed_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
 // whose items are rows of cells. v2 (D981, docs/ux/components/TreeTable): the
 // v2 header row over table rows with full-width dividers on `surface`.
 // (D1504) `tree_table_with` takes `TreeOptions`, `height` virtualising the rows.
-// ponytail: no footer or per-parent sort.
+// (D1533) `options.sorts` sorts within each parent and `options.footer` counts.
 fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TreeSource, cells_of: CellSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], extent: f32) -> (widget.Node, err) {
     var plain_tree: TreeOptions = zero
     let (made, made_error) = tree_table_with(a, key, t, label, columns, source, cells_of, expanded, selected, toggle, pick, sort_column, descending, sort, reorder, resize, extent, plain_tree)
@@ -4584,9 +4687,11 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     }
     var table_first = 0usize
     var table_total = 0usize
-    let (rows, rows_error) = tree_rows(a, key + 128u64, t, source, expanded, selected, toggle, pick, false, columns, cells_of, extent, width, 0u64, options, &table_first, &table_total)
+    let (ordered, ordered_error) = sorted_source(a, source, sort_column, descending, options)
+    if ordered_error != ok { ret (zero, ordered_error) }
+    let (rows, rows_error) = tree_rows(a, key + 128u64, t, ordered, expanded, selected, toggle, pick, false, columns, cells_of, extent, width, 0u64, options, &table_first, &table_total)
     if rows_error != ok { ret (zero, rows_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, rows.len + 1usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, rows.len + 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
     var part_count = 1usize
@@ -4607,6 +4712,12 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         }
         part_count = rows.len + 1usize
     }
+    if options.footer {
+        let (footer, footer_error) = tree_table_footer(a, key + 3u64, t, table_total, selected.len, width)
+        if footer_error != ok { ret (zero, footer_error) }
+        parts[part_count] = footer
+        part_count += 1usize
+    }
     var column_style = style.defaults()
     column_style.width = style.Length { Px: width }
     column_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
@@ -4619,6 +4730,66 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     sem.row_count = u32(table_total)
     sem.column_count = u32(columns.len)
     ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
+}
+
+// (D1533, docs/ux/components/TreeTable) The footer: "11 items shown, 1 selected"
+// in `body-small` `on-surface-variant`, 32 tall, 16 in; "1 item" in the
+// singular, the selection left out when there is none.
+fn tree_table_footer(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: usize, chosen: usize, width: f32) -> (widget.Node, err) {
+    let (words, words_error) = mem.alloc[u8](a, 64usize)
+    if words_error != ok { ret (zero, TooLarge) }
+    var n = footer_decimal(words, 0usize, shown)
+    if shown == 1usize { n = footer_append(words, n, " item shown") } else { n = footer_append(words, n, " items shown") }
+    if chosen != 0usize {
+        n = footer_append(words, n, ", ")
+        n = footer_decimal(words, n, chosen)
+        n = footer_append(words, n, " selected")
+    }
+    var caption = control.text_options()
+    caption.role = .BodySmall
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, words[0usize..n], t, caption, style.color(t.tokens, .OnSurfaceVariant))
+    if said_error != ok { ret (zero, said_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = said
+    var bar = style.defaults()
+    bar.width = style.Length { Px: width }
+    bar.height = style.Length { Px: 32.0 }
+    let sixteen = style.Length { Px: 16.0 }
+    let none = style.Length { Px: 0.0 }
+    bar.padding = style.EdgeLengths { left: sixteen, top: none, right: sixteen, bottom: none }
+    ret (widget.flex(key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, held[0usize..1usize]), ok)
+}
+
+fn footer_append(out: []u8, at: usize, text: str) -> usize {
+    var n = at
+    var i = 0usize
+    while i < text.len && n < out.len {
+        out[n] = text[i]
+        n += 1usize
+        i += 1usize
+    }
+    ret n
+}
+
+fn footer_decimal(out: []u8, at: usize, value: usize) -> usize {
+    var digits: [20]u8 = zero
+    var count = 0usize
+    var rest = value
+    while true {
+        digits[count] = u8(48usize + rest % 10usize)
+        count += 1usize
+        rest = rest / 10usize
+        if rest == 0usize { break }
+    }
+    var n = at
+    while count > 0usize && n < out.len {
+        count = count - 1usize
+        out[n] = digits[count]
+        n += 1usize
+    }
+    ret n
 }
 
 // ------------------------------------------------------- property editing (D851, P3-02)
