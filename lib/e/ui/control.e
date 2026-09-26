@@ -9049,6 +9049,20 @@ fn chosen_fire(ctx: *void) -> err {
 }
 
 // One submit an index, over `change`, for controls that take a submit a choice.
+// (D1407) A font list's group subheader: `title-small` in `primary`, 8 above, 4
+// below and 16 in.
+fn font_subheader(a: *mem.Arena, t: *const Theme, words: str) -> (widget.Node, err) {
+    var look = text_options()
+    look.role = .TitleSmall
+    look.wrap = .None
+    let (said, said_error) = colored_text(a, 0u64, words, t, look, style.color(t.tokens, .Primary))
+    if said_error != ok { ret (zero, said_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = said
+    ret (widget.padded(0u64, 16.0, 8.0, 16.0, 4.0, style.defaults(), held[0usize..1usize]), ok)
+}
+
 fn chosen_actions(a: *mem.Arena, count: usize, change: widget.Change[usize]) -> ([]widget.Submit, err) {
     var none: []widget.Submit = zero
     let (picks, picks_error) = mem.alloc[Chosen](a, count)
@@ -9137,8 +9151,20 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
 // `on-surface-variant`.
 // The search is the outlined field 40 tall with an 18 `search` mark 12 in, 16
 // above the family label.
-// ponytail: no subheaders, recent families, feature chips, trigger or sheet; the picker is its least 112 wide, not 160; rows are in the theme's face -- a field per family's face waits on the caller's fonts.
+// (D1407) `font_panel_with` groups the recent families first.
+// ponytail: no Monospace group, feature chips, trigger or sheet; the picker is its least 112 wide, not 160; rows are in the theme's face -- a field per family's face waits on the caller's fonts.
 fn font_panel(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, families: []const str, family: usize, styles: []const str, style_index: usize, styles_open: bool, toggle_styles: *const widget.Submit, size: i64, size_buffer: []u8, sample: str, pick_family: widget.Change[usize], pick_style: widget.Change[usize], change_size: widget.Change[i64], typed_size: widget.Change[str], search: []u8, search_len: usize, searched: widget.Change[str], rows: u32, width: f32) -> (widget.Node, err) {
+    var no_recent: []const usize = zero
+    let (made, made_error) = font_panel_with(a, key, t, label, families, family, styles, style_index, styles_open, toggle_styles, size, size_buffer, sample, pick_family, pick_style, change_size, typed_size, search, search_len, searched, rows, width, no_recent)
+    ret (made, made_error)
+}
+
+// (D1407, docs/ux/components/FontPicker, family list) `font_panel` with the
+// recently used families (indices into `families`, at most 5 shown) listed first
+// under a "Recent" subheader (their list keyed `key + 1048600`), the whole list
+// under "All fonts": `title-small` `primary` subheaders, 8 above and 4 below,
+// 16 in.
+fn font_panel_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, families: []const str, family: usize, styles: []const str, style_index: usize, styles_open: bool, toggle_styles: *const widget.Submit, size: i64, size_buffer: []u8, sample: str, pick_family: widget.Change[usize], pick_style: widget.Change[usize], change_size: widget.Change[i64], typed_size: widget.Change[str], search: []u8, search_len: usize, searched: widget.Change[str], rows: u32, width: f32, recent: []const usize) -> (widget.Node, err) {
     if families.len == 0usize || styles.len == 0usize { ret (zero, TooLarge) }
     var picked = family
     if picked >= families.len { picked = 0usize }
@@ -9176,6 +9202,34 @@ fn font_panel(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, famil
     let (list, list_error) = listed(a, key + 1u64, t, "Family", families, chosen_rows, family_actions, rows, 262.0, false, false)
     if list_error != ok { ret (zero, list_error) }
     parts[0usize] = list
+    var shown_recent = recent.len
+    if shown_recent > 5usize { shown_recent = 5usize }
+    if shown_recent > 0usize {
+        let (recent_names, recent_names_error) = mem.alloc[str](a, shown_recent)
+        let (recent_chosen, recent_chosen_error) = mem.alloc[bool](a, shown_recent)
+        let (recent_actions, recent_actions_error) = mem.alloc[widget.Submit](a, shown_recent)
+        let (grouped, grouped_error) = mem.alloc[widget.Node](a, 4usize)
+        if recent_names_error != ok || recent_chosen_error != ok || recent_actions_error != ok || grouped_error != ok { ret (zero, TooLarge) }
+        var k = 0usize
+        while k < shown_recent {
+            let at = recent[k]
+            if at >= families.len { ret (zero, TooLarge) }
+            recent_names[k] = families[at]
+            recent_chosen[k] = at == picked
+            recent_actions[k] = family_actions[at]
+            k += 1usize
+        }
+        let (recent_list, recent_list_error) = listed(a, key + 1048600u64, t, "Recent", recent_names[0usize..shown_recent], recent_chosen[0usize..shown_recent], recent_actions[0usize..shown_recent], u32(shown_recent), 262.0, false, false)
+        if recent_list_error != ok { ret (zero, recent_list_error) }
+        let (recent_head, recent_head_error) = font_subheader(a, t, "Recent")
+        let (all_head, all_head_error) = font_subheader(a, t, "All fonts")
+        if recent_head_error != ok || all_head_error != ok { ret (zero, TooLarge) }
+        grouped[0usize] = recent_head
+        grouped[1usize] = recent_list
+        grouped[2usize] = all_head
+        grouped[3usize] = list
+        parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), grouped[0usize..4usize])
+    }
     var list_frame = style.defaults()
     list_frame.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     list_frame.radius = t.tokens.radii.sm

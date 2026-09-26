@@ -459,6 +459,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !has_sheet_trigger || !has_sheet_panel || sheet_panel.y < sheet_trigger.y + sheet_trigger.height + 20.0 { os.exit(92i32) }
         mode_step += 1usize
     }
+    // (D1407) With the third family used recently, the list leads with it under
+    // "Recent" before "All fonts", and a press on it picks family 2.
+    var recent_families: [1]usize = zero
+    recent_families[0usize] = 2usize
+    var font_step = 0usize
+    while font_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (recent_font, recent_font_error) = control.font_panel_with(&f, 1600u64, &theme, "Editor font", s.names[0usize..4usize], 1usize, s.faces[0usize..3usize], 0usize, false, &s.press, 13i64, s.size[0usize..8usize], "fn main() {}", widget.Change[usize] { ctx: mem.cast[*void](s), invoke: on_family }, widget.Change[usize] { ctx: mem.cast[*void](s), invoke: on_index }, zero, zero, s.query[0usize..16usize], 0usize, zero, 5u32, 520.0, recent_families[..])
+        let (font_page, font_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if recent_font_error != ok || font_page_error != ok { os.exit(93i32) }
+        font_page[0usize] = recent_font
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), font_page[0usize..1usize]), time.Instant { nanos: 12000000000i64 + i64(font_step) }) != ok { os.exit(94i32) }
+        font_step += 1usize
+    }
+    if testing.by_text(&harness, "Recent").count == 0usize || testing.by_text(&harness, "All fonts").count == 0usize { os.exit(95i32) }
+    let (recent_row, has_recent_row) = bounds(&harness, &runtime, 1600u64 + 1048601u64)
+    if !has_recent_row || testing.tap(&harness, recent_row.x + 20.0, recent_row.y + recent_row.height * 0.5) != ok || s.family != 2usize { os.exit(96i32) }
     try io.print("ui pickers3 v2 ok\n")
     ret ok
 }
