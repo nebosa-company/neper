@@ -4084,7 +4084,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     // (D1456, docs/ux/components/TextField, text area) A multiline editor stands
     // in a viewport `rows` lines tall (keyed `key + 1048612`) that scrolls its
     // overflow and keeps the caret's line in view: the caret's hard line (the
-    // line breaks before it) sets the offset whenever it moves.
+    // line breaks before it) sets the offset whenever it moves. (D1481) With
+    // fonts the caret's laid-out line counts soft-wrapped lines too.
     if multiline {
         var caret_line = 0usize
         if mem.address_of(t.runtime) != 0usize {
@@ -4092,11 +4093,16 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
             if rs_error == ok {
                 let (edit_id, edit_found) = widget.find_by_key(rs, key)
                 if edit_found == 1usize {
-                    let (_, caret, has_caret) = widget.edit_selection(t.runtime, edit_id)
-                    var c = 0usize
-                    while has_caret && c < caret && c < len {
-                        if buffer[c] == 10u8 { caret_line += 1usize }
-                        c += 1usize
+                    let (laid_line, has_laid_line) = widget.edit_caret_line(t.runtime, edit_id)
+                    if has_laid_line {
+                        caret_line = laid_line
+                    } else {
+                        let (_, caret, has_caret) = widget.edit_selection(t.runtime, edit_id)
+                        var c = 0usize
+                        while has_caret && c < caret && c < len {
+                            if buffer[c] == 10u8 { caret_line += 1usize }
+                            c += 1usize
+                        }
                     }
                 }
             }
@@ -4402,8 +4408,7 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
 // A text area: a multiline editor `rows` lines tall (two at least).
 // (D1456) It scrolls its overflow in a `rows`-line viewport that follows the
 // caret's line.
-// ponytail: soft-wrapped lines are not counted; a long wrapped line can put the
-// caret below the viewport until the next line break.
+// (D1481) Soft-wrapped lines count toward the caret's line.
 fn text_area(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], options: FieldOptions) -> (widget.Node, err) {
     var tall = options
     if tall.rows < 2u32 { tall.rows = 2u32 }

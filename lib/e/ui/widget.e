@@ -5396,6 +5396,18 @@ fn edit_value(widget_runtime: *const Runtime, element: ElementId) -> (str, bool)
     ret (value, true)
 }
 
+// (D1481) The laid-out line an editor's caret stands on, soft-wrapped lines
+// counted, as last laid out; none without fonts or text.
+fn edit_caret_line(widget_runtime: *const Runtime, element: ElementId) -> (usize, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || usize(element.slot) >= s.elements.len { ret (0usize, false) }
+    let e = &s.elements[usize(element.slot)]
+    if !e.live || e.generation != element.generation || e.kind != EDIT_TAG { ret (0usize, false) }
+    let (laid, laid_error) = edit_layout(s, e)
+    if laid_error != ok { ret (0usize, false) }
+    ret (layout.line_of_offset(&laid, e.caret), true)
+}
+
 fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize, usize, bool) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize || usize(element.slot) >= s.elements.len { ret (0usize, 0usize, false) }

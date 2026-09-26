@@ -332,6 +332,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let (area_offset, has_area_offset) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 700u64 + 1048612u64).element)
     if !has_area_offset || !(area_offset > 0.0) { os.exit(39i32) }
+    // (D1481) One long line with no breaks wraps in a two-row area; with the
+    // caret at its end the viewport has scrolled past the first rows.
+    let (wrap_bytes, wrap_bytes_error) = mem.alloc[u8](a, 256usize)
+    if wrap_bytes_error != ok { os.exit(46i32) }
+    let wrap_len = control.copy_text(wrap_bytes, "aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa")
+    var wrap_step = 0usize
+    while wrap_step < 3usize {
+        let wrap_at = time.Instant { nanos: 6000000000i64 + i64(wrap_step) * 100000000i64 }
+        if testing.begin(&harness, wrap_at) != ok { os.exit(46i32) }
+        frame = mem.arena_from(frame_storage)
+        var wrap_options = control.field_options()
+        wrap_options.rows = 2u32
+        wrap_options.width = 200.0
+        let (wrapped_area, wrapped_area_error) = control.text_area(&frame, 800u64, &theme, "", wrap_bytes, wrap_len, zero, wrap_options)
+        let (wrap_page, wrap_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if wrapped_area_error != ok || wrap_page_error != ok { os.exit(46i32) }
+        wrap_page[0usize] = wrapped_area
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 300.0), wrap_page[0usize..1usize]), wrap_at) != ok { os.exit(47i32) }
+        if wrap_step == 0usize && widget.edit_select(&runtime, testing.by_key(&harness, 800u64).element, wrap_len, wrap_len) != ok { os.exit(48i32) }
+        wrap_step += 1usize
+    }
+    let (wrap_offset, has_wrap_offset) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 800u64 + 1048612u64).element)
+    if !has_wrap_offset || !(wrap_offset > 0.0) { os.exit(49i32) }
     // (D1467) A snackbar whose message and action do not fit on one line stands
     // two: the action under the message, below Dismiss; a short one stays one.
     // An 800 wide window of its own, so the snackbar is not in its compact form.

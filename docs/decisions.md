@@ -27302,3 +27302,9 @@ The Snackbar spec lets a snackbar leave: "after it leaves (`duration-short-4`, `
 The drawn notice now lives in the frame's arena. An early version pointed its buttons at a stack copy, and `ui_status4_v2`'s action tap caught it. That fixture's state pools (256 bytes, 2 classes) are raised to 2048 and 8 for the kept copy. The split view's marker now says the empty detail is the caller's `second`.
 
 `ui_status4_v2` checks this on Windows and Linux. 100 ms after the queue empties, the snackbar still stands with its action and a surface not yet full `inverse-surface`, and a second on it is gone. Against the old control the check fails (exit 44). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1481 — A text area follows the caret across soft-wrapped lines
+
+D1456's text area kept the caret's line in view by counting the hard line breaks before the caret. A long paragraph that wrapped put the caret below the viewport until the next break. A new `widget.edit_caret_line` gives the laid-out line the caret stands on, counting soft-wrapped lines, from the editor's own layout (`layout.line_of_offset`). The text area uses it, and falls back to hard lines when there are no fonts or no text.
+
+`ui_content` checks this on Windows and Linux: one unbroken line of twenty words in a two-row, 200 wide area, with the caret at its end, scrolls its viewport past the first rows. Against the old sources the check fails (exit 49). All 103 `ui_*` fixtures pass on both hosts.
