@@ -262,9 +262,10 @@ fn rich_options(t: *const Theme) -> RichOptions {
 }
 
 // A span kind's text role under a base role.
+// (D1466) Strong keeps the base role (it asks for weight 600 in `span_options`).
 fn span_role(kind: SpanKind, base: style.TextRole) -> style.TextRole {
     if kind == .Code || kind == .Key { ret .Code }
-    if kind == .Strong || kind == .Mention {
+    if kind == .Mention {
         if base == .BodyLarge { ret .TitleMedium }
         ret .TitleSmall
     }
@@ -279,6 +280,9 @@ fn span_options(kind: SpanKind, base: style.TextRole) -> TextOptions {
     out.wrap = .None
     out.italic = kind == .Emphasis
     out.mono = kind == .Code || kind == .Key
+    // (D1466, docs/ux/components/RichText) Strong is weight 600 in the same role
+    // and colour.
+    if kind == .Strong { out.weight = 600u32 }
     ret out
 }
 

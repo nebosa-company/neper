@@ -2625,7 +2625,7 @@ fn breadcrumbs_fit(a: *mem.Arena, t: *const control.Theme, names: []const str, w
 // `body-medium` label in `on-surface-variant` (`on-surface` hovered) under the
 // `state-hover` layer, at most 200 wide (160 touch) and cut with an ellipsis.
 // Between crumbs stands a 16 direction-mirrored chevron in
-// `on-surface-variant`, out of the tree. The current place is `body-medium` at 600 (`title-small`) in
+// `on-surface-variant`, out of the tree. The current place is `body-medium` at 600 (D1466) in
 // `on-surface`, at most 320 wide: text marked Current, no Tab stop. With `hidden`
 // levels the root and the last two stay and the rest collapse into a `more-horiz`
 // crumb, a button named "Show 3 hidden levels" with a menu of them in order.
@@ -2852,8 +2852,11 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
                     }
                 }
             } else {
+                // (D1466) The current place is `body-medium` at weight 600, not a
+                // heavier role standing in for it.
                 var here = control.text_options()
-                here.role = .TitleSmall
+                here.role = .BodyMedium
+                here.weight = 600u32
                 here.wrap = .None
                 here.ellipsis = "..."
                 here.max_lines = 1u32
