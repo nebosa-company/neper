@@ -26943,3 +26943,12 @@ Checks on Windows and Linux:
 The Flyout spec opens "over `duration-medium-1` with `ease-emphasized-decelerate` (fade and grow from the anchor edge)". The Popover spec opens over `duration-medium-1`, scaling from 90%. Both now stand in a box keyed `key + 8192`, there whether open or shut, and keep the D1427 opening share. `entered_overlay` wraps the overlay's content part way in: the flyout grows 8 from the anchor's edge (`grown_in`, above when placed above), and the popover scales from 90% (`scaled_in`), both faded. Closing is at once, and reduced motion opens at once.
 
 `ui_overlays2_v2` checks both, on Windows and Linux. On its first open frame the flyout is not yet `surface-container`. Its existing pixel checks, and the popover's, now look once each has arrived (1.45 s and 1.65 s). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1430 — Dialogs scale and fade in over a fading scrim
+
+The Dialog spec enters "over `duration-medium-4` with `ease-emphasized-decelerate` (fade in the scrim, scale the container from 90%...)". `dialog_as_look`, through which every dialog passes (alerts, `dialog_labelled` pickers, `duration_modal`), now stands in a box keyed `key + 8192`, there whether open or shut. It keeps the D1427 opening share over `duration-medium-4`. The card is drawn faded and scaled from 90% (`scaled_in`), and the scrim at that share of its opacity (`with_scrim_share`). Leaving is at once, and reduced motion enters at once. The spec's height growth from the top is not drawn.
+
+Checks on Windows and Linux:
+
+- `ui_overlays_v2` opens a dialog. 50 ms later its card's start is not yet `surface-container-high`; a second later it is.
+- All 103 `ui_*` fixtures pass.

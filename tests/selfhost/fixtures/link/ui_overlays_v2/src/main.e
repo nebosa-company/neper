@@ -658,6 +658,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         menu_step += 1usize
     }
+    // (D1430) A dialog scales and fades in over `duration-medium-4`: 50 ms after
+    // it opens its card's start is not yet `surface-container-high`, a second on
+    // it is.
+    var no_dialog_buttons: [1]overlay.DialogButton = zero
+    var dialog_step = 0usize
+    while dialog_step < 5usize {
+        var dialog_at = 97000000000i64
+        if dialog_step == 1usize { dialog_at = 97005000000i64 }
+        if dialog_step == 2usize { dialog_at = 97010000000i64 }
+        if dialog_step == 3usize { dialog_at = 97060000000i64 }
+        if dialog_step == 4usize { dialog_at = 98000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: dialog_at }) != ok { os.exit(206i32) }
+        var dialog_frame = mem.arena_from(frame_storage)
+        let (dialog_body, dialog_body_error) = control.text(&dialog_frame, 0u64, "Discard the draft?", &theme, control.text_options())
+        if dialog_body_error != ok { os.exit(206i32) }
+        let (opening_dialog, opening_dialog_error) = overlay.dialog(&dialog_frame, 5300u64, &theme, "Discard", dialog_body, no_dialog_buttons[0usize..0usize], dialog_step >= 2usize, false)
+        let (dialog_parts, dialog_parts_error) = mem.alloc[widget.Node](&dialog_frame, 1usize)
+        if opening_dialog_error != ok || dialog_parts_error != ok { os.exit(206i32) }
+        dialog_parts[0usize] = opening_dialog
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), dialog_parts[0usize..1usize]), time.Instant { nanos: dialog_at }) != ok { os.exit(207i32) }
+        if dialog_step >= 3usize {
+            let (dialog_box, has_dialog_box) = lifted(&harness, 5300u64)
+            let (dialog_shot, dialog_shot_error) = testing.snapshot(&harness, a)
+            if !has_dialog_box || dialog_shot_error != ok { os.exit(208i32) }
+            let carded = is_color(dialog_shot, at(dialog_box.x + 3.0, dialog_box.y + dialog_box.height * 0.5), style.color(&tokens, .SurfaceContainerHigh))
+            if dialog_step == 3usize && carded { os.exit(209i32) }
+            if dialog_step == 4usize && !carded { os.exit(210i32) }
+        }
+        dialog_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(51i32) }
     try io.print("ui overlays v2 ok\n")
     ret ok
