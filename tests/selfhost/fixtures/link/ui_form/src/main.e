@@ -109,7 +109,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 96usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 12u16, max_commands: 256usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 96usize, max_states: 32usize, state_bytes: 1024usize, state_classes: 8u16, max_depth: 12u16, max_commands: 256usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -206,6 +206,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (email_group_3, has_email_group_3) = find(tree_3, .Group, "Email")
     if !has_name_group_3 || !has_email_group_3 { os.exit(42i32) }
     if email_group_3.bounds.y != name_group_3.bounds.y || email_group_3.bounds.x <= name_group_3.bounds.x { os.exit(43i32) }
+    // (D1441) A changed message fades in over `duration-short-2`: on the frame
+    // the email turns invalid its message stands part way in, a second on whole.
+    var fade_step = 0usize
+    while fade_step < 4usize {
+        var fade_at = 7000000000i64
+        if fade_step == 1usize { fade_at = 7000000001i64 }
+        if fade_step == 2usize { fade_at = 7100000000i64 }
+        if fade_step == 3usize { fade_at = 8100000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: fade_at }) != ok { os.exit(45i32) }
+        frame = mem.arena_from(frame_storage)
+        let (fade_root, fade_root_error) = build(&frame, &theme, &buffers[0usize], ctx, jumps[0usize..2usize], fade_step >= 2usize, 400.0)
+        if fade_root_error != ok || testing.pump(&harness, fade_root, time.Instant { nanos: fade_at }) != ok { os.exit(45i32) }
+        // Read only once the message is the email's error: the read keeps what
+        // it is given as the message last seen.
+        if fade_step >= 2usize {
+            let shown_share = control.message_share(&theme, 20u64, "Email is required", .Invalid, tokens.durations.short2)
+            if fade_step == 2usize && !(shown_share < 1.0) { os.exit(46i32) }
+            if fade_step == 3usize && shown_share != 1.0 { os.exit(47i32) }
+        }
+        fade_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(44i32) }
     try io.print("ui form ok\n")
     ret ok

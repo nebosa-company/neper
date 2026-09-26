@@ -4695,6 +4695,60 @@ fn field_message(a: *mem.Arena, key: widget.Key, t: *const Theme, message: Messa
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
 }
 
+// (D1441) What a form field's message last was (its length, validity and two
+// byte sums) and when it last changed (0: not changing).
+type MessageSeen = struct { set: bool, len: usize, validity: Validity, sum: u64, weighted: u64, since: i64 }
+
+// (D1441, docs/ux/components/FormField, motion) How far a form field keyed `key`
+// has faded its message in since the message last changed: over `millis` on
+// `ease-standard`, 1 when it has not changed, before the field exists or under
+// reduced motion.
+fn message_share(t: *const Theme, key: widget.Key, said: str, validity: Validity, millis: u32) -> f32 {
+    if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret 1.0 }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret 1.0 }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret 1.0 }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: MessageSeen = zero
+    let (seen, _, seen_error) = widget.state[MessageSeen](&build, key + 1048600u64, fresh)
+    if seen_error != ok { ret 1.0 }
+    var sum = 0u64
+    var weighted = 0u64
+    var i = 0usize
+    while i < said.len {
+        sum += u64(said[i])
+        weighted += u64(said[i]) * u64(i + 1usize)
+        i += 1usize
+    }
+    let now = widget.frame_time(t.runtime).nanos
+    if !seen.set {
+        seen.set = true
+        seen.len = said.len
+        seen.validity = validity
+        seen.sum = sum
+        seen.weighted = weighted
+        ret 1.0
+    }
+    if seen.len != said.len || seen.validity != validity || seen.sum != sum || seen.weighted != weighted {
+        seen.len = said.len
+        seen.validity = validity
+        seen.sum = sum
+        seen.weighted = weighted
+        seen.since = now
+    }
+    if seen.since == 0i64 || now < seen.since { ret 1.0 }
+    let span = i64(millis) * 1000000i64
+    if span <= 0i64 { ret 1.0 }
+    let progress = f32(now - seen.since) / f32(span)
+    if progress >= 1.0 {
+        seen.since = 0i64
+        ret 1.0
+    }
+    widget.request_animation_frame(t.runtime)
+    ret animation.ease(.EaseInOut, progress)
+}
+
 // A form field: the label (keyed `key + 1`) above the control, the help or the
 // message (keyed `key + 2`) below; a group in the tree labelled by the label,
 // described by the help, its error the message when invalid, required and invalid
@@ -4715,7 +4769,14 @@ fn form_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, contr
     if shown.text.len == 0usize { shown = Message { validity: .Valid, text: help } }
     let (message_node, message_error) = field_message(a, key + 2u64, t, shown, control_key)
     if message_error != ok { ret (zero, message_error) }
-    parts[2usize] = message_node
+    // (D1441, docs/ux/components/FormField, motion) A changed message fades in
+    // over `duration-short-2` in place (`message_share`); the form never moves.
+    let (fading, fading_error) = mem.alloc[widget.Node](a, 1usize)
+    if fading_error != ok { ret (zero, TooLarge) }
+    fading[0usize] = message_node
+    var faded = style.defaults()
+    faded.opacity = message_share(t, key, shown.text, shown.validity, t.tokens.durations.short2)
+    parts[2usize] = widget.box(0u64, faded, fading[0usize..1usize])
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..3usize])
