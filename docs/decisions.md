@@ -26473,3 +26473,16 @@ the real row height.
 
 `ui_collections_v2` loads a list: 16 ms in there is no "Still loading", and
 11 seconds in there is, on Windows and Linux.
+
+## D1387 — Unreadable times mark the field invalid
+
+The TimePicker spec's invalid field shows the error icon and "Enter a time from
+00:00 to 23:59". `time_field` now reads its own text with `parse_clock`. When
+the text is not empty, reads as no time, and the field does not hold the focus,
+the field is invalid. Its note becomes "Enter a time from 00:00 to 23:59", or
+"12:00 AM to 11:59 PM" on a 12-hour clock. The clocked field draws an invalid
+note in `error`, now led by a 16 `error` icon 4 before it.
+
+`ui_pickers2_v2` shows "25:99" unfocused, which says how to write a time, beside
+a readable time, which does not. The fixture's own field had held five NUL
+bytes and now holds "09:30". Windows and Linux.
