@@ -27917,3 +27917,17 @@ The PropertyGrid spec fills a selected row, meaning a property picked for docs o
 `PropertyGridOptions` gains `selected` (a row's key; 0 for none) and `divide`. The selected row's line stands on `secondary-container`. When `divide` is set, each row's name cell stands in a stack with an 8-wide drag region over the seam (keyed `key + 600 + index`). A drag reports the new name width through `divide`: the pointer's distance from the grid's start (keyed `key`), at least 96 and at most 60% of the width, as a table's column resize measures from its header. Keeping the width is the caller's.
 
 `ui_collections5_v2` checks this on Windows and Linux. With Age selected, its row is `secondary-container` and Name's is not. Dragging the first row's seam 60 along reports a name column between 180 and 196 wide, from 128. With the selected fill disabled the check fails (exit 77). All 103 ui_* fixtures pass on both hosts. The divider has no resize cursor or keyboard path, and the touch list form remains under the marker.
+
+## D1545 — Pinned first column
+
+The Table spec's wide variant scrolls sideways with the identifying column pinned, and a 1px `outline-variant` seam gains a 4px shadow fade while scrolled. D1283 scrolled a wide table sideways, but its first column scrolled away with the rest; `tabulated`'s marker kept "no pinned column".
+
+`pinned_column` reads the sideways viewport's offset (`key + 2097152`) as last laid out. Once it is past 0, a copy of the first column stands over the viewport's start:
+
+- the column's header, keyed from `key ^ fnv1a64("pinned-head")` so its keys do not repeat the table's;
+- the built rows' first cells from the caller's source, on `surface` at each row's `index x extent - offset`, each over a 1px `outline-variant` divider and clipped to the body;
+- at the seam, a 1px `outline-variant` line and a 4-wide `shadow` fade at 12%.
+
+The copy (keyed `key ^ fnv1a64("pinned-column")`) is hidden from the tree, where the real first column still speaks. Grids (their row numbers), selectable tables (their checks), expandable rows and grouped headers are not pinned yet.
+
+`ui_collections2_v2` checks this on Windows and Linux. At rest there is no copy. Scrolled 60 sideways, the copy's top-left is the viewport's and it is at least the column's width. With pinning disabled the check fails (exit 159). All 103 ui_* fixtures pass on both hosts. The copy's cells are plain (no selected or hovered look) and trail a sideways scroll by one frame.

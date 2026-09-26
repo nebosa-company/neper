@@ -3681,7 +3681,8 @@ fn table_toolbar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, bar: T
 // (D1413) `failed` stands an error banner in the body.
 // (D1539) The toolbar is `table_toolbar` and the footer `pagination_footer`
 // (D1239), both the caller's to stack round the table.
-// ponytail: no pinned column; `data_grid` keeps the caller's cells
+// (D1545) Scrolled sideways, the first column stays pinned (`pinned_column`).
+// ponytail: `data_grid` keeps the caller's cells
 // as its editors -- `data_grid_of` is the one with the DataGrid's core.
 fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, role: u8, owned: bool, selection: TableOptions) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
@@ -3955,6 +3956,18 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         view.width = style.Length { Px: selection.view_width }
         view.overflow = .Clip
         column_node[0usize] = widget.scroll(key + 2097152u64, widget.Scroll { axis: .Horizontal, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view, wide[0usize..1usize])
+        // (D1545) Scrolled sideways, the first column stays pinned.
+        if !grid && !selecting && !selection.expandable && selection.groups.len == 0usize {
+            let (pinned, has_pinned, pinned_error) = pinned_column(a, key, t, columns, source, sort_column, descending, sort, reorder, resize, head_height, pad, below, selection, first, count, offset, row_extent, body_height)
+            if pinned_error != ok { ret (zero, pinned_error) }
+            if has_pinned {
+                let (layered, layered_error) = mem.alloc[widget.Node](a, 2usize)
+                if layered_error != ok { ret (zero, TooLarge) }
+                layered[0usize] = column_node[0usize]
+                layered[1usize] = pinned
+                column_node[0usize] = widget.stack(0u64, style.defaults(), layered[0usize..2usize])
+            }
+        }
     }
     var sem: widget.Semantics = zero
     sem.role = role
@@ -3962,6 +3975,84 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     sem.row_count = u32(total)
     sem.column_count = u32(columns.len)
     ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
+}
+
+// (D1545, docs/ux/components/Table, pinned column) Once a wide table (its
+// sideways viewport keyed `key + 2097152`) has scrolled sideways, as last laid
+// out, a copy of its first column stands over the viewport's start: the column's
+// header (keyed from `key ^ fnv1a64("pinned-head")`) and the built rows' first
+// cells on `surface` at the rows' heights, each over a 1px `outline-variant`
+// divider, clipped to the body; at the seam a 1px `outline-variant` line and a
+// 4 wide `shadow` fade. The copy (keyed `key ^ fnv1a64("pinned-column")`) is out
+// of the tree.
+// ponytail: a grid's row numbers, a selectable table's checks, expandable rows
+// and grouped headers are not pinned; the copy's cells are plain (no selected or
+// hovered look) and trail a sideways scroll by a frame.
+fn pinned_column(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, source: TableSource, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], head_height: f32, pad: f32, below: widget.Key, selection: TableOptions, first: usize, count: usize, offset: f32, row_extent: f32, body_height: f32) -> (widget.Node, bool, err) {
+    if mem.address_of(t.runtime) == 0usize { ret (zero, false, ok) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (zero, false, ok) }
+    let (side_id, side_found) = widget.find_by_key(s, key + 2097152u64)
+    if side_found != 1usize { ret (zero, false, ok) }
+    let (sideways, has_sideways) = widget.scroll_offset_of(t.runtime, side_id)
+    if !has_sideways || !(sideways > 0.0) { ret (zero, false, ok) }
+    let lane = columns[0usize].width
+    let (head, head_error) = header_cells_numeric(a, key ^ hash.fnv1a64("pinned-head"), t, columns[0usize..1usize], sort_column, descending, sort, reorder, resize, head_height, pad, 0.0, below, selection.numeric, selection.filtered)
+    if head_error != ok { ret (zero, false, head_error) }
+    let ground = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    let rule = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize * count + 1usize)
+    let (cells, cells_error) = mem.alloc[widget.Node](a, count + 1usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize)
+    if layers_error != ok || cells_error != ok || parts_error != ok { ret (zero, false, TooLarge) }
+    var n = 0usize
+    var i = 0usize
+    while i < count {
+        let index = first + i
+        var built: widget.Node = zero
+        let built_error = source.cell(source.ctx, a, index, 0usize, &built)
+        if built_error != ok { ret (zero, false, built_error) }
+        cells[i] = built
+        var cell_style = control.sized_style(lane, row_extent)
+        cell_style.background = ground
+        cell_style.padding = style.EdgeLengths { left: style.Length { Px: pad }, top: style.Length { Px: 0.0 }, right: style.Length { Px: pad }, bottom: style.Length { Px: 0.0 } }
+        let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+        if held_error != ok { ret (zero, false, TooLarge) }
+        held[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, cell_style, cells[i..i + 1usize])
+        var line = control.sized_style(lane, t.tokens.sizes.divider)
+        line.background = rule
+        held[1usize] = widget.box(0u64, line, zero)
+        let y = f32(index) * row_extent - offset
+        layers[n] = widget.positioned(0u64, 0.0, y, style.defaults(), held[0usize..1usize])
+        layers[n + 1usize] = widget.positioned(0u64, 0.0, y + row_extent - t.tokens.sizes.divider, style.defaults(), held[1usize..2usize])
+        n += 2usize
+        i += 1usize
+    }
+    var body_style = control.sized_style(lane, body_height)
+    body_style.overflow = .Clip
+    parts[3usize] = head
+    var head_style = control.sized_style(lane, head_height)
+    head_style.background = ground
+    head_style.overflow = .Clip
+    parts[0usize] = widget.box(0u64, head_style, parts[3usize..4usize])
+    parts[1usize] = widget.stack(0u64, body_style, layers[0usize..n])
+    parts[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+    // The seam: a 1px line and a 4 wide fade from `shadow`.
+    var seam = control.sized_style(1.0, head_height + body_height)
+    seam.background = rule
+    var fade = control.sized_style(4.0, head_height + body_height)
+    fade.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Shadow), 0.12) }
+    let (edges, edges_error) = mem.alloc[widget.Node](a, 5usize)
+    if edges_error != ok { ret (zero, false, TooLarge) }
+    edges[0usize] = parts[4usize]
+    edges[3usize] = widget.box(0u64, seam, zero)
+    edges[4usize] = widget.box(0u64, fade, zero)
+    edges[1usize] = widget.positioned(0u64, lane, 0.0, style.defaults(), edges[3usize..4usize])
+    edges[2usize] = widget.positioned(0u64, lane + 1.0, 0.0, style.defaults(), edges[4usize..5usize])
+    parts[5usize] = widget.stack(key ^ hash.fnv1a64("pinned-column"), style.defaults(), edges[0usize..3usize])
+    var quiet: widget.Semantics = zero
+    quiet.hidden = true
+    ret (widget.semantics(0u64, quiet, style.defaults(), parts[5usize..6usize]), true, ok)
 }
 
 // A cell builder for a tree table's columns past the first: one cell into the
