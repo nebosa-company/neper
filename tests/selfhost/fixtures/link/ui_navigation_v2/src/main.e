@@ -453,6 +453,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
         context_step += 1usize
     }
     if context_mid == context_end { os.exit(64i32) }
+    // (D1462) A disabled action at its group's outer end is hidden; one between
+    // others is dimmed in place.
+    var gated: [3]navigation.Action = zero
+    gated[0usize] = navigation.Action { label: "Undo", action: s.subs[0usize], icon: zero, enabled: false }
+    gated[1usize] = navigation.Action { label: "Share", action: s.subs[0usize], icon: zero, enabled: false }
+    gated[2usize] = navigation.Action { label: "Search", action: s.subs[0usize], icon: zero, enabled: true }
+    var inner_gated: [3]navigation.Action = zero
+    inner_gated[0usize] = navigation.Action { label: "Search", action: s.subs[0usize], icon: zero, enabled: true }
+    inner_gated[1usize] = navigation.Action { label: "Share", action: s.subs[0usize], icon: zero, enabled: false }
+    inner_gated[2usize] = navigation.Action { label: "Edit", action: s.subs[0usize], icon: zero, enabled: true }
+    var gate_step = 0usize
+    while gate_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (gated_bar, gated_error) = navigation.app_bar_of(&f, 4000u64, &theme, "Gated", inner_gated[0usize..3usize], gated[0usize..3usize], navigation.app_bar_options(), 600.0)
+        let (gated_page, gated_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if gated_error != ok || gated_page_error != ok { os.exit(70i32) }
+        gated_page[0usize] = gated_bar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 200.0), gated_page[0usize..1usize]), time.Instant { nanos: 30000000000i64 + i64(gate_step) }) != ok { os.exit(71i32) }
+        gate_step += 1usize
+    }
+    // Trailing: the two disabled at the start are hidden, Search stands.
+    if testing.by_key(&harness, 4009u64).count != 0usize || testing.by_key(&harness, 4010u64).count != 0usize || testing.by_key(&harness, 4011u64).count == 0usize { os.exit(72i32) }
+    // Leading: the disabled Share between Search and Edit stays, dimmed.
+    if testing.by_key(&harness, 4001u64).count == 0usize || testing.by_key(&harness, 4002u64).count == 0usize || testing.by_key(&harness, 4003u64).count == 0usize { os.exit(73i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation v2 ok\n")
     ret ok
