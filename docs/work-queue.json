@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C052",
-      "category": "compiler",
-      "group": "Front end and language",
-      "order": 52,
-      "title": "Structured edits (v1 precursor for T2 H29)",
-      "score": 0.91,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "`plan-rename-file --json --symbol m.f --to g` emits a plan -- `precondition` (file hashes), `edit` (`rename-symbol`, site, span, replacement), `postcondition` -- and applies nothing; `scripts/apply_plan.py` applies all or none against the hashes; both suites round-trip it (D376); `add-parameter-and-migrate` is `plan-add-parameter-file`, applied and re-checked by both suites, refused where a value or a protocol holds the signature (D406); `replace-expression` is `plan-replace-expression-file`, the span checked to be one expression node, applied and re-checked by both suites (D414); `change-signature` is `plan-change-signature-file`, the parameters reordered or removed by index and every call re-rendered from its own text, applied and re-checked by both suites (D415) -- the four shapes `m25-h29-structured-edits.md` fixed all exist. every plan's result names the program's `snapshot` (D436). `--arguments FILE` gives the added parameter an argument per call by the call's line and column with a `*` default, refused for a call it leaves out (D455). `neper apply-plan` (D481) applies a plan in the compiler -- every precondition's hash or nothing, highest offset first, `.tmp` and one replace, E-TOOL-0003 for a plan that cannot be applied as it stands -- and both suites apply every corpus plan with it; the Python applier is retired. A type's rename is a plan too (D515), from the index's references, where a subject naming a type was refused; the plans over the compiler itself -- a function at five hundred and forty sites, a type at four hundred -- apply and build the stable stage in both suites (D537), and so do the signature plans over the same function, its parameters reordered at every call and a parameter added with an argument at every call (D538). A stale plan's refusal names the file whose precondition no longer holds, in the message and as `symbol` (D547). Not yet: a plan over more than one program"
-    },
-    {
       "id": "C053",
       "category": "compiler",
       "group": "Front end and language",

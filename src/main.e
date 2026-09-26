@@ -4771,7 +4771,107 @@ fn save_executable(a: *mem.Arena, path: str, bytes: []u8, os_name: str) -> err {
 // replace. The `postcondition` is printed for the caller to check. Sources resolve by
 // root: `operand` under --root, `project-src` under --project-src (default --root).
 // `scripts/apply_plan.py` (D376) was the only applier before this.
+// (D1552) `--also PLAN` adds a plan over another program, the `--root` and
+// `--project-src` after it being that program's: all the plans apply in one
+// transaction (its lock and journal under the first root) or none does. A file
+// two plans name (a shared library) is read once and must hash as both record;
+// an edit both make is made once, and any other overlap refuses the apply. The
+// postconditions are joined with "; ".
+// ponytail: one file reached through two spellings of its path counts as two.
 const PLAN_FILES: usize = 64usize
+const PLAN_GROUPS: usize = 8usize
+
+// (D1552) One plan of an apply: the plan file and its program's roots.
+type PlanGroup = struct { plan: str, root: str, project_src: str }
+
+// (D1552) What the plans of an apply name, gathered across them: each file once
+// (its path, text, digest and the plan's spelling), the edits, whether a plan
+// failed, and the postconditions joined.
+type PlanTables = struct { paths: []str, texts: []str, digests: []str, names: []str, edit_file: []usize, edit_start: []usize, edit_end: []usize, edit_text: []str, files: usize, edits: usize, failed: bool, postcondition: str }
+
+// (D1552) One plan's records into the tables, refused as `apply-plan` refuses.
+fn plan_collect(a: *mem.Arena, sink: *Sink, plan: str, root: str, project_src: str, t: *PlanTables) -> err {
+    var succeeded = false
+    var line_start = 0usize
+    while line_start < plan.len {
+        var line_end = line_start
+        while line_end < plan.len && plan[line_end] != 10u8 { line_end += 1usize }
+        let line = plan[line_start..line_end]
+        line_start = line_end + 1usize
+        let kind = json_str_after(line, "\"record\":\"")
+        if same(kind, "result") {
+            if json_key_at(line, "\"ok\":true") != line.len { succeeded = true }
+        }
+        if same(kind, "precondition") {
+            let (path, path_error) = plan_source_path(a, line, root, project_src)
+            if path_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "a precondition names a source root apply-plan has no directory for") }
+            var known = 0usize
+            while known < t.files && !same(t.paths[known], path) { known += 1usize }
+            if known < t.files {
+                if !same(t.digests[known], json_str_after(line, "\"sha256\":\"")) { ret apply_plan_refused_file(sink, "E-TOOL-0003", json_str_after(line, "\"path\":\""), " changed since the plan was made; nothing applied") }
+            } else {
+                if PLAN_FILES == t.files { ret apply_plan_refused(sink, "E-TOOL-9999", "the plan names more files than apply-plan holds") }
+                let (text, read_error) = graph.load_file(a, path)
+                if read_error != ok { ret apply_plan_refused_file(sink, "E-TOOL-0003", json_str_after(line, "\"path\":\""), " cannot be read; nothing applied") }
+                let (digest, digest_error) = artifact_hash.sha256_hex(a, text)
+                if digest_error != ok { ret digest_error }
+                if !same(digest, json_str_after(line, "\"sha256\":\"")) { ret apply_plan_refused_file(sink, "E-TOOL-0003", json_str_after(line, "\"path\":\""), " changed since the plan was made; nothing applied") }
+                t.paths[t.files] = path
+                t.texts[t.files] = text
+                t.digests[t.files] = digest
+                t.names[t.files] = json_str_after(line, "\"path\":\"")
+                t.files += 1usize
+            }
+        }
+        if same(kind, "edit") {
+            if t.edit_file.len == t.edits { ret apply_plan_refused(sink, "E-TOOL-9999", "the plan has more edits than apply-plan holds") }
+            // An edit the generator owns (D512, H19): the text is regenerated from its
+            // input, so applying it here would be undone; the record names the original.
+            if json_key_at(line, "\"owner\":\"generator\"") != line.len { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit lies in generated text a generator owns; make it in the original the edit names; nothing applied") }
+            let (path, path_error) = plan_source_path(a, line, root, project_src)
+            if path_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "an edit names a source root apply-plan has no directory for") }
+            var file_at = 0usize
+            while file_at < t.files && !same(t.paths[file_at], path) { file_at += 1usize }
+            if file_at == t.files { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit names a file with no precondition; nothing applied") }
+            let start = json_usize_after(line, "\"byte_start\":")
+            let end = json_usize_after(line, "\"byte_end\":")
+            if start > end || end > t.texts[file_at].len { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit's span lies outside its file; nothing applied") }
+            let (replacement, replacement_error) = json_unescaped_after(a, line, "\"replacement\":\"")
+            if replacement_error != ok { ret replacement_error }
+            // (D1552) The same edit from another plan is made once.
+            var twin = false
+            var seen = 0usize
+            while seen < t.edits {
+                if t.edit_file[seen] == file_at && t.edit_start[seen] == start && t.edit_end[seen] == end && same(t.edit_text[seen], replacement) { twin = true }
+                seen += 1usize
+            }
+            if !twin {
+                t.edit_file[t.edits] = file_at
+                t.edit_start[t.edits] = start
+                t.edit_end[t.edits] = end
+                t.edit_text[t.edits] = replacement
+                t.edits += 1usize
+            }
+        }
+        if same(kind, "postcondition") {
+            let checked = json_str_after(line, "\"check\":\"")
+            if t.postcondition.len == 0usize {
+                t.postcondition = checked
+            } else {
+                if checked.len != 0usize {
+                    let (joined, joined_error) = mem.alloc[u8](a, t.postcondition.len + checked.len + 2usize)
+                    if joined_error != ok { ret joined_error }
+                    var n = nptest_append(joined, 0usize, t.postcondition)
+                    n = nptest_append(joined, n, "; ")
+                    n = nptest_append(joined, n, checked)
+                    t.postcondition = joined[0usize..n]
+                }
+            }
+        }
+    }
+    if !succeeded { t.failed = true }
+    ret ok
+}
 
 fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     var out = stderr_sink()
@@ -4784,9 +4884,19 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     var recover = false
     var fault_kind = 0usize
     var fault_after = 0usize
+    var groups: [8]PlanGroup = zero
+    groups[0usize].plan = args[2usize]
+    var group_count = 1usize
     var at = 2usize
     while at < args.len {
         if same(args[at], "--json") { json = true }
+        // (D1552) `--also PLAN` opens the next program's plan.
+        if same(args[at], "--also") && at + 1usize < args.len {
+            if PLAN_GROUPS == group_count { ret tool_usage() }
+            groups[group_count].plan = args[at + 1usize]
+            group_count += 1usize
+            at += 1usize
+        }
         if same(args[at], "--recover") { recover = true }
         // `--fault-apply N` (D1519): the apply dies after N files are replaced, as a
         // crash would, the journal and the lock left for `--recover`.
@@ -4803,18 +4913,28 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
             at += 1usize
         }
         if same(args[at], "--root") && at + 1usize < args.len {
-            root = args[at + 1usize]
-            has_root = true
+            groups[group_count - 1usize].root = args[at + 1usize]
+            if group_count == 1usize {
+                root = args[at + 1usize]
+                has_root = true
+            }
             at += 1usize
         }
         if same(args[at], "--project-src") && at + 1usize < args.len {
-            project_src = args[at + 1usize]
+            groups[group_count - 1usize].project_src = args[at + 1usize]
+            if group_count == 1usize { project_src = args[at + 1usize] }
             at += 1usize
         }
         at += 1usize
     }
     if !has_root { ret tool_usage() }
     if project_src.len == 0usize { project_src = root }
+    var grouped = 0usize
+    while grouped < group_count {
+        if groups[grouped].root.len == 0usize { ret tool_usage() }
+        if groups[grouped].project_src.len == 0usize { groups[grouped].project_src = groups[grouped].root }
+        grouped += 1usize
+    }
     // Refusals go to stderr as text, or into the stream as records.
     var sink = &report
     if json {
@@ -4825,17 +4945,24 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     let (dot_dir, dot_dir_error) = transaction_dir(a, root)
     if dot_dir_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "`.neper` cannot be made under the root") }
     if recover { ret recover_transaction(a, &out, sink, dot_dir, json) }
-    let (plan, plan_error) = graph.load_file(a, args[2usize])
-    if plan_error != ok { ret apply_plan_refused(sink, "E-CLI-9999", "the plan cannot be read") }
-    // Size the edit tables from the plan (D562, H29): compiler-wide structured
-    // changes legitimately exceed the former fixed cap of 4,096 edits.
+    // (D1552) Every plan read before anything is sized.
+    var plans: [8]str = zero
     var plan_edits = 0usize
-    var count_start = 0usize
-    while count_start < plan.len {
-        var count_end = count_start
-        while count_end < plan.len && plan[count_end] != 10u8 { count_end += 1usize }
-        if same(json_str_after(plan[count_start..count_end], "\"record\":\""), "edit") { plan_edits += 1usize }
-        count_start = count_end + 1usize
+    grouped = 0usize
+    while grouped < group_count {
+        let (plan, plan_error) = graph.load_file(a, groups[grouped].plan)
+        if plan_error != ok { ret apply_plan_refused(sink, "E-CLI-9999", "the plan cannot be read") }
+        plans[grouped] = plan
+        // Size the edit tables from the plans (D562, H29): compiler-wide structured
+        // changes legitimately exceed the former fixed cap of 4,096 edits.
+        var count_start = 0usize
+        while count_start < plan.len {
+            var count_end = count_start
+            while count_end < plan.len && plan[count_end] != 10u8 { count_end += 1usize }
+            if same(json_str_after(plan[count_start..count_end], "\"record\":\""), "edit") { plan_edits += 1usize }
+            count_start = count_end + 1usize
+        }
+        grouped += 1usize
     }
     let edit_capacity = plan_edits + 1usize
     let (file_paths, file_paths_error) = mem.alloc[str](a, PLAN_FILES)
@@ -4861,59 +4988,16 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     if edit_text_error != ok { ret edit_text_error }
     let (edit_order, edit_order_error) = mem.alloc[usize](a, edit_capacity)
     if edit_order_error != ok { ret edit_order_error }
-    var file_count = 0usize
-    var edit_count = 0usize
-    var succeeded = false
-    var postcondition = ""
-    var line_start = 0usize
-    while line_start < plan.len {
-        var line_end = line_start
-        while line_end < plan.len && plan[line_end] != 10u8 { line_end += 1usize }
-        let line = plan[line_start..line_end]
-        line_start = line_end + 1usize
-        let kind = json_str_after(line, "\"record\":\"")
-        if same(kind, "result") {
-            if json_key_at(line, "\"ok\":true") != line.len { succeeded = true }
-        }
-        if same(kind, "precondition") {
-            if PLAN_FILES == file_count { ret apply_plan_refused(sink, "E-TOOL-9999", "the plan names more files than apply-plan holds") }
-            let (path, path_error) = plan_source_path(a, line, root, project_src)
-            if path_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "a precondition names a source root apply-plan has no directory for") }
-            let (text, read_error) = graph.load_file(a, path)
-            if read_error != ok { ret apply_plan_refused_file(sink, "E-TOOL-0003", json_str_after(line, "\"path\":\""), " cannot be read; nothing applied") }
-            let (digest, digest_error) = artifact_hash.sha256_hex(a, text)
-            if digest_error != ok { ret digest_error }
-            if !same(digest, json_str_after(line, "\"sha256\":\"")) { ret apply_plan_refused_file(sink, "E-TOOL-0003", json_str_after(line, "\"path\":\""), " changed since the plan was made; nothing applied") }
-            file_paths[file_count] = path
-            file_texts[file_count] = text
-            file_digests[file_count] = digest
-            file_names[file_count] = json_str_after(line, "\"path\":\"")
-            file_count += 1usize
-        }
-        if same(kind, "edit") {
-            if edit_file.len == edit_count { ret apply_plan_refused(sink, "E-TOOL-9999", "the plan has more edits than apply-plan holds") }
-            // An edit the generator owns (D512, H19): the text is regenerated from its
-            // input, so applying it here would be undone; the record names the original.
-            if json_key_at(line, "\"owner\":\"generator\"") != line.len { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit lies in generated text a generator owns; make it in the original the edit names; nothing applied") }
-            let (path, path_error) = plan_source_path(a, line, root, project_src)
-            if path_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "an edit names a source root apply-plan has no directory for") }
-            var file_at = 0usize
-            while file_at < file_count && !same(file_paths[file_at], path) { file_at += 1usize }
-            if file_at == file_count { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit names a file with no precondition; nothing applied") }
-            let start = json_usize_after(line, "\"byte_start\":")
-            let end = json_usize_after(line, "\"byte_end\":")
-            if start > end || end > file_texts[file_at].len { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit's span lies outside its file; nothing applied") }
-            let (replacement, replacement_error) = json_unescaped_after(a, line, "\"replacement\":\"")
-            if replacement_error != ok { ret replacement_error }
-            edit_file[edit_count] = file_at
-            edit_start[edit_count] = start
-            edit_end[edit_count] = end
-            edit_text[edit_count] = replacement
-            edit_count += 1usize
-        }
-        if same(kind, "postcondition") { postcondition = json_str_after(line, "\"check\":\"") }
+    var tables = PlanTables { paths: file_paths, texts: file_texts, digests: file_digests, names: file_names, edit_file: edit_file, edit_start: edit_start, edit_end: edit_end, edit_text: edit_text, files: 0usize, edits: 0usize, failed: false, postcondition: "" }
+    grouped = 0usize
+    while grouped < group_count {
+        try plan_collect(a, sink, plans[grouped], groups[grouped].root, groups[grouped].project_src, &tables)
+        grouped += 1usize
     }
-    if !succeeded { ret apply_plan_refused(sink, "E-TOOL-0003", "the plan did not succeed; nothing applied") }
+    let file_count = tables.files
+    let edit_count = tables.edits
+    let postcondition = tables.postcondition
+    if tables.failed { ret apply_plan_refused(sink, "E-TOOL-0003", "the plan did not succeed; nothing applied") }
     // Per file, order the original spans and build the result once (D562). Splicing
     // a fresh full-file copy for each edit exhausted the ordinary 64 MiB arena on a
     // compiler-wide plan even after its edit table had grown to fit.

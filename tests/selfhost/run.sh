@@ -5305,6 +5305,25 @@ txn_status=0
 [ "$txn_status" -eq 2 ]
 grep -q 'changed during the apply' "$test_build/txn-edit.txt"
 [ ! -e "$txn_scratch/src/.neper/transaction.lock" ]
+# A plan over more than one program (D1552, H29): `--also` applies a second
+# program's plan in the same transaction; the same plan named twice for one
+# program makes its edits once; a stale file in the second program refuses both.
+multi_scratch="$test_build/multi-scratch"
+rm -rf "$multi_scratch" && mkdir -p "$multi_scratch"
+for side in one two three four five alone; do cp -r "$alias_fixture" "$multi_scratch/$side"; done
+"$test_build/neper-self" apply-plan "$txn_plan" --root "$multi_scratch/alone/src" > /dev/null
+"$test_build/neper-self" apply-plan "$txn_plan" --root "$multi_scratch/one/src" --also "$txn_plan" --root "$multi_scratch/two/src" --json > "$test_build/multi-applied.jsonl"
+tail -n 1 "$test_build/multi-applied.jsonl" | grep -q '"files":4'
+cmp -s "$multi_scratch/one/src/main.e" "$multi_scratch/alone/src/main.e"
+cmp -s "$multi_scratch/two/src/main.e" "$multi_scratch/alone/src/main.e"
+"$test_build/neper-self" apply-plan "$txn_plan" --root "$multi_scratch/three/src" --also "$txn_plan" --root "$multi_scratch/three/src" > /dev/null
+cmp -s "$multi_scratch/three/src/main.e" "$multi_scratch/alone/src/main.e"
+echo '// changed' >> "$multi_scratch/five/src/deep.e"
+multi_status=0
+"$test_build/neper-self" apply-plan "$txn_plan" --root "$multi_scratch/four/src" --also "$txn_plan" --root "$multi_scratch/five/src" > "$test_build/multi-stale.txt" 2>&1 || multi_status=$?
+[ "$multi_status" -eq 2 ]
+grep -q 'changed since the plan was made' "$test_build/multi-stale.txt"
+cmp -s "$multi_scratch/four/src/main.e" "$alias_fixture/src/main.e"
 "$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename-alias.jsonl" --root "$test_build/alias-scratch/src" > /dev/null
 cmp -s "$test_build/alias-scratch/src/other.e" "$alias_fixture/src/other.e"
 [ "$("$test_build/neper-self" emit-executable "$test_build/alias-scratch/src/main.e" "$repo" x64 linux "$test_build/alias" 2>/dev/null)" = 'executable written' ]

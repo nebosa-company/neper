@@ -5089,6 +5089,23 @@ Remove-Item -LiteralPath $txnScratch -Recurse -Force
 Copy-Item -Recurse $aliasFixture $txnScratch
 $txnIntervened = & $compiler apply-plan $aliasPlanActual --root $txnSrc --fault-edit 1 2>&1
 if ($LASTEXITCODE -ne 2 -or -not ($txnIntervened -match 'changed during the apply') -or (Test-Path -LiteralPath (Join-Path $txnSrc '.neper\transaction.lock'))) { throw 'an edit made during the apply was not caught' }
+# A plan over more than one program (D1552, H29): `--also` applies a second
+# program's plan in the same transaction; the same plan named twice for one
+# program makes its edits once; a stale file in the second program refuses both.
+$multiScratch = Join-Path $testBuild 'multi-scratch'
+if (Test-Path -LiteralPath $multiScratch) { Remove-Item -LiteralPath $multiScratch -Recurse -Force }
+New-Item -ItemType Directory -Force $multiScratch | Out-Null
+foreach ($side in 'one', 'two', 'three', 'four', 'five', 'alone') { Copy-Item -Recurse $aliasFixture (Join-Path $multiScratch $side) }
+& $compiler apply-plan $aliasPlanActual --root (Join-Path $multiScratch 'alone\src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the rename plan did not apply alone' }
+$renamedMain = (Get-FileHash -LiteralPath (Join-Path $multiScratch 'alone\src\main.e')).Hash
+$multiApplied = & $compiler apply-plan $aliasPlanActual --root (Join-Path $multiScratch 'one\src') --also $aliasPlanActual --root (Join-Path $multiScratch 'two\src') --json
+if ($LASTEXITCODE -ne 0 -or ((Get-FileHash -LiteralPath (Join-Path $multiScratch 'one\src\main.e')).Hash -ne $renamedMain) -or ((Get-FileHash -LiteralPath (Join-Path $multiScratch 'two\src\main.e')).Hash -ne $renamedMain) -or -not (($multiApplied | Select-Object -Last 1) -match '"files":4')) { throw "a plan over two programs did not apply to both: $multiApplied" }
+& $compiler apply-plan $aliasPlanActual --root (Join-Path $multiScratch 'three\src') --also $aliasPlanActual --root (Join-Path $multiScratch 'three\src') | Out-Null
+if ($LASTEXITCODE -ne 0 -or ((Get-FileHash -LiteralPath (Join-Path $multiScratch 'three\src\main.e')).Hash -ne $renamedMain)) { throw 'the same plan named twice for one program did not make its edits once' }
+Add-Content -LiteralPath (Join-Path $multiScratch 'five\src\deep.e') -Value '// changed'
+$multiStale = & $compiler apply-plan $aliasPlanActual --root (Join-Path $multiScratch 'four\src') --also $aliasPlanActual --root (Join-Path $multiScratch 'five\src') 2>&1
+if ($LASTEXITCODE -ne 2 -or -not ($multiStale -match 'changed since the plan was made') -or ((Get-FileHash -LiteralPath (Join-Path $multiScratch 'four\src\main.e')).Hash -ne (Get-FileHash -LiteralPath $txnMain).Hash)) { throw "a stale second program did not refuse the whole apply: $multiStale" }
 # A function only a constant reaches (D510, H17): its call in the initializer is a
 # use, and the rename plan rewrites it; before, the plan had the declaration alone.
 $comptimeFixture = Join-Path $conformanceRoot 'tools\uses_comptime'
