@@ -802,7 +802,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if faded_mid == faded_end { os.exit(207i32) }
     // (D1380) After a frame to settle in, the carousel strip follows a drag (its
     // first item 60 further left after a 60 pull) and a pull past half an item
-    // steps to the next.
+    // steps on. (D1548) A pull of 220 and an item's pitch steps as many items as
+    // it carried, rounded: more than one.
     var strip_keys: [5]widget.Key = zero
     var sk2 = 0usize
     while sk2 < 5usize {
@@ -811,6 +812,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var drag_step = 0usize
     var strip_rest: f32 = 0.0
+    var strip_pitch: f32 = 0.0
     while drag_step < 4usize {
         s.slide = 0usize
         var dragging_strip = collection.carousel_options()
@@ -827,11 +829,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let hold_y = first_item.y + 40.0
         if drag_step == 1usize {
             strip_rest = first_item.x
+            let (second_item, has_second_item) = bounds(&harness, &runtime, 8012u64)
+            if !has_second_item { os.exit(69i32) }
+            strip_pitch = second_item.x - first_item.x
             if !press(&harness, first_item.x + 100.0, hold_y) || !move_to(&harness, first_item.x + 90.0, hold_y) || !move_to(&harness, first_item.x + 40.0, hold_y) { os.exit(211i32) }
         }
         if drag_step == 2usize {
             if !near(first_item.x, strip_rest - 60.0) { os.exit(212i32) }
-            if !move_to(&harness, first_item.x - 60.0, hold_y) || !release(&harness, first_item.x - 60.0, hold_y) || s.slide != 1usize { os.exit(213i32) }
+            let carried = usize((220.0 + strip_pitch) / strip_pitch + 0.5)
+            if carried < 2usize { os.exit(70i32) }
+            if !move_to(&harness, first_item.x - 60.0 - strip_pitch, hold_y) || !release(&harness, first_item.x - 60.0 - strip_pitch, hold_y) || s.slide != carried { os.exit(213i32) }
         }
         drag_step += 1usize
     }

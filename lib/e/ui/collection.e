@@ -285,7 +285,22 @@ fn swipe_settle_cell(t: *const control.Theme, key: widget.Key) -> (*SwipeSettle,
 // where the pages stand, and whom to tell; (D982) settling, the drag only moves
 // the strip and the release turns past the threshold.
 // (D1378) `settling` keeps the last move's travel for a fling.
-type Paging = struct { cell: *Swipe, has_cell: bool, current: usize, count: usize, threshold: f32, turn: widget.Change[usize], settle: bool, rtl: bool, settling: *SwipeSettle, has_settling: bool }
+// (D1548) With a `pitch` (a carousel item and its gap; 0 for a page view) a
+// release steps as many items as the strip was dragged, rounded (one at least),
+// held to the ends.
+// ponytail: a fling steps one item past its distance at most; a multi-item
+// fling waits on a velocity kept over time rather than the last move's travel.
+type Paging = struct { cell: *Swipe, has_cell: bool, current: usize, count: usize, threshold: f32, turn: widget.Change[usize], settle: bool, rtl: bool, settling: *SwipeSettle, has_settling: bool, pitch: f32 }
+
+// (D1548) How many items a release past the threshold (or a fling) steps.
+fn paging_steps(p: *const Paging, moved: f32) -> usize {
+    if !(p.pitch > 0.0) { ret 1usize }
+    var far = moved
+    if far < 0.0 { far = 0.0 - far }
+    var steps = usize(far / p.pitch + 0.5)
+    if steps == 0usize { steps = 1usize }
+    ret steps
+}
 
 fn page_drag(ctx: *void, g: widget.Gesture) -> err {
     let p = mem.cast[*Paging](ctx)
@@ -337,8 +352,17 @@ fn page_drag(ctx: *void, g: widget.Gesture) -> err {
         }
         let fling_on = step < -16.0 && moved < 0.0
         let fling_back = step > 16.0 && moved > 0.0
-        if (moved < 0.0 - p.threshold || fling_on) && p.current + 1usize < p.count { ret widget.fire_change[usize](p.turn, p.current + 1usize) }
-        if (moved > p.threshold || fling_back) && p.current > 0usize { ret widget.fire_change[usize](p.turn, p.current - 1usize) }
+        let steps = paging_steps(p, moved)
+        if (moved < 0.0 - p.threshold || fling_on) && p.current + 1usize < p.count {
+            var ahead = p.current + steps
+            if ahead >= p.count { ahead = p.count - 1usize }
+            ret widget.fire_change[usize](p.turn, ahead)
+        }
+        if (moved > p.threshold || fling_back) && p.current > 0usize {
+            var behind = 0usize
+            if p.current > steps { behind = p.current - steps }
+            ret widget.fire_change[usize](p.turn, behind)
+        }
         ret ok
     default:
         ret ok
@@ -358,7 +382,7 @@ fn page_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []c
     var none_cell: *Swipe = zero
     let rtl = t.tokens.direction == .RightToLeft
     var no_settle: *SwipeSettle = zero
-    pagings[0usize] = Paging { cell: none_cell, has_cell: false, current: current, count: pages.len, threshold: width * 0.25, turn: turn, settle: false, rtl: rtl, settling: no_settle, has_settling: false }
+    pagings[0usize] = Paging { cell: none_cell, has_cell: false, current: current, count: pages.len, threshold: width * 0.25, turn: turn, settle: false, rtl: rtl, settling: no_settle, has_settling: false, pitch: 0.0 }
     // The swipe's cell lives on the view's element from the frame before; on the
     // first frame there is none and a drag that frame turns nothing.
     let (s, state_error) = widget.state_of(t.runtime)
@@ -8734,7 +8758,7 @@ fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: 
     let (pagings, pagings_error) = mem.alloc[Paging](a, 1usize)
     if pagings_error != ok { ret (zero, TooLarge) }
     let (page_step, has_page_step) = swipe_settle_cell(t, key)
-    pagings[0usize] = Paging { cell: kept, has_cell: has_cell, current: current, count: pages.len, threshold: w * 0.5, turn: turn, settle: true, rtl: rtl, settling: page_step, has_settling: has_page_step }
+    pagings[0usize] = Paging { cell: kept, has_cell: has_cell, current: current, count: pages.len, threshold: w * 0.5, turn: turn, settle: true, rtl: rtl, settling: page_step, has_settling: has_page_step, pitch: 0.0 }
     // The strip: the current page and, while dragged, its neighbours.
     let (strip, strip_error) = mem.alloc[widget.Node](a, 4usize)
     if strip_error != ok { ret (zero, TooLarge) }
@@ -8926,8 +8950,10 @@ fn carousel_options() -> CarouselOptions {
 // `label`, each item a group named by its title.
 // (D1380) On any host the strip drags: it follows the finger and a release
 // steps an item (`current`), settling from where it stood.
-// ponytail: a drag steps one item at most rather than scrolling freely with
-// momentum; the item before `current` is not built while dragging back; items do
+// (D1548) A release steps as many items as the drag and fling carried
+// (`paging_steps`).
+// ponytail: the strip steps on release rather than scrolling freely while
+// dragged; the item before `current` is not built while dragging back; items do
 // not grow and shrink as they pass the leading edge. (D1348) On touch, `show_all` puts a Show all button in the
 // header.
 fn carousel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const CarouselItem, keys: []const widget.Key, current: usize, turn: widget.Change[usize], options: CarouselOptions) -> (widget.Node, err) {
@@ -9002,7 +9028,7 @@ fn carousel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     let (strip_pagings, strip_pagings_error) = mem.alloc[Paging](a, 1usize)
     if strip_pagings_error != ok { ret (zero, TooLarge) }
     let pitch = large + 8.0
-    strip_pagings[0usize] = Paging { cell: strip_kept, has_cell: has_strip_kept, current: current, count: items.len, threshold: pitch * 0.5, turn: turn, settle: true, rtl: false, settling: strip_step, has_settling: has_strip_step }
+    strip_pagings[0usize] = Paging { cell: strip_kept, has_cell: has_strip_kept, current: current, count: items.len, threshold: pitch * 0.5, turn: turn, settle: true, rtl: false, settling: strip_step, has_settling: has_strip_step, pitch: pitch }
     var dragged: f32 = 0.0
     if has_strip_kept { dragged = strip_kept.moved }
     if dragged > 0.0 && current == 0usize { dragged = dragged / 3.0 }
