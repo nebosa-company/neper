@@ -306,7 +306,7 @@ fn run_metrics_faced(a: *mem.Arena, t: *const Theme, options: TextOptions, words
     if t.fonts.len == 0usize || words.len == 0usize { ret (0.0, 0.0, 0.0, ok) }
     let (look, look_error) = text_style_faced(a, t, options)
     if look_error != ok { ret (0.0, 0.0, 0.0, look_error) }
-    let (laid, laid_error) = layout.layout(a, words, look, layout.Options { width: 0.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "" })
+    let (laid, laid_error) = layout.layout(a, words, look, layout.Options { width: 0.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "", notdef: false })
     if laid_error != ok { ret (0.0, 0.0, 0.0, laid_error) }
     let (laids, laids_error) = mem.alloc[layout.Layout](a, 1usize)
     if laids_error != ok { ret (0.0, 0.0, 0.0, TooLarge) }

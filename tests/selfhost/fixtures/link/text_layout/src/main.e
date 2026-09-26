@@ -134,7 +134,7 @@ fn near(x: f32, y: f32) -> bool {
 }
 
 fn options(width: f32, align: layout.Align, wrap: layout.Wrap) -> layout.Options {
-    ret layout.Options { width: width, max_lines: 0u32, align: align, wrap: wrap, ellipsis: "" }
+    ret layout.Options { width: width, max_lines: 0u32, align: align, wrap: wrap, ellipsis: "", notdef: false }
 }
 
 fn glyph_count(line: layout.Line) -> usize {
@@ -267,13 +267,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Refusals.
     let (_, missing_error) = layout.layout(a, "abz", style, options(0.0, .Start, .Word))
     if missing_error != layout.MissingGlyph { os.exit(45i32) }
+    // (D1486) With `notdef` the unmapped `z` is the first font's glyph 0, and
+    // keeps its byte.
+    var boxed = options(0.0, .Start, .Word)
+    boxed.notdef = true
+    let (boxed_laid, boxed_error) = layout.layout(a, "abz", style, boxed)
+    if boxed_error != ok || boxed_laid.lines.len != 1usize { os.exit(60i32) }
+    var boxes = 0usize
+    var box_cluster = 0usize
+    var box_run = 0usize
+    while box_run < boxed_laid.lines[0usize].runs.len {
+        let glyph_run = boxed_laid.lines[0usize].runs[box_run].run
+        var q = 0usize
+        while q < glyph_run.glyphs.len {
+            if glyph_run.glyphs[q].id == 0u32 {
+                boxes += 1usize
+                box_cluster = glyph_run.glyphs[q].cluster
+            }
+            q += 1usize
+        }
+        box_run += 1usize
+    }
+    if boxes != 1usize || box_cluster != 2usize { os.exit(61i32) }
     let (_, no_fonts_error) = layout.layout(a, "ab", layout.Style { fonts: fonts[0usize..0usize], language: "", line_height: 0.0 }, options(0.0, .Start, .Word))
     if no_fonts_error != layout.Invalid { os.exit(46i32) }
     let (_, utf8_error) = layout.layout(a, "a\xff", style, options(0.0, .Start, .Word))
     if utf8_error != layout.Invalid { os.exit(47i32) }
     let (_, width_error) = layout.layout(a, "ab", style, options(-1.0, .Start, .Word))
     if width_error != layout.Invalid { os.exit(48i32) }
-    let (_, ellipsis_error) = layout.layout(a, "ab ab ab", style, layout.Options { width: 15.0, max_lines: 1u32, align: .Start, wrap: .Word, ellipsis: "z" })
+    let (_, ellipsis_error) = layout.layout(a, "ab ab ab", style, layout.Options { width: 15.0, max_lines: 1u32, align: .Start, wrap: .Word, ellipsis: "z", notdef: false })
     if ellipsis_error != layout.MissingGlyph { os.exit(49i32) }
 
     try io.print("text layout ok\n")
