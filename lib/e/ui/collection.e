@@ -2312,7 +2312,8 @@ fn row_actions_cell(a: *mem.Arena, t: *const control.Theme, row_key: widget.Key,
 // click toggles; otherwise Ctrl-click toggles, Shift-click extends and a plain
 // click is `pick`. A focused row takes Space, Shift+Up/Down, Ctrl+A and Escape as
 // a list's does (`selection_scopes`). The caller keeps `selected`.
-// ponytail: Shift+Up/Down stop at the built rows' edge; no touch hold.
+// (D1383) On touch, holding a row starts selection with it.
+// ponytail: Shift+Up/Down stop at the built rows' edge.
 fn table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, selection: TableOptions) -> (widget.Node, err) {
     let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 12u8, false, selection)
     ret (made, made_error)
@@ -3518,6 +3519,12 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             check = row_check
             clicks[i] = TableClick { runtime: t.runtime, select: selection.select, index: index, pick: pick, toggles: in_mode }
             row_pick = widget.Change[widget.Key] { ctx: ctx_of(&clicks[i]), invoke: table_click_fire }
+            // (D1383, docs/ux/components/List, Android) Out of selection mode, a
+            // touch held on a row 500 ms selects it, starting the mode.
+            if !in_mode && mem.address_of(t.runtime) != 0usize {
+                let hold_error = widget.long_press_touch(t.runtime, row_key, &toggle_presses[i])
+                if hold_error != ok { ret (zero, hold_error) }
+            }
         }
         let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting)
         if made_error != ok { ret (zero, made_error) }

@@ -586,6 +586,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if land_step == 2usize && lit { os.exit(115i32) }
         land_step += 1usize
     }
+    // (D1383) A touch held 600 ms on the first row of a selectable table with
+    // nothing selected toggles it into the selection; the release picks nothing.
+    var held_chose: Chosen = zero
+    var hold_choice: collection.TableOptions = zero
+    hold_choice.select = widget.Change[collection.ListSelect] { ctx: mem.cast[*void](&held_chose), invoke: on_choose }
+    var hold_step = 0usize
+    var hold_touch = testing.pointer_at(0.0, 0.0)
+    while hold_step < 3usize {
+        var hold_at = 5600000000i64
+        if hold_step == 1usize { hold_at = 5700000000i64 }
+        if hold_step == 2usize { hold_at = 6300000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: hold_at }) != ok { os.exit(120i32) }
+        f = mem.arena_from(frame_storage)
+        let hold_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        let (holding, holding_error) = collection.table_with(&f, 31u64, &theme, "Files", columns[0usize..3usize], hold_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, hold_choice)
+        let (hold_page, hold_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if holding_error != ok || hold_page_error != ok { os.exit(121i32) }
+        hold_page[0usize] = holding
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), hold_page[0usize..1usize]), time.Instant { nanos: hold_at }) != ok { os.exit(122i32) }
+        if hold_step == 0usize {
+            let (first_row, has_first_row) = bounds(&harness, &runtime, 1000u64)
+            if !has_first_row { os.exit(123i32) }
+            hold_touch = testing.pointer_at(first_row.x + first_row.width * 0.5, first_row.y + first_row.height * 0.5)
+            hold_touch.kind = .Touch
+            if testing.send(&harness, input.Event { PointerDown: hold_touch }) != ok { os.exit(124i32) }
+        }
+        hold_step += 1usize
+    }
+    if held_chose.count != 1usize || held_chose.kind != .Toggle || held_chose.index != 0usize { os.exit(125i32) }
+    if testing.send(&harness, input.Event { PointerUp: hold_touch }) != ok || held_chose.count != 1usize { os.exit(126i32) }
     // (D1248) With no rows the header stays over the loading state (a busy
     // "Loading" group under an indeterminate progress bar) or the empty state.
     var state_step = 0usize
