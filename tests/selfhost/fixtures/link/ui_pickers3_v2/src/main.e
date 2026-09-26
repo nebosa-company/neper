@@ -404,6 +404,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if thumb_step == 1usize && !ringed { os.exit(81i32) }
         thumb_step += 1usize
     }
+    // (D1339) The typed opacity: "40 %" reads as 0.4, "140" and "x" do not; with
+    // the caller's text the readout is a field the caller's typing reaches.
+    let (forty, forty_ok) = overlay.read_percent("40 %")
+    let (_, over_ok) = overlay.read_percent("140")
+    let (_, word_ok) = overlay.read_percent("x")
+    if !forty_ok || !near(forty, 0.4) || over_ok || word_ok { os.exit(82i32) }
+    let (alpha_bytes, alpha_bytes_error) = mem.alloc[u8](a, 8usize)
+    if alpha_bytes_error != ok { os.exit(83i32) }
+    alpha_bytes[0usize] = 53u8
+    alpha_bytes[1usize] = 48u8
+    f = mem.arena_from(frame_storage)
+    let (alpha_field, alpha_field_error) = overlay.color_field_typed(&f, 1300u64, &theme, "Accent colour", copper(), true, recent_pick, true, &s.press, s.swatches[0usize..6usize], recent_colours[0usize..0usize], s.hex[0usize..16usize], 7usize, recent_typed, 296.0, .Hex, zero, alpha_bytes, 2usize, recent_typed)
+    let (alpha_page, alpha_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if alpha_field_error != ok || alpha_page_error != ok { os.exit(84i32) }
+    alpha_page[0usize] = alpha_field
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), alpha_page[0usize..1usize]), time.Instant { nanos: 6400000000i64 }) != ok { os.exit(85i32) }
+    let (_, _, has_alpha_edit) = widget.edit_selection(&runtime, testing.by_key(&harness, 1306u64).element)
+    if !has_alpha_edit { os.exit(86i32) }
     try io.print("ui pickers3 v2 ok\n")
     ret ok
 }

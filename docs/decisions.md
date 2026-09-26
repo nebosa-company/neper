@@ -25768,3 +25768,16 @@ rings scale their radii by it, their 2 inner and 1 outer strokes kept.
 
 `ui_pickers3_v2` finds the hue thumb's inner ring 12 from its centre on touch
 and the strip there with a pointer, on Windows and Linux.
+
+## D1339 — Colour fields type their opacity
+
+The ColorPicker spec's channel row types its opacity in %. With
+`overlay.color_field_typed`'s `alpha_text` the readout (keyed `key + 6`) is a
+72 field of the channel row's height over the caller's text, ending in "%" and
+named Opacity, reaching `typed_alpha`; `color_field_format` is the call with
+the plain readout. `read_percent` reads a whole number to 100 with spaces and a
+trailing "%" as the share, refusing anything else.
+
+`ui_pickers3_v2` reads "40 %" as 0.4 and refuses "140" and "x", and finds the
+opacity readout an editable field over the caller's "50", on Windows and
+Linux.

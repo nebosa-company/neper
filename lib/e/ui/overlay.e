@@ -5204,6 +5204,26 @@ fn hue_memo(t: *const control.Theme, key: widget.Key) -> (*HueMemo, bool) {
     ret (kept, true)
 }
 
+// (D1339) A typed percentage: a whole number 0-100, spaces and a trailing "%"
+// allowed; the share (0..1), or false for anything else.
+fn read_percent(text: str) -> (f32, bool) {
+    var value = 0u32
+    var digits = 0usize
+    var i = 0usize
+    while i < text.len && text[i] == 32u8 { i += 1usize }
+    while i < text.len && text[i] >= 48u8 && text[i] <= 57u8 {
+        value = value * 10u32 + u32(text[i] - 48u8)
+        digits += 1usize
+        if value > 100u32 { ret (0.0, false) }
+        i += 1usize
+    }
+    while i < text.len && text[i] == 32u8 { i += 1usize }
+    if i < text.len && text[i] == 37u8 { i += 1usize }
+    while i < text.len && text[i] == 32u8 { i += 1usize }
+    if digits == 0usize || i != text.len { ret (0.0, false) }
+    ret (f32(value) / 100.0, true)
+}
+
 // (D1322) A format segment's press.
 type FormatPick = struct { format: ColorFormat, pick: widget.Change[ColorFormat] }
 
@@ -5546,7 +5566,8 @@ fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
 // (D1323) A grey keeps the last chromatic colour's hue (`HueMemo`), black its
 // saturation too.
 // (D1338) Thumbs are 28 on touch and grow to 24 hovered.
-// ponytail: the readout is not typed, no sheet or mode switch for touch, no host panel.
+// (D1339) `color_field_typed` makes the opacity readout a field.
+// ponytail: no sheet or mode switch for touch, no host panel.
 fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     var no_recent: []const paint.Color = zero
     let (made, made_error) = color_field_with(a, key, t, label, value, with_alpha, change, open, toggle, swatches, no_recent, hex, hex_len, typed, width)
@@ -5570,6 +5591,16 @@ fn color_field_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
 // by the format) holds the caller's text, which the caller writes with
 // `write_color` and reads with `read_color`.
 fn color_field_format(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, recent_colors: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32, format: ColorFormat, pick_format: widget.Change[ColorFormat]) -> (widget.Node, err) {
+    var no_text: []u8 = zero
+    var no_typed: widget.Change[str] = zero
+    let (made, made_error) = color_field_typed(a, key, t, label, value, with_alpha, change, open, toggle, swatches, recent_colors, hex, hex_len, typed, width, format, pick_format, no_text, 0usize, no_typed)
+    ret (made, made_error)
+}
+
+// (D1339) `color_field_format` whose opacity readout is typed: with `alpha_text`
+// the readout (keyed `key + 6`) is a field over the caller's text ending in "%",
+// told through `typed_alpha`; the caller reads it with `read_percent`.
+fn color_field_typed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, recent_colors: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32, format: ColorFormat, pick_format: widget.Change[ColorFormat], alpha_text: []u8, alpha_len: usize, typed_alpha: widget.Change[str]) -> (widget.Node, err) {
     if swatches.len > 64usize { ret (zero, TooLarge) }
     var recent = recent_colors
     if recent.len > 8usize { recent = recent_colors[0usize..8usize] }
@@ -5695,7 +5726,22 @@ fn color_field_format(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
         if format == .Hsl { hex_sem.label = "HSL" }
         channel_row[0usize] = widget.semantics(0u64, hex_sem, style.defaults(), channel_row[3usize..4usize])
         var channel_count = 1usize
-        if with_alpha {
+        if with_alpha && alpha_text.len > 0usize {
+            // (D1339) The typed opacity.
+            var alpha_field = control.field_options()
+            alpha_field.width = readout_w
+            alpha_field.height = channel_h
+            alpha_field.suffix = "%"
+            var no_submit: widget.Submit = zero
+            let (alpha_node, alpha_error) = control.text_field(a, key + 6u64, t, "", alpha_text, alpha_len, typed_alpha, no_submit, alpha_field)
+            if alpha_error != ok { ret (zero, alpha_error) }
+            var alpha_sem: widget.Semantics = zero
+            alpha_sem.role = 2u8
+            alpha_sem.label = "Opacity"
+            channel_row[2usize] = alpha_node
+            channel_row[1usize] = widget.semantics(0u64, alpha_sem, style.defaults(), channel_row[2usize..3usize])
+            channel_count = 2usize
+        } else if with_alpha {
             var words = control.text_options()
             words.role = .BodyMedium
             words.wrap = .None
