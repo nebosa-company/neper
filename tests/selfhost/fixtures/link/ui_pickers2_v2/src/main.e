@@ -404,6 +404,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.by_text(&harness, "January").count == 0usize { os.exit(84i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 1700u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || wheel_date.month != 2u8 || wheel_date.day != 28u8 { os.exit(85i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 1732u64).element) != ok || testing.press_key(&harness, 38u32, zero) != ok || wheel_date.year != 2025i32 || wheel_date.month != 1u8 { os.exit(86i32) }
+    // (D1352) Unit boxes: three editable boxes; 75 min rolls to 1 h 15 min, and
+    // 30 h 90 min holds at 24 h.
+    let (unit_bytes, unit_bytes_error) = mem.alloc[u8](a, 12usize)
+    if unit_bytes_error != ok { os.exit(87i32) }
+    var unit_boxes: overlay.DurationBoxes = zero
+    unit_boxes.hours = unit_bytes[0usize..4usize]
+    unit_boxes.minutes = unit_bytes[4usize..8usize]
+    unit_boxes.seconds = unit_bytes[8usize..12usize]
+    f = mem.arena_from(frame_storage)
+    let (units_node, units_error) = overlay.duration_boxes(&f, 1800u64, &theme, unit_boxes)
+    let (units_page, units_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if units_error != ok || units_page_error != ok { os.exit(88i32) }
+    units_page[0usize] = units_node
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), units_page[0usize..1usize]), time.Instant { nanos: 6700000000i64 }) != ok { os.exit(89i32) }
+    var unit_key = 1801u64
+    while unit_key <= 1803u64 {
+        let (_, _, has_unit_edit) = widget.edit_selection(&runtime, testing.by_key(&harness, unit_key).element)
+        if !has_unit_edit { os.exit(90i32) }
+        unit_key += 1u64
+    }
+    let (rolled_h, rolled_m, rolled_s) = overlay.duration_roll(0u32, 75u32, 0u32, 999u32)
+    let (held_h, _, _) = overlay.duration_roll(30u32, 90u32, 0u32, 24u32)
+    if rolled_h != 1u32 || rolled_m != 15u32 || rolled_s != 0u32 || held_h != 24u32 { os.exit(91i32) }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }

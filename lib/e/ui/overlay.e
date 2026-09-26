@@ -5007,7 +5007,56 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
 // one `secondary-container` with its check; the row is a group named "Presets".
 // (D1296) The chips wrap to the field's width.
 // (D1350) `duration_wheels` is the iOS form.
-// ponytail: no unit boxes for touch; the caller's text carries the value.
+// (D1352) `duration_boxes` is the touch form.
+// ponytail: the caller's text carries the value.
+// (D1352) A duration's unit boxes: each unit's typed text (the caller's buffer
+// and length) and whom its typing tells.
+type DurationBoxes = struct { hours: []u8, hours_len: usize, minutes: []u8, minutes_len: usize, seconds: []u8, seconds_len: usize, typed_hours: widget.Change[str], typed_minutes: widget.Change[str], typed_seconds: widget.Change[str] }
+
+// (D1352, docs/ux/components/DurationPicker, unit boxes) The touch form: a typed
+// box per unit -- hours, minutes, seconds (keyed `key + 1`, `key + 2`,
+// `key + 3`), each with its unit under it -- a `display-small` ":" between; the
+// caller reads the digits and rolls them over with `duration_roll`.
+// ponytail: focus does not move on after two digits; no presets or modal around
+// the boxes.
+fn duration_boxes(a: *mem.Arena, key: widget.Key, t: *const control.Theme, boxes: DurationBoxes) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (hours_box, hours_error) = typed_time_box(a, key + 1u64, t, "Hours", boxes.hours, boxes.hours_len, boxes.typed_hours)
+    let (minutes_box, minutes_error) = typed_time_box(a, key + 2u64, t, "Minutes", boxes.minutes, boxes.minutes_len, boxes.typed_minutes)
+    let (seconds_box, seconds_error) = typed_time_box(a, key + 3u64, t, "Seconds", boxes.seconds, boxes.seconds_len, boxes.typed_seconds)
+    if hours_error != ok || minutes_error != ok || seconds_error != ok { ret (zero, TooLarge) }
+    var colon_look = control.text_options()
+    colon_look.role = .DisplaySmall
+    colon_look.wrap = .None
+    let (first_colon, first_colon_error) = control.colored_text(a, 0u64, ":", t, colon_look, style.color(t.tokens, .OnSurface))
+    let (second_colon, second_colon_error) = control.colored_text(a, 0u64, ":", t, colon_look, style.color(t.tokens, .OnSurface))
+    if first_colon_error != ok || second_colon_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = hours_box
+    parts[1usize] = first_colon
+    parts[2usize] = minutes_box
+    parts[3usize] = second_colon
+    parts[4usize] = seconds_box
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts[0usize..5usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = "Duration"
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// (D1352) Typed units rolled over: seconds past 59 into minutes and minutes past
+// 59 into hours (75 min is 1 h 15 min), the hours held to `most`.
+fn duration_roll(hours: u32, minutes: u32, seconds: u32, most: u32) -> (u32, u32, u32) {
+    let total_seconds = u64(hours) * 3600u64 + u64(minutes) * 60u64 + u64(seconds)
+    var h = total_seconds / 3600u64
+    let m = (total_seconds % 3600u64) / 60u64
+    let s = total_seconds % 60u64
+    if h > u64(most) { h = u64(most) }
+    ret (u32(h), u32(m), u32(s))
+}
+
 fn duration_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], note: str, presets: []const str, chosen: usize, picks: []const widget.Submit, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != presets.len { ret (zero, TooLarge) }
     var no_toggle: widget.Submit = zero
