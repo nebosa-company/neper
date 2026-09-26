@@ -12,7 +12,9 @@
 - `docs/progress.html` is the only readiness document and is never hand-edited.
 - Append design decisions to `docs/decisions.md` as `## D<n> — <title>`; preserve
   earlier entries.
-- Change source and docs with the Edit tool, not Python patch scripts that carry
-  `old`/`new` strings: a script pays output tokens for the anchor text too and costs
-  about 4x as much per byte of new code. Use a script only when it computes the content
-  (constants, tables) or applies one mechanical change across many files.
+- Change source and docs with the Edit tool, or `build/windows/patch.exe` for a
+  multi-site edit (D1455), never a Python patch script or `python - <<EOF` heredoc that
+  carries `old`/`new` strings. Across Neper, Dart and Rust alike, code delivered that
+  way took twice the output tokens per byte and cost 4-5x as much per KB of new code
+  (`python scripts/lang-stats.py`). A script is for content it computes: constants,
+  tables, generated fixtures.
