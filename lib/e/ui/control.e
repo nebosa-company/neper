@@ -34,7 +34,9 @@ type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Fon
 type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool }
 // (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
 // theme's fonts that match best lead the fallback chain (`text_style_faced`).
-type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str, weight: u32, italic: bool, mono: bool }
+// (D1458) `size`, when above 0, sets the text's size in place of its role's,
+// the line height scaled with it.
+type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str, weight: u32, italic: bool, mono: bool, size: f32 }
 // A span of rich text; a linked span fires `link` when tapped, so the spans must
 // outlive the element the way an action's context does.
 type Span = struct { value: str, role: style.TextRole, color: style.ColorRole, link: widget.Submit }
@@ -45,7 +47,7 @@ const ROLE_LINK: u8 = 9u8
 const ROLE_TEXT: u8 = 6u8
 
 fn text_options() -> TextOptions {
-    ret TextOptions { role: .Body, color: .Text, align: .Start, wrap: .Word, max_lines: 0u32, ellipsis: "", weight: 0u32, italic: false, mono: false }
+    ret TextOptions { role: .Body, color: .Text, align: .Start, wrap: .Word, max_lines: 0u32, ellipsis: "", weight: 0u32, italic: false, mono: false, size: 0.0 }
 }
 
 // The layout style of a text role: the theme's fonts at the role's size, its line
@@ -66,8 +68,21 @@ fn text_style(a: *mem.Arena, t: *const Theme, role: style.TextRole) -> (layout.S
 // options' weight, italic and fixed pitch comes first (a missing italic or mono
 // face costs more than any weight gap); ties keep the theme's order.
 fn text_style_faced(a: *mem.Arena, t: *const Theme, options: TextOptions) -> (layout.Style, err) {
-    let (made, made_error) = text_style(a, t, options.role)
+    let (styled, made_error) = text_style(a, t, options.role)
     if made_error != ok { ret (zero, made_error) }
+    var made = styled
+    if options.size > 0.0 && made.fonts.len > 0usize {
+        let (resized, resized_error) = mem.alloc[layout.FontChoice](a, made.fonts.len)
+        if resized_error != ok { ret (zero, TooLarge) }
+        let was = made.fonts[0usize].size
+        var r = 0usize
+        while r < made.fonts.len {
+            resized[r] = layout.FontChoice { font: made.fonts[r].font, size: options.size }
+            r += 1usize
+        }
+        if was > 0.0 { made.line_height = made.line_height * options.size / was }
+        made.fonts = resized
+    }
     if (options.weight == 0u32 && !options.italic && !options.mono) || made.fonts.len < 2usize { ret (made, ok) }
     let (ordered, ordered_error) = mem.alloc[layout.FontChoice](a, made.fonts.len)
     let (costs, costs_error) = mem.alloc[u32](a, made.fonts.len)
@@ -899,7 +914,7 @@ fn account_hash(id: str) -> u32 {
 // (D1227) `avatar_group` overlaps several.
 // (D1253) With `options.action` a single avatar is pressable.
 // (D1393) A photo arriving over initials fades in.
-// ponytail: 32's initials are label-large 14 (the ramp has no 13).
+// (D1458) 32's initials are label-large at 13.
 // (D1227, docs/ux/components/Avatar, group) Up to three of `faces` (pictured
 // by `textures` where given) overlapped by a quarter of their size, each ringed 2
 // in the first face's ground, then, when `total` counts more, a neutral "+n" disc
@@ -1048,8 +1063,15 @@ fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Tex
             var said = text_options()
             said.wrap = .None
             said.role = .LabelSmall
-            if size > 24.0 { said.role = .LabelLarge }
-            if size > 32.0 { said.role = .TitleMedium }
+            if size > 24.0 {
+                said.role = .LabelLarge
+                // (D1458) 32's initials are 13, below the ramp's 14.
+                said.size = 13.0
+            }
+            if size > 32.0 {
+                said.role = .TitleMedium
+                said.size = 0.0
+            }
             if size > 40.0 { said.role = .TitleLarge }
             if size > 56.0 { said.role = .HeadlineMedium }
             let (words, words_error) = colored_text(a, 0u64, options.initials, t, said, style.color(t.tokens, ink))

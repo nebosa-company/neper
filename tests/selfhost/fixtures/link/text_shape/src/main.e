@@ -413,6 +413,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     asked.mono = true
     let (fixed_look, fixed_error) = control.text_style_faced(a, &theme, asked)
     if fixed_error != ok || fixed_look.fonts[0usize].font.id != 24u32 { os.exit(26i32) }
+    // (D1458) A size in the options replaces the role's and scales the line height.
+    var sized = control.text_options()
+    let (role_look, role_error) = control.text_style_faced(a, &theme, sized)
+    sized.size = 13.0
+    let (sized_look, sized_error) = control.text_style_faced(a, &theme, sized)
+    if role_error != ok || sized_error != ok || sized_look.fonts[0usize].size != 13.0 || sized_look.fonts.len != 4usize { os.exit(27i32) }
+    let expected_line = role_look.line_height * 13.0 / role_look.fonts[0usize].size
+    if sized_look.line_height - expected_line > 0.001 || expected_line - sized_look.line_height > 0.001 { os.exit(28i32) }
 
     try io.print("text shape ok\n")
     ret ok
