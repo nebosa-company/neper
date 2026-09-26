@@ -26399,3 +26399,18 @@ points there.
 `ui_progress` waits with a delayed bar: hidden at 0 and 100 ms, shown at 400,
 still shown 100 ms after the wait ends, gone 600 ms after. `ui_status_v2`
 still passes, on Windows and Linux.
+
+## D1382 — A selected range of numbers shows its sum
+
+The DataGrid spec's status bar summarises a selection ("2 cells selected · Sum
+11,244"). When every filled cell of the selected range reads as a plain number
+(`read_number`: an optional minus, digits with optional thousands commas, an
+optional fraction), with at least one, `grid_sum` adds them. The status line
+then gains " · Sum " and the total, written with thousands commas by
+`write_sum` over the existing `write_grouped`: whole when every number was
+whole, otherwise to two places. A range with any other text says only its
+count.
+
+`ui_collections6_v2` sums Port over gamma and staging to 44, finds a range with
+a name not numeric, writes 1,234,567 and 11,244.50, and reads "1,234.5"; its
+"6 cells selected" still reads alone, on Windows and Linux.

@@ -3010,6 +3010,99 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     ret ok
 }
 
+// (D1382) The sum of a grid's selected range when every filled cell in it reads
+// as a number ("1,234", "-5", "2.5"), with at least one; whether all were whole.
+fn grid_sum(source: GridSource, state: GridState) -> (f64, bool, bool) {
+    var at_row = state.row
+    var last_row = state.anchor_row
+    if at_row > last_row {
+        at_row = state.anchor_row
+        last_row = state.row
+    }
+    var first_column = state.column
+    var last_column = state.anchor_column
+    if first_column > last_column {
+        first_column = state.anchor_column
+        last_column = state.column
+    }
+    var total: f64 = 0.0
+    var any = false
+    var whole = true
+    while at_row <= last_row {
+        var column = first_column
+        while column <= last_column {
+            let text = source.cell(source.ctx, at_row, column).text
+            if text.len > 0usize {
+                let (value, integral, read) = read_number(text)
+                if !read { ret (0.0, false, false) }
+                total += value
+                if !integral { whole = false }
+                any = true
+            }
+            column += 1usize
+        }
+        at_row += 1usize
+    }
+    ret (total, any, whole)
+}
+
+// (D1382) A plain number: an optional minus, digits with optional thousands
+// commas, and an optional fraction after a point; whether it had no fraction.
+fn read_number(text: str) -> (f64, bool, bool) {
+    var at = 0usize
+    var negative = false
+    if at < text.len && text[at] == 45u8 {
+        negative = true
+        at += 1usize
+    }
+    var value: f64 = 0.0
+    var digits = 0usize
+    while at < text.len && ((text[at] >= 48u8 && text[at] <= 57u8) || (text[at] == 44u8 && digits > 0usize)) {
+        if text[at] != 44u8 {
+            value = value * 10.0 + f64(text[at] - 48u8)
+            digits += 1usize
+        }
+        at += 1usize
+    }
+    var integral = true
+    if at < text.len && text[at] == 46u8 {
+        integral = false
+        at += 1usize
+        var scale: f64 = 0.1
+        while at < text.len && text[at] >= 48u8 && text[at] <= 57u8 {
+            value += scale * f64(text[at] - 48u8)
+            scale = scale * 0.1
+            digits += 1usize
+            at += 1usize
+        }
+    }
+    if digits == 0usize || at != text.len { ret (0.0, false, false) }
+    if negative { value = 0.0 - value }
+    ret (value, integral, true)
+}
+
+// (D1382) A sum with thousands commas (`write_grouped`): whole, or to two places.
+fn write_sum(out: []u8, value: f64, whole: bool) -> usize {
+    var n = 0usize
+    var v = value
+    if v < 0.0 && out.len > 0usize {
+        out[0usize] = 45u8
+        n = 1usize
+        v = 0.0 - v
+    }
+    var cents = u64(v * 100.0 + 0.5)
+    if whole { cents = u64(v + 0.5) * 100u64 }
+    n += write_grouped(out[n..out.len], usize(cents / 100u64), 44u8)
+    if !whole && n + 3usize <= out.len {
+        let part = cents % 100u64
+        out[n] = 46u8
+        out[n + 1usize] = 48u8 + u8(part / 10u64)
+        out[n + 2usize] = 48u8 + u8(part % 10u64)
+        n += 3usize
+    }
+    ret n
+}
+
 // "1 error", "3 errors", "2 cells selected": a count and its noun.
 fn count_words(a: *mem.Arena, count: usize, one: str, many: str) -> (str, err) {
     let (said, said_error) = mem.alloc[u8](a, 48usize)
@@ -3235,8 +3328,20 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         n += 2usize
     }
     if chosen > 1usize {
-        let (words, words_error) = count_words(a, chosen, " cell selected", " cells selected")
-        if words_error != ok { ret (zero, words_error) }
+        let (counted, counted_error) = count_words(a, chosen, " cell selected", " cells selected")
+        if counted_error != ok { ret (zero, counted_error) }
+        // (D1382, docs/ux/components/DataGrid, status bar) A range of numbers
+        // adds its sum: "2 cells selected · Sum 11,244".
+        var words = counted
+        let (total_sum, all_numbers, whole) = grid_sum(source, state)
+        if all_numbers {
+            let (summed, summed_error) = mem.alloc[u8](a, counted.len + 48usize)
+            if summed_error != ok { ret (zero, TooLarge) }
+            var w = control.copy_text(summed, counted)
+            w += control.copy_text(summed[w..summed.len], " · Sum ")
+            w += write_sum(summed[w..summed.len], total_sum, whole)
+            words = summed[0usize..w]
+        }
         let (chosen_node, chosen_error) = control.colored_text(a, key + 5u64, words, t, caption, style.color(t.tokens, .OnSurfaceVariant))
         if chosen_error != ok { ret (zero, chosen_error) }
         said[n] = chosen_node
