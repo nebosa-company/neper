@@ -3187,7 +3187,58 @@ type ProgressTone = enum u8 { Active, Error, Paused }
 // (square, no gaps), the buffered share (0 for none), the tone, the phase of the
 // indeterminate motion (negative: the shared clock; otherwise an exact turn),
 // and a content colour for a ring inside a button (alpha 0: the tone's colours).
-type ProgressOptions = struct { thick: bool, full_bleed: bool, buffer: f32, tone: ProgressTone, phase: f32, content: paint.Color }
+// (D1381) With `delayed` the indicator keeps the spec's timing itself: it shows
+// only once `waiting` has held 300 ms and, once shown, stays 500 ms.
+type ProgressOptions = struct { thick: bool, full_bleed: bool, buffer: f32, tone: ProgressTone, phase: f32, content: paint.Color, delayed: bool, waiting: bool }
+
+// (D1381) A wait's show timing, kept on a holder that is built shown or not:
+// whether the wait has begun and when, and when the indicator appeared.
+type BusyHold = struct { waiting: bool, since: i64, showing: bool, shown_at: i64 }
+
+// (D1381, docs/ux/components/ProgressBar, timing) Whether an indicator whose wait
+// is `waiting` shows this frame: after 300 ms of waiting, and for at least 500 ms
+// once shown, asking for frames while either clock runs.
+fn busy_visible(t: *const Theme, holder: widget.Key, waiting: bool) -> bool {
+    if mem.address_of(t.runtime) == 0usize { ret waiting }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret waiting }
+    let (id, found) = widget.find_by_key(s, holder)
+    if found != 1usize { ret false }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: BusyHold = zero
+    let (hold, _, hold_error) = widget.state[BusyHold](&build, holder, fresh)
+    if hold_error != ok { ret waiting }
+    let now = widget.frame_time(t.runtime).nanos
+    if waiting {
+        if !hold.waiting {
+            hold.waiting = true
+            hold.since = now
+        }
+        if !hold.showing && now - hold.since >= 300000000i64 {
+            hold.showing = true
+            hold.shown_at = now
+        }
+        if !hold.showing { widget.request_animation_frame(t.runtime) }
+        ret hold.showing
+    }
+    hold.waiting = false
+    if hold.showing && now - hold.shown_at < 500000000i64 {
+        widget.request_animation_frame(t.runtime)
+        ret true
+    }
+    hold.showing = false
+    ret false
+}
+
+// (D1381) A delayed indicator in its holder (keyed `key + 16384`), empty while
+// hidden.
+fn busy_held(a: *mem.Arena, key: widget.Key, shown: widget.Node, visible: bool) -> (widget.Node, err) {
+    if !visible { ret (widget.box(key + 16384u64, style.defaults(), zero), ok) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = shown
+    ret (widget.box(key + 16384u64, style.defaults(), held[0usize..1usize]), ok)
+}
 
 fn progress_options() -> ProgressOptions {
     var out: ProgressOptions = zero
@@ -3335,6 +3386,19 @@ fn eased_on_curve(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32,
 }
 
 fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {
+    if options.delayed {
+        let visible = busy_visible(t, key + 16384u64, options.waiting)
+        var plain = options
+        plain.delayed = false
+        var inner: widget.Node = zero
+        if visible {
+            let (made, made_error) = progress_bar_of(a, key, t, label, value, indeterminate, width, plain)
+            if made_error != ok { ret (zero, made_error) }
+            inner = made
+        }
+        let (held, held_error) = busy_held(a, key, inner, visible)
+        ret (held, held_error)
+    }
     let aimed = clamp_share(value)
     // (D1279) A determinate bar eases to each new value, never backwards.
     var share = aimed
@@ -3584,6 +3648,19 @@ fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, va
 // from 38% to full opacity every two seconds. The tree says busy; determinate,
 // the value is the percent.
 fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32, options: ProgressOptions) -> (widget.Node, err) {
+    if options.delayed {
+        let visible = busy_visible(t, key + 16384u64, options.waiting)
+        var plain = options
+        plain.delayed = false
+        var inner: widget.Node = zero
+        if visible {
+            let (made, made_error) = progress_ring_of(a, key, t, label, value, indeterminate, size, plain)
+            if made_error != ok { ret (zero, made_error) }
+            inner = made
+        }
+        let (held, held_error) = busy_held(a, key, inner, visible)
+        ret (held, held_error)
+    }
     var share = clamp_share(value)
     if share > 0.0 && share < 0.04 { share = 0.04 }
     var stroke = size / 12.0
@@ -8311,7 +8388,8 @@ fn skeleton_options() -> SkeletonOptions {
 // line with `radius-xs`, a circle `width` across, a rectangle with
 // `options.radius`, or a pill fully rounded; carrying its region's shimmer, a
 // `surface-container-high` band 40% of the region wide; not in the tree.
-// ponytail: the 300 ms show delay and 500 ms minimum are the caller's timing.
+// (D1381) A caller showing skeletons can time them with `busy_visible`, as
+// `ProgressOptions.delayed` does for the bar and ring.
 fn skeleton_of(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, options: SkeletonOptions) -> (widget.Node, err) {
     var h = height
     var radius = options.radius

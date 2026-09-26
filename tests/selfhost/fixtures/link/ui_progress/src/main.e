@@ -170,6 +170,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         ease_step += 1usize
     }
+    // (D1381) A delayed bar waits 300 ms before it shows, and once shown stays
+    // 500 ms after the wait ends: hidden at 0 and 100 ms, shown at 400, still
+    // shown when the wait ends at 500, gone at 1000.
+    var wait_step = 0usize
+    while wait_step < 7usize {
+        var wait_at = 20000000000i64
+        if wait_step == 1usize { wait_at = 20016000000i64 }
+        if wait_step == 2usize { wait_at = 20100000000i64 }
+        if wait_step == 3usize { wait_at = 20400000000i64 }
+        if wait_step == 4usize { wait_at = 20500000000i64 }
+        if wait_step == 5usize { wait_at = 20600000000i64 }
+        if wait_step == 6usize { wait_at = 21100000000i64 }
+        var waiting_options = control.progress_options()
+        waiting_options.delayed = true
+        waiting_options.waiting = wait_step <= 3usize
+        if testing.begin(&harness, time.Instant { nanos: wait_at }) != ok { os.exit(34i32) }
+        frame = mem.arena_from(frame_storage)
+        let (waiting_bar, delayed_error) = control.progress_bar_of(&frame, 95u64, &theme, "Loading", 0.0, true, 100.0, waiting_options)
+        let (waiting_page, waiting_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if delayed_error != ok || waiting_page_error != ok { os.exit(35i32) }
+        waiting_page[0usize] = waiting_bar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(120.0, 120.0), waiting_page[0usize..1usize]), time.Instant { nanos: wait_at }) != ok { os.exit(36i32) }
+        let shown_now = testing.by_key(&harness, 95u64).count == 1usize
+        if wait_step <= 2usize && shown_now { os.exit(37i32) }
+        if (wait_step == 3usize || wait_step == 5usize) && !shown_now { os.exit(38i32) }
+        if wait_step == 6usize && shown_now { os.exit(39i32) }
+        wait_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(23i32) }
     try io.print("ui progress ok\n")
     ret ok
