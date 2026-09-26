@@ -4026,7 +4026,10 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // (D1534) With `numbered` each row leads with its section number ("2.1.3", its
 // place among its siblings at every level) in `body-medium` `on-surface-variant`,
 // at least 28 wide; the current row's number is `primary` at weight 600.
-type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool, numbered: bool }
+// (D1538) An outline with `has_filter` stands a filter field over its rows
+// (`filter`, `filter_len`, reported through `filtering`) that narrows them by
+// `sort_text` (column 0).
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool, numbered: bool, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool }
 
 // (D1534) Row `at`'s section number into `out`: its place among its siblings,
 // then its parent's, up to the root, written root first ("2.1.3").
@@ -4153,6 +4156,83 @@ fn sorted_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key {
     let order = s.orders[slot]
     if index >= order.len { ret s.inner.key(s.inner.ctx, parent, index) }
     ret s.inner.key(s.inner.ctx, parent, order[index])
+}
+
+// (D1538, docs/ux/components/Outline, filter) A source narrowed to the nodes
+// whose text holds `needle` (folded) and their ancestors.
+// ponytail: each count and key walks the subtree again, O(nodes * depth) a row;
+// keep the kept children per parent if outlines grow past a few hundred headings.
+type FilteredTree = struct { inner: TreeSource, ctx: *void, text: fn(*void, widget.Key, usize) -> str, needle: []const u8 }
+
+fn filter_keeps(f: *FilteredTree, node: widget.Key) -> bool {
+    if contains_folded(f.text(f.ctx, node, 0usize), f.needle) { ret true }
+    ret filtered_count(mem.cast[*void](f), node) > 0usize
+}
+
+fn filtered_count(ctx: *void, parent: widget.Key) -> usize {
+    let f = mem.cast[*FilteredTree](ctx)
+    if !f.inner.has_children(f.inner.ctx, parent) && parent != 0u64 { ret 0usize }
+    let count = f.inner.count(f.inner.ctx, parent)
+    var kept = 0usize
+    var i = 0usize
+    while i < count {
+        if filter_keeps(f, f.inner.key(f.inner.ctx, parent, i)) { kept += 1usize }
+        i += 1usize
+    }
+    ret kept
+}
+
+fn filtered_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key {
+    let f = mem.cast[*FilteredTree](ctx)
+    let count = f.inner.count(f.inner.ctx, parent)
+    var kept = 0usize
+    var i = 0usize
+    while i < count {
+        let node = f.inner.key(f.inner.ctx, parent, i)
+        if filter_keeps(f, node) {
+            if kept == index { ret node }
+            kept += 1usize
+        }
+        i += 1usize
+    }
+    ret 0u64
+}
+
+fn filtered_has_children(ctx: *void, node: widget.Key) -> bool {
+    ret filtered_count(ctx, node) > 0usize
+}
+
+fn filtered_build(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> err {
+    let f = mem.cast[*FilteredTree](ctx)
+    ret f.inner.build(f.inner.ctx, a, node, out)
+}
+
+// (D1538) Under `parent`: every node counted into `all`, the matches into `hits`,
+// and each kept branch into `open` (so the results stand expanded).
+fn filter_walk(f: *FilteredTree, parent: widget.Key, open: []widget.Key, opened: *usize, hits: *usize, all: *usize) {
+    let count = f.inner.count(f.inner.ctx, parent)
+    var i = 0usize
+    while i < count {
+        let node = f.inner.key(f.inner.ctx, parent, i)
+        *all = *all + 1usize
+        if contains_folded(f.text(f.ctx, node, 0usize), f.needle) { *hits = *hits + 1usize }
+        if f.inner.has_children(f.inner.ctx, node) {
+            if *opened < open.len && filtered_count(mem.cast[*void](f), node) > 0usize {
+                open[*opened] = node
+                *opened = *opened + 1usize
+            }
+            filter_walk(f, node, open, opened, hits, all)
+        }
+        i += 1usize
+    }
+}
+
+// (D1538) The Clear under "No headings match": the filter emptied.
+type FilterClear = struct { filtering: widget.Change[str] }
+
+fn filter_clear_fire(ctx: *void) -> err {
+    let c = back_of[FilterClear](ctx)
+    ret widget.fire_change[str](c.filtering, "")
 }
 
 // The source in sorted form, when the options ask for it.
@@ -4645,7 +4725,8 @@ fn outline(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
 // (D1534) Numbers and follow mode: `outline_with` passes `TreeOptions`, whose
 // `numbered` leads each heading with its section number, and `outline_follow`
 // finds the current heading from the document's scroll.
-// ponytail: no filter field, and the label's own 600 weight is the caller's.
+// (D1538) The filter field and its count (`TreeOptions.has_filter`).
+// ponytail: the label's own 600 weight is the caller's.
 fn outline_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], current: widget.Key, collapse: *const widget.Submit, extent: f32, width: f32) -> (widget.Node, err) {
     let (made, made_error) = treed(a, key, t, label, source, expanded, selected, toggle, pick, true, extent, width, current)
     if made_error != ok { ret (zero, made_error) }
@@ -4675,8 +4756,38 @@ fn outline_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
 }
 
 // (D1534) An outline with `TreeOptions` (numbers).
+// (D1538, docs/ux/components/Outline, filter) With `has_filter` a 32 outlined
+// "Filter headings" field (keyed `key + 4194304`, clear of the twisties' odd
+// keys) stands under the header, 12 in. Typed into, the outline narrows to the
+// matches and their ancestors, every kept branch open, and a `body-small`
+// `on-surface-variant` count 40 tall closes it ("2 of 38 headings", a polite
+// status); with no match, "No headings match" and a Clear (keyed
+// `key + 4194305`) that empties the filter.
+// ponytail: ancestors are not dimmed nor the matched text bold (the rows are the
+// caller's); Down into the results and Enter to the first match are not wired.
 fn outline_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], current: widget.Key, collapse: *const widget.Submit, extent: f32, width: f32, options: TreeOptions) -> (widget.Node, err) {
-    let (made, made_error) = treed_with(a, key, t, label, source, expanded, selected, toggle, pick, true, extent, width, current, options)
+    let (lower, lower_count, lower_error) = outline_filter_parts(a, key, t, width, options)
+    if lower_error != ok { ret (zero, lower_error) }
+    var shown = source
+    var opened = expanded
+    var closing = lower_count + 1usize
+    if options.has_filter && options.filter_len > 0usize {
+        let (held, held_error) = mem.alloc[FilteredTree](a, 1usize)
+        let (open, open_error) = mem.alloc[widget.Key](a, 256usize)
+        if held_error != ok || open_error != ok { ret (zero, TooLarge) }
+        held[0usize] = FilteredTree { inner: source, ctx: options.sort_ctx, text: options.sort_text, needle: options.filter[0usize..options.filter_len] }
+        var open_n = 0usize
+        var hits = 0usize
+        var all = 0usize
+        filter_walk(&held[0usize], 0u64, open, &open_n, &hits, &all)
+        shown = TreeSource { ctx: mem.cast[*void](&held[0usize]), count: filtered_count, key: filtered_key, has_children: filtered_has_children, build: filtered_build }
+        opened = open[0usize..open_n]
+        let (counted, counted_error) = outline_filter_count(a, key, t, width, hits, all, options.filtering)
+        if counted_error != ok { ret (zero, counted_error) }
+        lower[closing] = counted
+        closing += 1usize
+    }
+    let (made, made_error) = treed_with(a, key, t, label, shown, opened, selected, toggle, pick, true, extent, width, current, options)
     if made_error != ok { ret (zero, made_error) }
     var heading = control.text_options()
     heading.role = .TitleSmall
@@ -4696,11 +4807,69 @@ fn outline_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     band.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let flat = style.Length { Px: 0.0 }
     band.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: flat, right: style.Length { Px: 4.0 }, bottom: flat }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
-    if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, band, bar_parts[0usize..3usize])
-    parts[1usize] = made
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
+    lower[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, band, bar_parts[0usize..3usize])
+    lower[lower_count] = made
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), lower[0usize..closing]), ok)
+}
+
+// (D1538) The outline's column, its first slot left for the header: the filter
+// field in the second when `has_filter`; the next free slot.
+fn outline_filter_parts(a: *mem.Arena, key: widget.Key, t: *const control.Theme, width: f32, options: TreeOptions) -> ([]widget.Node, usize, err) {
+    var none: []widget.Node = zero
+    let (lower, lower_error) = mem.alloc[widget.Node](a, 5usize)
+    if lower_error != ok { ret (none, 0usize, TooLarge) }
+    if !options.has_filter { ret (lower, 1usize, ok) }
+    var field = control.field_options()
+    field.width = control.max_zero(width - 24.0)
+    field.height = 32.0
+    field.placeholder = "Filter headings"
+    let (typed, typed_error) = control.text_field(a, key + 4194304u64, t, "Filter headings", options.filter, options.filter_len, options.filtering, zero, field)
+    if typed_error != ok { ret (none, 0usize, typed_error) }
+    lower[4usize] = typed
+    lower[1usize] = widget.padded(0u64, 12.0, 4.0, 12.0, 4.0, style.defaults(), lower[4usize..5usize])
+    ret (lower, 2usize, ok)
+}
+
+// (D1538) The filter's closing line, 40 tall and centred: "HITS of ALL headings",
+// or "No headings match" and a Clear (`key + 4194305`) that empties the filter.
+fn outline_filter_count(a: *mem.Arena, key: widget.Key, t: *const control.Theme, width: f32, hits: usize, all: usize, filtering: widget.Change[str]) -> (widget.Node, err) {
+    let (said, said_error) = mem.alloc[u8](a, 48usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    let (clears, clears_error) = mem.alloc[FilterClear](a, 1usize)
+    let (presses, presses_error) = mem.alloc[widget.Submit](a, 1usize)
+    if said_error != ok || parts_error != ok || clears_error != ok || presses_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if hits == 0usize {
+        n = control.copy_text(said, "No headings match")
+    } else {
+        n = control.write_i64(said, i64(hits))
+        n += control.copy_text(said[n..48usize], " of ")
+        n += control.write_i64(said[n..48usize], i64(all))
+        n += control.copy_text(said[n..48usize], " headings")
+    }
+    var small = control.text_options()
+    small.role = .BodySmall
+    small.wrap = .None
+    let (words, words_error) = control.colored_text(a, 0u64, said[0usize..n], t, small, style.color(t.tokens, .OnSurfaceVariant))
+    if words_error != ok { ret (zero, words_error) }
+    parts[0usize] = words
+    var at = 1usize
+    if hits == 0usize {
+        clears[0usize] = FilterClear { filtering: filtering }
+        presses[0usize] = widget.Submit { ctx: ctx_of(&clears[0usize]), invoke: filter_clear_fire }
+        var plain = control.button_options()
+        plain.variant = .Plain
+        let (clear, clear_error) = control.button(a, key + 4194305u64, t, "Clear", &presses[0usize], plain)
+        if clear_error != ok { ret (zero, clear_error) }
+        parts[1usize] = clear
+        at = 2usize
+    }
+    parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 8.0 }, control.sized_style(width, 40.0), parts[0usize..at])
+    var sem: widget.Semantics = zero
+    sem.role = 26u8
+    sem.label = said[0usize..n]
+    sem.live = 1u8
+    ret (widget.semantics(0u64, sem, style.defaults(), parts[2usize..3usize]), ok)
 }
 
 fn no_cell(ctx: *void, a: *mem.Arena, row_key: widget.Key, column: usize, out: *widget.Node) -> err {
@@ -8582,6 +8751,30 @@ fn pull_options() -> PullOptions {
     ret out
 }
 
+// (D1537, docs/ux/components/PullToRefresh, done / nothing new / failed) The
+// snackbar a finished refresh raises, and whether it raises one: failed, "Couldn't
+// refresh. Check your connection" with Retry; new rows above the viewport, their
+// count ("1 new build", "12 new builds", from `one` and `many`); nothing new, "Up
+// to date" only when the refresh took over 2 s (`took`, nanoseconds); else none.
+// The new rows' tag is `control.status_label(.., "New", .Neutral, false)`, and
+// clearing it is the caller's.
+fn refresh_outcome_notice(a: *mem.Arena, added: usize, above: bool, took: i64, failed: bool, one: str, many: str, retry: widget.Submit, dismiss: widget.Submit) -> (control.Notice, bool, err) {
+    if failed { ret (control.Notice { text: "Couldn't refresh. Check your connection", action_label: "Retry", action: retry, dismiss: dismiss }, true, ok) }
+    if added == 0usize {
+        if took <= 2000000000i64 { ret (zero, false, ok) }
+        ret (control.Notice { text: "Up to date", action_label: "", action: zero, dismiss: dismiss }, true, ok)
+    }
+    if !above { ret (zero, false, ok) }
+    var noun = many
+    if added == 1usize { noun = one }
+    let (bytes, bytes_error) = mem.alloc[u8](a, noun.len + 26usize)
+    if bytes_error != ok { ret (zero, false, TooLarge) }
+    var n = control.write_i64(bytes, i64(added))
+    n += control.copy_text(bytes[n..bytes.len], " new ")
+    n += control.copy_text(bytes[n..bytes.len], noun)
+    ret (control.Notice { text: bytes[0usize..n], action_label: "", action: zero, dismiss: dismiss }, true, ok)
+}
+
 // v2 (D982, docs/ux/components/PullToRefresh). On touch: the content (keyed
 // `key`) follows a downward pull, one for one to 40 and half past it (120 at
 // most), and the release past 80 refreshes; the indicator, a 40
@@ -8596,7 +8789,8 @@ fn pull_options() -> PullOptions {
 // under it while refreshing. A group named `label`, busy while refreshing.
 // (D1289) The refreshing arc spins from the frame clock.
 // (D1414) Released, the content and indicator settle back.
-// ponytail: no new-row tag or outcome snackbar.
+// (D1537) The outcome snackbar is `refresh_outcome_notice`.
+// ponytail: a failure is announced politely like any snackbar, not assertively.
 fn pull_to_refresh_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, refreshing: bool, refresh: *const widget.Submit, options: PullOptions) -> (widget.Node, err) {
     let w = options.width
     let h = options.height
