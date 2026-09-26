@@ -25895,3 +25895,21 @@ and the fade and slide.
 on the right target moves it to the right slot. Dragged again and dropped in
 the open, it floats there. This passes on Windows and Linux, and
 `ui_containers2_v2`, `ui_containers3_v2` and `ui_workspace` still pass on both.
+
+## D1347 — Documents drag between editor groups
+
+The MultiDocumentWorkspace spec's cross-group drag. A tab drag's payload now
+names its group (`tab_payload`: a tag plus the group times 4096 plus the index
+plus one). A tab dropped on another group's tab reaches
+`DocumentTabsOptions.transfer` as a `DocumentTransfer`, while one dropped in its
+own strip reorders as before. The workspace's strips name their groups and
+relay a transfer as the new `WorkspaceEvent` kind `Transfer`: `group` and
+`index` the source, `to_group` the target (a new field) and `move.to` the
+place. The caller moves the document. D1344's lifted tab reads the tagged
+payload, and a dragged table header or dock panel no longer reads as a tab.
+Dropping on a strip's empty space is still to come.
+
+`ui_containers5_v2` drags the first group's first tab onto the second group's
+second tab: a Transfer from group 0, document 0, to group 1 at 1. This passes
+on Windows and Linux, and `ui_navigation5_v2`, `ui_workspace`,
+`ui_containers2_v2` and `ui_drag_drop` still pass on both.
