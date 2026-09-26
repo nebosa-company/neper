@@ -8105,8 +8105,8 @@ fn swipe_tile(a: *mem.Arena, key: widget.Key, t: *const control.Theme, act: *con
 // are the tiles' labels, trailing then leading.
 // (D1377) A fling opens or closes, the row rubber-bands past its leading stop,
 // and a released row settles from where it was let go.
-// ponytail: the actions reach the keyboard as the hover buttons; closing settles
-// on the emphasized curve rather than `ease-standard`.
+// (D1476) Closing settles on `ease-standard`.
+// ponytail: the actions reach the keyboard as the hover buttons.
 fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, actions: []const SwipeAction, revealed: bool, reveal: widget.Change[bool], options: SwipeOptions) -> (widget.Node, err) {
     if actions.len == 0usize || actions.len > 3usize || options.leading.len > 1usize { ret (zero, TooLarge) }
     let tile_count = actions.len + options.leading.len
@@ -8151,7 +8151,11 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
             settle_kept.residue = 0.0
             settle_kept.since = 0i64
         } else {
-            offset += settle_kept.residue * (1.0 - animation.ease(.EmphasizedDecelerate, gone))
+            // (D1476, docs/ux/components/SwipeActions, settle) A close settles on
+            // `ease-standard`.
+            var settle_curve: animation.Curve = .EmphasizedDecelerate
+            if !revealed { settle_curve = .EaseInOut }
+            offset += settle_kept.residue * (1.0 - animation.ease(settle_curve, gone))
             widget.request_animation_frame(t.runtime)
         }
     }

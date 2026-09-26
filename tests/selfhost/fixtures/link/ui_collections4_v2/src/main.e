@@ -450,7 +450,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if root_band_error != ok || testing.pump(&harness, root_band, now) != ok { os.exit(188i32) }
     let (banded, has_banded) = bounds(&harness, &runtime, 500u64)
     if !has_banded || !near(banded.x, row.x + 30.0) { os.exit(189i32) }
-    if !release(&harness, row.x + 350.0, row.y + 50.0) || s.revealed || !settle_rows(&harness, &f, &theme, &touch, s, &now) { os.exit(190i32) }
+    if !release(&harness, row.x + 350.0, row.y + 50.0) || s.revealed { os.exit(190i32) }
+    // (D1476) The close settles on `ease-standard`: half way through its 250 ms
+    // the row has come back half of its 30 (the emphasized curve would leave 3).
+    let (root_closing, root_closing_error) = build(&f, &theme, &touch, s)
+    if root_closing_error != ok || testing.pump(&harness, root_closing, now) != ok { os.exit(240i32) }
+    let (root_halfway, root_halfway_error) = build(&f, &theme, &touch, s)
+    if root_halfway_error != ok || testing.pump(&harness, root_halfway, time.Instant { nanos: now.nanos + 125000000i64 }) != ok { os.exit(241i32) }
+    let (root_halfway_seen, root_halfway_seen_error) = build(&f, &theme, &touch, s)
+    if root_halfway_seen_error != ok || testing.pump(&harness, root_halfway_seen, time.Instant { nanos: now.nanos + 125000000i64 }) != ok { os.exit(243i32) }
+    let (halfway, has_halfway) = bounds(&harness, &runtime, 500u64)
+    if !has_halfway || !(halfway.x > row.x + 10.0) || !(halfway.x < row.x + 20.0) { os.exit(242i32) }
+    if !settle_rows(&harness, &f, &theme, &touch, s, &now) { os.exit(190i32) }
     if !press(&harness, row.x + 250.0, row.y + 50.0) || !move_to(&harness, row.x + 240.0, row.y + 50.0) || !move_to(&harness, row.x + 228.0, row.y + 50.0) || !release(&harness, row.x + 228.0, row.y + 50.0) || !s.revealed { os.exit(191i32) }
     let (root_fling, root_fling_error) = build(&f, &theme, &touch, s)
     if root_fling_error != ok || testing.pump(&harness, root_fling, time.Instant { nanos: now.nanos + 50000000i64 }) != ok { os.exit(192i32) }

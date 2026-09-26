@@ -27270,3 +27270,9 @@ The PageIndicator spec draws the current page as "a 24 x 8 primary pill" that "s
 The Row spec animates selection: "Selection changes animate the fill in `duration-short-3` with `ease-standard`". A list row changed from its rest look to `secondary-container` in one frame. `row_acting`, and through it `row_of`, now eases one share over `duration-short-3`, kept on the row (slot `key + 1048599`, as the list box's rows do since D1440). The share mixes the rest fill and text colours toward the selected ones. Reduced motion changes at once. Every built row now holds one ease cell. `ui_collections4_v2`'s old state pool (64 states, 512 bytes, 2 classes) ran out under it and silently lost the touch lift, so its pool is raised to 256, 8192 and 8. That was the D1413-era trap again.
 
 `ui_collections_v2` checks this on Windows and Linux: 50 ms after a row is selected it is not yet `secondary-container`, and a second later it is. Against the old collection the check fails (exit 237). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1476 — A swipe row closes on ease-standard
+
+The SwipeActions spec settles a released row over `duration-medium-1` "with `ease-emphasized-decelerate`; close with `ease-standard`". D1377 used the emphasized curve both ways, so a closing row snapped most of the way back in its first frames. When the row is not revealed, the settle now uses `ease-standard`. The opening settle keeps the emphasized curve.
+
+`ui_collections4_v2` checks this on Windows and Linux. A row pulled 30 past its rest and let go stands half way back, between 10 and 20, at 125 ms. The emphasized curve would leave about 3, and against the old collection the check fails (exit 242).
