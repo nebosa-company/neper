@@ -139,6 +139,16 @@ fn tree_build(ctx: *void, a: *mem.Arena, key: widget.Key, out: *widget.Node) -> 
     ret ok
 }
 
+// (D1533) A row's name, which the sorted tree table orders siblings by.
+fn tree_sort_text(ctx: *void, key: widget.Key, column: usize) -> str {
+    if key == 1u64 { ret "A" }
+    if key == 11u64 { ret "A1" }
+    if key == 111u64 { ret "A1a" }
+    if key == 12u64 { ret "A2" }
+    if key == 2u64 { ret "B" }
+    ret "B1"
+}
+
 fn tree_cell(ctx: *void, a: *mem.Arena, key: widget.Key, column: usize, out: *widget.Node) -> err {
     *out = widget.box(0u64, control.sized_style(20.0, 10.0), zero)
     ret ok
@@ -673,6 +683,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if testing.by_key(&large_harness, 10000u64).count != 1usize || testing.by_key(&large_harness, 10020u64).count != 0usize { os.exit(92i32) }
     if widget.focus(&large_runtime, testing.by_key(&large_harness, 10000u64).element) != ok || testing.press_key(&large_harness, 35u32, zero) != ok || !(logs[0usize].offset > 16000.0) { os.exit(93i32) }
+    // (D1533) Sorted within each parent, descending by name: B over A, and under A,
+    // A2 over A1 -- the hierarchy kept -- with the footer's counts under the rows.
+    f = mem.arena_from(frame_storage)
+    var sorted_options: collection.TreeOptions = zero
+    sorted_options.sorts = true
+    sorted_options.sort_ctx = mem.cast[*void](&logs[0usize])
+    sorted_options.sort_text = tree_sort_text
+    sorted_options.footer = true
+    logs[0usize].large = false
+    let sorted_source = collection.TreeSource { ctx: mem.cast[*void](&logs[0usize]), count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
+    var sorted_columns: [2]collection.Column = zero
+    sorted_columns[0usize] = collection.Column { title: "Name", width: 200.0 }
+    sorted_columns[1usize] = collection.Column { title: "Size", width: 80.0 }
+    var sorted_open: [2]widget.Key = zero
+    sorted_open[0usize] = 1u64
+    sorted_open[1usize] = 11u64
+    var sorted_chosen: [1]widget.Key = zero
+    sorted_chosen[0usize] = 2u64
+    let sorted_ctx = mem.cast[*void](&logs[0usize])
+    let (sorted_table, sorted_table_error) = collection.tree_table_with(&f, 600u64, &theme, "Sorted", sorted_columns[..], sorted_source, collection.CellSource { ctx: sorted_ctx, cell: tree_cell }, sorted_open[..], sorted_chosen[..], widget.Change[widget.Key] { ctx: sorted_ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: sorted_ctx, invoke: on_pick }, 0usize, true, widget.Change[usize] { ctx: sorted_ctx, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: sorted_ctx, invoke: on_reorder }, widget.Change[collection.ColumnResize] { ctx: sorted_ctx, invoke: on_resize }, 0.0, sorted_options)
+    let (sorted_page, sorted_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if sorted_table_error != ok || sorted_page_error != ok { os.exit(99i32) }
+    sorted_page[0usize] = sorted_table
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 300.0), sorted_page[0usize..1usize]), time.Instant { nanos: 2500000000i64 }) != ok { os.exit(100i32) }
+    let (sorted_a, has_sorted_a) = bounds(&harness, &runtime, 1u64)
+    let (sorted_b, has_sorted_b) = bounds(&harness, &runtime, 2u64)
+    let (sorted_a1, has_sorted_a1) = bounds(&harness, &runtime, 11u64)
+    let (sorted_a2, has_sorted_a2) = bounds(&harness, &runtime, 12u64)
+    if !has_sorted_a || !has_sorted_b || !has_sorted_a1 || !has_sorted_a2 { os.exit(101i32) }
+    if !(sorted_b.y < sorted_a.y) || !(sorted_a.y < sorted_a2.y) || !(sorted_a2.y < sorted_a1.y) { os.exit(102i32) }
+    if testing.by_text(&harness, "5 items shown, 1 selected").count == 0usize { os.exit(103i32) }
     if testing.close(&large_harness) != ok || widget.close(&large_runtime) != ok || testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
     try io.print("ui collections3 v2 ok\n")
     ret ok
