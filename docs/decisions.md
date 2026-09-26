@@ -27769,3 +27769,24 @@ A selection failure on a copied instruction now walks the instruction's origin c
 Selection fails only when a table fills, so a fault makes the case reproducible, as `--fault-write` does for publication. `--fault-select-inlined DEPTH` refuses the first copied instruction whose chain is at least DEPTH bodies deep, with its own reason in the message. The corpus gains `select_inlined`: `main` calls `deep.outer`, which calls `deep.inner`, and a release build under `--fault-select-inlined 2 -j 1` gives one diagnostic at `deep.e:2:9` naming `main.main` and `deep.outer`. The golden is the same on both hosts, both suites pin it, and it validates against the schema. At depth 1, the diagnostic lands on `deep.outer`'s own line.
 
 A selection failure is still printed from the worker that meets it. Two workers failing at once can interleave their output, which the fault shows without `-j 1`. That path predates this row and is left as it stands. The fixed point holds on both hosts, and C048 closes at 1.
+
+## D1529 — Spec surfaces per variant and the deferred-library fixture manifest
+
+C050's gap clause named three things.
+
+**The SL05 drain edge.** D580 and D581 closed it after C050's evidence was last written. D580 added a bounded final drain for a descendant that keeps the capture writers. D581 covers the whole termination grace spent on a descendant that ignores cooperative termination. The queue now records both.
+
+**Variant-composed spec surfaces.** `e.mem`, `e.meta` and `e.os` are `surface:"spec"`: their source is a target variant (`os.windows.e`, `os.linux.e`) beside compiler seeds, so the module-surface gate had left them out. `check_module_surfaces.py` now checks each spec module per target. It reads the declarations from the target's variant file, the one the loader uses for that target (D97), and checks them with the delivered-catalogue rule: every catalogue declaration must be written in the variant or seeded. With `--compiler` it indexes the variant and compares exact signatures wherever the index gives one. Without a target it checks both variants. Both suites already run the gate with the compiler on their own host, so each host's variant is now held.
+
+The first run found seven places where the `e.os` catalogue had fallen behind its source:
+
+- `WindowOptions` had gained `mode`, whose type `WindowMode` the catalogue did not declare.
+- `MonitorInfo` had gained its work area.
+- `AccessibleNode` had grown with the accessibility work.
+- Four functions spelled their byte parameter `buffer` where the catalogue said `buf`.
+
+The catalogue now states what is delivered, `WindowMode` included, and the gate passes on Windows and Linux.
+
+**The deferred-library fixture manifest.** `docs/library-fixtures.json` lists every partial module (121) with its milestone and schedule, its catalogue and delivered counts, the declarations still pending (93 in all), and the link fixtures whose sources `use` it. `scripts/library_fixtures.py --write` produces the file. Without the flag the script checks that the committed file is exactly what the repository produces, that each named fixture exists, and that no module with a delivered declaration lacks an executable fixture. Today every partial module has one. Both suites run the check.
+
+`tests/test_module_plan.py` fails at HEAD, before this row, on `e.algo.uuid` and other catalogue items (duplicate import qualifiers). Nothing here touches that, and it is left for its own work. C050 closes at 1.

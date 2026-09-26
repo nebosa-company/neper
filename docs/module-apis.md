@@ -5684,13 +5684,14 @@ type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: 
 type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 type Window = struct { raw: usize }
-type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool }
+type WindowMode = enum u8 { Windowed, Maximized, Fullscreen }
+type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool, mode: WindowMode }
 type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focused: bool, visible: bool }
 type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
-type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
-type AccessibleNode = struct { id: u32, parent: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u8, actions: u8, x: f32, y: f32, width: f32, height: f32 }
+type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
+type AccessibleNode = struct { id: u32, generation: u32, parent: u32, parent_generation: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u16, actions: u32, sort: u8, live: u8, row: u32, column: u32, row_count: u32, column_count: u32, level: u8, selection_start: usize, selection_end: usize, labelled_by: u32, labelled_by_generation: u32, described_by: u32, described_by_generation: u32, error_by: u32, error_by_generation: u32, controls: u32, controls_generation: u32, active: u32, active_generation: u32, relation_flags: u8, x: f32, y: f32, width: f32, height: f32 }
 error NotFound
 error Denied
 error Exists
@@ -5705,8 +5706,8 @@ fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err)
 fn create_new(a: *mem.Arena, path: str) -> (File, err)
 fn read(f: File, buf: []u8) -> (usize, err)
 fn write(f: File, buf: []const u8) -> (usize, err)
-fn read_detail(f: File, buf: []u8, detail: *ErrorDetail) -> (usize, err)
-fn write_detail(f: File, buf: []const u8, detail: *ErrorDetail) -> (usize, err)
+fn read_detail(f: File, buffer: []u8, detail: *ErrorDetail) -> (usize, err)
+fn write_detail(f: File, buffer: []const u8, detail: *ErrorDetail) -> (usize, err)
 fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err)
 fn copy_bytes(dst: []u8, src: []const u8)
 fn touch(p: *const u8, n: usize)
@@ -5733,7 +5734,7 @@ fn canonical(a: *mem.Arena, path: str) -> (str, err)
 fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err
 fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
 fn pipe() -> (File, File, err)
-fn pipe_read(f: File, buf: []u8) -> (usize, err)
+fn pipe_read(f: File, buffer: []u8) -> (usize, err)
 fn dup(f: File) -> (File, err)
 fn spawn(a: *mem.Arena, argv: []const str, stdio: Stdio) -> (Proc, err)
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err)
@@ -5743,7 +5744,7 @@ fn kill(p: Proc) -> err
 fn exit(code: i32)
 fn args(a: *mem.Arena) -> ([]str, err)
 fn env(a: *mem.Arena, name: str) -> (str, err)
-fn random(buf: []u8) -> err
+fn random(buffer: []u8) -> err
 fn page_size() -> usize
 fn reserve(n: usize) -> (*u8, err)
 fn commit(p: *u8, n: usize) -> err

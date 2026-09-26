@@ -17,6 +17,10 @@ $compilerAsm = Join-Path $testBuild 'neper-self.asm'
 if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
 & python (Join-Path $repo 'scripts\check_module_surfaces.py') --compiler $compiler --arch x64 --os windows
 if ($LASTEXITCODE -ne 0) { throw 'compiler-resolved module surface validation failed' }
+# The deferred-library fixture manifest (D1529): current, and every delivered API
+# with an executable fixture.
+& python (Join-Path $repo 'scripts\library_fixtures.py')
+if ($LASTEXITCODE -ne 0) { throw 'the deferred-library fixture manifest is stale or unevidenced' }
 # The bootstrap's rules for `src/` (D794), before the next ten-minute build finds one.
 & python (Join-Path $repo 'scripts\lint_bootstrap.py') (Join-Path $repo 'src')
 if ($LASTEXITCODE -ne 0) { throw 'src/ breaks a bootstrap rule (scripts/lint_bootstrap.py)' }

@@ -67,8 +67,18 @@ def seeded_intrinsics():
     return seeded
 
 
-def source_declarations(module):
-    path = ROOT / 'lib' / Path(*module.split('.')).with_suffix('.e')
+def module_path(module, target_os=None):
+    """A module's source; for a variant-composed module, the target's variant (D1529)."""
+    base = ROOT / 'lib' / Path(*module.split('.')).with_suffix('.e')
+    if target_os:
+        variant = base.with_name('%s.%s.e' % (base.stem, target_os))
+        if variant.exists():
+            return variant
+    return base
+
+
+def source_declarations(module, target_os=None):
+    path = module_path(module, target_os)
     if not path.exists():
         return None
     return set(DECLARATION.findall(path.read_text(encoding='utf-8')))
@@ -106,7 +116,7 @@ def normalize_declaration(text):
 
 def compiler_declarations(compiler, module, arch, target_os):
     """Return module-scope declarations from one successful semantic index."""
-    path = ROOT / 'lib' / Path(*module.split('.')).with_suffix('.e')
+    path = module_path(module, target_os)
     command = [str(compiler), 'index-file', str(path), str(ROOT), arch, target_os,
                '--json']
     completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
@@ -204,6 +214,34 @@ def main(argv=None):
     failures = []
     exact_checked = 0
     partial_checked = 0
+    spec_checked = 0
+    # The variant-composed spec surfaces (D1529): each target's variant, or both.
+    spec_targets = [args.target_os] if args.target_os else ['windows', 'linux']
+    for entry in modules:
+        if entry.get('surface') != 'spec':
+            continue
+        module = entry['name']
+        fenced = surfaces.get(module)
+        if fenced is None:
+            failures.append('%s: a spec surface with no fence in docs/module-apis.md' % module)
+            continue
+        module_seeds = seeded.get(module, set())
+        for target in spec_targets:
+            written = source_declarations(module, target)
+            if written is None:
+                failures.append('%s: no lib/e source for %s' % (module, target))
+                continue
+            failures.extend('%s (%s)' % (problem, target) for problem in
+                            compare_delivered(module, fenced, written, module_seeds))
+            if args.compiler:
+                compiled, failure = compiler_declarations(args.compiler, module, args.arch, target)
+                if failure:
+                    failures.append(failure)
+                else:
+                    failures.extend('%s (%s)' % (problem, target) for problem in
+                                    compare_delivered_compiler_declarations(
+                                        module, declarations.get(module, {}), compiled, module_seeds))
+        spec_checked += 1
     for entry in modules:
         exact = entry.get('surface') == 'source'
         partial = (entry.get('surface') == 'partial'
@@ -249,13 +287,13 @@ def main(argv=None):
     for failure in failures:
         print('FAIL: %s' % failure)
     if failures:
-        print('%d exact and %d partial module(s) checked, %d problem(s)' %
-              (exact_checked, partial_checked, len(failures)))
+        print('%d exact, %d partial and %d spec module(s) checked, %d problem(s)' %
+              (exact_checked, partial_checked, spec_checked, len(failures)))
         return 1
     evidence = ' and compiler-resolved declarations' if args.compiler else ''
-    print('PASS: %d exact source surfaces and %d delivered M1/M2 partial '
-          'catalogues match their source%s' %
-          (exact_checked, partial_checked, evidence))
+    print('PASS: %d exact source surfaces, %d delivered M1/M2 partial catalogues and '
+          '%d variant-composed spec surfaces (%s) match their source%s' %
+          (exact_checked, partial_checked, spec_checked, ', '.join(spec_targets), evidence))
     return 0
 
 
