@@ -5120,16 +5120,25 @@ impact_refused=0
 (cd "$conformance_root/tools" && $test_build/neper-self test-impact-file test_project/src/nested/deep.e "$repo" x64 linux --json --changed nowhere > "$test_build/conformance-tools-impact-refused.jsonl") || impact_refused=$?
 [ "$impact_refused" -eq 2 ]
 # A query over a program that does not check (D520, H08, H18): the stream, exit 1.
-for broken_case in "context-file context_broken" "uses-file uses_broken" "plan-rename-file plan_rename_broken"; do
+# (D1554) The context case asks for the function that fails, which has no page.
+for broken_case in "context-file context_broken main" "uses-file uses_broken helper" "plan-rename-file plan_rename_broken helper"; do
     set -- $broken_case
     broken_tail=""
     if [ "$1" = "plan-rename-file" ]; then broken_tail="--to aide"; fi
     broken_status=0
-    (cd "$conformance_root/tools" && "$test_build/neper-self" "$1" query_broken.e "$repo" x64 linux --json --symbol query_broken.helper $broken_tail > "$test_build/conformance-tools-$2.jsonl" 2> "$test_build/conformance-tools-$2.stderr") || broken_status=$?
+    (cd "$conformance_root/tools" && "$test_build/neper-self" "$1" query_broken.e "$repo" x64 linux --json --symbol "query_broken.$3" $broken_tail > "$test_build/conformance-tools-$2.jsonl" 2> "$test_build/conformance-tools-$2.stderr") || broken_status=$?
     [ "$broken_status" -eq 1 ]
     [ ! -s "$test_build/conformance-tools-$2.stderr" ]
     cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { echo "$1 --json over a program that does not check differs from the conformance corpus" >&2; exit 1; }
 done
+# A partial answer (D1554, H08): a function that checks, in a program that does
+# not, has its page -- the diagnostic after the subject, the facts, a result of
+# exit 1 marked partial.
+partial_status=0
+(cd "$conformance_root/tools" && "$test_build/neper-self" context-file query_partial.e "$repo" x64 linux --json --symbol query_partial.later > "$test_build/conformance-tools-context-partial.jsonl" 2> "$test_build/conformance-tools-context-partial.stderr") || partial_status=$?
+[ "$partial_status" -eq 1 ]
+[ ! -s "$test_build/conformance-tools-context-partial.stderr" ]
+cmp -s "$test_build/conformance-tools-context-partial.jsonl" "$conformance_root/tools/context_partial.x64-linux.expected.jsonl" || { echo "context-file --json over a function that checks in a program that does not differs from the conformance corpus" >&2; exit 1; }
 # A dependency that does not parse (D521, H18): the stream under the query's header, exit 1.
 for syntax_case in "context-file context_syntax" "uses-file uses_syntax" "explain-file explain_syntax"; do
     set -- $syntax_case

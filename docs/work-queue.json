@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C053",
-      "category": "compiler",
-      "group": "Front end and language",
-      "order": 53,
-      "title": "Bounded semantic context for harnesses (v1 precursor for T2 H08)",
-      "score": 0.84,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "`context-file --json --symbol module.name [--budget N] [--cursor N]` (D361): a subject record bound to the source SHA-256, target and check policy, then facts with provenance -- signature, `own` parameters, the rules that held or the unsafe boundary, every resolved call, dispatch, instantiation and discard with its span -- under a record budget with omission counts, a completeness flag and a deterministic cursor; pinned per host; the caller's contract from the signature -- allocation, borrow, mutation, errors, threads (D396) -- and the same per module as a catalogue (D397); `--bytes N` bounds a page in serialized bytes and the result reports `bytes` (D400); a type subject answers with its fields or members, its layout on the target and what the rules make of a value -- resource, borrow or copy (D419). a constant or a global is a subject too: its declaration, its settled value or its initialisation, and for a global that every thread shares it (D437). a function's page names every module its module imports with the interface hash the manifest records (D498), so an answer can be held against the interfaces it rests on. A broken source answers as a stream (D520): every query over a program that does not check emits its header, the diagnostic and a result of exit 1 on stdout, where `context-file`, `uses-file` and the plans had written text to stderr and nothing a harness could read; pinned over `query_broken` for three commands on both hosts. Borrow origins inside a body are facts (D1553): the region a value was taken in (the innermost live mark of its arena) and the storage a thread start lends, each a compiler-proved `borrow` record at the binding; the context, contract, nested-instance and batch goldens gain them on both hosts. Not yet: partial answers over the functions that do check"
-    },
-    {
       "id": "C057",
       "category": "compiler",
       "group": "Front end and language",

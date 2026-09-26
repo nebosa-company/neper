@@ -26,6 +26,9 @@ error InvalidPlan
 // A query answered with a refusal (D406, D409): its stream has been written, with a
 // result of exit code 2; the caller decides whether the process ends with it.
 error Refused
+// (D1554) A partial context page the subject cannot have (it did not check, or is
+// not a function): nothing is written, and the driver answers as D520 does.
+error NotChecked
 
 // One record at a time: built here, printed whole, so a line is never split.
 type Out = struct {
@@ -3968,12 +3971,25 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
 }
 
 fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, budget: usize, byte_budget: usize, cursor: usize, target_name: str, checks: str) -> err {
-    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
-    if storage_error != ok { ret storage_error }
-    var out: Out = zero
-    out.bytes = storage
-    try header(&out, "context")
-    // The subject: `module.name`, a declared function of the program.
+    var none: []const bool = zero
+    ret context_json_with(a, c, g, subject, budget, byte_budget, cursor, target_name, checks, "", none)
+}
+
+// (D1554, C053, H08) The page of a function that checked, in a program that does
+// not: `diagnostic` is the check's diagnostic record, written after the subject
+// record, and the result is `ok: false`, exit 1, `complete: false` and `partial:
+// true`. `failed` marks the functions whose bodies failed; a subject that is one
+// of them, or is not a function, has no partial page: nothing is written and the
+// answer is `NotChecked`, for the driver to answer as D520 does.
+fn context_json_partial(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, budget: usize, byte_budget: usize, cursor: usize, target_name: str, checks: str, diagnostic: str, failed: []const bool) -> err {
+    let function_index = context_function_index(c, g, subject)
+    if function_index == c.function_count || (function_index < failed.len && failed[function_index]) { ret NotChecked }
+    ret context_json_with(a, c, g, subject, budget, byte_budget, cursor, target_name, checks, diagnostic, failed)
+}
+
+// The function a context subject names (`module.name`): a declared function of
+// the program, the non-generic one first; `function_count` for none.
+fn context_function_index(c: *check.Checker, g: *graph.Graph, subject: str) -> usize {
     var dot = subject.len
     var at = 0usize
     while at < subject.len {
@@ -4005,6 +4021,22 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
             }
         }
     }
+    ret function_index
+}
+
+fn context_json_with(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, budget: usize, byte_budget: usize, cursor: usize, target_name: str, checks: str, diagnostic: str, failed: []const bool) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "context")
+    var dot = subject.len
+    var at = 0usize
+    while at < subject.len {
+        if subject[at] == 46u8 { dot = at }
+        at += 1usize
+    }
+    let function_index = context_function_index(c, g, subject)
     if function_index == c.function_count {
         // A type (D419, H08): the subject names an aggregate of the program.
         if dot != subject.len {
@@ -4039,6 +4071,11 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
     out.lines = module.lines
     // The subject record: identity of the snapshot and the subject, always written.
     try subject_record(&out, g, subject, root, relative, path, module.text, digest, target_name, checks, "", function.source_start)
+    // (D1554) A partial page names what does not check, before the facts.
+    if diagnostic.len != 0usize {
+        try text(&out, diagnostic)
+        try flush(&out)
+    }
     var page: Page = zero
     page.cursor = cursor
     page.budget = budget
@@ -4190,12 +4227,13 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         try flush(&out)
         written += 1usize
     }
-    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
+    if diagnostic.len != 0usize { try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"records\":") } else { try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":") }
     try decimal(&out, written)
     try text(&out, ",\"omitted\":")
     try decimal(&out, omitted)
     try text(&out, ",\"complete\":")
-    if omitted == 0usize && !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    if omitted == 0usize && !c.explain_overflow && diagnostic.len == 0usize { try text(&out, "true") } else { try text(&out, "false") }
+    if diagnostic.len != 0usize { try text(&out, ",\"partial\":true") }
     try text(&out, ",\"cursor\":")
     try decimal(&out, cursor + written)
     // The serialized bytes before this record (D400, H18): what the harness held.

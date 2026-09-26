@@ -5076,6 +5076,46 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     ret write_all(&out, "}}\n")
 }
 
+// (D1554, C053, H08) `context-file --symbol` over a program that does not check,
+// for a subject that did: the check's diagnostic as a record, captured, and the
+// subject's page with it, partial. `tool.NotChecked` when the subject has none.
+fn partial_context(a: *mem.Arena, report: *Sink, checker: *check.Checker, loaded: *graph.Graph, args: []str, failed: []bool, check_error: err) -> err {
+    let (captured, captured_error) = mem.alloc[u8](a, 16384usize)
+    if captured_error != ok { ret captured_error }
+    var diagnostic = capture_sink(captured)
+    diagnostic.json = true
+    try print_check_diagnostic(&diagnostic, loaded, checker, check_error)
+    // The record is the captured text up to its first newline.
+    var line_end = 0usize
+    while line_end < diagnostic.count && line_end < captured.len && captured[line_end] != 10u8 { line_end += 1usize }
+    let line = captured[0usize..line_end]
+    var budget = 64usize
+    var byte_budget = 0usize
+    var cursor = 0usize
+    var checks = "retained"
+    var flag_at = 9usize
+    while flag_at < args.len {
+        if same(args[flag_at], "--unchecked") {
+            checks = "off"
+            flag_at += 1usize
+        } else {
+            if flag_at + 1usize >= args.len { break }
+            if same(args[flag_at], "--budget") && decimal_ok(args[flag_at + 1usize]) { budget = decimal_value(args[flag_at + 1usize]) }
+            if same(args[flag_at], "--bytes") && decimal_ok(args[flag_at + 1usize]) { byte_budget = decimal_value(args[flag_at + 1usize]) }
+            if same(args[flag_at], "--cursor") && decimal_ok(args[flag_at + 1usize]) { cursor = decimal_value(args[flag_at + 1usize]) }
+            flag_at += 2usize
+        }
+    }
+    var target_storage: [64]u8 = zero
+    var target_at = tool.nptest_copy(target_storage[..], 0usize, args[4usize])
+    target_storage[target_at] = 45u8
+    target_at = tool.nptest_copy(target_storage[..], target_at + 1usize, args[5usize])
+    let answered = tool.context_json_partial(a, checker, loaded, args[8usize], budget, byte_budget, cursor, target_storage[0usize..target_at], checks, line, failed)
+    // The page wrote its own header; the held one is dropped.
+    if answered == ok { report.pending_header = "" }
+    ret answered
+}
+
 // The file the refusal is about (D547, H29), named in the message as the plan's
 // precondition spells it and carried as `symbol`, so a harness re-plans from it.
 fn apply_plan_refused_file(report: *Sink, code: str, path: str, tail: str) -> err {
@@ -10776,7 +10816,32 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     let (explains, explains_error) = mem.alloc[check.Explain](a, 524288usize)
     if explains_error != ok { ret explains_error }
     checker.explains = explains
-    let check_error = check.run(&checker, &resolver, &loaded)
+    // (D1554, C053, H08) A context page goes on past a body that fails, so a
+    // function that does check can still be answered for.
+    var check_error = ok
+    var failed: []bool = zero
+    if kind == 2usize {
+        let (failed_storage, failed_error) = mem.alloc[bool](a, checker.functions.len)
+        if failed_error != ok { ret failed_error }
+        // An allocation is not cleared: nothing has failed yet.
+        var clearing = 0usize
+        while clearing < failed_storage.len {
+            failed_storage[clearing] = false
+            clearing += 1usize
+        }
+        failed = failed_storage
+        check_error = check.run_partial(&checker, &resolver, &loaded, failed)
+    } else {
+        check_error = check.run(&checker, &resolver, &loaded)
+    }
+    if check_error != ok && kind == 2usize && check_error != mem.Exhausted {
+        let partial_error = partial_context(a, report, &checker, &loaded, args, failed, check_error)
+        if partial_error != tool.NotChecked {
+            if partial_error != ok { ret partial_error }
+            os.exit(1i32)
+            ret ok
+        }
+    }
     if check_error != ok {
         // `explain-file` over a program that does not check (D430, H06): the stream
         // still -- what the checker decided before it stopped, the dispatch that found

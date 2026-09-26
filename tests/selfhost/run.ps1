@@ -5550,7 +5550,8 @@ foreach ($impactCase in @(@('helper', 'impact'), @('nested.deep', 'impact_local'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" test-impact-file test_project/src/nested/deep.e `"$repo`" x64 windows --json --changed nowhere > `"$(Join-Path $testBuild 'conformance-tools-impact-refused.jsonl')`""
 if ($LASTEXITCODE -ne 2) { throw "test-impact-file over an unknown module did not exit 2 (got $LASTEXITCODE)" }
 # A query over a program that does not check (D520, H08, H18): the stream, exit 1.
-foreach ($brokenCase in @(@('context-file', '--symbol', 'query_broken.helper', 'context_broken'), @('uses-file', '--symbol', 'query_broken.helper', 'uses_broken'), @('plan-rename-file', '--symbol', 'query_broken.helper', 'plan_rename_broken'))) {
+# (D1554) The context case asks for the function that fails, which has no page.
+foreach ($brokenCase in @(@('context-file', '--symbol', 'query_broken.main', 'context_broken'), @('uses-file', '--symbol', 'query_broken.helper', 'uses_broken'), @('plan-rename-file', '--symbol', 'query_broken.helper', 'plan_rename_broken'))) {
     $brokenActual = Join-Path $testBuild "conformance-tools-$($brokenCase[3]).jsonl"
     $brokenStderr = Join-Path $testBuild "conformance-tools-$($brokenCase[3]).stderr"
     $brokenTail = ''
@@ -5560,6 +5561,15 @@ foreach ($brokenCase in @(@('context-file', '--symbol', 'query_broken.helper', '
     if ((Get-Item -LiteralPath $brokenStderr).Length -ne 0) { throw "$($brokenCase[0]) --json over a program that does not check wrote to stderr" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $brokenActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($brokenCase[3]).expected.jsonl")).Hash) { throw "$($brokenCase[0]) --json over a program that does not check differs from the conformance corpus" }
 }
+# A partial answer (D1554, H08): a function that checks, in a program that does
+# not, has its page -- the diagnostic after the subject, the facts, a result of
+# exit 1 marked partial.
+$partialActual = Join-Path $testBuild 'conformance-tools-context-partial.jsonl'
+$partialStderr = Join-Path $testBuild 'conformance-tools-context-partial.stderr'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file query_partial.e `"$repo`" x64 windows --json --symbol query_partial.later > `"$partialActual`" 2> `"$partialStderr`""
+if ($LASTEXITCODE -ne 1) { throw "context-file --json over a function that checks in a program that does not exited $LASTEXITCODE, not 1" }
+if ((Get-Item -LiteralPath $partialStderr).Length -ne 0) { throw 'context-file --json partial page wrote to stderr' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $partialActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/context_partial.x64-windows.expected.jsonl')).Hash) { throw 'context-file --json over a function that checks in a program that does not differs from the conformance corpus' }
 # A dependency that does not parse (D521, H18): the stream under the query's header, exit 1;
 # and `index-file` over the file itself begins with its header.
 foreach ($syntaxCase in @(@('context-file', 'context_syntax'), @('uses-file', 'uses_syntax'), @('explain-file', 'explain_syntax'))) {
