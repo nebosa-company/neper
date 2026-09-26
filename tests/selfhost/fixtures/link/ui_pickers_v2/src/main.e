@@ -543,6 +543,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if modal_error != ok || modal_page_error != ok { os.exit(108i32) }
         modal_page[0usize] = modal
         if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), modal_page[0usize..1usize]), time.Instant { nanos: 3500000000i64 + i64(modal_step) }) != ok { os.exit(109i32) }
+        // (D1369) "Select date" is a label-medium label, one 16 line tall.
+        let (select_label, has_select_label) = bounds(&harness, &runtime, 1201u64)
+        if !has_select_label || select_label.height > 17.0 { os.exit(142i32) }
         if modal_step == 0usize {
             if testing.by_text(&harness, "Tue, Sep 15").count == 0usize || testing.by_text(&harness, "Select date").count == 0usize { os.exit(110i32) }
             var no_day: time.Date = zero

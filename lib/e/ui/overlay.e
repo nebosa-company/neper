@@ -850,6 +850,19 @@ fn dialog_as(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
 }
 
 fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit, has_icon: bool, icon: control.GlyphKind, destructive_icon: bool) -> (widget.Node, err) {
+    let (made, made_error) = dialog_as_look(a, key, t, title, content, buttons, open, described, semantic_role, busy, fallback, has_icon, icon, destructive_icon, .HeadlineSmall, .OnSurface)
+    ret (made, made_error)
+}
+
+// (D1369) A dismissable dialog whose title is a `label-medium` label in
+// `on-surface-variant` (the pickers' "Select date" and "Select time").
+fn dialog_labelled(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = dialog_as_look(a, key, t, title, content, buttons, true, false, 23u8, false, *dismiss, false, .Info, false, .LabelMedium, .OnSurfaceVariant)
+    ret (made, made_error)
+}
+
+// (D1369) `dialog_as_state` with the title's role and colour.
+fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit, has_icon: bool, icon: control.GlyphKind, destructive_icon: bool, title_role: style.TextRole, title_ink: style.ColorRole) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var submit: widget.Submit = zero
     var cancel: widget.Submit = zero
@@ -886,9 +899,9 @@ fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var heading = control.text_options()
-    heading.role = .HeadlineSmall
+    heading.role = title_role
     if has_icon { heading.align = .Center }
-    let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, .OnSurface))
+    let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, title_ink))
     if title_error != ok { ret (zero, title_error) }
     let (titled, titled_error) = mem.alloc[widget.Node](a, 1usize)
     if titled_error != ok { ret (zero, TooLarge) }
@@ -3785,8 +3798,9 @@ type DateModalOptions = struct { typing: bool, toggle_mode: *const widget.Submit
 // with the calendar) over a divider, then the calendar (`key + 40`) of the
 // month `shown` or, typing, `date_entry` (`key + 32`); Cancel fires `cancel`, OK
 // `confirm`, and a pick in either mode reaches `pick` as the pending date.
-// ponytail: the title is the dialog's `headline-small`, not the spec's
-// `label-medium` over a `headline-large` date line; no full-screen range form.
+// (D1369) "Select date" is a `label-medium` label in `on-surface-variant`
+// (`dialog_labelled`).
+// ponytail: no full-screen range form.
 fn date_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pending: time.Date, has_pending: bool, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date], open: bool, cancel: *const widget.Submit, confirm: *const widget.Submit, options: DateModalOptions) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (said, said_error) = mem.alloc[u8](a, 24usize)
@@ -3844,7 +3858,7 @@ fn date_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pe
     if buttons_error != ok { ret (zero, TooLarge) }
     buttons[0usize] = DialogButton { label: "Cancel", action: *cancel, kind: .Cancel }
     buttons[1usize] = DialogButton { label: "OK", action: *confirm, kind: .Default }
-    let (made, made_error) = dialog_dismissable(a, key, t, "Select date", content, buttons[0usize..2usize], true, false, false, cancel)
+    let (made, made_error) = dialog_labelled(a, key, t, "Select date", content, buttons[0usize..2usize], cancel)
     ret (made, made_error)
 }
 
@@ -4266,7 +4280,8 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 }
 
 // (D1294, docs/ux/components/TimePicker, modal dial) The touch time picker, a
-// modal dialog (keyed `key`) titled "Select time": the hour box (`key + 1`, its
+// modal dialog (keyed `key`) titled "Select time" (D1369: a `label-medium`
+// label in `on-surface-variant`): the hour box (`key + 1`, its
 // hour in the clock `twelve` asks for) and the minute box (`key + 2`) with a
 // `display-small` ":" between; with `twelve`, the AM/PM selector -- two stacked
 // 48 by 64 segments (`key + 3`, `key + 4`), the chosen one
@@ -4750,7 +4765,7 @@ fn time_picker_modal_with(a: *mem.Arena, key: widget.Key, t: *const control.Them
     if buttons_error != ok { ret (zero, TooLarge) }
     buttons[0usize] = DialogButton { label: "Cancel", action: *cancel, kind: .Cancel }
     buttons[1usize] = DialogButton { label: "OK", action: *confirm, kind: .Default }
-    let (made, made_error) = dialog_dismissable(a, key, t, "Select time", content, buttons[0usize..2usize], true, false, false, cancel)
+    let (made, made_error) = dialog_labelled(a, key, t, "Select time", content, buttons[0usize..2usize], cancel)
     ret (made, made_error)
 }
 
