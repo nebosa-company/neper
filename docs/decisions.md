@@ -25979,3 +25979,14 @@ hours held to a caller's limit. Focus does not move on after two digits.
 
 `ui_pickers2_v2` finds the three boxes editable, rolls 75 min to 1 h 15 min, and
 holds 30 h 90 min at 24 h, on Windows and Linux.
+
+## D1353 — Removing a pair offers Undo
+
+The KeyValueEditor spec's removal: `collection.pair_removed_notice` makes the
+snackbar notice a removal raises, "NAME removed" ("Variable removed" for an
+empty name) with an Undo action, for `control.snackbar`, whose live status
+reads it out. Putting the pair back is the caller's, since the pairs are the
+caller's model. The removed row's collapse is not animated.
+
+`ui_collections5_v2` checks the notice text and Undo label for a named and an
+unnamed pair, on Windows and Linux.
