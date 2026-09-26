@@ -27130,3 +27130,11 @@ Several specs ask for faces the text system could not choose: a modified propert
 - A 600 request leads with the 700 face, italic with the italic face, mono with the mono face; plain text keeps the theme's order.
 
 `text_layout` and all 103 `ui_*` fixtures pass on both hosts.
+
+## D1455 — Working-tree patches are applied by a neper tool
+
+The sessions had been editing sources through ad hoc Python scripts, whose heredocs mangled backslashes and newlines. `tools/patch` is a neper program for the same job. `patch SPEC` reads blocks: a line `@@@ path` names a file, and `<<<`, `===` and `>>>` lines fence the old text and the new text of each edit. Every old text must stand exactly once in its file, and the spec's line ends are taken as the file's own (LF or CRLF). Nothing is written unless every edit applies; then each file is written whole and named on one line. Backslashes and quotes pass through as written.
+
+Edits the compiler can plan (a rename, an added parameter, a changed signature, a replaced expression) keep going through `plan-*-file` and `apply-plan` (D481).
+
+Built with `neper-try emit-executable tools/patch/src/main.e <repo> x64 windows build/windows/patch.exe`, it applied edits to an LF file and a CRLF file with quotes and a literal `\n`. A missing old text and a repeated one were each refused with exit 1, and the file was left untouched.
