@@ -26195,3 +26195,16 @@ minutes by the list's step is still missing.
 
 `ui_pickers2_v2` focuses "14:30" with the caret at the end: Up gives "14:31";
 Home then Up gives "15:31", on Windows and Linux.
+
+## D1369 — Picker modals are titled with a label
+
+The DatePicker and TimePicker specs title their touch modals "Select date" and
+"Select time" in `label-medium` `on-surface-variant`, not the dialog's
+`headline-small` headline. `dialog_as_state` now forwards to `dialog_as_look`,
+which takes the title's role and colour, and `dialog_labelled` is the
+dismissable form with the label look. Both picker modals use it. Every other
+dialog keeps `headline-small` in `on-surface`.
+
+`ui_pickers_v2` finds the date modal's title one 16 line tall (a headline is
+32), and the time modal checks in `ui_pickers2_v2` still pass, on Windows and
+Linux.
