@@ -2042,13 +2042,51 @@ fn navigation_split(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pri
 // firing `pop` (no title: no bar).
 // (D1410) `list_focus` and `detail_focus` (keys of a focusable element in each
 // pane) let F6 move the focus between the panes side by side.
-type NavigationSplitOptions = struct { medium: bool, list_label: str, detail_label: str, empty: str, detail_title: str, pop: widget.Submit, list_focus: widget.Key, detail_focus: widget.Key }
+// (D1546) `supporting` (with `has_supporting`) is the large window's third pane,
+// a group named `supporting_label`.
+type NavigationSplitOptions = struct { medium: bool, list_label: str, detail_label: str, empty: str, detail_title: str, pop: widget.Submit, list_focus: widget.Key, detail_focus: widget.Key, supporting: widget.Node, has_supporting: bool, supporting_label: str }
 
 fn navigation_split_options() -> NavigationSplitOptions {
     var out: NavigationSplitOptions = zero
     out.list_label = "List"
     out.detail_label = "Detail"
+    out.supporting_label = "Supporting"
     ret out
+}
+
+// (D1546, docs/ux/components/NavigationSplit, supporting pane) From the large
+// width (1200) a split with a supporting pane stands it at the end, 320 wide:
+// flush on `surface-container-low` after a 1px `outline-variant` line with a
+// pointer, 24 after the split on touch with `radius-lg`; `split` is what the
+// list and detail were built into, `split_width` wide.
+fn split_supported(a: *mem.Arena, t: *const control.Theme, split: widget.Node, split_width: f32, height: f32, touch: bool, options: NavigationSplitOptions) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = split
+    var gap: f32 = 0.0
+    var n = 1usize
+    if touch {
+        gap = 24.0
+    } else {
+        var line = control.sized_style(1.0, height)
+        line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+        parts[1usize] = widget.box(0u64, line, zero)
+        n = 2usize
+    }
+    parts[4usize] = options.supporting
+    var pane = control.sized_style(320.0, height)
+    pane.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+    pane.overflow = .Clip
+    if touch { pane.radius = t.tokens.radii.lg }
+    parts[3usize] = widget.box(0u64, pane, parts[4usize..5usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = options.supporting_label
+    parts[n] = widget.semantics(0u64, sem, style.defaults(), parts[3usize..4usize])
+    n += 1usize
+    var row = style.defaults()
+    row.width = style.Length { Px: split_width + gap + 320.0 + control.if_else(touch, 0.0, 1.0) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: gap }, row, parts[0usize..n]), ok)
 }
 
 // v2 (D973, docs/ux/components/NavigationSplit): side by side from expanded
@@ -2062,15 +2100,21 @@ fn navigation_split_options() -> NavigationSplitOptions {
 // `body-medium` `on-surface-variant`. In a single pane the list, or the detail
 // under a v2 app bar (keyed `key + 4`) led by Back (`key + 5`) named "Back to
 // <the list>"; Escape and Alt+Left share its `pop` action.
-// ponytail: the touch divider is D966's sash, not the 24 gutter with its 4 x 48
-// handle; no supporting pane or Back motion. (D1412) A push slides the detail
+// (D1546) From 1200 wide `supporting` stands as a third pane (`split_supported`).
+// ponytail: the touch gutter is D966's 24 sash with its grip always shown, and
+// its 1px line stays; the dragged handle does not widen to 12; no Back motion.
+// (D1412) A push slides the detail
 // in. (D1411) Escape in the detail
 // returns the focus to the list. (D1409) On touch the
 // list snaps to 360 and half.
-fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, primary: widget.Node, detail: widget.Node, showing_detail: bool, position: f32, change: widget.Change[f32], width: f32, height: f32, options: NavigationSplitOptions) -> (widget.Node, err) {
+fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, primary: widget.Node, detail: widget.Node, showing_detail: bool, position: f32, change: widget.Change[f32], whole: f32, height: f32, options: NavigationSplitOptions) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
-    let size = style.size_class(width)
+    let size = style.size_class(whole)
     let side_by_side = size == .Expanded || (options.medium && size != .Compact)
+    // (D1546) The large window's supporting pane takes 320 and its gap.
+    let supported = side_by_side && options.has_supporting && whole >= 1200.0
+    var width = whole
+    if supported { width = whole - 320.0 - control.if_else(touch, 24.0, 1.0) }
     var radius: f32 = 0.0
     if touch && side_by_side { radius = t.tokens.radii.lg }
     // The list pane.
@@ -2172,13 +2216,19 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             split_options.snaps = true
             split_options.points = points[0usize..2usize]
         }
-        let (split, split_error) = control.split_view_with(a, key, t, "Resize list", .Horizontal, list_pane, detail_pane, position, least_list, least_detail, change, control.max_zero(width - 2.0 * inset), control.max_zero(height - 2.0 * inset), split_options)
+        let (split_made, split_error) = control.split_view_with(a, key, t, "Resize list", .Horizontal, list_pane, detail_pane, position, least_list, least_detail, change, control.max_zero(width - 2.0 * inset), control.max_zero(height - 2.0 * inset), split_options)
         if split_error != ok { ret (zero, split_error) }
+        var split = split_made
+        if supported {
+            let (with_support, support_error) = split_supported(a, t, split_made, control.max_zero(width - 2.0 * inset), control.max_zero(height - 2.0 * inset), touch, options)
+            if support_error != ok { ret (zero, support_error) }
+            split = with_support
+        }
         if !touch { ret (split, ok) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = split
-        var window = control.sized_style(width, height)
+        var window = control.sized_style(whole, height)
         window.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
         ret (widget.padded(0u64, inset, inset, inset, inset, window, held[0usize..1usize]), ok)
     }
