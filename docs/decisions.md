@@ -26555,3 +26555,15 @@ face.
 and the pixel inside its upper bowl keeps the badge colour. The earlier disc
 checks still hold, and `ui_notification` passes, on Windows and Linux. On a
 host without a tray the fixture checks the refusal instead.
+
+## D1393 — An arriving avatar photo fades in over the initials
+
+The Avatar spec's photo replaces the initials without a jump. `avatar_of` keeps
+a photo share on the avatar (`eased_on`, slot `key + 1048001`, forward only,
+`duration-medium-1`). While a photo that arrived over initials is part way in,
+the avatar stands the initials on their container with the photo over them at
+that opacity. Once the fade is done, or when the photo was there from the first
+frame, only the photo is built.
+
+`ui_content_v2` gives "BK" a photo: 50 ms in the initials still stand under it,
+and a second later only the photo is left, on Windows and Linux.
