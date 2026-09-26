@@ -472,7 +472,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // and the drop reports A2 into B.
     var moved_log = TreeMoveLog { node: 0u64, into: 0u64 }
     var move_step = 0usize
-    while move_step < 2usize {
+    let toggles_at_hold = logs[0usize].toggles
+    while move_step < 3usize {
         var moving: collection.TreeOptions = zero
         moving.move = widget.Change[collection.TreeMove] { ctx: mem.cast[*void](&moved_log), invoke: on_tree_move }
         f = mem.arena_from(frame_storage)
@@ -483,14 +484,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var move_ground = control.sized_style(320.0, 360.0)
         move_ground.background = paint.Brush { Solid: style.color(&tokens, .Surface) }
         move_page[0usize] = moving_tree
-        if testing.pump(&harness, widget.box(0u64, move_ground, move_page[0usize..1usize]), time.Instant { nanos: 1600000000i64 + i64(move_step) }) != ok { os.exit(74i32) }
+        if testing.pump(&harness, widget.box(0u64, move_ground, move_page[0usize..1usize]), time.Instant { nanos: 1600000000i64 + i64(move_step) * 1000000000i64 }) != ok { os.exit(74i32) }
         let (a2_row, has_a2_row) = bounds(&harness, &runtime, 12u64)
         let (b_row, has_b_row) = bounds(&harness, &runtime, 2u64)
         if !has_a2_row || !has_b_row { os.exit(75i32) }
         if move_step == 0usize {
             if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(a2_row.x + 60.0, a2_row.y + a2_row.height * 0.5) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(a2_row.x + 60.0, a2_row.y + a2_row.height * 0.5 + 10.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(b_row.x + 60.0, b_row.y + b_row.height * 0.5) }) != ok { os.exit(76i32) }
         }
-        if move_step == 1usize {
+        // (D1373) Held over B a second, B is asked to open.
+        if move_step == 2usize && (logs[0usize].toggled != 2u64 || logs[0usize].toggles == toggles_at_hold) { os.exit(79i32) }
+        if move_step == 2usize {
             let (move_shot, move_shot_error) = testing.snapshot(&harness, a)
             if move_shot_error != ok || !is_color(move_shot, at(b_row.x + b_row.width * 0.5, b_row.y + 0.5), style.color(&tokens, .Primary)) { os.exit(77i32) }
             if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(b_row.x + 60.0, b_row.y + b_row.height * 0.5) }) != ok || moved_log.node != 12u64 || moved_log.into != 2u64 { os.exit(78i32) }
