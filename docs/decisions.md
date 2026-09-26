@@ -27107,3 +27107,9 @@ Milestone record: the D1445 full suites ran in the suite worktree at 4f5ee28d. W
 The DockLayout spec fades the guide and preview in over `duration-short-3` with `ease-standard`. While a panel is dragged, the guide, its three targets and the drop preview now stand at the share `overlay.appeared_share` gives on the tear-off area (`key + 1048799`). That share counts from the drag's first frame, eases over `duration-short-3` and latches once arrived. Reduced motion shows them at once. The preview does not slide between targets.
 
 `ui_containers4_v2` checks this on Windows and Linux. At the drag's frozen start, the guide's edge beyond the right target is not yet `surface-container-high`; two frames later, 600 ms in, it is. `ui_containers2_v2` and `ui_workspace` still pass on both hosts.
+
+## D1452 — The outline's current marker slides
+
+The Outline spec says "the current marker slides between items over `duration-medium-2` with `ease-standard`". `tree_rows` now finds the current row's place among the visible rows and eases that place on the outline (slot `key + 1048611`). The 3 px `primary` bar is still drawn in the current row, but offset toward where it came from by the part of the move still to come, times the row extent. Reduced motion moves it at once. Smooth scrolling on jumps (`duration-long-2`) is still not done.
+
+`ui_collections3_v2` moves the current heading from the first row to the second, on Windows and Linux. On the change's frame the rows' leading 16 columns differ from how they settle a second later; the check fails without the change. `ui_tabular` still passes on both hosts.

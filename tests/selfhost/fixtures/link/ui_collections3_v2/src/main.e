@@ -539,6 +539,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
         twist_step += 1usize
     }
     if twist_sums[0usize] == twist_sums[1usize] { os.exit(82i32) }
+    // (D1452) The outline's current marker slides from the first heading to the
+    // second over `duration-medium-2`: on the change's frame the rows' leading
+    // edge looks other than it settles a second on.
+    var marker_sums: [2]u32 = zero
+    var marker_step = 0usize
+    while marker_step < 4usize {
+        var marker_at = 3000000000i64
+        var marker_current = 1u64
+        if marker_step == 1usize { marker_at = 3000000001i64 }
+        if marker_step == 2usize {
+            marker_at = 3100000000i64
+            marker_current = 2u64
+        }
+        if marker_step == 3usize {
+            marker_at = 4100000000i64
+            marker_current = 2u64
+        }
+        if testing.begin(&harness, time.Instant { nanos: marker_at }) != ok { os.exit(83i32) }
+        f = mem.arena_from(frame_storage)
+        let marker_source = collection.TreeSource { ctx: ctx, count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
+        var no_folds: widget.Submit = zero
+        let (marked_outline, marked_outline_error) = collection.outline_of(&f, 850u64, &theme, "Marked", marker_source, with_open[0usize..0usize], no_chosen[0usize..0usize], widget.Change[widget.Key] { ctx: ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, marker_current, &no_folds, 0.0, 240.0)
+        let (marker_page, marker_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if marked_outline_error != ok || marker_page_error != ok { os.exit(83i32) }
+        marker_page[0usize] = marked_outline
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 360.0), marker_page[0usize..1usize]), time.Instant { nanos: marker_at }) != ok { os.exit(83i32) }
+        if marker_step >= 2usize {
+            let (first_row, has_first_row) = bounds(&harness, &runtime, 1u64)
+            let (marker_shot, marker_shot_error) = testing.snapshot(&harness, a)
+            if !has_first_row || marker_shot_error != ok { os.exit(84i32) }
+            var sum = 0u32
+            var y = 0usize
+            while y < usize(first_row.height * 2.0) {
+                var x = 0usize
+                while x < 16usize {
+                    sum += u32(marker_shot.pixels[at(first_row.x + f32(x), first_row.y + f32(y)) + 1usize])
+                    x += 1usize
+                }
+                y += 1usize
+            }
+            marker_sums[marker_step - 2usize] = sum
+        }
+        marker_step += 1usize
+    }
+    if marker_sums[0usize] == marker_sums[1usize] { os.exit(85i32) }
     logs[0usize].large = true
     let (large_rt, large_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 6000usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 16384usize })
     if large_runtime_error != ok { os.exit(53i32) }
