@@ -175,13 +175,17 @@ both hosts.
 **M2.5:** sections 2, 3, 4, 5 and 6 as written; the fixtures; the false-positive
 measurement over the compiler and the library; the closure record.
 
-**Later:** arbitrary retention through dynamic containers;
-non-lexical liveness if the measurement asks for it.
+**Later:** arbitrary retention through dynamic containers.
 
 Delivered since: casts keep provenance (D1558); `list.Builder` builds, then
 freezes (D1559); `slot_map` keys are generation-tagged handles with an owner
 identity, a slot retiring rather than wrapping, and three compares per protected
-access (D1560).
+access (D1560); a pin lives to its pointer's last use (D1561): when a pinned
+local moves or closes outside any loop and every known holder of the pointer --
+a view, a pointer alias or a field alias of it -- is named nowhere from that point
+to the function's end (the moving expression included, so a move through the
+pointer itself stays refused), the pin has ended; with an unknown holder, or in a
+loop, the block's end still rules.
 
 ## 8. Implementation record
 

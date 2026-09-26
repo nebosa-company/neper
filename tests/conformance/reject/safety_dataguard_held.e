@@ -1,8 +1,8 @@
 use e.mem
 use e.sync
 
-// A guard released while a view of its data lives in the same block (D1555, H04):
-// the pointer taken to the guard lives to the block's end, so the release is
+// A guard released while a view of its data is still used after it (D1555, D1561,
+// H04): the pointer taken to the guard lives to its last use, so the release is
 // E-SAFETY-0004.
 type Counter = struct { hits: i64 }
 
@@ -13,5 +13,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let p = sync.data_of[Counter](&g)
     p.hits = p.hits + 1i64
     sync.data_release(g)
+    if p.hits != 1i64 { ret mem.Exhausted }
     ret ok
 }
