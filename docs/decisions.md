@@ -26460,3 +26460,16 @@ still missing.
 `ui_collections_v2` drags from Alpha to Beta: the release reports three
 selections ending in a toggle of tile 1. `ui_ripple_v2` still passes, on
 Windows and Linux.
+
+## D1386 — A slow list says it is still loading
+
+The List spec adds "Still loading" under the skeleton rows when loading takes
+over 10 seconds. `loading_for` times how long the loading group (the element
+keyed `key`) has been built without a break, with a `LoadingSince` cell on it,
+asking for frames until 10 seconds pass. Past that, `loading_rows` puts a
+`body-medium` `on-surface-variant` "Still loading" (keyed `key + 2`), 16 in and
+12 down, under the rows. The rows are still the 72 avatar skeleton whatever
+the real row height.
+
+`ui_collections_v2` loads a list: 16 ms in there is no "Still loading", and
+11 seconds in there is, on Windows and Linux.
