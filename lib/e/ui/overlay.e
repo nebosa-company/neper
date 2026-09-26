@@ -4975,8 +4975,8 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // (D1403) A fast drag snaps minutes to the fives.
 // (D1419) A minute off the fives turns the hand to that minute and ends it on a
 // small 16 `primary` knob. (D1420) The hand sweeps; (D1421) a switch of dial
-// fades the numbers in.
-// ponytail: the old numbers are not drawn fading out under the new.
+// fades the numbers in; (D1471) the old dial's numbers fade out under them
+// (`key + 48 + index`).
 // (D1349) A wheel's drag, kept on the wheel: the value it started from.
 // (D1389) `at` is the value the drag last asked for, `last_y` and `step` the
 // last move's place and travel (a fling's speed). (D1418) `coasting` from
@@ -5733,13 +5733,43 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
             held[0usize] = widget.box(key + 32u64 + u64(i), fading, held[1usize..2usize])
         }
         let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(48.0, 48.0), held[0usize..1usize])
+        // (D1471) While the dials switch, the old dial's number fades out under
+        // the new one: minutes in fives under the hours, hours under the minutes.
+        var fading_count = 0usize
+        let (outgoing, outgoing_error) = mem.alloc[widget.Node](a, 3usize)
+        if outgoing_error != ok { ret (zero, TooLarge) }
+        if numbers_in < 1.0 {
+            var old_value = u8(i)
+            if !editing_minute {
+                old_value = u8(i * 5usize)
+            } else if twelve {
+                if old_value == 0u8 { old_value = 12u8 }
+            } else if hour >= 12u8 {
+                old_value = old_value + 12u8
+            }
+            var old_digits = two_digits(a, old_value)
+            if editing_minute && old_value < 10u8 { old_digits = old_digits[1usize..2usize] }
+            let (old_said, old_said_error) = control.colored_text(a, 0u64, old_digits, t, caption, style.color(t.tokens, .OnSurface))
+            if old_said_error != ok { ret (zero, old_said_error) }
+            outgoing[0usize] = old_said
+            var leaving = style.defaults()
+            leaving.opacity = 1.0 - numbers_in
+            outgoing[1usize] = widget.box(key + 48u64 + u64(i), leaving, outgoing[0usize..1usize])
+            outgoing[2usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(48.0, 48.0), outgoing[1usize..2usize])
+            fading_count = 1usize
+        }
         let (cells, cells_error) = mem.alloc[widget.Node](a, 1usize)
         if cells_error != ok { ret (zero, TooLarge) }
         cells[0usize] = widget.region(key + 10u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&presses[i]), invoke: control.press_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(48.0, 48.0), held[0usize..0usize])
-        let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+        let (both, both_error) = mem.alloc[widget.Node](a, 3usize)
         if both_error != ok { ret (zero, TooLarge) }
-        both[0usize] = centred
-        both[1usize] = cells[0usize]
+        var laid = 0usize
+        if fading_count == 1usize {
+            both[0usize] = outgoing[2usize]
+            laid = 1usize
+        }
+        both[laid] = centred
+        both[laid + 1usize] = cells[0usize]
         let a_i = f32(i) * 0.5235988
         let x = 112.0 + 88.0 * math.sin[f32](a_i) - 24.0
         let y = 112.0 - 88.0 * math.cos[f32](a_i) - 24.0
@@ -5750,7 +5780,7 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
         if chosen { number_sem.states = accessibility.STATE_CHECKED }
         let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
         if stacked_error != ok { ret (zero, TooLarge) }
-        stacked[0usize] = widget.stack(0u64, control.sized_style(48.0, 48.0), both[0usize..2usize])
+        stacked[0usize] = widget.stack(0u64, control.sized_style(48.0, 48.0), both[0usize..laid + 2usize])
         stacked[1usize] = widget.semantics(0u64, number_sem, style.defaults(), stacked[0usize..1usize])
         layers[n] = widget.positioned(0u64, x, y, style.defaults(), stacked[1usize..2usize])
         n += 1usize

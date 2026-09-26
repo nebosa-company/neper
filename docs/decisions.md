@@ -27240,3 +27240,9 @@ The TextField and SelectableText specs select a word on a double click. Every ed
 D1199's edge auto-scroll set its speed per second but moved a 60 Hz frame's share on every Frame. On a slower or faster host, or after a stall, the viewport moved at the wrong speed. The runtime now records when the last step ran. Each step covers the time since then, the first one frame's share and a gap past 100 ms capped at 100 ms, so a stall does not throw the viewport. The record clears when the drag leaves the edge band.
 
 `ui_gesture` checks this on Windows and Linux: a Frame 33.3 ms after the first moves the viewport two frames' share, three in all. Against the old runtime the check fails (exit 60). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1471 — The time dial's old numbers fade out
+
+The TimePicker spec cross-fades the numbers when the dial switches between hours and minutes. D1421 faded the new numbers in over `duration-short-4` and dropped the old ones at once. While the new numbers fade in, each place now also draws the old dial's number beneath them at the rest of the opacity, in a box keyed `key + 48 + index`: the minutes in fives under the hours, and the hours under the minutes, 12-hour or 24-hour as the dial shows them. Once the switch settles, the old numbers leave the tree.
+
+`ui_pickers2_v2` checks this on Windows and Linux: 50 ms after the switch back to hours, the minute dial's 30 stands fading under the 6, and a second later it is gone.

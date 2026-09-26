@@ -454,6 +454,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let fading = testing.by_key(&harness, 1338u64).count > 0usize
         if fade_step == 1usize && !fading { os.exit(134i32) }
         if fade_step == 2usize && fading { os.exit(135i32) }
+        // (D1471) The minute dial's 30 fades out under the 6 (`key + 48 + 6`).
+        let leaving = testing.by_key(&harness, 1354u64).count > 0usize
+        if fade_step == 1usize && (!leaving || testing.by_text(&harness, "30").count == 0usize) { os.exit(145i32) }
+        if fade_step == 2usize && leaving { os.exit(146i32) }
         fade_step += 1usize
     }
     // (D1295) Input mode: the boxes are typed fields, the dial gives way, and the
