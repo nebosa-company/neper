@@ -367,6 +367,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
         push_step += 1usize
     }
     if push_mid == push_end { os.exit(150i32) }
+    // (D1546) 1300 wide (a harness of its own), the supporting pane stands 320
+    // wide at the end, flush after a 1px line; 1000 wide it is not built.
+    let (wide_rt, wide_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 2048usize })
+    if wide_runtime_error != ok { os.exit(151i32) }
+    var wide_runtime = wide_rt
+    let wide_theme = control.Theme { tokens: &tokens, fonts: theme.fonts, language: "", runtime: &wide_runtime }
+    let (wide_h, wide_harness_error) = testing.harness(a, &wide_runtime, 1320u32, 560u32, 1.0)
+    if wide_harness_error != ok { os.exit(151i32) }
+    var wide_harness = wide_h
+    var support_step = 0usize
+    while support_step < 2usize {
+        var support_width: f32 = 1300.0
+        if support_step == 1usize { support_width = 1000.0 }
+        f = mem.arena_from(frame_storage)
+        let support_list = widget.region(4711u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, control.sized_style(60.0, 20.0), zero)
+        let support_detail = widget.region(4712u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, control.sized_style(60.0, 20.0), zero)
+        var support_options = navigation.navigation_split_options()
+        support_options.supporting = widget.region(4713u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, control.sized_style(60.0, 20.0), zero)
+        support_options.has_supporting = true
+        support_options.supporting_label = "Inspector"
+        let (support_split, support_split_error) = navigation.navigation_split_of(&f, 4700u64, &wide_theme, support_list, support_detail, true, 300.0, zero, support_width, 300.0, support_options)
+        let (support_page, support_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if support_split_error != ok || support_page_error != ok { os.exit(151i32) }
+        support_page[0usize] = support_split
+        if testing.pump(&wide_harness, widget.box(0u64, control.sized_style(1320.0, 560.0), support_page[0usize..1usize]), time.Instant { nanos: 43000000000i64 + i64(support_step) }) != ok { os.exit(151i32) }
+        let (support_box, has_support_box) = bounds(&wide_harness, &wide_runtime, 4713u64)
+        let (support_detail_box, has_support_detail_box) = bounds(&wide_harness, &wide_runtime, 4712u64)
+        if support_step == 0usize && (!has_support_box || !has_support_detail_box || !(support_box.x > 1300.0 - 321.5) || !(support_box.x < 1300.0 - 318.5) || !(support_detail_box.x < support_box.x - 100.0)) { os.exit(152i32) }
+        if support_step == 1usize && testing.by_key(&wide_harness, 4713u64).count != 0usize { os.exit(153i32) }
+        support_step += 1usize
+    }
+    if testing.close(&wide_harness) != ok || widget.close(&wide_runtime) != ok { os.exit(151i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation4 v2 ok\n")
     ret ok

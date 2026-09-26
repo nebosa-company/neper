@@ -27931,3 +27931,13 @@ The Table spec's wide variant scrolls sideways with the identifying column pinne
 The copy (keyed `key ^ fnv1a64("pinned-column")`) is hidden from the tree, where the real first column still speaks. Grids (their row numbers), selectable tables (their checks), expandable rows and grouped headers are not pinned yet.
 
 `ui_collections2_v2` checks this on Windows and Linux. At rest there is no copy. Scrolled 60 sideways, the copy's top-left is the viewport's and it is at least the column's width. With pinning disabled the check fails (exit 159). All 103 ui_* fixtures pass on both hosts. The copy's cells are plain (no selected or hovered look) and trail a sideways scroll by one frame.
+
+## D1546 — Navigation split supporting pane
+
+The NavigationSplit spec adds a third, narrower pane at the end from the large width (1200 and up), such as an inspector or related items. `navigation_split_of` had none; its marker named the supporting pane with the touch divider and Back motion.
+
+`NavigationSplitOptions` gains `supporting`, `has_supporting` and `supporting_label` ("Supporting"). Side by side and at least 1200 wide, the list and detail split takes the width less the pane and its gap, and `split_supported` stands the pane after it. The pane is 320 wide on `surface-container-low`, a group named by its label. With a pointer it stands flush after a 1px `outline-variant` line; on touch it stands 24 after the split with `radius-lg`, like the other panes. The function's width parameter is now `whole`, since `width` is what the split gets.
+
+The touch-divider part of the marker was stale. On touch, D966's sash is already a 24 strip with its 4 x 48 grip always shown. What differs is its 1px line and a dragged handle that does not widen to 12, and the marker now says only that.
+
+`ui_navigation4_v2` checks this on Windows and Linux in a 1320-wide harness of its own, since the fixture's 900-wide one clamps the layout. At 1300 the pane's content starts 320 from the end, after the detail; at 1000 it is not built. With the pane disabled the check fails (exit 152). All 103 ui_* fixtures pass on both hosts.
