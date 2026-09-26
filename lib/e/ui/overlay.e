@@ -4197,9 +4197,17 @@ fn clocked_field_glyph(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if options.invalid { note_color = style.color(t.tokens, .Error) }
     let (note_node, note_error) = control.colored_text(a, 0u64, note, t, small, note_color)
     if note_error != ok { ret (zero, note_error) }
-    let (lines, lines_error) = mem.alloc[widget.Node](a, 3usize)
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 5usize)
     if lines_error != ok { ret (zero, TooLarge) }
     lines[2usize] = note_node
+    // (D1387) Invalid, the note is led by the 16 `error` icon, 4 before it.
+    if options.invalid {
+        let (alert, alert_error) = control.icon_square(a, style.color(t.tokens, .Error), .Alert, 16.0)
+        if alert_error != ok { ret (zero, alert_error) }
+        lines[3usize] = alert
+        lines[4usize] = note_node
+        lines[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), lines[3usize..5usize])
+    }
     var note_style = style.defaults()
     note_style.padding.left = style.Length { Px: 16.0 }
     note_style.padding.top = style.Length { Px: 4.0 }
@@ -5071,11 +5079,23 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
 // (D1294) `time_picker_modal` is the touch dial form.
 // (D1295) `time_picker_modal_with` adds its input mode.
 // (D1349) `time_wheels` is the iOS form.
-// ponytail: there is no error icon; the caller's text and picks
-// carry the value.
+// (D1387) Text that reads as no time, once the field has lost the focus, marks
+// it invalid with an `error` icon and "Enter a time from 00:00 to 23:59" (12:00
+// AM to 11:59 PM on a 12-hour clock) in place of the note.
 fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, times: []const str, offsets: []const str, selected: usize, picks: []const widget.Submit, note: str, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != times.len || offsets.len != times.len { ret (zero, TooLarge) }
-    let (boxed, boxed_error) = clocked_field(a, key, t, label, buffer, len, typed, note, true, open, toggle, options)
+    // (D1387, docs/ux/components/TimePicker, invalid) Unreadable text, unfocused.
+    var shown_note = note
+    var look = options
+    let (_, reads) = parse_clock(buffer[0usize..len])
+    var holding_focus = false
+    if mem.address_of(t.runtime) != 0usize { holding_focus = widget.focus_within(t.runtime, key) }
+    if len > 0usize && !reads && !holding_focus {
+        look.invalid = true
+        shown_note = "Enter a time from 00:00 to 23:59"
+        if uses_12_hour(t.language) { shown_note = "Enter a time from 12:00 AM to 11:59 PM" }
+    }
+    let (boxed, boxed_error) = clocked_field(a, key, t, label, buffer, len, typed, shown_note, true, open, toggle, look)
     if boxed_error != ok { ret (zero, boxed_error) }
     // (D1275) Typing filters the list: while the field has the focus and its text
     // is not the selected time, only the times it starts (ignoring case) stay;

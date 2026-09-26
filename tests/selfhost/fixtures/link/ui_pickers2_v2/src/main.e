@@ -210,6 +210,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         s.picks[i] = widget.Submit { ctx: mem.cast[*void](&s.picked[i]), invoke: on_pick }
         i += 1usize
     }
+    // The field's own text, a time it reads (D1387 marks unreadable text).
+    let start_words = "09:30"
+    var sw = 0usize
+    while sw < start_words.len {
+        s.clock[sw] = start_words[sw]
+        sw += 1usize
+    }
     s.times[0usize] = "13:00"
     s.times[1usize] = "13:30"
     s.times[2usize] = "14:00"
@@ -333,6 +340,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !testing.same_text(loose_clock[0usize..clock_text.len], "14:31") { os.exit(106i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || testing.press_key(&harness, 38u32, zero) != ok { os.exit(107i32) }
     if !testing.same_text(loose_clock[0usize..clock_text.len], "15:31") { os.exit(108i32) }
+    // (D1387) Unfocused "25:99" is no time: the field says how to write one; a
+    // readable time says nothing.
+    let (bad_clock, bad_clock_error) = mem.alloc[u8](a, 8usize)
+    if bad_clock_error != ok { os.exit(109i32) }
+    let bad_words = "25:99"
+    var bw = 0usize
+    while bw < bad_words.len {
+        bad_clock[bw] = bad_words[bw]
+        bw += 1usize
+    }
+    f = mem.arena_from(frame_storage)
+    let (bad_field, bad_field_error) = overlay.time_field(&f, 1920u64, &theme, "Starts", bad_clock, bad_words.len, zero, false, &s.press, s.times[0usize..8usize], s.offsets[0usize..8usize], 3usize, s.picks[0usize..8usize], "", filter_options)
+    let (good_field, good_field_error) = overlay.time_field(&f, 1940u64, &theme, "Ends", loose_clock, clock_text.len, zero, false, &s.press, s.times[0usize..8usize], s.offsets[0usize..8usize], 3usize, s.picks[0usize..8usize], "", filter_options)
+    let (bad_page, bad_page_error) = mem.alloc[widget.Node](&f, 2usize)
+    if bad_field_error != ok || good_field_error != ok || bad_page_error != ok { os.exit(110i32) }
+    bad_page[0usize] = bad_field
+    bad_page[1usize] = good_field
+    if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, control.sized_style(400.0, 400.0), bad_page[0usize..2usize]), time.Instant { nanos: 6090000000i64 }) != ok { os.exit(111i32) }
+    if testing.by_text(&harness, "Enter a time from 00:00 to 23:59").count != 1usize { os.exit(112i32) }
     // (D1294) The dial picker at 14:30 on a 12-hour clock: the hour box says 02
     // and PM is chosen; the dial's 3 sets 15, the minute box asks to be edited,
     // and on the minute dial the sixth number sets 30.
