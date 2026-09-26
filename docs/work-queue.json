@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C050",
-      "category": "compiler",
-      "group": "Front end and language",
-      "order": 50,
-      "title": "Learnability and executable API documentation (v1 precursor for T2 H11)",
-      "score": 0.76,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "The index carries every symbol's signature, spans, attributes and documentation (D232), `context-file` its resource and unsafe facts (D361) and, from the signature, the caller's contract -- allocation from an arena parameter, borrow or mutation per pointer parameter as the view rule reads it, fallible or partial results, a thread started in the body (D396) -- per function with `--symbol`, per module as a catalogue with `--module` (D397); the language card is generated and stamped (D374) and its examples are programs both suites check with the compiler -- a ```neper fence checks clean, a ```neper reject E-CODE fence is refused with that code, the near miss beside the edit shapes (D404). the card's diagnostic codes are marked verified, present or planned from the goldens, the suites and the source (D440), and its displayed grammar productions are explicitly `present` (D567). Concrete functions in a module catalogue are `supported-on-target`, derived from the checked source and requested concrete target rather than a second registry (D568); the first executable test reaching one promotes it to `verified` and is named as evidence (D570). Planned-only modules and APIs answer `unavailable` instead of appearing callable (D571-D572). Generic signatures retain their comptime parameters and dependent types (D573), and catalogues include generic templates: an uninstantiated template is `present`, while a tested concrete instance promotes its template to `verified` (D574). Both suites resolve all twenty-eight source-delivered surfaces and compare their exact declarations with the catalogue (D576); the sixteen compiler-origin functions in `e.atomic`, `e.io` and `e.str` expose exact indexed template signatures to the same gate (D577). `e.proc.run` now delivers independent capture limits and explicit exit, cancellation, deadline and output-limit outcomes over the host process-group/job boundary (D578), with inherited-writer drain closure still pending. The same semantic gate requires every catalogue declaration from all thirteen partial M1/M2 source modules and compares exact signatures for twelve; `e.simd` retains SL01's explicit dependent-metavariable spelling exception (D579). Not yet: the remaining SL05 drain edge, variant-composed spec surfaces and the deferred-library fixture manifest"
-    },
-    {
       "id": "C051",
       "category": "compiler",
       "group": "Front end and language",

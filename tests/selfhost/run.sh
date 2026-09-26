@@ -25,6 +25,9 @@ mkdir -p "$test_build"
 # commit limit will bear.
 $neper build "$repo/src/main.e" --arena 1g --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
 python3 "$repo/scripts/check_module_surfaces.py" --compiler "$test_build/neper-self" --arch x64 --os linux
+# The deferred-library fixture manifest (D1529): current, and every delivered API
+# with an executable fixture.
+python3 "$repo/scripts/library_fixtures.py"
 # The bootstrap's rules for `src/` (D794), before the next ten-minute build finds one.
 python3 "$repo/scripts/lint_bootstrap.py" "$repo/src"
 # Every bootstrap frame has to cover the temporaries its statements allocate. A

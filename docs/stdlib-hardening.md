@@ -447,9 +447,14 @@ source-delivered `e.atomic`, `e.io` and `e.str` surfaces expose canonical signat
 through the index and are compared exactly as well. All thirteen partial M1/M2
 source modules must also deliver every catalogue declaration; twelve have exact
 checked signatures, while `e.simd` retains SL01's documented dependent-metavariable
-spelling exception. Partial modules may still expose helpers or legacy declarations;
-variant-composed `surface:"spec"` modules and other compiler seeds remain outside
-this source-file signature gate. Executable CPU fixtures above remain required;
+spelling exception. Partial modules may still expose helpers or legacy declarations.
+The variant-composed `surface:"spec"` modules (`e.mem`, `e.meta`, `e.os`) are checked
+per target variant (D1529): each must deliver its catalogue from the variant's source
+or the compiler's seeds, with exact signatures where the index gives them.
+`docs/library-fixtures.json` is the deferred-library fixture manifest (D1529): for
+every partial module, the catalogue declarations still pending and the executable
+link fixtures that already use it; `scripts/library_fixtures.py` checks it is current
+and that no delivered API lacks a fixture. Executable CPU fixtures above remain required;
 later libraries need their own independent runtime evidence, never a static-check
 substitute.
 
