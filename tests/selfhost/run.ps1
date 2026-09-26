@@ -5389,7 +5389,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contractActual).Hash -ne (Get-
 # (D821): the thread start's call fact and the threads fact stand although
 # `helper.fill[u8]` landed at the index the function count had.
 $nestedActual = Join-Path $testBuild 'conformance-tools-nested-instance.jsonl'
-cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\nested_instance')`" && `"$compiler`" context-file src\main.e `"$repo`" x64 windows --json --symbol main.main --budget 16 > `"$nestedActual`""
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\nested_instance')`" && `"$compiler`" context-file src\main.e `"$repo`" x64 windows --json --symbol main.main --budget 20 > `"$nestedActual`""
 if ($LASTEXITCODE -ne 0) { throw "context-file --json failed on nested_instance" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $nestedActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/nested_instance.x64-windows.expected.jsonl')).Hash) { throw "context-file --json over a call before the first instance differs from the conformance corpus" }
 # `query-batch --json --batch FILE` (D409, H16): six queries over one check, each its own

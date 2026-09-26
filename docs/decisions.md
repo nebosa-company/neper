@@ -27993,3 +27993,18 @@ C052's structured edits were plans over one program: `plan-*-file` wrote a plan 
 `apply-plan` now takes further plans: `--also PLAN --root DIR [--project-src DIR]`, up to eight, the roots after a plan being its program's. Every plan is read and sized first, then `plan_collect` gathers each plan's records into one set of tables. A file two plans name is read once and must hash as both preconditions record. An edit both plans make (the same file, span and replacement) is made once. Any other overlap stays refused by the existing overlap rule, and a plan whose result was not `ok` refuses them all. The apply is then D1519's single transaction, its lock and journal under the first root, so every program's files are replaced or none are, and `--recover` restores them all. The postconditions are joined with `; `. One plan behaves exactly as before. A file reached through two spellings of its path counts as two files; that ceiling is marked.
 
 Both suites check this after the D1519 transaction tests, with the alias fixture copied as separate programs. The rename plan applied to two programs with `--also` leaves both `main.e` files as a single apply leaves one, and the JSON result reports 4 files. The same plan named twice for one program makes its edits once. A second program whose `deep.e` changed after planning refuses the whole apply (exit 2, "changed since the plan was made") and leaves the first program untouched. HEAD's compiler, which ignores `--also`, fails the first check. The block passes against the new compiler on Windows and Linux, and stage 2 equals stage 3 on both.
+
+## D1553 — Borrow origins as facts
+
+H08 asks the context page for borrow origins inside a body. D487 made a view a `borrow` fact: a local bound to `&x`, a slice of `x` or a literal holding `&x`, naming what it views. D501 made the end of a view one too. Two other origins the checker already follows had no fact, so a harness could not see them before planning a reset or a read: which region a value was taken in, and what a thread start lends.
+
+The checker now records both as a `borrow` origin (explain kind 12, `record_explain_origin`), and `context-file` states them, compiler-proved, at the binding:
+
+- In `region_bind`, where an allocation from an arena is tied to that arena's innermost live mark (D354), the fact reads "bytes is taken in the region mark marks from here: a reset to mark ends it".
+- In `lend_thread_storage`, where a thread start lends the storage it was given (D365, D674), the fact reads "counter is lent to worker from here: nobody else reads or writes it until the join". `lend_thread_storage` gains the module index to place it.
+
+`explain-file`'s listing skips the new kind, as it skips the other body facts.
+
+Four goldens gain the facts. `context_moves` (`ends`: the allocation after `mem.mark`), `contract` (`main` lends `counter`) and `nested_instance` (its thread start) each gain one record; `batch` (`context contract.main 4`) reports one more omitted record. `nested_instance`'s budget in both suites rises from 16 to 20, so the call its test exists for stays on the page rather than being the record the lend fact displaced.
+
+These goldens also carry pre-existing drift: a different `e.os` interface hash and snapshot ids, which HEAD's compiler produces too. That drift is the pending golden-refresh decision and is not this change's. So each golden took exactly the delta between the old and new compilers' output: the inserted fact, and the result line's records, omitted, cursor and bytes moved by the same amounts. On Linux the same delta, computed from the Linux compilers, reproduces the edited Linux goldens from HEAD's for all four. Stage 2 equals stage 3 on both hosts.
