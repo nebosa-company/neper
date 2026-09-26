@@ -28044,3 +28044,25 @@ The in-block case needed nothing new. A pointer taken to the guard lives to the 
 The goldens agree on both hosts, and so do `sync_guard`, `sync_rwguard` and `thread_group` on Linux. A sweep of every link fixture and accept case (601 sources) with HEAD's compiler and the new one found none newly refused. The 18 it lists as newly accepted are HEAD's compiler refusing the new `sync.e`, whose `data_of` needs the cast rule. Stage 2 equals stage 3 on both hosts, so the compiler's own source is clean under the stricter rule.
 
 Out of scope, and noticed on the way: returning `&x` of a plain local, or a pointer that came back from a call given `&x`, is not refused. The frame-escape rule is threads' only (D357).
+
+## D1556 — Thread contexts through external slices, and globals
+
+H04's design left two ways to share with a thread outside the rule (`m25-h04-concurrency.md` section 5). One is storage reached through a slice whose backing local is unknown; the other is module-scope variables. Probes confirmed both races were accepted:
+
+- A context `Job { data: items }` with `items` a parameter slice, the parent reading `items[0]` before the join.
+- The same with a slice from `mem.alloc`, the parent writing it.
+- A `var hits` the thread's entry function increments while the parent increments it too.
+
+**Slices.** Lending a context (`lend_thread_storage`, D365) now also lends every slice local the context aliases at any recorded field depth (D413, D705): `lend_alias_targets`. The parent's read or write of that slice before the join is E-SAFETY-0016, as a read of the context itself is. Arrays and aggregates the context points into are not lent this way. The first version lent every alias target, recursively, and the sweep found it refusing `link/net_tls`, whose server context and the parent's client config both read one array of ALPN names. That read-only sharing is legitimate, and those targets are D686-D714's to lend by the address given.
+
+**Globals.** A thread handle's `Resource` now records its entry function (`thread_entry`, the first argument of the start), until the join consumes the handle. While any such thread in this frame is unjoined, a name the use walk meets that is not a local but a module-scope variable is refused (E-SAFETY-0016, `thread_global_use`) when the entry function names it. A function of the same module the entry names counts too, four deep (`function_names_text`, over the module's tokens). A variable of an atomic or lock type is exempt, and so is an access while this frame holds a guard. Neper refuses a local that shadows a module name, so a matching identifier in the body is the variable.
+
+Still outside, and marked: a thread function in another module, a `mod.var` spelling, and a guard in the parent trusted to be the lock the thread takes. `&global` is not yet expressible, so the atomic and lock exemptions have no fixture.
+
+Fixtures, on Windows and Linux:
+
+- `reject/safety_thread_param_slice`: a parameter slice read before the join.
+- `reject/safety_thread_global`: the global reached through a callee of the entry function.
+- `accept/thread_global_joined`: the global named after the join, and another the thread never names, named before it.
+
+The D1555 conformance cases, `sync_dataguard`, `sync_guard`, `thread_group`, `thread_spawn`, `thread_pool` and `task_pool` still pass on Linux. Stage 2 equals stage 3 on both hosts. A sweep of every link fixture and accept case with HEAD's compiler and the new one found none newly refused. The 18 sources HEAD's compiler cannot judge, because they import the new `e.sync`, were each checked to be accepted as D1555's compiler accepted them. That second check is what caught `net_tls`: D1555's sweep had no blind spot there, but this one would have had.
