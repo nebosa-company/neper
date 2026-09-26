@@ -26567,3 +26567,16 @@ frame, only the photo is built.
 
 `ui_content_v2` gives "BK" a photo: 50 ms in the initials still stand under it,
 and a second later only the photo is left, on Windows and Linux.
+
+## D1394 — Snackbars span compact windows
+
+The Snackbar spec places it bottom centre in a compact window, as wide as the
+window less 16 each side and 16 above the foot, where the 24 bottom-start
+placement and the 288 to 560 width are for wider windows. The snackbar now
+reads the window's width (`widget.surface_size`). Under 600, it is the window
+less 32 wide with a 16 margin, so it stands centred; the toast is unchanged.
+The first frame cannot see the window yet, so it lays out as a wide window's.
+
+`ui_status4_v2` opens a second, 360-wide runtime and harness: the snackbar's
+surface covers 20 and 340 across and leaves 8, on Windows and Linux;
+`ui_status5_v2` still passes.
