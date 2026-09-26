@@ -27324,3 +27324,9 @@ A comparison checks its operands without the result's context, since the result 
 `lower_binary_expr` now checks the right operand first, with no expectation, when a comparison's left operand is an untyped float, and lowers the left in that type when it is a float. Only code that failed to lower before takes the new path, so nothing that compiled changes meaning. Untyped integers on the left keep their existing path. The `missing_context`, `cast_untyped` and `constant_missing_context` refusals still refuse.
 
 `float_scalar` checks this on Windows and Linux: `1.0 > p.y`, `0.5 >= p.y` and `0.75 != p.y` with an `f32` on the right, `10.0 >= p.x`, `5.0 != p.x` and `6.0 < p.x` with an `f64`, and `let under = 0.25 < heap[0]`. The self-hosted compiler rebuilt with the change reaches its fixed point on Windows: stage 2 and stage 3 are byte-identical.
+
+## D1484 — A header dropped before the first column shows its landing line
+
+D1357's landing line lives in the handle after a column, so a header dragged onto the first column had nowhere to show it: no handle stands before column 0. D1478 already repeats the landing line in an overlay over the drag's ghost. When the pointer is over the first column and the lifted header is not it, that overlay (`key + 1048601`) now anchors to the first header and stands at its start.
+
+`ui_collections2_v2` checks this on Windows and Linux. Kind dragged over Name puts the line at Name's start, and the line is gone after the release. Against the old collection the check fails (exit 142).

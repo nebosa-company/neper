@@ -1782,8 +1782,7 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // (D1357) A landing line stands where the dragged header would land.
 // (D1478) A ghost of the lifted header follows the pointer (an overlay keyed
 // `key + 1048600`), the landing line repeated over it (`key + 1048601`).
-// ponytail: a header dragged onto the first column shows no line (no handle
-// stands before it).
+// (D1484) Landing before the first column, the line stands at its start.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     var plain: []const bool = zero
     let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain, plain)
@@ -2041,14 +2040,22 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             let travel = widget.pointer_position(t.runtime).x - widget.pointer_origin(t.runtime).x
             parts[2usize] = widget.overlay(key + 1048600u64, widget.Overlay { anchor: lifted_key, placement: .Below, offset: geometry.Point { x: travel, y: 0.0 - lifted_box.height }, modal: false, dismiss: zero }, style.defaults(), ghost[1usize..2usize])
             part_count = 3usize
-            // The landing line stands over the ghost.
-            if landing_grip != 0u64 {
+            // The landing line stands over the ghost; (D1484) landing before the
+            // first column, where no handle stands, it stands at that header's
+            // start.
+            var line_anchor = landing_grip
+            var line_x: f32 = 3.0
+            if line_anchor == 0u64 && has_landing && landing == 0usize && lifted_at > 0usize {
+                line_anchor = key + 1u64
+                line_x = 0.0
+            }
+            if line_anchor != 0u64 {
                 var over_mark = control.sized_style(2.0, inner)
                 over_mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
                 let (line_node, line_node_error) = mem.alloc[widget.Node](a, 1usize)
                 if line_node_error != ok { ret (zero, TooLarge) }
                 line_node[0usize] = widget.box(0u64, over_mark, zero)
-                parts[3usize] = widget.overlay(key + 1048601u64, widget.Overlay { anchor: landing_grip, placement: .Below, offset: geometry.Point { x: 3.0, y: 0.0 - inner }, modal: false, dismiss: zero }, style.defaults(), line_node[0usize..1usize])
+                parts[3usize] = widget.overlay(key + 1048601u64, widget.Overlay { anchor: line_anchor, placement: .Below, offset: geometry.Point { x: line_x, y: 0.0 - inner }, modal: false, dismiss: zero }, style.defaults(), line_node[0usize..1usize])
                 part_count = 4usize
             }
         }

@@ -642,6 +642,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if land_step == 2usize && lit { os.exit(115i32) }
         land_step += 1usize
     }
+    // (D1484) Kind dragged over Name, the first column: the landing line stands
+    // at Name's start (`11 + 1048601`); released, it is gone.
+    var first_step = 0usize
+    while first_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        let first_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        var first_options: collection.TableOptions = zero
+        let (first_table, first_table_error) = collection.table_with(&f, 11u64, &theme, "Files", columns[0usize..3usize], first_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, first_options)
+        let (first_page, first_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if first_table_error != ok || first_page_error != ok { os.exit(138i32) }
+        first_page[0usize] = first_table
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), first_page[0usize..1usize]), time.Instant { nanos: 5550000000i64 + i64(first_step) }) != ok { os.exit(139i32) }
+        let (front_head, has_front_head) = bounds(&harness, &runtime, 12u64)
+        let (kind_head_now, has_kind_head_now) = bounds(&harness, &runtime, 16u64)
+        if !has_front_head || !has_kind_head_now { os.exit(140i32) }
+        let first_lines = testing.by_key(&harness, 11u64 + 1048601u64).count
+        if first_step == 0usize {
+            if first_lines != 0usize || testing.send(&harness, input.Event { PointerDown: testing.pointer_at(kind_head_now.x + 20.0, kind_head_now.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(kind_head_now.x + 10.0, kind_head_now.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(front_head.x + 20.0, front_head.y + 20.0) }) != ok { os.exit(141i32) }
+        }
+        if first_step == 1usize {
+            let (first_line, has_first_line) = bounds(&harness, &runtime, 11u64 + 1048601u64)
+            if first_lines != 1usize || !has_first_line || first_line.x < front_head.x - 0.5 || first_line.x > front_head.x + 0.5 { os.exit(142i32) }
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(front_head.x + 20.0, front_head.y + 20.0) }) != ok { os.exit(143i32) }
+        }
+        if first_step == 2usize && first_lines != 0usize { os.exit(144i32) }
+        first_step += 1usize
+    }
     // (D1383) A touch held 600 ms on the first row of a selectable table with
     // nothing selected toggles it into the selection; the release picks nothing.
     var held_chose: Chosen = zero
