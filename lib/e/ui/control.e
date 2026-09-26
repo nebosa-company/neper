@@ -5447,7 +5447,8 @@ fn tab_view(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str
 // (D1310) `collapsible`: a wish below half of `low` reports 0, the pane shut.
 type Handle = struct { runtime: *widget.Runtime, pane: widget.Key, bound: widget.Key, vertical: bool, size: f32, thick: f32, low: f32, high: f32, reserve: f32, change: widget.Change[f32], cell: *SashCell, has_cell: bool, collapsible: bool }
 type Nudge = struct { handle: *Handle, amount: f32 }
-type SashCell = struct { initial: f32, start: f32, dragging: bool, cancelled: bool }
+// (D1356) `open` is the last size above 0, which a collapse eases down from.
+type SashCell = struct { initial: f32, start: f32, dragging: bool, cancelled: bool, open: f32 }
 
 fn sash_cell(runtime: *widget.Runtime, key: widget.Key, size: f32) -> (*SashCell, bool) {
     var none: *SashCell = zero
@@ -5457,7 +5458,7 @@ fn sash_cell(runtime: *widget.Runtime, key: widget.Key, size: f32) -> (*SashCell
     let (id, found) = widget.find_by_key(s, key)
     if found != 1usize { ret (none, false) }
     var build = widget.BuildContext { runtime: runtime, element: id, frame: 0u64 }
-    let (kept, _, kept_error) = widget.state[SashCell](&build, key, SashCell { initial: size, start: size, dragging: false, cancelled: false })
+    let (kept, _, kept_error) = widget.state[SashCell](&build, key, SashCell { initial: size, start: size, dragging: false, cancelled: false, open: size })
     if kept_error != ok { ret (none, false) }
     ret (kept, true)
 }
@@ -5587,8 +5588,7 @@ fn sash_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // value the size ("240 px"), controlling the pane. (D1212) A double-click restores
 // the size the pane was first built at, and Escape during a drag restores the
 // size the drag began at and ignores the rest of that drag.
-// ponytail: no snap-to-close, size readout or resize cursor; the default size is
-// the first built one, not a separate caller value.
+// ponytail: the default size is the first built one, not a separate caller value.
 fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node, bar: bool) -> (widget.Node, err) {
     let (made, made_error) = pane_with_collapse(a, key, t, label, axis, size, low, high, bound, reserve, change, content, bar, false)
     ret (made, made_error)
@@ -5599,7 +5599,8 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 // `low` or the sash's double-click opens it again.
 // (D1333) While its sash is dragged it shows its size in a plain tooltip.
 // (D1334) Over or dragging its sash, the pointer is the resize cursor.
-// ponytail: the collapse does not animate.
+// (D1356) Collapse and reopen ease the size over `duration-medium-2`.
+// ponytail: the standard ease-in-out curve, not the emphasized pair.
 fn resizable_pane_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node, collapsible: bool) -> (widget.Node, err) {
     let (named, named_error) = mem.alloc[u8](a, label.len + 7usize)
     if named_error != ok { ret (zero, TooLarge) }
@@ -5652,6 +5653,16 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     let (handles, handles_error) = mem.alloc[Handle](a, 1usize)
     if handles_error != ok { ret (zero, TooLarge) }
     let (kept, has_kept) = sash_cell(t.runtime, key + 2u64, size)
+    // (D1356, docs/ux/components/ResizablePane, collapse) A collapsible pane eases
+    // shut from its last open size and open to its new one; drags stay direct.
+    var shown = size
+    if collapsible && has_kept {
+        if size > 0.0 { kept.open = size }
+        var open_goal: f32 = 0.0
+        if size > 0.0 { open_goal = 1.0 }
+        let opened = eased_on(t, key + 2u64, key + 3u64, open_goal, false, t.tokens.durations.medium2)
+        shown = kept.open * opened
+    }
     handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: hit, low: low, high: high, reserve: reserve, change: change, cell: kept, has_cell: has_kept, collapsible: collapsible }
     let (nudges, nudges_error) = mem.alloc[Nudge](a, 6usize)
     if nudges_error != ok { ret (zero, TooLarge) }
@@ -5671,12 +5682,12 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     var grip = style.defaults()
     let full = style.Length { Percent: 100.0 }
     if vertical {
-        pane_style.height = style.Length { Px: size }
+        pane_style.height = style.Length { Px: shown }
         pane_style.width = full
         grip.height = style.Length { Px: hit }
         grip.width = full
     } else {
-        pane_style.width = style.Length { Px: size }
+        pane_style.width = style.Length { Px: shown }
         pane_style.height = full
         grip.width = style.Length { Px: hit }
         grip.height = full

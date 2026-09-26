@@ -26015,3 +26015,17 @@ colours...") is still missing.
 `ui_pickers3_v2` finds the touch panel well below the trigger rather than 4
 under it, and its thumb and mode checks still pass. Its later pumps are now a
 second apart. On Windows and Linux.
+
+## D1356 — Collapsible panes ease shut and open
+
+The ResizablePane spec animates collapse and reopen over `duration-medium-2`.
+The sash's cell now keeps `open`, the last size above 0. A collapsible pane
+eases an openness between 0 and 1 (`eased_on`, slot `key + 3` on the sash) and
+draws at `open * openness`, so a collapse shrinks from the size it had and a
+reopen grows to the new one. Drags keep the openness at 1 and stay direct.
+The curve is the standard ease-in-out, not the spec's emphasized pair. The
+stale "no snap-to-close, size readout or resize cursor" note is gone (D1310,
+D1333 and D1334 did those).
+
+`ui_panes` sets a 120 pane to 0: a frame 100 ms later it is part way, and a
+second later it is shut, on Windows and Linux.
