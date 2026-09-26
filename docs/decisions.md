@@ -27490,3 +27490,16 @@ The Gauge spec: "Loading: the track with a Skeleton block in the readout". The c
 The NotificationList spec: "New notices insert at the top with a `duration-medium-1` `ease-emphasized-decelerate` slide; the list does not jump if the person has scrolled". D1359 slid the rows by 72 a notice, whatever the rows' heights, on the standard curve, and slid them even when the person had scrolled down. The slide now runs on the emphasized-decelerate curve (`eased_on_curve`). It lifts the rows by the measured heights of the first rows as last laid out, 72 for a row not yet laid out, pro rata for the part of a notice still to come. While the list's viewport stands scrolled, it does not slide at all.
 
 `ui_status5_v2` checks this on Windows and Linux: scrolled down a twelve-notice list, a notice put at the top leaves the fourth row where it stood. Against the old control it slides (exit 76). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1510 — The Interface carries what the checker keeps of a declaration
+
+The first step of C036's remaining line, "declarations from the Interface instead of a lexed tree": the Interface must carry everything the checker keeps of a declaration before anything can be decoded from it. D1325 made the payload read back whole, but a function record lacked what `collect_function` sets beyond the signature, and an aggregate record lacked what `collect_aggregate_declaration` sets beyond its fields.
+
+Format 15 appends an attribute tail to both, leaving the head and the signature and body hashes as they were, so every edge and hash is unchanged:
+
+- a function record ends in `{u8 attributes (intrinsic 1, variadic 2, gpu 4), 3 zero, u32 gpu_size, u32 import_library, u32 import_symbol}` and one `own` byte a parameter. The two strings are indexes plus one, zero for empty. For an extern they are the `@import` library and symbol, and otherwise the `@borrows` name and the `@noescape` spelling, as `Function` keeps them.
+- an aggregate record ends in `{u8 attributes (resource 1, reorder 2, packed 4), 3 zero, u32 align, u32 cleanup}`, the cleanup name an index plus one.
+
+`interface_payload_end` walks both tails and refuses an attribute bit the writer never sets or an `own` byte other than 0 or 1. The strings are interned in the collection pass that the Strings section is written from. The first try interned them only in `write_module`'s table, and a warm build then failed as E-LINK-0001 on the interface-only artifacts `settle` writes. A global still has no Interface record, and a generic declaration still needs its tree, so the decode, next, covers modules with neither.
+
+Both suites now expect format 15 in their artifact checks (the head fields they read by offset have not moved). Verified on Windows and Linux: the incremental fixture's cold build, warm build (every module kept) and body edit (only `dep` rebuilt); the compiler's own cold and warm artifact builds (all 37 modules kept warm); and the self-hosted compiler's fixed point, stage 2 and stage 3 byte-identical. The full suites were not run through: on both hosts they stop at conformance goldens whose `snapshot` hash follows the library sources and is stale at HEAD, independently of this change.
