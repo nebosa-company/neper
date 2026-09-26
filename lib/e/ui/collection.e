@@ -6764,30 +6764,35 @@ fn page_view_options() -> PageViewOptions {
 // said politely.
 // (D1288) A change of page slides the strip there (`page_settle`).
 // (D1378) A fling past 1000 px/s turns the page short of half its width.
-// ponytail: no reduced-motion cross-fade; the neighbours are built only while
-// the strip is dragged or settling.
+// (D1379) The settle is `duration-medium-4` on the emphasized curve; reduced
+// motion fades the new page in instead.
+// ponytail: the old page is not faded out under reduced motion; the neighbours
+// are built only while the strip is dragged or settling.
 // (D1288) A page view's settle, kept across frames: the page shown last frame,
 // the strip offset the settle began at, and when.
 type PageSettle = struct { last: usize, from: f32, since: i64, set: bool }
 
 // (D1288) The strip's offset this frame: on a change of page it starts where the
-// old page stood (a page per step, mirrored right to left) and eases to 0 over
-// `duration-medium-2`, asking for frames; none under reduced motion.
-fn page_settle(t: *const control.Theme, key: widget.Key, current: usize, w: f32, rtl: bool) -> f32 {
-    if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret 0.0 }
+// old page stood (a page per step, mirrored right to left) and eases to 0,
+// asking for frames. (D1379) Over `duration-medium-4` on
+// `ease-emphasized-decelerate`; under reduced motion no slide, and the new page
+// fades in over `duration-short-2` instead -- the second answer, its opacity.
+fn page_settle(t: *const control.Theme, key: widget.Key, current: usize, w: f32, rtl: bool) -> (f32, f32) {
+    if mem.address_of(t.runtime) == 0usize { ret (0.0, 1.0) }
+    let reduced = t.tokens.motion.reduced
     let (s, state_error) = widget.state_of(t.runtime)
-    if state_error != ok { ret 0.0 }
+    if state_error != ok { ret (0.0, 1.0) }
     let (id, found) = widget.find_by_key(s, key)
-    if found != 1usize { ret 0.0 }
+    if found != 1usize { ret (0.0, 1.0) }
     var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
     var fresh: PageSettle = zero
     let (settle, _, cell_error) = widget.state[PageSettle](&build, key + 1048576u64, fresh)
-    if cell_error != ok { ret 0.0 }
+    if cell_error != ok { ret (0.0, 1.0) }
     let now = widget.frame_time(t.runtime).nanos
     if !settle.set {
         settle.set = true
         settle.last = current
-        ret 0.0
+        ret (0.0, 1.0)
     }
     if settle.last != current {
         var from = (f32(current) - f32(settle.last)) * w
@@ -6796,16 +6801,19 @@ fn page_settle(t: *const control.Theme, key: widget.Key, current: usize, w: f32,
         settle.since = now
         settle.last = current
     }
-    if settle.from == 0.0 { ret 0.0 }
-    let span = i64(t.tokens.durations.medium2) * 1000000i64
+    if settle.from == 0.0 { ret (0.0, 1.0) }
+    var millis = t.tokens.durations.medium4
+    if reduced { millis = t.tokens.durations.short2 }
+    let span = i64(millis) * 1000000i64
     var progress: f32 = 1.0
     if span > 0i64 && now >= settle.since { progress = f32(now - settle.since) / f32(span) }
     if progress >= 1.0 {
         settle.from = 0.0
-        ret 0.0
+        ret (0.0, 1.0)
     }
     widget.request_animation_frame(t.runtime)
-    ret settle.from * (1.0 - animation.ease(.EaseInOut, progress))
+    if reduced { ret (0.0, progress) }
+    ret (settle.from * (1.0 - animation.ease(.EmphasizedDecelerate, progress)), 1.0)
 }
 
 fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []const widget.Node, current: usize, turn: widget.Change[usize], options: PageViewOptions) -> (widget.Node, err) {
@@ -6821,7 +6829,12 @@ fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: 
     if logical_moved > 0.0 && current == 0usize { moved = moved / 3.0 }
     if logical_moved < 0.0 && current + 1usize == pages.len { moved = moved / 3.0 }
     // (D1288) After a change of page the strip settles from where it stood.
-    if moved == 0.0 { moved = page_settle(t, key, current, w, rtl) }
+    var page_shown: f32 = 1.0
+    if moved == 0.0 {
+        let (settled, faded) = page_settle(t, key, current, w, rtl)
+        moved = settled
+        page_shown = faded
+    }
     let (pagings, pagings_error) = mem.alloc[Paging](a, 1usize)
     if pagings_error != ok { ret (zero, TooLarge) }
     let (page_step, has_page_step) = swipe_settle_cell(t, key)
@@ -6840,7 +6853,9 @@ fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: 
             held[0usize] = pages[page]
             var page_x = (f32(page) - f32(current)) * w
             if rtl { page_x = 0.0 - page_x }
-            strip[n] = widget.positioned(0u64, page_x + moved, 0.0, control.sized_style(w, h), held[0usize..1usize])
+            var page_look = control.sized_style(w, h)
+            if page == current { page_look.opacity = page_shown }
+            strip[n] = widget.positioned(0u64, page_x + moved, 0.0, page_look, held[0usize..1usize])
             n += 1usize
         }
         page += 1usize
