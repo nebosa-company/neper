@@ -25990,3 +25990,14 @@ caller's model. The removed row's collapse is not animated.
 
 `ui_collections5_v2` checks the notice text and Undo label for a named and an
 unnamed pair, on Windows and Linux.
+
+## D1354 — Duration boxes move focus on after two digits
+
+The DurationPicker spec's unit boxes take two digits and then focus moves on.
+`duration_boxes` now puts a relay under the hours and minutes boxes: it passes
+the typing to the caller's change and, once the text holds two digits, calls
+`widget.focus_key` on the next box through the theme's runtime. The seconds
+box is the last one and keeps focus.
+
+`ui_pickers2_v2` types "1" into hours (focus stays) and then "2" (focus is on
+minutes), on Windows and Linux.
