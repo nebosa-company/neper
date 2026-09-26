@@ -5751,7 +5751,9 @@ fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []
 // selection gesture as a `ListSelect` and the caller keeps the selected set.
 // (D1241) `bulk` are the selection bar's actions. (D1247) `loading`, with no
 // items, is how many skeleton rows (3 to 8) stand in their place.
-type ListOptions = struct { grouped: bool, dividers: bool, inset: f32, subheader: str, title: str, footnote: str, width: f32, empty_title: str, empty_message: str, select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: usize }
+// (D1415) `loading_height` is the real rows' height the skeleton rows match (72
+// when unset).
+type ListOptions = struct { grouped: bool, dividers: bool, inset: f32, subheader: str, title: str, footnote: str, width: f32, empty_title: str, empty_message: str, select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: usize, loading_height: f32 }
 
 // (D1240) A multi-select list's selection gesture: toggle the row at `index`,
 // extend the selection from the anchor to it, select all, or clear.
@@ -5953,7 +5955,7 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
         i += 1usize
     }
     if items.len == 0usize && options.loading > 0usize {
-        let (loading_node, loading_error) = loading_rows(a, key + 1u64, t, options.loading, width)
+        let (loading_node, loading_error) = loading_rows_sized(a, key + 1u64, t, options.loading, width, options.loading_height)
         if loading_error != ok { ret (zero, loading_error) }
         parts[p] = loading_node
         p += 1usize
@@ -6125,8 +6127,15 @@ fn selection_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, cou
 // `width` wide (360 when unset) in a busy group named "Loading" (keyed `key`),
 // the rows themselves out of the tree.
 // (D1386) Past 10 seconds, "Still loading" under them.
-// ponytail: the rows are the 72 avatar skeleton whatever the real row's height.
+// (D1415) `loading_rows_sized` matches the real rows' height.
 fn loading_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = loading_rows_sized(a, key, t, count, width, 72.0)
+    ret (made, made_error)
+}
+
+fn loading_rows_sized(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, width: f32, height: f32) -> (widget.Node, err) {
+    var tall = height
+    if !(tall > 0.0) { tall = 72.0 }
     var n = count
     if n < 3usize { n = 3usize }
     if n > 8usize { n = 8usize }
@@ -6138,7 +6147,7 @@ fn loading_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: 
     if bones_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < n {
-        let (bone, bone_error) = control.skeleton_row(a, 0u64, t, wide, sweep)
+        let (bone, bone_error) = control.skeleton_row_sized(a, 0u64, t, wide, tall, sweep)
         if bone_error != ok { ret (zero, bone_error) }
         bones[i] = bone
         i += 1usize

@@ -709,6 +709,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if wait_step == 2usize && (has_busy || testing.by_text(&harness, "No photos").count == 0usize) { os.exit(149i32) }
         wait_step += 1usize
     }
+    // (D1415) Skeleton rows match the real rows' height: five one-line rows of 56.
+    waiting.loading_height = 56.0
+    f = mem.arena_from(frame_storage)
+    let (short_wait, short_wait_error) = collection.list_of(&f, 990u64, &theme, "Waiting", no_rows[0usize..0usize], no_keys[0usize..0usize], waiting)
+    let (short_page, short_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if short_wait_error != ok || short_page_error != ok { os.exit(228i32) }
+    short_page[0usize] = short_wait
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), short_page[0usize..1usize]), time.Instant { nanos: 6100000000i64 }) != ok { os.exit(228i32) }
+    let (short_bones, has_short_bones) = bounds(&harness, &runtime, 991u64)
+    if !has_short_bones || !near(short_bones.height, 280.0) { os.exit(229i32) }
     // (D1249) The virtual list's thumb drags: 100 rows of 48 in a 144 viewport, so
     // 56 down the thumb moves the content 56 x 4800 / 144; a press on the strip
     // below the thumb first centres the thumb there.

@@ -8667,6 +8667,13 @@ fn skeleton_of(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
 // avatar circle and two lines 16 after it -- 14 tall at 60% and 12 tall at 40% of
 // the text's width, 8 apart.
 fn skeleton_row(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, sweep: *Sweep) -> (widget.Node, err) {
+    let (made, made_error) = skeleton_row_sized(a, key, t, width, 72.0, sweep)
+    ret (made, made_error)
+}
+
+// (D1415) `skeleton_row` `height` tall: one text bar under 64 (a one-line row),
+// two under 80, three from there (a three-line row).
+fn skeleton_row_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, sweep: *Sweep) -> (widget.Node, err) {
     var circle = skeleton_options()
     circle.shape = .Circle
     circle.sweep = sweep
@@ -8677,14 +8684,19 @@ fn skeleton_row(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, swe
     let (avatar_node, e1) = skeleton_of(a, 0u64, t, 40.0, 40.0, circle)
     let (first, e2) = skeleton_of(a, 0u64, t, text_width * 0.6, 14.0, lined)
     let (second, e3) = skeleton_of(a, 0u64, t, text_width * 0.4, 12.0, lined)
-    if e1 != ok || e2 != ok || e3 != ok { ret (zero, TooLarge) }
-    let (lines, lines_error) = mem.alloc[widget.Node](a, 4usize)
+    let (third, e4) = skeleton_of(a, 0u64, t, text_width * 0.5, 12.0, lined)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (zero, TooLarge) }
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 5usize)
     if lines_error != ok { ret (zero, TooLarge) }
     lines[2usize] = first
     lines[3usize] = second
+    lines[4usize] = third
+    var bars = 3usize
+    if height < 80.0 { bars = 2usize }
+    if height < 64.0 { bars = 1usize }
     lines[0usize] = avatar_node
-    lines[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), lines[2usize..4usize])
-    var row_style = sized_style(width, 72.0)
+    lines[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), lines[2usize..2usize + bars])
+    var row_style = sized_style(width, height)
     let side = style.Length { Px: 16.0 }
     let flat = style.Length { Px: 0.0 }
     row_style.padding = style.EdgeLengths { left: side, top: flat, right: side, bottom: flat }

@@ -26836,3 +26836,15 @@ short of the threshold still stands down 50 ms later and is home 400 ms later.
 After an armed release, the refreshing content reaches 64. The fixture's
 runtime `state_bytes` rise from 384 to 512 for the new cell. `ui_interaction`
 still passes.
+
+## D1415 — Skeleton rows match the real rows' height
+
+The List spec's loading state shows skeleton rows "matching the real row's
+height". `ListOptions` gains `loading_height`, which is 72 when unset. The new
+`loading_rows_sized` and `control.skeleton_row_sized` build rows that tall.
+Rows under 64 get one text bar (a one-line row) and rows under 80 get two; from
+80 up they get three. `skeleton_row` and `loading_rows` keep their 72.
+
+`ui_collections_v2` loads a list of one-line rows. Its five skeleton rows stand
+280 tall, on Windows and Linux. `ui_containers_v2` and `ui_collections2_v2`
+still pass.
