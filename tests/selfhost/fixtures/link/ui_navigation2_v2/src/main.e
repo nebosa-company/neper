@@ -532,6 +532,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         pathed.edit = s.subs[6usize]
         pathed.go = s.subs[7usize]
         pathed.cancel = s.subs[8usize]
+        pathed.complete = s.subs[12usize]
         pathed.editing = path_step == 1usize
         pathed.path = path_bytes
         pathed.path_len = path_len
@@ -556,6 +557,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let cancels_before = s.counters[8usize].count
             if widget.focus(&runtime, testing.by_key(&harness, 2360u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.counters[7usize].count != goes_before + 1usize { os.exit(103i32) }
             if testing.press_key(&harness, 27u32, zero) != ok || s.counters[8usize].count != cancels_before + 1usize { os.exit(104i32) }
+            // (D1396) Tab asks to complete the folder name, and the field keeps the focus.
+            let completes_before = s.counters[12usize].count
+            if widget.focus(&runtime, testing.by_key(&harness, 2360u64).element) != ok || testing.press_key(&harness, 9u32, zero) != ok || s.counters[12usize].count != completes_before + 1usize { os.exit(127i32) }
+            let (still_there, has_still) = testing.focused(&harness)
+            if !has_still || still_there.slot != testing.by_key(&harness, 2360u64).element.slot { os.exit(128i32) }
         }
         path_step += 1usize
     }
