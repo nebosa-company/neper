@@ -27205,3 +27205,14 @@ The SplitView spec folds into a stack on compact windows: "the view stacks when 
 The Popup spec emphasizes a suggestion's matching text at weight 600. `popup_row_match` already split the label round the match, but it stood the match in a heavier role, `title-small` or `title-medium`, with the ramp's size and line height, because there was no way to ask for a weight. With D1453's faces the match now keeps the row's own role and asks for weight 600. A theme with a 600 face draws it there; one without draws the row's face. `popup_of`'s "no match highlighting" marker was stale, and now points at `popup_row_match`.
 
 `ui_overlays2_v2` (popups and the search view) passes on Windows and Linux. D1453's `text_shape` checks cover the face choice itself.
+
+## D1466 — Strong text and the current breadcrumb stand at weight 600
+
+Two more places used a heavier role as a stand-in for weight 600.
+
+- **Strong spans.** Rich text's strong spans took `title-small` or `title-medium`, where the RichText spec says "weight 600, same colour" and no role change. They now keep the base role and ask for weight 600 (`span_options`; `span_role` leaves Strong at the base).
+- **The current breadcrumb.** It was `title-small` for `body-medium` at 600. It is now `body-medium` asking for weight 600.
+
+Themes without a 600 face draw these in the regular face at the same size.
+
+`text_shape` checks on Windows and Linux that a strong span is `body-medium` at 600, an emphasis span `body-medium` italic, and a code span mono in the `code` role. All 103 `ui_*` fixtures pass on both hosts.

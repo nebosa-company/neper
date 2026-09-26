@@ -413,6 +413,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     asked.mono = true
     let (fixed_look, fixed_error) = control.text_style_faced(a, &theme, asked)
     if fixed_error != ok || fixed_look.fonts[0usize].font.id != 24u32 { os.exit(26i32) }
+    // (D1466) Strong asks for weight 600 in the base role; emphasis for italic;
+    // code for fixed pitch in the code role.
+    let strong_span = control.span_options(.Strong, .BodyMedium)
+    let emphasis_span = control.span_options(.Emphasis, .BodyMedium)
+    let code_span = control.span_options(.Code, .BodyMedium)
+    if strong_span.role != .BodyMedium || strong_span.weight != 600u32 || strong_span.italic { os.exit(29i32) }
+    if emphasis_span.role != .BodyMedium || !emphasis_span.italic || emphasis_span.weight != 0u32 { os.exit(30i32) }
+    if code_span.role != .Code || !code_span.mono { os.exit(31i32) }
     // (D1458) A size in the options replaces the role's and scales the line height.
     var sized = control.text_options()
     let (role_look, role_error) = control.text_style_faced(a, &theme, sized)
