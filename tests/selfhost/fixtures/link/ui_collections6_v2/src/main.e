@@ -262,6 +262,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.dispatch(&runtime, shift_key(true)) != ok || !widget.modifiers(&runtime).shift || testing.tap(&harness, grid.x + 100.0, grid.y + 120.0) != ok || widget.dispatch(&runtime, shift_key(false)) != ok || widget.modifiers(&runtime).shift || store.last.kind != .Extend || store.state.row != 2usize || store.state.column != 0usize || store.state.anchor_row != 0usize || store.state.anchor_column != 1usize { os.exit(111i32) }
     let (root_2s, build_2s_error) = build(&f, &theme, ctx, store)
     if build_2s_error != ok || testing.pump(&harness, root_2s, now) != ok || testing.by_text(&harness, "6 cells selected").count != 1usize { os.exit(112i32) }
+    // (D1382) A range of numbers sums: Port of gamma and staging is 22 + 22; a
+    // range with a name in it does not; the sum is written with thousands commas.
+    let number_source = collection.GridSource { ctx: ctx, count: grid_count, cell: grid_cell }
+    var number_state: collection.GridState = zero
+    number_state.row = 2usize
+    number_state.anchor_row = 3usize
+    number_state.column = 1usize
+    number_state.anchor_column = 1usize
+    let (port_sum, port_numbers, port_whole) = collection.grid_sum(number_source, number_state)
+    number_state.column = 0usize
+    let (_, mixed_numbers, _) = collection.grid_sum(number_source, number_state)
+    if !port_numbers || !port_whole || port_sum != 44.0 || mixed_numbers { os.exit(160i32) }
+    var grouped: [24]u8 = zero
+    let grouped_len = collection.write_sum(grouped[..], 1234567.0, true)
+    let halves_len = collection.write_sum(grouped[12usize..24usize], 11244.5, false)
+    let (read_back, read_whole, read_ok) = collection.read_number("1,234.5")
+    if !testing.same_text(grouped[0usize..grouped_len], "1,234,567") || !testing.same_text(grouped[12usize..12usize + halves_len], "11,244.50") || !read_ok || read_whole || read_back != 1234.5 { os.exit(161i32) }
     // A second tap within 500 ms keeps both ordinary tap notifications and adds
     // edit mode for an editable cell.
     let double_at = time.Instant { nanos: 2200000000i64 }
