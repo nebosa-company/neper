@@ -5228,6 +5228,14 @@ fn begin_drag(widget_runtime: *Runtime, payload: u64) -> err {
     ret ok
 }
 
+// (D1477) Where the pointer went down for the gesture now under way, so a build
+// can move a dragged thing by the pointer's travel.
+fn pointer_origin(widget_runtime: *const Runtime) -> geometry.Point {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret zero }
+    ret s.arena_state.down
+}
+
 // (D1344) Where the pointer last stood, for a build that follows a drag.
 fn pointer_position(widget_runtime: *const Runtime) -> geometry.Point {
     let s = mem.cast[*State](widget_runtime.state)
