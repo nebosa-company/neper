@@ -233,6 +233,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let dimmed = style.layer(page, style.color(&tokens, .Scrim), tokens.states.scrim)
     let high = style.color(&tokens, .SurfaceContainerHigh)
     // The palette, Test active: 560 wide, centred, 64 down over the scrim.
+    // (D1432) The palette fades in over `duration-short-4` from its first
+    // builds: on its first frame its scrim is not yet dimmed; two early frames
+    // let it arrive before the look at 1 s.
+    var palette_step = 0usize
+    while palette_step < 2usize {
+        let palette_at = time.Instant { nanos: 500000000i64 + i64(palette_step) * 100000000i64 }
+        if testing.begin(&harness, palette_at) != ok { os.exit(11i32) }
+        let (root_in, build_in_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Palette, 1usize)
+        if build_in_error != ok || testing.pump(&harness, root_in, palette_at) != ok { os.exit(11i32) }
+        if palette_step == 0usize {
+            let (early_shot, early_shot_error) = testing.snapshot(&harness, a)
+            let early_dimmed = style.layer(style.color(&tokens, .Background), style.color(&tokens, .Scrim), tokens.states.scrim)
+            if early_shot_error != ok || is_color(early_shot, at(5.0, 5.0), early_dimmed) { os.exit(11i32) }
+        }
+        palette_step += 1usize
+    }
+    if testing.begin(&harness, time.Instant { nanos: 1000000000i64 }) != ok { os.exit(11i32) }
     let (root, build_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Palette, 1usize)
     if build_error != ok || testing.pump(&harness, root, time.Instant { nanos: 1000000000i64 }) != ok { os.exit(11i32) }
     let (shot, shot_error) = testing.snapshot(&harness, a)
@@ -339,6 +356,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Down moves on, Up from the first wraps, Escape dismisses.
     let (root_4, build_4_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Switcher, 0usize)
     if build_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok { os.exit(29i32) }
+    // (D1432) The switcher fades and scales in over `duration-short-4` from its
+    // first builds; look once it has arrived.
+    var switcher_step = 0usize
+    while switcher_step < 2usize {
+        let switcher_at = time.Instant { nanos: 1310000000i64 + i64(switcher_step) * 400000000i64 }
+        if testing.begin(&harness, switcher_at) != ok { os.exit(29i32) }
+        let (root_4_in, build_4_in_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Switcher, 0usize)
+        if build_4_in_error != ok || testing.pump(&harness, root_4_in, switcher_at) != ok { os.exit(29i32) }
+        switcher_step += 1usize
+    }
     let (shot_4, shot_4_error) = testing.snapshot(&harness, a)
     if shot_4_error != ok { os.exit(30i32) }
     let (list, has_list) = lifted(&harness, 200u64)

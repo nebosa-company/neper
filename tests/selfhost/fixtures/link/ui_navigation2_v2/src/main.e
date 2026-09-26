@@ -439,11 +439,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Its menu 2 below on `surface-container`, at least 200 wide; five commands
     // 32 tall, a separator line before Autosave, Autosave checked, Delete
     // disabled.
+    // (D1432) The menu fades and slides 4 down over `duration-short-4` from its
+    // first builds; look once it has arrived.
+    var arrive_step = 0usize
+    while arrive_step < 2usize {
+        let arrive_at = time.Instant { nanos: 3000000000i64 + i64(arrive_step) * 500000000i64 }
+        if testing.begin(&harness, arrive_at) != ok { os.exit(28i32) }
+        let (root_menu_in, root_menu_in_error) = build(&f, &theme, s, false, 0usize)
+        if root_menu_in_error != ok || testing.pump(&harness, root_menu_in, arrive_at) != ok { os.exit(28i32) }
+        arrive_step += 1usize
+    }
+    let (shot_menu, shot_menu_error) = testing.snapshot(&harness, a)
+    if shot_menu_error != ok { os.exit(28i32) }
     let (menu, has_menu) = testing.overlay_of(&harness, testing.by_key(&harness, 2402u64).element)
-    if !has_menu || !near(menu.y, file.y + 26.0) || menu.width < 200.0 || !is_color(shot_3, at(menu.x + 100.0, menu.y + 4.0), style.color(&tokens, .SurfaceContainer)) { os.exit(28i32) }
+    if !has_menu || !near(menu.y, file.y + 26.0) || menu.width < 200.0 || !is_color(shot_menu, at(menu.x + 100.0, menu.y + 4.0), style.color(&tokens, .SurfaceContainer)) { os.exit(28i32) }
     let (open_row, has_open_row) = bounds(&harness, &runtime, 2404u64)
     let (auto_row, has_auto_row) = bounds(&harness, &runtime, 2406u64)
-    if !has_open_row || !has_auto_row || !near(open_row.height, 32.0) || !near(auto_row.y, open_row.y + 81.0) || !is_color(shot_3, at(menu.x + 100.0, open_row.y + 72.5), style.color(&tokens, .OutlineVariant)) { os.exit(29i32) }
+    if !has_open_row || !has_auto_row || !near(open_row.height, 32.0) || !near(auto_row.y, open_row.y + 81.0) || !is_color(shot_menu, at(menu.x + 100.0, open_row.y + 72.5), style.color(&tokens, .OutlineVariant)) { os.exit(29i32) }
     let (auto_node, has_auto_node) = find(tree_3, .MenuItem, "Autosave")
     let (delete_node, has_delete_node) = find(tree_3, .MenuItem, "Delete")
     let (auto_check, has_auto_check) = find(tree_3, .MenuItemCheckbox, "Autosave")

@@ -26964,3 +26964,11 @@ Checks on Windows and Linux:
 - `ui_overlays3_v2` finds a side sheet's panel not yet in place on its first frame.
 - The fixture's sheet pixel checks now look once each sheet has arrived (`arrive`, two more frames).
 - All 103 `ui_*` fixtures pass.
+
+## D1432 — Palette, switcher and menu bar motion; motion wrappers keep the tree's shape
+
+**Motion.** The CommandPalette spec fades the panel in and moves it 8 px down into place over `duration-short-4`. The WindowSwitcher spec fades and scales it from 0.95, and the MenuBar spec brings menus in with a fade and a 4 px slide down. `centred_modal` now counts `overlay.appeared_share` from the panel's first build: the dimmed palette slides down 8 (the new `overlay.slid_in`) over its fading scrim (`with_scrim_share`), and the undimmed switcher scales from 95% (`scaled_in`). `bar_menu_at` slides its menus 4 down.
+
+**Shape.** Moving focus into the palette showed that a motion wrapper added only while animating changes the tree's shape when the motion ends. The reconciler then remakes everything under it, and a focused field loses its focus. `scaled_in`, `grown_in`, `slid_in` and `entered_overlay` now always wrap. So do the D1431 sheet slide, the D1423 month slide, the D1424 year-view fade, this palette and switcher, and the D1412 split push (whenever the detail shows); at the end of a motion the wrappers are identity.
+
+**Checks.** `ui_overlays4_v2` finds the palette's scrim not yet dimmed on its first frame, looks at the palette and switcher once they have arrived, and types into the palette. `ui_navigation2_v2` looks at its menu once it has arrived. `ui_transient`'s depth limit rises from 12 to 16 for the wrappers. All 103 `ui_*` fixtures pass on Windows and Linux.
