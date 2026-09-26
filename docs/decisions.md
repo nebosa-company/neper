@@ -25863,3 +25863,35 @@ landing line is still to come.
 `ui_collections2_v2` holds the Kind header mid-drag: it is lifted; released,
 it rests, on Windows and Linux; `ui_tabular`, `ui_collections3_v2` and
 `ui_drag_drop` still pass on both.
+
+## D1346 — Dock panels drag to another slot or tear off
+
+The DockLayout spec's panel moving. A docked panel's header now drags it away
+(`DockPanelOptions.drag_payload`, a drag whose payload carries
+`dock_payload_tag`). While one is dragged the layout adds, after its own layers:
+
+- **Tear-off area** (`key + 1048799`) over the whole layout. A drop there
+  floats the panel where it was dropped.
+- **Dock guide** over the layout's centre: 32 targets, 4 apart, on
+  `surface-container-high` at elevation 2, for the left, right and bottom
+  slots (`key + 1048800 + slot`). The target under the pointer is `primary` /
+  `on-primary`, and a drop on it moves the panel to that slot.
+- **Drop preview**: `primary-container` at 72% with a 2 `primary` edge, where
+  that slot would stand.
+- **Ghost**: the panel's name in a 32 tall `surface-container-high` chip at 92%
+  under the pointer (`key + 1048700`).
+
+Each drop is a `Move` through `dock_apply`, which places a torn-off panel at the
+drop.
+
+The layers are always a stack and the drag's layers come after the layout's,
+so the tree under a drag keeps its shape. Putting them first had renumbered the
+unkeyed layers and killed the pressed header mid-drag.
+
+Still to come: one guide per slot under the pointer, top and centre targets,
+and the fade and slide.
+
+`ui_containers4_v2` drags the left slot's panel. The ghost stands, and a drop
+on the right target moves it to the right slot. Dragged again and dropped in
+the open, it floats there. This passes on Windows and Linux, and
+`ui_containers2_v2`, `ui_containers3_v2` and `ui_workspace` still pass on both.

@@ -3375,7 +3375,9 @@ fn dock_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
 // -- empty or one each --, the current one and a pick each), and the Maximise and
 // Dock actions (none: no button).
 // (D1297) `move` hears a floating panel's header dragged: each move's distance.
-type DockPanelOptions = struct { focused: bool, floating: bool, maximised: bool, busy: bool, empty: str, tabs: []const str, counts: []const str, current: usize, picks: []const widget.Submit, maximise: *const widget.Submit, dock: *const widget.Submit, move: widget.Change[geometry.Point] }
+// (D1346) `drag_payload`, when set, lets a docked panel's header drag it away as
+// a drag carrying the payload (the dock layout's panel moves).
+type DockPanelOptions = struct { focused: bool, floating: bool, maximised: bool, busy: bool, empty: str, tabs: []const str, counts: []const str, current: usize, picks: []const widget.Submit, maximise: *const widget.Submit, dock: *const widget.Submit, move: widget.Change[geometry.Point], drag_payload: u64 }
 
 fn dock_panel_options() -> DockPanelOptions {
     var out: DockPanelOptions = zero
@@ -3383,7 +3385,7 @@ fn dock_panel_options() -> DockPanelOptions {
 }
 
 // (D1297) A panel header's gestures: a double press maximises, a drag moves.
-type DockHeader = struct { maximise: *const widget.Submit, move: widget.Change[geometry.Point] }
+type DockHeader = struct { maximise: *const widget.Submit, move: widget.Change[geometry.Point], runtime: *widget.Runtime, payload: u64 }
 
 fn dock_header_gesture(ctx: *void, g: widget.Gesture) -> err {
     let h = mem.cast[*DockHeader](ctx)
@@ -3391,6 +3393,10 @@ fn dock_header_gesture(ctx: *void, g: widget.Gesture) -> err {
     case .DoubleTap as at:
         if mem.address_of(h.maximise) == 0usize { ret ok }
         ret widget.fire_submit(*h.maximise)
+    case .DragStart as at:
+        // (D1346) A docked panel's header starts the panel's move.
+        if h.payload != 0u64 && mem.address_of(h.runtime) != 0usize { ret widget.begin_drag(h.runtime, h.payload) }
+        ret ok
     case .DragMove as d:
         ret widget.fire_change[geometry.Point](h.move, d.delta)
     default:
@@ -3587,18 +3593,19 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
         parts[0usize] = widget.stack(0u64, header, parts[3usize..5usize])
     }
     let moving = floating && widget.change_set[geometry.Point](options.move.invoke)
-    if mem.address_of(options.maximise) != 0usize || moving {
+    let tearing = !floating && options.drag_payload != 0u64
+    if mem.address_of(options.maximise) != 0usize || moving || tearing {
         let (header_child, header_child_error) = mem.alloc[widget.Node](a, 1usize)
         if header_child_error != ok { ret (zero, TooLarge) }
         header_child[0usize] = parts[0usize]
         let (headers, headers_error) = mem.alloc[DockHeader](a, 1usize)
         if headers_error != ok { ret (zero, TooLarge) }
-        headers[0usize] = DockHeader { maximise: options.maximise, move: options.move }
+        headers[0usize] = DockHeader { maximise: options.maximise, move: options.move, runtime: t.runtime, payload: options.drag_payload }
         let gesture = widget.GestureAction { ctx: mem.cast[*void](&headers[0usize]), invoke: dock_header_gesture }
         // (D1297) A floating panel's header drags it (keyed `key + 4096`).
         var gestures = 1u8
         var header_key = 0u64
-        if moving {
+        if moving || tearing {
             gestures = 1u8 | widget.GESTURE_DRAG
             header_key = key + 4096u64
         }
@@ -4006,12 +4013,58 @@ fn dock_apply(model: *DockModel, placements: []DockPlacement, e: DockEvent) {
         if side_slot(p.slot) { model.current[slot_index(p.slot)] = e.panel }
     }
     if e.kind == .Move {
+        // (D1346) Torn off to float, it stands where it was dropped.
+        if e.slot == .Floating && p.slot != .Floating && (e.offset.x != 0.0 || e.offset.y != 0.0) {
+            p.x = e.offset.x
+            p.y = e.offset.y
+        }
         p.slot = e.slot
         if side_slot(e.slot) {
             p.home = e.slot
             model.current[slot_index(e.slot)] = e.panel
             model.collapsed[slot_index(e.slot)] = false
         }
+    }
+}
+
+// (D1346) A dock drag's payload: this tag plus the panel plus one.
+fn dock_payload_tag() -> u64 {
+    ret 2199023255552u64
+}
+
+// (D1346) Which panel a drag carries, if a dock panel's.
+fn dock_dragged(runtime: *widget.Runtime, count: usize) -> (usize, bool) {
+    if mem.address_of(runtime) == 0usize { ret (0usize, false) }
+    let (payload, has_payload) = widget.dragging(runtime)
+    if !has_payload || payload <= dock_payload_tag() || payload > dock_payload_tag() + u64(count) { ret (0usize, false) }
+    ret (usize(payload - dock_payload_tag() - 1u64), true)
+}
+
+// (D1346) A drop on a guide target, or on the layout (tear-off): the panel the
+// drag carries moves to `slot`, a floating one where it was dropped, relative to
+// the layout keyed `layout`.
+type DockDrop = struct { runtime: *widget.Runtime, layout: widget.Key, slot: DockSlot, count: usize, change: widget.Change[DockEvent] }
+
+fn dock_drop_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*DockDrop](ctx)
+    switch g {
+    case .Drop as dropped:
+        if dropped.payload <= dock_payload_tag() || dropped.payload > dock_payload_tag() + u64(d.count) { ret ok }
+        let panel = usize(dropped.payload - dock_payload_tag() - 1u64)
+        var at: geometry.Point = zero
+        if d.slot == .Floating {
+            let (s, state_error) = widget.state_of(d.runtime)
+            if state_error == ok {
+                let (id, found) = widget.find_by_key(s, d.layout)
+                if found == 1usize {
+                    let (area, has_area) = widget.bounds_of(d.runtime, id)
+                    if has_area { at = geometry.Point { x: max_f(dropped.position.x - area.x, 1.0), y: max_f(dropped.position.y - area.y, 1.0) } }
+                }
+            }
+        }
+        ret widget.fire_change[DockEvent](d.change, DockEvent { kind: .Move, panel: panel, slot: d.slot, sizes: zero, offset: at })
+    default:
+        ret ok
     }
 }
 
@@ -4055,6 +4108,8 @@ fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: Doc
         options.move = widget.Change[geometry.Point] { ctx: mem.cast[*void](&drags[0usize]), invoke: dock_drag_fire }
     } else {
         options.maximise = maximise
+        // (D1346) A docked panel drags away by its header.
+        options.drag_payload = dock_payload_tag() + u64(shown) + 1u64
         var n = 0usize
         var i = 0usize
         while i < placements.len {
@@ -4104,9 +4159,10 @@ fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: Doc
 // `dock_apply` turns into the caller's next model and placements. A group in the
 // tree.
 // (D1298) A floating panel drags by its header (`Drag`, which `dock_apply` applies).
-// ponytail: tearing a docked panel off is the caller's (a Move event through
-// dock_apply); no drag ghost, dock guide or drop preview (its sashes restore on a
-// double press through D1212).
+// (D1346) A docked panel drags by its header: the ghost, the dock guide with its
+// drop preview, and a drop elsewhere tearing it off to float, each a `Move`.
+// ponytail: one guide over the layout's centre (not one per slot under the
+// pointer), no top or centre targets, and no fade or slide.
 fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: DockModel, placements: []const DockPlacement, contents: []const widget.Node, centre: widget.Node, change: widget.Change[DockEvent], width: f32, height: f32) -> (widget.Node, err) {
     if contents.len != placements.len { ret (zero, TooLarge) }
     let (main_child, main_child_error) = mem.alloc[widget.Node](a, 1usize)
@@ -4296,10 +4352,137 @@ fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model
         }
         i += 1usize
     }
+    // (D1346, docs/ux/components/DockLayout, moving) While a panel is dragged: the
+    // tear-off area under everything (`key + 1048799`, a drop there floats it); the
+    // dock guide over the layout's centre -- 32 targets 4 apart on
+    // `surface-container-high` for the left, right and bottom slots (`key + 1048800 +
+    // slot`), the one under the pointer `primary` / `on-primary` -- with the drop
+    // preview, `primary-container` at 72% where that slot would stand; and the
+    // ghost, the panel's name in a 32 tall `surface-container-high` chip at 92%
+    // under the pointer (`key + 1048700`).
+    let (dragged_panel, is_dragging) = dock_dragged(t.runtime, placements.len)
+    var all_layers = layers[0usize..layer_count]
+    if is_dragging {
+        let (moved, moved_error) = mem.alloc[widget.Node](a, layer_count + 8usize)
+        let (drops, drops_error) = mem.alloc[DockDrop](a, 4usize)
+        let (bits, bits_error) = mem.alloc[widget.Node](a, 12usize)
+        if moved_error != ok || drops_error != ok || bits_error != ok { ret (zero, TooLarge) }
+        drops[0usize] = DockDrop { runtime: t.runtime, layout: key, slot: .Floating, count: placements.len, change: change }
+        drops[1usize] = DockDrop { runtime: t.runtime, layout: key, slot: .Left, count: placements.len, change: change }
+        drops[2usize] = DockDrop { runtime: t.runtime, layout: key, slot: .Right, count: placements.len, change: change }
+        drops[3usize] = DockDrop { runtime: t.runtime, layout: key, slot: .Bottom, count: placements.len, change: change }
+        // The layout's own layers keep their places, so nothing under the drag is
+        // rebuilt; the tear-off area comes after them, the guide over it.
+        var m = 0usize
+        var l = 0usize
+        while l < layer_count {
+            moved[m] = layers[l]
+            m += 1usize
+            l += 1usize
+        }
+        moved[m] = widget.region(key + 1048799u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drops[0usize]), invoke: dock_drop_gesture }, gestures: widget.GESTURE_DROP, enabled: true, focusable: false }, control.sized_style(width, height), zero)
+        m += 1usize
+        let pointer = widget.pointer_position(t.runtime)
+        let (rs, rs_error) = widget.state_of(t.runtime)
+        var origin: geometry.Point = zero
+        if rs_error == ok {
+            let (layout_id, layout_count) = widget.find_by_key(rs, key)
+            if layout_count == 1usize {
+                let (layout_box, has_layout_box) = widget.bounds_of(t.runtime, layout_id)
+                if has_layout_box { origin = geometry.Point { x: layout_box.x, y: layout_box.y } }
+            }
+        }
+        let local = geometry.Point { x: pointer.x - origin.x, y: pointer.y - origin.y }
+        // The guide: a 3 x 3 grid of 32 targets 4 apart, 4 in, centred.
+        let side: f32 = 32.0 * 3.0 + 4.0 * 2.0 + 8.0
+        let gx = (width - side) * 0.5
+        let gy = (height - side) * 0.5
+        var guide = control.sized_style(side, side)
+        guide.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+        guide.radius = t.tokens.radii.md
+        guide.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[2usize]) }
+        moved[m] = widget.positioned(0u64, gx, gy, guide, zero)
+        m += 1usize
+        var hot = 0usize
+        var g = 1usize
+        while g < 4usize {
+            var tx = gx + 4.0
+            var ty = gy + 4.0 + 36.0
+            var glyph: control.GlyphKind = .ChevronLeft
+            if g == 2usize {
+                tx = gx + 4.0 + 72.0
+                glyph = .ChevronRight
+            }
+            if g == 3usize {
+                tx = gx + 4.0 + 36.0
+                ty = gy + 4.0 + 72.0
+                glyph = .ChevronDown
+            }
+            let over = local.x >= tx && local.x < tx + 32.0 && local.y >= ty && local.y < ty + 32.0
+            if over { hot = g }
+            var target_look = control.sized_style(32.0, 32.0)
+            target_look.radius = t.tokens.radii.sm
+            var ink = style.color(t.tokens, .OnSurfaceVariant)
+            target_look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+            if over {
+                ink = style.color(t.tokens, .OnPrimary)
+                target_look.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+            }
+            let (arrow, arrow_error) = control.icon_square(a, ink, glyph, 18.0)
+            if arrow_error != ok { ret (zero, arrow_error) }
+            bits[3usize * g] = arrow
+            bits[3usize * g + 1usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(32.0, 32.0), bits[3usize * g..3usize * g + 1usize])
+            bits[3usize * g + 2usize] = widget.region(key + 1048800u64 + u64(g), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drops[g]), invoke: dock_drop_gesture }, gestures: widget.GESTURE_DROP, enabled: true, focusable: false }, target_look, bits[3usize * g + 1usize..3usize * g + 2usize])
+            moved[m] = widget.positioned(0u64, tx, ty, control.sized_style(32.0, 32.0), bits[3usize * g + 2usize..3usize * g + 3usize])
+            m += 1usize
+            g += 1usize
+        }
+        if hot != 0usize {
+            // The drop preview where the slot would stand.
+            var px: f32 = strip_w + 4.0
+            var py: f32 = 4.0
+            var pw = model.sizes.left
+            var ph = max_f(height - 8.0, 0.0)
+            if hot == 2usize {
+                pw = model.sizes.right
+                px = max_f(width - pw - 4.0, 0.0)
+            }
+            if hot == 3usize {
+                pw = max_f(width - strip_w - 8.0, 0.0)
+                ph = model.sizes.bottom
+                py = max_f(height - ph - 4.0, 0.0)
+            }
+            var preview = control.sized_style(pw, ph)
+            preview.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .PrimaryContainer), 0.72) }
+            preview.border = style.Border { width: 2.0, color: style.color(t.tokens, .Primary) }
+            preview.radius = t.tokens.radii.xs
+            moved[m] = widget.positioned(0u64, px, py, preview, zero)
+            m += 1usize
+        }
+        // The ghost under the pointer.
+        var chip_words = control.text_options()
+        chip_words.role = .LabelMedium
+        chip_words.wrap = .None
+        let (chip_text, chip_text_error) = control.colored_text(a, 0u64, placements[dragged_panel].name, t, chip_words, style.color(t.tokens, .OnSurface))
+        if chip_text_error != ok { ret (zero, chip_text_error) }
+        bits[0usize] = chip_text
+        var chip = style.defaults()
+        chip.height = style.Length { Px: 32.0 }
+        chip.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+        chip.radius = t.tokens.radii.sm
+        chip.opacity = 0.92
+        chip.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
+        chip.padding = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        bits[1usize] = widget.flex(key + 1048700u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, chip, bits[0usize..1usize])
+        moved[m] = widget.positioned(0u64, max_f(local.x + 12.0, 0.0), max_f(local.y + 12.0, 0.0), style.defaults(), bits[1usize..2usize])
+        m += 1usize
+        all_layers = moved[0usize..m]
+    }
     let (stacked, stacked_error) = mem.alloc[widget.Node](a, 1usize)
     if stacked_error != ok { ret (zero, TooLarge) }
-    stacked[0usize] = layers[0usize]
-    if layer_count > 1usize { stacked[0usize] = widget.stack(0u64, control.sized_style(width, height), layers[0usize..layer_count]) }
+    stacked[0usize] = all_layers[0usize]
+    // (D1346) Always a stack, so a drag's layers join it without reshaping the tree.
+    stacked[0usize] = widget.stack(0u64, control.sized_style(width, height), all_layers)
     let (focuses, focuses_error) = mem.alloc[DockFocus](a, 3usize)
     if focuses_error != ok { ret (zero, TooLarge) }
     focuses[0usize] = DockFocus { runtime: t.runtime, backward: false, centre: false }

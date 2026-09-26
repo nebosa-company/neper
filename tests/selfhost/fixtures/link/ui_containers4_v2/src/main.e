@@ -229,6 +229,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let grab = geometry.Point { x: palette_head.x + 100.0, y: palette_head.y + palette_head.height * 0.5 }
     if testing.drag(&harness, grab, geometry.Point { x: grab.x + 40.0, y: grab.y + 20.0 }, 5usize) != ok { os.exit(50i32) }
     if !(s.placements[5usize].x > start_x + 10.0) || !(s.placements[5usize].y > start_y) { os.exit(51i32) }
+    // (D1346) The left slot's panel dragged by its header: the ghost and the
+    // guide stand; over the guide's right target the preview shows, and released
+    // there the panel moves to the right slot. Dragged again and released in the
+    // open, it tears off to float where it was dropped.
+    let moved_panel = s.model.current[0usize]
+    f = mem.arena_from(frame_storage)
+    if !frame(&harness, &f, &theme, s) { os.exit(52i32) }
+    let (left_head, has_left_head) = bounds(&harness, &runtime, 240u64 + 4096u64)
+    if !has_left_head { os.exit(53i32) }
+    let hold = geometry.Point { x: left_head.x + 60.0, y: left_head.y + left_head.height * 0.5 }
+    if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(hold.x, hold.y) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(hold.x + 10.0, hold.y) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(hold.x + 30.0, hold.y + 10.0) }) != ok { os.exit(54i32) }
+    f = mem.arena_from(frame_storage)
+    if !frame(&harness, &f, &theme, s) || testing.by_key(&harness, 200u64 + 1048700u64).count != 1usize { os.exit(55i32) }
+    let (right_target, has_right_target) = bounds(&harness, &runtime, 200u64 + 1048802u64)
+    if !has_right_target { os.exit(56i32) }
+    let aim = geometry.Point { x: right_target.x + 16.0, y: right_target.y + 16.0 }
+    if testing.send(&harness, input.Event { PointerMove: testing.pointer_at(aim.x, aim.y) }) != ok { os.exit(57i32) }
+    f = mem.arena_from(frame_storage)
+    if !frame(&harness, &f, &theme, s) { os.exit(58i32) }
+    if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(aim.x, aim.y) }) != ok { os.exit(59i32) }
+    if s.placements[moved_panel].slot != .Right { os.exit(65i32) }
+    f = mem.arena_from(frame_storage)
+    if !frame(&harness, &f, &theme, s) || testing.by_key(&harness, 200u64 + 1048700u64).count != 0usize { os.exit(60i32) }
+    let torn_panel = s.model.current[1usize]
+    let (right_head, has_right_head) = bounds(&harness, &runtime, 256u64 + 4096u64)
+    let (layout_box, has_layout_box) = bounds(&harness, &runtime, 200u64)
+    if !has_right_head || !has_layout_box { os.exit(61i32) }
+    let tear = geometry.Point { x: right_head.x + 40.0, y: right_head.y + right_head.height * 0.5 }
+    let open_spot = geometry.Point { x: layout_box.x + 300.0, y: layout_box.y + 30.0 }
+    if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(tear.x, tear.y) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(tear.x - 10.0, tear.y) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(open_spot.x, open_spot.y) }) != ok { os.exit(62i32) }
+    f = mem.arena_from(frame_storage)
+    if !frame(&harness, &f, &theme, s) { os.exit(63i32) }
+    if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(open_spot.x, open_spot.y) }) != ok || s.placements[torn_panel].slot != .Floating || !(s.placements[torn_panel].x > 250.0) { os.exit(64i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(30i32) }
     try io.print("ui containers4 v2 ok\n")
     ret ok
