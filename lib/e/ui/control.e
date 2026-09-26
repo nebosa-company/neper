@@ -9062,7 +9062,10 @@ fn joined(a: *mem.Arena, head: str, tail: str) -> (str, err) {
 // rows while older notices load, and the failed-load row with Retry.
 // (D1303) Three or more notices in a row from one `source` in one day fold into
 // one row (keyed `key + 256 + index` of the first) that opens to show them.
-// ponytail: no insert motion; Up and Down aim at a folded row's hidden notices.
+// (D1359) New notices slide in at the top as `inserted` grows.
+// ponytail: Up and Down aim at a folded row's hidden notices; a slide is 72 a
+// notice whatever the rows' heights, on the standard curve, and runs even when
+// the list is scrolled.
 fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
     var options: NotificationListOptions = zero
     let (node, node_error) = notification_list_with(a, key, t, label, items, mark_read, width, height, options)
@@ -9075,7 +9078,8 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
 // named "Loading older notifications", `key + 201`); with `failed`, the row
 // "Couldn't load older notifications." and a Retry text button (`key + 202`)
 // firing `retry`.
-type NotificationListOptions = struct { has_settings: bool, settings: widget.Submit, loading: bool, failed: bool, retry: widget.Submit }
+// (D1359) `inserted` is the caller's running count of notices put at the top.
+type NotificationListOptions = struct { has_settings: bool, settings: widget.Submit, loading: bool, failed: bool, retry: widget.Submit, inserted: u32 }
 
 fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32, options: NotificationListOptions) -> (widget.Node, err) {
     if items.len > 64usize { ret (zero, TooLarge) }
@@ -9300,8 +9304,17 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
     view_style.width = style.Length { Px: inner }
     view_style.height = style.Length { Px: max_zero(height - 2.0 - 56.0 - t.tokens.sizes.divider) }
     view_style.overflow = .Clip
-    let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, rows[0usize..n])
-    if view_error != ok { ret (zero, TooLarge) }
+    // (D1359, docs/ux/components/NotificationList, insert) When `inserted` grows
+    // the rows start a row a notice higher and slide down into place over
+    // `duration-medium-1` (at once under reduced motion).
+    let settled = f32(options.inserted)
+    let arriving = eased_on(t, key, key + 999983u64, settled, false, t.tokens.durations.medium1)
+    var rows_style = style.defaults()
+    rows_style.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 - 72.0 * (settled - arriving) }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let (rows_column, rows_column_error) = mem.alloc[widget.Node](a, 1usize)
+    if rows_column_error != ok { ret (zero, TooLarge) }
+    rows_column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, rows_style, rows[0usize..n])
+    let view = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: paint.rgba(0.5, 0.5, 0.5, 0.6), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view_style, rows_column[0usize..1usize])
     // The header bar.
     var title_look = text_options()
     title_look.role = .TitleMedium

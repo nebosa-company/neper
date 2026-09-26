@@ -26057,3 +26057,20 @@ are still no top or centre targets.
 `ui_containers4_v2` drags the left panel by its header and finds the guide's
 targets inside the left slot, and the move and tear-off still land, on Windows
 and Linux.
+
+## D1359 — New notices slide in at the top
+
+The NotificationList spec inserts new notices at the top with a slide over
+`duration-medium-1`. Notices carry no identity, so the list cannot tell a new
+row from a moved one. The caller counts instead:
+`NotificationListOptions.inserted` is its running total of notices put at the
+top. When it grows, the rows' column starts 72 a notice higher (a negative top
+margin, so layout and hit-testing move with it) and eases into place (`eased_on`
+on the viewport). Under reduced motion they appear at once. The viewport is now
+built with `widget.scroll` directly, in the same shape `scroll_view` gave. The
+slide assumes 72 a notice, uses the standard curve, and runs even when the list
+is scrolled.
+
+`ui_status5_v2` raises `inserted` from 0 to 1: 100 ms later the first row stands
+higher than at rest, and a second later it is back, on Windows and Linux;
+`ui_desktop` still passes on both.
