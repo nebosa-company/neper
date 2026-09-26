@@ -4462,7 +4462,9 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // ponytail: minutes do not snap to five on a fast drag; a minute off the fives
 // puts the knob on no number.
 // (D1349) A wheel's drag, kept on the wheel: the value it started from.
-type WheelCell = struct { base: usize, held: bool }
+// (D1389) `at` is the value the drag last asked for, `last_y` and `step` the
+// last move's place and travel (a fling's speed).
+type WheelCell = struct { base: usize, held: bool, at: i64, last_y: f32, step: f32 }
 type WheelPick = struct { index: usize, pick: widget.Change[usize] }
 type WheelDrag = struct { cell: *WheelCell, has_cell: bool, selected: usize, count: usize, pick: widget.Change[usize], runtime: *widget.Runtime, key: widget.Key }
 
@@ -4490,9 +4492,14 @@ fn wheel_drag_gesture(ctx: *void, g: widget.Gesture) -> err {
         if !d.has_cell { ret ok }
         d.cell.base = d.selected
         d.cell.held = true
+        d.cell.at = i64(d.selected)
+        d.cell.last_y = at.y
+        d.cell.step = 0.0
         ret ok
     case .DragMove as moved:
         if !d.has_cell { ret ok }
+        d.cell.step = moved.position.y - d.cell.last_y
+        d.cell.last_y = moved.position.y
         // A detent every 36 up or down from where the drag began.
         let rows = (moved.position.y - moved.start.y) / 36.0
         var steps = i64(rows)
@@ -4500,11 +4507,23 @@ fn wheel_drag_gesture(ctx: *void, g: widget.Gesture) -> err {
         var wanted = i64(d.cell.base) - steps
         if wanted < 0i64 { wanted = 0i64 }
         if wanted >= i64(d.count) { wanted = i64(d.count) - 1i64 }
+        d.cell.at = wanted
         if usize(wanted) == d.selected { ret ok }
         ret widget.fire_change[usize](d.pick, usize(wanted))
     case .DragEnd as at:
-        if d.has_cell { d.cell.held = false }
-        ret ok
+        if !d.has_cell { ret ok }
+        d.cell.held = false
+        // (D1389, docs/ux/components/TimePicker, wheels) A fling -- a last move
+        // over 16 (1000 px/s at 60 Hz) -- coasts on: four more of that move's
+        // rows, held to the ends.
+        let step = d.cell.step
+        d.cell.step = 0.0
+        if step > -16.0 && step < 16.0 { ret ok }
+        var coasted = d.cell.at - i64(step * 4.0 / 36.0)
+        if coasted < 0i64 { coasted = 0i64 }
+        if coasted >= i64(d.count) { coasted = i64(d.count) - 1i64 }
+        if coasted == d.cell.at { ret ok }
+        ret widget.fire_change[usize](d.pick, usize(coasted))
     default:
         ret ok
     }
@@ -4518,7 +4537,8 @@ fn wheel_drag_gesture(ctx: *void, g: widget.Gesture) -> err {
 // turns the wheel a detent every 36, and Up and Down step it. A spin button
 // named `label` with the value as its value, keyed `key` (its rows `key + 1 +
 // offset`, 0..4).
-// ponytail: no momentum or fling; the wheel steps with the drag.
+// (D1389) A fling coasts on a few rows.
+// ponytail: the coast lands at once rather than decelerating through the rows.
 fn wheel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, values: []const str, selected: usize, pick: widget.Change[usize], width: f32) -> (widget.Node, err) {
     if values.len == 0usize || selected >= values.len { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 5usize)

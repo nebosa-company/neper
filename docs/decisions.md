@@ -26499,3 +26499,16 @@ English until there is a host locale service.
 
 `ui_pickers_v2` builds March 2026 in de-DE ("März 2026" over "Mo Di Mi ...") and
 in fr-FR ("mars 2026"); `ui_pickers2_v2` still passes, on Windows and Linux.
+
+## D1389 — Picker wheels coast after a fling
+
+The TimePicker spec's wheels have momentum. D1349's wheel cell now keeps the
+value the drag last asked for and the last move's travel. On release, a last
+move over 16 (1000 px/s at 60 Hz, above a steady drag's 9) coasts on: four
+more of that move's rows, held to the wheel's ends, reported as one pick. The
+coast lands at once rather than decelerating through the rows. D1349's steady
+two-row drag is unchanged.
+
+`ui_pickers2_v2` flicks the duration hours up 90 in three moves of 30: three rows
+with the finger and three more coasting take 1 to 7, and the earlier wheel
+checks still pass, on Windows and Linux.
