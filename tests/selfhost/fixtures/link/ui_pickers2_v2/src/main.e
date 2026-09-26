@@ -43,6 +43,20 @@ fn on_text(ctx: *void, value: str) -> err {
     ret ok
 }
 
+// (D1367) A field's text rewritten through its change, kept in its bytes.
+type ClockText = struct { bytes: []u8, len: usize }
+
+fn on_clock_text(ctx: *void, value: str) -> err {
+    let r = mem.cast[*ClockText](ctx)
+    var i = 0usize
+    while i < value.len && i < r.bytes.len {
+        r.bytes[i] = value[i]
+        i += 1usize
+    }
+    r.len = i
+    ret ok
+}
+
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.01 && d > -0.01
@@ -288,6 +302,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         filter_step += 1usize
     }
     if testing.by_key(&harness, 909u64).count != 1usize || testing.by_key(&harness, 910u64).count != 1usize || testing.by_key(&harness, 905u64).count != 0usize || testing.by_key(&harness, 908u64).count != 0usize { os.exit(52i32) }
+    // (D1367) "230 pm" typed and the focus moved away: the field is rewritten
+    // "14:30" on the 24-hour clock.
+    let (loose_clock, loose_clock_error) = mem.alloc[u8](a, 16usize)
+    if loose_clock_error != ok { os.exit(99i32) }
+    let loose_words = "230 pm"
+    var lc = 0usize
+    while lc < loose_words.len {
+        loose_clock[lc] = loose_words[lc]
+        lc += 1usize
+    }
+    var clock_text = ClockText { bytes: loose_clock, len: loose_words.len }
+    var clock_step = 0usize
+    while clock_step < 4usize {
+        f = mem.arena_from(frame_storage)
+        let (loose_field, loose_field_error) = overlay.time_field(&f, 1900u64, &theme, "Starts", loose_clock, clock_text.len, widget.Change[str] { ctx: mem.cast[*void](&clock_text), invoke: on_clock_text }, false, &s.press, s.times[0usize..8usize], s.offsets[0usize..8usize], 3usize, s.picks[0usize..8usize], "", filter_options)
+        let (clock_page, clock_page_error) = mem.alloc[widget.Node](&f, 2usize)
+        if loose_field_error != ok || clock_page_error != ok { os.exit(100i32) }
+        clock_page[0usize] = loose_field
+        clock_page[1usize] = widget.region(1995u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, control.sized_style(40.0, 40.0), zero)
+        if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, control.sized_style(400.0, 400.0), clock_page[0usize..2usize]), time.Instant { nanos: 6050000000i64 + i64(clock_step) }) != ok { os.exit(101i32) }
+        if clock_step == 1usize && widget.focus(&runtime, testing.by_key(&harness, 1900u64).element) != ok { os.exit(102i32) }
+        if clock_step == 2usize && widget.focus(&runtime, testing.by_key(&harness, 1995u64).element) != ok { os.exit(103i32) }
+        clock_step += 1usize
+    }
+    if !testing.same_text(loose_clock[0usize..clock_text.len], "14:30") { os.exit(104i32) }
     // (D1294) The dial picker at 14:30 on a 12-hour clock: the hour box says 02
     // and PM is chosen; the dial's 3 sets 15, the minute box asks to be edited,
     // and on the minute dial the sixth number sets 30.
