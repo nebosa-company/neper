@@ -26118,3 +26118,16 @@ do not snap to five on a fast drag.
 
 `ui_pickers2_v2` drags from the top of the dial round to three o'clock at 14:30:
 the hour is 15, and the release asks for the minutes, on Windows and Linux.
+
+## D1363 — Arrows move between years
+
+The Calendar spec's year view is a grid to move through with arrows. Each
+year pill in `year_grid` now stands in a scope binding Left and Right to the
+year before and after, and Up and Down to the year three off (a row). Each
+binding focuses that pill through `control.FocusTo` and holds at the ends.
+overlay.e cannot reach `collection.roving` (collection depends on overlay), so
+the four bindings are local. The view is still fifteen years round the shown
+one, not a scrolled century, and each pill is still its own Tab stop.
+
+`ui_pickers_v2` focuses 2026: Right moves to 2027 and Down to 2030, and a
+press on 2030 still picks it, on Windows and Linux.

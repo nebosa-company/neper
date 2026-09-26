@@ -3039,8 +3039,9 @@ fn year_pick_fire(ctx: *void) -> err {
 // (`primary` / `on-primary` for the shown year), keyed `key + 4096 + index`,
 // showing that year's month and leaving the year view; `width` wide, `height`
 // tall.
-// ponytail: fifteen years round the shown one, not a scrolled century; arrows do
-// not move between years (each pill is its own Tab stop).
+// (D1363) Left and Right move the focus a year, Up and Down a row of three.
+// ponytail: fifteen years round the shown one, not a scrolled century; each pill
+// is still its own Tab stop.
 fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: time.Date, marks: *const CalendarMarks, show: widget.Change[time.Date], width: f32, height: f32) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var pill_w: f32 = 64.0
@@ -3063,7 +3064,9 @@ fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: tim
     let (presses, presses_error) = mem.alloc[widget.Submit](a, count)
     let (pills, pills_error) = mem.alloc[widget.Node](a, count)
     let (rows, rows_error) = mem.alloc[widget.Node](a, (count + 2usize) / 3usize)
-    if picks_error != ok || presses_error != ok || pills_error != ok || rows_error != ok { ret (zero, TooLarge) }
+    let (hops, hops_error) = mem.alloc[control.FocusTo](a, 4usize * count)
+    let (hop_keys, hop_keys_error) = mem.alloc[widget.Shortcut](a, 4usize * count)
+    if picks_error != ok || presses_error != ok || pills_error != ok || rows_error != ok || hops_error != ok || hop_keys_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < count {
         let year = first + i32(i)
@@ -3103,7 +3106,23 @@ fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: tim
         let content = widget.aligned(0u64, .Center, .Center, control.sized_style(pill_w, pill_h), held[0usize..1usize])
         let (pill, pill_error) = control.pressable(a, pill_key, t, 3u8, digits[0usize..digit_count], look, true, chosen, &presses[i], content)
         if pill_error != ok { ret (zero, pill_error) }
-        pills[i] = pill
+        // (D1363, docs/ux/components/Calendar, year view) The arrows: Left 37, Up
+        // 38, Right 39, Down 40, each to the year that far off, held at the ends.
+        var hop = 0usize
+        while hop < 4usize {
+            var to = i
+            if hop == 0usize && i > 0usize { to = i - 1usize }
+            if hop == 1usize && i >= 3usize { to = i - 3usize }
+            if hop == 2usize && i + 1usize < count { to = i + 1usize }
+            if hop == 3usize && i + 3usize < count { to = i + 3usize }
+            hops[4usize * i + hop] = control.FocusTo { runtime: t.runtime, key: key + 4096u64 + u64(to) }
+            hop_keys[4usize * i + hop] = widget.Shortcut { key: 37u32 + u32(hop), modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&hops[4usize * i + hop]), invoke: control.focus_to_fire } }
+            hop += 1usize
+        }
+        let (held_pill, held_pill_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_pill_error != ok { ret (zero, TooLarge) }
+        held_pill[0usize] = pill
+        pills[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: hop_keys[4usize * i..4usize * i + 4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held_pill[0usize..1usize])
         i += 1usize
     }
     var r = 0usize
