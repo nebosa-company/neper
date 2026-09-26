@@ -26860,3 +26860,9 @@ The Popup spec closes the surface "over `duration-short-2` with `ease-emphasized
 The SearchBar spec runs "a 2px indeterminate progress bar" under the header when suggestions take longer than 300 ms, and keeps the previous suggestions until new ones arrive. The new `search_view_loading` is `search_view` with a `loading` flag; `search_view` itself passes false. The 300 ms wait and the 500 ms minimum come from `control.busy_visible`, held on the view's box (`key + 8192`). The bar reuses the popup-loading painter (`popup_load_paint`), 2 tall, keyed `key + 8196`, and sits across the panel's top over the rows, which stay.
 
 `ui_overlays2_v2` checks the timing on Windows and Linux. A loading view shows no bar at 0 and 100 ms. At 400 ms the bar shows, and the fallback row is still there.
+
+## D1418 — Flung wheels decelerate through their rows
+
+The TimePicker spec's wheels "flick to spin with momentum and detents". D1389 landed a fling's coast on its final value at once. Now the value is still set at once, and the wheel draws its rows running from where the fling left it to that value over `duration-medium-4`, on an ease-out cubic curve. The `WheelCell` records `coasting`, `coast_from` and `coast_since` (stamped on the next build), and the wheel asks for frames while it runs. Reduced motion lands at once. The cell lookup moves ahead of the rows, so they are built around the drawn value; the semantics value stays the chosen one.
+
+`ui_pickers2_v2` flings the hour wheel from 1 to 7, on Windows and Linux. 100 ms after the fling the rows stand short of 7 (no "09" row), and a second later they stand at 7.
