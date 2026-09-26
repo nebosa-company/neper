@@ -2623,42 +2623,10 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     ret (made, made_error)
 }
 
-// (D1431) A surface keyed `key` kept on it from its first build: how far it has
-// come in over `millis` on the emphasized-decelerate curve (0 before it exists,
-// 1 under reduced motion or once there, and from then on whatever the clock).
-type AppearSince = struct { set: bool, since: i64, arrived: bool }
-
-// (D1491) Under reduced motion it comes in over `duration-short-2`, a fade.
+// (D1431, D1491) How far a surface keyed `key` has come in: `control.appeared_share`
+// (D1496 moved it there, for badges).
 fn appeared_share(t: *const control.Theme, key: widget.Key, millis: u32) -> f32 {
-    if mem.address_of(t.runtime) == 0usize { ret 1.0 }
-    var span_millis = millis
-    if t.tokens.motion.reduced { span_millis = t.tokens.durations.short2 }
-    let (s, state_error) = widget.state_of(t.runtime)
-    if state_error != ok { ret 1.0 }
-    let (id, found) = widget.find_by_key(s, key)
-    if found != 1usize {
-        widget.request_animation_frame(t.runtime)
-        ret 0.0
-    }
-    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
-    var fresh: AppearSince = zero
-    let (kept, _, kept_error) = widget.state[AppearSince](&build, key + 8196u64, fresh)
-    if kept_error != ok { ret 1.0 }
-    let now = widget.frame_time(t.runtime).nanos
-    if kept.arrived { ret 1.0 }
-    if !kept.set {
-        kept.set = true
-        kept.since = now
-    }
-    let span = i64(span_millis) * 1000000i64
-    if span <= 0i64 || now < kept.since { ret 1.0 }
-    let progress = f32(now - kept.since) / f32(span)
-    if progress >= 1.0 {
-        kept.arrived = true
-        ret 1.0
-    }
-    widget.request_animation_frame(t.runtime)
-    ret animation.ease(.EmphasizedDecelerate, progress)
+    ret control.appeared_share(t, key, millis)
 }
 
 fn standard_sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {

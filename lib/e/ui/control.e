@@ -1827,12 +1827,35 @@ fn badge_count(a: *mem.Arena, count: i64) -> (str, err) {
 // `on-error`, emphasis `primary` / `on-primary`, neutral
 // `surface-container-highest` / `on-surface-variant` -- or a 6 `error` dot. Not in
 // the tree: its meaning belongs in the anchor's name (`badge_name`).
+// (D1496) It appears scaling up from nothing (`badge_grown`).
 fn badge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str, kind: BadgeKind) -> (widget.Node, err) {
+    let (made, made_error) = badge_bare(a, key, t, value, kind)
+    if made_error != ok { ret (zero, made_error) }
+    let (grown_node, grown_error) = badge_grown(a, t, key, made)
+    ret (grown_node, grown_error)
+}
+
+// (D1496, docs/ux/components/Badge, appear) A badge keyed `key` scales from 0
+// to 1 over `duration-short-3` on `ease-emphasized-decelerate` from its first
+// frame (`appeared_share`); reduced motion shows it at once. The scale always
+// wraps it, so its identity holds once it has come.
+fn badge_grown(a: *mem.Arena, t: *const Theme, key: widget.Key, made: widget.Node) -> (widget.Node, err) {
+    var grown: f32 = 1.0
+    if !t.tokens.motion.reduced { grown = appeared_share(t, key, t.tokens.durations.short3) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = made
+    // (D1497) The scale carries the badge's key and its kept state, so the pill
+    // inside may change shape (a count cross-fading) without losing them.
+    ret (widget.transformed(key, widget.VisualTransform { scale: grown, rotation: 0.0, offset: zero }, style.defaults(), held[0usize..1usize]), ok)
+}
+
+fn badge_bare(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str, kind: BadgeKind) -> (widget.Node, err) {
     if kind == .Dot {
         var dot = sized_style(6.0, 6.0)
         dot.background = paint.Brush { Solid: style.color(t.tokens, .Error) }
         dot.radius = 3.0
-        ret (widget.box(key, dot, zero), ok)
+        ret (widget.box(0u64, dot, zero), ok)
     }
     var ground: style.ColorRole = .Error
     var ink: style.ColorRole = .OnError
@@ -1849,7 +1872,7 @@ fn badge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str, kind: B
     caption.wrap = .None
     let (label_node, label_error) = colored_text(a, 0u64, value, t, caption, style.color(t.tokens, ink))
     if label_error != ok { ret (zero, label_error) }
-    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    let (body, body_error) = mem.alloc[widget.Node](a, 4usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = label_node
     var pill = style.defaults()
@@ -1860,7 +1883,110 @@ fn badge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str, kind: B
     let side = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
     pill.padding = style.EdgeLengths { left: side, top: flat, right: side, bottom: flat }
-    ret (widget.flex(key, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, pill, body[0usize..1usize]), ok)
+    // (D1497, docs/ux/components/Badge, change) A new count cross-fades over the
+    // old in `duration-short-2`, and the pill's width eases to the new one's on
+    // `ease-standard` (kept on the badge: the counts, slot `key + 8197`; the width
+    // `+ 8198`; the fade `+ 8199`, whose goal flips at each change).
+    let (change, has_change) = badge_change(t, key, value)
+    let (count_width, _, _, count_error) = run_metrics(a, t, .LabelSmall, value)
+    if has_change {
+        if count_error == ok {
+            var wide = count_width + 8.0
+            if wide < 16.0 { wide = 16.0 }
+            pill.width = style.Length { Px: eased_on(t, key, key + 8198u64, wide, false, t.tokens.durations.short2) }
+        }
+        var flip_goal: f32 = 0.0
+        if change.flipped { flip_goal = 1.0 }
+        let flip = eased_on(t, key, key + 8199u64, flip_goal, false, t.tokens.durations.short2)
+        var arrived = flip
+        if !change.flipped { arrived = 1.0 - flip }
+        if arrived < 1.0 && change.prior_len > 0usize {
+            let (prior_node, prior_error) = colored_text(a, 0u64, change.prior[0usize..change.prior_len], t, caption, style.color(t.tokens, ink))
+            if prior_error != ok { ret (zero, prior_error) }
+            var fresh_look = style.defaults()
+            fresh_look.opacity = arrived
+            var old_look = style.defaults()
+            old_look.opacity = 1.0 - arrived
+            body[1usize] = widget.box(0u64, fresh_look, body[0usize..1usize])
+            body[2usize] = prior_node
+            body[3usize] = widget.box(0u64, old_look, body[2usize..3usize])
+            var centre_both = pill
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = widget.aligned(0u64, .Center, .Center, style.defaults(), body[3usize..4usize])
+            pair[1usize] = widget.aligned(0u64, .Center, .Center, style.defaults(), body[1usize..2usize])
+            centre_both.padding = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat }
+            ret (widget.stack(0u64, centre_both, pair[0usize..2usize]), ok)
+        }
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, pill, body[0usize..1usize]), ok)
+}
+
+// (D1497) A badge's counts across frames: the one shown last, the one before a
+// change (up to four bytes, "99+" at most), and a flag that flips at each
+// change so the fade restarts.
+type BadgeCounts = struct { value: [4]u8, value_len: usize, prior: [4]u8, prior_len: usize, flipped: bool, set: bool }
+
+fn badge_change(t: *const Theme, key: widget.Key, value: str) -> (BadgeCounts, bool) {
+    if mem.address_of(t.runtime) == 0usize || value.len > 4usize { ret (zero, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (zero, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (zero, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: BadgeCounts = zero
+    let (kept, _, kept_error) = widget.state[BadgeCounts](&build, key + 8197u64, fresh)
+    if kept_error != ok { ret (zero, false) }
+    if !kept.set {
+        kept.set = true
+        kept.value_len = copy_text(kept.value[0usize..4usize], value)
+        ret (*kept, true)
+    }
+    if !same_text(kept.value[0usize..kept.value_len], value) {
+        kept.prior = kept.value
+        kept.prior_len = kept.value_len
+        kept.value_len = copy_text(kept.value[0usize..4usize], value)
+        kept.flipped = !kept.flipped
+    }
+    ret (*kept, true)
+}
+
+// (D1431) A surface keyed `key` kept on it from its first build: how far it has
+// come in over `millis` on the emphasized-decelerate curve (0 before it exists,
+// 1 under reduced motion or once there, and from then on whatever the clock).
+type AppearSince = struct { set: bool, since: i64, arrived: bool }
+
+// (D1491) Under reduced motion it comes in over `duration-short-2`, a fade.
+fn appeared_share(t: *const Theme, key: widget.Key, millis: u32) -> f32 {
+    if mem.address_of(t.runtime) == 0usize { ret 1.0 }
+    var span_millis = millis
+    if t.tokens.motion.reduced { span_millis = t.tokens.durations.short2 }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret 1.0 }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize {
+        widget.request_animation_frame(t.runtime)
+        ret 0.0
+    }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: AppearSince = zero
+    let (kept, _, kept_error) = widget.state[AppearSince](&build, key + 8196u64, fresh)
+    if kept_error != ok { ret 1.0 }
+    let now = widget.frame_time(t.runtime).nanos
+    if kept.arrived { ret 1.0 }
+    if !kept.set {
+        kept.set = true
+        kept.since = now
+    }
+    let span = i64(span_millis) * 1000000i64
+    if span <= 0i64 || now < kept.since { ret 1.0 }
+    let progress = f32(now - kept.since) / f32(span)
+    if progress >= 1.0 {
+        kept.arrived = true
+        ret 1.0
+    }
+    widget.request_animation_frame(t.runtime)
+    ret animation.ease(.EmphasizedDecelerate, progress)
 }
 
 // v2 (D971): a badge on the top end corner of an anchor `side` square (an icon or
