@@ -4537,12 +4537,16 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     while i < options.len {
         let row_key = key + 1u64 + u64(i)
         let state = control_state(t, row_key, true, false)
-        var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
-        var words = style.color(t.tokens, .OnSurface)
-        if chosen[i] {
-            fill = style.color(t.tokens, .SecondaryContainer)
-            words = style.color(t.tokens, .OnSecondaryContainer)
-        }
+        // (D1440, docs/ux/components/ListBox, motion) The selection fill, the
+        // label colour and a multi-select row's box change over
+        // `duration-short-2` on `ease-standard` (kept on the row, slot `+
+        // 1048599`); reduced motion changes at once.
+        var chosen_goal: f32 = 0.0
+        if chosen[i] { chosen_goal = 1.0 }
+        let picked_share = eased_on(t, row_key, row_key + 1048599u64, chosen_goal, false, t.tokens.durations.short2)
+        let selection_fill = style.color(t.tokens, .SecondaryContainer)
+        let fill = with_alpha(selection_fill, selection_fill.alpha * picked_share)
+        let words = style.mix(style.color(t.tokens, .OnSurface), style.color(t.tokens, .OnSecondaryContainer), picked_share)
         var row_style = style.defaults()
         row_style.width = style.Length { Px: row_width }
         row_style.height = style.Length { Px: row_height }
@@ -4559,7 +4563,7 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var gap: f32 = 0.0
         bits[0usize] = text_item
         if multi {
-            let (mark_node, mark_error) = choice_mark(a, t, state, chosen[i], false, false, true)
+            let (mark_node, mark_error) = choice_mark_at(a, t, state, chosen[i], false, false, true, picked_share)
             if mark_error != ok { ret (zero, mark_error) }
             bits[0usize] = mark_node
             bits[1usize] = text_item

@@ -27018,3 +27018,9 @@ Checks on Windows and Linux:
 The Pagination spec says "the current fill cross-fades in `duration-short-2`". Each page button now eases a current share on itself (slot `page_key + 1048598`). Its fill is `secondary-container` at that share, and its numerals mix from `on-surface-variant` to `on-secondary-container`, so the old page fades out as the new one fades in. Reduced motion changes at once.
 
 `ui_paged` turns to page 2, on Windows and Linux: on the turn's first frame the button is not yet `secondary-container`, and a second later it is. `ui_navigation4_v2` still passes.
+
+## D1440 — List box selection fades
+
+The ListBox spec says "the selection fill and the checkbox change over `duration-short-2` with `ease-standard`. Nothing moves." Each list box and multi-select row now eases a chosen share on itself (slot `row_key + 1048599`). The `secondary-container` fill stands at that share, the label mixes from `on-surface` to `on-secondary-container`, and a multi-select row's box uses `choice_mark_at` with the same share. Reduced motion changes at once. A single list's check glyph still appears at once.
+
+`ui_selection2_v2` picks the third row, on Windows and Linux: on the pick's first frame that row is not yet `secondary-container`, and a second later it is. Its state limits rise from 8 / 256 to 32 / 1024. All 103 `ui_*` fixtures pass on both hosts.
