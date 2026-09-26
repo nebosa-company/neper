@@ -28156,3 +28156,33 @@ Fixtures, both hosts:
 Sweeps against D1561's compiler: the 157 existing reject answers are unchanged, and none of 608 accept sources is newly refused or accepted. Stage 2 equals stage 3 on both hosts.
 
 With D1558-D1561, all of C058's lines have landed and the item closes. What H02 still leaves outside the guarantee is recorded in `m25-h02-regions.md`: `mem.address_of` and `usize` arithmetic, pins in loops, and holders the rules cannot see.
+
+## D1563 — H01's check-bodies cost, counted in instructions and cut
+
+D352 recorded H01's debug check-bodies phase over the +10% budget: +11% on `sc500k`, +16% on the compiler's own source. The same breach was re-measured before this change: wall-clock medians put `sc500k` at +9..+13% and the compiler source at +10..+17%. The spread comes from the host, not the change. So the cost is now counted in instructions: callgrind's inclusive count under `check.check_function`, for a Linux `check-file`, run against the same compiler built with `c.resources_on = false` at `check_function`. That count is deterministic, and a per-function difference between the two runs names where the pass spends.
+
+It named three things:
+
+- `resource_return_value` ran in full at every `ret`, even with no region value, view or resource in scope.
+- Every field, index and `*` the resource walk meets asks `alias_of_lent` and `alias_of_dangling`. Each built a member path in a 128-entry buffer, cleared (2 KB) once for the direct target and again for the dynamic candidates. That happened even when no local was lent to a thread or dangling, so neither question could answer yes.
+- `find_local` called `same` for every local it passed.
+
+Now:
+
+- `resource_return_value` asks `any_affine_local` first. A region needs a live mark and a view is owned, so with no affine local nothing returned can escape or transfer.
+- `alias_of_lent` and `alias_of_dangling` first scan the resource records for a lent or dangling local. Both answer only with such a local.
+- `alias_target`, `dynamic_alias_candidate` and `has_dynamic_alias_path` skip the buffer for a place with no field, index or `*` step, whose path is empty.
+- `find_local` compares lengths before calling `same`.
+
+Every gate is exact. None changes an answer.
+
+Result, instructions under `check_function`, with resources against without:
+
+| workload | D1562 with | D1563 with | D1563 without | H01 |
+|---|---|---|---|---|
+| `sc500k` | | 8,521M | 7,812M | +9.1% |
+| compiler source | 2,181M | 1,914M | 1,659M | +15.4% |
+
+`sc500k`, the row D352 judged, is inside +10%. On the compiler's own source the pass is still +15.4% in instructions and about +10.4% in wall-clock. The remaining 255M is spread thin across the hooks: name lookups for the per-statement walk, the snapshot and join at every branch, alias recording at every binding and assignment, and the affine classification of every new local. No single hook holds more than 8% of it. The compiler holds an unchecked error in nearly every function, so the "any affine local" gate rarely saves anything there. What would close the row is a per-statement answer the walk shares, not another gate.
+
+Sweeps against D1562's compiler: none of 608 accept sources and 158 reject answers changed. Stage 2 equals stage 3 on both hosts.
