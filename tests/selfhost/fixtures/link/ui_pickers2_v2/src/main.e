@@ -493,6 +493,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_flick_wheel { os.exit(115i32) }
     let flick_from = geometry.Point { x: flick_wheel.x + 30.0, y: flick_wheel.y + 160.0 }
     if testing.drag(&harness, flick_from, geometry.Point { x: flick_from.x, y: flick_from.y - 90.0 }, 3usize) != ok || flick_log.unit != 0u32 || flick_log.value != 7u32 { os.exit(116i32) }
+    // (D1418) Set to 7, the wheel draws its rows running there from 4: 100 ms on
+    // they stand short of 7 (no "09" yet), a second on at 7.
+    var coast_step = 0usize
+    while coast_step < 3usize {
+        var coast_at = 6560000000i64
+        if coast_step == 1usize { coast_at = 6660000000i64 }
+        if coast_step == 2usize { coast_at = 7560000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: coast_at }) != ok { os.exit(117i32) }
+        f = mem.arena_from(frame_storage)
+        let (coasts, coasts_error) = overlay.duration_wheels(&f, 1760u64, &theme, 7u32, 0u32, 0u32, widget.Change[overlay.DurationChoice] { ctx: mem.cast[*void](&flick_log), invoke: on_span })
+        let (coast_page, coast_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if coasts_error != ok || coast_page_error != ok { os.exit(117i32) }
+        coast_page[0usize] = coasts
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), coast_page[0usize..1usize]), time.Instant { nanos: coast_at }) != ok { os.exit(118i32) }
+        let ninth = testing.by_text(&harness, "09").count > 0usize
+        if coast_step == 1usize && ninth { os.exit(119i32) }
+        if coast_step == 2usize && !ninth { os.exit(120i32) }
+        coast_step += 1usize
+    }
     // (D1351) Date wheels on 31 January 2026: Down on the month lands on 28
     // February; Up on the year sets 2025.
     var wheel_date: time.Date = zero

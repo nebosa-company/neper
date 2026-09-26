@@ -4548,8 +4548,9 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // puts the knob on no number.
 // (D1349) A wheel's drag, kept on the wheel: the value it started from.
 // (D1389) `at` is the value the drag last asked for, `last_y` and `step` the
-// last move's place and travel (a fling's speed).
-type WheelCell = struct { base: usize, held: bool, at: i64, last_y: f32, step: f32 }
+// last move's place and travel (a fling's speed). (D1418) `coasting` from
+// `coast_from` since `coast_since` (0: not yet stamped).
+type WheelCell = struct { base: usize, held: bool, at: i64, last_y: f32, step: f32, coasting: bool, coast_from: i64, coast_since: i64 }
 type WheelPick = struct { index: usize, pick: widget.Change[usize] }
 type WheelDrag = struct { cell: *WheelCell, has_cell: bool, selected: usize, count: usize, pick: widget.Change[usize], runtime: *widget.Runtime, key: widget.Key }
 
@@ -4608,6 +4609,9 @@ fn wheel_drag_gesture(ctx: *void, g: widget.Gesture) -> err {
         if coasted < 0i64 { coasted = 0i64 }
         if coasted >= i64(d.count) { coasted = i64(d.count) - 1i64 }
         if coasted == d.cell.at { ret ok }
+        d.cell.coasting = true
+        d.cell.coast_from = d.cell.at
+        d.cell.coast_since = 0i64
         ret widget.fire_change[usize](d.pick, usize(coasted))
     default:
         ret ok
@@ -4623,9 +4627,51 @@ fn wheel_drag_gesture(ctx: *void, g: widget.Gesture) -> err {
 // named `label` with the value as its value, keyed `key` (its rows `key + 1 +
 // offset`, 0..4).
 // (D1389) A fling coasts on a few rows.
-// ponytail: the coast lands at once rather than decelerating through the rows.
+// (D1418) The coast decelerates through the rows between: the value is set at
+// once, and the rows drawn run to it over `duration-medium-4`.
 fn wheel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, values: []const str, selected: usize, pick: widget.Change[usize], width: f32) -> (widget.Node, err) {
     if values.len == 0usize || selected >= values.len { ret (zero, TooLarge) }
+    var no_cell: *WheelCell = zero
+    var cell = no_cell
+    var has_cell = false
+    if mem.address_of(t.runtime) != 0usize {
+        let (s, state_error) = widget.state_of(t.runtime)
+        if state_error == ok {
+            let (id, found) = widget.find_by_key(s, key)
+            if found == 1usize {
+                var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+                var fresh: WheelCell = zero
+                let (kept, _, kept_error) = widget.state[WheelCell](&build, key + 1048576u64, fresh)
+                if kept_error == ok {
+                    cell = kept
+                    has_cell = true
+                }
+            }
+        }
+    }
+    // (D1418, docs/ux/components/TimePicker, wheels: momentum) The rows drawn
+    // run from where the fling left the wheel to `selected` on a decelerating
+    // (ease-out cubic) curve.
+    var drawn_at = selected
+    if has_cell && cell.coasting {
+        let now = widget.frame_time(t.runtime).nanos
+        if cell.coast_since == 0i64 { cell.coast_since = now }
+        let span = i64(t.tokens.durations.medium4) * 1000000i64
+        var progress: f32 = 1.0
+        if span > 0i64 && now >= cell.coast_since { progress = f32(now - cell.coast_since) / f32(span) }
+        if t.tokens.motion.reduced || progress >= 1.0 {
+            cell.coasting = false
+        } else {
+            let left = 1.0 - progress
+            let eased = 1.0 - left * left * left
+            let travel = f32(i64(selected) - cell.coast_from) * eased
+            var passed = i64(travel + 0.5)
+            if travel < 0.0 { passed = i64(travel - 0.5) }
+            let drawn = cell.coast_from + passed
+            if drawn >= 0i64 && drawn < i64(values.len) { drawn_at = usize(drawn) }
+            widget.request_animation_frame(t.runtime)
+        }
+    }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 5usize)
     let (picks, picks_error) = mem.alloc[WheelPick](a, 7usize)
     let (presses, presses_error) = mem.alloc[widget.Submit](a, 7usize)
@@ -4634,7 +4680,7 @@ fn wheel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     var r = 0usize
     while r < 5usize {
         let offset = i64(r) - 2i64
-        let at = i64(selected) + offset
+        let at = i64(drawn_at) + offset
         var row_style = control.sized_style(width, 36.0)
         if at < 0i64 || at >= i64(values.len) {
             rows[r] = widget.box(0u64, row_style, zero)
@@ -4674,23 +4720,7 @@ fn wheel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     // The drag, kept on the wheel.
     let (drags, drags_error) = mem.alloc[WheelDrag](a, 1usize)
     if drags_error != ok { ret (zero, TooLarge) }
-    var no_cell: *WheelCell = zero
-    drags[0usize] = WheelDrag { cell: no_cell, has_cell: false, selected: selected, count: values.len, pick: pick, runtime: t.runtime, key: key }
-    if mem.address_of(t.runtime) != 0usize {
-        let (s, state_error) = widget.state_of(t.runtime)
-        if state_error == ok {
-            let (id, found) = widget.find_by_key(s, key)
-            if found == 1usize {
-                var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
-                var fresh: WheelCell = zero
-                let (kept, _, kept_error) = widget.state[WheelCell](&build, key + 1048576u64, fresh)
-                if kept_error == ok {
-                    drags[0usize].cell = kept
-                    drags[0usize].has_cell = true
-                }
-            }
-        }
-    }
+    drags[0usize] = WheelDrag { cell: cell, has_cell: has_cell, selected: selected, count: values.len, pick: pick, runtime: t.runtime, key: key }
     var up = selected
     if up > 0usize { up -= 1usize }
     var down = selected
