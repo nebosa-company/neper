@@ -169,7 +169,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 2048usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 128usize, state_bytes: 4096usize, state_classes: 8u16, max_depth: 32u16, max_commands: 2048usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -339,6 +339,61 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if fade_step == 2usize && filled { os.exit(49i32) }
         if fade_step == 3usize && !filled { os.exit(50i32) }
         fade_step += 1usize
+    }
+    // (D1496) A badge appears scaling up: 15 ms after its first frame its pill's
+    // end is not yet `error`, a second on it is.
+    var badge_step = 0usize
+    while badge_step < 4usize {
+        var badge_at = 70000000000i64 + i64(badge_step)
+        if badge_step == 2usize { badge_at = 70015000000i64 }
+        if badge_step == 3usize { badge_at = 71000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: badge_at }) != ok { os.exit(51i32) }
+        f = mem.arena_from(frame_storage)
+        let (grown_badge, grown_badge_error) = control.badge_of(&f, 900u64, &theme, "3", .Urgent)
+        let (badge_nodes, badge_nodes_error) = mem.alloc[widget.Node](&f, 1usize)
+        if grown_badge_error != ok || badge_nodes_error != ok { os.exit(52i32) }
+        badge_nodes[0usize] = grown_badge
+        var badge_ground = control.sized_style(200.0, 100.0)
+        badge_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.box(0u64, badge_ground, badge_nodes[0usize..1usize]), time.Instant { nanos: badge_at }) != ok { os.exit(53i32) }
+        if badge_step >= 2usize {
+            let (badge_box, has_badge_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 900u64).element)
+            let (badge_shot, badge_shot_error) = testing.snapshot(&harness, a)
+            if !has_badge_box || badge_shot_error != ok { os.exit(54i32) }
+            let end_red = is_color(badge_shot, at(badge_box.x + badge_box.width - 3.0, badge_box.y + badge_box.height * 0.5), style.color(&tokens, .Error))
+            if badge_step == 2usize && end_red { os.exit(55i32) }
+            if badge_step == 3usize && !end_red { os.exit(56i32) }
+        }
+        badge_step += 1usize
+    }
+    // (D1497) Its count changing from 3 to 12 cross-fades: 30 ms on both counts
+    // stand; a second on only 12 does. (This fixture's font cannot measure the
+    // digits, so the width ease is not exercised here.)
+    var change_step = 0usize
+    while change_step < 4usize {
+        var change_at = 72000000000i64 + i64(change_step)
+        var change_value = "3"
+        if change_step >= 1usize { change_value = "12" }
+        if change_step == 2usize { change_at = 72030000000i64 }
+        if change_step == 3usize { change_at = 73000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: change_at }) != ok { os.exit(57i32) }
+        f = mem.arena_from(frame_storage)
+        let (changed_badge, changed_badge_error) = control.badge_of(&f, 900u64, &theme, change_value, .Urgent)
+        let (change_nodes, change_nodes_error) = mem.alloc[widget.Node](&f, 1usize)
+        if changed_badge_error != ok || change_nodes_error != ok { os.exit(58i32) }
+        change_nodes[0usize] = changed_badge
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(200.0, 100.0), change_nodes[0usize..1usize]), time.Instant { nanos: change_at }) != ok { os.exit(59i32) }
+        let (change_box, has_change_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 900u64).element)
+        if !has_change_box { os.exit(60i32) }
+        let olds = testing.by_text(&harness, "3").count
+        let news = testing.by_text(&harness, "12").count
+        if change_step == 2usize {
+            if olds == 0usize || news == 0usize { os.exit(61i32) }
+        }
+        if change_step == 3usize {
+            if olds != 0usize || news == 0usize { os.exit(62i32) }
+        }
+        change_step += 1usize
     }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(34i32) }
     try io.print("ui status3 v2 ok\n")
