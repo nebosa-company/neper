@@ -6381,6 +6381,15 @@ fn sash_cell(runtime: *widget.Runtime, key: widget.Key, size: f32) -> (*SashCell
     ret (kept, true)
 }
 
+// (D1550, docs/ux/components/ResizablePane, reset) The size a pane (keyed `key`,
+// its sash `key + 2`) restores on a double-click, when the caller has one of its
+// own rather than the size the pane was first built at; called after the pane is
+// built each frame (the sash's first frame keeps the built size).
+fn pane_default(t: *const Theme, key: widget.Key, size: f32) {
+    let (kept, has_kept) = sash_cell(t.runtime, key + 2u64, size)
+    if has_kept { kept.initial = size }
+}
+
 // (D1212) Escape during a drag: back to the size the drag began at.
 fn handle_cancel(ctx: *void) -> err {
     let h = mem.cast[*Handle](ctx)
@@ -6506,7 +6515,7 @@ fn sash_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // value the size ("240 px"), controlling the pane. (D1212) A double-click restores
 // the size the pane was first built at, and Escape during a drag restores the
 // size the drag began at and ignores the rest of that drag.
-// ponytail: the default size is the first built one, not a separate caller value.
+// (D1550) `pane_default` gives the double-click a size of the caller's.
 fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node, bar: bool) -> (widget.Node, err) {
     let (made, made_error) = pane_with_collapse(a, key, t, label, axis, size, low, high, bound, reserve, change, content, bar, false)
     ret (made, made_error)

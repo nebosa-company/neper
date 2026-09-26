@@ -27967,3 +27967,11 @@ The SelectableText spec draws the selection in `primary-container` behind `on-pr
 The widget state now keeps `window_blurred`, set by Blur and cleared by Focus, and both ask for a frame. `widget.window_active(runtime)` answers it; a runtime not yet open counts as active. `selectable` (and so `selectable_text` and `selectable_block`) fills the selection with `surface-container-highest` and draws the selected glyphs in the text's own colour while the window is inactive.
 
 `ui_content2_v2` checks this on Windows and Linux, continuing from its Shift+End selection. After a Blur the selection band shows `surface-container-highest` and no `primary-container`; after a Focus it is `primary-container` again. With the inactive branch disabled the check fails (exit 45). All 103 ui_* fixtures pass on both hosts. Touch handles and the touch toolbar remain under the marker.
+
+## D1550 — A pane's default size is the caller's
+
+D1212 made a double-click on a pane's sash restore the size the pane was first built at, and the marker said a separate caller value was missing. A pane whose first size came from saved settings would "reset" to those settings, not to the app's default.
+
+`control.pane_default(t, key, size)`, called after the pane is built, sets the size the sash (keyed `key + 2`) restores on a double-click. It writes the D1212 sash cell's `initial`. The cell's first frame still keeps the built size, so callers that never set a default see no change.
+
+`ui_containers2_v2` checks this on Windows and Linux. After the D1212 double-click restores 100, `pane_default(.., 150)` makes the next double-click report 150, and the default is put back to 100. With the write disabled the check fails (exit 85). All 103 ui_* fixtures pass on both hosts.

@@ -254,6 +254,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if root_rest_error != ok || testing.pump(&harness, root_rest, now) != ok { os.exit(44i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !near(stores[0usize].size, 60.0) { os.exit(45i32) }
     if testing.tap(&harness, sash.x + 4.0, mid) != ok || testing.tap(&harness, sash.x + 4.0, mid) != ok || !near(stores[0usize].size, 100.0) { os.exit(46i32) }
+    // (D1550) With a default of the caller's (150), the double-click restores it.
+    control.pane_default(&theme, 10u64, 150.0)
+    if testing.tap(&harness, sash.x + 4.0, mid) != ok || testing.tap(&harness, sash.x + 4.0, mid) != ok || !near(stores[0usize].size, 150.0) { os.exit(85i32) }
+    control.pane_default(&theme, 10u64, 100.0)
     // The focused dock panel: surface-container-low under a 2px primary line, a
     // 32 Close button named for the panel that fires.
     let (panel, has_panel) = bounds(&harness, &runtime, 50u64)
