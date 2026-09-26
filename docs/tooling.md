@@ -863,6 +863,14 @@ the same order run to run; under `--json` a record of the build stream, a text
 line on stderr otherwise. A harness weighing a specialization reads its cost
 here rather than guessing it from the template.
 
+After the instance costs, `--explain` on an executable build names each
+transformation the compiler does not have as a `transformation` record (D1520,
+H20): `name`, `decision` (`unavailable`) and `reason`. Today that is `vectorize`:
+there is no vectorizer, and `Vec` and `Mask` lower lane by lane. `--stats` counts
+the `allocation sites` in the functions a build lowered: one per call of the
+runtime's arena allocation that `mem.alloc` becomes, an inlined copy counted
+where it lands.
+
 `--instances N` (D426, H06) on a build command is a budget over the
 specializations the build makes: after the bodies are checked, the instances of
 generic functions they asked for are counted -- each worker's own, since a

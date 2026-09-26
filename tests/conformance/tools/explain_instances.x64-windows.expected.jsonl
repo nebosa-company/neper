@@ -4,4 +4,5 @@
 {"record":"instance-cost","symbol":"instances.twice","instance":1,"instructions":3,"bytes":42}
 {"record":"instance-cost","symbol":"instances.twice","instance":2,"instructions":3,"bytes":39}
 {"record":"instance-cost","symbol":"instances.twice","instance":3,"instructions":3,"bytes":43}
+{"record":"transformation","name":"vectorize","decision":"unavailable","reason":"no vectorizer: automatic vectorisation is not scheduled, and Vec and Mask lower lane by lane"}
 {"record":"result","ok":true,"exit_code":0,"data":{"executable":"conformance-tools-explain-instances.out","diagnostics":0}}

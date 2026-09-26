@@ -1572,6 +1572,32 @@
         }
       }
     },
+    "transformation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "name",
+        "decision",
+        "reason"
+      ],
+      "properties": {
+        "record": {
+          "const": "transformation"
+        },
+        "name": {
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "unavailable"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
     "instance_cost": {
       "type": "object",
       "additionalProperties": false,
@@ -2101,6 +2127,9 @@
         },
         {
           "$ref": "#/$defs/instance_cost"
+        },
+        {
+          "$ref": "#/$defs/transformation"
         },
         {
           "$ref": "#/$defs/progress"

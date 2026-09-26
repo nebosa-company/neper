@@ -3502,6 +3502,36 @@ fn flush_explanations(report: *Sink, oracle: *nir.Builder) -> err {
     ret ok
 }
 
+// (D1520, H20) The allocations of the functions from `first` on: each call of the
+// runtime's arena allocation, as `mem.alloc` lowers to, one site however often it
+// runs. An inlined copy of a function that allocates is a site of its own.
+fn allocation_sites(builder: *nir.Builder, first: usize) -> usize {
+    var sites = 0usize
+    var function_at = first
+    while function_at < builder.function_count {
+        let function = builder.functions[function_at]
+        var at = function.first_instruction
+        while at < function.first_instruction + function.instruction_count {
+            let instruction = builder.instructions[at]
+            if instruction.opcode == .Call && instruction.immediate < builder.function_ref_count {
+                let name = builder.function_refs[instruction.immediate].name
+                if same(name, "neper_mem_alloc") || same(name, "neper_mem_alloc_fill") { sites += 1usize }
+            }
+            at += 1usize
+        }
+        function_at += 1usize
+    }
+    ret sites
+}
+
+// (D1520, H20) A transformation the compiler does not have is said to be
+// unavailable rather than left unmentioned: there is no vectorizer (automatic
+// vectorisation is not scheduled), and `Vec` and `Mask` lower lane by lane.
+fn explain_unavailable(report: *Sink, json: bool) -> err {
+    if json { ret write_all(report, "{\"record\":\"transformation\",\"name\":\"vectorize\",\"decision\":\"unavailable\",\"reason\":\"no vectorizer: automatic vectorisation is not scheduled, and Vec and Mask lower lane by lane\"}\n") }
+    ret stderr_text("transformation: vectorize unavailable (no vectorizer: automatic vectorisation is not scheduled, and Vec and Mask lower lane by lane)\n")
+}
+
 // What the body pools are sized from (D314): the largest module when they hold one
 // module at a time, the program when they hold it whole.
 fn body_bytes_of(loaded: *graph.Graph, per_module: bool) -> usize {
@@ -9092,6 +9122,8 @@ type LowerWorker = struct {
     functions_lowered: usize,
     // (D1515) The lowered functions whose previous emission was laid in place.
     functions_reused: usize,
+    // (D1520) The arena allocations its lowered functions make, by call site.
+    allocation_sites: usize,
     second_ns: usize,
     lower_ns: usize,
     write_ns: usize,
@@ -9645,6 +9677,7 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     try lower.module(&w.checker, w.loaded, module_index, &w.builder, &w.signatures, w.bindings)
     w.lower_ns += nptest_now() - lower_started
     w.functions_lowered += w.builder.function_count - first
+    w.allocation_sites += allocation_sites(&w.builder, first)
     w.stage.count = 0usize
     w.relocation_count = 0usize
     w.line_count = 0usize
@@ -10250,6 +10283,7 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         report.build.bodies_checked += crew.workers[worker_at].bodies_checked
         report.build.functions_lowered += crew.workers[worker_at].functions_lowered
         report.build.functions_reused += crew.workers[worker_at].functions_reused
+        report.build.allocation_sites += crew.workers[worker_at].allocation_sites
         report.regalloc_ns = report.regalloc_ns +% crew.workers[worker_at].report.regalloc_ns
         report.codegen_ns = report.codegen_ns +% crew.workers[worker_at].report.codegen_ns
         builder.instruction_total += crew.workers[worker_at].builder.instruction_total
@@ -10260,6 +10294,7 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         report.build.bodies_checked += crew.workers[LOWER_WORKERS].bodies_checked
         report.build.functions_lowered += crew.workers[LOWER_WORKERS].functions_lowered
         report.build.functions_reused += crew.workers[LOWER_WORKERS].functions_reused
+        report.build.allocation_sites += crew.workers[LOWER_WORKERS].allocation_sites
         report.regalloc_ns = report.regalloc_ns +% crew.workers[LOWER_WORKERS].report.regalloc_ns
         report.codegen_ns = report.codegen_ns +% crew.workers[LOWER_WORKERS].report.codegen_ns
         builder.instruction_total += crew.workers[LOWER_WORKERS].builder.instruction_total
@@ -10274,6 +10309,7 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         cost_worker += 1usize
     }
     if crew.generous_made { try flush_explanations(report, &crew.workers[LOWER_WORKERS].builder) }
+    if crew.count != 0usize && crew.workers[0usize].builder.explain { try explain_unavailable(report, crew.workers[0usize].builder.explain_json) }
     if report.timing {
         try stderr_text("  of which regalloc: ")
         try report_ms(report.regalloc_ns)
