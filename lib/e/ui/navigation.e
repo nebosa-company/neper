@@ -2723,7 +2723,7 @@ type DocumentMove = struct { from: usize, to: usize }
 
 // A tab's gestures: a tap picks it, a drag begins a move carrying the index
 // (D844), a drop of another's tab on it ends one.
-type TabGesture = struct { runtime: *widget.Runtime, focus: widget.Key, index: usize, pinned: bool, pick: widget.Change[usize], move: widget.Change[DocumentMove] }
+type TabGesture = struct { runtime: *widget.Runtime, focus: widget.Key, index: usize, pinned: bool, pick: widget.Change[usize], move: widget.Change[DocumentMove], group: usize, transfer: widget.Change[DocumentTransfer] }
 
 fn tab_gesture(ctx: *void, g: widget.Gesture) -> err {
     let h = mem.cast[*TabGesture](ctx)
@@ -2734,10 +2734,12 @@ fn tab_gesture(ctx: *void, g: widget.Gesture) -> err {
         ret widget.focus_key(h.runtime, h.focus)
     case .DragStart as at:
         if h.pinned { ret ok }
-        ret widget.begin_drag(h.runtime, u64(h.index) + 1u64)
+        ret widget.begin_drag(h.runtime, tab_payload(h.group, h.index))
     case .Drop as d:
-        if d.payload == 0u64 || h.pinned { ret ok }
-        let from = usize(d.payload - 1u64)
+        let (from_group, from, is_tab) = tab_payload_of(d.payload)
+        if !is_tab || h.pinned { ret ok }
+        // (D1347) Another group's tab moves across; this group's reorders.
+        if from_group != h.group { ret widget.fire_change[DocumentTransfer](h.transfer, DocumentTransfer { from_group: from_group, from_index: from, to_group: h.group, to_index: h.index }) }
         if from == h.index { ret ok }
         ret widget.fire_change[DocumentMove](h.move, DocumentMove { from: from, to: h.index })
     default:
@@ -2957,7 +2959,29 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
 // (D1337) `more` names the tab menu's further commands (Pin, Copy path, Reveal
 // in folder, Split right -- the caller's words), after a separator; one reports
 // the tab and the command's index through `more_pick`.
-type DocumentTabsOptions = struct { icons: []const control.GlyphKind, read_only: []const bool, preview: usize, width: f32, all_open: bool, toggle_all: widget.Submit, more: []const str, more_pick: widget.Change[TabCommand] }
+// (D1347) `group` names the strip's editor group in its drags; a tab of another
+// group dropped on one of this strip's reaches `transfer`.
+type DocumentTabsOptions = struct { icons: []const control.GlyphKind, read_only: []const bool, preview: usize, width: f32, all_open: bool, toggle_all: widget.Submit, more: []const str, more_pick: widget.Change[TabCommand], group: usize, transfer: widget.Change[DocumentTransfer] }
+
+// (D1347) A document dragged from one group's strip onto another's tab.
+type DocumentTransfer = struct { from_group: usize, from_index: usize, to_group: usize, to_index: usize }
+
+// (D1347) A tab drag's payload: this tag plus the group times 4096 plus the index
+// plus one.
+fn tab_payload_tag() -> u64 {
+    ret 4398046511104u64
+}
+
+fn tab_payload(group: usize, index: usize) -> u64 {
+    ret tab_payload_tag() + u64(group) * 4096u64 + u64(index) + 1u64
+}
+
+// (D1347) The group and index a tab drag's payload carries.
+fn tab_payload_of(payload: u64) -> (usize, usize, bool) {
+    if payload <= tab_payload_tag() || payload > tab_payload_tag() + 4096u64 * 4096u64 { ret (0usize, 0usize, false) }
+    let raw = payload - tab_payload_tag() - 1u64
+    ret (usize(raw / 4096u64), usize(raw % 4096u64), true)
+}
 
 // (D1337) A tab menu's further command: which tab, which command.
 type TabCommand = struct { index: usize, command: usize }
@@ -3026,8 +3050,9 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     var landing = documents.len
     if mem.address_of(t.runtime) != 0usize {
         let (payload, has_payload) = widget.dragging(t.runtime)
-        if has_payload && payload >= 1u64 && usize(payload - 1u64) < documents.len {
-            lifted = usize(payload - 1u64)
+        let (payload_group, payload_index, is_tab_payload) = tab_payload_of(payload)
+        if has_payload && is_tab_payload && payload_group == options.group && payload_index < documents.len {
+            lifted = payload_index
             let (rs, rs_error) = widget.state_of(t.runtime)
             let at = widget.pointer_position(t.runtime)
             var look = 0usize
@@ -3047,7 +3072,7 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let chosen = i == current
         let tab_key = key + 1u64 + 2u64 * u64(i)
         let close_key = key + 2u64 + 2u64 * u64(i)
-        gestures[i] = TabGesture { runtime: t.runtime, focus: tab_key, index: i, pinned: d.pinned, pick: pick, move: move }
+        gestures[i] = TabGesture { runtime: t.runtime, focus: tab_key, index: i, pinned: d.pinned, pick: pick, move: move, group: options.group, transfer: options.transfer }
         closes[i] = TabClose { index: i, close: close }
         actions[i] = widget.Submit { ctx: mem.cast[*void](&closes[i]), invoke: tab_close_fire }
         let state = control.control_state(t, tab_key, true, chosen)
@@ -4625,9 +4650,11 @@ type EditorGroup = struct { documents: []const Document, current: usize, recent:
 // `group`, split the active group, reopen the last closed document, open a
 // recent one, follow crumb `index`, open the document switcher, or open the
 // group's actions menu.
-type WorkspaceEventKind = enum u8 { Pick, Close, Move, Split, Reopen, OpenRecent, Crumb, Switcher, GroupMenu, Resize }
+// (D1347) `Transfer`: a document dragged from `group` (at `index`) to `to_group`
+// at `move.to`.
+type WorkspaceEventKind = enum u8 { Pick, Close, Move, Split, Reopen, OpenRecent, Crumb, Switcher, GroupMenu, Resize, Transfer }
 // (D1273) `size` is a Resize's new size of `group` along the axis.
-type WorkspaceEvent = struct { kind: WorkspaceEventKind, group: usize, index: usize, move: DocumentMove, size: f32 }
+type WorkspaceEvent = struct { kind: WorkspaceEventKind, group: usize, index: usize, move: DocumentMove, size: f32, to_group: usize }
 
 // The workspace's layout: the active group, the axis the groups divide
 // (Horizontal: side by side), and the compact form.
@@ -4641,7 +4668,7 @@ type GroupResize = struct { group: usize, change: widget.Change[WorkspaceEvent] 
 
 fn group_resize_fire(ctx: *void, size: f32) -> err {
     let r = mem.cast[*GroupResize](ctx)
-    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: .Resize, group: r.group, index: 0usize, move: zero, size: size })
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: .Resize, group: r.group, index: 0usize, move: zero, size: size, to_group: 0usize })
 }
 
 fn workspace_options() -> WorkspaceOptions {
@@ -4654,17 +4681,23 @@ type GroupRelay = struct { kind: WorkspaceEventKind, group: usize, index: usize,
 
 fn relay_index_fire(ctx: *void, index: usize) -> err {
     let r = mem.cast[*GroupRelay](ctx)
-    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: index, move: zero, size: 0.0 })
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: index, move: zero, size: 0.0, to_group: 0usize })
 }
 
 fn relay_move_fire(ctx: *void, moved: DocumentMove) -> err {
     let r = mem.cast[*GroupRelay](ctx)
-    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: .Move, group: r.group, index: moved.from, move: moved, size: 0.0 })
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: .Move, group: r.group, index: moved.from, move: moved, size: 0.0, to_group: 0usize })
+}
+
+// (D1347) A document dragged in from another group.
+fn relay_transfer_fire(ctx: *void, moved: DocumentTransfer) -> err {
+    let r = mem.cast[*GroupRelay](ctx)
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: .Transfer, group: moved.from_group, index: moved.from_index, move: DocumentMove { from: moved.from_index, to: moved.to_index }, size: 0.0, to_group: moved.to_group })
 }
 
 fn relay_fire(ctx: *void) -> err {
     let r = mem.cast[*GroupRelay](ctx)
-    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: r.index, move: zero, size: 0.0 })
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: r.index, move: zero, size: 0.0, to_group: 0usize })
 }
 
 fn relay(a: *mem.Arena, kind: WorkspaceEventKind, group: usize, index: usize, change: widget.Change[WorkspaceEvent]) -> (*GroupRelay, err) {
@@ -4757,7 +4790,8 @@ fn location_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, crumbs:
 // (D1273) With `sizes` the groups take the caller's sizes, and `resizable` puts
 // a sash between them.
 // (D1299) With `grid` four groups stand two by two.
-// ponytail: no drag between groups; the switcher itself is the caller's (window_switcher);
+// (D1347) A tab dragged onto another group's tab moves there (`Transfer`).
+// ponytail: the switcher itself is the caller's (window_switcher);
 // no restore hooks beyond the caller's own model; macOS/Web key maps not done.
 fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, groups: []const EditorGroup, views: []const widget.Node, options: WorkspaceOptions, change: widget.Change[WorkspaceEvent], width: f32, height: f32) -> (widget.Node, err) {
     if views.len != groups.len { ret (zero, TooLarge) }
@@ -4911,7 +4945,11 @@ fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control
         if parts_error != ok { ret (zero, TooLarge) }
         let (strip_parts, strip_parts_error) = mem.alloc[widget.Node](a, 3usize)
         if strip_parts_error != ok { ret (zero, TooLarge) }
-        let (strip, strip_error) = document_tabs_marked(a, base + 1u64, t, label, group.documents, group.current, pick, close, move, true, g == active)
+        // (D1347) The strip names its group, so a tab dragged between groups moves.
+        var strip_options: DocumentTabsOptions = zero
+        strip_options.group = g
+        strip_options.transfer = widget.Change[DocumentTransfer] { ctx: mem.cast[*void](moved), invoke: relay_transfer_fire }
+        let (strip, strip_error) = document_tabs_styled(a, base + 1u64, t, label, group.documents, group.current, pick, close, move, g == active, strip_options)
         if strip_error != ok { ret (zero, strip_error) }
         strip_parts[0usize] = strip
         strip_parts[1usize] = widget.spacer(0u64, 1.0)

@@ -232,6 +232,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (cell_b, has_b) = bounds(&harness, &runtime, 5201u64)
     let (cell_c, has_c) = bounds(&harness, &runtime, 5401u64)
     if !has_a || !has_b || !has_c || !near(cell_a.width, 300.0) || !near(cell_a.height, 200.0) || !near(cell_b.x, cell_a.x + 301.0) || !near(cell_c.y, cell_a.y + 201.0) { os.exit(37i32) }
+    // (D1347) The first group's first tab dragged onto the second group's second
+    // tab: a Transfer from group 0, document 0, to group 1 at 1.
+    f = mem.arena_from(frame_storage)
+    let (move_views, move_views_error) = mem.alloc[widget.Node](&f, 2usize)
+    if move_views_error != ok { os.exit(38i32) }
+    move_views[0usize] = blank(10.0, 10.0)
+    move_views[1usize] = blank(10.0, 10.0)
+    let (move_space, move_space_error) = navigation.multi_document_workspace_of(&f, 7000u64, &theme, "Moves", s.groups[0usize..2usize], move_views[0usize..2usize], navigation.workspace_options(), sized_change, 601.0, 200.0)
+    if move_space_error != ok || testing.pump(&harness, move_space, time.Instant { nanos: 7000000000i64 }) != ok { os.exit(39i32) }
+    let (from_tab, has_from_tab) = bounds(&harness, &runtime, 7003u64)
+    let (to_tab, has_to_tab) = bounds(&harness, &runtime, 7205u64)
+    if !has_from_tab || !has_to_tab { os.exit(40i32) }
+    let lift_from = geometry.Point { x: from_tab.x + 20.0, y: from_tab.y + 10.0 }
+    let land_on = geometry.Point { x: to_tab.x + 20.0, y: to_tab.y + 10.0 }
+    if testing.drag(&harness, lift_from, land_on, 6usize) != ok { os.exit(41i32) }
+    if s.last.kind != .Transfer || s.last.group != 0usize || s.last.index != 0usize || s.last.to_group != 1usize || s.last.move.to != 1usize { os.exit(42i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(30i32) }
     try io.print("ui containers5 v2 ok\n")
     ret ok
