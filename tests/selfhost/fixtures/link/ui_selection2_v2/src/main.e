@@ -93,7 +93,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 240usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 20u16, max_commands: 1024usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 240usize, max_states: 32usize, state_bytes: 1024usize, state_classes: 2u16, max_depth: 20u16, max_commands: 1024usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -179,6 +179,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !is_color(shot, at(head.x + 0.5, head.y + 24.0), primary) || !is_color(shot, at(head.x + 1.5, head.y + 24.0), primary) { os.exit(21i32) }
     if !is_color(shot, at(red.x + 4.0, red.y + 4.0), secondary) || !is_color(shot, at(green.x + 4.0, green.y + 4.0), style.color(&tokens, .SurfaceContainer)) { os.exit(22i32) }
+    // (D1440) Picked, a row's fill fades in over `duration-short-2`: on the
+    // pick's first frame the third row is not yet `secondary-container`, a
+    // second on it is.
+    var pick_step = 0usize
+    while pick_step < 4usize {
+        var pick_at = 8000000000i64
+        if pick_step == 1usize { pick_at = 8000000001i64 }
+        if pick_step == 2usize { pick_at = 8100000000i64 }
+        if pick_step == 3usize { pick_at = 9100000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: pick_at }) != ok { os.exit(28i32) }
+        f = mem.arena_from(frame_storage)
+        var picked_row = 0usize
+        if pick_step >= 2usize { picked_row = 2usize }
+        let (picking, picking_error) = control.list_box(&f, 900u64, &theme, "Picked", store.words[0usize..3usize], picked_row, store.picks[0usize..3usize], 3u32, 200.0)
+        let (pick_page, pick_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if picking_error != ok || pick_page_error != ok { os.exit(28i32) }
+        pick_page[0usize] = picking
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 300.0), pick_page[0usize..1usize]), time.Instant { nanos: pick_at }) != ok { os.exit(28i32) }
+        if pick_step >= 2usize {
+            let (third, has_third) = bounds(&harness, &runtime, 903u64)
+            let (pick_shot, pick_shot_error) = testing.snapshot(&harness, a)
+            if !has_third || pick_shot_error != ok { os.exit(29i32) }
+            let picked_now = is_color(pick_shot, at(third.x + 4.0, third.y + third.height * 0.5), style.color(&tokens, .SecondaryContainer))
+            if pick_step == 2usize && picked_now { os.exit(30i32) }
+            if pick_step == 3usize && !picked_now { os.exit(31i32) }
+        }
+        pick_step += 1usize
+    }
     try io.print("ui selection2 v2 ok\n")
     ret ok
 }
