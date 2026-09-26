@@ -3246,6 +3246,19 @@ fn scroll_ancestor(s: *State, index: usize) -> (usize, bool) {
     ret (0usize, false)
 }
 
+// (D1380) The nearest region above `index` that takes drags, unless a viewport
+// stands nearer (a press in a scrolling list still scrolls it).
+fn drag_ancestor(s: *State, index: usize) -> (usize, bool) {
+    var at = index
+    while s.elements[at].has_parent {
+        at = usize(s.elements[at].parent)
+        let e = &s.elements[at]
+        if e.kind == SCROLL_TAG { ret (0usize, false) }
+        if e.live && e.kind == REGION_TAG && (e.gestures & GESTURE_DRAG) != 0u8 { ret (at, true) }
+    }
+    ret (0usize, false)
+}
+
 fn axis_of(e: *const Element, p: geometry.Point) -> f32 {
     if e.scroll_axis == .Vertical { ret p.y }
     ret p.x
@@ -4925,6 +4938,17 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 // the pointer is released to whatever scrolls.
                 if distance_sq(p.position, s.arena_state.down) > gesture_slop() * gesture_slop() {
                     if (e.gestures & GESTURE_DRAG) == 0u8 {
+                        // (D1380) Handed to the nearest region above that drags (a
+                        // carousel strip under its tappable items), from the press.
+                        let (dragger, has_dragger) = drag_ancestor(s, candidate)
+                        if has_dragger {
+                            s.arena_state.candidate = u32(dragger)
+                            s.arena_state.dragging = true
+                            s.arena_state.last = p.position
+                            let began = fire_gesture(s.elements[dragger].gesture, Gesture { DragStart: s.arena_state.down })
+                            if began != ok { ret began }
+                            ret fire_gesture(s.elements[dragger].gesture, Gesture { DragMove: Drag { start: s.arena_state.down, position: p.position, delta: geometry.Point { x: p.position.x - s.arena_state.down.x, y: p.position.y - s.arena_state.down.y } } })
+                        }
                         // Released to the viewport above the region, which drags from here.
                         let (viewport, has_viewport) = scroll_ancestor(s, candidate)
                         s.arena_state.pressed = false

@@ -7017,9 +7017,11 @@ fn carousel_options() -> CarouselOptions {
 // dense) 8 apart at the end, Previous (`key + 1`) and Next (`key + 2`),
 // disabled at the ends; Left and Right step from the strip. A group named
 // `label`, each item a group named by its title.
-// ponytail: the strip steps an item at a time through `current` rather than
-// scrolling freely with snapping; items do not grow and shrink as they pass
-// the leading edge. (D1348) On touch, `show_all` puts a Show all button in the
+// (D1380) On any host the strip drags: it follows the finger and a release
+// steps an item (`current`), settling from where it stood.
+// ponytail: a drag steps one item at most rather than scrolling freely with
+// momentum; the item before `current` is not built while dragging back; items do
+// not grow and shrink as they pass the leading edge. (D1348) On touch, `show_all` puts a Show all button in the
 // header.
 fn carousel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const CarouselItem, keys: []const widget.Key, current: usize, turn: widget.Change[usize], options: CarouselOptions) -> (widget.Node, err) {
     if items.len == 0usize || keys.len != items.len || current >= items.len { ret (zero, TooLarge) }
@@ -7084,9 +7086,30 @@ fn carousel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     strip_style.overflow = .Clip
     let flat = style.Length { Px: 0.0 }
     strip_style.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: flat, right: flat, bottom: flat }
-    let (strip, strip_error) = mem.alloc[widget.Node](a, 1usize)
+    // (D1380, docs/ux/components/Carousel, touch) The strip is a drag region
+    // (keyed `key + 4`): the items follow the finger (a third as far past either
+    // end), a release past half the first item's width -- or a fling past 1000
+    // px/s -- steps one item, and a step settles from where the strip stood.
+    let (strip_kept, has_strip_kept) = swipe_cell(t, key + 4u64)
+    let (strip_step, has_strip_step) = swipe_settle_cell(t, key + 4u64)
+    let (strip_pagings, strip_pagings_error) = mem.alloc[Paging](a, 1usize)
+    if strip_pagings_error != ok { ret (zero, TooLarge) }
+    let pitch = large + 8.0
+    strip_pagings[0usize] = Paging { cell: strip_kept, has_cell: has_strip_kept, current: current, count: items.len, threshold: pitch * 0.5, turn: turn, settle: true, rtl: false, settling: strip_step, has_settling: has_strip_step }
+    var dragged: f32 = 0.0
+    if has_strip_kept { dragged = strip_kept.moved }
+    if dragged > 0.0 && current == 0usize { dragged = dragged / 3.0 }
+    if dragged < 0.0 && current + 1usize == items.len { dragged = dragged / 3.0 }
+    if dragged == 0.0 {
+        let (settled, _) = page_settle(t, key + 4u64, current, pitch, false)
+        dragged = settled
+    }
+    var shifted = style.defaults()
+    shifted.margin = style.EdgeLengths { left: style.Length { Px: dragged }, top: flat, right: flat, bottom: flat }
+    let (strip, strip_error) = mem.alloc[widget.Node](a, 2usize)
     if strip_error != ok { ret (zero, TooLarge) }
-    strip[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, strip_style, cells[0usize..n])
+    strip[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, shifted, cells[0usize..n])
+    strip[0usize] = widget.region(key + 4u64, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&strip_pagings[0usize]), invoke: page_drag }, gestures: widget.GESTURE_DRAG, enabled: true, focusable: false }, strip_style, strip[1usize..2usize])
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var p = 0usize
