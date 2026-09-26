@@ -131,8 +131,9 @@ fn bar_group(items: []const widget.Node) -> widget.Node {
 // (D1318) While a medium or large bar collapses, its headline cross-fades into
 // the row's small title over the first 40 of travel (the row title out of the
 // tree).
-// ponytail: no contextual motion; worded actions stay
-// text buttons; a disabled action is dimmed rather than hidden.
+// (D1391) The contextual bar fades in with a 4 drop.
+// ponytail: worded actions stay text buttons; a disabled action is dimmed rather
+// than hidden.
 fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, options: AppBarOptions, width: f32) -> (widget.Node, err) {
     if leading.len > 8usize || trailing.len > 8usize { ret (zero, TooLarge) }
     // The options' actions outlive the frame in the arena.
@@ -357,6 +358,22 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         var window = control.sized_style(width, height * share)
         window.overflow = .Clip
         ret (widget.stack(key, window, slid[0usize..1usize]), ok)
+    }
+    // (D1391, docs/ux/components/AppBar, contextual) Entering, the contextual bar
+    // fades in from 4 above over `duration-medium-2` on
+    // `ease-emphasized-decelerate` (kept on the bar, slot `key + 1048000`);
+    // leaving, and under reduced motion, it changes at once.
+    var context_goal: f32 = 0.0
+    if contextual { context_goal = 1.0 }
+    let entered = control.eased_emphasized(t, key, key + 1048000u64, context_goal, true, t.tokens.durations.medium2)
+    if contextual && entered < 1.0 {
+        let (easing, easing_error) = mem.alloc[widget.Node](a, 2usize)
+        if easing_error != ok { ret (zero, TooLarge) }
+        easing[0usize] = row[0usize]
+        easing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - 4.0 * (1.0 - entered) } }, style.defaults(), easing[0usize..1usize])
+        var faded = style.defaults()
+        faded.opacity = entered
+        row[0usize] = widget.box(0u64, faded, easing[1usize..2usize])
     }
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }
