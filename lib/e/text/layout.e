@@ -43,7 +43,9 @@ type Style = struct { fonts: []const FontChoice, language: str, line_height: f32
 type GlyphRun = struct { run: shape.Run, origin: geometry.Point, size: f32 }
 type Line = struct { runs: []const GlyphRun, bounds: geometry.Rect, baseline: f32, start: usize, end: usize }
 type Layout = struct { source: str, lines: []const Line, bounds: geometry.Rect }
-type Options = struct { width: f32, max_lines: u32, align: Align, wrap: Wrap, ellipsis: str }
+// (D1486) With `notdef` a character no font maps is set in the first font, as
+// its missing-glyph box (glyph 0), rather than refused as `MissingGlyph`.
+type Options = struct { width: f32, max_lines: u32, align: Align, wrap: Wrap, ellipsis: str, notdef: bool }
 error MissingGlyph
 error Invalid
 error TooLarge
@@ -162,7 +164,7 @@ fn shape_span(a: *mem.Arena, style: Style, source: str, start: usize, end: usize
 }
 
 // The items of one paragraph `[start, end)`, in logical order.
-fn shape_paragraph(a: *mem.Arena, style: Style, source: str, start: usize, end: usize, items: []Item, count: *usize, rtl_paragraph: *bool) -> err {
+fn shape_paragraph(a: *mem.Arena, style: Style, source: str, start: usize, end: usize, items: []Item, count: *usize, rtl_paragraph: *bool, notdef: bool) -> err {
     let length = end - start
     let (scalars, scalars_error) = mem.alloc[u32](a, length + 1usize)
     if scalars_error != ok { ret scalars_error }
@@ -180,8 +182,9 @@ fn shape_paragraph(a: *mem.Arena, style: Style, source: str, start: usize, end: 
         scalars[chars] = scalar
         let (font, font_error) = font_for(a, style, scalar)
         if font_error != ok { ret font_error }
-        if font == NONE { ret MissingGlyph }
+        if font == NONE && !notdef { ret MissingGlyph }
         fonts[chars] = font
+        if font == NONE { fonts[chars] = 0usize }
         if is_neutral(scalar) {
             dirs[chars] = 2u8
         } else if is_rtl(scalar) {
@@ -590,7 +593,7 @@ fn layout(a: *mem.Arena, source: str, style: Style, options: Options) -> (Layout
         if text_end > at && source[text_end - 1usize] == 13u8 { text_end -= 1usize }
         let from = item_count
         var rtl = false
-        let shape_error = shape_paragraph(a, style, source, at, text_end, items, &item_count, &rtl)
+        let shape_error = shape_paragraph(a, style, source, at, text_end, items, &item_count, &rtl, options.notdef)
         if shape_error != ok { ret (zero, shape_error) }
         let cut_error = cut_paragraph(items, from, item_count, style, source, at, text_end, options, rtl, cuts, &cut_count)
         if cut_error != ok { ret (zero, cut_error) }
@@ -831,7 +834,7 @@ fn ellipsis(a: *mem.Arena, style: Style, line: str, max_width: f32, mode: Ellips
     if items_error != ok { ret ("", items_error) }
     var count = 0usize
     var rtl = false
-    let shape_error = shape_paragraph(a, style, line, 0usize, line.len, items, &count, &rtl)
+    let shape_error = shape_paragraph(a, style, line, 0usize, line.len, items, &count, &rtl, false)
     if shape_error != ok { ret ("", shape_error) }
     if measure(items, 0usize, count, style, line, 0usize, line.len) <= max_width {
         mem.copy[u8](out[..line.len], line)
