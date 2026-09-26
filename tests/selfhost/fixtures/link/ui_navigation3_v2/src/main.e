@@ -128,6 +128,13 @@ fn find(tree: accessibility.Tree, role: accessibility.Role, label: str) -> (acce
     ret (zero, false)
 }
 
+// (D1498) A destination's page: a 200 x 100 block keyed 4000 + its index.
+fn build_destination(ctx: *void, a: *mem.Arena, index: usize) -> (widget.Node, err) {
+    var block = control.sized_style(200.0, 100.0)
+    block.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 1.0, 1.0) }
+    ret (widget.box(4000u64 + u64(index), block, zero), ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -452,6 +459,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if page_step == 3usize && !shown_page { os.exit(85i32) }
         }
         page_step += 1usize
+    }
+    // (D1498) A change of destination fades through: 50 ms in only the page
+    // left stands (fading out), 300 ms in only the new one (fading in).
+    var through_step = 0usize
+    while through_step < 5usize {
+        var through_at = 21500000000i64 + i64(through_step)
+        var through_chosen = 0usize
+        if through_step >= 2usize { through_chosen = 1usize }
+        if through_step == 2usize { through_at = 21600000000i64 }
+        if through_step == 3usize { through_at = 21650000000i64 }
+        if through_step == 4usize { through_at = 21900000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: through_at }) != ok { os.exit(91i32) }
+        f = mem.arena_from(frame_storage)
+        let (through, through_error) = navigation.destination_pages(&f, 3960u64, &theme, through_chosen, navigation.PageBuilder { ctx: mem.cast[*void](&f), build: build_destination })
+        let (through_parts, through_parts_error) = mem.alloc[widget.Node](&f, 1usize)
+        if through_error != ok || through_parts_error != ok { os.exit(92i32) }
+        through_parts[0usize] = through
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 520.0), through_parts[0usize..1usize]), time.Instant { nanos: through_at }) != ok { os.exit(93i32) }
+        let old_pages = testing.by_key(&harness, 4000u64).count
+        let new_pages = testing.by_key(&harness, 4001u64).count
+        if through_step == 3usize && (old_pages != 1usize || new_pages != 0usize) { os.exit(94i32) }
+        if through_step == 4usize && (old_pages != 0usize || new_pages != 1usize) { os.exit(95i32) }
+        through_step += 1usize
     }
     // (D1450) Scrolled down, the bottom bar slides out of its 80 slot over
     // `duration-medium-2` and leaves the tree: part way its top is not yet the

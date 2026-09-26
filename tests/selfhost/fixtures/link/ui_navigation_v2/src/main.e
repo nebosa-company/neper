@@ -141,6 +141,12 @@ fn find(tree: accessibility.Tree, role: accessibility.Role, label: str) -> (acce
     ret (zero, false)
 }
 
+// (D1499) The page a pop leaves, built again for its level: a block keyed
+// 2900 + the level.
+fn build_left(ctx: *void, a: *mem.Arena, index: usize) -> (widget.Node, err) {
+    ret (widget.box(2900u64 + u64(index), control.sized_style(100.0, 100.0), zero), ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -345,6 +351,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if slide_step == 3usize && !placed { os.exit(54i32) }
         }
         slide_step += 1usize
+    }
+    // (D1499) Popping with `navigation_stack_leaving`, the page left (level 1,
+    // built again) stands over the revealed one while it slides away (in its
+    // layer `2850 + 5`); a second on it is gone.
+    var leave_step = 0usize
+    while leave_step < 5usize {
+        var leave_at = 12700000000i64 + i64(leave_step)
+        var leave_depth = 2usize
+        if leave_step >= 2usize { leave_depth = 1usize }
+        if leave_step == 2usize { leave_at = 12800000000i64 }
+        if leave_step == 3usize { leave_at = 12900000000i64 }
+        if leave_step == 4usize { leave_at = 13900000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: leave_at }) != ok { os.exit(74i32) }
+        f = mem.arena_from(frame_storage)
+        var leave_pages: [2]widget.Node = zero
+        leave_pages[0usize] = widget.box(0u64, control.sized_style(100.0, 100.0), zero)
+        leave_pages[1usize] = widget.box(0u64, control.sized_style(100.0, 100.0), zero)
+        let (leaving_stack, leaving_stack_error) = navigation.navigation_stack_leaving(&f, 2850u64, &theme, slide_titles[0usize..leave_depth], leave_pages[0usize..leave_depth], &s.subs[3usize], no_jumps(), 600.0, navigation.PageBuilder { ctx: mem.cast[*void](&f), build: build_left })
+        if leaving_stack_error != ok || testing.pump(&harness, leaving_stack, time.Instant { nanos: leave_at }) != ok { os.exit(75i32) }
+        let left_layers = testing.by_key(&harness, 2855u64).count
+        let left_pages = testing.by_key(&harness, 2901u64).count
+        if leave_step == 3usize && (left_layers != 1usize || left_pages != 1usize) { os.exit(76i32) }
+        if leave_step == 4usize && (left_layers != 0usize || left_pages != 0usize) { os.exit(77i32) }
+        leave_step += 1usize
     }
     // (D1445) A pop eases on `ease-emphasized-accelerate` over `duration-medium-1`:
     // 200 ms after it the page beneath (a full-width block) is still well short
