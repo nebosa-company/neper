@@ -635,6 +635,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         band_step += 1usize
     }
+    // (D1386) A list still loading after 10 seconds says "Still loading"; at
+    // first it does not.
+    var slow_step = 0usize
+    while slow_step < 3usize {
+        var slow_at = 80000000000i64
+        if slow_step == 1usize { slow_at = 80016000000i64 }
+        if slow_step == 2usize { slow_at = 91000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: slow_at }) != ok { os.exit(211i32) }
+        var slow_list = collection.list_options()
+        slow_list.width = 300.0
+        slow_list.loading = 5usize
+        var slow_rows: [1]collection.RowItem = zero
+        var slow_keys: [1]widget.Key = zero
+        f = mem.arena_from(frame_storage)
+        let (slow_node, slow_node_error) = collection.list_of(&f, 990u64, &theme, "Slow", slow_rows[0usize..0usize], slow_keys[0usize..0usize], slow_list)
+        let (slow_page, slow_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if slow_node_error != ok || slow_page_error != ok { os.exit(212i32) }
+        slow_page[0usize] = slow_node
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 600.0), slow_page[0usize..1usize]), time.Instant { nanos: slow_at }) != ok { os.exit(213i32) }
+        let still_count = testing.by_text(&harness, "Still loading").count
+        if slow_step == 1usize && still_count != 0usize { os.exit(214i32) }
+        if slow_step == 2usize && still_count != 1usize { os.exit(215i32) }
+        slow_step += 1usize
+    }
     // (D1247) With nothing to show: a loading list holds 5 skeleton rows (72 each)
     // in a busy "Loading" group; a loading grid does the same with tiles; an empty
     // grid shows its empty state.

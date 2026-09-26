@@ -6058,8 +6058,8 @@ fn selection_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, cou
 // (D1247, docs/ux/components/List, loading) `count` skeleton rows (held to 3..8)
 // `width` wide (360 when unset) in a busy group named "Loading" (keyed `key`),
 // the rows themselves out of the tree.
-// ponytail: the rows are the 72 avatar skeleton whatever the real row's height,
-// and still, with no "Still loading" after 10 seconds.
+// (D1386) Past 10 seconds, "Still loading" under them.
+// ponytail: the rows are the 72 avatar skeleton whatever the real row's height.
 fn loading_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, width: f32) -> (widget.Node, err) {
     var n = count
     if n < 3usize { n = 3usize }
@@ -6077,9 +6077,55 @@ fn loading_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: 
         bones[i] = bone
         i += 1usize
     }
-    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bones[0usize..n])
+    // (D1386, docs/ux/components/List, loading) Loading for more than 10 seconds,
+    // a `body-medium` `on-surface-variant` "Still loading" (keyed `key + 2`), 16 in
+    // and 12 down, under the rows; the wait is timed on the loading group.
+    var shown_rows = bones[0usize..n]
+    if loading_for(t, key) > 10000000000i64 {
+        let (longer, longer_error) = mem.alloc[widget.Node](a, n + 1usize)
+        if longer_error != ok { ret (zero, TooLarge) }
+        var b = 0usize
+        while b < n {
+            longer[b] = bones[b]
+            b += 1usize
+        }
+        var said = control.text_options()
+        said.role = .BodyMedium
+        let (still, still_error) = control.colored_text(a, key + 2u64, "Still loading", t, said, style.color(t.tokens, .OnSurfaceVariant))
+        if still_error != ok { ret (zero, still_error) }
+        let (padded_still, padded_still_error) = mem.alloc[widget.Node](a, 1usize)
+        if padded_still_error != ok { ret (zero, TooLarge) }
+        padded_still[0usize] = still
+        longer[n] = widget.padded(0u64, 16.0, 12.0, 16.0, 0.0, style.defaults(), padded_still[0usize..1usize])
+        shown_rows = longer[0usize..n + 1usize]
+    }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), shown_rows)
     let (made, made_error) = control.placeholder_region(a, key, t, "Loading", sweep, column)
     ret (made, made_error)
+}
+
+// (D1386) How long the element keyed `key` has been built without a break, from
+// a cell on it (0 before its second frame); asks for a frame while under 10 s.
+type LoadingSince = struct { set: bool, since: i64 }
+
+fn loading_for(t: *const control.Theme, key: widget.Key) -> i64 {
+    if mem.address_of(t.runtime) == 0usize { ret 0i64 }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret 0i64 }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret 0i64 }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: LoadingSince = zero
+    let (kept, _, kept_error) = widget.state[LoadingSince](&build, key ^ hash.fnv1a64("loading-since"), fresh)
+    if kept_error != ok { ret 0i64 }
+    let now = widget.frame_time(t.runtime).nanos
+    if !kept.set {
+        kept.set = true
+        kept.since = now
+    }
+    let spent = now - kept.since
+    if spent <= 10000000000i64 { widget.request_animation_frame(t.runtime) }
+    ret spent
 }
 
 // A source of rows (D979): the count, a row's stable key and its content.
