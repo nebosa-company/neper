@@ -5425,7 +5425,8 @@ fn declare_late(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_index:
         var import_at = g.modules[from].first_import
         while import_at < end {
             let imported = g.imports[import_at].target
-            if !g.modules[imported].has_tree && !listed[imported] {
+            // (D1511) A module declared from its Interface already stands.
+            if !g.modules[imported].has_tree && !listed[imported] && !declared_from_interface(g, imported) {
                 list[count] = imported
                 listed[imported] = true
                 count += 1usize
@@ -6793,7 +6794,18 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
     }
     var unparsed = 0usize
     queue_at = 0usize
+    loaded.interfaces = held
     while queue_at < needed {
+        // (D1511, C036) A stable import in a debug build declares from its artifact's
+        // Interface when that says everything the checker needs: no tree at all. A
+        // stable module is never rebuilt later in the build, so what is declared
+        // from it stands; a release build still wants the oracle's short bodies.
+        let candidate = list[queue_at]
+        if !loaded.modules[candidate].has_tree && !hot.release && hot.unchanged[candidate] && candidate < hot.stable.len && hot.stable[candidate] && candidate < loaded.from_interface.len && em.interface_decodable(held[candidate]) {
+            loaded.from_interface[candidate] = true
+            queue_at += 1usize
+            continue
+        }
         if !loaded.modules[list[queue_at]].has_tree {
             list[unparsed] = list[queue_at]
             unparsed += 1usize
@@ -7839,6 +7851,12 @@ fn resolve_per_module(a: *mem.Arena, resolver: *resolve.Resolver, loaded: *graph
         if loaded.modules[loaded.order[collected]].has_tree {
             collect_error = resolve.collect_module(resolver, loaded, loaded.order[collected])
             if collect_error != ok { break }
+        } else {
+            // (D1511) A stable import declared from its Interface.
+            if declared_from_interface(loaded, loaded.order[collected]) {
+                collect_error = em.declare_interface_symbols(resolver, loaded, loaded.order[collected], loaded.interfaces[loaded.order[collected]])
+                if collect_error != ok { break }
+            }
         }
         collected += 1usize
     }
@@ -8002,10 +8020,19 @@ fn declarations_per_module(checker: *check.Checker, resolver: *resolve.Resolver,
     try check.begin_declarations(checker, resolver, loaded)
     var order_at = 0usize
     while order_at < loaded.order_count {
-        if loaded.modules[loaded.order[order_at]].has_tree { try check.declarations_module(checker, resolver, loaded, loaded.order[order_at]) }
+        if loaded.modules[loaded.order[order_at]].has_tree {
+            try check.declarations_module(checker, resolver, loaded, loaded.order[order_at])
+        } else {
+            if declared_from_interface(loaded, loaded.order[order_at]) { try em.declare_interface_records(checker, loaded, loaded.order[order_at], loaded.interfaces[loaded.order[order_at]]) }
+        }
         order_at += 1usize
     }
     ret check.finish_declarations(checker)
+}
+
+// (D1511) Whether a module declares from its artifact's Interface.
+fn declared_from_interface(loaded: *graph.Graph, module_index: usize) -> bool {
+    ret module_index < loaded.from_interface.len && loaded.from_interface[module_index] && module_index < loaded.interfaces.len
 }
 
 // The body sweep, and the first inlining oracle inside it (D313): a module's bodies
