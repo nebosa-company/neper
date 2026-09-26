@@ -26896,3 +26896,9 @@ D1307 listed only the fifteen years around the shown one. The year view now runs
 The Calendar spec slides the grid horizontally when the month changes, over `duration-medium-2` with `ease-standard`, in the direction of the turn. The calendar eases its month index (year x 12 + month) on its own element, under slot `key + 1048590`. The day rows stand the part still to come a grid's width away (held to one width), mirrored right to left, inside a clip. The header and weekday names stay put. Reduced motion changes at once; the spec's reduced-motion cross-fade is not drawn.
 
 `ui_pickers_v2` turns a calendar from March to April 2026, on Windows and Linux. 50 ms later the chosen 10 April is not yet `primary` where it settles; a second later it is. `ui_adaptive`, `ui_navigation`, `ui_navigation3_v2`, `ui_pickers` and `ui_pickers2_v2` still pass on both hosts.
+
+## D1424 — The calendar's year view fades in and out
+
+The Calendar spec cross-fades the year view over `duration-short-4`. The calendar now keeps a year-view share, under slot `key + 1048591`. Whichever view is coming in (the years, or the weekday names and days) is drawn at that share's opacity in one box until it arrives. The view going out is not drawn under it. Reduced motion switches at once.
+
+`ui_pickers_v2` checks the fade on Windows and Linux. 50 ms after the view is toggled, the chosen 2026 pill is not yet `primary`; a second later it is. The other calendar fixtures still pass on both hosts.
