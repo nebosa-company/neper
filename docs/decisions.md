@@ -27150,3 +27150,9 @@ A text area stood `rows` lines tall but grew with its text and could not scroll.
 The Image spec says that "a pressable image is a Button named by its action... with the alt as description." D1252 had made the Button and dropped the alt. `framed_image` now puts the alt text (`options.label`) on the Button's semantics as its hint, which the tree reports as the node's description.
 
 `ui_content_v2`'s pressable image check now also requires the "Open screenshot" Button's hint to be "Screenshot", on Windows and Linux.
+
+## D1458 — Text can take a size off the ramp; 32 avatars' initials are 13
+
+The Avatar spec sets 32's initials in `label-large` at 13, but the type ramp has no 13 and they stood at 14. `TextOptions.size`, when above 0, now sets the text's size in place of its role's, and `text_style_faced` scales the line height with it. A 32 avatar's initials ask for 13.
+
+`text_shape` checks on Windows and Linux that a 13 request sizes every face in the chain to 13 and scales the line height in proportion. All 103 `ui_*` fixtures pass on both hosts.
