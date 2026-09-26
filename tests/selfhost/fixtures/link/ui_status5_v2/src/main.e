@@ -326,6 +326,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !has_review { os.exit(64i32) }
         fold_pass += 1usize
     }
+    // (D1359) A notice put at the top slides in: the first row starts higher and
+    // settles where it rests. A build sees the last pump's time.
+    var arrive_step = 0usize
+    var rest_y: f32 = 0.0
+    var mid_y: f32 = 0.0
+    while arrive_step < 5usize {
+        var arrivals: control.NotificationListOptions = zero
+        if arrive_step >= 2usize { arrivals.inserted = 1u32 }
+        var arrive_at = 12000000000i64 + i64(arrive_step) * 1000000000i64
+        if arrive_step == 2usize { arrive_at = 13100000000i64 }
+        f = mem.arena_from(frame_storage)
+        let (arrive_list, arrive_list_error) = control.notification_list_with(&f, 7000u64, &theme, "Inbox", s.items[0usize..2usize], &s.press, 380.0, 500.0, arrivals)
+        let (arrive_page, arrive_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if arrive_list_error != ok || arrive_page_error != ok { os.exit(65i32) }
+        arrive_page[0usize] = arrive_list
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 520.0), arrive_page[0usize..1usize]), time.Instant { nanos: arrive_at }) != ok { os.exit(66i32) }
+        let (first_row, has_first_row) = bounds(&harness, &runtime, 7002u64)
+        if !has_first_row { os.exit(67i32) }
+        if arrive_step == 1usize { rest_y = first_row.y }
+        if arrive_step == 3usize { mid_y = first_row.y }
+        arrive_step += 1usize
+        if arrive_step == 5usize && (!(mid_y < rest_y - 1.0) || !near(first_row.y, rest_y)) { os.exit(68i32) }
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(27i32) }
     try io.print("ui status5 v2 ok\n")
     ret ok
