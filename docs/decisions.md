@@ -26361,3 +26361,25 @@ faded out.
 `ui_collections4_v2` turns a reduced-motion page view: 50 ms in, the second page
 already stands at the view's start but is not yet solid, and settled it is.
 D1288's slide checks and `ui_paged` still pass, on Windows and Linux.
+
+## D1380 — Carousel strips drag
+
+The Carousel spec's strip follows a horizontal drag and settles on an item. The
+strip is now a drag region (keyed `key + 4`) with D1378's `Paging` and
+`page_drag`. The items follow the finger, a third as far past either end. A
+release past half the first item's width, or a fling past 1000 px/s, steps
+`current` by one through `turn`. A step settles from where the strip stood
+(`page_settle` with the item pitch as the page width).
+
+The items are tappable regions without drags, so a press on one never reached
+the strip. The runtime now hands a press that passes the slop on a region
+without drags to the nearest region above it that takes drags
+(`widget.drag_ancestor`), firing its DragStart and first DragMove. A viewport
+nearer than any such region still takes it as before, so lists keep scrolling.
+A drag steps one item at most rather than scrolling freely, the item before
+`current` is not built while dragging back, and items do not resize at the
+leading edge.
+
+`ui_collections4_v2`, after a frame to settle in, pulls the strip 60 (its first
+item follows 60) and then past half an item (it steps to the second). The full
+UI sweep passes on Windows and Linux.

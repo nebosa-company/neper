@@ -756,6 +756,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
         fade_step += 1usize
     }
     if faded_mid == faded_end { os.exit(207i32) }
+    // (D1380) After a frame to settle in, the carousel strip follows a drag (its
+    // first item 60 further left after a 60 pull) and a pull past half an item
+    // steps to the next.
+    var strip_keys: [5]widget.Key = zero
+    var sk2 = 0usize
+    while sk2 < 5usize {
+        strip_keys[sk2] = 8011u64 + u64(sk2)
+        sk2 += 1usize
+    }
+    var drag_step = 0usize
+    var strip_rest: f32 = 0.0
+    while drag_step < 4usize {
+        s.slide = 0usize
+        var dragging_strip = collection.carousel_options()
+        dragging_strip.title = "Recent"
+        dragging_strip.width = 360.0
+        f = mem.arena_from(frame_storage)
+        let (drag_strip, drag_strip_error) = collection.carousel_of(&f, 8000u64, &theme, "Recent", s.slides[0usize..5usize], strip_keys[..], 0usize, widget.Change[usize] { ctx: mem.cast[*void](s), invoke: on_slide }, dragging_strip)
+        let (drag_strip_page, drag_strip_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if drag_strip_error != ok || drag_strip_page_error != ok { os.exit(208i32) }
+        drag_strip_page[0usize] = drag_strip
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), drag_strip_page[0usize..1usize]), time.Instant { nanos: 57000000000i64 + i64(drag_step) * 1000000000i64 }) != ok { os.exit(209i32) }
+        let (first_item, has_first_item) = bounds(&harness, &runtime, 8011u64)
+        if !has_first_item { os.exit(210i32) }
+        let hold_y = first_item.y + 40.0
+        if drag_step == 1usize {
+            strip_rest = first_item.x
+            if !press(&harness, first_item.x + 100.0, hold_y) || !move_to(&harness, first_item.x + 90.0, hold_y) || !move_to(&harness, first_item.x + 40.0, hold_y) { os.exit(211i32) }
+        }
+        if drag_step == 2usize {
+            if !near(first_item.x, strip_rest - 60.0) { os.exit(212i32) }
+            if !move_to(&harness, first_item.x - 60.0, hold_y) || !release(&harness, first_item.x - 60.0, hold_y) || s.slide != 1usize { os.exit(213i32) }
+        }
+        drag_step += 1usize
+    }
     // (D1289) While refreshing the arc spins: a quarter turn later its circle is
     // drawn differently.
     var spin_sums: [2]u64 = zero
