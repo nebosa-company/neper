@@ -386,22 +386,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let touch_tokens = style.adapt(&tokens, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
     let touch_theme = control.Theme { tokens: &touch_tokens, fonts: theme.fonts, language: "", runtime: &runtime }
     var thumb_step = 0usize
-    while thumb_step < 2usize {
+    // (D1343) The touch field shows its spectrum after a press on Spectrum.
+    while thumb_step < 4usize {
         var thumb_theme = &theme
-        if thumb_step == 1usize { thumb_theme = &touch_theme }
+        var thumb_key = 1100u64
+        if thumb_step >= 1usize {
+            thumb_theme = &touch_theme
+            thumb_key = 1200u64
+        }
         f = mem.arena_from(frame_storage)
-        let (thumbed, thumbed_error) = overlay.color_field_with(&f, 1100u64 + 100u64 * u64(thumb_step), thumb_theme, "Accent colour", paint.rgba(0.2, 0.5, 0.8, 1.0), false, recent_pick, true, &s.press, s.swatches[0usize..6usize], recent_colours[0usize..0usize], s.hex[0usize..16usize], 7usize, recent_typed, 296.0)
+        let (thumbed, thumbed_error) = overlay.color_field_with(&f, thumb_key, thumb_theme, "Accent colour", paint.rgba(0.2, 0.5, 0.8, 1.0), false, recent_pick, true, &s.press, s.swatches[0usize..6usize], recent_colours[0usize..0usize], s.hex[0usize..16usize], 7usize, recent_typed, 296.0)
         let (thumb_page, thumb_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if thumbed_error != ok || thumb_page_error != ok { os.exit(77i32) }
         thumb_page[0usize] = thumbed
         if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), thumb_page[0usize..1usize]), time.Instant { nanos: 6300000000i64 + i64(thumb_step) }) != ok { os.exit(78i32) }
-        let (hue_strip, has_hue_strip) = bounds(&harness, &runtime, 1103u64 + 100u64 * u64(thumb_step))
+        if thumb_step == 2usize {
+            let (spectrum_tab, has_spectrum_tab) = bounds(&harness, &runtime, 1200u64 + 4200u64 + 2u64)
+            if !has_spectrum_tab || testing.tap(&harness, spectrum_tab.x + spectrum_tab.width * 0.5, spectrum_tab.y + spectrum_tab.height * 0.5) != ok { os.exit(92i32) }
+        }
+        if thumb_step == 1usize || thumb_step == 2usize {
+            thumb_step += 1usize
+            continue
+        }
+        let (hue_strip, has_hue_strip) = bounds(&harness, &runtime, thumb_key + 3u64)
         let (thumb_shot, thumb_shot_error) = testing.snapshot(&harness, a)
         if !has_hue_strip || thumb_shot_error != ok { os.exit(79i32) }
         let centre_x = hue_strip.x + hue_strip.width * (210.0 / 360.0)
         let ringed = is_color(thumb_shot, at(centre_x + 12.0, hue_strip.y + hue_strip.height * 0.5), style.color(&tokens, .SurfaceContainerLowest))
         if thumb_step == 0usize && ringed { os.exit(80i32) }
-        if thumb_step == 1usize && !ringed { os.exit(81i32) }
+        if thumb_step == 3usize && !ringed { os.exit(81i32) }
         thumb_step += 1usize
     }
     // (D1339) The typed opacity: "40 %" reads as 0.4, "140" and "x" do not; with
@@ -422,6 +435,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), alpha_page[0usize..1usize]), time.Instant { nanos: 6400000000i64 }) != ok { os.exit(85i32) }
     let (_, _, has_alpha_edit) = widget.edit_selection(&runtime, testing.by_key(&harness, 1306u64).element)
     if !has_alpha_edit { os.exit(86i32) }
+    // (D1343) On touch the panel shows the swatches first, the spectrum hidden;
+    // the Spectrum segment swaps them.
+    var mode_step = 0usize
+    while mode_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        let (moded_field, moded_field_error) = overlay.color_field_with(&f, 1400u64, &touch_theme, "Accent colour", copper(), false, recent_pick, true, &s.press, s.swatches[0usize..6usize], recent_colours[0usize..0usize], s.hex[0usize..16usize], 7usize, recent_typed, 296.0)
+        let (moded_page, moded_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if moded_field_error != ok || moded_page_error != ok { os.exit(87i32) }
+        moded_page[0usize] = moded_field
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), moded_page[0usize..1usize]), time.Instant { nanos: 6500000000i64 + i64(mode_step) }) != ok { os.exit(88i32) }
+        let spectrum_there = testing.by_key(&harness, 1402u64).count
+        let swatch_there = testing.by_key(&harness, 1408u64).count
+        if mode_step < 2usize && (spectrum_there != 0usize || swatch_there != 1usize) { os.exit(89i32) }
+        if mode_step == 1usize {
+            let (spectrum_segment, has_spectrum_segment) = bounds(&harness, &runtime, 1400u64 + 4200u64 + 2u64)
+            if !has_spectrum_segment || testing.tap(&harness, spectrum_segment.x + spectrum_segment.width * 0.5, spectrum_segment.y + spectrum_segment.height * 0.5) != ok { os.exit(90i32) }
+        }
+        if mode_step == 2usize && (spectrum_there != 1usize || swatch_there != 0usize) { os.exit(91i32) }
+        mode_step += 1usize
+    }
     try io.print("ui pickers3 v2 ok\n")
     ret ok
 }

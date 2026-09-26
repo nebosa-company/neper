@@ -25823,3 +25823,16 @@ in `key_code`. Drag and drop is still to come.
 `ui_collections3_v2` presses F2 on A2 (reported as 12), then renames it: the
 field stands, Enter commits and Escape cancels, on Windows and Linux;
 `ui_tabular` still passes on both.
+
+## D1343 — Touch colour panels switch between swatches and spectrum
+
+The ColorPicker spec's touch mode switch: on touch a colour field's panel
+leads with a Swatches / Spectrum segmented button (keyed `key + 4200`) and
+shows one part at a time -- the swatches first, as the spec's first mode --
+the choice kept on the field (`ColorMode`) so the caller holds nothing new.
+Pointer hosts keep both parts. The sheet presentation for touch is still to
+come.
+
+`ui_pickers3_v2` opens a touch field: the swatches stand and the spectrum does
+not; a press on Spectrum swaps them. D1338's touch-thumb check now switches to
+the spectrum first. This passes on Windows and Linux.
