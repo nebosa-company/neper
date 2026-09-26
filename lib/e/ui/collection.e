@@ -3561,15 +3561,26 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             var twisty_states = 0u32
             var twisty_actions = accessibility.ACTION_EXPAND
             if open {
-                turn = .ChevronDown
                 twisty_states = accessibility.STATE_EXPANDED
                 twisty_actions = accessibility.ACTION_COLLAPSE
             }
-            let (twisty, twisty_error) = control.glyph_action(a, row_key ^ hash.fnv1a64("row-disclose"), t, turn, "Details", &expand_submits[i], 24.0, 18.0, style.color(t.tokens, .OnSurfaceVariant), true, twisty_states, twisty_actions, row_key ^ hash.fnv1a64("row-detail"))
+            let disclose_key = row_key ^ hash.fnv1a64("row-disclose")
+            let (twisty, twisty_error) = control.glyph_action(a, disclose_key, t, turn, "Details", &expand_submits[i], 24.0, 18.0, style.color(t.tokens, .OnSurfaceVariant), true, twisty_states, twisty_actions, row_key ^ hash.fnv1a64("row-detail"))
             if twisty_error != ok { ret (zero, twisty_error) }
+            // (D1438, docs/ux/components/TableRow, motion) The chevron turns a
+            // quarter to point down over `duration-short-3` on `ease-standard` as
+            // the row opens (kept on the disclosure, slot `+ 1048597`; the other
+            // way round right to left); reduced motion turns at once.
+            var open_goal: f32 = 0.0
+            if open { open_goal = 1.0 }
+            var quarter: f32 = 1.5707963 * control.eased_on(t, disclose_key, disclose_key + 1048597u64, open_goal, false, t.tokens.durations.short3)
+            if t.tokens.direction == .RightToLeft { quarter = 0.0 - quarter }
+            let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
+            if turning_error != ok { ret (zero, TooLarge) }
+            turning[0usize] = twisty
             let (led, led_error) = mem.alloc[widget.Node](a, 2usize)
             if led_error != ok { ret (zero, TooLarge) }
-            led[0usize] = twisty
+            led[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, offset: zero }, control.sized_style(24.0, 24.0), turning[0usize..1usize])
             led[1usize] = cells[0usize]
             cells[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), led[0usize..2usize])
         }
@@ -4592,13 +4603,18 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
             actions[block_count] = widget.Submit { ctx: ctx_of(&toggles[block_count]), invoke: group_toggle_fire }
             let heading_key = property_group_heading_key(key, head.group)
             let state = control.control_state(t, heading_key, true, false)
-            var kind: control.GlyphKind = .ChevronRight
-            if open { kind = .ChevronDown }
-            let (chevron, chevron_error) = control.stroked_glyph(a, muted, kind, 15.0, 18.0 * 1.75 / 24.0)
+            let (chevron, chevron_error) = control.stroked_glyph(a, muted, .ChevronRight, 15.0, 18.0 * 1.75 / 24.0)
             if chevron_error != ok { ret (zero, chevron_error) }
-            let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)
+            let (drawn, drawn_error) = mem.alloc[widget.Node](a, 2usize)
             if drawn_error != ok { ret (zero, TooLarge) }
-            drawn[0usize] = chevron
+            // (D1438, docs/ux/components/PropertyGrid, motion) The group's chevron
+            // turns a quarter over `duration-short-3` as it opens (kept on the
+            // heading, slot `+ 1048597`); reduced motion turns at once.
+            var open_goal: f32 = 0.0
+            if open { open_goal = 1.0 }
+            let quarter = 1.5707963 * control.eased_on(t, heading_key, heading_key + 1048597u64, open_goal, false, t.tokens.durations.short3)
+            drawn[1usize] = chevron
+            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, offset: zero }, style.defaults(), drawn[1usize..2usize])
             let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.padded(0u64, 4.5, 4.5, 4.5, 4.5, control.sized_style(24.0, 24.0), drawn[0usize..1usize])
