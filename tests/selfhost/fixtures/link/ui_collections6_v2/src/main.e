@@ -67,6 +67,13 @@ fn grid_cell(ctx: *void, row: usize, column: usize) -> collection.GridCell {
     ret c
 }
 
+// (D1402) A sheet Save, counted.
+fn on_save(ctx: *void) -> err {
+    let count = mem.cast[*u32](ctx)
+    *count += 1u32
+    ret ok
+}
+
 fn on_change(ctx: *void, event: collection.GridEvent) -> err {
     let store = mem.cast[*Store](ctx)
     store.events += 1usize
@@ -480,6 +487,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (empty_cell, has_empty_cell) = collection.grid_paste_cell(pasted, 1usize, 1usize, paste_room)
     let (_, has_missing_cell) = collection.grid_paste_cell(pasted, 2usize, 0usize, paste_room)
     if !has_empty_cell || empty_cell.len != 0usize || has_missing_cell { os.exit(138i32) }
+    // (D1402) On touch a tapped row asks to be edited in a sheet; the sheet lays
+    // out a field per column and Save.
+    let sheet_tokens = style.adapt(&tokens, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
+    let sheet_theme = control.Theme { tokens: &sheet_tokens, fonts: theme.fonts, language: "", runtime: &runtime }
+    store.state.editing = false
+    store.state.menu_open = false
+    store.state.disabled = false
+    var sheet_step = 0usize
+    while sheet_step < 2usize {
+        f = mem.arena_from(storage)
+        let (touch_grid, touch_grid_error) = build(&f, &sheet_theme, ctx, store)
+        if touch_grid_error != ok || testing.pump(&harness, touch_grid, time.Instant { nanos: 90000000000i64 + i64(sheet_step) }) != ok { os.exit(162i32) }
+        sheet_step += 1usize
+    }
+    let (touch_cell, has_touch_cell) = bounds(&harness, &runtime, 2u64)
+    if !has_touch_cell { os.exit(163i32) }
+    let (whole_grid, has_whole_grid) = bounds(&harness, &runtime, 1u64)
+    let events_before_tap = store.events
+    if !has_whole_grid || testing.tap(&harness, whole_grid.x + 150.0, whole_grid.y + 70.0) != ok { os.exit(164i32) }
+    if store.events == events_before_tap { os.exit(169i32) }
+    if store.last.kind != .EditRow { os.exit(170i32) }
+    var sheet_columns: [2]collection.Column = zero
+    sheet_columns[0usize] = collection.Column { title: "Host", width: 120.0 }
+    sheet_columns[1usize] = collection.Column { title: "Port", width: 100.0 }
+    let (sheet_bytes, sheet_bytes_error) = mem.alloc[u8](a, 64usize)
+    if sheet_bytes_error != ok { os.exit(165i32) }
+    var drafts: [2]collection.RowDraft = zero
+    drafts[0usize] = collection.RowDraft { buffer: sheet_bytes[0usize..32usize], len: 0usize }
+    drafts[1usize] = collection.RowDraft { buffer: sheet_bytes[32usize..64usize], len: 0usize }
+    var saves = 0u32
+    let sheet_cancel = widget.Submit { ctx: mem.cast[*void](&saves), invoke: on_save }
+    f = mem.arena_from(storage)
+    let (row_sheet, row_sheet_error) = collection.grid_row_sheet(&f, 900u64, &sheet_theme, "Edit host", sheet_columns[..], drafts[..], zero, widget.Submit { ctx: mem.cast[*void](&saves), invoke: on_save }, &sheet_cancel, true, 300.0)
+    let (sheet_page, sheet_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if row_sheet_error != ok || sheet_page_error != ok { os.exit(166i32) }
+    sheet_page[0usize] = row_sheet
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 600.0), sheet_page[0usize..1usize]), time.Instant { nanos: 91000000000i64 }) != ok { os.exit(167i32) }
+    if testing.by_key(&harness, 916u64).count != 1usize || testing.by_key(&harness, 917u64).count != 1usize || testing.by_text(&harness, "Save").count == 0usize { os.exit(168i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(54i32) }
     try io.print("ui collections6 v2 ok\n")
     ret ok

@@ -2434,7 +2434,50 @@ type GridState = struct { row: usize, column: usize, anchor_row: usize, anchor_c
 // What a key, tap or editor asks: Move and Extend select, Edit/Type/Commit/Cancel
 // drive text, Toggle changes a checkbox and Open presents a select or date. The
 // caller owns every value; `next` is its next interaction state.
-type GridEventKind = enum u8 { Move, Extend, Edit, Replace, Type, Commit, Cancel, Toggle, Open, Menu, Paste, Clear, Undo, FillDown }
+// (D1402) `EditRow`: on touch, a tapped row asks to be edited in a sheet.
+type GridEventKind = enum u8 { Move, Extend, Edit, Replace, Type, Commit, Cancel, Toggle, Open, Menu, Paste, Clear, Undo, FillDown, EditRow }
+
+// (D1402) One field of a row being edited in a sheet: the caller's text buffer
+// and its length.
+type RowDraft = struct { buffer: []u8, len: usize }
+
+// (D1402) A sheet field's typing: which column and its text.
+type RowFieldEdit = struct { column: usize, text: str }
+type RowFieldRelay = struct { column: usize, typed: widget.Change[RowFieldEdit] }
+
+fn row_field_fire(ctx: *void, value: str) -> err {
+    let r = back_of[RowFieldRelay](ctx)
+    ret widget.fire_change[RowFieldEdit](r.typed, RowFieldEdit { column: r.column, text: value })
+}
+
+// (D1402, docs/ux/components/DataGrid, sheet editing) A row's fields in a modal
+// bottom sheet titled `title` (keyed `key`): a text field for each column,
+// labelled by its title, over the caller's `drafts` (keyed `key + 16 +
+// column`), then Cancel and Save; typing reaches `typed` with the column. The
+// caller fills the drafts from the row when it opens and validates on Save.
+fn grid_row_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, columns: []const Column, drafts: []const RowDraft, typed: widget.Change[RowFieldEdit], save: widget.Submit, cancel: *const widget.Submit, open: bool, width: f32) -> (widget.Node, err) {
+    if drafts.len != columns.len { ret (zero, TooLarge) }
+    let (fields, fields_error) = mem.alloc[widget.Node](a, columns.len)
+    let (relays, relays_error) = mem.alloc[RowFieldRelay](a, columns.len)
+    if fields_error != ok || relays_error != ok { ret (zero, TooLarge) }
+    var c = 0usize
+    while c < columns.len {
+        relays[c] = RowFieldRelay { column: c, typed: typed }
+        var look = control.field_options()
+        look.width = width
+        let (field, field_error) = control.text_field(a, key + 16u64 + u64(c), t, columns[c].title, drafts[c].buffer, drafts[c].len, widget.Change[str] { ctx: ctx_of(&relays[c]), invoke: row_field_fire }, zero, look)
+        if field_error != ok { ret (zero, field_error) }
+        fields[c] = field
+        c += 1usize
+    }
+    let (buttons, buttons_error) = mem.alloc[overlay.DialogButton](a, 2usize)
+    if buttons_error != ok { ret (zero, TooLarge) }
+    buttons[0usize] = overlay.DialogButton { label: "Cancel", action: *cancel, kind: .Cancel }
+    buttons[1usize] = overlay.DialogButton { label: "Save", action: save, kind: .Default }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, style.defaults(), fields[0usize..columns.len])
+    let (made, made_error) = overlay.bottom_sheet_with_actions(a, key, t, title, content, buttons[0usize..2usize], open, cancel, 0.0)
+    ret (made, made_error)
+}
 type GridEvent = struct { kind: GridEventKind, row: usize, column: usize, next: GridState, text: str }
 
 // (D1284, docs/ux/components/DataGrid, paste) Pasted text as the grid reads it:
@@ -2961,6 +3004,8 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     let focus = control.FocusTo { runtime: t.runtime, key: b.holder }
     var tap_kind: GridEventKind = .Move
     if value.kind == .Checkbox && !value.read_only { tap_kind = .Toggle }
+    // (D1402) On touch a tap asks to edit the row in a sheet.
+    if density_of(t) == 2usize && tap_kind == .Move && !s.disabled { tap_kind = .EditRow }
     presses[0usize] = GridPress {
         move: GridFire { event: GridEvent { kind: tap_kind, row: index, column: at, next: next, text: "" }, change: b.change, to: focus },
         extend: GridFire { event: GridEvent { kind: .Extend, row: s.row, column: s.column, next: extended, text: "" }, change: b.change, to: focus },
@@ -3141,8 +3186,8 @@ fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
 // and, for a range, "N cells selected" in `body-medium` `on-surface-variant`.
 // Every change reaches `change` as a `GridEvent` carrying the next state.
 // (D1284) `grid_paste_size` and `grid_paste_cell` read a Paste's text.
-// ponytail: the model's mutation and undo are the caller's; no cross-fade or
-// touch sheet.
+// (D1402) On touch a tapped row reports `EditRow`, and `grid_row_sheet` edits it.
+// ponytail: the model's mutation and undo are the caller's; no cross-fade.
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
     var row_extent = extent
