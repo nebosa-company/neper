@@ -1033,6 +1033,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         pick_step += 1usize
     }
+    // (D1497) A list of twenty in a viewport 150 tall: Page Down moves the
+    // viewport's rows (150 over a row's height), not the window's.
+    var paged_items: [20]collection.RowItem = zero
+    var paged_keys: [20]widget.Key = zero
+    var pi = 0usize
+    while pi < 20usize {
+        paged_items[pi] = collection.row_item("Row")
+        paged_keys[pi] = 7200u64 + u64(pi)
+        pi += 1usize
+    }
+    var paged_step = 0usize
+    while paged_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        var paged_options = collection.list_options()
+        paged_options.width = 300.0
+        let (paged_list, paged_list_error) = collection.list_of(&f, 7100u64, &theme, "Paged", paged_items[..], paged_keys[..], paged_options)
+        let (paged_held, paged_held_error) = mem.alloc[widget.Node](&f, 1usize)
+        if paged_list_error != ok || paged_held_error != ok { os.exit(252i32) }
+        paged_held[0usize] = paged_list
+        let paged_view = widget.scroll(7000u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: zero, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, control.sized_style(300.0, 150.0), paged_held[0usize..1usize])
+        let (paged_page, paged_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if paged_page_error != ok { os.exit(252i32) }
+        paged_page[0usize] = paged_view
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 600.0), paged_page[0usize..1usize]), time.Instant { nanos: 104000000000i64 + i64(paged_step) }) != ok { os.exit(253i32) }
+        paged_step += 1usize
+    }
+    let (paged_row, has_paged_row) = bounds(&harness, &runtime, 7200u64)
+    if !has_paged_row || paged_row.height <= 0.0 { os.exit(254i32) }
+    let expected_page = usize(150.0 / paged_row.height)
+    if widget.focus(&runtime, testing.by_key(&harness, 7200u64).element) != ok || testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 7200u64 + u64(expected_page)) { os.exit(255i32) }
     // (D1490) Under reduced motion the fill cross-fades over 100 ms: 50 ms in
     // it is not yet `secondary-container`, a second on it is.
     var calm_tokens = tokens

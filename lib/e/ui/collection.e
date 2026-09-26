@@ -6067,8 +6067,8 @@ fn list_options() -> ListOptions {
 // a tap toggles.
 // (D1247) `loading` skeleton rows stand in for no rows.
 // ponytail: the caller sets `selected` from the gestures; no
-// sticky subheader or insert motion; a page is the window's
-// height over the first row's, not the enclosing viewport's.
+// sticky subheader or insert motion. (D1497) A page is the enclosing viewport's
+// height over the first row's (the window's outside one).
 fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, options: ListOptions) -> (widget.Node, err) {
     if keys.len != items.len { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, items.len)
@@ -6116,7 +6116,10 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     if items.len > 0usize && mem.address_of(t.runtime) != 0usize {
         let tall = row_height(t, row_lines(&items[0usize]))
         let window = widget.surface_size(t.runtime)
-        if tall > 0.0 && window.height > tall { page = usize(window.height / tall) }
+        var room = window.height
+        let (around, has_around) = widget.viewport_extent_around(t.runtime, keys[0usize])
+        if has_around { room = around }
+        if tall > 0.0 && room > tall { page = usize(room / tall) }
         // Before the first layout the window is unknown: a page is the list.
         if page == 0usize { page = items.len }
     }
