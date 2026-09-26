@@ -27428,3 +27428,9 @@ A `PageFade` kept on the page box records the change. For the first `duration-sh
 The NavigationStack spec pops by sliding the top page away to the end while the page beneath returns. D1319 dropped the leaving page, because the caller's `pages` no longer hold it, so a pop was the revealed page's parallax alone. The new `navigation_stack_leaving` takes D1498's `PageBuilder` (its `ctx` not null) for the page a pop leaves. The stack records the depth a pop left (`StackCell.left_from`). While the depth eases down, it builds that page again for its level and slides it from its place out to the end, over the revealed page, in a layer keyed `key + 5`. A pop of several levels spreads the slide over them. `navigation_stack_of` passes no builder and is unchanged.
 
 `ui_navigation_v2` checks this on Windows and Linux: 100 ms after a pop from depth 2 to 1, the page left (level 1, built again) stands in its layer, and a second on both are gone.
+
+## D1500 — Table rows can be disabled
+
+The TableRow spec: "Disabled (not actionable, e.g. queued behind a lock): content at 38%, tags at 38% opacity, checkbox disabled, still focusable for reading". A table had no way to mark a row so. `TableOptions.disabled` names rows by key, as `selected` does. Through the new `table_row_full`, such a row draws its content, and its selection cell, at `disabled-content` (38%), under no state layer. Its pick and double pick are inert, and so is its selection checkbox. It stays focusable, and it is Disabled in the tree, with no Press action. `table_row_of` keeps its signature and passes `false`. Space and the Shift arrows through the selection scopes still reach a disabled row.
+
+`ui_collections2_v2` checks this on Windows and Linux: with the first row disabled, a tap on it does not pick, a tap on the second does, and the first row is Disabled in the tree. All 103 `ui_*` fixtures pass on both hosts.

@@ -694,6 +694,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     edge_shift.shift = true
     if widget.focus(&runtime, testing.by_key(&harness, 1000u64 + u64(edge_first)).element) != ok || testing.press_key(&harness, 38u32, edge_shift) != ok { os.exit(148i32) }
     if edge_chose.count != 1usize || edge_chose.kind != .Extend || edge_chose.index != edge_first - 1usize || !(logs[0usize].offset < 400.0) { os.exit(149i32) }
+    // (D1500) A disabled row (the table's first, key 1000): a tap does not pick
+    // it, and its row is Disabled in the tree; the second still picks.
+    var off_keys: [1]widget.Key = zero
+    off_keys[0usize] = 1000u64
+    var off_options: collection.TableOptions = zero
+    off_options.disabled = off_keys[..]
+    var off_step = 0usize
+    while off_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let off_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        let (off_table, off_table_error) = collection.table_with(&f, 61u64, &theme, "Files", columns[0usize..3usize], off_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, 0.0, zero, 300.0, off_options)
+        let (off_page, off_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if off_table_error != ok || off_page_error != ok { os.exit(150i32) }
+        off_page[0usize] = off_table
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), off_page[0usize..1usize]), time.Instant { nanos: 5590000000i64 + i64(off_step) }) != ok { os.exit(151i32) }
+        off_step += 1usize
+    }
+    let off_picks = logs[0usize].picks
+    let (off_row, has_off_row) = bounds(&harness, &runtime, 1000u64)
+    let (on_row, has_on_row) = bounds(&harness, &runtime, 1001u64)
+    if !has_off_row || !has_on_row || testing.tap(&harness, off_row.x + 150.0, off_row.y + off_row.height * 0.5) != ok || logs[0usize].picks != off_picks { os.exit(152i32) }
+    if testing.tap(&harness, on_row.x + 150.0, on_row.y + on_row.height * 0.5) != ok || logs[0usize].picks != off_picks + 1usize { os.exit(153i32) }
+    let (off_tree, off_tree_error) = testing.semantics(&harness)
+    if off_tree_error != ok { os.exit(154i32) }
+    var off_at = 0usize
+    var off_disabled = false
+    while off_at < off_tree.nodes.len {
+        if off_tree.nodes[off_at].role == .Row && off_tree.nodes[off_at].position.row == 1u32 && off_tree.nodes[off_at].state.disabled { off_disabled = true }
+        off_at += 1usize
+    }
+    if !off_disabled { os.exit(155i32) }
     // (D1383) A touch held 600 ms on the first row of a selectable table with
     // nothing selected toggles it into the selection; the release picks nothing.
     var held_chose: Chosen = zero
