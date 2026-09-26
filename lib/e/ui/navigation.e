@@ -2313,8 +2313,9 @@ fn crumb_drop_gesture(ctx: *void, g: widget.Gesture) -> err {
 }
 
 // (D1361) `drop`, when set, makes each crumb before the current place a drop
-// target.
-type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool, width: f32, root_icon: bool, root_glyph: control.GlyphKind, edit: widget.Submit, editing: bool, path: []u8, path_len: usize, typed: widget.Change[str], go: widget.Submit, cancel: widget.Submit, path_error: str, sibling_toggle: widget.Change[usize], sibling_open: usize, siblings: []const overlay.MenuItem, drop: widget.Change[CrumbDrop] }
+// target. (D1396) `complete`, when set, is Tab in the editable path: the host's
+// folder-name completion, which rewrites `path` through `typed`.
+type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool, width: f32, root_icon: bool, root_glyph: control.GlyphKind, edit: widget.Submit, editing: bool, path: []u8, path_len: usize, typed: widget.Change[str], go: widget.Submit, cancel: widget.Submit, path_error: str, sibling_toggle: widget.Change[usize], sibling_open: usize, siblings: []const overlay.MenuItem, drop: widget.Change[CrumbDrop], complete: widget.Submit }
 
 // (D1326) A sibling chevron's press: which crumb.
 type SiblingAsk = struct { index: usize, toggle: widget.Change[usize] }
@@ -2525,7 +2526,7 @@ fn breadcrumbs_fit(a: *mem.Arena, t: *const control.Theme, names: []const str, w
 // (D1326) Sibling menus from `BreadcrumbsOptions.sibling_toggle`.
 // (D1361) Drop targets from `BreadcrumbsOptions.drop`.
 // (D1374) A drag held there `duration-long-2` navigates to the crumb.
-// ponytail: no Tab completion of folder names.
+// (D1396) Tab completes folder names through `BreadcrumbsOptions.complete`.
 fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit, given: BreadcrumbsOptions) -> (widget.Node, err) {
     if picks.len != names.len || names.len == 0usize { ret (zero, TooLarge) }
     var options = given
@@ -2559,7 +2560,16 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), edited[0usize..edited_count])
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
         if scoped_error != ok { ret (zero, TooLarge) }
-        scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: path_actions[2usize], keys: zero }, style.defaults(), column[0usize..1usize])
+        // (D1396, docs/ux/components/Breadcrumbs, editing) With `complete`, Tab
+        // asks the host to complete the folder name rather than leaving the field.
+        var path_keys: []const widget.Shortcut = zero
+        if widget.submit_set(options.complete.invoke) {
+            let (tabbing, tabbing_error) = mem.alloc[widget.Shortcut](a, 1usize)
+            if tabbing_error != ok { ret (zero, TooLarge) }
+            tabbing[0usize] = widget.Shortcut { key: 9u32, modifiers: zero, action: options.complete }
+            path_keys = tabbing[0usize..1usize]
+        }
+        scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: path_keys, default_action: zero, cancel_action: path_actions[2usize], keys: zero }, style.defaults(), column[0usize..1usize])
         var editing_sem: widget.Semantics = zero
         editing_sem.role = 2u8
         editing_sem.label = label

@@ -26595,3 +26595,15 @@ the wheels' English-only notes now point at D1388.
 `ui_pickers_v2` types "9/1/2026" into a field held from September 8, 2026: it
 says "Choose a date from September 8, 2026". `ui_pickers2_v2` still passes, on
 Windows and Linux.
+
+## D1396 — Tab completes folder names in the path field
+
+The Breadcrumbs spec offers Tab completion of folder names in the editable path
+where the host provides it. `BreadcrumbsOptions.complete`, when set, binds Tab
+in the path field's scope to it. The host looks up the folder names and
+rewrites `path` through `typed`, and the field keeps the focus instead of Tab
+leaving it. Without `complete`, Tab moves on as before.
+
+`ui_navigation2_v2` presses Tab in the editing path field: the completion is
+asked for once and the field still holds the focus; Enter and Escape still go
+and cancel, on Windows and Linux.
