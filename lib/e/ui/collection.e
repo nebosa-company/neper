@@ -1780,9 +1780,10 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // (D1341) `TableOptions.groups` adds the grouped tier (`header_groups`).
 // (D1345) A dragged header lifts.
 // (D1357) A landing line stands where the dragged header would land.
-// ponytail: the lifted header keeps its place rather than following the pointer;
-// a header dragged onto the first column shows no line (no handle stands before
-// it).
+// (D1478) A ghost of the lifted header follows the pointer (an overlay keyed
+// `key + 1048600`), the landing line repeated over it (`key + 1048601`).
+// ponytail: a header dragged onto the first column shows no line (no handle
+// stands before it).
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     var plain: []const bool = zero
     let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain, plain)
@@ -1821,6 +1822,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     // (D1357) Which header is dragged and where it would land.
     let (lifted_at, has_lifted_column) = lifted_column(t)
     let (landing, has_landing) = landing_column(t, key, columns.len)
+    var landing_grip: widget.Key = 0u64
     var i = 0usize
     while i < columns.len {
         let header_key = key + 1u64 + 2u64 * u64(i)
@@ -1977,6 +1979,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             mark.margin = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: flat, right: flat, bottom: flat }
         }
         if lands_here {
+            landing_grip = grip_key
             mark = control.sized_style(2.0, inner)
             mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
             mark.margin = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: flat, right: flat, bottom: flat }
@@ -2009,16 +2012,50 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     var band = style.defaults()
     band.height = style.Length { Px: inner }
     band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, band, cells[0usize..n])
     var rule = style.defaults()
     rule.height = style.Length { Px: t.tokens.sizes.divider }
     rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
     parts[1usize] = widget.box(0u64, rule, zero)
+    var part_count = 2usize
+    // (D1478) The ghost: the lifted header's `surface-container-highest` at
+    // elevation 4, its width last frame, its title, moved by the pointer's travel.
+    if has_lifted_column && lifted_at < columns.len && mem.address_of(t.runtime) != 0usize {
+        let lifted_key = key + 1u64 + 2u64 * u64(lifted_at)
+        let (lifted_box, has_lifted_box) = control.keyed_bounds(t.runtime, lifted_key)
+        if has_lifted_box {
+            var ghost_look = control.sized_style(lifted_box.width, lifted_box.height)
+            ghost_look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+            ghost_look.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
+            var ghost_words = control.text_options()
+            ghost_words.role = .TitleSmall
+            ghost_words.wrap = .None
+            let (ghost_title, ghost_title_error) = control.colored_text(a, 0u64, columns[lifted_at].title, t, ghost_words, style.color(t.tokens, .OnSurface))
+            if ghost_title_error != ok { ret (zero, ghost_title_error) }
+            let (ghost, ghost_error) = mem.alloc[widget.Node](a, 2usize)
+            if ghost_error != ok { ret (zero, TooLarge) }
+            ghost[0usize] = ghost_title
+            ghost[1usize] = widget.aligned(0u64, .Center, .Center, ghost_look, ghost[0usize..1usize])
+            let travel = widget.pointer_position(t.runtime).x - widget.pointer_origin(t.runtime).x
+            parts[2usize] = widget.overlay(key + 1048600u64, widget.Overlay { anchor: lifted_key, placement: .Below, offset: geometry.Point { x: travel, y: 0.0 - lifted_box.height }, modal: false, dismiss: zero }, style.defaults(), ghost[1usize..2usize])
+            part_count = 3usize
+            // The landing line stands over the ghost.
+            if landing_grip != 0u64 {
+                var over_mark = control.sized_style(2.0, inner)
+                over_mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+                let (line_node, line_node_error) = mem.alloc[widget.Node](a, 1usize)
+                if line_node_error != ok { ret (zero, TooLarge) }
+                line_node[0usize] = widget.box(0u64, over_mark, zero)
+                parts[3usize] = widget.overlay(key + 1048601u64, widget.Overlay { anchor: landing_grip, placement: .Below, offset: geometry.Point { x: 3.0, y: 0.0 - inner }, modal: false, dismiss: zero }, style.defaults(), line_node[0usize..1usize])
+                part_count = 4usize
+            }
+        }
+    }
     let (row_node, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+    row_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
     var sem: widget.Semantics = zero
     sem.role = 13u8
     ret (widget.semantics(0u64, sem, style.defaults(), row_node[0usize..1usize]), ok)

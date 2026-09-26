@@ -600,6 +600,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if lift_step == 0usize {
             if risen || testing.send(&harness, input.Event { PointerDown: testing.pointer_at(kind_head.x + 20.0, kind_head.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(kind_head.x + 40.0, kind_head.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(kind_head.x + 60.0, kind_head.y + 20.0) }) != ok { os.exit(106i32) }
         }
+        // (D1478) Mid-drag a ghost of the header stands 40 on, where the pointer
+        // carried it (`11 + 1048600`); released, it is gone.
+        let header_ghosts = testing.by_key(&harness, 11u64 + 1048600u64).count
+        if lift_step == 1usize {
+            let (header_ghost, has_header_ghost) = bounds(&harness, &runtime, 11u64 + 1048600u64)
+            if header_ghosts != 1usize || !has_header_ghost || header_ghost.x < kind_head.x + 39.0 || header_ghost.x > kind_head.x + 41.0 { os.exit(136i32) }
+        }
+        if lift_step == 2usize && header_ghosts != 0usize { os.exit(137i32) }
         if lift_step == 1usize {
             if !risen || testing.send(&harness, input.Event { PointerUp: testing.pointer_at(kind_head.x + 60.0, kind_head.y + 20.0) }) != ok { os.exit(107i32) }
         }
