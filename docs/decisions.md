@@ -26414,3 +26414,15 @@ count.
 `ui_collections6_v2` sums Port over gamma and staging to 44, finds a range with
 a name not numeric, writes 1,234,567 and 11,244.50, and reads "1,234.5"; its
 "6 cells selected" still reads alone, on Windows and Linux.
+
+## D1383 — Holding a table row on touch starts selection
+
+The List spec's touch hosts start selection mode with a long press. A
+selectable table (`TableOptions.select`) out of selection mode now asks
+`widget.long_press_touch` for each row. A touch held 500 ms on a row fires its
+selection toggle, which starts the mode, and the runtime consumes the release
+so the row's tap does not also pick. Pointer presses are unchanged.
+
+`ui_collections2_v2` holds a touch 600 ms on the first row of a selectable table
+with nothing selected: the table reports a toggle of row 0, and the release
+reports nothing more, on Windows and Linux.
