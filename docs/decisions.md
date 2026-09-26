@@ -27024,3 +27024,9 @@ The Pagination spec says "the current fill cross-fades in `duration-short-2`". E
 The ListBox spec says "the selection fill and the checkbox change over `duration-short-2` with `ease-standard`. Nothing moves." Each list box and multi-select row now eases a chosen share on itself (slot `row_key + 1048599`). The `secondary-container` fill stands at that share, the label mixes from `on-surface` to `on-secondary-container`, and a multi-select row's box uses `choice_mark_at` with the same share. Reduced motion changes at once. A single list's check glyph still appears at once.
 
 `ui_selection2_v2` picks the third row, on Windows and Linux: on the pick's first frame that row is not yet `secondary-container`, and a second later it is. Its state limits rise from 8 / 256 to 32 / 1024. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1441 — Form field messages fade in place
+
+The FormField spec cross-fades messages in place (`duration-short-2`, `ease-standard`), and the form never animates reflow. `message_share` keeps what a field's message last was (its length, its validity and two byte sums) and when it changed, on the field (slot `key + 1048600`). `form_field` draws its message, or its help, in a box at that share's opacity, and the box is always there. The share is 1 until the message changes, and then eases in over `duration-short-2`. Reduced motion shows the message at once. The old message is not drawn fading out.
+
+`ui_form` turns the email invalid, on Windows and Linux: on that frame its error stands part way in, and a second later it is whole. The fixture's limits rise to 32 states, 1024 bytes and 8 classes. All 103 `ui_*` fixtures pass on both hosts.
