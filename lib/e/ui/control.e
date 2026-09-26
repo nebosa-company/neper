@@ -8639,9 +8639,9 @@ fn glyph_action(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // (D1467) A message and action that do not fit on one line stand two.
 // (D1480) A dismissed notice leaves fading out and sinking 8.
 // (D1493) `toast_with` gives the head its title and severity.
-// ponytail: the
-// toast's stack of three shows the head alone; a leaving notice keeps 120 bytes
-// of its text and 24 of its action.
+// (D1494) The toasts behind the head collapse into "N more notifications".
+// ponytail: the stack of three shows the head over its count, not three toasts;
+// a leaving notice keeps 120 bytes of its text and 24 of its action.
 // (D1480) The last notice shown, kept on the surface so it can leave after the
 // caller drops it.
 type NoticeGhost = struct { text: [120]u8, text_len: usize, label: [24]u8, label_len: usize, set: bool }
@@ -8895,6 +8895,38 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize])
+    // (D1494, docs/ux/components/Snackbar, toast stack) The toasts behind the
+    // head collapse into "N more notifications" (`body-small`
+    // `on-surface-variant` on a `surface-container-high` pill, keyed `key + 3`)
+    // 8 under it, end-aligned; the toast always stands in that column, so the
+    // head is not remade when the count appears.
+    if !bottom && notices.len > 0usize {
+        let (column, column_error) = mem.alloc[widget.Node](a, 3usize)
+        if column_error != ok { ret (zero, TooLarge) }
+        column[0usize] = body[0usize]
+        var stacked = 1usize
+        if notices.len > 1usize {
+            let (more_bytes, more_bytes_error) = mem.alloc[u8](a, 40usize)
+            if more_bytes_error != ok { ret (zero, TooLarge) }
+            var m = write_i64(more_bytes, i64(notices.len - 1usize))
+            if notices.len == 2usize { m += copy_text(more_bytes[m..40usize], " more notification") } else { m += copy_text(more_bytes[m..40usize], " more notifications") }
+            var small = text_options()
+            small.role = .BodySmall
+            small.wrap = .None
+            let (more_words, more_words_error) = colored_text(a, 0u64, more_bytes[0usize..m], t, small, style.color(t.tokens, .OnSurfaceVariant))
+            if more_words_error != ok { ret (zero, more_words_error) }
+            column[2usize] = more_words
+            var pill = style.defaults()
+            pill.radius = t.tokens.radii.md
+            pill.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+            let across = style.Length { Px: 12.0 }
+            let down = style.Length { Px: 6.0 }
+            pill.padding = style.EdgeLengths { left: across, top: down, right: across, bottom: down }
+            column[1usize] = widget.box(key + 3u64, pill, column[2usize..3usize])
+            stacked = 2usize
+        }
+        body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .End, gap: 8.0 }, style.defaults(), column[0usize..stacked])
+    }
     // The margin rides inside the overlay as padding, which the clamp keeps.
     var margin: f32 = 24.0
     if !bottom { margin = 12.0 }

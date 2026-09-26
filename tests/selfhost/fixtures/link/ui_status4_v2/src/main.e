@@ -249,6 +249,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (failed_tree, failed_tree_error) = testing.semantics(&harness)
     let (failed_node, has_failed_node) = find(failed_tree, .Status, "Build 4128 finished")
     if failed_tree_error != ok || !has_failed_node || failed_node.live != .Assertive { os.exit(50i32) }
+    // (D1494) With two notices queued the toast's head stands over "1 more
+    // notification" (keyed `key + 3`); with one there is no count.
+    if testing.by_key(&harness, 883u64).count != 0usize { os.exit(51i32) }
+    f = mem.arena_from(frame_storage)
+    let (stacked_toast, stacked_toast_error) = control.toast_with(&f, 880u64, &theme, s.notices[0usize..2usize], 320.0, failed_toast)
+    let (stacked_page, stacked_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if stacked_toast_error != ok || stacked_page_error != ok { os.exit(52i32) }
+    stacked_page[0usize] = stacked_toast
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), stacked_page[0usize..1usize]), time.Instant { nanos: 43100000000i64 }) != ok { os.exit(53i32) }
+    let (count_pill, has_count_pill) = widget.bounds_of(&runtime, testing.by_key(&harness, 883u64).element)
+    let (head_close, has_head_close) = widget.bounds_of(&runtime, testing.by_key(&harness, 882u64).element)
+    if testing.by_text(&harness, "1 more notification").count != 1usize || !has_count_pill || !has_head_close || !(count_pill.y > head_close.y + head_close.height) { os.exit(54i32) }
     // (D1394) In a compact window, 360 wide, the snackbar spans it less 16 a
     // side: its surface at 20 and at 340 across, the ground at 8.
     let (compact_rt, compact_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 2048usize, state_classes: 8u16, max_depth: 32u16, max_commands: 2048usize })
