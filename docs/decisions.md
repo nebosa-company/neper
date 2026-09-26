@@ -26884,3 +26884,9 @@ The TimePicker spec moves the dial's "hand and knob over `duration-medium-2` wit
 The TimePicker spec cross-fades the numbers over `duration-short-4` when the hour dial switches to the minute dial. The dial now keeps its mode as a share on the ring (slot `key + 7 + 1048579`). After a switch, the new numbers are drawn at that share's opacity, each in a box keyed `key + 32 + index` while it fades. The old numbers are not drawn fading out (a ponytail). Reduced motion switches at once.
 
 `ui_pickers2_v2` switches from the minute dial back to hours, on Windows and Linux. 50 ms later the 6 stands in its fading box; a second later it does not. The fixture has no fonts, so the check reads keys, not glyph pixels.
+
+## D1422 — The year view scrolls a century either side
+
+D1307 listed only the fifteen years around the shown one. The year view now runs from a hundred years before the shown year to a hundred after, held inside `earliest` and `latest`. It sits in a virtual viewport keyed `key + 4094`: rows of three, `pill + 16` tall. The viewport opens with the shown year's row in the middle, following D807's offset rule, so a scroll the runtime keeps is not undone. Only the rows in view, plus one either side (`widget.visible_range`), are built; each row is keyed `key + 8192 + row`. Pill keys still count from the first year listed (`key + 4096 + index`). Each pill is still its own Tab stop, and an arrow past the built rows finds nothing to focus (a ponytail).
+
+`ui_pickers_v2` checks the view on Windows and Linux. With March 2026 shown, 2026 is index 100 and in view, 1926 is not built, and the D1363 arrows and the press on 2030 work at their new indexes.
