@@ -8405,7 +8405,8 @@ fn status_line(a: *mem.Arena, t: *const Theme, words: str, marked: bool, tone: s
 // range (1 or more: none), the unit or context under the readout, the status word
 // (empty: Normal, High or Critical once there are thresholds), and the no-data and
 // stale states.
-type GaugeOptions = struct { warn: f32, critical: f32, unit: str, status: str, no_data: bool, stale: bool }
+// (D1508) `loading`: the track alone with a skeleton block in the readout.
+type GaugeOptions = struct { warn: f32, critical: f32, unit: str, status: str, no_data: bool, stale: bool, loading: bool }
 
 fn gauge_options() -> GaugeOptions {
     var out: GaugeOptions = zero
@@ -8434,7 +8435,9 @@ fn gauge(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32
 // value and the status word as its hint; the ring is not in the tree.
 // (D1279) The arc eases to each new value (`eased_share`).
 // (D1301) No data reads an en dash, and the readout is `on-surface-variant`.
-// ponytail: the loading skeleton is the caller's.
+// (D1508, docs/ux/components/Gauge, loading) Loading, the gauge is the track
+// alone with a `skeleton_of` line (half the size wide, a fifth tall) in place of
+// the readout, and Busy in the tree.
 fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, size: f32, options: GaugeOptions) -> (widget.Node, err) {
     if high <= low { ret (zero, TooLarge) }
     let share = clamp_share((value - low) / (high - low))
@@ -8459,7 +8462,7 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
         ink = muted
     }
     var ring = Ring { track: style.color(t.tokens, .SurfaceContainerHighest), fill: fill, share: drawn_share, thickness: size * 0.1, arena: a, start: 0.0 - 2.3561945, sweep: 4.712389, gap: 0.0, band: style.color(t.tokens, .WarningContainer), band_from: options.warn }
-    if options.no_data { ring.share = 0.0 }
+    if options.no_data || options.loading { ring.share = 0.0 }
     // The stroke's centre line at 40% of the size: the ring square 90% of it.
     let (painted, painted_error) = ring_node(a, key + 1u64, ring, size * 0.9)
     if painted_error != ok { ret (zero, painted_error) }
@@ -8474,8 +8477,15 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
     big.role = .DisplaySmall
     if size < 128.0 { big.role = .TitleLarge }
     big.wrap = .None
-    let (readout, readout_error) = colored_text(a, 0u64, shown, t, big, ink)
+    var (readout, readout_error) = colored_text(a, 0u64, shown, t, big, ink)
     if readout_error != ok { ret (zero, readout_error) }
+    if options.loading {
+        var block = skeleton_options()
+        block.shape = .Line
+        let (bone, bone_error) = skeleton_of(a, key + 2u64, t, size * 0.5, size * 0.2, block)
+        if bone_error != ok { ret (zero, bone_error) }
+        readout = bone
+    }
     let (inner, inner_error) = mem.alloc[widget.Node](a, 2usize)
     if inner_error != ok { ret (zero, TooLarge) }
     inner[0usize] = readout
@@ -8525,6 +8535,10 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
     sem.label = label
     sem.value = shown
     sem.hint = status
+    if options.loading {
+        sem.value = ""
+        sem.states = accessibility.STATE_BUSY
+    }
     ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
 }
 

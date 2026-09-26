@@ -311,6 +311,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if neutral_tree_error != ok { os.exit(51i32) }
     let (dead, has_dead) = find(neutral_tree, "GPU")
     if !has_dead || !same(dead.value, "–") || !same(dead.hint, "No data") { os.exit(52i32) }
+    // (D1508) A loading gauge: its skeleton block (`key + 2`) in the readout, no
+    // value, and Busy in the tree.
+    f = mem.arena_from(frame_storage)
+    var loading_gauge = control.gauge_options()
+    loading_gauge.loading = true
+    let (waiting_gauge, waiting_gauge_error) = control.gauge_of(&f, 990u64, &theme, "Disk", 40.0, 0.0, 100.0, 96.0, loading_gauge)
+    let (waiting_page, waiting_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if waiting_gauge_error != ok || waiting_page_error != ok { os.exit(53i32) }
+    waiting_page[0usize] = waiting_gauge
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 660.0), waiting_page[0usize..1usize]), time.Instant { nanos: 22000000000i64 }) != ok { os.exit(54i32) }
+    let (waiting_tree, waiting_tree_error) = testing.semantics(&harness)
+    if waiting_tree_error != ok || testing.by_key(&harness, 992u64).count != 1usize || testing.by_text(&harness, "40").count != 0usize { os.exit(55i32) }
+    let (disk, has_disk) = find(waiting_tree, "Disk")
+    if !has_disk || !disk.state.busy || disk.value.len != 0usize { os.exit(56i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(39i32) }
     try io.print("ui status v2 ok\n")
     ret ok
