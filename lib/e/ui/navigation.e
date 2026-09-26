@@ -1872,7 +1872,8 @@ fn navigation_split_options() -> NavigationSplitOptions {
 // under a v2 app bar (keyed `key + 4`) led by Back (`key + 5`) named "Back to
 // <the list>"; Escape and Alt+Left share its `pop` action.
 // ponytail: the touch divider is D966's sash, not the 24 gutter with its 4 x 48
-// handle; no supporting pane or push motion. (D1409) On touch the
+// handle; no supporting pane or push motion. (D1411) Escape in the detail
+// returns the focus to the list. (D1409) On touch the
 // list snaps to 360 and half.
 fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, primary: widget.Node, detail: widget.Node, showing_detail: bool, position: f32, change: widget.Change[f32], width: f32, height: f32, options: NavigationSplitOptions) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -1945,7 +1946,17 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     var detail_sem: widget.Semantics = zero
     detail_sem.role = 2u8
     detail_sem.label = options.detail_label
-    let detail_pane = widget.semantics(0u64, detail_sem, style.defaults(), detail_boxes[0usize..1usize])
+    var detail_pane = widget.semantics(0u64, detail_sem, style.defaults(), detail_boxes[0usize..1usize])
+    // (D1411, docs/ux/components/NavigationSplit, keyboard) Side by side, Escape in
+    // the detail returns the focus to the list's `list_focus`.
+    if side_by_side && options.list_focus != 0u64 && mem.address_of(t.runtime) != 0usize {
+        let (backs, backs_error) = mem.alloc[control.FocusTo](a, 1usize)
+        let (escaping, escaping_error) = mem.alloc[widget.Node](a, 1usize)
+        if backs_error != ok || escaping_error != ok { ret (zero, TooLarge) }
+        backs[0usize] = control.FocusTo { runtime: t.runtime, key: options.list_focus }
+        escaping[0usize] = detail_pane
+        detail_pane = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: widget.Submit { ctx: mem.cast[*void](&backs[0usize]), invoke: control.focus_to_fire }, keys: zero }, style.defaults(), escaping[0usize..1usize])
+    }
     if side_by_side {
         var least_list: f32 = 200.0
         var least_detail: f32 = 320.0

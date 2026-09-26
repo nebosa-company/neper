@@ -26788,3 +26788,13 @@ otherwise. Escape returning the focus to the list is still missing.
 
 `ui_navigation4_v2` presses F6 in a side-by-side split's list and the focus
 moves to the detail; `ui_adaptive` still passes, on Windows and Linux.
+
+## D1411 — Escape in a split's detail returns to the list
+
+The NavigationSplit spec's Escape in the detail returns the focus to the list
+when the panes stand side by side (and goes Back in a single pane, which
+`pop` already does). With `list_focus` set, the side-by-side detail pane now
+stands in a scope whose cancel action focuses `list_focus`.
+
+`ui_navigation4_v2` presses Escape in the detail after D1410's F6: the focus
+returns to the list, and `ui_adaptive` still passes, on Windows and Linux.
