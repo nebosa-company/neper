@@ -33,6 +33,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_error != shell.Invalid { os.exit(3i32) }
     // A badge of five: the top right wears the disc, the bottom left does not.
     if app.tray_set_badge(a, &tray, 5u32) != ok || tray.composed[4usize * 16usize + 15usize] != BADGE || tray.composed[15usize * 16usize] != BLUE { os.exit(4i32) }
+    // (D1392) The disc carries the 5 in white: its top left pixel set, the one
+    // inside its upper bowl not.
+    if tray.composed[2usize * 16usize + 11usize] != 4294967295u32 || tray.composed[3usize * 16usize + 12usize] != BADGE { os.exit(12i32) }
     if app.tray_set_badge(a, &tray, 0u32) != ok || tray.composed[4usize * 16usize + 15usize] != BLUE { os.exit(5i32) }
     var small: [64]u32 = zero
     if app.tray_set_icon(a, &tray, shell.Icon { width: 8u32, height: 8u32, pixels: small[..] }) != shell.Invalid { os.exit(6i32) }

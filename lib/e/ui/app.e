@@ -230,8 +230,9 @@ fn frames_of(app: *const App) -> u64 {
 // activation with a menu attached becomes the shell's popup menu at the pointer,
 // and its choice a `.Command` with the item's id. The badge is composed into the
 // icon here, since the shell has no badge of its own: a filled disc in the top
-// right corner while the count is not zero. ponytail: a disc, not the number; a
-// glyph needs a face the app does not hold at this level. Every call answers
+// right corner while the count is not zero, (D1392) carrying the count 1 to 9
+// (a "+" past that) in white from a 3 by 5 pixel figure scaled to the disc, so no
+// font face is needed. Every call answers
 // `shell.Unsupported` where the host has no tray, and `tray_supported` says so
 // before one is opened.
 
@@ -276,6 +277,40 @@ fn compose(t: *Tray) {
         }
         y += 1i32
     }
+    // (D1392) The count's figure, centred in the disc: a pixel for each set bit of
+    // its five rows of three, `scale` wide.
+    var scale = radius / 4i32
+    if scale < 1i32 { scale = 1i32 }
+    let figure = badge_figure(t.badge)
+    let left = centre_x - (3i32 * scale) / 2i32
+    let top = centre_y - (5i32 * scale) / 2i32
+    var fy = 0i32
+    while fy < 5i32 * scale {
+        var fx = 0i32
+        while fx < 3i32 * scale {
+            let bit = 14u32 - u32((fy / scale) * 3i32 + fx / scale)
+            let px = left + fx
+            let py = top + fy
+            if (figure >> bit) & 1u32 == 1u32 && px >= 0i32 && py >= 0i32 && px < i32(t.width) && py < i32(t.height) { t.composed[usize(py) * usize(t.width) + usize(px)] = 4294967295u32 }
+            fx += 1i32
+        }
+        fy += 1i32
+    }
+}
+
+// (D1392) A badge count's 3 by 5 figure, fifteen bits read row by row from the
+// top left: the digits 1 to 9, and "+" for ten or more.
+fn badge_figure(count: u32) -> u32 {
+    if count == 1u32 { ret 11415u32 }
+    if count == 2u32 { ret 29671u32 }
+    if count == 3u32 { ret 29647u32 }
+    if count == 4u32 { ret 23497u32 }
+    if count == 5u32 { ret 31183u32 }
+    if count == 6u32 { ret 31215u32 }
+    if count == 7u32 { ret 29257u32 }
+    if count == 8u32 { ret 31727u32 }
+    if count == 9u32 { ret 31695u32 }
+    ret 1488u32
 }
 
 fn tray_open(a: *mem.Arena, id: u32, icon: shell.Icon, tooltip: str) -> (Tray, err) {

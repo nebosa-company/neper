@@ -26542,3 +26542,16 @@ contextual shows at once.
 
 `ui_navigation_v2` turns a bar contextual: 50 ms in its fill is not yet what it
 settles to a second later, on Windows and Linux.
+
+## D1392 — Tray badges show their count
+
+The tray's badge was a bare disc, because a figure seemed to need a font face
+the app layer does not hold. It now carries the count: 1 to 9, or "+" past
+that, in white from a 3 by 5 pixel figure (`badge_figure`, fifteen bits row by
+row) scaled to a quarter of the disc's radius and centred in it. That needs no
+face.
+
+`ui_tray` badges a 16-pixel icon with five: the figure's top-left pixel is white
+and the pixel inside its upper bowl keeps the badge colour. The earlier disc
+checks still hold, and `ui_notification` passes, on Windows and Linux. On a
+host without a tray the fixture checks the refusal instead.
