@@ -86,6 +86,13 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
 // (D1246) What a selectable table said last, and how often.
 type Chosen = struct { count: usize, kind: collection.ListSelectKind, index: usize }
 
+// (D1413) A Retry press, counted.
+fn on_retry(ctx: *void) -> err {
+    let count = mem.cast[*u32](ctx)
+    *count += 1u32
+    ret ok
+}
+
 fn on_choose(ctx: *void, value: collection.ListSelect) -> err {
     let chose = mem.cast[*Chosen](ctx)
     chose.count += 1usize
@@ -616,6 +623,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if held_chose.count != 1usize || held_chose.kind != .Toggle || held_chose.index != 0usize { os.exit(125i32) }
     if testing.send(&harness, input.Event { PointerUp: hold_touch }) != ok || held_chose.count != 1usize { os.exit(126i32) }
+    // (D1413) A failed load puts an error banner with Retry in the body, whatever
+    // the rows; the header stays, and Retry retries.
+    var retries = 0u32
+    var failed_options: collection.TableOptions = zero
+    failed_options.failed = "Couldn't load builds"
+    failed_options.retry = widget.Submit { ctx: mem.cast[*void](&retries), invoke: on_retry }
+    var failed_step = 0usize
+    while failed_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let failed_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        let (failed_table, failed_table_error) = collection.table_with(&f, 41u64, &theme, "Builds", columns[0usize..3usize], failed_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, failed_options)
+        let (failed_page, failed_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if failed_table_error != ok || failed_page_error != ok { os.exit(127i32) }
+        failed_page[0usize] = failed_table
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), failed_page[0usize..1usize]), time.Instant { nanos: 5700000000i64 + i64(failed_step) }) != ok { os.exit(128i32) }
+        failed_step += 1usize
+    }
+    if testing.by_text(&harness, "Couldn't load builds").count == 0usize || testing.by_role(&harness, .ColumnHeader).count == 0usize { os.exit(129i32) }
+    let (failed_tree, failed_tree_error) = testing.semantics(&harness)
+    let (retry_button, has_retry_button) = find(failed_tree, .Button, "Retry")
+    if failed_tree_error != ok || !has_retry_button || testing.tap(&harness, retry_button.bounds.x + retry_button.bounds.width * 0.5, retry_button.bounds.y + retry_button.bounds.height * 0.5) != ok || retries != 1u32 { os.exit(130i32) }
     // (D1248) With no rows the header stays over the loading state (a busy
     // "Loading" group under an indeterminate progress bar) or the empty state.
     var state_step = 0usize

@@ -26810,3 +26810,14 @@ once, and the list's 30% shift and fade are not drawn.
 
 `ui_navigation4_v2` shows a narrow split's detail: 50 ms in, the page's start is
 not yet what it settles to, on Windows and Linux; `ui_adaptive` still passes.
+
+## D1413 — Tables show a failed load in place
+
+The Table spec's error state is an `error` banner with a Retry action in the
+body, with the header kept. `TableOptions` gains `failed` (the message) and
+`retry` (a Submit). When `failed` is set, the body shows the banner (keyed
+`key + 2`) whatever the rows, and the header stays. When `retry` is set, the
+banner carries a Retry action.
+
+`ui_collections2_v2` fails a table's load and taps Retry once. The message and
+the column headers show, and the tap is counted once, on Windows and Linux.
