@@ -4947,6 +4947,15 @@ $runFloodActual = Join-Path $testBuild 'conformance-tools-run-flood.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_flood.e `"$repo`" x64 windows conformance-tools-run-flood.out --json --capture 50 > `"$runFloodActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runFloodActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_flood.expected.jsonl')).Hash) { throw "run --json --capture differs from the conformance corpus" }
 if ((Get-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-run-flood.out.stdout')).Length -ne 296) { throw 'the whole flood output is not in the file beside the executable' }
+# A memory budget (D1527, H16): the workers admitted under it build the default
+# image, and a budget below one worker's need is refused by name, exit 1.
+$budgetDefault = Join-Path $testBuild 'budget-default.exe'
+$budgetOne = Join-Path $testBuild 'budget-1g.exe'
+& $compiler emit-executable (Join-Path $conformanceRoot 'tools/run_flood.e') $repo 'x64' 'windows' $budgetDefault | Out-Null
+& $compiler emit-executable (Join-Path $conformanceRoot 'tools/run_flood.e') $repo 'x64' 'windows' $budgetOne --memory-budget 1g | Out-Null
+if ((Get-FileHash -LiteralPath $budgetDefault).Hash -ne (Get-FileHash -LiteralPath $budgetOne).Hash) { throw 'a build under --memory-budget is not the default image' }
+$budgetTiny = & $compiler emit-executable (Join-Path $conformanceRoot 'tools/run_flood.e') $repo 'x64' 'windows' (Join-Path $testBuild 'budget-tiny.exe') --memory-budget 1m 2>&1
+if ($LASTEXITCODE -ne 1 -or -not ($budgetTiny -match 'memory-budget does not hold one lowering worker')) { throw "a budget under one worker was not refused by name: $budgetTiny" }
 # The capture as chunk records (D1525, H18): `--chunked` streams each stream's
 # captured prefix as `output` records with a closing record per stream.
 $runChunkedActual = Join-Path $testBuild 'conformance-tools-run-chunked.jsonl'

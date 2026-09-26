@@ -27725,3 +27725,37 @@ A program that does not parse still ends the batch, as a failing load does. The 
 - **Eviction batch.** An edit past the budget evicts, and the evicted key is then refused as stale. A failing edit leaves the current snapshot when a free slot takes the check. With every slot pinned, an edit is refused.
 
 The same checks pass on Windows and Linux, with the bootstrap-built and the self-built compiler, and the fixed point holds.
+
+## D1527 — A memory budget for the lowering workers
+
+H16 prefers "a scheduler with explicit memory/backpressure limits over automatically launching one memory-heavy task per logical core", and asks that dependency critical paths, queue wait and peak aggregate allocation be measured before any default changes. The crew (D326, D339) launched up to eight workers. Each had a reservation of the root's capacity, admitted while the root arena had room, with no bound on what the workers reached together.
+
+`--memory-budget SIZE` is that limit.
+
+- **Admission.** One worker is admitted per 256 MB of the budget (`WORKER_FLOOR`, about an eighth of the 1,834 MB the compiler's build reaches across eight workers), at least one and at most what `-j` and the eight allow. Each worker's arena is an equal share of the budget, a reservation of that size (`graph.reserved_arena_sized`).
+- **Backpressure.** A worker whose share runs dry stops as a dry worker does (D325), and the generous worker does its modules over in the program's arena: the work is delayed, never refused, and the image is the same.
+- **Named failure.** A budget that cannot hold one worker's setup is refused by name (`BudgetTooSmall`: E-CLI-9999, exit 1) rather than reported as an exhausted compiler.
+- **Stats.** `--stats` reports `workers admitted` and `memory budget`.
+
+Making small budgets real exposed two faults in the dry path, which the default arena had never reached:
+
+- A worker replaced by the generous one during the body sweep kept its dry stop. The lowering then treated that stop as where it had run dry in lowering, so the generous worker lowered from there: the modules before it, `main` among them, were lowered by no one, and the link failed with `e.os.NotFound`. The generous worker now lowers a replaced worker's modules from its first.
+- An arena exhausted during selection was printed as "cannot select machine code" and ended the build. It now stops the worker as dry, so the generous worker takes the module.
+
+The compiler's own debug build under each budget:
+
+| budget | Windows workers | worker arenas reached | peak working set (Win) | Linux wall | image |
+|---|---|---|---|---|---|
+| none | 8 | 1,834 MB | 2,250 MB | 1,630 ms | default |
+| 1 GB | 4 | 959 MB | 1,377 MB | 1,687 ms | same |
+| 700 MB | 2 | 561 MB | 975 MB (Linux) | 1,906 ms | same |
+| 512 MB | 2, both replaced | 558 MB | 1,350 MB (Linux) | 2,373 ms | same |
+| 320 MB | 1 | 362 MB | 776 MB (Linux) | 1,986 ms | same |
+| 300 MB | 1, replaced | 346 MB | 1,154 MB (Linux) | 3,061 ms | same |
+| 16 MB | refused by name | | | | |
+
+Half the workers keep the wall time within a few per cent while nearly halving the aggregate allocation. Below that, time grows as the work serializes, and replacement costs the redone work. The workers' own reports give the critical path: per-worker milliseconds in `--time`'s `workers, ms` lines, the slowest worker bounding each phase. The static assignment is largest-first to the least loaded, so there is no queue wait beyond a worker's own earlier modules.
+
+The default stays eight workers with no budget. D339 measured the two-million-line workload at a 4.8 GB peak commit, which is what "measured at four" had been about before D339, and nothing here argues for a lower default: the budget is how a caller with less memory asks for less.
+
+Both suites build a program under `--memory-budget 1g` to the default image and refuse `--memory-budget 1m` by name. The compiler's budget sweep and the dry-worker fallback (300 MB, 512 MB) were run on Windows and Linux, with every image identical to the default and the fixed point holding. C047's three lines have now landed, and it closes at 1.

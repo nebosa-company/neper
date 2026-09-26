@@ -4860,6 +4860,15 @@ cmp -s "$run_trap_actual" "$conformance_root/tools/run_trap.expected.jsonl" || {
 # `run --json --capture N` (D370, H18): a bounded record, the whole output in the file.
 (cd "$test_build" && ./neper-self run ../../../../tests/conformance/tools/run_flood.e "$repo" x64 linux conformance-tools-run-flood.out --json --capture 50 > "conformance-tools-run-flood.jsonl")
 cmp -s "$test_build/conformance-tools-run-flood.jsonl" "$conformance_root/tools/run_flood.expected.jsonl" || { echo "run --json --capture differs from the conformance corpus"; exit 1; }
+# A memory budget (D1527, H16): the workers admitted under it build the default
+# image, and a budget below one worker's need is refused by name, exit 1.
+(cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/run_flood.e "$repo" x64 linux budget-default.out > /dev/null)
+(cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/run_flood.e "$repo" x64 linux budget-1g.out --memory-budget 1g > /dev/null)
+cmp "$test_build/budget-default.out" "$test_build/budget-1g.out"
+budget_status=0
+(cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/run_flood.e "$repo" x64 linux budget-tiny.out --memory-budget 1m > budget-tiny.txt 2>&1) || budget_status=$?
+[ "$budget_status" -eq 1 ]
+grep -q 'memory-budget does not hold one lowering worker' "$test_build/budget-tiny.txt"
 # The capture as chunk records (D1525, H18): `--chunked` streams each stream's
 # captured prefix as `output` records with a closing record per stream.
 (cd "$test_build" && ./neper-self run ../../../../tests/conformance/tools/run_flood.e "$repo" x64 linux conformance-tools-run-chunked.out --json --capture 50 --chunked > "conformance-tools-run-chunked.jsonl")
