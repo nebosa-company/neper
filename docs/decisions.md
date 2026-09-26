@@ -27048,3 +27048,11 @@ The Breadcrumbs spec cross-fades the edit field in over `duration-short-3` with 
 The ColorPicker spec says that "thumbs move without animation while dragged and with `duration-short-3` `ease-standard` on keyboard steps". The colour field's panel now eases each thumb's value: saturation and brightness on the spectrum, hue on its strip and alpha on its strip. The values are kept on the field itself (slots `key + 1048603..1048606`), because the spectrum and strips are remade whenever their colours change. `thumb_eased` moves a thumb at once while its own area is pressed, so a drag follows the pointer. Reduced motion also moves at once. The panel still opens as the D1429 flyout does, not as its own Flyout motion.
 
 `ui_pickers3_v2` sets a new colour, on Windows and Linux. On the change's frame the hue strip differs from how it settles a second later, and it matches without the change. The fixture's limits rise to 64 states, 4096 bytes and 32 classes. `ui_pickers` still passes on both hosts.
+
+## D1445 — Stack pushes decelerate and pops accelerate
+
+The NavigationStack spec pushes "with `ease-emphasized-decelerate` over `duration-medium-2`" and pops "with `ease-emphasized-accelerate` over `duration-medium-1`". D1319 had eased both ways on the standard curve over `duration-medium-2`. `eased_on_depth` now uses `control.eased_emphasized`, which decelerates toward a deeper stack and accelerates toward a shallower one. It takes `duration-medium-1` while popping. The stack's cell keeps which way the depth last moved (`StackCell.popped`), so a pop keeps its duration through the frames after it. Reduced motion changes at once.
+
+Trying to always wrap the sliding page, per the D1432 lesson, moved the page 14 up under the bar, so the wrapper stays conditional. It is marked as a ponytail: content focused inside the page is remade when a slide ends, but the Back that takes the focus sits in the bar.
+
+`ui_navigation_v2` pops a stack, on Windows and Linux. 200 ms after the pop, the page beneath (a full-width block) is not yet 530 in; the old standard curve had it there, and the check fails without the change. A second later it is. All 103 `ui_*` fixtures pass on both hosts.
