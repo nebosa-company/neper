@@ -27075,3 +27075,9 @@ The Wizard spec slides content "8% and fades in the direction of travel (forward
 - On a destination change's frame the new page's block is not yet `primary`, and a second later it is.
 
 The fixture's state limits rise to 4096 bytes and 32 classes. `ui_navigation` and `ui_navigation_v2` still pass on both hosts.
+
+## D1448 — Virtual grid tiles move on reflow
+
+The VirtualGrid spec animates tiles "to new positions on a size change over `duration-medium-2` with `ease-standard`". `reflow_share_over` is D1401's `reflow_share` with the duration given; `reflow_share` keeps `duration-medium-1` for GridView. `virtual_grid_of` now keeps the reflow on the grid. When a width change alters the columns, each built tile stands the part of its move still to come away from its new place: `(old column - new column) x (side + 4)` across and `(old row - new row) x extent` down. Every tile always stands in its moving wrapper, and reduced motion moves the tiles at once. The spec's reduced-motion cross-fade is not drawn.
+
+`ui_collections_v2` narrows a virtual grid from 600 to 300, on Windows and Linux. On the change's frame the grid's first 300 x 300 differs from how it settles a second later; it matches without the motion. `ui_collection` still passes on both hosts.

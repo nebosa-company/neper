@@ -709,6 +709,52 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if wait_step == 2usize && (has_busy || testing.by_text(&harness, "No photos").count == 0usize) { os.exit(149i32) }
         wait_step += 1usize
     }
+    // (D1448) Narrowed from 600 to 300, the virtual grid's tiles move to their
+    // new places over `duration-medium-2`: on the change's frame the grid looks
+    // other than it settles a second on.
+    var reflow_sums: [2]u32 = zero
+    var reflow_step = 0usize
+    while reflow_step < 4usize {
+        var reflow_at = 6200000000i64
+        var reflow_width: f32 = 600.0
+        if reflow_step == 1usize { reflow_at = 6200000001i64 }
+        if reflow_step == 2usize {
+            reflow_at = 6300000000i64
+            reflow_width = 300.0
+        }
+        if reflow_step == 3usize {
+            reflow_at = 7300000000i64
+            reflow_width = 300.0
+        }
+        if testing.begin(&harness, time.Instant { nanos: reflow_at }) != ok { os.exit(230i32) }
+        f = mem.arena_from(frame_storage)
+        var reflowing = collection.virtual_grid_options()
+        reflowing.width = reflow_width
+        reflowing.height = 300.0
+        let reflow_ctx: *void = zero
+        let (reflow_grid, reflow_grid_error) = collection.virtual_grid_of(&f, 1990u64, &theme, "Reflow", collection.TileSource { ctx: reflow_ctx, count: photo_count, key: photo_key, tile: photo_tile }, reflowing)
+        let (reflow_page, reflow_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if reflow_grid_error != ok || reflow_page_error != ok { os.exit(230i32) }
+        reflow_page[0usize] = reflow_grid
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), reflow_page[0usize..1usize]), time.Instant { nanos: reflow_at }) != ok { os.exit(230i32) }
+        if reflow_step >= 2usize {
+            let (reflow_shot, reflow_shot_error) = testing.snapshot(&harness, a)
+            if reflow_shot_error != ok { os.exit(231i32) }
+            var sum = 0u32
+            var y = 0usize
+            while y < 300usize {
+                var x = 0usize
+                while x < 300usize {
+                    sum += u32(reflow_shot.pixels[at(f32(x), f32(y)) + 1usize])
+                    x += 1usize
+                }
+                y += 1usize
+            }
+            reflow_sums[reflow_step - 2usize] = sum
+        }
+        reflow_step += 1usize
+    }
+    if reflow_sums[0usize] == reflow_sums[1usize] { os.exit(232i32) }
     // (D1415) Skeleton rows match the real rows' height: five one-line rows of 56.
     waiting.loading_height = 56.0
     f = mem.arena_from(frame_storage)
