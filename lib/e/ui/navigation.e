@@ -1309,6 +1309,26 @@ fn destination_bar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), column[0usize..2usize]), ok)
 }
 
+// (D1448, docs/ux/components/DestinationBar, motion) The page a destination
+// shows, keyed `key`: when `selected` changes it fades in over
+// `duration-medium-1` on `ease-emphasized-decelerate` (the chosen index eases on
+// the page, slot `key + 1048608`). It always stands in its fading box; reduced
+// motion changes at once.
+// ponytail: the page leaving is not drawn fading out first (the caller builds
+// only the new one), so the fade through is its second half.
+fn destination_page(a: *mem.Arena, key: widget.Key, t: *const control.Theme, selected: usize, content: widget.Node) -> (widget.Node, err) {
+    let shown = control.eased_emphasized(t, key, key + 1048608u64, f32(selected), false, t.tokens.durations.medium1)
+    var still = f32(selected) - shown
+    if still < 0.0 { still = 0.0 - still }
+    if still > 1.0 { still = 1.0 }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = content
+    var fading = style.defaults()
+    fading.opacity = 1.0 - still
+    ret (widget.box(key, fading, held[0usize..1usize]), ok)
+}
+
 fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Destination, selected: usize, picks: []const widget.Submit, form: DestinationForm, extent: f32) -> (widget.Node, err) {
     if picks.len != items.len { ret (zero, TooLarge) }
     let (pick_actions, tab_stop, pick_actions_error) = destination_actions(a, key + 1u64, t, picks, selected)
@@ -2184,7 +2204,9 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         goal = 1.0
         span = t.tokens.durations.medium2
     }
-    let shown = control.eased_on(t, key + 8192u64, key + 8193u64, goal, false, span)
+    // (D1447, docs/ux/components/NavigationDrawer, motion) Entering decelerates
+    // and leaving accelerates, on the emphasized pair.
+    let shown = control.eased_emphasized(t, key + 8192u64, key + 8193u64, goal, false, span)
     if !open && shown <= 0.0 { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     if picks.len != items.len { ret (zero, TooLarge) }
     let (pick_contexts, pick_contexts_error) = mem.alloc[DrawerPick](a, picks.len)

@@ -139,7 +139,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 2048usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 4096usize, state_classes: 32u16, max_depth: 32u16, max_commands: 2048usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -340,8 +340,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let swipes_before = s.counters[3usize].count
     if testing.drag(&harness, geometry.Point { x: 5.0, y: 100.0 }, geometry.Point { x: 40.0, y: 100.0 }, 4usize) != ok || s.counters[3usize].count != swipes_before { os.exit(70i32) }
     if testing.drag(&harness, geometry.Point { x: 5.0, y: 100.0 }, geometry.Point { x: 120.0, y: 100.0 }, 6usize) != ok || s.counters[3usize].count == swipes_before { os.exit(71i32) }
-    // (D1286) Opening slides the drawer in: half way, 200 in from the edge is
-    // still the page; settled, it is the drawer's surface.
+    // (D1286) Opening slides the drawer in: part way, 280 in from the edge is
+    // still the page; settled, it is the drawer's surface. (D1447) It enters on
+    // `ease-emphasized-decelerate`: a quarter of the way through its
+    // `duration-medium-2`, 100 in is already the drawer (the standard curve had
+    // it well short).
     let slide_surface = style.color(&tokens, .SurfaceContainerLow)
     var slide_step = 0usize
     while slide_step < 4usize {
@@ -353,7 +356,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             slide_open = true
         }
         if slide_step == 3usize {
-            slide_at = 9250000000i64
+            slide_at = 9175000000i64
             slide_open = true
         }
         if testing.begin(&harness, time.Instant { nanos: slide_at }) != ok { os.exit(72i32) }
@@ -368,7 +371,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         slide_step += 1usize
     }
     let (half_shot, half_shot_error) = testing.snapshot(&harness, a)
-    if half_shot_error != ok || is_color(half_shot, at(200.0, 300.0), slide_surface) { os.exit(75i32) }
+    if half_shot_error != ok || is_color(half_shot, at(280.0, 300.0), slide_surface) || !is_color(half_shot, at(100.0, 300.0), slide_surface) { os.exit(75i32) }
     if testing.begin(&harness, time.Instant { nanos: 9600000000i64 }) != ok { os.exit(76i32) }
     f = mem.arena_from(frame_storage)
     let (settled_drawer, settled_error) = navigation.navigation_drawer_of(&f, 3900u64, &theme, "neper", s.rows[0usize..3usize], 0usize, s.picks[0usize..3usize], true, &s.dismiss, 300.0)
@@ -414,6 +417,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         if pill_step == 4usize && testing.by_key(&harness, fill_key).count != 0usize { os.exit(84i32) }
         pill_step += 1usize
+    }
+    // (D1448) Moved to another destination, its page fades in over
+    // `duration-medium-1`: on the move's frame the page's block is not yet
+    // `primary`, a second on it is.
+    var page_block = control.sized_style(200.0, 100.0)
+    page_block.background = paint.Brush { Solid: style.color(&tokens, .Primary) }
+    var page_step = 0usize
+    while page_step < 4usize {
+        var page_at = 20000000000i64
+        var page_chosen = 0usize
+        if page_step == 1usize { page_at = 20000000001i64 }
+        if page_step == 2usize {
+            page_at = 20100000000i64
+            page_chosen = 1usize
+        }
+        if page_step == 3usize {
+            page_at = 21100000000i64
+            page_chosen = 1usize
+        }
+        if testing.begin(&harness, time.Instant { nanos: page_at }) != ok { os.exit(82i32) }
+        f = mem.arena_from(frame_storage)
+        let (destination, destination_error) = navigation.destination_page(&f, 3950u64, &theme, page_chosen, widget.box(3951u64, page_block, zero))
+        let (destination_parts, destination_parts_error) = mem.alloc[widget.Node](&f, 1usize)
+        if destination_error != ok || destination_parts_error != ok { os.exit(82i32) }
+        destination_parts[0usize] = destination
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 520.0), destination_parts[0usize..1usize]), time.Instant { nanos: page_at }) != ok { os.exit(82i32) }
+        if page_step >= 2usize {
+            let (page_box, has_page_box) = bounds(&harness, &runtime, 3951u64)
+            let (page_shot, page_shot_error) = testing.snapshot(&harness, a)
+            if !has_page_box || page_shot_error != ok { os.exit(83i32) }
+            let shown_page = is_color(page_shot, at(page_box.x + 100.0, page_box.y + 50.0), style.color(&tokens, .Primary))
+            if page_step == 2usize && shown_page { os.exit(84i32) }
+            if page_step == 3usize && !shown_page { os.exit(85i32) }
+        }
+        page_step += 1usize
     }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation3 v2 ok\n")
