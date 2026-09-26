@@ -52,8 +52,14 @@ fn tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 // lines, then the `shortcut` (empty for none) in the same 8 after it. Centred
 // above the anchor, 4 from it, flipping below when there is no room above; a
 // non-modal overlay that presses pass through.
+// (D1427, docs/ux/components/Tooltip, motion) It fades and scales in from 80%
+// over `duration-short-4` on the emphasized-decelerate curve and out over
+// `duration-short-2`, in a box keyed `key + 8192` that is there shown or not;
+// leaving, it is out of the tree and its overlay is keyed `key + 8195`.
 fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, text: str, shortcut: str, shown: bool) -> (widget.Node, err) {
-    if !shown { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let entering = opening_share_over(t, key, shown, t.tokens.durations.short4)
+    let leaving = closing_share_over(t, key, shown, t.tokens.durations.short2)
+    if !shown && !(leaving > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let ink = style.color(t.tokens, .InverseOnSurface)
     var caption = control.text_options()
     caption.role = .BodySmall
@@ -89,7 +95,58 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (tip, tip_error) = mem.alloc[widget.Node](a, 1usize)
     if tip_error != ok { ret (zero, TooLarge) }
     tip[0usize] = widget.semantics(0u64, sem, style.defaults(), surface[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .AboveCenter, offset: geometry.Point { x: 0.0, y: -4.0 }, modal: false, dismiss: zero }, style.defaults(), tip[0usize..1usize]), ok)
+    let (placed_node, placed_error) = transient_placed(a, key, shown, entering, leaving, 0.8, tip[0usize], surface[0usize], widget.Overlay { anchor: anchor, placement: .AboveCenter, offset: geometry.Point { x: 0.0, y: -4.0 }, modal: false, dismiss: zero })
+    ret (placed_node, placed_error)
+}
+
+// (D1427) How far a transient surface keyed `key` has come in over `millis`,
+// kept on its box `key + 8192` (slot `key + 8193`); shutting is at once.
+fn opening_share_over(t: *const control.Theme, key: widget.Key, open: bool, millis: u32) -> f32 {
+    var open_goal: f32 = 0.0
+    if open { open_goal = 1.0 }
+    ret control.eased_emphasized(t, key + 8192u64, key + 8193u64, open_goal, true, millis)
+}
+
+// (D1427) How far a transient surface keyed `key` still stands while it leaves
+// over `millis` (slot `key + 8194`); nothing for one never shown.
+fn closing_share_over(t: *const control.Theme, key: widget.Key, open: bool, millis: u32) -> f32 {
+    var stay_goal: f32 = 0.0
+    if open { stay_goal = 1.0 }
+    ret control.eased_emphasized(t, key + 8192u64, key + 8194u64, stay_goal, false, millis)
+}
+
+// (D1427) A surface part way in or out: faded to the share and scaled from
+// `from` (1 for none).
+fn scaled_in(a: *mem.Arena, surface: widget.Node, share: f32, from: f32) -> (widget.Node, err) {
+    if !(share < 1.0) { ret (surface, ok) }
+    let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
+    if growing_error != ok { ret (zero, TooLarge) }
+    growing[0usize] = surface
+    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: from + (1.0 - from) * share, rotation: 0.0, offset: zero }, style.defaults(), growing[0usize..1usize])
+    var faded = style.defaults()
+    faded.opacity = share
+    ret (widget.box(0u64, faded, growing[1usize..2usize]), ok)
+}
+
+// (D1427) A transient overlay in its box `key + 8192`: shown, `named` (the
+// surface in its semantics) at the entering share, keyed `key`; leaving, the
+// bare `surface` at the leaving share, keyed `key + 8195`.
+fn transient_placed(a: *mem.Arena, key: widget.Key, shown: bool, entering: f32, leaving: f32, from: f32, named: widget.Node, surface: widget.Node, placed: widget.Overlay) -> (widget.Node, err) {
+    var share = entering
+    var drawn_node = named
+    var overlay_key = key
+    if !shown {
+        share = leaving
+        drawn_node = surface
+        overlay_key = key + 8195u64
+    }
+    let (scaled, scaled_error) = scaled_in(a, drawn_node, share, from)
+    if scaled_error != ok { ret (zero, scaled_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = scaled
+    held[1usize] = widget.overlay(overlay_key, placed, style.defaults(), held[0usize..1usize])
+    ret (widget.box(key + 8192u64, style.defaults(), held[1usize..2usize]), ok)
 }
 
 // v2 (D975, docs/ux/components/Tooltip, rich): `surface-container`, `radius-md`,
@@ -99,8 +156,11 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
 // two text buttons (keyed `key + 1 + index`) 8 below it and 8 apart. Below the
 // anchor, its end aligned with the anchor's, 4 from it, flipping above; a
 // non-modal overlay, a tooltip in the tree named by the subhead (or the text).
+// (D1427) It comes and goes as the plain tooltip does.
 fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, subhead: str, text: str, actions: []const MenuItem, shown: bool) -> (widget.Node, err) {
-    if !shown { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let entering = opening_share_over(t, key, shown, t.tokens.durations.short4)
+    let leaving = closing_share_over(t, key, shown, t.tokens.durations.short2)
+    if !shown && !(leaving > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     if actions.len > 2usize { ret (zero, TooLarge) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -174,7 +234,8 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     let (tip, tip_error) = mem.alloc[widget.Node](a, 1usize)
     if tip_error != ok { ret (zero, TooLarge) }
     tip[0usize] = widget.semantics(0u64, sem, style.defaults(), surface[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .BelowEnd, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero }, style.defaults(), tip[0usize..1usize]), ok)
+    let (placed_node, placed_error) = transient_placed(a, key, shown, entering, leaving, 0.8, tip[0usize], surface[0usize], widget.Overlay { anchor: anchor, placement: .BelowEnd, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero })
+    ret (placed_node, placed_error)
 }
 
 // A command in a menu: its label, what it does, and whether it may be chosen.

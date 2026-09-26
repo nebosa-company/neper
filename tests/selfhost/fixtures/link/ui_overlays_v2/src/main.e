@@ -594,6 +594,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let (clipped, clipped_error) = widget.clipboard_get(&runtime, a)
     if clipped_error != ok || !same(clipped, "hello") { os.exit(193i32) }
+    // (D1427) A tooltip fades and scales in: 50 ms after it is shown its plate's
+    // start is not yet `inverse-surface`, a second on it is; hidden, it leaves
+    // out of the tree (keyed `key + 8195`) and is gone a second on.
+    var tip_step = 0usize
+    while tip_step < 8usize {
+        var tip_at = 90000000000i64
+        if tip_step == 1usize { tip_at = 90005000000i64 }
+        if tip_step == 2usize { tip_at = 90010000000i64 }
+        if tip_step == 3usize { tip_at = 90060000000i64 }
+        if tip_step == 4usize { tip_at = 91000000000i64 }
+        if tip_step == 5usize { tip_at = 92000000000i64 }
+        if tip_step == 6usize { tip_at = 92020000000i64 }
+        if tip_step == 7usize { tip_at = 93000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: tip_at }) != ok { os.exit(194i32) }
+        var tip_frame = mem.arena_from(frame_storage)
+        let (tip_anchor, tip_anchor_error) = control.button(&tip_frame, 5000u64, &theme, "Anchor", &s.subs[4usize], control.button_options())
+        let (fading_tip, fading_tip_error) = overlay.tooltip_of(&tip_frame, 5100u64, &theme, 5000u64, "Save file", "", tip_step >= 2usize && tip_step <= 4usize)
+        let (tip_parts, tip_parts_error) = mem.alloc[widget.Node](&tip_frame, 2usize)
+        if tip_anchor_error != ok || fading_tip_error != ok || tip_parts_error != ok { os.exit(194i32) }
+        tip_parts[0usize] = tip_anchor
+        tip_parts[1usize] = fading_tip
+        var tip_page = control.sized_style(600.0, 400.0)
+        tip_page.padding = style.EdgeLengths { left: style.Length { Px: 100.0 }, top: style.Length { Px: 200.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        if testing.pump(&harness, widget.box(0u64, tip_page, tip_parts[0usize..2usize]), time.Instant { nanos: tip_at }) != ok { os.exit(195i32) }
+        if tip_step == 3usize || tip_step == 4usize {
+            let (tip_box, has_tip_box) = lifted(&harness, 5100u64)
+            let (tip_shot, tip_shot_error) = testing.snapshot(&harness, a)
+            if !has_tip_box || tip_shot_error != ok { os.exit(196i32) }
+            let plated = is_color(tip_shot, at(tip_box.x + 3.0, tip_box.y + tip_box.height * 0.5), style.color(&tokens, .InverseSurface))
+            if tip_step == 3usize && plated { os.exit(197i32) }
+            if tip_step == 4usize && !plated { os.exit(198i32) }
+        }
+        if tip_step == 6usize && (testing.by_key(&harness, 5100u64).count != 0usize || testing.by_key(&harness, 5100u64 + 8195u64).count == 0usize) { os.exit(199i32) }
+        if tip_step == 7usize && testing.by_key(&harness, 5100u64 + 8195u64).count != 0usize { os.exit(200i32) }
+        tip_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(51i32) }
     try io.print("ui overlays v2 ok\n")
     ret ok
