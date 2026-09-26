@@ -117,7 +117,7 @@ fn closing_share_over(t: *const control.Theme, key: widget.Key, open: bool, mill
 }
 
 // (D1432) A surface part way in: faded to the share and `distance` above its
-// place (below for a negative distance) for the share still to come. It,
+// place (below for a negative distance) for the share still to come.
 // Like `scaled_in` and `grown_in` it always wraps, so the tree keeps its shape
 // when the motion ends and nothing inside is remade (a focused field keeps
 // its focus).

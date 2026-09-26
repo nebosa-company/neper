@@ -219,6 +219,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_4, build_4_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
     if build_4_error != ok { os.exit(32i32) }
     if testing.pump(&harness, root_4, now) != ok { os.exit(33i32) }
+    // (D1433) The switch slides and cross-fades over `duration-short-3`; 50 ms on
+    // the track is not yet `primary`, 400 ms on it is.
+    let switch_track_px = ((usize(switch_bounds.y + (switch_bounds.height - 40.0) * 0.5 + 4.0) + 4usize) * 140usize + usize(switch_bounds.x + 4.0) + 12usize) * 4usize
+    var slide_step = 0usize
+    while slide_step < 2usize {
+        let slide_at = time.Instant { nanos: now.nanos + 50000000i64 + i64(slide_step) * 350000000i64 }
+        if testing.begin(&harness, slide_at) != ok { os.exit(33i32) }
+        let (root_slide, root_slide_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
+        if root_slide_error != ok || testing.pump(&harness, root_slide, slide_at) != ok { os.exit(33i32) }
+        let (slide_shot, slide_shot_error) = testing.snapshot(&harness, a)
+        if slide_shot_error != ok { os.exit(33i32) }
+        let slide_blue = f32(slide_shot.pixels[switch_track_px + 2usize])
+        let on_track = style.color(&tokens, .Primary).blue * 255.0
+        let arrived_blue = slide_blue < on_track + 3.0 && slide_blue > on_track - 3.0
+        if slide_step == 0usize && arrived_blue { os.exit(33i32) }
+        slide_step += 1usize
+    }
     let (dark_2, _) = state_of(&harness, .Switch, "Dark")
     if !dark_2.checked { os.exit(34i32) }
     let (shot_on, shot_on_error) = testing.snapshot(&harness, a)
