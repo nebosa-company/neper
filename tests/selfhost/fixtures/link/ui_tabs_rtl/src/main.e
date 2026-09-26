@@ -243,6 +243,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (paged_view, has_paged_view) = widget.bounds_of(&runtime, testing.by_key(&harness, 1048876u64).element)
     let (before_page, _) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 1048876u64).element)
     if !has_back_chevron || !has_paged_view || !tab_named_role(&harness, .Button, "Scroll tabs back") { os.exit(43i32) }
+    // (D1375) Beside the back chevron a 24 fade stands over the clipped edge;
+    // scrolled to the end, there is none forward.
+    let (back_fade, has_back_fade) = widget.bounds_of(&runtime, testing.by_key(&harness, 300u64 + 1048579u64).element)
+    let (_, has_forward_fade) = widget.bounds_of(&runtime, testing.by_key(&harness, 300u64 + 1048580u64).element)
+    if !has_back_fade || has_forward_fade || back_fade.width < 23.5 || back_fade.x < back_chevron.x + back_chevron.width - 0.5 { os.exit(46i32) }
     if testing.tap(&harness, back_chevron.x + back_chevron.width * 0.5, back_chevron.y + back_chevron.height * 0.5) != ok { os.exit(44i32) }
     let (after_page, _) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 1048876u64).element)
     let paged_by = before_page - after_page

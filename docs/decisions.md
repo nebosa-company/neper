@@ -26281,3 +26281,18 @@ at 1 fires the crumb's pick during the build, as D1373 does for a tree branch.
 
 `ui_navigation2_v2` holds a drag over "lib" for a second: the trail goes to
 "lib", and the fill and the drop still hold, on Windows and Linux.
+
+## D1375 — Overflowing tab bars fade at the clipped edge
+
+The Tabs spec shows a fade at a scrollable bar's clipped edge beside its
+chevron. With D1255's back chevron up, a 24-wide fade (keyed `key + 1048579`)
+stands just after it; with the forward chevron up, another (keyed
+`key + 1048580`) stands just before it. Each is a custom paint (`EdgeFade`,
+`edge_fade_paint`) laying a linear gradient across its own rect, from the
+bar's `background` at the edge side to clear toward the tabs. The gradient
+needs a custom paint because a box's linear brush takes window coordinates,
+which a build does not know. Touch bars have no chevrons and no fade.
+
+`ui_tabs_rtl` scrolls a strip to its end: the back fade stands 24 wide beside
+the back chevron and there is no forward fade. `ui_navigation2_v2` still
+passes, on Windows and Linux.
