@@ -26902,3 +26902,15 @@ The Calendar spec slides the grid horizontally when the month changes, over `dur
 The Calendar spec cross-fades the year view over `duration-short-4`. The calendar now keeps a year-view share, under slot `key + 1048591`. Whichever view is coming in (the years, or the weekday names and days) is drawn at that share's opacity in one box until it arrives. The view going out is not drawn under it. Reduced motion switches at once.
 
 `ui_pickers_v2` checks the fade on Windows and Linux. 50 ms after the view is toggled, the chosen 2026 pill is not yet `primary`; a second later it is. The other calendar fixtures still pass on both hosts.
+
+## D1425 — Date wheels follow the locale's order
+
+D1351's date wheels always stood month, day, year. The new `date_order_of(language)` answers the order a language writes dates in:
+
+- month-day-year for no language, for English with no region, and for en-US and en-PH;
+- year-month-day for ja, zh, ko, hu and lt;
+- day-month-year otherwise.
+
+`date_wheels` places its three wheels in that order. Their keys do not change (`key`, `key + 16`, `key + 32`).
+
+`ui_pickers2_v2` checks the order on Windows and Linux: in German the day wheel stands left of the month and the month left of the year, and in Japanese the year leads, then the month and the day. The existing English checks still pass.
