@@ -6288,8 +6288,60 @@ fn list_options() -> ListOptions {
 // a tap toggles.
 // (D1247) `loading` skeleton rows stand in for no rows.
 // ponytail: the caller sets `selected` from the gestures; no
-// sticky subheader or insert motion. (D1497) A page is the enclosing viewport's
+// sticky subheader or removal motion. (D1507) Rows that arrive grow in. (D1497) A page is the enclosing viewport's
 // height over the first row's (the window's outside one).
+// (D1507) A list's rows that arrived after it stood: up to eight keys and when
+// each first appeared.
+type ListArrivals = struct { keys: [8]widget.Key, since: [8]i64, count: usize }
+
+// (D1507, docs/ux/components/List, motion) How far a row keyed `row_key` of the
+// list keyed `key` has come in: a row that first appears in a list already
+// standing grows to its height and fades in over `duration-medium-1` on
+// `ease-emphasized-decelerate` (kept on the list, slot `key + 1048614`); the
+// list's own first rows, and reduced motion, stand at once.
+fn list_arrival(t: *const control.Theme, key: widget.Key, row_key: widget.Key) -> f32 {
+    if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret 1.0 }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret 1.0 }
+    let (list_id, list_found) = widget.find_by_key(s, key)
+    if list_found != 1usize { ret 1.0 }
+    var build = widget.BuildContext { runtime: t.runtime, element: list_id, frame: 0u64 }
+    var fresh: ListArrivals = zero
+    let (arrivals, _, arrivals_error) = widget.state[ListArrivals](&build, key + 1048614u64, fresh)
+    if arrivals_error != ok { ret 1.0 }
+    let now = widget.frame_time(t.runtime).nanos
+    let span = i64(t.tokens.durations.medium1) * 1000000i64
+    var k = 0usize
+    while k < arrivals.count {
+        if arrivals.keys[k] == row_key {
+            let gone = now - arrivals.since[k]
+            if span <= 0i64 || gone >= span { ret 1.0 }
+            widget.request_animation_frame(t.runtime)
+            if gone < 0i64 { ret 0.0 }
+            ret animation.ease(.EmphasizedDecelerate, f32(gone) / f32(span))
+        }
+        k += 1usize
+    }
+    let (_, row_found) = widget.find_by_key(s, row_key)
+    if row_found != 0usize { ret 1.0 }
+    // A new row: remembered in the oldest slot once eight are held.
+    var slot = arrivals.count
+    if slot == 8usize {
+        slot = 0usize
+        var oldest = 1usize
+        while oldest < 8usize {
+            if arrivals.since[oldest] < arrivals.since[slot] { slot = oldest }
+            oldest += 1usize
+        }
+    } else {
+        arrivals.count += 1usize
+    }
+    arrivals.keys[slot] = row_key
+    arrivals.since[slot] = now
+    widget.request_animation_frame(t.runtime)
+    ret 0.0
+}
+
 fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, options: ListOptions) -> (widget.Node, err) {
     if keys.len != items.len { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, items.len)
@@ -6325,6 +6377,19 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
         let (made, made_error) = row_of(a, keys[i], t, &shown[i], i, items.len, width)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
+        // (D1507) A row arriving grows to its height and fades in; every row
+        // stands in its (clipping) arrival box, so none is remade when it lands.
+        let arrived = list_arrival(t, key, keys[i])
+        let (arriving, arriving_error) = mem.alloc[widget.Node](a, 1usize)
+        if arriving_error != ok { ret (zero, TooLarge) }
+        arriving[0usize] = made
+        var arrival_look = style.defaults()
+        if arrived < 1.0 {
+            arrival_look.height = style.Length { Px: row_height(t, row_lines(&items[i])) * arrived }
+            arrival_look.overflow = .Clip
+            arrival_look.opacity = arrived
+        }
+        rows[i] = widget.box(0u64, arrival_look, arriving[0usize..1usize])
         if selecting && touch && items[i].commands.len == 0usize && !items[i].disabled {
             holds[i] = ListPick { runtime: t.runtime, select: options.select, kind: .Toggle, index: i, focus: 0u64, has_focus: false }
             hold_fires[i] = widget.Submit { ctx: ctx_of(&holds[i]), invoke: list_pick_fire }

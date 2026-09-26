@@ -1063,6 +1063,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_paged_row || paged_row.height <= 0.0 { os.exit(254i32) }
     let expected_page = usize(150.0 / paged_row.height)
     if widget.focus(&runtime, testing.by_key(&harness, 7200u64).element) != ok || testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 7200u64 + u64(expected_page)) { os.exit(255i32) }
+    // (D1507) A row added to a standing list grows in: 50 ms after it arrives it
+    // is shorter than the row before it, a second on as tall.
+    var grow_items: [3]collection.RowItem = zero
+    var grow_keys: [3]widget.Key = zero
+    var gi = 0usize
+    while gi < 3usize {
+        grow_items[gi] = collection.row_item("Row")
+        grow_keys[gi] = 7300u64 + u64(gi)
+        gi += 1usize
+    }
+    var grow_step = 0usize
+    while grow_step < 5usize {
+        var grow_at = 105000000000i64 + i64(grow_step)
+        var grow_count = 2usize
+        if grow_step >= 2usize { grow_count = 3usize }
+        if grow_step == 2usize { grow_at = 105100000000i64 }
+        if grow_step == 3usize { grow_at = 105150000000i64 }
+        if grow_step == 4usize { grow_at = 106200000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: grow_at }) != ok { os.exit(1i32) }
+        f = mem.arena_from(frame_storage)
+        var grow_options = collection.list_options()
+        grow_options.width = 300.0
+        let (grow_list, grow_list_error) = collection.list_of(&f, 7250u64, &theme, "Growing", grow_items[0usize..grow_count], grow_keys[0usize..grow_count], grow_options)
+        let (grow_page, grow_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if grow_list_error != ok || grow_page_error != ok { os.exit(2i32) }
+        grow_page[0usize] = grow_list
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 600.0), grow_page[0usize..1usize]), time.Instant { nanos: grow_at }) != ok { os.exit(3i32) }
+        if grow_step >= 3usize {
+            let (before_row, has_before_row) = bounds(&harness, &runtime, 7301u64)
+            let (new_row, has_new_row) = bounds(&harness, &runtime, 7302u64)
+            if !has_before_row || !has_new_row { os.exit(4i32) }
+            if grow_step == 3usize && !(new_row.height < before_row.height - 1.0) { os.exit(5i32) }
+            if grow_step == 4usize && !(new_row.height > before_row.height - 0.5) { os.exit(6i32) }
+        }
+        grow_step += 1usize
+    }
     // (D1490) Under reduced motion the fill cross-fades over 100 ms: 50 ms in
     // it is not yet `secondary-container`, a second on it is.
     var calm_tokens = tokens
