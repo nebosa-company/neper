@@ -26937,3 +26937,9 @@ Checks on Windows and Linux:
 
 - `ui_overlays_v2` opens a menu. 50 ms later its panel's start is not yet `surface-container`; a second later it is.
 - All 103 `ui_*` fixtures pass.
+
+## D1429 — Flyouts and popovers come in
+
+The Flyout spec opens "over `duration-medium-1` with `ease-emphasized-decelerate` (fade and grow from the anchor edge)". The Popover spec opens over `duration-medium-1`, scaling from 90%. Both now stand in a box keyed `key + 8192`, there whether open or shut, and keep the D1427 opening share. `entered_overlay` wraps the overlay's content part way in: the flyout grows 8 from the anchor's edge (`grown_in`, above when placed above), and the popover scales from 90% (`scaled_in`), both faded. Closing is at once, and reduced motion opens at once.
+
+`ui_overlays2_v2` checks both, on Windows and Linux. On its first open frame the flyout is not yet `surface-container`. Its existing pixel checks, and the popover's, now look once each has arrived (1.45 s and 1.65 s). All 103 `ui_*` fixtures pass on both hosts.

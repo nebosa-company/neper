@@ -370,6 +370,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // a press outside dismisses without reaching Search.
     let (root_2, build_2_error) = build(&f, &theme, s, .Flyout)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(18i32) }
+    // (D1429) On its first open frame the flyout is still coming in.
+    let (fly_early_shot, fly_early_shot_error) = testing.snapshot(&harness, a)
+    let (fly_early, has_fly_early) = lifted(&harness, 20u64)
+    if fly_early_shot_error != ok || !has_fly_early || is_color(fly_early_shot, at(fly_early.x + 100.0, fly_early.y + 10.0), style.color(&tokens, .SurfaceContainer)) { os.exit(21i32) }
+    // (D1429) The flyout fades and grows in over `duration-medium-1`; look once
+    // it has arrived.
+    if testing.begin(&harness, time.Instant { nanos: 1450000000i64 }) != ok { os.exit(18i32) }
+    let (root_2_in, build_2_in_error) = build(&f, &theme, s, .Flyout)
+    if build_2_in_error != ok || testing.pump(&harness, root_2_in, time.Instant { nanos: 1450000000i64 }) != ok { os.exit(18i32) }
     let (shot_2, shot_2_error) = testing.snapshot(&harness, a)
     if shot_2_error != ok { os.exit(19i32) }
     let (filter, has_filter) = bounds(&harness, &runtime, 2u64)
@@ -400,6 +409,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // it on `surface-container-high`, the beak in the card's colour 16 down.
     let (root_4, build_4_error) = build(&f, &theme, s, .Popover)
     if build_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok { os.exit(27i32) }
+    // (D1429) The popover scales and fades in over `duration-medium-1`; look
+    // once it has arrived.
+    if testing.begin(&harness, time.Instant { nanos: 1650000000i64 }) != ok { os.exit(27i32) }
+    let (root_4_in, build_4_in_error) = build(&f, &theme, s, .Popover)
+    if build_4_in_error != ok || testing.pump(&harness, root_4_in, time.Instant { nanos: 1650000000i64 }) != ok { os.exit(27i32) }
     let (shot_4, shot_4_error) = testing.snapshot(&harness, a)
     if shot_4_error != ok { os.exit(28i32) }
     let (anchor, has_anchor) = bounds(&harness, &runtime, 3u64)

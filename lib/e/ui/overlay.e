@@ -1895,10 +1895,41 @@ fn flyout_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // elevation 2, no border; 16 all round on touch, 12 at the sides and top and 8
 // below with a pointer; 240 to 360 wide on touch, 200 to 320 with a pointer; 4
 // off its anchor, flipping when that side overflows.
+// (D1429, docs/ux/components/Flyout, motion) It fades and grows 8 from the
+// anchor's edge over `duration-medium-1` on the emphasized-decelerate curve, in
+// a box keyed `key + 8192` there open or shut; closing is at once.
 fn flyout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let entering = opening_share_over(t, key, open, t.tokens.durations.medium1)
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (made, made_error) = light_dismissed(a, key, t, anchor, placement, label, content, dismiss)
-    ret (made, made_error)
+    if made_error != ok { ret (zero, made_error) }
+    let (moved, moved_error) = entered_overlay(a, key, made, entering, 1.0, placement == .Above || placement == .AboveCenter || placement == .AboveMatch)
+    ret (moved, moved_error)
+}
+
+// (D1429) An overlay `made` in its box `key + 8192` with its content part way
+// in at `share`: grown 8 from the anchor's edge (`from` 1), or scaled up from
+// `from`, and faded.
+fn entered_overlay(a: *mem.Arena, key: widget.Key, made: widget.Node, share: f32, from: f32, above: bool) -> (widget.Node, err) {
+    var moved = made
+    if share < 1.0 && made.children.len == 1usize {
+        let (kids, kids_error) = mem.alloc[widget.Node](a, 1usize)
+        if kids_error != ok { ret (zero, TooLarge) }
+        if from < 1.0 {
+            let (scaled, scaled_error) = scaled_in(a, made.children[0usize], share, from)
+            if scaled_error != ok { ret (zero, scaled_error) }
+            kids[0usize] = scaled
+        } else {
+            let (grown, grown_error) = grown_in(a, made.children[0usize], share, above)
+            if grown_error != ok { ret (zero, grown_error) }
+            kids[0usize] = grown
+        }
+        moved.children = kids[0usize..1usize]
+    }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = moved
+    ret (widget.box(key + 8192u64, style.defaults(), held[0usize..1usize]), ok)
 }
 
 // The same flyout adapted to the caller's size class: compact touch screens use
@@ -1978,8 +2009,12 @@ fn popover_action_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, a
 // The same with the main action's loading ring shown and repeat actions ignored;
 // secondary actions are disabled until the caller clears `busy`. A dirty short
 // task consumes outside presses while Close and Escape still dismiss it.
+// (D1429, docs/ux/components/Popover, motion) It fades and scales up from 90%
+// over `duration-medium-1` on the emphasized-decelerate curve, in a box keyed
+// `key + 8192` there open or shut; closing is at once.
 fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, busy: bool, dirty: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let entering = opening_share_over(t, key, open, t.tokens.durations.medium1)
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     if actions.len > 2usize { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var heading = control.text_options()
@@ -2073,7 +2108,9 @@ fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor
     var outside = *dismiss
     if dirty { outside = widget.Submit { ctx: zero, invoke: zero } }
     let (made, made_error) = dismissable_by_offset_outside(a, key, anchor, placement, title, joined, dismiss, outside, offset, key + 1u64)
-    ret (made, made_error)
+    if made_error != ok { ret (zero, made_error) }
+    let (moved, moved_error) = entered_overlay(a, key, made, entering, 0.9, false)
+    ret (moved, moved_error)
 }
 
 // The popover stays anchored except at compact touch size, where the same body
