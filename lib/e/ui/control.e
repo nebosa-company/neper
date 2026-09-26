@@ -6884,9 +6884,51 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
     look.padding_y = (side - glyph_size) * 0.5
     look.min_width = side
     look.min_height = side
-    let (mark, mark_error) = icon_square(a, muted, kind, glyph_size)
+    // (D1532) Selected, the glyph is its filled "on" form (docs/ux/components/IconButton).
+    let (mark, mark_error) = icon_square_of(a, muted, kind, glyph_size, selected, style.color(t.tokens, .SecondaryContainer))
     if mark_error != ok { ret (zero, mark_error) }
     let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, selected, action, mark)
+    ret (node, node_error)
+}
+
+// (D1532, docs/ux/components/IconButton) A round glyph button with a badge on its
+// icon: a count (`count_text`, "99+" at most) in the urgent colour at the icon's top
+// -2 and end -12, or with `dot` a 6 dot, the button's name gaining what the badge
+// means -- `meaning`, else the count, else "new": "Notifications, 3 unread".
+fn glyph_button_badged(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, count_text: str, meaning: str, dot: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = with_alpha(muted, state_opacity(t, state))
+    look.foreground = muted
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = side * 0.5
+    look.custom_padding = true
+    look.padding = (side - glyph_size) * 0.5
+    look.padding_y = (side - glyph_size) * 0.5
+    look.min_width = side
+    look.min_height = side
+    let (mark, mark_error) = icon_square(a, muted, kind, glyph_size)
+    if mark_error != ok { ret (zero, mark_error) }
+    if count_text.len == 0usize && !dot {
+        let (plain, plain_error) = pressable(a, key, t, 3u8, label, look, true, false, action, mark)
+        ret (plain, plain_error)
+    }
+    var badge_kind: BadgeKind = .Urgent
+    if dot && count_text.len == 0usize { badge_kind = .Dot }
+    let (count, count_error) = badge_of(a, 0u64, t, count_text, badge_kind)
+    if count_error != ok { ret (zero, count_error) }
+    let (anchored, anchored_error) = badge_anchor(a, 0u64, mark, glyph_size, count, badge_kind == .Dot)
+    if anchored_error != ok { ret (zero, anchored_error) }
+    // The anchor stands 2 taller for the count's overhang; the circle keeps its side.
+    look.padding_y = max_zero((side - glyph_size - 2.0) * 0.5)
+    var said = meaning
+    if said.len == 0usize { said = count_text }
+    if said.len == 0usize { said = "new" }
+    let (name, name_error) = badge_name(a, label, said)
+    if name_error != ok { ret (zero, name_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, name, look, true, false, action, anchored)
     ret (node, node_error)
 }
 
