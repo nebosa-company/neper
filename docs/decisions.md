@@ -26631,3 +26631,15 @@ the same with no history.
 
 `ui_workspace` gives a history of notes, todo, main.e: Ctrl+Tab picks todo,
 Ctrl+Shift+Tab main.e, and Ctrl+Shift+T reopens, on Windows and Linux.
+
+## D1399 — An empty workspace offers Open recent
+
+The MultiDocumentWorkspace spec's empty state ends with a tonal Open recent
+button. `workspace_empty` could already draw it, but the single-group
+workspace passed no action. `WorkspaceHistory.open_recent`, when set, is now
+that button (keyed `key + 3`). The D1398 check's history literal gains the
+field.
+
+`ui_workspace` empties the workspace with `open_recent` set: "No open files"
+stands with an Open recent button, and `ui_containers2_v2` still passes, on
+Windows and Linux.
