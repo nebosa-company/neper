@@ -5434,7 +5434,8 @@ fn row_lines(item: *const RowItem) -> usize {
 // ends with its switch, is that control in the tree, Checked when `on`, and a
 // press anywhere on it (or Space) runs its action, which toggles it.
 // (D1265) `media_kind` leads with the caller's avatar or thumbnail, framed.
-// ponytail: no selection animation; the focus ring is the runtime's, inset where the list clips it.
+// (D1475) A selection change eases the fill and the text colours.
+// ponytail: the focus ring is the runtime's, inset where the list clips it.
 fn row_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32) -> (widget.Node, err) {
     var tall = row_height(t, row_lines(item))
     // (D1265) A thumbnail row stands the 56 picture and its 8 above and below.
@@ -5496,10 +5497,18 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
     var ink = surface_ink
     var muted = style.color(t.tokens, .OnSurfaceVariant)
     var fill = control.with_alpha(surface_ink, control.state_opacity(t, state))
-    if item.selected {
-        ink = style.color(t.tokens, .OnSecondaryContainer)
-        muted = ink
-        fill = style.layer(style.color(t.tokens, .SecondaryContainer), ink, control.state_opacity(t, state))
+    // (D1475, docs/ux/components/Row, motion) Selection changes ease the fill and
+    // the text colours over `duration-short-3` on `ease-standard` (kept on the
+    // row, slot `key + 1048599`); reduced motion changes at once.
+    var picked_goal: f32 = 0.0
+    if item.selected { picked_goal = 1.0 }
+    let picked_share = control.eased_on(t, key, key + 1048599u64, picked_goal, false, t.tokens.durations.short3)
+    if picked_share > 0.0 {
+        let picked_ink = style.color(t.tokens, .OnSecondaryContainer)
+        let picked_fill = style.layer(style.color(t.tokens, .SecondaryContainer), picked_ink, control.state_opacity(t, state))
+        ink = style.mix(ink, picked_ink, picked_share)
+        muted = style.mix(muted, picked_ink, picked_share)
+        fill = style.mix(fill, picked_fill, picked_share)
     }
     if !enabled {
         ink = control.with_alpha(surface_ink, t.tokens.states.disabled_content)
