@@ -26872,3 +26872,9 @@ The TimePicker spec's wheels "flick to spin with momentum and detents". D1389 la
 The TimePicker spec says that "between five-minute marks a small knob shows the exact minute". Before, a minute off the fives left the hand on the five-mark below it with no knob. Now the hand turns to the exact minute, at 6 degrees a minute, and ends on a 16 `primary` knob. No number is marked chosen.
 
 `ui_pickers2_v2` opens the minute dial at 14:07 and finds `primary` at seven past (42 degrees, 88 from the hub), on Windows and Linux; the check fails without the change. The same commit gives the D1418 checks their own exit codes (122-125), which had reused D1403's.
+
+## D1420 — The dial's hand sweeps
+
+The TimePicker spec moves the dial's "hand and knob over `duration-medium-2` with `ease-standard`". `dial_swept` keeps the goal on the dial's ring (`key + 7`). It unwraps each new angle to the short way round from the last goal, then eases there with `control.eased_on`. While the ring is pressed (a drag) the ease takes 0 ms, so the knob follows the finger. Reduced motion changes at once. The hand, the knob and the D1419 small knob all stand at the swept angle.
+
+`ui_pickers2_v2` turns the minute dial from the half hour to 14:07, on Windows and Linux. 100 ms later the knob is not yet at seven past; 500 ms later it is.

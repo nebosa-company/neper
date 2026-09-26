@@ -409,15 +409,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
         dial_step += 1usize
     }
     // (D1419) At 14:07 on the minute dial the hand ends on a small knob at seven
-    // past (42 degrees), between the 5 and the 10.
+    // past (42 degrees), between the 5 and the 10. (D1420) It sweeps there from
+    // the half hour: 100 ms on it is not there yet, 500 ms on it is.
     var off_step = 0usize
-    while off_step < 2usize {
+    while off_step < 3usize {
+        var off_at = 6200000000i64
+        if off_step == 1usize { off_at = 6300000000i64 }
+        if off_step == 2usize { off_at = 6700000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: off_at }) != ok { os.exit(129i32) }
         f = mem.arena_from(frame_storage)
         let (off_modal, off_modal_error) = overlay.time_picker_modal(&f, 1300u64, &theme, 14u8, 7u8, true, true, true, time_change, &s.press, &s.press)
         let (off_page, off_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if off_modal_error != ok || off_page_error != ok { os.exit(126i32) }
         off_page[0usize] = off_modal
-        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), off_page[0usize..1usize]), time.Instant { nanos: 6200000000i64 + i64(off_step) }) != ok { os.exit(126i32) }
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), off_page[0usize..1usize]), time.Instant { nanos: off_at }) != ok { os.exit(126i32) }
+        if off_step == 1usize {
+            let (early_ring, has_early_ring) = bounds(&harness, &runtime, 1307u64)
+            let (early_shot, early_shot_error) = testing.snapshot(&harness, a)
+            if !has_early_ring || early_shot_error != ok { os.exit(130i32) }
+            let early_hub = geometry.Point { x: early_ring.x + early_ring.width * 0.5, y: early_ring.y + early_ring.height * 0.5 }
+            if is_color(early_shot, at(early_hub.x + 58.88, early_hub.y - 65.4), style.color(&tokens, .Primary)) { os.exit(131i32) }
+        }
         off_step += 1usize
     }
     let (off_ring, has_off_ring) = bounds(&harness, &runtime, 1307u64)
