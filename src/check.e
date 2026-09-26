@@ -12307,6 +12307,18 @@ fn carrier_borrows_from(c: *Checker, carrier: usize, parameter: usize) -> bool {
 fn result_borrows_from(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, parameter: usize) -> bool {
     let (origin, found) = result_borrow_origin(c, g, tree, module_index, node_index)
     if found && origin == parameter { ret true }
+    // (D1555, H04) `mem.cast[*T](x)` is the address `x` is, so it borrows what `x`
+    // borrows: a guard's data, stored as `*void`, comes back typed under `@borrows`.
+    if tree.nodes[node_index].kind == .CallExpr {
+        let (callee_index, has_callee) = first_node_child(tree, tree.nodes[node_index])
+        if has_callee {
+            let (cast, cast_error) = cast_info(c, g, tree, module_index, tree.nodes[callee_index])
+            if cast_error == ok && cast.matched {
+                let (argument_index, has_argument) = call_argument_node(tree, tree.nodes[node_index], 0usize)
+                if has_argument { ret result_borrows_from(c, g, tree, module_index, argument_index, parameter) }
+            }
+        }
+    }
     let (carrier, has_carrier) = place_base_local(c, g, tree, module_index, node_index)
     ret has_carrier && carrier_borrows_from(c, carrier, parameter)
 }
@@ -16399,6 +16411,23 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     c.resources[local_index].acquired = usize(node.token_start)
     resource_set_fields(c, local_index, resource_moved)
     record_explain_move(c, module_index, node, c.locals[local_index].name)
+    // (D1555, H04) What was consumed -- a guard released, a file closed -- leaves
+    // every view of it dangling: the data a guard protects is a view of the guard.
+    // A local that took the view by assignment carries the container untagged, so
+    // every local naming it is ended here, not only the tracked views.
+    var viewer = 0usize
+    while viewer < c.local_count {
+        if viewer != local_index && c.resources[viewer].view_of == local_index + 1usize && c.resources[viewer].state != resource_moved {
+            c.resources[viewer].view = true
+            c.resources[viewer].obligated = false
+            c.resources[viewer].state = resource_moved
+            c.resources[viewer].dangling = 2u8
+            c.resources[viewer].acquired = usize(node.token_start)
+            c.affine_answer_valid = false
+            record_explain_view_end(c, module_index, node, c.locals[viewer].name, 2u8)
+        }
+        viewer += 1usize
+    }
     ret ok
 }
 
@@ -17115,6 +17144,15 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         let place_token = c.tokens[usize(place.token_start)]
         let (assigned_local, found_assigned) = find_local(c, g.modules[module_index].text[place_token.start..place_token.end])
         if found_assigned { try record_alias(c, g, tree, module_index, assigned_local, initializer_index, true) }
+        // (D1555, H04) `x = p` with `p` a view: `x` names the same container from
+        // here, so the consumption of the container ends it too (a guard's data
+        // cannot be carried past the release in another local).
+        if found_assigned {
+            let (source_local, found_source) = resource_local_of(c, g, tree, module_index, initializer_index)
+            if found_source && source_local != assigned_local && c.resources[source_local].view_of != 0usize {
+                c.resources[assigned_local].view_of = c.resources[source_local].view_of
+            }
+        }
     }
     // `s.p = &x` or `items[i] = &x`: the carrier aliases `x` through that
     // complete comptime field/element path from here (D413, D704, D709).
@@ -17445,6 +17483,16 @@ fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // its state but moved -- an unchecked one goes with the error it was bound beside.
 fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     var (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+    // (D1555, H04) A view of a local whose release is deferred cannot be returned:
+    // the deferred call runs as this `ret` leaves, so the caller would hold a view
+    // of a released guard (or a closed handle).
+    if is_resource && c.resources[local_index].view && c.resources[local_index].view_of != 0usize {
+        let container = c.resources[local_index].view_of - 1usize
+        if container < c.local_count && c.resources[container].state == resource_reserved {
+            record_failure_related(c, module_index, tree.nodes[node_index], .ViewMutated, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[container].acquired), c.resources[container].acquired)
+            ret ResourceViolation
+        }
+    }
     // A pointer copied out of an aggregate field still names the region local
     // recorded by that aggregate's alias fact (D682).
     let (aliased, has_alias) = alias_target(c, g, tree, module_index, node_index)

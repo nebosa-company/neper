@@ -126,6 +126,33 @@ fn release(g: own Guard) {
     mutex_unlock(g.m)
 }
 
+// ---- DataGuard --------------------------------------------------------------
+//
+// (D1555, H04) A lock held with the data it protects: `data_guard(&m, &value)` takes
+// the mutex and returns a guard owed to `data_release`, as `Guard` is; the data is
+// reached only through `data_of[T](&g)`, whose result is a view of the guard
+// (`@borrows("g")`), so the view rule keeps it inside the guard's life: a release
+// while a view of it lives in the same block is refused (E-SAFETY-0004), a view
+// used after the release (carried out in another local) is E-SAFETY-0014, and a
+// view returned past a deferred release is refused too. `T` is the caller's to
+// keep the same between `data_guard` and `data_of`.
+
+type DataGuard = resource(data_release) struct { m: *Mutex, data: *void }
+
+fn data_guard[T: type](m: *Mutex, data: *T) -> DataGuard {
+    mutex_lock(m)
+    ret DataGuard { m: m, data: mem.cast[*void](data) }
+}
+
+fn data_release(g: own DataGuard) {
+    mutex_unlock(g.m)
+}
+
+@borrows("g")
+fn data_of[T: type](g: *const DataGuard) -> *T {
+    ret mem.cast[*T](g.data)
+}
+
 // ---- RwLock ---------------------------------------------------------------
 //
 // ponytail: a writer can be starved by a stream of readers, because a reader joins

@@ -6612,6 +6612,7 @@ type Barrier = struct { state: *void }
 type Guard = resource(release) struct { m: *Mutex }
 type ReadGuard = resource(read_release) struct { l: *RwLock }
 type WriteGuard = resource(write_release) struct { l: *RwLock }
+type DataGuard = resource(data_release) struct { m: *Mutex, data: *void }
 type BarrierState = struct { parties: u32, waiting: Atomic[u32], generation: Atomic[u32], open: Atomic[u32] }
 type SpinLock = struct { state: Atomic[u32] }
 type Rcu = struct { published: Atomic[u32], epoch: Atomic[u64], readers: []Atomic[u64] }
@@ -6647,6 +6648,9 @@ fn read_release(g: own ReadGuard)
 fn write_guard(l: *RwLock) -> WriteGuard
 fn try_write_guard(l: *RwLock) -> (WriteGuard, err)
 fn write_release(g: own WriteGuard)
+fn data_guard[T: type](m: *Mutex, data: *T) -> DataGuard
+fn data_release(g: own DataGuard)
+@borrows("g") fn data_of[T: type](g: *const DataGuard) -> *T
 fn condition() -> Condition
 fn condition_wait(c: *Condition, m: *Mutex)
 fn condition_wait_for(c: *Condition, m: *Mutex, timeout: time.Duration) -> bool
