@@ -26182,3 +26182,16 @@ differs. The comment no longer leaves the reformat to the caller.
 
 `ui_pickers2_v2` types "230 pm" with a 24-hour theme, focuses the field and
 then a neighbour: the text becomes "14:30", on Windows and Linux.
+
+## D1368 — Up and Down step a time field
+
+The TimePicker spec's field steps the part under the caret with Up and Down.
+While its list is shut, `time_field` binds Up and Down (beside Alt+Down) to
+`clock_step_fire`. That reads the field's text (the caller's buffer) and caret.
+Before the ":" or "." it steps the hour, after it the minute, by one with
+wrapping, and it rewrites the text through `typed` with `write_clock_in`.
+While the list is open, Up and Down still move through it. Shift stepping the
+minutes by the list's step is still missing.
+
+`ui_pickers2_v2` focuses "14:30" with the caret at the end: Up gives "14:31";
+Home then Up gives "15:31", on Windows and Linux.
