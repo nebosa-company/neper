@@ -28076,3 +28076,13 @@ H04's acceptance takes schedule perturbation as evidence over tested runs, not a
 `link/thread_perturb` runs four workers under `thread.spawn_all`, six times, one seed per round and a distinct seed per worker. Each step perturbs, increments a tally reached only through `sync.data_guard`/`data_of` (D1555), perturbs again, and adds to an atomic counter. Every round must end with 12,000 on both, and it does on Windows and Linux, in both suites. As a check that the fixture can see a race, a copy with the guard removed, reading and writing the tally with a perturbation between, loses increments and fails. The fixture would fail on a real race rather than pass by luck of the schedule.
 
 With D1555's data guards and D1556's slices and globals, all three of C057's lines have landed and the item closes.
+
+## D1558 — A cast keeps its operand's provenance
+
+H02's regions and views left "raw-cast provenance" outside the bounded subset: a pointer made by `mem.cast` was not a region value or a view, since nothing said what it borrows. The probe showed what that cost. `let raw = mem.cast[*u32](&bytes[0])`, with `bytes` allocated after a mark, stayed usable after `mem.reset` of that mark, where the same pointer without the cast was E-SAFETY-0013.
+
+A cast is the address it was given, so it has that address's provenance. `region_bind`'s walk from a binding's initializer to the local it came from (through `&`, fields and subslices) now steps through a `mem.cast[*T](x)` call to `x` (`cast_argument_of`, over `cast_info`). `raw` then takes `bytes`'s region, and its use after the reset is refused naming `raw`. D1555's cast step in `result_borrows_from`, the `@borrows` return proof, now uses the same helper.
+
+What stays raw is what carries no provenance at all: `mem.address_of`, arithmetic on a `usize`, a pointer read out of a struct field. `m25-h02-regions.md` says so, and drops raw-cast provenance from its "Later" list.
+
+Fixtures, both hosts: `reject/regions_cast` (the cast used after the reset, E-SAFETY-0013) and `accept/regions_cast_valid` (the cast used before the reset, and a cast of a frame local's whole struct). A sweep of 604 link fixtures and accept cases, with D1557's compiler as the baseline, found none newly refused or accepted. Stage 2 equals stage 3 on both hosts.

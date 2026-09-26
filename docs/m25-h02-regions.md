@@ -103,10 +103,13 @@ Stated so that no one reads the rules above as more than they are:
   is rejected. A direct call is allowed only when the corresponding callee parameter
   carries the same checked `@noescape` summary (D739). Code without that public
   contract makes no no-escape claim.
-- A pointer made by `mem.cast`, `mem.address_of`, arithmetic on a `usize`, or read
-  out of a struct (`s.items`): not a region value or a view, since nothing says what
-  it borrows. These are the raw-pointer cases H02 asks to record outside the
+- A pointer made by `mem.address_of`, arithmetic on a `usize`, or read out of a
+  struct (`s.items`): not a region value or a view, since nothing says what it
+  borrows. These are the raw-pointer cases H02 asks to record outside the
   guarantee, and an `@unsafe` function is where they belong when they matter.
+  A `mem.cast[*T](p)` of a tracked pointer is not one of them (D1558): the cast
+  is the address it was given, so it keeps `p`'s region or view, as a binding
+  and as a `@borrows` return (D1555).
 - A container mutation through a pointer alias (`let p = &l; list.push(p, x)`) is
   followed and invalidates `l`'s views (D671). Copying that pointer local preserves
   the same target, so local pointer-copy chains are followed too (D672). A mutable
@@ -139,9 +142,9 @@ leaves, and rejects forwarding one to an unannotated/extern callee, indirect
 callback or thread context. A direct callee may receive it only at an exact parameter
 position that callee also marks `@noescape` (D736-D744). Generic instances retain
 the complete summary; artifact format 14 serializes a count and ordered one-based
-positions in the function interface and canonical signature (D745). Raw-cast
-provenance and arbitrary dynamic-container retention remain outside the bounded
-subset.
+positions in the function interface and canonical signature (D745). A cast keeps
+its operand's provenance (D1558); arbitrary dynamic-container retention remains
+outside the bounded subset.
 
 ## 6. Diagnostics and fixtures
 
@@ -172,7 +175,7 @@ both hosts.
 **M2.5:** sections 2, 3, 4, 5 and 6 as written; the fixtures; the false-positive
 measurement over the compiler and the library; the closure record.
 
-**Later:** arbitrary retention through dynamic containers; raw-cast provenance;
+**Later:** arbitrary retention through dynamic containers;
 non-lexical liveness if the measurement asks for it;
 build-then-freeze containers -- a `freeze` that consumes
 the builder and returns the slice, after which the builder cannot grow (H02's

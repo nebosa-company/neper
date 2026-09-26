@@ -12307,21 +12307,25 @@ fn carrier_borrows_from(c: *Checker, carrier: usize, parameter: usize) -> bool {
     ret found == wanted
 }
 
+// (D1558, H02) The argument of a `mem.cast[*T](x)` call at `node_index`, when it is
+// one: a cast is the address it was given, so it carries that address's provenance.
+fn cast_argument_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    if tree.nodes[node_index].kind != .CallExpr { ret (0usize, false) }
+    let (callee_index, has_callee) = first_node_child(tree, tree.nodes[node_index])
+    if !has_callee { ret (0usize, false) }
+    let (cast, cast_error) = cast_info(c, g, tree, module_index, tree.nodes[callee_index])
+    if cast_error != ok || !cast.matched { ret (0usize, false) }
+    let (argument_index, has_argument) = call_argument_node(tree, tree.nodes[node_index], 0usize)
+    ret (argument_index, has_argument)
+}
+
 fn result_borrows_from(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, parameter: usize) -> bool {
     let (origin, found) = result_borrow_origin(c, g, tree, module_index, node_index)
     if found && origin == parameter { ret true }
     // (D1555, H04) `mem.cast[*T](x)` is the address `x` is, so it borrows what `x`
     // borrows: a guard's data, stored as `*void`, comes back typed under `@borrows`.
-    if tree.nodes[node_index].kind == .CallExpr {
-        let (callee_index, has_callee) = first_node_child(tree, tree.nodes[node_index])
-        if has_callee {
-            let (cast, cast_error) = cast_info(c, g, tree, module_index, tree.nodes[callee_index])
-            if cast_error == ok && cast.matched {
-                let (argument_index, has_argument) = call_argument_node(tree, tree.nodes[node_index], 0usize)
-                if has_argument { ret result_borrows_from(c, g, tree, module_index, argument_index, parameter) }
-            }
-        }
-    }
+    let (cast_argument, is_cast) = cast_argument_of(c, g, tree, module_index, node_index)
+    if is_cast { ret result_borrows_from(c, g, tree, module_index, cast_argument, parameter) }
     let (carrier, has_carrier) = place_base_local(c, g, tree, module_index, node_index)
     ret has_carrier && carrier_borrows_from(c, carrier, parameter)
 }
@@ -14971,12 +14975,20 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     if !has_initializer || !holds_pointer(c, c.locals[local_index].ty, 0usize) { ret ok }
     var source_index = initializer_index
     var source = tree.nodes[source_index]
-    // `s[1..]`, `&s[0]`, `s.items`: what it came from.
-    while source.kind == .BracketPostfix || source.kind == .FieldExpr || (source.kind == .UnaryExpr && c.tokens[usize(source.token_start)].kind == .PunctAmp) {
-        let (inner_index, has_inner) = first_node_child(tree, source)
-        if !has_inner { break }
-        source_index = inner_index
-        source = tree.nodes[source_index]
+    // `s[1..]`, `&s[0]`, `s.items`: what it came from. (D1558, H02) And
+    // `mem.cast[*T](p)`: the address `p` is, so the region or view `p` has.
+    while true {
+        if source.kind == .BracketPostfix || source.kind == .FieldExpr || (source.kind == .UnaryExpr && c.tokens[usize(source.token_start)].kind == .PunctAmp) {
+            let (inner_index, has_inner) = first_node_child(tree, source)
+            if !has_inner { break }
+            source_index = inner_index
+            source = tree.nodes[source_index]
+        } else {
+            let (cast_argument, is_cast) = cast_argument_of(c, g, tree, module_index, source_index)
+            if !is_cast { break }
+            source_index = cast_argument
+            source = tree.nodes[source_index]
+        }
     }
     if source.kind == .NameExpr {
         // Only a tagged local -- an owned one -- has anything to hand on.
