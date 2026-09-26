@@ -57,6 +57,13 @@ fn close_to(value: u8, expected: f32) -> bool {
 // (D1294) The last choice a modal time picker reported.
 type Chose = struct { count: usize, kind: overlay.TimeChoiceKind, value: u8 }
 
+// (D1351) A date wheel's turn, kept.
+fn on_wheel_date(ctx: *void, value: time.Date) -> err {
+    let kept = mem.cast[*time.Date](ctx)
+    *kept = value
+    ret ok
+}
+
 // (D1350) A duration turn, kept as the unit and the value.
 type SpanLog = struct { unit: u32, value: u32 }
 
@@ -381,6 +388,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 1632u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || span_log.unit != 2u32 || span_log.value != 6u32 { os.exit(80i32) }
     let (next_minute, has_next_minute) = bounds(&harness, &runtime, 1620u64)
     if !has_next_minute || testing.tap(&harness, next_minute.x + 20.0, next_minute.y + 18.0) != ok || span_log.unit != 1u32 || span_log.value != 21u32 { os.exit(81i32) }
+    // (D1351) Date wheels on 31 January 2026: Down on the month lands on 28
+    // February; Up on the year sets 2025.
+    var wheel_date: time.Date = zero
+    var date_step = 0usize
+    while date_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (dates, dates_error) = overlay.date_wheels(&f, 1700u64, &theme, time.Date { year: 2026i32, month: 1u8, day: 31u8 }, widget.Change[time.Date] { ctx: mem.cast[*void](&wheel_date), invoke: on_wheel_date })
+        let (date_page, date_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if dates_error != ok || date_page_error != ok { os.exit(82i32) }
+        date_page[0usize] = dates
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), date_page[0usize..1usize]), time.Instant { nanos: 6600000000i64 + i64(date_step) }) != ok { os.exit(83i32) }
+        date_step += 1usize
+    }
+    if testing.by_text(&harness, "January").count == 0usize { os.exit(84i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 1700u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || wheel_date.month != 2u8 || wheel_date.day != 28u8 { os.exit(85i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 1732u64).element) != ok || testing.press_key(&harness, 38u32, zero) != ok || wheel_date.year != 2025i32 || wheel_date.month != 1u8 { os.exit(86i32) }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }
