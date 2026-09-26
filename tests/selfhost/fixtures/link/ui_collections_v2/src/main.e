@@ -236,7 +236,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1200usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 40u16, max_commands: 4096usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1200usize, max_states: 96usize, state_bytes: 2048usize, state_classes: 8u16, max_depth: 40u16, max_commands: 4096usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -979,6 +979,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
         flow_step += 1usize
     }
     if flow_mid == flow_end { os.exit(227i32) }
+    // (D1475) A row's selection fill eases in over 150 ms: 50 ms after it is
+    // selected the row is not yet `secondary-container`, a second on it is.
+    var pick_step = 0usize
+    while pick_step < 4usize {
+        var pick_at = 100000000000i64 + i64(pick_step)
+        if pick_step == 2usize { pick_at = 100050000000i64 }
+        if pick_step == 3usize { pick_at = 101000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: pick_at }) != ok { os.exit(233i32) }
+        var picked_item = collection.row_item("Picked")
+        picked_item.selected = pick_step >= 2usize
+        f = mem.arena_from(frame_storage)
+        let (picked_row, picked_row_error) = collection.row_of(&f, 5000u64, &theme, &picked_item, 0usize, 1usize, 300.0)
+        let (picked_page, picked_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if picked_row_error != ok || picked_page_error != ok { os.exit(234i32) }
+        picked_page[0usize] = picked_row
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 600.0), picked_page[0usize..1usize]), time.Instant { nanos: pick_at }) != ok { os.exit(235i32) }
+        if pick_step >= 2usize {
+            let (picked_box, has_picked_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 5000u64).element)
+            let (pick_shot, pick_shot_error) = testing.snapshot(&harness, a)
+            if !has_picked_box || pick_shot_error != ok { os.exit(236i32) }
+            let filled = is_color(pick_shot, at(picked_box.x + 4.0, picked_box.y + picked_box.height * 0.5), style.color(&tokens, .SecondaryContainer))
+            if pick_step == 2usize && filled { os.exit(237i32) }
+            if pick_step == 3usize && !filled { os.exit(238i32) }
+        }
+        pick_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok

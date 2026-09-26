@@ -27264,3 +27264,9 @@ The Calendar spec makes each grid a single Tab stop and moves through it with th
 The PageIndicator spec draws the current page as "a 24 x 8 primary pill" that "slides and stretches between dots over `duration-medium-2` with `ease-standard`". D973 sized the pill 24 x 24 (rounded 4), because the dot's square size was reused, and it moved at once. Each dot now eases between its rest size and the pill. Its width runs to 24, its height to 8, and its colour from `outline` to `primary` on one share, kept on the track (slot `key + 1 + 2097152 + visible index`). As the new pill stretches, the old one shrinks back to a dot. The dots are keyed `key + 2 + visible index`. Touch haptics and the reduced-motion cross-fade are still not done.
 
 `ui_paged` checks this on Windows and Linux. Turned from page 2 to page 3, the third dot is 8 x 8, 150 ms later it is between 9 and 23 wide, and a second later it is 24 x 8. `ui_navigation4_v2` still passes.
+
+## D1475 — List rows ease their selection
+
+The Row spec animates selection: "Selection changes animate the fill in `duration-short-3` with `ease-standard`". A list row changed from its rest look to `secondary-container` in one frame. `row_acting`, and through it `row_of`, now eases one share over `duration-short-3`, kept on the row (slot `key + 1048599`, as the list box's rows do since D1440). The share mixes the rest fill and text colours toward the selected ones. Reduced motion changes at once. Every built row now holds one ease cell. `ui_collections4_v2`'s old state pool (64 states, 512 bytes, 2 classes) ran out under it and silently lost the touch lift, so its pool is raised to 256, 8192 and 8. That was the D1413-era trap again.
+
+`ui_collections_v2` checks this on Windows and Linux: 50 ms after a row is selected it is not yet `secondary-container`, and a second later it is. Against the old collection the check fails (exit 237). All 103 `ui_*` fixtures pass on both hosts.

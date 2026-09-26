@@ -261,7 +261,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let touch_tokens = style.adapt(&tokens, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1200usize, max_states: 64usize, state_bytes: 512usize, state_classes: 2u16, max_depth: 40u16, max_commands: 4096usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1200usize, max_states: 256usize, state_bytes: 8192usize, state_classes: 8u16, max_depth: 40u16, max_commands: 4096usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
