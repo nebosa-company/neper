@@ -28124,3 +28124,18 @@ H02 names generation-tagged checked handles as an alternative for dynamic contai
 Without the owner compare the fixture fails (exit 4). `link/stat_slots`, which builds a key by hand to test retirement, now gives it the owner its map issued.
 
 `docs/library-fixtures.json` is regenerated here. It had gone stale since D1547 (`ui_content_v2` now imports `e.ui.overlay`) and D1555-D1557 (`e.sync` and `e.thread` gained entries and fixtures). The suites' manifest check would otherwise have failed.
+
+## D1561 — A pin lives to its pointer's last use
+
+D351 pins a local that a pointer is taken to until the pointer's block ends, so the local cannot move or close there. H02 kept non-lexical liveness "if the measurement asks for it", and D1555 asked. A guard released after its data view's last use, in the same block, was E-SAFETY-0004 though nothing could touch the view again, and the only way out was an inner block that exists for the checker's sake.
+
+A pin now ends at its pointer's last use, where that can be known. When `resource_consume` meets a pinned local, `pin_still_live` asks three things. Is the move inside a loop, where a later iteration reaches an earlier use? Is there no known holder? Holders are locals whose view, pointer alias or field alias names the pinned local. Is any holder named anywhere from the moving expression to the end of the function? Only when all three answers are no has the pin ended. The pinned local is then free to move, and D1555 ends the holder's view with it. The moving expression is included in the scan so that a move through the pointer itself, `os.close(*p)` (D610), stays pinned. The enclosing function is found by its source range, since the checker keeps no current-function field and its struct sits at the bootstrap's field limit.
+
+Two reject cases were affected, found by a new sweep that compares every reject case's answer between two compilers:
+
+- `safety_pointer_move` first became accepted, because the holder was named only inside the move. Including the moving expression put it back; its golden is unchanged.
+- `safety_dataguard_held` (D1555) released its guard after the view's last use, which is now correct to accept. It now uses the view after the release, which is what "held" means, and stays E-SAFETY-0004.
+
+`accept/pins_last_use` pins the new shape on both hosts: a data view used and its guard released, and a file's pointer used and the file closed, each in one block. D1558's compiler refuses it. The final sweeps against that compiler show all 157 reject answers unchanged and, of 607 accept sources, only the new case newly accepted. Stage 2 equals stage 3 on both hosts.
+
+Still lexical: a pin inside a loop, and a pointer whose holder the rules do not know (stored into an untracked place). The diagnostic still says the pointer "lives until this block ends", which is now the conservative case's wording.

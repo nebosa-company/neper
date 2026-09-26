@@ -15196,6 +15196,47 @@ fn resource_pin(c: *Checker, local_index: usize, token: usize) {
     c.pin_count += 1usize
 }
 
+// (D1561, H02) Whether the pin on `pinned` may still be used after `node`: inside a
+// loop (a later iteration reaches an earlier use), with no known holder -- a local
+// whose view, pointer alias or field alias names it -- or with a holder named after
+// `node`, or in it (a move through the pointer itself, D610), anywhere in the
+// function. Otherwise the pointer's last use has passed and
+// the local may move or close though the pointer's block has not ended.
+fn pin_still_live(c: *Checker, g: *graph.Graph, module_index: usize, pinned: usize, node: syntax.Node) -> bool {
+    if c.loop_depth != 0usize || usize(node.token_end) > c.token_count || usize(node.token_start) >= c.token_count { ret true }
+    let here = c.tokens[usize(node.token_start)].start
+    var body_end = 0usize
+    var at = 0usize
+    while at < c.function_count {
+        let function = c.functions[at]
+        if function.module_index == module_index && function.source_start <= here && here < function.source_end { body_end = function.source_end }
+        at += 1usize
+    }
+    if body_end == 0usize { ret true }
+    var holders = 0usize
+    var holder = 0usize
+    while holder < c.local_count {
+        var holds_it = holder != pinned && (c.resources[holder].view_of == pinned + 1usize || c.resources[holder].points_to == pinned + 1usize)
+        var alias_at = 0usize
+        while !holds_it && holder != pinned && alias_at < c.resource_alias_count {
+            if c.resource_aliases[alias_at].carrier == holder && c.resource_aliases[alias_at].pointed == pinned { holds_it = true }
+            alias_at += 1usize
+        }
+        if holds_it {
+            holders += 1usize
+            let name = c.locals[holder].name
+            var token_at = usize(node.token_start)
+            while token_at < c.token_count && c.tokens[token_at].start < body_end {
+                let token = c.tokens[token_at]
+                if token.kind == .Identifier && same(g.modules[module_index].text[token.start..token.end], name) { ret true }
+                token_at += 1usize
+            }
+        }
+        holder += 1usize
+    }
+    ret holders == 0usize
+}
+
 // The statement's candidates pinned to the open block, until it ends.
 fn resource_commit_pins(c: *Checker) {
     var at = 0usize
@@ -16416,6 +16457,12 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
             if c.resources[lent_at].region == 0usize && c.resources[lent_at].view_of == 0usize { c.resources[lent_at].state = resource_plain }
         }
         lent_at += 1usize
+    }
+    // (D1561, H02) Non-lexical: a pin whose every holder is known and named nowhere
+    // after this point of the function, outside any loop, is dead already.
+    if c.resources[local_index].pinned != 0usize && !pin_still_live(c, g, module_index, local_index, node) {
+        c.resources[local_index].pinned = 0usize
+        c.pins_live = c.pins_live - 1usize
     }
     // A pointer to it is live until its block ends: nothing moves out from under it.
     if c.resources[local_index].pinned != 0usize {
