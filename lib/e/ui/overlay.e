@@ -4404,6 +4404,67 @@ fn time_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8
     ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
 }
 
+// (D1350) A duration wheel's turn: which unit (0 hours, 1 minutes, 2 seconds)
+// and its new value.
+type DurationChoice = struct { unit: u8, value: u32 }
+type DurationWheelRelay = struct { unit: u8, change: widget.Change[DurationChoice] }
+
+fn duration_wheel_fire(ctx: *void, index: usize) -> err {
+    let r = mem.cast[*DurationWheelRelay](ctx)
+    ret widget.fire_change[DurationChoice](r.change, DurationChoice { unit: r.unit, value: u32(index) })
+}
+
+// (D1350, docs/ux/components/DurationPicker, wheels) The iOS duration picker: an
+// hours wheel (0-23), a minutes and a seconds wheel (0-59), each 64 wide with
+// its unit ("hours", "min", "sec") in `body-large` `on-surface` beside the
+// band's right end, 8 apart (keyed `key`, `key + 16`, `key + 32`); a turn
+// reports the unit and value as a `DurationChoice`.
+fn duration_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hours: u32, minutes: u32, seconds: u32, change: widget.Change[DurationChoice]) -> (widget.Node, err) {
+    let (hour_values, hour_error) = wheel_numbers(a, 24usize, 0usize)
+    let (minute_values, minute_error) = wheel_numbers(a, 60usize, 0usize)
+    if hour_error != ok || minute_error != ok { ret (zero, TooLarge) }
+    let (relays, relays_error) = mem.alloc[DurationWheelRelay](a, 3usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 9usize)
+    if relays_error != ok || parts_error != ok { ret (zero, TooLarge) }
+    var units: [3]str = zero
+    units[0usize] = "hours"
+    units[1usize] = "min"
+    units[2usize] = "sec"
+    var values: [3]u32 = zero
+    values[0usize] = hours % 24u32
+    values[1usize] = minutes % 60u32
+    values[2usize] = seconds % 60u32
+    var u = 0usize
+    while u < 3usize {
+        relays[u] = DurationWheelRelay { unit: u8(u), change: change }
+        var column = minute_values
+        if u == 0usize { column = hour_values }
+        let (turned, turned_error) = wheel(a, key + 16u64 * u64(u), t, units[u], column, usize(values[u]), widget.Change[usize] { ctx: mem.cast[*void](&relays[u]), invoke: duration_wheel_fire }, 64.0)
+        if turned_error != ok { ret (zero, turned_error) }
+        var said_look = control.text_options()
+        said_look.role = .BodyLarge
+        said_look.wrap = .None
+        let (said, said_error) = control.colored_text(a, 0u64, units[u], t, said_look, style.color(t.tokens, .OnSurface))
+        if said_error != ok { ret (zero, said_error) }
+        parts[3usize * u + 1usize] = turned
+        parts[3usize * u + 2usize] = said
+        parts[3usize * u] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, control.sized_style(120.0, 180.0), parts[3usize * u + 1usize..3usize * u + 3usize])
+        u += 1usize
+    }
+    let (row, row_error) = mem.alloc[widget.Node](a, 3usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = parts[0usize]
+    row[1usize] = parts[3usize]
+    row[2usize] = parts[6usize]
+    let (grouped, grouped_error) = mem.alloc[widget.Node](a, 1usize)
+    if grouped_error != ok { ret (zero, TooLarge) }
+    grouped[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), row[0usize..3usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = "Duration"
+    ret (widget.semantics(0u64, sem, style.defaults(), grouped[0usize..1usize]), ok)
+}
+
 // (D1349) A time wheel's turn as the `TimeChoice` it sets: a 12-hour wheel's
 // hour kept in the half of the day the period says.
 type TimeWheelRelay = struct { kind: TimeChoiceKind, change: widget.Change[TimeChoice], twelve: bool, pm: bool }
@@ -4875,7 +4936,8 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
 // chips are 32 tall, 8 apart, 12 below the field's supporting text, the selected
 // one `secondary-container` with its check; the row is a group named "Presets".
 // (D1296) The chips wrap to the field's width.
-// ponytail: no unit boxes for touch or wheels for iOS; the caller's text carries the value.
+// (D1350) `duration_wheels` is the iOS form.
+// ponytail: no unit boxes for touch; the caller's text carries the value.
 fn duration_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], note: str, presets: []const str, chosen: usize, picks: []const widget.Submit, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != presets.len { ret (zero, TooLarge) }
     var no_toggle: widget.Submit = zero

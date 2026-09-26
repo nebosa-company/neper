@@ -25943,3 +25943,15 @@ date and duration wheels, are still to come.
 and PM. A tap under the hour picks 15, Down on the minutes sets 31, and a
 two-row drag up turns the hours to 16. This passes on Windows and Linux, and
 `ui_pickers_v2` still passes on both.
+
+## D1350 — Duration pickers have wheels
+
+The DurationPicker spec's iOS countdown form: `overlay.duration_wheels` sets an
+hours wheel (0-23), a minutes and a seconds wheel (0-59) -- D1349's `wheel`,
+64 wide -- each with its unit ("hours", "min", "sec") in `body-large`
+`on-surface` beside the band, 8 apart. A turn reports the unit (0, 1, 2) and
+the value as a `DurationChoice`. The touch form's unit boxes are still to
+come.
+
+`ui_pickers2_v2` sets the wheels at 1 h 20 min 5 s: Down on the seconds sets
+6, and a press under the minutes picks 21, on Windows and Linux.
