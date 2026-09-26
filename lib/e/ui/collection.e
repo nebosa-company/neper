@@ -3594,6 +3594,76 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: zero, keys: widget.Change[input.KeyEvent] { ctx: ctx_of(&keyed[0usize]), invoke: grid_key } }, style.defaults(), column_node[0usize..1usize]), ok)
 }
 
+// (D1539, docs/ux/components/Table, toolbar) What a table's toolbar holds: its
+// title; the search's buffer, length and change; the active filters' names, each
+// removed through `unfilter` with its index, and the Clear filters action; and the
+// Columns action (opening the caller's menu) when `has_columns`.
+type TableToolbar = struct { title: str, query: []u8, query_len: usize, searching: widget.Change[str], filters: []const str, unfilter: widget.Change[usize], clear: widget.Submit, columns: widget.Submit, has_columns: bool }
+
+// (D1539) Over a table, `width` wide and `control-xl` 56 tall (48 on touch), 16 in
+// and 8 between: the title in `title-medium` `on-surface`, then at the end each
+// active filter as an input chip (keyed `key + 16 + 2j`, its remove one above),
+// a "Clear filters" text button (`key + 2`) while any stands, a 32 outlined
+// "Search" field 200 wide (`key + 1`) and a "Columns" text button (`key + 3`). In
+// selection mode the table's selection bar stands instead; that is the caller's
+// choice of which to place.
+fn table_toolbar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, bar: TableToolbar, width: f32) -> (widget.Node, err) {
+    if bar.filters.len > 8usize { ret (zero, TooLarge) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, bar.filters.len + 5usize)
+    let (drops, drops_error) = mem.alloc[PairRemove](a, bar.filters.len + 1usize)
+    let (presses, presses_error) = mem.alloc[widget.Submit](a, bar.filters.len + 3usize)
+    if parts_error != ok || drops_error != ok || presses_error != ok { ret (zero, TooLarge) }
+    var heading = control.text_options()
+    heading.role = .TitleMedium
+    heading.wrap = .None
+    let (title, title_error) = control.colored_text(a, 0u64, bar.title, t, heading, style.color(t.tokens, .OnSurface))
+    if title_error != ok { ret (zero, title_error) }
+    var grown = title
+    grown.style.width = style.Length { Flex: 1.0 }
+    parts[0usize] = grown
+    var n = 1usize
+    var inert: widget.Submit = zero
+    presses[0usize] = inert
+    var j = 0usize
+    while j < bar.filters.len {
+        drops[j] = PairRemove { index: j, remove: bar.unfilter }
+        presses[j + 3usize] = widget.Submit { ctx: ctx_of(&drops[j]), invoke: pair_remove_fire }
+        let (filter_chip, filter_chip_error) = control.chip(a, key + 16u64 + 2u64 * u64(j), t, bar.filters[j], .Input, false, &presses[0usize], &presses[j + 3usize])
+        if filter_chip_error != ok { ret (zero, filter_chip_error) }
+        parts[n] = filter_chip
+        n += 1usize
+        j += 1usize
+    }
+    var plain = control.button_options()
+    plain.variant = .Plain
+    if bar.filters.len > 0usize {
+        presses[1usize] = bar.clear
+        let (clear, clear_error) = control.button(a, key + 2u64, t, "Clear filters", &presses[1usize], plain)
+        if clear_error != ok { ret (zero, clear_error) }
+        parts[n] = clear
+        n += 1usize
+    }
+    var field = control.field_options()
+    field.width = 200.0
+    field.height = 32.0
+    field.placeholder = "Search"
+    let (search, search_error) = control.text_field(a, key + 1u64, t, "Search", bar.query, bar.query_len, bar.searching, zero, field)
+    if search_error != ok { ret (zero, search_error) }
+    parts[n] = search
+    n += 1usize
+    if bar.has_columns {
+        presses[2usize] = bar.columns
+        let (columns, columns_error) = control.button(a, key + 3u64, t, "Columns", &presses[2usize], plain)
+        if columns_error != ok { ret (zero, columns_error) }
+        parts[n] = columns
+        n += 1usize
+    }
+    var band = control.sized_style(width, control.if_else(density_of(t) == 2usize, 48.0, 56.0))
+    let flat = style.Length { Px: 0.0 }
+    band.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: flat, right: style.Length { Px: 8.0 }, bottom: flat }
+    ret (widget.flex(key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, band, parts[0usize..n]), ok)
+}
+
 // v2 (D980, docs/ux/components/Table, DataGrid): the header (`header_cells`)
 // over the rows (`table_row_of`) in a clipped viewport on `surface`, each row
 // but the last over a 1px `outline-variant` divider, the runtime's rounded
@@ -3609,7 +3679,9 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
 // (D1248) with no rows, its loading or empty state (`table_state`).
 // (D1283) `view_width` scrolls a wide table sideways.
 // (D1413) `failed` stands an error banner in the body.
-// ponytail: no toolbar, footer or pinned column; `data_grid` keeps the caller's cells
+// (D1539) The toolbar is `table_toolbar` and the footer `pagination_footer`
+// (D1239), both the caller's to stack round the table.
+// ponytail: no pinned column; `data_grid` keeps the caller's cells
 // as its editors -- `data_grid_of` is the one with the DataGrid's core.
 fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, role: u8, owned: bool, selection: TableOptions) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }

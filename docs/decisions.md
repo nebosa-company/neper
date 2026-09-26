@@ -27862,3 +27862,18 @@ The Outline spec's header takes an optional filter field. Typing narrows the out
 `TreeOptions` gains `filter`, `filter_len`, `filtering` and `has_filter`. With `has_filter`, `outline_with` stands a 32 outlined "Filter headings" field under the header, 12 in, keyed `key + 4194304`: `key + 3` was taken by the second row's twisty (`key + 1 + 2i`). With text in the field, a `FilteredTree` source wraps the caller's the way D1533's `SortedTree` does. A node stays when its text (`sort_text`, column 0, folded) holds the filter or a descendant stays. A walk of the whole tree counts the headings and matches and opens every kept branch, so the results stand expanded whatever `expanded` says. The count line is `body-small` `on-surface-variant`, 40 tall and centred, a polite status. With no match it reads "No headings match" beside a Clear (`key + 4194305`) that reports an empty filter through `filtering`.
 
 `ui_collections3_v2` checks this on Windows and Linux. Filtered by "a1" with nothing expanded, A and A1a stand, A2 and B do not, and "2 of 6 headings" shows. By "zz", "No headings match" shows and Clear reports an empty filter. Without `has_filter` the field is absent (exit 111). All 103 ui_* fixtures pass on both hosts. Still under the marker: dimmed ancestors and a bold matched text (the rows are the caller's), Down into the results, Enter to the first match, and the O(nodes x depth) walk per row.
+
+## D1539 — Table toolbar
+
+The Table spec's optional toolbar holds the table's title in `title-medium`, a search, the active filters as chips with Clear filters, and a Columns menu. It is `control-xl` 56 tall (48 on touch), 16 in, with 8 gaps, and its search is a 32 outlined field on pointer hosts. The `tabulated` marker named the toolbar, footer and pinned column as missing. The footer was already `pagination_footer` (D1239), so the marker was part stale.
+
+`table_toolbar(a, key, t, TableToolbar, width)` builds the bar. It holds the title, growing, then at the end:
+
+- each filter as an input chip keyed `key + 16 + 2j`, whose remove (one above) reports `j` through `unfilter`;
+- "Clear filters" (`key + 2`) while any filter stands;
+- a 200-wide "Search" field (`key + 1`);
+- with `has_columns`, a "Columns" text button (`key + 3`) running the caller's action, which opens its menu.
+
+In selection mode the table's selection bar replaces the toolbar, and choosing which to place is the caller's.
+
+`ui_collections6_v2` checks this on Windows and Linux. With filters "Failed" and "This week", the title, both chips, Clear filters, Search and Columns stand, and the second chip's remove reports index 1. With no filters there is no Clear filters. Removing the Clear filters button fails the check (exit 183). All 103 ui_* fixtures pass on both hosts. The pinned column remains under the marker.
