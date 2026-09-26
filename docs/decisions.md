@@ -27258,3 +27258,9 @@ The SplitView spec asks the view to "keep a ratio across window resizes". Until 
 The Calendar spec makes each grid a single Tab stop and moves through it with the arrows. The day grid has done this since its roving stop. The year view still made every built pill a Tab stop, so Tab walked through up to thirty years before it left the view. The year grid now reuses `calendar_tab_stop`: the focused pill keeps its place in the tab order, else the shown year's, else the first built. Every other pill stays pressable and reachable with the arrows, whose `FocusTo` hops focus by key. Arrows past the built rows still find nothing to focus.
 
 `ui_pickers_v2` checks this on Windows and Linux: Tab from 2026 does not land on 2027. Against the old overlay the check fails (exit 181).
+
+## D1474 — The page indicator's pill is 24 x 8 and slides
+
+The PageIndicator spec draws the current page as "a 24 x 8 primary pill" that "slides and stretches between dots over `duration-medium-2` with `ease-standard`". D973 sized the pill 24 x 24 (rounded 4), because the dot's square size was reused, and it moved at once. Each dot now eases between its rest size and the pill. Its width runs to 24, its height to 8, and its colour from `outline` to `primary` on one share, kept on the track (slot `key + 1 + 2097152 + visible index`). As the new pill stretches, the old one shrinks back to a dot. The dots are keyed `key + 2 + visible index`. Touch haptics and the reduced-motion cross-fade are still not done.
+
+`ui_paged` checks this on Windows and Linux. Turned from page 2 to page 3, the third dot is 8 x 8, 150 ms later it is between 9 and 23 wide, and a second later it is 24 x 8. `ui_navigation4_v2` still passes.

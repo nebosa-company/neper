@@ -551,7 +551,12 @@ fn scrub_gesture(ctx: *void, g: widget.Gesture) -> err {
 // End go to the ends. A slider named "Page", its value "Page 2 of 5", said
 // politely. Disabled, the dots and pill are `on-surface` at 38% and the track
 // takes no focus.
-// ponytail: no pill motion or touch haptics; the focus ring is the runtime's.
+// (D1474) The pill is 24 x 8, and a change slides it: each dot's width, height
+// and colour ease between dot and pill over `duration-medium-2` on
+// `ease-standard` (kept on the track, slot `key + 1 + 2097152 + visible index`),
+// so the old pill shrinks as the new one stretches. A dot is keyed `key + 2 +
+// visible index`.
+// ponytail: no touch haptics or reduced-motion cross-fade; the focus ring is the runtime's.
 fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, current: usize, turn: widget.Change[usize], options: IndicatorOptions) -> (widget.Node, err) {
     if count == 0usize || current >= count { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -587,16 +592,19 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
         if rtl { logical = shown - 1usize - v }
         let page = first + logical
         let size = indicator_dot_size(first, shown, count, logical, current)
-        var dot = control.sized_style(size, size)
-        dot.radius = size * 0.5
-        dot.background = paint.Brush { Solid: dot_ink }
-        if page == current {
-            dot.radius = 4.0
-            dot.background = paint.Brush { Solid: pill_ink }
-            middle += 12.0
-        }
+        // (D1474, docs/ux/components/PageIndicator, changing) The dot eases to
+        // the 24 x 8 pill and back.
+        let rest = indicator_dot_size(first, shown, count, logical, count)
+        var pill_goal: f32 = 0.0
+        if page == current { pill_goal = 1.0 }
+        let pill_share = control.eased_on(t, key + 1u64, key + 1u64 + 2097152u64 + u64(v), pill_goal, false, t.tokens.durations.medium2)
+        let dot_height = rest + (8.0 - rest) * pill_share
+        var dot = control.sized_style(rest + (24.0 - rest) * pill_share, dot_height)
+        dot.radius = dot_height * 0.5
+        dot.background = paint.Brush { Solid: style.mix(dot_ink, pill_ink, pill_share) }
+        if page == current { middle += 12.0 }
         if (!rtl && page < current) || (rtl && page > current) { middle += size + 8.0 }
-        dots[v] = widget.box(0u64, dot, zero)
+        dots[v] = widget.box(key + 2u64 + u64(v), dot, zero)
         v += 1usize
     }
     var row_style = style.defaults()
