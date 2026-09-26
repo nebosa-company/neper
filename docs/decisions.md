@@ -27348,3 +27348,9 @@ D1291 kept a label with a character no font maps from blanking the window by dro
 D1249's thumb press measured the 12 wide strip from the viewport's bounds, but the thumb is painted inside its padding. On a padded viewport, a press on the painted thumb missed it, and a press in the padding grabbed. The viewport now keeps its padded inside (`Element.viewport_rect`, set where its extent is laid out). `thumb_grab` measures the strip and the thumb's travel from that rect, and refuses a press past its end.
 
 `ui_collections_v2` checks this on Windows and Linux with a 200 x 176 viewport padded 16. A press in the padding at 196 does not move the content. A press 4 in from the inside's end at 180 jumps it. Against the old runtime the padding press grabs (exit 243). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1488 — A shut notification fold stands in for its notices on the keyboard
+
+D1303 folds a run of three or more notices from one source into a row. Up and Down still aimed at the run's own rows, which a shut fold does not build, so Up from the row below a shut fold went nowhere. The fold row had no arrows of its own either. The shortcuts read their `FocusTo` targets when pressed, so while a fold is shut each of its notices' targets now names the fold row (`key + 256 + first index`). The fold row stands in a scope whose Up and Down go to the rows either side of its run. The scope is always there, open or shut, so its identity holds.
+
+`ui_status5_v2` checks this on Windows and Linux: with "4 builds failed" shut, Up from the review below it focuses the fold row, and Down comes back. Against the old control the check fails (exit 70).

@@ -320,6 +320,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if fold_tree_error != ok || !has_fold_row { os.exit(60i32) }
         let shown_builds = testing.by_text(&harness, "Build 4127 failed").count
         if fold_pass < 2usize && (shown_builds != 0usize || fold_row.state.expanded) { os.exit(61i32) }
+        // (D1488) Shut, the fold stands in for its builds: Up from the review
+        // below reaches the fold row, and Down from it comes back.
+        if fold_pass == 0usize {
+            if widget.focus(&runtime, testing.by_key(&harness, 6014u64).element) != ok || testing.press_key(&harness, 38u32, zero) != ok { os.exit(69i32) }
+            let (up_to, _) = widget.focused_key(&runtime)
+            if up_to != 6256u64 || testing.press_key(&harness, 40u32, zero) != ok { os.exit(70i32) }
+            let (down_to, _) = widget.focused_key(&runtime)
+            if down_to != 6014u64 { os.exit(71i32) }
+        }
         if fold_pass == 1usize && !tap_key(&harness, &runtime, 6256u64) { os.exit(62i32) }
         if fold_pass >= 2usize && (shown_builds == 0usize || !fold_row.state.expanded) { os.exit(63i32) }
         let (_, has_review) = find(fold_tree, .ListItem, "info, Ada requested your review")
