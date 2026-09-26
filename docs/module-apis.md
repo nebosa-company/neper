@@ -608,6 +608,7 @@ false. Ignore-file precedence/negation is application policy, not an implicit gl
 ```neper
 type List[T: type] = struct { items: []T, len: usize, arena: *mem.Arena }
 type Iter[T: type] = struct { items: []const T, index: usize }
+type Builder[T: type] = resource(builder_drop) struct { list: List[T] }
 
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (List[T], err)
 fn from_slice[T: type](a: *mem.Arena, src: []const T) -> (List[T], err)
@@ -621,6 +622,11 @@ fn remove[T: type](l: *List[T], index: usize) -> T
 fn clear[T: type](l: *List[T])
 fn iter[T: type](l: *const List[T]) -> Iter[T]
 fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
+fn builder[T: type](a: *mem.Arena, capacity: usize) -> (Builder[T], err)
+fn build_push[T: type](b: *Builder[T], v: own T) -> err
+fn built[T: type](b: *const Builder[T]) -> []const T
+fn freeze[T: type](b: own Builder[T]) -> []const T
+fn builder_drop[T: type](b: own Builder[T])
 ```
 
 ### `e.data.deque`

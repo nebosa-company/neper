@@ -177,9 +177,7 @@ measurement over the compiler and the library; the closure record.
 
 **Later:** arbitrary retention through dynamic containers;
 non-lexical liveness if the measurement asks for it;
-build-then-freeze containers -- a `freeze` that consumes
-the builder and returns the slice, after which the builder cannot grow (H02's
-container redesign) -- and generation-tagged handles for the dynamic containers
+and generation-tagged handles for the dynamic containers
 that want them, with the owner identity, generation-wrap policy and per-access cost
 H02 lists.
 

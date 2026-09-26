@@ -106,3 +106,38 @@ fn iter_next[T: type](it: *Iter[T]) -> (T, bool) {
     it.index += 1usize
     ret (value, true)
 }
+
+// ---- build, then freeze (D1559, H02) ----------------------------------------
+//
+// A list that is built and then only read: `builder` makes a `Builder`, a resource
+// owed to `freeze` or `builder_drop`, `build_push` grows it, and `freeze` consumes
+// it and hands back the elements as a read-only slice. After the freeze the builder
+// is moved, so growing it again is E-SAFETY-0001, and a builder neither frozen nor
+// dropped is E-SAFETY-0002 at the exit that forgets it. The slice lives in the
+// builder's arena, not in the builder, so it outlives the freeze.
+type Builder[T: type] = resource(builder_drop) struct { list: List[T] }
+
+fn builder[T: type](a: *mem.Arena, capacity: usize) -> (Builder[T], err) {
+    let (made, made_error) = init[T](a, capacity)
+    ret (Builder[T] { list: made }, made_error)
+}
+
+fn build_push[T: type](b: *Builder[T], v: own T) -> err {
+    ret push[T](&b.list, v)
+}
+
+// The elements so far, read-only; the builder is its caller's to freeze or drop.
+fn built[T: type](b: *const Builder[T]) -> []const T {
+    ret b.list.items[..b.list.len]
+}
+
+// The audited hand-over: the builder ends and its elements stay in the arena.
+@unsafe
+fn freeze[T: type](b: own Builder[T]) -> []const T {
+    ret b.list.items[..b.list.len]
+}
+
+// A builder given up without a freeze; its storage stays with the arena.
+@unsafe
+fn builder_drop[T: type](b: own Builder[T]) {
+}

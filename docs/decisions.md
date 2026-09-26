@@ -28086,3 +28086,25 @@ A cast is the address it was given, so it has that address's provenance. `region
 What stays raw is what carries no provenance at all: `mem.address_of`, arithmetic on a `usize`, a pointer read out of a struct field. `m25-h02-regions.md` says so, and drops raw-cast provenance from its "Later" list.
 
 Fixtures, both hosts: `reject/regions_cast` (the cast used after the reset, E-SAFETY-0013) and `accept/regions_cast_valid` (the cast used before the reset, and a cast of a frame local's whole struct). A sweep of 604 link fixtures and accept cases, with D1557's compiler as the baseline, found none newly refused or accepted. Stage 2 equals stage 3 on both hosts.
+
+## D1559 — Build, then freeze
+
+H02's container redesign asked for build-then-freeze containers: a `freeze` that consumes the builder and returns the slice, after which the builder cannot grow. A `list.List` could be read as a slice while it still grew, so a slice taken early could miss what came later, or name storage `reserve` had since moved.
+
+It is a library change, because H01 already has the rule it needs. `e.data.list` gains `Builder[T]`, a `resource(builder_drop) struct { list: List[T] }`: a generic resource, which the checker already tracked by its concrete instance (D611). Its API:
+
+- `builder(a, capacity)` makes one.
+- `build_push(&b, v)` grows it.
+- `built(&b)` reads it so far.
+- `freeze(b)` consumes it and hands back the elements as `[]const T`.
+- `builder_drop(b)` gives it up without a freeze.
+
+`freeze` and `builder_drop` are `@unsafe`: they are the audited hand-over, where the builder ends and its elements stay in the arena. After a freeze the builder is moved, so growing it again is E-SAFETY-0001. A builder neither frozen nor dropped is E-SAFETY-0002 at the exit that forgets it; a `try` inside the building counts as such an exit. So the building goes in a function given `&b`, and the caller drops on its failure and freezes on success, as `link/list_freeze` does. The frozen slice is not a view of the builder, which was moved rather than addressed, so it outlives the freeze, as arena storage does.
+
+Fixtures, both hosts:
+
+- `link/list_freeze`: three elements built, frozen and read.
+- `reject/regions_freeze_grow`: a push after the freeze, E-SAFETY-0001.
+- `reject/regions_freeze_forgotten`: the builder only read, never frozen or dropped, E-SAFETY-0002.
+
+The 20 link fixtures and accept cases that import `e.data.list`, `e.data.graph` or `e.data.linked` still check. The module surface check passes with the new entries.
