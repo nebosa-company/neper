@@ -341,7 +341,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_deep || !has_middle || !has_current { os.exit(25i32) }
     if !is_color(shot_2, at(deep.x + 16.5, deep.y + 16.0), rule) || !is_color(shot_2, at(deep.x + 36.5, deep.y + 16.0), rule) || !is_color(shot_2, at(deep.x + 26.5, deep.y + 16.0), background) { os.exit(26i32) }
     if !is_color(shot_2, at(middle.x + 16.5, middle.y + 0.5), rule) || !is_color(shot_2, at(middle.x + 16.5, middle.y + 31.5), rule) || !is_color(shot_2, at(deep.x + 16.5, deep.y + 0.5), rule) { os.exit(27i32) }
-    if !is_color(shot_2, at(current.x + 1.5, current.y + 16.0), style.color(&tokens, .Primary)) || !is_color(shot_2, at(current.x + 1.5, current.y + 4.0), background) { os.exit(28i32) }
+    // (D1502) The bar stands at the pane's edge, 8 before the row.
+    if !is_color(shot_2, at(current.x - 6.5, current.y + 16.0), style.color(&tokens, .Primary)) || !is_color(shot_2, at(current.x - 6.5, current.y + 4.0), background) || is_color(shot_2, at(current.x + 1.5, current.y + 16.0), style.color(&tokens, .Primary)) { os.exit(28i32) }
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if tree_2_error != ok { os.exit(29i32) }
     var currents = 0usize
@@ -574,7 +575,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             while y < usize(first_row.height * 2.0) {
                 var x = 0usize
                 while x < 16usize {
-                    sum += u32(marker_shot.pixels[at(first_row.x + f32(x), first_row.y + f32(y)) + 1usize])
+                    sum += u32(marker_shot.pixels[at(first_row.x - 8.0 + f32(x), first_row.y + f32(y)) + 1usize])
                     x += 1usize
                 }
                 y += 1usize

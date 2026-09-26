@@ -27440,3 +27440,9 @@ The TableRow spec: "Disabled (not actionable, e.g. queued behind a lock): conten
 The TableRow spec: "Loading row: skeleton bars in each cell at the row height". A virtual table whose rows arrive a page at a time had no way to show a row still coming. `TableOptions.pending` names such rows by key. Each of their cells is a `skeleton_of` text line, 60% of the cell's inner width and 12 tall, and the row is Busy in the tree. `table_row_full` now takes its conditions as bits (`ROW_DISABLED`, `ROW_LOADING`).
 
 `ui_collections2_v2` checks this on Windows and Linux: with the third row pending, that row is Busy in the tree and the second is not. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1502 — The outline's current bar stands at the pane's edge
+
+The Outline spec: the current heading's marker is "a 3px `primary` bar at the pane's leading edge ... square on the pane side". D981 drew it at the start of the current row, which a tree insets 8 from the pane, so the bar floated 8 in. A tree row's bar now stands 8 before the row, on the pane's edge. A tree table's rows, which are not inset, keep theirs at 0.
+
+`ui_collections3_v2` checks this on Windows and Linux. The bar's colour stands 6.5 before the current row and no longer at its start. D1452's sliding-marker check now sums its pixels from the pane's edge. All 103 `ui_*` fixtures pass on both hosts.
