@@ -789,6 +789,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (fade_shot, fade_shot_error) = testing.snapshot(&harness, a)
             if !has_fade_box || !has_fade_second || fade_shot_error != ok || !near(fade_second.x, fade_box.x) { os.exit(206i32) }
             let fade_spot = at(fade_box.x + 120.0, fade_box.y + 60.0)
+            // (D1485) Mid-fade the first page fades out beneath the second (its
+            // layer `1960 + 1048577`); settled, it is gone.
+            let leaving_pages = testing.by_key(&harness, 1960u64 + 1048577u64).count
+            if fade_step == 3usize && (leaving_pages != 1usize || testing.by_key(&harness, 1970u64).count != 1usize) { os.exit(244i32) }
+            if fade_step == 4usize && (leaving_pages != 0usize || testing.by_key(&harness, 1970u64).count != 0usize) { os.exit(245i32) }
             if fade_step == 3usize { faded_mid = fade_shot.pixels[fade_spot] }
             if fade_step == 4usize { faded_end = fade_shot.pixels[fade_spot] }
         }

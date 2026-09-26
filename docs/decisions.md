@@ -27330,3 +27330,9 @@ A comparison checks its operands without the result's context, since the result 
 D1357's landing line lives in the handle after a column, so a header dragged onto the first column had nowhere to show it: no handle stands before column 0. D1478 already repeats the landing line in an overlay over the drag's ghost. When the pointer is over the first column and the lifted header is not it, that overlay (`key + 1048601`) now anchors to the first header and stands at its start.
 
 `ui_collections2_v2` checks this on Windows and Linux. Kind dragged over Name puts the line at Name's start, and the line is gone after the release. Against the old collection the check fails (exit 142).
+
+## D1485 — A page view cross-fades under reduced motion
+
+The PageView spec: "Reduced motion: the pages cross-fade in `duration-short-2` with no slide". D1379 faded the new page in, but the old page left at once, so the fade ran from the view's background, not from the old page. `PageSettle` now remembers the page it left, and `page_settle` returns it as a third answer. The carousel's caller ignores it. While the new page fades in under reduced motion, the page left stands beneath it at the rest of the opacity, in a layer keyed `key + 1048577`. When the fade ends, the layer goes.
+
+`ui_collections4_v2` checks this on Windows and Linux: 50 ms into a reduced-motion turn the first page's layer and its content stand under the second, and a second later both are gone. Against the old collection the check fails (exit 244). `ui_paged` still passes.
