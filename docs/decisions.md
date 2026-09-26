@@ -27484,3 +27484,9 @@ The List spec: "Rows enter (a new item) with a 100% height grow plus fade in `du
 The Gauge spec: "Loading: the track with a Skeleton block in the readout". The caller had to build that itself. `GaugeOptions.loading` draws it: the ring with no value arc, a `skeleton_of` line half the gauge's size wide and a fifth tall in place of the digits (keyed `key + 2`), and the progress node Busy in the tree with no value.
 
 `ui_status_v2` checks this on Windows and Linux: a loading gauge shows its skeleton block and not its digits, and it is Busy with an empty value. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1509 — A notification list's insert slide follows the rows and the scroll
+
+The NotificationList spec: "New notices insert at the top with a `duration-medium-1` `ease-emphasized-decelerate` slide; the list does not jump if the person has scrolled". D1359 slid the rows by 72 a notice, whatever the rows' heights, on the standard curve, and slid them even when the person had scrolled down. The slide now runs on the emphasized-decelerate curve (`eased_on_curve`). It lifts the rows by the measured heights of the first rows as last laid out, 72 for a row not yet laid out, pro rata for the part of a notice still to come. While the list's viewport stands scrolled, it does not slide at all.
+
+`ui_status5_v2` checks this on Windows and Linux: scrolled down a twelve-notice list, a notice put at the top leaves the fourth row where it stood. Against the old control it slides (exit 76). All 103 `ui_*` fixtures pass on both hosts.
