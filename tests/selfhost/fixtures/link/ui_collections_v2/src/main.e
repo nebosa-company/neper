@@ -1033,6 +1033,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         pick_step += 1usize
     }
+    // (D1490) Under reduced motion the fill cross-fades over 100 ms: 50 ms in
+    // it is not yet `secondary-container`, a second on it is.
+    var calm_tokens = tokens
+    calm_tokens.motion.reduced = true
+    let calm_theme = control.Theme { tokens: &calm_tokens, fonts: fonts, language: "", runtime: &runtime }
+    var calm_step = 0usize
+    while calm_step < 4usize {
+        var calm_at = 102000000000i64 + i64(calm_step)
+        if calm_step == 2usize { calm_at = 102050000000i64 }
+        if calm_step == 3usize { calm_at = 103000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: calm_at }) != ok { os.exit(246i32) }
+        var calm_item = collection.row_item("Calm")
+        calm_item.selected = calm_step >= 2usize
+        f = mem.arena_from(frame_storage)
+        let (calm_row, calm_row_error) = collection.row_of(&f, 5100u64, &calm_theme, &calm_item, 0usize, 1usize, 300.0)
+        let (calm_page, calm_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if calm_row_error != ok || calm_page_error != ok { os.exit(247i32) }
+        calm_page[0usize] = calm_row
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 600.0), calm_page[0usize..1usize]), time.Instant { nanos: calm_at }) != ok { os.exit(248i32) }
+        if calm_step >= 2usize {
+            let (calm_box, has_calm_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 5100u64).element)
+            let (calm_shot, calm_shot_error) = testing.snapshot(&harness, a)
+            if !has_calm_box || calm_shot_error != ok { os.exit(249i32) }
+            let calm_filled = is_color(calm_shot, at(calm_box.x + 4.0, calm_box.y + calm_box.height * 0.5), style.color(&tokens, .SecondaryContainer))
+            if calm_step == 2usize && calm_filled { os.exit(250i32) }
+            if calm_step == 3usize && !calm_filled { os.exit(251i32) }
+        }
+        calm_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok
