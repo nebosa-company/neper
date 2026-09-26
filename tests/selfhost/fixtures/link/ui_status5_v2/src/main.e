@@ -358,6 +358,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
         arrive_step += 1usize
         if arrive_step == 5usize && (!(mid_y < rest_y - 1.0) || !near(first_row.y, rest_y)) { os.exit(68i32) }
     }
+    // (D1509) Scrolled down a long list, a notice put at the top does not move
+    // the rows in view: the fourth row stands where it stood.
+    var long_items: [12]control.NotificationItem = zero
+    var li = 0usize
+    while li < 12usize {
+        long_items[li] = s.items[1usize]
+        li += 1usize
+    }
+    var held_step = 0usize
+    var held_y: f32 = 0.0
+    while held_step < 4usize {
+        var held_options: control.NotificationListOptions = zero
+        if held_step >= 3usize { held_options.inserted = 1u32 }
+        let held_at = 15000000000i64 + i64(held_step) * 1000000000i64
+        f = mem.arena_from(frame_storage)
+        let (held_list, held_list_error) = control.notification_list_with(&f, 7500u64, &theme, "Long", long_items[..], &s.press, 380.0, 400.0, held_options)
+        let (held_page, held_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if held_list_error != ok || held_page_error != ok { os.exit(72i32) }
+        held_page[0usize] = held_list
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 520.0), held_page[0usize..1usize]), time.Instant { nanos: held_at }) != ok { os.exit(73i32) }
+        let (fourth, has_fourth) = bounds(&harness, &runtime, 7500u64 + 2u64 + 3u64 * 3u64)
+        if !has_fourth { os.exit(74i32) }
+        if held_step == 1usize && testing.wheel(&harness, fourth.x + 40.0, fourth.y + 10.0, -3i32) != ok { os.exit(75i32) }
+        if held_step == 2usize { held_y = fourth.y }
+        if held_step == 3usize && !near(fourth.y, held_y) { os.exit(76i32) }
+        held_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(27i32) }
     try io.print("ui status5 v2 ok\n")
     ret ok

@@ -10259,8 +10259,8 @@ fn joined(a: *mem.Arena, head: str, tail: str) -> (str, err) {
 // (D1359) New notices slide in at the top as `inserted` grows.
 // (D1488) A shut fold stands in for its notices: Up and Down reach it, and from
 // it the rows either side.
-// ponytail: a slide is 72 a notice whatever the rows' heights, on the standard
-// curve, and runs even when the list is scrolled.
+// (D1509) The slide goes by the rows' measured heights on the emphasized curve,
+// and stands still while the list is scrolled.
 fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
     var options: NotificationListOptions = zero
     let (node, node_error) = notification_list_with(a, key, t, label, items, mark_read, width, height, options)
@@ -10521,10 +10521,35 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
     // (D1359, docs/ux/components/NotificationList, insert) When `inserted` grows
     // the rows start a row a notice higher and slide down into place over
     // `duration-medium-1` (at once under reduced motion).
+    // (D1509) On `ease-emphasized-decelerate`, by the rows' measured heights (72
+    // for a row not yet laid out), and not while the list is scrolled.
     let settled = f32(options.inserted)
-    let arriving = eased_on(t, key, key + 999983u64, settled, false, t.tokens.durations.medium1)
+    let arriving = eased_on_curve(t, key, key + 999983u64, settled, false, t.tokens.durations.medium1, true)
+    var remaining = settled - arriving
+    var lift: f32 = 0.0
+    var row_at = 0usize
+    while remaining > 0.0 && row_at < items.len && mem.address_of(t.runtime) != 0usize {
+        var row_tall: f32 = 72.0
+        let (row_box, has_row_box) = keyed_bounds(t.runtime, key + 2u64 + 3u64 * u64(row_at))
+        if has_row_box && row_box.height > 0.0 { row_tall = row_box.height }
+        var take: f32 = 1.0
+        if remaining < 1.0 { take = remaining }
+        lift += row_tall * take
+        remaining -= take
+        row_at += 1usize
+    }
+    if mem.address_of(t.runtime) != 0usize {
+        let (s_view, view_error) = widget.state_of(t.runtime)
+        if view_error == ok {
+            let (view_id, view_found) = widget.find_by_key(s_view, key)
+            if view_found == 1usize {
+                let (scrolled_by, has_scrolled) = widget.scroll_offset_of(t.runtime, view_id)
+                if has_scrolled && scrolled_by > 0.0 { lift = 0.0 }
+            }
+        }
+    }
     var rows_style = style.defaults()
-    rows_style.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 - 72.0 * (settled - arriving) }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    rows_style.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 - lift }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     let (rows_column, rows_column_error) = mem.alloc[widget.Node](a, 1usize)
     if rows_column_error != ok { ret (zero, TooLarge) }
     rows_column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, rows_style, rows[0usize..n])
