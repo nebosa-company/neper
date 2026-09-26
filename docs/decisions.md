@@ -26529,3 +26529,16 @@ action.
 `ui_progress` shows an upload at 62% ("Uploading", "62%", "About 20 s left")
 and a failed one ("Upload failed" with Retry), on Windows and Linux;
 `ui_status_v2` still passes.
+
+## D1391 — The contextual app bar fades in
+
+The AppBar spec's contextual bar fades in with a 4px drop over
+`duration-medium-2` on `ease-emphasized-decelerate`. `app_bar_of` keeps an
+entry share on the bar (`eased_emphasized`, slot `key + 1048000`, forward only)
+that rises when `options.contextual` becomes set. While it is under 1 the bar's
+content is faded to it and offset 4 up for the share still to come. Leaving,
+and under reduced motion, the bar changes at once; a bar first built
+contextual shows at once.
+
+`ui_navigation_v2` turns a bar contextual: 50 ms in its fill is not yet what it
+settles to a second later, on Windows and Linux.

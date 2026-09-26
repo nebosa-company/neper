@@ -376,6 +376,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         guard_step += 1usize
     }
+    // (D1391) A selection turns a bar contextual: 50 ms in its fill is still
+    // coming in; a second later it is the full `secondary-container`.
+    var none_actions: []const navigation.Action = zero
+    var context_step = 0usize
+    var context_mid: u32 = 0u32
+    var context_end: u32 = 0u32
+    while context_step < 5usize {
+        var context_at = 90000000000i64 + i64(context_step) * 16000000i64
+        if context_step == 3usize { context_at = 90082000000i64 }
+        if context_step == 4usize { context_at = 91000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: context_at }) != ok { os.exit(60i32) }
+        var context_look = navigation.app_bar_options()
+        if context_step >= 2usize {
+            context_look.contextual = "1 selected"
+            context_look.clear = s.subs[2usize]
+        }
+        f = mem.arena_from(frame_storage)
+        let (context_bar, context_bar_error) = navigation.app_bar_of(&f, 1500u64, &theme, "Inbox", none_actions, none_actions, context_look, 600.0)
+        let (context_page, context_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if context_bar_error != ok || context_page_error != ok { os.exit(61i32) }
+        context_page[0usize] = context_bar
+        var context_ground = control.sized_style(640.0, 200.0)
+        context_ground.background = paint.Brush { Solid: style.color(&tokens, .Surface) }
+        if testing.pump(&harness, widget.box(0u64, context_ground, context_page[0usize..1usize]), time.Instant { nanos: context_at }) != ok { os.exit(62i32) }
+        if context_step >= 3usize {
+            let (context_box, has_context_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 1500u64).element)
+            let (context_shot, context_shot_error) = testing.snapshot(&harness, a)
+            if !has_context_box || context_shot_error != ok { os.exit(63i32) }
+            let context_spot = at(context_box.x + 500.0, context_box.y + 6.0)
+            let context_rgb = u32(context_shot.pixels[context_spot]) * 65536u32 + u32(context_shot.pixels[context_spot + 1usize]) * 256u32 + u32(context_shot.pixels[context_spot + 2usize])
+            if context_step == 3usize { context_mid = context_rgb }
+            if context_step == 4usize { context_end = context_rgb }
+        }
+        context_step += 1usize
+    }
+    if context_mid == context_end { os.exit(64i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation v2 ok\n")
     ret ok
