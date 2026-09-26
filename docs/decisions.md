@@ -27138,3 +27138,9 @@ The sessions had been editing sources through ad hoc Python scripts, whose hered
 Edits the compiler can plan (a rename, an added parameter, a changed signature, a replaced expression) keep going through `plan-*-file` and `apply-plan` (D481).
 
 Built with `neper-try emit-executable tools/patch/src/main.e <repo> x64 windows build/windows/patch.exe`, it applied edits to an LF file and a CRLF file with quotes and a literal `\n`. A missing old text and a repeated one were each refused with exit 1, and the file was left untouched.
+
+## D1456 — Text areas scroll their overflow
+
+A text area stood `rows` lines tall but grew with its text and could not scroll. A multiline editor now stands in a viewport `rows` lines tall, keyed `key + 1048612`. The viewport and the editor inside it take the field's inner width, because a scroll lays out its content unbounded only along its axis; the full width had made the text layout fail. The viewport's offset keeps the caret's line in view. That line is counted from the line breaks before the caret, from the editor's selection. Under D807 the runtime takes the offset whenever it moves, and a wheel scroll in between is kept. Soft-wrapped lines are not counted (a ponytail).
+
+`ui_content` holds five lines in a two-row text area, on Windows and Linux. With the caret moved down to the last line, the viewport's offset is past the first lines. The fixture's synthetic font maps only `a`, and Ctrl+End does not move a caret, so the check uses Down. Its limits rise for the field. The check fails without the change, since no viewport exists. `ui_field` and all 103 `ui_*` fixtures pass on both hosts.

@@ -4044,6 +4044,42 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         at += 1usize
     }
     editor[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    // (D1456, docs/ux/components/TextField, text area) A multiline editor stands
+    // in a viewport `rows` lines tall (keyed `key + 1048612`) that scrolls its
+    // overflow and keeps the caret's line in view: the caret's hard line (the
+    // line breaks before it) sets the offset whenever it moves.
+    if multiline {
+        var caret_line = 0usize
+        if mem.address_of(t.runtime) != 0usize {
+            let (rs, rs_error) = widget.state_of(t.runtime)
+            if rs_error == ok {
+                let (edit_id, edit_found) = widget.find_by_key(rs, key)
+                if edit_found == 1usize {
+                    let (_, caret, has_caret) = widget.edit_selection(t.runtime, edit_id)
+                    var c = 0usize
+                    while has_caret && c < caret && c < len {
+                        if buffer[c] == 10u8 { caret_line += 1usize }
+                        c += 1usize
+                    }
+                }
+            }
+        }
+        var first_line = 0usize
+        if caret_line + 1usize > usize(options.rows) { first_line = caret_line + 1usize - usize(options.rows) }
+        // The viewport and the editor inside it take the field's inner width, as
+        // a scroll lays its content out unbounded along its axis only.
+        let inner = max_zero(options.width - 2.0 * pad_x - options.start_space - options.end_space)
+        var scrolled_style = editor_style
+        scrolled_style.width = style.Length { Px: inner }
+        let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
+        if scrolled_error != ok { ret (zero, TooLarge) }
+        scrolled[0usize] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, scrolled_style)
+        var viewport = style.defaults()
+        viewport.width = style.Length { Px: inner }
+        viewport.height = style.Length { Px: f32(options.rows) * line }
+        viewport.overflow = .Clip
+        editor[at] = widget.scroll(key + 1048612u64, widget.Scroll { axis: .Vertical, offset: f32(first_line) * line, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, viewport, scrolled[0usize..1usize])
+    }
     at += 1usize
     let (lines, lines_error) = mem.alloc[widget.Node](a, 4usize)
     if lines_error != ok { ret (zero, TooLarge) }
@@ -4327,7 +4363,10 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
 }
 
 // A text area: a multiline editor `rows` lines tall (two at least).
-// ponytail: a text area does not scroll its overflow; a viewport around it waits on the editor reporting its caret's line.
+// (D1456) It scrolls its overflow in a `rows`-line viewport that follows the
+// caret's line.
+// ponytail: soft-wrapped lines are not counted; a long wrapped line can put the
+// caret below the viewport until the next line break.
 fn text_area(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], options: FieldOptions) -> (widget.Node, err) {
     var tall = options
     if tall.rows < 2u32 { tall.rows = 2u32 }
