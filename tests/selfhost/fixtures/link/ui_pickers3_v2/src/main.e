@@ -463,10 +463,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // "Recent" before "All fonts", and a press on it picks family 2.
     var recent_families: [1]usize = zero
     recent_families[0usize] = 2usize
+    // (D1408) The fourth family is monospace.
+    var mono_flags: [4]bool = zero
+    mono_flags[3usize] = true
     var font_step = 0usize
     while font_step < 2usize {
         f = mem.arena_from(frame_storage)
-        let (recent_font, recent_font_error) = control.font_panel_with(&f, 1600u64, &theme, "Editor font", s.names[0usize..4usize], 1usize, s.faces[0usize..3usize], 0usize, false, &s.press, 13i64, s.size[0usize..8usize], "fn main() {}", widget.Change[usize] { ctx: mem.cast[*void](s), invoke: on_family }, widget.Change[usize] { ctx: mem.cast[*void](s), invoke: on_index }, zero, zero, s.query[0usize..16usize], 0usize, zero, 5u32, 520.0, recent_families[..])
+        let (recent_font, recent_font_error) = control.font_panel_with(&f, 1600u64, &theme, "Editor font", s.names[0usize..4usize], 1usize, s.faces[0usize..3usize], 0usize, false, &s.press, 13i64, s.size[0usize..8usize], "fn main() {}", widget.Change[usize] { ctx: mem.cast[*void](s), invoke: on_family }, widget.Change[usize] { ctx: mem.cast[*void](s), invoke: on_index }, zero, zero, s.query[0usize..16usize], 0usize, zero, 5u32, 520.0, recent_families[..], mono_flags[..])
         let (font_page, font_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if recent_font_error != ok || font_page_error != ok { os.exit(93i32) }
         font_page[0usize] = recent_font
@@ -474,6 +477,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         font_step += 1usize
     }
     if testing.by_text(&harness, "Recent").count == 0usize || testing.by_text(&harness, "All fonts").count == 0usize { os.exit(95i32) }
+    if testing.by_text(&harness, "Monospace").count == 0usize || testing.by_key(&harness, 1600u64 + 1048701u64).count != 1usize { os.exit(97i32) }
     let (recent_row, has_recent_row) = bounds(&harness, &runtime, 1600u64 + 1048601u64)
     if !has_recent_row || testing.tap(&harness, recent_row.x + 20.0, recent_row.y + recent_row.height * 0.5) != ok || s.family != 2usize { os.exit(96i32) }
     try io.print("ui pickers3 v2 ok\n")
