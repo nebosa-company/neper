@@ -244,6 +244,10 @@ type Graph = struct {
     // whether the image depends on it.
     jobs: usize,
     perturb: bool,
+    // (D1527, H16) `--memory-budget SIZE`: the bytes the lowering workers' arenas may
+    // reach together; zero for no budget.
+    memory_budget: usize,
+    workers_admitted: usize,
     // The instruction level the build was given (D765), for the manifest's `options`.
     cpu_level: usize,
     // What every worker arena of every phase committed, summed (D339).
@@ -284,6 +288,26 @@ fn arena_touched(arena: *mem.Arena) -> usize {
 }
 
 // A phase's worker count under `-j N`.
+// (D1527) A reservation of its own, as `reserved_arena`, of a stated capacity: a
+// worker under `--memory-budget` is held to its share.
+fn reserved_arena_sized(a: *mem.Arena, wanted: usize) -> (mem.Arena, err) {
+    var none: mem.Arena = zero
+    var capacity = wanted
+    let root = mem.stats(a).capacity - 4096usize
+    if capacity > root { capacity = root }
+    let (base, reserve_error) = os.reserve(capacity)
+    if reserve_error != ok { ret (none, reserve_error) }
+    let (cwd, cwd_error) = os.current_dir(a)
+    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 {
+        let commit_error = os.commit(base, capacity)
+        if commit_error != ok { ret (none, commit_error) }
+    }
+    var arena: mem.Arena = zero
+    arena.base = base
+    arena.cap = capacity
+    ret (arena, ok)
+}
+
 fn worker_cap(g: *Graph, most: usize) -> usize {
     if g.jobs != 0usize && g.jobs < most { ret g.jobs }
     ret most

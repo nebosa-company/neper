@@ -772,7 +772,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--overlay") || same(flag, "--cpu")
+    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--overlay") || same(flag, "--cpu")
 }
 
 // `--cpu LEVEL` (D765): section 13's x64 levels, `x64-v1` the SSE2 baseline the build
@@ -865,7 +865,7 @@ fn flags_known(args: []str) -> bool {
     while at < args.len {
         // `-- ARGS...` (D267): the program's own arguments, not the compiler's flags.
         if same(args[at], "--") { ret true }
-        if same(args[at], "--arena") {
+        if same(args[at], "--arena") || same(args[at], "--memory-budget") {
             if at + 1usize >= args.len { ret false }
             let (size, size_ok) = arena_size(args[at + 1usize])
             if !size_ok { ret false }
@@ -989,6 +989,22 @@ fn decimal_ok(spelling: str) -> bool {
 }
 
 // `-j N` (D331): the worker count asked for, none when the flag is absent.
+// `--memory-budget SIZE` (D1527, H16): as `--arena` spells a size; zero without it.
+fn memory_budget_flag(args: []str) -> usize {
+    var at = 7usize
+    while at + 1usize < args.len {
+        if same(args[at], "--") { ret 0usize }
+        if same(args[at], "--memory-budget") {
+            let (size, size_ok) = arena_size(args[at + 1usize])
+            if size_ok { ret size }
+            ret 0usize
+        }
+        if takes_value(args[at]) { at += 1usize }
+        at += 1usize
+    }
+    ret 0usize
+}
+
 fn jobs_flag(args: []str) -> usize {
     var at = 7usize
     while at + 1usize < args.len {
@@ -8649,6 +8665,9 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
             if report.timing { report.codegen_ns = report.codegen_ns -% nptest_now() }
             let codegen_error = codegen_x64.function(builder, function_at, stack_slots, context)
             if report.timing { report.codegen_ns = report.codegen_ns +% nptest_now() }
+            // A worker's arena run dry in selection is the worker's, not the program's
+            // (D1527): the generous worker does the module over (D325).
+            if codegen_error == mem.Exhausted { ret codegen_error }
             if codegen_error != ok {
                 try print_codegen_diagnostic(report, loaded, builder.functions[function_at], context, codegen_error)
                 try finish_report(report)
@@ -9169,6 +9188,23 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
 // The workers (D325, D326): eight, since twelve on the twelve-core machine this is
 // measured on lowered no faster; the arena caps how many are actually made.
 const LOWER_WORKERS: usize = 8usize
+
+// A budget under one worker's setup (D1527).
+error BudgetTooSmall
+
+// A worker's arena: the root's capacity reserved, or its share of `--memory-budget`.
+fn worker_arena(a: *mem.Arena, loaded: *graph.Graph, worker_count: usize) -> (mem.Arena, err) {
+    if loaded.memory_budget != 0usize {
+        let (share, share_error) = graph.reserved_arena_sized(a, loaded.memory_budget / worker_count)
+        ret (share, share_error)
+    }
+    let (whole, whole_error) = graph.reserved_arena(a)
+    ret (whole, whole_error)
+}
+
+// (D1527) The least arena a worker is admitted with under `--memory-budget`: an
+// eighth of what the compiler's own build reached across its eight workers, rounded.
+const WORKER_FLOOR: usize = 268435456usize
 
 // The generous worker's slot, past the last thread's: a function, since the bootstrap
 // reads a constant before `{` as an aggregate literal.
@@ -9898,6 +9934,15 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
     var worker_count = pending
     let most_workers = graph.worker_cap(loaded, LOWER_WORKERS)
     if worker_count > most_workers { worker_count = most_workers }
+    // (D1527, H16) Admission under a memory budget: as many workers as the budget
+    // gives each at least WORKER_FLOOR, each held to an equal share of it. A worker
+    // its share runs dry hands its modules to the generous worker (D325), which is
+    // the backpressure: the work is done, later and in less memory, never refused.
+    if loaded.memory_budget != 0usize {
+        var admitted = loaded.memory_budget / WORKER_FLOOR
+        if admitted == 0usize { admitted = 1usize }
+        if worker_count > admitted { worker_count = admitted }
+    }
     var order_at = 0usize
     while order_at < pending {
         var best = order_at
@@ -9973,10 +10018,11 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         // is touched, and every pool of the worker -- its builder, its stages, its
         // bindings, its oracles and its forked checker -- is taken from it, where they
         // were taken from the program's arena, sized from the program and charged whole.
-        let (arena, arena_error) = graph.reserved_arena(a)
+        let (arena, arena_error) = worker_arena(a, loaded, worker_count)
         if arena_error != ok { ret arena_error }
         workers[worker_at].arena = arena
         let (worker_bindings, bindings_error) = mem.alloc[lower.Binding](&workers[worker_at].arena, bindings.len)
+        if bindings_error == mem.Exhausted && loaded.memory_budget != 0usize { ret BudgetTooSmall }
         if bindings_error != ok { ret bindings_error }
         workers[worker_at].scale = 4usize
         workers[worker_at].share = largest_share
@@ -9984,8 +10030,14 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         // The first worker is set up and forked here, on the main thread; the others
         // set up and fork on their own threads (D402), their bindings kept for it.
         if worker_at == 0usize {
-            try init_lower_worker(&workers[worker_at].arena, &workers[worker_at], checker, loaded, resolver, report, abi, hot, held, worker_bindings, builder, release, body_skip)
-            try worker_forked(&workers[0usize], &workers[0usize].arena, checker)
+            // Under a budget, one worker's setup that does not fit its share is the
+            // budget's failure, named, not an exhausted compiler (D1527).
+            let setup_error = init_lower_worker(&workers[worker_at].arena, &workers[worker_at], checker, loaded, resolver, report, abi, hot, held, worker_bindings, builder, release, body_skip)
+            if setup_error == mem.Exhausted && loaded.memory_budget != 0usize { ret BudgetTooSmall }
+            if setup_error != ok { ret setup_error }
+            let fork_error = worker_forked(&workers[0usize], &workers[0usize].arena, checker)
+            if fork_error == mem.Exhausted && loaded.memory_budget != 0usize { ret BudgetTooSmall }
+            if fork_error != ok { ret fork_error }
         } else {
             workers[worker_at].bindings = worker_bindings
             workers[worker_at].setup_pending = true
@@ -10021,6 +10073,7 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         worker_at += 1usize
     }
     crew.count = worker_count
+    loaded.workers_admitted = worker_count
     crew.on = true
     crew.setup = WorkerSetup { loaded: loaded, checker: checker, resolver: resolver, report: report, abi: abi, hot: hot, held: held, builder: builder, release: release, body_skip: body_skip }
     ret ok
@@ -10366,8 +10419,12 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
     // the rest of its modules lowered there, after their bodies are checked there.
     worker_at = 0usize
     while worker_at < crew.count {
-        let dry = ran_dry(&crew.workers[worker_at])
-        if crew.workers[worker_at].replaced || dry {
+        // A worker replaced in the body sweep keeps the stop it ran dry at, but the
+        // generous one checked all its modules and lowers all of them (D1527: from
+        // its first, where the stop had been taken as where lowering ran dry).
+        let replaced_before = crew.workers[worker_at].replaced
+        let dry = ran_dry(&crew.workers[worker_at]) && !replaced_before
+        if replaced_before || dry {
             let generous = &crew.workers[LOWER_WORKERS]
             var from = 0usize
             if dry {
@@ -11182,6 +11239,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // A corrupt artifact named on the command line is the input's failure, not the
     // compiler's (D368, H24): it is refused and never linked.
+    if result == BudgetTooSmall {
+        code = "E-CLI-9999"
+        message = "the --memory-budget does not hold one lowering worker for this program; give it more"
+        status = 1i32
+    }
     if result == em.InvalidArtifact {
         code = "E-LINK-0001"
         message = "a compiled module is malformed or its checksum does not match: the artifact was not read; rebuild it"
@@ -11651,6 +11713,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if trailing_flags {
             loaded.jobs = jobs_flag(args)
             loaded.perturb = has_flag(args, "--perturb")
+            loaded.memory_budget = memory_budget_flag(args)
         }
         report.timing = trailing_flags && has_flag(args, "--time")
         report.build.full = trailing_flags && has_flag(args, "--stats-full")

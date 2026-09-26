@@ -892,6 +892,23 @@ be cancelled on another, which is what a harness's deadline means. `--deadline 0
 is a deadline already passed and cancels at the first checkpoint, the corpus's
 `tools/deadline` case.
 
+`--memory-budget SIZE` (D1527, H16), spelled as `--arena` spells a size, bounds
+the bytes the lowering workers' arenas may reach together.
+
+- **Admission.** A worker is admitted for each 256 MB of the budget, at least one
+  and at most the eight `-j` allows, and each gets an equal share of the budget as
+  its arena.
+- **Running dry.** A worker whose share runs dry, whether in the body sweep or in
+  lowering and selection, hands its modules to the generous worker (D325). That
+  worker does them over in the program's arena, so the image is the same and the
+  work is done later, never refused.
+- **Too small.** A budget that cannot hold one worker's setup is refused by name
+  (E-CLI-9999, exit 1).
+
+`--stats` reports `workers admitted` and `memory budget` beside `worker arenas
+reached`. The budget bounds the workers; the generous worker is bounded by
+`--arena`.
+
 `--explain` on a build (D408) also lists, after the lowering, every generic
 instance the build made as an `instance-cost` record (D453, H06): `symbol` (the
 template, `module.name`), `instance` (which of the template's instances, from

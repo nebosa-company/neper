@@ -511,6 +511,9 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
         worker_at += 1usize
     }
     try row_bytes(b, "worker arenas reached", worker_bytes)
+    // (D1527) The lowering workers admitted, and the budget they were admitted under.
+    try row_number(b, "workers admitted", g.workers_admitted)
+    try row_bytes(b, "memory budget", g.memory_budget)
     try row_unit(b, "", "executable size", b.image_bytes, "bytes", "_bytes")
     // Read here, after everything the build allocated: the process's peak so far is its
     // peak (D311).
