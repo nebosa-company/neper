@@ -1,0 +1,140 @@
+{
+ "schema": "neper-inline-cap",
+ "version": 1,
+ "host": "linux",
+ "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+ "runs": 9,
+ "caps": [
+  0,
+  20,
+  40,
+  80,
+  160
+ ],
+ "programs": [
+  {
+   "program": "sieve",
+   "same_output": true,
+   "image_bytes": {
+    "0": 18752,
+    "20": 18631,
+    "40": 18555,
+    "80": 18555,
+    "160": 18555
+   },
+   "ms_p50": {
+    "0": 313.2,
+    "20": 298.8,
+    "40": 314.0,
+    "80": 303.0,
+    "160": 294.8
+   }
+  },
+  {
+   "program": "sort",
+   "same_output": true,
+   "image_bytes": {
+    "0": 23160,
+    "20": 23039,
+    "40": 22963,
+    "80": 22827,
+    "160": 22827
+   },
+   "ms_p50": {
+    "0": 600.3,
+    "20": 608.0,
+    "40": 600.8,
+    "80": 586.6,
+    "160": 620.8
+   }
+  },
+  {
+   "program": "hash",
+   "same_output": true,
+   "image_bytes": {
+    "0": 17946,
+    "20": 17825,
+    "40": 17749,
+    "80": 17749,
+    "160": 17749
+   },
+   "ms_p50": {
+    "0": 717.4,
+    "20": 723.3,
+    "40": 739.2,
+    "80": 725.8,
+    "160": 722.9
+   }
+  },
+  {
+   "program": "records",
+   "same_output": true,
+   "image_bytes": {
+    "0": 20675,
+    "20": 20554,
+    "40": 20478,
+    "80": 20478,
+    "160": 20478
+   },
+   "ms_p50": {
+    "0": 629.9,
+    "20": 626.6,
+    "40": 630.4,
+    "80": 624.9,
+    "160": 642.3
+   }
+  }
+ ],
+ "compiler": [
+  {
+   "cap": 0,
+   "image_bytes": 7476064,
+   "debug_build_ms_p50": 866.4,
+   "debug_build_ms_range": [
+    781.7,
+    1015.2
+   ],
+   "fixed_point": true
+  },
+  {
+   "cap": 20,
+   "image_bytes": 7655144,
+   "debug_build_ms_p50": 787.8,
+   "debug_build_ms_range": [
+    729.4,
+    965.5
+   ],
+   "fixed_point": true
+  },
+  {
+   "cap": 40,
+   "image_bytes": 8054136,
+   "debug_build_ms_p50": 753.0,
+   "debug_build_ms_range": [
+    677.2,
+    854.2
+   ],
+   "fixed_point": true
+  },
+  {
+   "cap": 80,
+   "image_bytes": 9728568,
+   "debug_build_ms_p50": 958.4,
+   "debug_build_ms_range": [
+    879.9,
+    1123.5
+   ],
+   "fixed_point": true
+  },
+  {
+   "cap": 160,
+   "image_bytes": 10738296,
+   "debug_build_ms_p50": 1084.8,
+   "debug_build_ms_range": [
+    964.1,
+    1838.1
+   ],
+   "fixed_point": true
+  }
+ ]
+}

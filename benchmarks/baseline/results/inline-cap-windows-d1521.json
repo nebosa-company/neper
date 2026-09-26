@@ -1,0 +1,140 @@
+{
+ "schema": "neper-inline-cap",
+ "version": 1,
+ "host": "windows",
+ "platform": "Windows-11-10.0.26200-SP0",
+ "runs": 9,
+ "caps": [
+  0,
+  20,
+  40,
+  80,
+  160
+ ],
+ "programs": [
+  {
+   "program": "sieve",
+   "same_output": true,
+   "image_bytes": {
+    "0": 20992,
+    "20": 20992,
+    "40": 20992,
+    "80": 20992,
+    "160": 20992
+   },
+   "ms_p50": {
+    "0": 331.0,
+    "20": 383.5,
+    "40": 359.3,
+    "80": 330.6,
+    "160": 347.4
+   }
+  },
+  {
+   "program": "sort",
+   "same_output": true,
+   "image_bytes": {
+    "0": 25600,
+    "20": 25088,
+    "40": 25088,
+    "80": 25088,
+    "160": 25088
+   },
+   "ms_p50": {
+    "0": 568.6,
+    "20": 569.0,
+    "40": 567.7,
+    "80": 574.3,
+    "160": 580.0
+   }
+  },
+  {
+   "program": "hash",
+   "same_output": true,
+   "image_bytes": {
+    "0": 19968,
+    "20": 19968,
+    "40": 19968,
+    "80": 19968,
+    "160": 19968
+   },
+   "ms_p50": {
+    "0": 577.7,
+    "20": 580.2,
+    "40": 582.4,
+    "80": 580.4,
+    "160": 586.9
+   }
+  },
+  {
+   "program": "records",
+   "same_output": true,
+   "image_bytes": {
+    "0": 23040,
+    "20": 23040,
+    "40": 22528,
+    "80": 22528,
+    "160": 22528
+   },
+   "ms_p50": {
+    "0": 619.0,
+    "20": 617.6,
+    "40": 616.0,
+    "80": 606.5,
+    "160": 612.4
+   }
+  }
+ ],
+ "compiler": [
+  {
+   "cap": 0,
+   "image_bytes": 7526912,
+   "debug_build_ms_p50": 479.3,
+   "debug_build_ms_range": [
+    449.2,
+    487.9
+   ],
+   "fixed_point": true
+  },
+  {
+   "cap": 20,
+   "image_bytes": 7707136,
+   "debug_build_ms_p50": 509.9,
+   "debug_build_ms_range": [
+    490.5,
+    565.6
+   ],
+   "fixed_point": true
+  },
+  {
+   "cap": 40,
+   "image_bytes": 8101376,
+   "debug_build_ms_p50": 504.7,
+   "debug_build_ms_range": [
+    493.1,
+    592.5
+   ],
+   "fixed_point": true
+  },
+  {
+   "cap": 80,
+   "image_bytes": 9775616,
+   "debug_build_ms_p50": 494.5,
+   "debug_build_ms_range": [
+    476.5,
+    519.6
+   ],
+   "fixed_point": true
+  },
+  {
+   "cap": 160,
+   "image_bytes": 10785280,
+   "debug_build_ms_p50": 499.1,
+   "debug_build_ms_range": [
+    474.8,
+    583.3
+   ],
+   "fixed_point": true
+  }
+ ]
+}

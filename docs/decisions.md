@@ -27615,3 +27615,24 @@ H20 asks for measurements of allocations, among others. It also asks that a tran
 `--stats` now counts the `allocation sites` in the functions a build lowered: every call of the runtime's arena allocation, which is what `mem.alloc` lowers to (`neper_mem_alloc`, or `neper_mem_alloc_fill` in a debug build). A site is counted once however often it runs. It is a static count: the arena is a bump allocator, and counting every run would add work to the generated code. An inlined copy counts where it lands. The row sits beside `functions lowered` and has the same meaning on a warm build, where kept modules are not counted. A program with three `mem.alloc` calls reports 28 sites on Windows in debug and 30 in release, where the one function that allocates twice is inlined into `main`; one more call makes 29. The rest of the 28 are the library modules the program lowers. The `stats` record carries `allocation_sites` and still validates.
 
 `--explain` on an executable build ends its explanations with a `transformation` record: `name` `vectorize`, `decision` `unavailable`, and why (automatic vectorisation is not scheduled, and `Vec` and `Mask` lower lane by lane). Plain, it is a line on stderr. The schema gains the record, and the `explain_instances` conformance streams gain the line on both hosts. They reproduce byte for byte. The self-host fixed point holds on Windows and Linux.
+
+## D1521 — The inlining cap against GP-01 and the M2 CPU workloads
+
+D346 kept the forty-instruction inlining cap on one workload and deferred the next re-evaluation to "the GP workloads when they exist". Of the GP workloads, only GP-01, the compiler itself, exists as a program. The hardening plan names GP-01 plus the applicable M2 CPU workloads for H20, which are `benchmarks/cpu`'s sieve, sort, hash and records. `benchmarks/baseline/inline_cap.py` measures the cap against them.
+
+- **Programs:** each CPU program is built in release as shipped under caps 0, 20, 40, 80 and 160. Its image size is recorded, and it runs nine times after a warm-up; every run's output must match the others'.
+- **Compiler:** GP-01 is built under each cap. Its image size is recorded, along with the median of nine runs of one fixed job: a debug build of the compiler, which inlines nothing, so only the capped compiler's own code speed differs. The capped compiler must also build itself under its cap to the same bytes.
+
+Results are in `benchmarks/baseline/results/inline-cap-{windows,linux}-d1521.json`.
+
+| cap | GP-01 image (Windows) | GP-01 job, Windows | GP-01 job, Linux |
+|---|---|---|---|
+| 0 | 7,526,912 B | 479 ms | 866 ms |
+| 20 | 7,707,136 B | 510 ms | 788 ms |
+| 40 | 8,101,376 B | 505 ms | 753 ms |
+| 80 | 9,775,616 B | 494 ms | 958 ms |
+| 160 | 10,785,280 B | 499 ms | 1,085 ms |
+
+The CPU programs do not respond to the cap. Their few calls are in loops over arrays, and every cap is within the run-to-run noise (about ±5 %) on both hosts. Their images differ by at most a few hundred bytes. On Windows the compiler job is flat within its noise. On Linux, where the job runs longer, 40 is the fastest cap and 80 and above are slower, while each doubling past 40 adds a fifth to a third more image. Every cap's compiler reaches its fixed point.
+
+Forty is retained. It is never measurably slower, it is the fastest where any cap matters, and it costs 7.6 % more image than no inlining. The versioned budget beside it: on GP-01 the cap-40 image stays within 10 % of the cap-0 image, and the cap-40 fixed job is no slower than cap 0's beyond the run-to-run range. `inline_cap.py` is how the next re-evaluation reruns this, with this table as the baseline, when another GP workload exists as a program.
