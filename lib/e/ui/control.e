@@ -3519,7 +3519,19 @@ fn eased_emphasized(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f3
 }
 
 fn eased_on_curve(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32, forward: bool, millis: u32, emphasized: bool) -> f32 {
-    if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret goal }
+    if t.tokens.motion.reduced { ret goal }
+    ret eased_core(t, key, slot, goal, forward, millis, emphasized)
+}
+
+// (D1489) A cross-fade that runs under reduced motion too, where the spec swaps
+// a movement for a fade: `eased_on` on the standard curve without the reduced
+// short cut.
+fn faded_on(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32, millis: u32) -> f32 {
+    ret eased_core(t, key, slot, goal, false, millis, false)
+}
+
+fn eased_core(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32, forward: bool, millis: u32, emphasized: bool) -> f32 {
+    if mem.address_of(t.runtime) == 0usize { ret goal }
     let (s, state_error) = widget.state_of(t.runtime)
     if state_error != ok { ret goal }
     let (id, found) = widget.find_by_key(s, key)
