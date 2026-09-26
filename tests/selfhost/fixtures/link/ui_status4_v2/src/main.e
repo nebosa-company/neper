@@ -105,7 +105,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 2048usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 2048usize, state_classes: 8u16, max_depth: 32u16, max_commands: 2048usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -207,9 +207,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         enter_step += 1usize
     }
+    // (D1480) Dismissed, it leaves fading out: 100 ms on it still stands (its
+    // action there, its surface not the full `inverse-surface`); a second on it
+    // is gone.
+    var leave_step = 0usize
+    while leave_step < 5usize {
+        var leave_at = 40500000001i64
+        if leave_step >= 1usize { leave_at = 40600000000i64 }
+        if leave_step >= 3usize { leave_at = 41600000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: leave_at }) != ok { os.exit(41i32) }
+        f = mem.arena_from(frame_storage)
+        let (leaving, leaving_error) = control.snackbar(&f, 770u64, &theme, s.notices[0usize..0usize], 320.0)
+        let (leave_page, leave_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if leaving_error != ok || leave_page_error != ok { os.exit(42i32) }
+        leave_page[0usize] = leaving
+        var leave_ground = control.sized_style(640.0, 400.0)
+        leave_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.box(0u64, leave_ground, leave_page[0usize..1usize]), time.Instant { nanos: leave_at }) != ok { os.exit(43i32) }
+        let still = testing.by_key(&harness, 771u64).count
+        if leave_step == 2usize {
+            let (leave_box, has_leave_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 771u64).element)
+            let (leave_shot, leave_shot_error) = testing.snapshot(&harness, a)
+            if still != 1usize || !has_leave_box || leave_shot_error != ok { os.exit(44i32) }
+            if is_color(leave_shot, at(leave_box.x - 20.0, leave_box.y + leave_box.height * 0.5), full_ink) { os.exit(45i32) }
+        }
+        if leave_step == 4usize && still != 0usize { os.exit(46i32) }
+        leave_step += 1usize
+    }
     // (D1394) In a compact window, 360 wide, the snackbar spans it less 16 a
     // side: its surface at 20 and at 340 across, the ground at 8.
-    let (compact_rt, compact_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 2048usize })
+    let (compact_rt, compact_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 2048usize, state_classes: 8u16, max_depth: 32u16, max_commands: 2048usize })
     if compact_runtime_error != ok { os.exit(34i32) }
     var compact_runtime = compact_rt
     let compact_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &compact_runtime }

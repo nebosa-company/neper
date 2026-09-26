@@ -6347,7 +6347,7 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
 // (D1464) `SplitOptions.stack` folds it into a stack where both minimums do not
 // fit.
 // (D1472) `SplitOptions.ratio` keeps the divider's share across resizes.
-// ponytail: no empty-detail slot.
+// The empty detail is the caller's `second` (`empty_state_of`, centred).
 fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err) {
     var plain: SplitOptions = zero
     let (made, made_error) = split_view_with(a, key, t, label, axis, first, second, position, min_first, min_second, change, width, height, plain)
@@ -8598,8 +8598,22 @@ fn glyph_action(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // (D1287) It enters fading in and rising 8.
 // (D1394) In a compact window it spans the width less 16 a side.
 // (D1467) A message and action that do not fit on one line stand two.
-// ponytail: exit motion, the toast's title and severity well wait on a richer
-// Notice; the toast's stack of three shows the head alone.
+// (D1480) A dismissed notice leaves fading out and sinking 8.
+// ponytail: the toast's title and severity well wait on a richer Notice; the
+// toast's stack of three shows the head alone; a leaving notice keeps 120 bytes
+// of its text and 24 of its action.
+// (D1480) The last notice shown, kept on the surface so it can leave after the
+// caller drops it.
+type NoticeGhost = struct { text: [120]u8, text_len: usize, label: [24]u8, label_len: usize, set: bool }
+
+// (D1480) The first `copied` bytes of `source`, cut back to a whole UTF-8
+// character when the copy stopped inside one.
+fn whole_chars(source: str, copied: usize) -> usize {
+    if copied >= source.len { ret copied }
+    var n = copied
+    while n > 0usize && (source[n] & 192u8) == 128u8 { n -= 1usize }
+    ret n
+}
 // (D1278) A notice's countdown, kept on its surface across frames: which notice
 // it counts for, how long it has shown unpaused, the last frame's time, and
 // whether it has fired.
@@ -8664,11 +8678,54 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
     // shows it at once.
     var entry_goal: f32 = 0.0
     if notices.len > 0usize { entry_goal = 1.0 }
-    let entered = eased_on(t, key + 8192u64, key + 8193u64, entry_goal, true, t.tokens.durations.medium1)
-    if notices.len == 0usize { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
-    let head = &notices[0usize]
-    let timed = notice_timeout(t, key, head, bottom)
-    if timed != ok { ret (zero, timed) }
+    var entered = eased_on(t, key + 8192u64, key + 8193u64, entry_goal, true, t.tokens.durations.medium1)
+    // (D1480, docs/ux/components/Snackbar, motion) A dismissed notice leaves over
+    // `duration-short-4` on `ease-emphasized-accelerate`, fading out and sinking
+    // 8, drawn from the copy kept while it showed (slot `key + 8195`), its
+    // buttons inert. Reduced motion removes it at once.
+    let leave = eased_emphasized(t, key + 8192u64, key + 8194u64, entry_goal, false, t.tokens.durations.short4)
+    var ghost: *NoticeGhost = zero
+    var has_ghost = false
+    if mem.address_of(t.runtime) != 0usize {
+        let (gs, gs_error) = widget.state_of(t.runtime)
+        if gs_error == ok {
+            let (surface_id, surface_found) = widget.find_by_key(gs, key + 8192u64)
+            if surface_found == 1usize {
+                var ghost_build = widget.BuildContext { runtime: t.runtime, element: surface_id, frame: 0u64 }
+                var fresh_ghost: NoticeGhost = zero
+                let (kept_ghost, _, kept_ghost_error) = widget.state[NoticeGhost](&ghost_build, key + 8195u64, fresh_ghost)
+                if kept_ghost_error == ok {
+                    ghost = kept_ghost
+                    has_ghost = true
+                }
+            }
+        }
+    }
+    // The notice drawn lives in the frame's arena: its buttons keep pointers to
+    // its actions.
+    let (held_notice, held_notice_error) = mem.alloc[Notice](a, 1usize)
+    if held_notice_error != ok { ret (zero, TooLarge) }
+    let shown_notice = &held_notice[0usize]
+    var inert: Notice = zero
+    *shown_notice = inert
+    if notices.len > 0usize {
+        *shown_notice = notices[0usize]
+        if has_ghost {
+            ghost.text_len = whole_chars(shown_notice.text, copy_text(ghost.text[0usize..120usize], shown_notice.text))
+            ghost.label_len = whole_chars(shown_notice.action_label, copy_text(ghost.label[0usize..24usize], shown_notice.action_label))
+            ghost.set = true
+        }
+    } else {
+        if !has_ghost || !ghost.set || leave <= 0.0 { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
+        shown_notice.text = ghost.text[0usize..ghost.text_len]
+        shown_notice.action_label = ghost.label[0usize..ghost.label_len]
+        entered = leave
+    }
+    let head = shown_notice
+    if notices.len > 0usize {
+        let timed = notice_timeout(t, key, head, bottom)
+        if timed != ok { ret (zero, timed) }
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var at = 0usize
