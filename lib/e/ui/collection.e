@@ -5191,7 +5191,29 @@ type PropertyStatus = struct { modified: bool, message: str }
 // (none when both are empty); the filter field's buffer, length and change (no
 // field unless `has_filter`); and each property's status with the reset that
 // sets one back to its default by index (neither unless `has_status`).
-type PropertyGridOptions = struct { kind: str, name: str, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool, status: fn(*void, usize) -> PropertyStatus, has_status: bool, reset: widget.Change[usize] }
+// (D1544) `selected` is the property row (by key) picked for docs or binding;
+// `divide` hears the name column's divider dragged: the new name width.
+type PropertyGridOptions = struct { kind: str, name: str, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool, status: fn(*void, usize) -> PropertyStatus, has_status: bool, reset: widget.Change[usize], selected: widget.Key, divide: widget.Change[f32] }
+
+// (D1544) A property grid's divider drag: the name width is the pointer's
+// distance from the grid's (keyed `grid`) start, at least 96 and at most 60% of
+// `width`.
+type PropertyDivide = struct { runtime: *widget.Runtime, grid: widget.Key, width: f32, divide: widget.Change[f32] }
+
+fn property_divide_drag(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*PropertyDivide](ctx)
+    switch g {
+    case .DragMove as moved:
+        let (area, has_area) = keyed_bounds_of(d.runtime, d.grid)
+        if !has_area { ret ok }
+        var named = moved.position.x - area.x
+        if named > d.width * 0.6 { named = d.width * 0.6 }
+        if named < 96.0 { named = 96.0 }
+        ret widget.fire_change[f32](d.divide, named)
+    default:
+        ret ok
+    }
+}
 
 fn property_grid_options() -> PropertyGridOptions {
     var out: PropertyGridOptions = zero
@@ -5237,9 +5259,10 @@ fn contains_folded(hay: str, needle: []const u8) -> bool {
 // `reset`; a message stands under the editor in `body-small` `error` after a
 // 16 `error` icon, and the row grows.
 // (D1453) A modified name asks for a 600 face.
-// ponytail: read-only
-// and Mixed values are the caller's
-// editors; no draggable column divider, selected row or touch list form.
+// (D1544) `selected` marks its row `secondary-container`, and with `divide` each
+// row's seam drags the name column's width.
+// ponytail: read-only and Mixed values are the caller's editors; the divider
+// has no resize cursor or keyboard path; no touch list form.
 fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32, options: PropertyGridOptions) -> (widget.Node, err) {
     let total = source.count(source.ctx)
     if total > 256usize { ret (zero, TooLarge) }
@@ -5347,6 +5370,18 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     let (pair, pair_error) = mem.alloc[widget.Node](a, 3usize)
                     if pair_error != ok { ret (zero, TooLarge) }
                     pair[0usize] = widget.semantics(0u64, name_sem, name_style, named[0usize..1usize])
+                    if widget.change_set[f32](options.divide.invoke) {
+                        // (D1544) The divider: an 8 wide drag region over the seam
+                        // (keyed `key + 600 + index`).
+                        let (dividing, dividing_error) = mem.alloc[PropertyDivide](a, 1usize)
+                        let (seam, seam_error) = mem.alloc[widget.Node](a, 3usize)
+                        if dividing_error != ok || seam_error != ok { ret (zero, TooLarge) }
+                        dividing[0usize] = PropertyDivide { runtime: t.runtime, grid: key, width: width, divide: options.divide }
+                        seam[0usize] = pair[0usize]
+                        seam[2usize] = widget.region(key + 600u64 + u64(r), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&dividing[0usize]), invoke: property_divide_drag }, gestures: widget.GESTURE_DRAG, enabled: true, focusable: false }, control.sized_style(8.0, row_min), zero)
+                        seam[1usize] = widget.positioned(0u64, name_width - 4.0, 0.0, style.defaults(), seam[2usize..3usize])
+                        pair[0usize] = widget.stack(0u64, style.defaults(), seam[0usize..2usize])
+                    }
                     var editor: widget.Node = zero
                     let editor_error = source.editor(source.ctx, a, r, &editor)
                     if editor_error != ok { ret (zero, editor_error) }
@@ -5396,6 +5431,8 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     line_style.width = style.Length { Px: width }
                     line_style.min_height = style.Length { Px: row_min }
                     line_style.padding = style.EdgeLengths { left: flat, top: flat, right: style.Length { Px: 8.0 }, bottom: flat }
+                    // (D1544) The selected row on `secondary-container`.
+                    if options.selected != 0u64 && p.key == options.selected { line_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }
                     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
                     if lined_error != ok { ret (zero, TooLarge) }
                     lined[0usize] = widget.flex(p.key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, pair[0usize..parts_in_row])

@@ -53,6 +53,16 @@ fn on_pair_edit(ctx: *void, value: collection.PairEdit) -> err {
     ret ok
 }
 
+// (D1544) A property grid's divider reports: how many, and the last width.
+type DivideLog = struct { count: usize, width: f32 }
+
+fn on_divide(ctx: *void, value: f32) -> err {
+    let log = mem.cast[*DivideLog](ctx)
+    log.count += 1usize
+    log.width = value
+    ret ok
+}
+
 // (D1260) A tap on the middle of the element keyed `key`.
 fn tap_bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bool {
     let (b, found) = bounds(h, runtime, key)
@@ -417,6 +427,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !(add_before - add_after > 40.0) { os.exit(74i32) }
     if testing.by_label(&harness, "Add variable").count == 0usize { os.exit(47i32) }
+    // (D1544) A property grid with Age selected: its row on
+    // `secondary-container`, Name's not; dragging the first row's picked_seam 60 on
+    // reports a name column 188 wide.
+    var grid_log: Log = zero
+    var divide_log = DivideLog { count: 0usize, width: 0.0 }
+    var picked = collection.property_grid_options()
+    picked.selected = 102u64
+    picked.divide = widget.Change[f32] { ctx: mem.cast[*void](&divide_log), invoke: on_divide }
+    f = mem.arena_from(storage)
+    var no_collapsed: []const widget.Key = zero
+    let (picked_grid, picked_error) = collection.property_grid_of(&f, 1200u64, &theme, "Properties", collection.PropertySource { ctx: mem.cast[*void](&grid_log), count: property_count, property: property_at, editor: property_editor }, no_collapsed, widget.Change[widget.Key] { ctx: mem.cast[*void](&grid_log), invoke: on_toggle }, 128.0, 320.0, picked)
+    let (picked_page, picked_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if picked_error != ok || picked_page_error != ok { os.exit(75i32) }
+    picked_page[0usize] = picked_grid
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(420.0, 700.0), picked_page[0usize..1usize]), time.Instant { nanos: 37000000000i64 }) != ok { os.exit(75i32) }
+    let (picked_age, has_picked_age) = bounds(&harness, &runtime, 102u64)
+    let (picked_name, has_picked_name) = bounds(&harness, &runtime, 101u64)
+    let (picked_shot, picked_shot_error) = testing.snapshot(&harness, a)
+    if !has_picked_age || !has_picked_name || picked_shot_error != ok { os.exit(76i32) }
+    let chosen_ground = style.color(&tokens, .SecondaryContainer)
+    if !is_color(picked_shot, at(picked_age.x + 4.0, picked_age.y + 2.0), chosen_ground) || is_color(picked_shot, at(picked_name.x + 4.0, picked_name.y + 2.0), chosen_ground) { os.exit(77i32) }
+    let (picked_seam, has_picked_seam) = bounds(&harness, &runtime, 1800u64)
+    if !has_picked_seam { os.exit(78i32) }
+    let seam_from = geometry.Point { x: picked_seam.x + picked_seam.width * 0.5, y: picked_seam.y + picked_seam.height * 0.5 }
+    if testing.drag(&harness, seam_from, geometry.Point { x: seam_from.x + 60.0, y: seam_from.y }, 4usize) != ok || divide_log.count == 0usize || !(divide_log.width > 180.0) || !(divide_log.width < 196.0) { os.exit(79i32) }
     // (D1314) Text mode: the pairs written one a line; parsed back, blank lines
     // and comments pass and a line with no `=` is named; the Text segment fires
     // the switch, and in text mode the area stands with its hint.
