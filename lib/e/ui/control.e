@@ -817,8 +817,8 @@ fn account_hash(id: str) -> u32 {
 // hollow `outline` ring 2 wide. The name carries the presence ("Ada, online").
 // (D1227) `avatar_group` overlaps several.
 // (D1253) With `options.action` a single avatar is pressable.
-// ponytail: 32's initials are label-large 14 (the ramp has no 13); no
-// cross-fade from initials to the photo.
+// (D1393) A photo arriving over initials fades in.
+// ponytail: 32's initials are label-large 14 (the ramp has no 13).
 // (D1227, docs/ux/components/Avatar, group) Up to three of `faces` (pictured
 // by `textures` where given) overlapped by a quarter of their size, each ringed 2
 // in the first face's ground, then, when `total` counts more, a neutral "+n" disc
@@ -942,7 +942,14 @@ fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Tex
     var ink: style.ColorRole = .OnSurfaceVariant
     let (content, content_error) = mem.alloc[widget.Node](a, 2usize)
     if content_error != ok { ret (zero, TooLarge) }
-    if pictured {
+    // (D1393, docs/ux/components/Avatar) A photo that arrives over initials fades
+    // in over them across `duration-medium-1` (kept on the avatar, slot
+    // `key + 1048001`); one there from the first frame shows at once.
+    var photo_goal: f32 = 0.0
+    if pictured { photo_goal = 1.0 }
+    let photo_shown = eased_on(t, key, key + 1048001u64, photo_goal, true, t.tokens.durations.medium1)
+    let fading_in = pictured && photo_shown < 1.0 && options.initials.len != 0usize
+    if pictured && !fading_in {
         content[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: .Cover }, sized_style(size, size))
     } else {
         if options.initials.len != 0usize {
@@ -977,6 +984,16 @@ fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Tex
             content[1usize] = square
         }
         content[0usize] = widget.aligned(0u64, .Center, .Center, sized_style(size, size), content[1usize..2usize])
+        if fading_in {
+            let (faded, faded_error) = mem.alloc[widget.Node](a, 3usize)
+            if faded_error != ok { ret (zero, TooLarge) }
+            var veil = sized_style(size, size)
+            veil.opacity = photo_shown
+            faded[2usize] = widget.image(0u64, widget.Image { texture: texture, fit: .Cover }, sized_style(size, size))
+            faded[0usize] = content[0usize]
+            faded[1usize] = widget.box(0u64, veil, faded[2usize..3usize])
+            content[0usize] = widget.stack(0u64, sized_style(size, size), faded[0usize..2usize])
+        }
     }
     disc.background = paint.Brush { Solid: style.color(t.tokens, ground) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)

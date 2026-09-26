@@ -459,6 +459,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let face_box = bounds(&harness, &runtime, 731u64)
     let profile_before = s.retries
     if profile_buttons != 1usize || !(face_box.width > 39.5) || testing.tap(&harness, face_box.x + 20.0, face_box.y + 20.0) != ok || s.retries != profile_before + 1u32 { os.exit(108i32) }
+    // (D1393) A photo arriving over "BK": 50 ms in the initials still stand under
+    // it; a second later only the photo is left.
+    var arriving = control.avatar_options()
+    arriving.initials = "BK"
+    arriving.account = "bea"
+    arriving.label = "Bea Kay"
+    var arrive_step = 0usize
+    while arrive_step < 5usize {
+        var arrive_at = 3000000000i64 + i64(arrive_step) * 16000000i64
+        if arrive_step == 3usize { arrive_at = 3082000000i64 }
+        if arrive_step == 4usize { arrive_at = 4000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: arrive_at }) != ok { os.exit(60i32) }
+        var shown_face = no_face
+        if arrive_step >= 2usize { shown_face = texture }
+        fr = mem.arena_from(frame_storage)
+        let (arrive_face, arrive_face_error) = control.avatar_of(&fr, 740u64, &theme, shown_face, arriving)
+        let (arrive_page, arrive_page_error) = mem.alloc[widget.Node](&fr, 1usize)
+        if arrive_face_error != ok || arrive_page_error != ok { os.exit(61i32) }
+        arrive_page[0usize] = arrive_face
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 520.0), arrive_page[0usize..1usize]), time.Instant { nanos: arrive_at }) != ok { os.exit(62i32) }
+        let initials_left = testing.by_text(&harness, "BK").count
+        if arrive_step == 3usize && initials_left == 0usize { os.exit(63i32) }
+        if arrive_step == 4usize && initials_left != 0usize { os.exit(64i32) }
+        arrive_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui content v2 ok\n")
     ret ok
