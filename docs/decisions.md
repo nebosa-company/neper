@@ -27563,3 +27563,16 @@ A module rebuilt because an edge did not hold (`edge-changed`) now keeps its art
 One input was indexed module-wide. An instruction's inline origin is the head of its chain in the module's table of inlined bodies, and an edit that changes what an earlier function inlines shifts every later origin. Selection only compares two origins (a line row is new when its origin differs from the last row's), so the identity now takes each origin relative to the function's least. That preserves every comparison selection makes.
 
 The compiler builds itself in release. A body edit to `lex.column_of`, which `main` and `tool` inline, rebuilds `lex` for its source and the other two for their body edges. 554 of their 561 lowered functions are reused: 471 of 561 before origins were taken relative. The two `main.e` edits of D1515 reuse the same counts in release as in debug. Each warm image is byte-identical to a clean build of the same mode, on Windows and Linux. The hot fixture cases hold in both modes, and the self-host fixed point holds on both hosts.
+
+## D1517 — C036 closes as H14's v1 precursor
+
+C036 is H14's v1 precursor, and its task file gave two remaining lines: declarations from the Interface instead of a lexed tree, and reuse inside a rebuilt module. Both have landed. D1511 and D1514 declare a stable import from its artifact, globals included. D1515 and D1516 reuse unchanged function emission and relocation descriptions when every input selection reads is equal, in both modes and whatever the reason a module is rebuilt.
+
+The two limits the evidence kept listing are how the build works, not gaps in those lines:
+
+- **A generic template's body is its instances' input.** `check_instance` checks each instance from the template module's tree (D821, D138). A module that declares templates therefore keeps its header tree, which holds their bodies. That tree is parsed on the main thread before the body workers start, and it is read-only afterwards. Decoding such a module's other declarations would parse it anyway. Parsing its text on demand in a body worker would race on `graph.parsed`, the graph's shared one-module parse cache.
+- **A release build's oracle inlines from bodies.** D421's header trees keep the short bodies it inlines. An Interface records signatures, so a stable import in release keeps its header tree. Emission reuse still runs in release (D1516).
+
+What H14 lists beyond the precursor belongs to T2 H14: per-function queries for type checking and lowering, and early cutoff inside a module's check. Those are not partial C036 work.
+
+C036 closes at 1.
