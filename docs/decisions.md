@@ -27576,3 +27576,9 @@ The two limits the evidence kept listing are how the build works, not gaps in th
 What H14 lists beyond the precursor belongs to T2 H14: per-function queries for type checking and lowering, and early cutoff inside a module's check. Those are not partial C036 work.
 
 C036 closes at 1.
+
+## D1518 — The instruction level pinned in the incremental identity
+
+C043's gap clause named CPU features in the identity. D765 had already put the instruction level in the compiler identity's top byte, beside D431's inline cap. Nothing pinned it on the incremental path, and the queue never recorded it.
+
+Verified on the incremental fixture, debug and release, on Windows and Linux: a warm build under `--cpu x64-v3` over x64-v1 artifacts rebuilds every module as `options-changed` and is byte-identical to a clean v3 build. The plain warm build after it rebuilds every module back and is the clean v1 build. The cache filename is the same for both levels, and the identity is what keeps them apart, which is what H15 asks for "even where today's cache filename would collide". Both suites now assert this sequence after the inline-cap case.
