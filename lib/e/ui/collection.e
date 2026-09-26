@@ -5547,6 +5547,43 @@ fn pair_reveal_fire(ctx: *void) -> err {
     ret widget.fire_change[usize](r.reveal, r.index)
 }
 
+// (D1536, docs/ux/components/KeyValueEditor, secret) A shown secret stays shown
+// while its value field (`field`) has focus, and for 30 s of the rest: then its
+// reveal fires once with the pair so the caller hides it. The time is kept at the
+// Show value toggle (`key`) and starts over when the value is hidden.
+type RevealTimer = struct { shown: i64, last: i64, fired: bool }
+
+fn reveal_timeout(t: *const control.Theme, key: widget.Key, field: widget.Key, index: usize, revealed: bool, reveal: widget.Change[usize]) -> err {
+    if mem.address_of(t.runtime) == 0usize { ret ok }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret ok }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize {
+        if revealed { widget.request_animation_frame(t.runtime) }
+        ret ok
+    }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: RevealTimer = zero
+    let (timer, _, timer_error) = widget.state[RevealTimer](&build, key, fresh)
+    if timer_error != ok { ret ok }
+    let now = widget.frame_time(t.runtime).nanos
+    if !revealed {
+        timer.shown = 0i64
+        timer.last = now
+        timer.fired = false
+        ret ok
+    }
+    if !widget.focus_within(t.runtime, field) && now > timer.last && timer.last != 0i64 { timer.shown += now - timer.last }
+    timer.last = now
+    if timer.fired { ret ok }
+    if timer.shown >= 30000000000i64 {
+        timer.fired = true
+        ret widget.fire_change[usize](reveal, index)
+    }
+    widget.request_animation_frame(t.runtime)
+    ret ok
+}
+
 // (D1353, docs/ux/components/KeyValueEditor, removed) The snackbar notice a
 // removal raises: "NAME removed" ("Variable removed" when the name is empty)
 // with an Undo action; the snackbar's live status reads it out. Putting the
@@ -5611,8 +5648,8 @@ fn joined(a: *mem.Arena, first: str, second: str, third: []const u8) -> (str, er
 // (D1327) The ordered variant (`KeyValueOptions.ordered`).
 // (D1353) Removal's Undo notice (`pair_removed_notice`).
 // (D1460) Identifier names stand in the `code` face.
-// ponytail: the removed row's collapse, the 30 s reveal limit or the touch list
-// form.
+// (D1536) A shown secret hides after 30 s without focus in its value field.
+// ponytail: the removed row's collapse or the touch list form.
 fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
     if pairs.len > 128usize { ret (zero, TooLarge) }
     if options.text_mode {
@@ -5715,6 +5752,8 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         if toggled {
             reveals[i] = PairReveal { index: i, reveal: options.reveal }
             reveal_presses[i] = widget.Submit { ctx: ctx_of(&reveals[i]), invoke: pair_reveal_fire }
+            let timed_error = reveal_timeout(t, key + 1048576u64 + u64(i), key + 2u64 + 3u64 * u64(i), i, revealed, options.reveal)
+            if timed_error != ok { ret (zero, timed_error) }
             var eye: control.GlyphKind = .Visibility
             if revealed { eye = .VisibilityOff }
             let (shower, shower_error) = glyph_in(a, key + 1048576u64 + u64(i), t, eye, "Show value", &reveal_presses[i], field_h, control.if_else(dense, t.tokens.sizes.icon_sm, t.tokens.sizes.icon_md), control.with_alpha(style.color(t.tokens, .OnSurface), 0.0), muted, false, true)

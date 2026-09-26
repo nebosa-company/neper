@@ -27838,3 +27838,11 @@ The Snackbar spec stacks toasts "8 apart, newest on top, max 3; older ones colla
 The toast column now shows up to three toasts: the head, then the next two under it, 8 apart. Each of those is `stacked_toast`, keyed `key + 16 + 8 * j` with its action and close one and two above: the toast's 340 `surface-container-high` sheet, `radius-md`, elevation 3, its message in `body-medium` `on-surface-variant`, its action a text button in `primary`, its close, and a polite status named by its message. Its notice is held in the frame so its buttons outlive the build. Only the notices past three collapse into the count pill (`key + 3`) under the stack, "1 more notification" or "N more notifications".
 
 `ui_status4_v2` changes with the design. With two notices the second toast stands under the head and there is no count. With five, the third toast ("Sync finished") stands 340 wide, the fourth is not drawn, and "2 more notifications" sits under the stack. The old library shows a count for two (exit 54). All 103 ui_* fixtures pass on Windows and Linux.
+
+## D1536 — A shown secret hides after 30 s
+
+The KeyValueEditor spec says a secret value's Show value toggle "reveals for as long as the field has focus or 30 s". D1260 showed the value while the caller's `shown` flag held, for as long as the caller kept it; the `ponytail:` marker on `key_value_editor_of` named the 30 s limit as missing.
+
+`reveal_timeout` keeps a `RevealTimer` at the Show value toggle (`key + 1048576 + i`). While the value is shown it counts the frame time that passes while the value field (`key + 2 + 3i`) does not hold focus, and asks for frames meanwhile. At 30 s it fires the editor's `reveal` with the pair, once, so the caller hides it the way a press would. A hidden value starts the count over. The library cannot hide the value itself, because `shown` is the caller's.
+
+`ui_collections5_v2` checks this on Windows and Linux. With pair 1 shown and its value field unfocused, nothing fires at 20 s; past 30 s the reveal fires with index 1, and a later build does not fire it again. With the timer disabled, the check fails (exit 72). All 103 ui_* fixtures pass on both hosts. The removed row's collapse and the touch list form remain under the marker.
