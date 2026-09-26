@@ -7402,42 +7402,45 @@ fn page_view_options() -> PageViewOptions {
 // (D1378) A fling past 1000 px/s turns the page short of half its width.
 // (D1379) The settle is `duration-medium-4` on the emphasized curve; reduced
 // motion fades the new page in instead.
-// ponytail: the old page is not faded out under reduced motion; the neighbours
-// are built only while the strip is dragged or settling.
+// (D1485) Under reduced motion the old page fades out beneath the new.
+// ponytail: the neighbours are built only while the strip is dragged or
+// settling.
 // (D1288) A page view's settle, kept across frames: the page shown last frame,
-// the strip offset the settle began at, and when.
-type PageSettle = struct { last: usize, from: f32, since: i64, set: bool }
+// the strip offset the settle began at, and when; (D1485) the page it left.
+type PageSettle = struct { last: usize, from: f32, since: i64, set: bool, prior: usize }
 
 // (D1288) The strip's offset this frame: on a change of page it starts where the
 // old page stood (a page per step, mirrored right to left) and eases to 0,
 // asking for frames. (D1379) Over `duration-medium-4` on
 // `ease-emphasized-decelerate`; under reduced motion no slide, and the new page
-// fades in over `duration-short-2` instead -- the second answer, its opacity.
-fn page_settle(t: *const control.Theme, key: widget.Key, current: usize, w: f32, rtl: bool) -> (f32, f32) {
-    if mem.address_of(t.runtime) == 0usize { ret (0.0, 1.0) }
+// fades in over `duration-short-2` instead -- the second answer, its opacity;
+// the third is the page it left (fading out beneath it).
+fn page_settle(t: *const control.Theme, key: widget.Key, current: usize, w: f32, rtl: bool) -> (f32, f32, usize) {
+    if mem.address_of(t.runtime) == 0usize { ret (0.0, 1.0, current) }
     let reduced = t.tokens.motion.reduced
     let (s, state_error) = widget.state_of(t.runtime)
-    if state_error != ok { ret (0.0, 1.0) }
+    if state_error != ok { ret (0.0, 1.0, current) }
     let (id, found) = widget.find_by_key(s, key)
-    if found != 1usize { ret (0.0, 1.0) }
+    if found != 1usize { ret (0.0, 1.0, current) }
     var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
     var fresh: PageSettle = zero
     let (settle, _, cell_error) = widget.state[PageSettle](&build, key + 1048576u64, fresh)
-    if cell_error != ok { ret (0.0, 1.0) }
+    if cell_error != ok { ret (0.0, 1.0, current) }
     let now = widget.frame_time(t.runtime).nanos
     if !settle.set {
         settle.set = true
         settle.last = current
-        ret (0.0, 1.0)
+        ret (0.0, 1.0, current)
     }
     if settle.last != current {
         var from = (f32(current) - f32(settle.last)) * w
         if rtl { from = 0.0 - from }
         settle.from = from
         settle.since = now
+        settle.prior = settle.last
         settle.last = current
     }
-    if settle.from == 0.0 { ret (0.0, 1.0) }
+    if settle.from == 0.0 { ret (0.0, 1.0, current) }
     var millis = t.tokens.durations.medium4
     if reduced { millis = t.tokens.durations.short2 }
     let span = i64(millis) * 1000000i64
@@ -7445,11 +7448,11 @@ fn page_settle(t: *const control.Theme, key: widget.Key, current: usize, w: f32,
     if span > 0i64 && now >= settle.since { progress = f32(now - settle.since) / f32(span) }
     if progress >= 1.0 {
         settle.from = 0.0
-        ret (0.0, 1.0)
+        ret (0.0, 1.0, current)
     }
     widget.request_animation_frame(t.runtime)
-    if reduced { ret (0.0, progress) }
-    ret (settle.from * (1.0 - animation.ease(.EmphasizedDecelerate, progress)), 1.0)
+    if reduced { ret (0.0, progress, settle.prior) }
+    ret (settle.from * (1.0 - animation.ease(.EmphasizedDecelerate, progress)), 1.0, current)
 }
 
 fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []const widget.Node, current: usize, turn: widget.Change[usize], options: PageViewOptions) -> (widget.Node, err) {
@@ -7466,19 +7469,32 @@ fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: 
     if logical_moved < 0.0 && current + 1usize == pages.len { moved = moved / 3.0 }
     // (D1288) After a change of page the strip settles from where it stood.
     var page_shown: f32 = 1.0
+    var page_left = current
     if moved == 0.0 {
-        let (settled, faded) = page_settle(t, key, current, w, rtl)
+        let (settled, faded, left_page) = page_settle(t, key, current, w, rtl)
         moved = settled
         page_shown = faded
+        page_left = left_page
     }
     let (pagings, pagings_error) = mem.alloc[Paging](a, 1usize)
     if pagings_error != ok { ret (zero, TooLarge) }
     let (page_step, has_page_step) = swipe_settle_cell(t, key)
     pagings[0usize] = Paging { cell: kept, has_cell: has_cell, current: current, count: pages.len, threshold: w * 0.5, turn: turn, settle: true, rtl: rtl, settling: page_step, has_settling: has_page_step }
     // The strip: the current page and, while dragged, its neighbours.
-    let (strip, strip_error) = mem.alloc[widget.Node](a, 3usize)
+    let (strip, strip_error) = mem.alloc[widget.Node](a, 4usize)
     if strip_error != ok { ret (zero, TooLarge) }
     var n = 0usize
+    // (D1485, docs/ux/components/PageView, reduced motion) The page left fades
+    // out beneath the new one as it fades in (a cross-fade, no slide).
+    if page_shown < 1.0 && page_left != current && page_left < pages.len {
+        let (leaving, leaving_error) = mem.alloc[widget.Node](a, 1usize)
+        if leaving_error != ok { ret (zero, TooLarge) }
+        leaving[0usize] = pages[page_left]
+        var leaving_look = control.sized_style(w, h)
+        leaving_look.opacity = 1.0 - page_shown
+        strip[n] = widget.positioned(key + 1048577u64, 0.0, 0.0, leaving_look, leaving[0usize..1usize])
+        n += 1usize
+    }
     var from = current
     if current > 0usize { from = current - 1usize }
     var page = from
@@ -7737,7 +7753,7 @@ fn carousel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     if dragged > 0.0 && current == 0usize { dragged = dragged / 3.0 }
     if dragged < 0.0 && current + 1usize == items.len { dragged = dragged / 3.0 }
     if dragged == 0.0 {
-        let (settled, _) = page_settle(t, key + 4u64, current, pitch, false)
+        let (settled, _, _) = page_settle(t, key + 4u64, current, pitch, false)
         dragged = settled
     }
     var shifted = style.defaults()
