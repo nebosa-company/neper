@@ -26225,3 +26225,20 @@ anchors on the frame. The untyped form and its keys are unchanged.
 `ui_pickers_v2` types into the docked field: Enter on "9/25/2026" picks the
 25th, the mark opens the calendar, and the open calendar stands at its new
 keys. `ui_pickers` and `ui_pickers2_v2` still pass, on Windows and Linux.
+
+## D1371 — Key-value text keeps its comments
+
+The KeyValueEditor spec's Text to Table switch keeps comments as they were.
+`pairs_parse_noted` is `pairs_parse` that also fills a `PairNote` per pair (the
+caller's buffer) with the comment and blank lines before it, verbatim and each
+ending in a newline, as far as the buffer holds. `pairs_text_noted` writes each
+pair's note ahead of it. `pairs_parse` and `pairs_text` call these with no
+notes, so their behaviour is unchanged. The notes are a parallel array rather
+than fields on `Pair`, because callers (the desktop example among them) build
+`Pair` literals. Lines after the last pair are still dropped.
+
+`ui_collections5_v2` parses "# env / HOME = /root / blank / PATH=/bin" with notes
+and writes back "# env
+HOME= /root
+
+PATH=/bin", on Windows and Linux.

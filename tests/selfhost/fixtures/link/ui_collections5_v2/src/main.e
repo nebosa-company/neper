@@ -386,6 +386,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !same(as_text[0usize..written], "API=\nAPI=") { os.exit(49i32) }
     let (parsed_count, parsed_bad) = collection.pairs_parse("# env\nHOME = /root\n\nPATH=/bin\n", pairs[0usize..2usize])
     if parsed_count != 2usize || parsed_bad != 0usize || !same(pairs[0usize].name[0usize..pairs[0usize].name_len], "HOME") || !same(pairs[0usize].value[0usize..pairs[0usize].value_len], " /root") || !same(pairs[1usize].name[0usize..pairs[1usize].name_len], "PATH") { os.exit(50i32) }
+    // (D1371) Parsed with notes, the comment and the blank line come back where
+    // they stood.
+    let (note_bytes, note_bytes_error) = mem.alloc[u8](a, 64usize)
+    if note_bytes_error != ok { os.exit(67i32) }
+    var notes: [2]collection.PairNote = zero
+    notes[0usize].text = note_bytes[0usize..32usize]
+    notes[1usize].text = note_bytes[32usize..64usize]
+    let (noted_count, _) = collection.pairs_parse_noted("# env\nHOME = /root\n\nPATH=/bin\n", pairs[0usize..2usize], notes[..])
+    let rewritten = collection.pairs_text_noted(as_text, pairs[0usize..2usize], notes[..])
+    if noted_count != 2usize || !same(as_text[0usize..rewritten], "# env\nHOME= /root\n\nPATH=/bin") { os.exit(68i32) }
     let (_, broken_line) = collection.pairs_parse("A=1\noops", pairs[0usize..2usize])
     if broken_line != 2usize { os.exit(51i32) }
     var mode_log: Log = zero

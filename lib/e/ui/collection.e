@@ -4397,12 +4397,32 @@ fn pair_drag_gesture(ctx: *void, g: widget.Gesture) -> err {
 
 // (D1314) The pairs as text, one NAME=value a line, into `out`; how many bytes.
 fn pairs_text(out: []u8, pairs: []const Pair) -> usize {
+    var no_notes: []const PairNote = zero
+    ret pairs_text_noted(out, pairs, no_notes)
+}
+
+// (D1371) The comment and blank lines that stood before a pair, verbatim, each
+// line ending in a newline, in the caller's buffer.
+type PairNote = struct { text: []u8, len: usize }
+
+// (D1371, docs/ux/components/KeyValueEditor, mode switch) `pairs_text` that
+// writes each pair's note (when `notes` has one for it) before the pair, so
+// comments `pairs_parse_noted` kept come back where they were.
+fn pairs_text_noted(out: []u8, pairs: []const Pair, notes: []const PairNote) -> usize {
     var n = 0usize
     var i = 0usize
     while i < pairs.len {
         if i > 0usize && n < out.len {
             out[n] = 10u8
             n += 1usize
+        }
+        if i < notes.len {
+            var c = 0usize
+            while c < notes[i].len && n < out.len {
+                out[n] = notes[i].text[c]
+                n += 1usize
+                c += 1usize
+            }
         }
         var k = 0usize
         while k < pairs[i].name_len && n < out.len {
@@ -4430,8 +4450,22 @@ fn pairs_text(out: []u8, pairs: []const Pair) -> usize {
 // many pairs it filled and the first line (from 1) that did not parse -- no `=`,
 // an empty name, a part longer than its buffer, or more pairs than `pairs` -- or
 // 0 when every line did.
-// ponytail: comments are dropped, not kept for the way back.
+// (D1371) `pairs_parse_noted` keeps the comments.
 fn pairs_parse(text: str, pairs: []Pair) -> (usize, usize) {
+    var no_notes: []PairNote = zero
+    let (count, bad) = pairs_parse_noted(text, pairs, no_notes)
+    ret (count, bad)
+}
+
+// (D1371) `pairs_parse` that keeps the comment and blank lines before each pair
+// in its note (`notes[index]`, as far as its buffer holds).
+// ponytail: lines after the last pair are dropped.
+fn pairs_parse_noted(text: str, pairs: []Pair, notes: []PairNote) -> (usize, usize) {
+    var c = 0usize
+    while c < notes.len {
+        notes[c].len = 0usize
+        c += 1usize
+    }
     var count = 0usize
     var line = 1usize
     var start = 0usize
@@ -4442,6 +4476,19 @@ fn pairs_parse(text: str, pairs: []Pair) -> (usize, usize) {
         var upto = end
         if upto > from && text[upto - 1usize] == 13u8 { upto -= 1usize }
         while from < upto && text[from] == 32u8 { from += 1usize }
+        if (from >= upto || text[from] == 35u8) && count < notes.len {
+            // A comment or blank line: kept, with its newline, for the next pair.
+            var k = start
+            while k < upto && notes[count].len < notes[count].text.len {
+                notes[count].text[notes[count].len] = text[k]
+                notes[count].len += 1usize
+                k += 1usize
+            }
+            if notes[count].len < notes[count].text.len {
+                notes[count].text[notes[count].len] = 10u8
+                notes[count].len += 1usize
+            }
+        }
         if from < upto && text[from] != 35u8 {
             var eq = from
             while eq < upto && text[eq] != 61u8 { eq += 1usize }
