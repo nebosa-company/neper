@@ -3679,7 +3679,9 @@ fn date_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 
 // (D1258) The docked calendar's footer: `today` (picked by Today) and what Clear
 // does; with `clear` unset there is no footer.
-type DateFooter = struct { today: time.Date, clear: *const widget.Submit }
+// (D1370) With `typing` the field is typed: the caller's `buffer` and `len`
+// through `typed`, Enter committing what `parse_date` reads.
+type DateFooter = struct { today: time.Date, clear: *const widget.Submit, typing: bool, buffer: []u8, len: usize, typed: widget.Change[str] }
 
 // (D1258, docs/ux/components/DatePicker, docked) `date_picker` with the docked
 // calendar's footer under the days: Today and Clear text buttons 32 tall, spread
@@ -3884,7 +3886,11 @@ fn date_open_fire(ctx: *void) -> err {
 // (D1257) `date_entry` is the typed form (input mode) with its inline error.
 // (D1258) `date_picker_with` adds the Today and Clear footer.
 // (D1293) `date_picker_modal` is the touch form.
-// ponytail: this docked field stays read-only.
+// (D1370, docs/ux/components/DatePicker, always typeable) With
+// `footer.typing` the field is D960's clocked field with a calendar mark
+// (editor `key`, the mark `key + 1` opening the calendar, the frame `key + 2`),
+// Enter commits what `parse_date` reads through `pick`, and the calendar's keys
+// move to `key + 1048576` on (its overlay `+ 1`, the month `+ 2`).
 fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, ranged: bool, from: time.Date, to: time.Date, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date], footer: DateFooter) -> (widget.Node, err) {
     let (text_bytes, text_error) = mem.alloc[u8](a, 32usize)
     if text_error != ok { ret (zero, TooLarge) }
@@ -3914,18 +3920,35 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         if opens_error != ok { ret (zero, TooLarge) }
         let (open_actions, open_actions_error) = mem.alloc[widget.Submit](a, 1usize)
         if open_actions_error != ok { ret (zero, TooLarge) }
-        opens[0usize] = DateOpen { toggle: *toggle, runtime: t.runtime, focus: key + 5u64 + u64(focus_day) }
+        opens[0usize] = DateOpen { toggle: *toggle, runtime: t.runtime, focus: base_of(key, footer.typing) + 5u64 + u64(focus_day) }
         open_actions[0usize] = widget.Submit { ctx: mem.cast[*void](&opens[0usize]), invoke: date_open_fire }
         trigger = &open_actions[0usize]
     }
-    let (head, head_error) = control.field_head(a, key, t, label, caption, has_value, open, trigger, field_height, .Calendar, .Calendar, true)
-    if head_error != ok { ret (zero, head_error) }
+    // (D1370) Typed, the calendar's keys stand clear of the field's.
+    var base = key
+    var anchor = key
+    if footer.typing {
+        base = key + 1048576u64
+        anchor = key + 2u64
+    }
+    var head: widget.Node = zero
+    if footer.typing {
+        var typed_look = control.field_options()
+        typed_look.width = 7.0 * cell + 32.0
+        let (typed_head, typed_head_error) = clocked_field_glyph(a, key, t, label, footer.buffer, footer.len, footer.typed, "", true, open, trigger, typed_look, .Calendar)
+        if typed_head_error != ok { ret (zero, typed_head_error) }
+        head = typed_head
+    } else {
+        let (plain_head, plain_head_error) = control.field_head(a, key, t, label, caption, has_value, open, trigger, field_height, .Calendar, .Calendar, true)
+        if plain_head_error != ok { ret (zero, plain_head_error) }
+        head = plain_head
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
     var popup_node = widget.box(0u64, style.defaults(), zero)
     if open {
-        let (month, month_error) = calendar(a, key + 2u64, t, label, shown, value, has_value, ranged, from, to, show, pick)
+        let (month, month_error) = calendar(a, base + 2u64, t, label, shown, value, has_value, ranged, from, to, show, pick)
         if month_error != ok { ret (zero, month_error) }
         let (inside, inside_error) = mem.alloc[widget.Node](a, 4usize)
         if inside_error != ok { ret (zero, TooLarge) }
@@ -3939,9 +3962,9 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
             today_press[0usize] = widget.Submit { ctx: mem.cast[*void](&todays[0usize]), invoke: day_fire }
             var plain = control.button_options()
             plain.variant = .Plain
-            let (today_button, today_error) = control.button(a, key + 64u64, t, "Today", &today_press[0usize], plain)
+            let (today_button, today_error) = control.button(a, base + 64u64, t, "Today", &today_press[0usize], plain)
             if today_error != ok { ret (zero, today_error) }
-            let (clear_button, clear_error) = control.button(a, key + 65u64, t, "Clear", footer.clear, plain)
+            let (clear_button, clear_error) = control.button(a, base + 65u64, t, "Clear", footer.clear, plain)
             if clear_error != ok { ret (zero, clear_error) }
             inside[2usize] = today_button
             inside[3usize] = clear_button
@@ -3962,7 +3985,7 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         var raised_style = control.surface_style(t, raised)
         raised_style.padding.top = style.Length { Px: 8.0 }
         raised_style.width = style.Length { Px: 7.0 * cell + 32.0 }
-        let (lifted, lifted_error) = dismissable(a, key + 1u64, key, .Below, label, widget.box(0u64, raised_style, inside[0usize..1usize]), toggle, 4.0)
+        let (lifted, lifted_error) = dismissable(a, base + 1u64, anchor, .Below, label, widget.box(0u64, raised_style, inside[0usize..1usize]), toggle, 4.0)
         if lifted_error != ok { ret (zero, lifted_error) }
         popup_node = lifted
     }
@@ -3985,7 +4008,15 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         keys[0usize] = widget.Shortcut { key: 40u32, modifiers: alt, action: *trigger }
         shortcuts = keys[0usize..1usize]
     }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])
+    // (D1370) Typed, Enter commits the text.
+    var committing: widget.Submit = zero
+    if footer.typing {
+        let (commits, commits_error) = mem.alloc[DateCommit](a, 1usize)
+        if commits_error != ok { ret (zero, TooLarge) }
+        commits[0usize] = DateCommit { text: footer.buffer[0usize..footer.len], language: t.language, today: footer.today, picked: pick }
+        committing = widget.Submit { ctx: mem.cast[*void](&commits[0usize]), invoke: date_commit_fire }
+    }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: committing, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
 
@@ -4101,6 +4132,18 @@ fn duration_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 // keyed `key + 2`; the clock `key + 1` fires `toggle` when `opener`, and is a
 // plain mark otherwise.
 fn clocked_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], note: str, opener: bool, open: bool, toggle: *const widget.Submit, options: control.FieldOptions) -> (widget.Node, err) {
+    let (made, made_error) = clocked_field_glyph(a, key, t, label, buffer, len, typed, note, opener, open, toggle, options, .Clock)
+    ret (made, made_error)
+}
+
+// (D1370) The key a docked date picker's calendar parts count from.
+fn base_of(key: widget.Key, typing: bool) -> widget.Key {
+    if typing { ret key + 1048576u64 }
+    ret key
+}
+
+// (D1370) `clocked_field` with another mark than the clock.
+fn clocked_field_glyph(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], note: str, opener: bool, open: bool, toggle: *const widget.Submit, options: control.FieldOptions, glyph: control.GlyphKind) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var h = t.tokens.sizes.control_md
     var side = t.tokens.sizes.control_sm
@@ -4118,7 +4161,7 @@ fn clocked_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     var face_color = muted
     if open { face_color = style.color(t.tokens, .Primary) }
-    let (face, face_error) = control.mark_glyph(a, face_color, .Clock, size)
+    let (face, face_error) = control.mark_glyph(a, face_color, glyph, size)
     if face_error != ok { ret (zero, face_error) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
