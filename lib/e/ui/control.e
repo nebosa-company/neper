@@ -8638,7 +8638,8 @@ fn glyph_action(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // (D1394) In a compact window it spans the width less 16 a side.
 // (D1467) A message and action that do not fit on one line stand two.
 // (D1480) A dismissed notice leaves fading out and sinking 8.
-// ponytail: the toast's title and severity well wait on a richer Notice; the
+// (D1493) `toast_with` gives the head its title and severity.
+// ponytail: the
 // toast's stack of three shows the head alone; a leaving notice keeps 120 bytes
 // of its text and 24 of its action.
 // (D1480) The last notice shown, kept on the surface so it can leave after the
@@ -8711,6 +8712,24 @@ fn notice_timeout(t: *const Theme, key: widget.Key, head: *const Notice, bottom:
 }
 
 fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32, bottom: bool) -> (widget.Node, err) {
+    var plain: ToastOptions = zero
+    let (made, made_error) = noticed_with(a, key, t, notices, width, bottom, plain)
+    ret (made, made_error)
+}
+
+// (D1493, docs/ux/components/Snackbar, toast) A toast's head notice beyond its
+// `Notice`: the `title-small` title naming the event over the message (none when
+// empty), and its severity, which picks the well's container and glyph; an
+// `Error` toast is announced assertively.
+type ToastOptions = struct { title: str, severity: Severity }
+
+// A toast with its head's title and severity (D1493).
+fn toast_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32, options: ToastOptions) -> (widget.Node, err) {
+    let (made, made_error) = noticed_with(a, key, t, notices, width, false, options)
+    ret (made, made_error)
+}
+
+fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32, bottom: bool, toast_options: ToastOptions) -> (widget.Node, err) {
     // (D1287) A notice enters fading in and rising 8 from its edge over
     // `duration-medium-1`; the surface stands in a box keyed `key + 8192` that is
     // there with or without notices, so the entry is remembered. Reduced motion
@@ -8773,7 +8792,7 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
     if !bottom {
         ink = style.color(t.tokens, .OnSurfaceVariant)
         accent = style.color(t.tokens, .Primary)
-        let (well, well_error) = severity_well(a, t, .Info, 32.0)
+        let (well, well_error) = severity_well(a, t, toast_options.severity, 32.0)
         if well_error != ok { ret (zero, well_error) }
         parts[at] = well
         at += 1usize
@@ -8783,6 +8802,18 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
     let (text_item, text_error) = colored_text(a, 0u64, head.text, t, caption, ink)
     if text_error != ok { ret (zero, text_error) }
     var grown = text_item
+    // (D1493) A toast's title stands over its message.
+    if !bottom && toast_options.title.len != 0usize && notices.len > 0usize {
+        var heading = text_options()
+        heading.role = .TitleSmall
+        let (title_item, title_error) = colored_text(a, 0u64, toast_options.title, t, heading, style.color(t.tokens, .OnSurface))
+        if title_error != ok { ret (zero, title_error) }
+        let (titled, titled_error) = mem.alloc[widget.Node](a, 2usize)
+        if titled_error != ok { ret (zero, TooLarge) }
+        titled[0usize] = title_item
+        titled[1usize] = text_item
+        grown = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 2.0 }, style.defaults(), titled[0usize..2usize])
+    }
     grown.style.width = style.Length { Flex: 1.0 }
     parts[at] = grown
     at += 1usize
@@ -8859,6 +8890,8 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
     sem.role = 26u8
     sem.label = head.text
     sem.live = 1u8
+    // (D1493) An error toast is an alert.
+    if !bottom && toast_options.severity == .Error { sem.live = 2u8 }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize])

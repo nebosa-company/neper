@@ -27380,3 +27380,9 @@ Under reduced motion the shares now cross-fade over `duration-short-2` through D
 Select's spec: "Reduced motion: menus and sheets cross-fade". D1491 pinned the standard sheet and the modal sheet to appear at once under reduced motion, because they slide on `appeared_share` directly. Under reduced motion they now stand in place from their first frame. The share, which D1491 counts over `duration-short-2` there, fades them in, carried as the opacity of the transform wrapper they already stand in, so the tree keeps its shape.
 
 `ui_overlays3_v2` checks this on Windows and Linux under reduced motion. A side sheet built fresh stands at the window's end. 50 ms on, its body is not yet `surface-container-low`, and a second on it is. Against the old overlay the check fails (exit 144). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1493 — A toast carries its title and severity
+
+The Snackbar spec gives the toast "a 32 status well with an icon, a `title-small` title, a `body-medium` message". The well takes the severity's container and glyph, and "Error toasts use an alert (assertive)". `Notice` has only text and one action. A struct literal must name every field, so adding fields would break every caller's queue. That includes the gallery example, which holds another session's uncommitted edits. Instead, `toast_with` takes `ToastOptions { title, severity }` for the head notice. The title stands over the message in `title-small` `on-surface`, the well is `severity_well` for that severity, and an `Error` toast's status is assertive. `toast` and `snackbar` pass empty options through the shared `noticed_with`.
+
+`ui_status4_v2` checks this on Windows and Linux: a toast titled "Build 4128 failed" with the Error severity shows the title, and its status is assertive. All 103 `ui_*` fixtures pass on both hosts.

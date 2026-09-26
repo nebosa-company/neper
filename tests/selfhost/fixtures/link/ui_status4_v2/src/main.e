@@ -234,6 +234,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if leave_step == 4usize && still != 0usize { os.exit(46i32) }
         leave_step += 1usize
     }
+    // (D1493) A toast with a title and the Error severity: the title stands over
+    // the message and the toast is an assertive status.
+    f = mem.arena_from(frame_storage)
+    var failed_toast: control.ToastOptions = zero
+    failed_toast.title = "Build 4128 failed"
+    failed_toast.severity = .Error
+    let (titled_toast, titled_toast_error) = control.toast_with(&f, 880u64, &theme, s.notices[1usize..2usize], 320.0, failed_toast)
+    let (titled_page, titled_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if titled_toast_error != ok || titled_page_error != ok { os.exit(47i32) }
+    titled_page[0usize] = titled_toast
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), titled_page[0usize..1usize]), time.Instant { nanos: 43000000000i64 }) != ok { os.exit(48i32) }
+    if testing.by_text(&harness, "Build 4128 failed").count != 1usize { os.exit(49i32) }
+    let (failed_tree, failed_tree_error) = testing.semantics(&harness)
+    let (failed_node, has_failed_node) = find(failed_tree, .Status, "Build 4128 finished")
+    if failed_tree_error != ok || !has_failed_node || failed_node.live != .Assertive { os.exit(50i32) }
     // (D1394) In a compact window, 360 wide, the snackbar spans it less 16 a
     // side: its surface at 20 and at 340 across, the ground at 8.
     let (compact_rt, compact_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 2048usize, state_classes: 8u16, max_depth: 32u16, max_commands: 2048usize })
