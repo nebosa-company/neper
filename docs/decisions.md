@@ -27181,3 +27181,9 @@ The DatePicker spec puts range selection full screen on compact touch hosts. The
 A day's press reaches `pick`. The form is a modal dialog named "Select range" and slides up over `duration-medium-4` as it first appears (`appeared_share`). `short_date` writes "Sep 14".
 
 `ui_pickers_v2` opens the form from 14 September with three months, on Windows and Linux. It finds "Select range", "October 2026" and the summary "Sep 14 – End date"; a tap on 3 October reaches the pick, and Save fires. `ui_pickers2_v2` still passes.
+
+## D1462 — Disabled app bar actions hide at their group's outer end
+
+The AppBar spec hides a disabled action rather than dimming it, "unless its absence would move the others". `app_bar_of` now drops the disabled actions at the outer end of each group, where removing them moves nothing: the end of the leading group and the start of the trailing group. Keys stay by index, and a disabled action between enabled ones is still dimmed in place. An overflowing trailing group (More) is unchanged.
+
+`ui_navigation_v2` builds a bar with two disabled trailing actions before Search and a disabled Share between two enabled leading actions, on Windows and Linux. The trailing two are hidden and Search stands; Share stands, dimmed. All 103 `ui_*` fixtures pass on both hosts.

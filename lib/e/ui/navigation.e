@@ -132,8 +132,8 @@ fn bar_group(items: []const widget.Node) -> widget.Node {
 // the row's small title over the first 40 of travel (the row title out of the
 // tree).
 // (D1391) The contextual bar fades in with a 4 drop.
-// ponytail: worded actions stay text buttons; a disabled action is dimmed rather
-// than hidden.
+// (D1462) A disabled action at its group's outer end is hidden.
+// ponytail: worded actions stay text buttons.
 fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, options: AppBarOptions, width: f32) -> (widget.Node, err) {
     if leading.len > 8usize || trailing.len > 8usize { ret (zero, TooLarge) }
     // The options' actions outlive the frame in the arena.
@@ -204,7 +204,11 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         named = options.contextual
     }
     // The leading group.
+    // (D1462, docs/ux/components/AppBar, action states) A disabled action is
+    // hidden where its absence moves no other: at the outer end of its group (the
+    // leading group's end, the trailing group's start); elsewhere it is dimmed.
     var lead_count = leading.len
+    while lead_count > 0usize && !leading[lead_count - 1usize].enabled { lead_count -= 1usize }
     let backed = options.back_label.len > 0usize
     if contextual || backed { lead_count = 1usize }
     let (fronts, fronts_error) = mem.alloc[widget.Node](a, lead_count)
@@ -222,7 +226,7 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
             fronts[0usize] = going
         } else {
             var i = 0usize
-            while i < leading.len {
+            while i < lead_count {
                 let (made, made_error) = bar_action(a, key + 1u64 + u64(i), t, &leading[i], ink)
                 if made_error != ok { ret (zero, made_error) }
                 fronts[i] = made
@@ -234,16 +238,20 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
     var shown = trailing.len
     let overflow = trailing.len > 3usize
     if overflow { shown = 3usize }
-    var back_count = shown
+    var skipped = 0usize
+    if !overflow {
+        while skipped < shown && !trailing[skipped].enabled { skipped += 1usize }
+    }
+    var back_count = shown - skipped
     if overflow { back_count = shown + 1usize }
     if overflow && options.more_open { back_count = shown + 2usize }
     let (backs, backs_error) = mem.alloc[widget.Node](a, back_count)
     if backs_error != ok { ret (zero, TooLarge) }
-    var j = 0usize
+    var j = skipped
     while j < shown {
         let (made, made_error) = bar_action(a, key + 9u64 + u64(j), t, &trailing[j], muted)
         if made_error != ok { ret (zero, made_error) }
-        backs[j] = made
+        backs[j - skipped] = made
         j += 1usize
     }
     if overflow {
