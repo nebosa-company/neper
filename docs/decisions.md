@@ -27012,3 +27012,9 @@ Checks on Windows and Linux:
 - `ui_collections2_v2` opens a row. On the open's first frame the disclosure's upper half differs from how it settles.
 - `ui_property` reopens Person. On the open's first frame the heading's leading 28 columns differ from how they settle.
 - All 103 `ui_*` fixtures pass.
+
+## D1439 — Pagination's current fill cross-fades
+
+The Pagination spec says "the current fill cross-fades in `duration-short-2`". Each page button now eases a current share on itself (slot `page_key + 1048598`). Its fill is `secondary-container` at that share, and its numerals mix from `on-surface-variant` to `on-secondary-container`, so the old page fades out as the new one fades in. Reduced motion changes at once.
+
+`ui_paged` turns to page 2, on Windows and Linux: on the turn's first frame the button is not yet `secondary-container`, and a second later it is. `ui_navigation4_v2` still passes.

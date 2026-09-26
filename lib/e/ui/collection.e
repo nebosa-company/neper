@@ -1005,13 +1005,16 @@ fn paged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
             }
             let page_key = key + 3u64 + u64(page)
             let state = control.control_state(t, page_key, true, is_current)
-            var ink = muted
+            // (D1439, docs/ux/components/Pagination, motion) The current fill and
+            // numerals cross-fade over `duration-short-2` on `ease-standard` (kept
+            // on the page, slot `+ 1048598`); reduced motion changes at once.
+            var current_goal: f32 = 0.0
+            if is_current { current_goal = 1.0 }
+            let filled = control.eased_on(t, page_key, page_key + 1048598u64, current_goal, false, t.tokens.durations.short2)
+            let fill = style.color(t.tokens, .SecondaryContainer)
+            let ink = style.mix(muted, style.color(t.tokens, .OnSecondaryContainer), filled)
             var look = style.resolve(t.tokens, .Plain, state)
-            look.background = control.with_alpha(ink, control.state_opacity(t, state))
-            if is_current {
-                ink = style.color(t.tokens, .OnSecondaryContainer)
-                look.background = style.layer(style.color(t.tokens, .SecondaryContainer), ink, control.state_opacity(t, state))
-            }
+            look.background = style.layer(control.with_alpha(fill, fill.alpha * filled), ink, control.state_opacity(t, state))
             look.foreground = ink
             look.border_width = 0.0
             look.opacity = 1.0
