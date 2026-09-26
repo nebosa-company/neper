@@ -4410,6 +4410,45 @@ fn text_area(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
     ret (node, node_error)
 }
 
+// (D1468, docs/ux/components/FontPicker, trigger) The compact trigger: a field
+// (keyed `key`) showing "Family, size" (the size in points, "Inter, 12") with the
+// label `label` in its notch and a trailing chevron, pressed to open the panel
+// through `toggle` (the caller anchors the panel to it); Expanded while `open`.
+// With `missing` the family is not installed: a `warning` mark leads the value
+// and "Not installed, using <fallback>" stands under the field in `body-small`
+// `error` (keyed `key + 1`).
+fn font_trigger(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, family: str, size: i64, open: bool, toggle: *const widget.Submit, missing: bool, fallback: str) -> (widget.Node, err) {
+    let (said, said_error) = mem.alloc[u8](a, family.len + 24usize)
+    if said_error != ok { ret (zero, TooLarge) }
+    var n = copy_text(said, family)
+    n += copy_text(said[n..said.len], ", ")
+    n += write_i64(said[n..said.len], size)
+    let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
+    let (head, head_error) = field_head(a, key, t, label, said[0usize..n], true, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense)
+    if head_error != ok { ret (zero, head_error) }
+    if !missing { ret (head, ok) }
+    let (warned, warned_error) = mem.alloc[widget.Node](a, 3usize)
+    if warned_error != ok { ret (zero, TooLarge) }
+    let (mark, mark_error) = icon_square(a, style.color(t.tokens, .Error), .Warning, t.tokens.sizes.icon_sm)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (note_bytes, note_error) = mem.alloc[u8](a, fallback.len + 32usize)
+    if note_error != ok { ret (zero, TooLarge) }
+    var m = copy_text(note_bytes, "Not installed, using ")
+    m += copy_text(note_bytes[m..note_bytes.len], fallback)
+    var small = text_options()
+    small.role = .BodySmall
+    let (note, note_node_error) = colored_text(a, key + 1u64, note_bytes[0usize..m], t, small, style.color(t.tokens, .Error))
+    if note_node_error != ok { ret (zero, note_node_error) }
+    warned[0usize] = mark
+    warned[1usize] = note
+    warned[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), warned[0usize..2usize])
+    let (column, column_error) = mem.alloc[widget.Node](a, 2usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = head
+    column[1usize] = warned[2usize]
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), column[0usize..2usize]), ok)
+}
+
 // -------------------------------------------------------- basic choice (D824, P1-11)
 
 // A read-only field's box that opens something (D956's select head, D959): `h`
@@ -9501,7 +9540,8 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
 // above the family label.
 // (D1407) `font_panel_with` groups the recent families first.
 // (D1408) ... and the monospace families under their own group.
-// ponytail: no feature chips, trigger or sheet; the picker is its least 112 wide, not 160; rows are in the theme's face -- a field per family's face waits on the caller's fonts.
+// (D1468) `font_trigger` is the compact trigger that opens it.
+// ponytail: no feature chips or sheet; the picker is its least 112 wide, not 160; rows are in the theme's face -- a field per family's face waits on the caller's fonts.
 fn font_panel(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, families: []const str, family: usize, styles: []const str, style_index: usize, styles_open: bool, toggle_styles: *const widget.Submit, size: i64, size_buffer: []u8, sample: str, pick_family: widget.Change[usize], pick_style: widget.Change[usize], change_size: widget.Change[i64], typed_size: widget.Change[str], search: []u8, search_len: usize, searched: widget.Change[str], rows: u32, width: f32) -> (widget.Node, err) {
     var no_recent: []const usize = zero
     var no_monospace: []const bool = zero

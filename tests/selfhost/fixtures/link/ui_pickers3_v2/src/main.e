@@ -36,6 +36,13 @@ fn on_press(ctx: *void) -> err {
     ret ok
 }
 
+// (D1468) A font trigger's press, counted.
+fn on_font_open(ctx: *void) -> err {
+    let count = mem.cast[*u32](ctx)
+    *count += 1u32
+    ret ok
+}
+
 fn on_colour(ctx: *void, value: paint.Color) -> err {
     let s = mem.cast[*Store](ctx)
     s.colour = value
@@ -517,6 +524,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
         strip_step += 1usize
     }
     if strip_sums[0usize] == strip_sums[1usize] { os.exit(100i32) }
+    // (D1468) The font trigger shows "Inter, 12" and opens the panel on a press;
+    // a missing family says so under it.
+    var font_opens = 0u32
+    let font_open = widget.Submit { ctx: mem.cast[*void](&font_opens), invoke: on_font_open }
+    var trigger_step = 0usize
+    while trigger_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (trigger, trigger_error) = control.font_trigger(&f, 1500u64, &theme, "Editor font", "Inter", 12i64, false, &font_open, true, "Segoe UI")
+        let (trigger_page, trigger_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if trigger_error != ok || trigger_page_error != ok { os.exit(101i32) }
+        trigger_page[0usize] = trigger
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), trigger_page[0usize..1usize]), time.Instant { nanos: 12000000000i64 + i64(trigger_step) }) != ok { os.exit(102i32) }
+        trigger_step += 1usize
+    }
+    if testing.by_text(&harness, "Inter, 12").count == 0usize || testing.by_text(&harness, "Not installed, using Segoe UI").count == 0usize { os.exit(103i32) }
+    let (trigger_box, has_trigger_box) = bounds(&harness, &runtime, 1500u64)
+    if !has_trigger_box || testing.tap(&harness, trigger_box.x + trigger_box.width * 0.5, trigger_box.y + trigger_box.height * 0.5) != ok || font_opens != 1u32 { os.exit(104i32) }
     try io.print("ui pickers3 v2 ok\n")
     ret ok
 }
