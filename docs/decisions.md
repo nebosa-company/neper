@@ -27366,3 +27366,11 @@ The PageIndicator spec: "Reduced motion: the pill moves without the stretch, cro
 The Row spec: "Reduced motion: selection and state changes cross-fade in `duration-short-2`". D1475 eased a row's selection over `duration-short-3` and changed it at once under reduced motion. With D1489's `faded_on`, a row under reduced motion now cross-fades the same share over `duration-short-2`, on the same slot.
 
 `ui_collections_v2` checks this on Windows and Linux under reduced motion: 50 ms after a row is selected it is not yet `secondary-container`, and a second on it is. Against the old collection the check fails (exit 250). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1491 — Transient surfaces fade only under reduced motion
+
+Popup, Menu and Select specify "Reduced motion: fade only". The shared open, close and appear shares (`opening_share_over`, `closing_share_over`, `appeared_share`) returned their goals at once under reduced motion, so these surfaces jumped in and out. The helpers that move them (`slid_in`, `scaled_in`, `grown_in`, `entered_overlay`, `transient_placed`) would have scaled or slid them on any share.
+
+Under reduced motion the shares now cross-fade over `duration-short-2` through D1489's `faded_on`. `appeared_share` counts over `duration-short-2`. The movement helpers now take the theme, and under reduced motion they keep the surface in place at full size, with only the fade. The popup's own `opening_share` and `closing_share` route through the `_over` helpers. The two sheets that slide on `appeared_share` directly (standard and modal) are pinned to 1 under reduced motion, so they still appear at once rather than slide briefly.
+
+`ui_overlays2_v2` checks this on Windows and Linux under reduced motion: 50 ms after a popup opens its middle is not yet the settled colour, and its top row is already on the surface, with no ground showing where 8 of travel would leave it. Against the old overlay the check fails (exit 150). All 103 `ui_*` fixtures pass on both hosts.
