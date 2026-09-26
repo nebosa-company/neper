@@ -1690,8 +1690,8 @@ fn popup_loading(a: *mem.Arena, key: widget.Key, t: *const control.Theme, messag
 // shut, so the opening is remembered. Reduced motion shows it at once.
 // (D1416) Closing, it fades and shrinks back over `duration-short-2`
 // (`closing_share`), out of the tree while it leaves.
-// ponytail: no match highlighting; the anchor keeps the focus
-// because the popup takes none.
+// (D1465) Its rows highlight a match through `popup_row_match` (weight 600).
+// ponytail: the anchor keeps the focus because the popup takes none.
 fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
     var shown = opening_share(t, key, open)
     let leaving = closing_share(t, key, open)
@@ -1824,14 +1824,12 @@ fn popup_row_match(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     if runs_error != ok { ret (zero, TooLarge) }
     var normal = control.text_options()
     normal.role = .BodyMedium
-    var strong = control.text_options()
-    strong.role = .TitleSmall
-    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm {
-        normal.role = .BodyLarge
-        strong.role = .TitleMedium
-    }
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { normal.role = .BodyLarge }
     normal.wrap = .None
-    strong.wrap = .None
+    // (D1465) The match is the row's own role at weight 600 (D1453's faces), not
+    // a heavier role standing in for it.
+    var strong = normal
+    strong.weight = 600u32
     let ink = style.color(t.tokens, .OnSurface)
     let (before, before_error) = control.colored_text(a, 0u64, label[0usize..match_start], t, normal, ink)
     let (matched, matched_error) = control.colored_text(a, 0u64, label[match_start..match_end], t, strong, ink)
