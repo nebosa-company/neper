@@ -6900,8 +6900,8 @@ fn list_options() -> ListOptions {
 // a tap toggles.
 // (D1247) `loading` skeleton rows stand in for no rows.
 // (D1542) A removed row collapses where it stood (`list_leaving`).
-// ponytail: the caller sets `selected` from the gestures; no sticky subheader;
-// reduced motion drops a removed row rather than cross-fading it; a removal
+// (D1543) The subheader sticks at its viewport's top (`list_sticky`).
+// ponytail: the caller sets `selected` from the gestures; reduced motion drops a removed row rather than cross-fading it; a removal
 // past the 12th row is not seen. (D1507) Rows that arrive grow in. (D1497) A page is the enclosing viewport's
 // height over the first row's (the window's outside one).
 // (D1507) A list's rows that arrived after it stood: up to eight keys and when
@@ -7173,6 +7173,11 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
         o += 1usize
     }
     outer[o] = body
+    if options.subheader.len > 0usize {
+        let (sticking, sticking_error) = list_sticky(a, key, t, options.subheader, width, body)
+        if sticking_error != ok { ret (zero, sticking_error) }
+        outer[o] = sticking
+    }
     o += 1usize
     if options.grouped && options.footnote.len > 0usize {
         note.role = .BodySmall
@@ -7189,6 +7194,45 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     sem.label = label
     sem.row_count = u32(items.len)
     ret (widget.semantics(0u64, sem, style.defaults(), outer[0usize..o]), ok)
+}
+
+// (D1543, docs/ux/components/List, subheader) A list with a subheader stands in a
+// stack of its own; once the list's top has scrolled above its viewport's (as
+// last laid out) and more than a subheader of it is still in view, a copy of the
+// subheader -- `title-small` `primary`, 16 in, 16 above and 8 below -- stands
+// stuck at the viewport's top on `surface-container` (keyed
+// `key ^ fnv1a64("stuck-subheader")`, out of the tree), pushed up by the list's
+// end.
+fn list_sticky(a: *mem.Arena, key: widget.Key, t: *const control.Theme, subheader: str, width: f32, body: widget.Node) -> (widget.Node, err) {
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = body
+    var count = 1usize
+    if mem.address_of(t.runtime) != 0usize {
+        let (own, has_own) = widget.bounds_for_key(t.runtime, key)
+        let (view, has_view) = widget.viewport_around(t.runtime, key)
+        var heading = control.text_options()
+        heading.role = .TitleSmall
+        heading.wrap = .None
+        let tall = 24.0 + style.text_style(t.tokens, .TitleSmall).line_height
+        if has_own && has_view && own.y < view.y && own.y + own.height > view.y + tall {
+            var stuck_y = view.y - own.y
+            if stuck_y > own.height - tall { stuck_y = own.height - tall }
+            let (said, said_error) = control.colored_text(a, 0u64, subheader, t, heading, style.color(t.tokens, .Primary))
+            if said_error != ok { ret (zero, said_error) }
+            layers[4usize] = said
+            var band = style.defaults()
+            if width > 0.0 { band.width = style.Length { Px: width } } else { band.width = style.Length { Px: own.width } }
+            band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+            layers[3usize] = widget.padded(key ^ hash.fnv1a64("stuck-subheader"), 16.0, 16.0, 16.0, 8.0, band, layers[4usize..5usize])
+            var quiet: widget.Semantics = zero
+            quiet.hidden = true
+            layers[2usize] = widget.semantics(0u64, quiet, style.defaults(), layers[3usize..4usize])
+            layers[1usize] = widget.positioned(0u64, 0.0, stuck_y, style.defaults(), layers[2usize..3usize])
+            count = 2usize
+        }
+    }
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..count]), ok)
 }
 
 // (D1241, docs/ux/components/List, selection bar) In place of the list's header

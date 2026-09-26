@@ -30,6 +30,7 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
+use e.algo.hash as hash
 
 const W: usize = 420usize
 
@@ -687,6 +688,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     grid_ctrl.control = true
     if widget.focus(&runtime, testing.by_key(&harness, 8100u64).element) != ok || testing.press_key(&harness, 187u32, grid_ctrl) != ok || grid_log.zooms != 1usize || grid_log.level != 2usize { os.exit(189i32) }
     if testing.press_key(&harness, 109u32, grid_ctrl) != ok || grid_log.zooms != 2usize || grid_log.level != 0usize { os.exit(190i32) }
+    // (D1543) A list with a subheader in a 200 tall viewport: at rest nothing is
+    // stuck; scrolled 200 down, the subheader's copy stands at the viewport's top.
+    var today_items: [10]collection.RowItem = zero
+    var today_keys: [10]widget.Key = zero
+    var ti = 0usize
+    while ti < 10usize {
+        today_items[ti] = collection.row_item("Build")
+        today_keys[ti] = 9300u64 + u64(ti)
+        ti += 1usize
+    }
+    let stuck_key = 9200u64 ^ hash.fnv1a64("stuck-subheader")
+    var sticky_step = 0usize
+    while sticky_step < 4usize {
+        var scrolled_by: f32 = 0.0
+        if sticky_step >= 2usize { scrolled_by = 200.0 }
+        f = mem.arena_from(storage)
+        var today = collection.list_options()
+        today.width = 300.0
+        today.subheader = "Today"
+        let (today_list, today_error) = collection.list_of(&f, 9200u64, &theme, "Builds", today_items[..], today_keys[..], today)
+        let (today_held, today_held_error) = mem.alloc[widget.Node](&f, 1usize)
+        if today_error != ok || today_held_error != ok { os.exit(191i32) }
+        today_held[0usize] = today_list
+        var view_style = control.sized_style(300.0, 200.0)
+        view_style.overflow = .Clip
+        let today_view = widget.scroll(9199u64, widget.Scroll { axis: .Vertical, offset: scrolled_by, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: zero, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view_style, today_held[0usize..1usize])
+        let (today_page, today_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if today_page_error != ok { os.exit(191i32) }
+        today_page[0usize] = today_view
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 600.0), today_page[0usize..1usize]), time.Instant { nanos: 97000000000i64 + i64(sticky_step) }) != ok { os.exit(191i32) }
+        if sticky_step == 1usize && testing.by_key(&harness, stuck_key).count != 0usize { os.exit(192i32) }
+        if sticky_step == 3usize {
+            let (stuck, has_stuck) = bounds(&harness, &runtime, stuck_key)
+            let (viewport, has_viewport) = bounds(&harness, &runtime, 9199u64)
+            if !has_stuck || !has_viewport || !(stuck.y - viewport.y < 0.5) || !(viewport.y - stuck.y < 0.5) { os.exit(193i32) }
+        }
+        sticky_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(54i32) }
     try io.print("ui collections6 v2 ok\n")
     ret ok

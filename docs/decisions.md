@@ -27901,3 +27901,11 @@ The List spec says removed rows collapse over `duration-short-4` on `ease-emphas
 `list_leaving` keeps a `ListSeen` on the list (slot `key + 1048615`): the first 12 row keys and their count. A build with exactly one row fewer than the last is a removal, placed at the first key that differs. The removed row's element still stands during that build, so its height is taken from its last bounds. A box of that height stands in the row's place and falls to nothing over `duration-short-4` on the emphasized-accelerate curve, with frames requested meanwhile, the way D1541 closes a key-value row.
 
 `ui_collections_v2` checks this on Windows and Linux. When the middle of three rows is removed, the last row stands in place on the first frame and a second later has risen by more than 30. With the collapse disabled the check fails (exit 165). All 103 ui_* fixtures pass on both hosts. Reduced motion drops the row rather than cross-fading it, a removal past the 12th row is not seen, and the sticky subheader remains under the marker.
+
+## D1543 — Sticky list subheader
+
+The List spec's subheader is "sticky while its section scrolls", with a `surface-container` fill once stuck. `list_of` drew it only at the list's top, so it scrolled away; the marker said there was no sticky subheader.
+
+`widget.viewport_around(runtime, key)` gives the bounds of the nearest scroll viewport around an element, as last laid out; D1497's `viewport_extent_around` gave only its extent. A list with a subheader now stands in a stack of its own (`list_sticky`). The wrapper depends only on whether there is a subheader, so scrolling never adds or drops it. The copy sticks once the list's top has scrolled above the viewport's and more than a subheader's height of the list is still in view. It is the subheader in `title-small` `primary`, 16 in, 16 above and 8 below, on `surface-container`, keyed `key ^ fnv1a64("stuck-subheader")` and hidden from the tree. It stands at the viewport's top, pushed up by the list's end.
+
+`ui_collections6_v2` checks this on Windows and Linux. A list of ten rows in a 200-tall viewport has no stuck copy at rest. Scrolled 200 down, the copy's top is the viewport's top. With the condition disabled the check fails (exit 193). All 103 ui_* fixtures pass on both hosts. Positions come from the last layout, so the copy trails a scroll by one frame.
