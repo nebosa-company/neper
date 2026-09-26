@@ -221,7 +221,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     fonts[0usize] = shape.Font { id: 7u32, data: font_bytes, face_index: 0u32 }
     if scene.register_font(&renderer, fonts[0usize]) != ok { os.exit(6i32) }
     let tokens = style.reference(.Light)
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 256usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 16u16, max_commands: 2048usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 256usize, max_states: 32usize, state_bytes: 1024usize, state_classes: 8u16, max_depth: 16u16, max_commands: 2048usize })
     if runtime_error != ok { os.exit(7i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts[0usize..1usize], language: "", runtime: &runtime }
@@ -294,6 +294,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let visited_x = p3.x + 2.0 * code_step + 8.0 + 2.0 * step
     if !is_color(shot, px(visited_x + 5.0, p3.y + 8.0), style.color(&tokens, .LinkVisited)) { os.exit(29i32) }
     // Hovered, the next frame washes the link and thickens its underline.
+    // (D1442) One more build first, so the link's eased wash has its cell.
+    frame = mem.arena_from(frame_storage)
+    let (root_warm, root_warm_error) = build(&frame, &theme, page)
+    if root_warm_error != ok || testing.pump(&harness, root_warm, time.Instant { nanos: 1050000000i64 }) != ok { os.exit(30i32) }
     if testing.hover(&harness, link_bounds.x + 8.0, link_bounds.y + 16.0) != ok { os.exit(30i32) }
     frame = mem.arena_from(frame_storage)
     let (root_2, build_2_error) = build(&frame, &theme, page)
@@ -301,7 +305,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(32i32) }
     let (hovered, hovered_error) = testing.snapshot(&harness, a)
     if hovered_error != ok { os.exit(33i32) }
-    if !is_color(hovered, px(p1.x + 0.5, line2 + 1.0), over(primary, tokens.states.hover, ground)) { os.exit(34i32) }
+    // (D1442) The wash fades in over `duration-short-2`: on the hover's own
+    // frame it is not yet at the hover opacity, 500 ms on it is.
+    if is_color(hovered, px(p1.x + 0.5, line2 + 1.0), over(primary, tokens.states.hover, ground)) { os.exit(34i32) }
+    if testing.begin(&harness, time.Instant { nanos: 1600000000i64 }) != ok { os.exit(36i32) }
+    frame = mem.arena_from(frame_storage)
+    let (root_washed, root_washed_error) = build(&frame, &theme, page)
+    if root_washed_error != ok || testing.pump(&harness, root_washed, time.Instant { nanos: 1600000000i64 }) != ok { os.exit(36i32) }
+    let (washed, washed_error) = testing.snapshot(&harness, a)
+    if washed_error != ok || !is_color(washed, px(p1.x + 0.5, line2 + 1.0), over(primary, tokens.states.hover, ground)) { os.exit(37i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui content3 v2 ok\n")
     ret ok
