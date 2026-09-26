@@ -196,6 +196,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tree_3_error != ok { os.exit(38i32) }
     let (last_next, has_last_next) = find(tree_3, .Button, "Next")
     if !has_last_next || !last_next.state.disabled || testing.by_text(&harness, "16").count == 0usize || testing.by_text(&harness, "20").count == 0usize { os.exit(39i32) }
+    // (D1439) Turned to page 2, its fill cross-fades in over `duration-short-2`:
+    // on the turn's first frame the button is not yet `secondary-container`, a
+    // second on it is.
+    var fill_step = 0usize
+    while fill_step < 4usize {
+        var fill_at = 9000000000i64
+        if fill_step == 1usize { fill_at = 9000000001i64 }
+        if fill_step == 2usize { fill_at = 9100000000i64 }
+        if fill_step == 3usize { fill_at = 10100000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: fill_at }) != ok { os.exit(41i32) }
+        frame = mem.arena_from(frame_storage)
+        var fill_leaf = 0usize
+        if fill_step >= 2usize { fill_leaf = 1usize }
+        let (fill_root, fill_root_error) = build(&frame, &theme, ctx, 0usize, fill_leaf)
+        if fill_root_error != ok || testing.pump(&harness, fill_root, time.Instant { nanos: fill_at }) != ok { os.exit(41i32) }
+        if fill_step >= 2usize {
+            let (second, has_second) = widget.bounds_of(&runtime, testing.by_key(&harness, 34u64).element)
+            let (fill_shot, fill_shot_error) = testing.snapshot(&harness, a)
+            if !has_second || fill_shot_error != ok { os.exit(42i32) }
+            let spot = ((usize(second.y + second.height * 0.5)) * usize(fill_shot.width) + usize(second.x + 6.0)) * 4usize
+            let fill = style.color(&tokens, .SecondaryContainer)
+            let green = f32(fill_shot.pixels[spot + 1usize])
+            let filled = green < fill.green * 255.0 + 3.0 && green > fill.green * 255.0 - 3.0
+            if fill_step == 2usize && filled { os.exit(43i32) }
+            if fill_step == 3usize && !filled { os.exit(44i32) }
+        }
+        fill_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(40i32) }
     try io.print("ui paged ok\n")
     ret ok
