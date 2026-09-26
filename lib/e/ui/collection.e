@@ -4480,8 +4480,19 @@ fn treed_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
 // sorting, reordering and resizing as a table's; a tree in the tree named `label`
 // whose items are rows of cells. v2 (D981, docs/ux/components/TreeTable): the
 // v2 header row over table rows with full-width dividers on `surface`.
-// ponytail: no viewport or virtualisation, footer or per-parent sort.
+// (D1504) `tree_table_with` takes `TreeOptions`, `height` virtualising the rows.
+// ponytail: no footer or per-parent sort.
 fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TreeSource, cells_of: CellSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], extent: f32) -> (widget.Node, err) {
+    var plain_tree: TreeOptions = zero
+    let (made, made_error) = tree_table_with(a, key, t, label, columns, source, cells_of, expanded, selected, toggle, pick, sort_column, descending, sort, reorder, resize, extent, plain_tree)
+    ret (made, made_error)
+}
+
+// (D1504, docs/ux/components/TreeTable) A tree table with `options`: with
+// `options.height` above 0 its rows stand under the header in a virtual viewport
+// that tall (keyed `key + 2`), only those in view built, the arrows revealing
+// their rows (as `TreeOptions` does for a tree, D1503).
+fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TreeSource, cells_of: CellSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], extent: f32, options: TreeOptions) -> (widget.Node, err) {
     if columns.len == 0usize { ret (zero, TooLarge) }
     let (head, head_error) = header_row(a, key, t, columns, sort_column, descending, sort, reorder, resize)
     if head_error != ok { ret (zero, head_error) }
@@ -4491,29 +4502,41 @@ fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         width += columns[c].width
         c += 1usize
     }
-    var plain_tree: TreeOptions = zero
     var table_first = 0usize
     var table_total = 0usize
-    let (rows, rows_error) = tree_rows(a, key + 128u64, t, source, expanded, selected, toggle, pick, false, columns, cells_of, extent, width, 0u64, plain_tree, &table_first, &table_total)
+    let (rows, rows_error) = tree_rows(a, key + 128u64, t, source, expanded, selected, toggle, pick, false, columns, cells_of, extent, width, 0u64, options, &table_first, &table_total)
     if rows_error != ok { ret (zero, rows_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, rows.len + 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
-    var r = 0usize
-    while r < rows.len {
-        parts[1usize + r] = rows[r]
-        r += 1usize
+    var part_count = 1usize
+    if options.height > 0.0 {
+        var row_extent = extent
+        if !(row_extent > 0.0) { row_extent = table_row_height(t) }
+        var view_style = style.defaults()
+        view_style.width = style.Length { Px: width }
+        view_style.height = style.Length { Px: options.height }
+        view_style.overflow = .Clip
+        parts[1usize] = widget.scroll(key + 2u64, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.scrolled, virtual_first: table_first, virtual_count: table_total, virtual_extent: row_extent, fades: false }, view_style, rows)
+        part_count = 2usize
+    } else {
+        var r = 0usize
+        while r < rows.len {
+            parts[1usize + r] = rows[r]
+            r += 1usize
+        }
+        part_count = rows.len + 1usize
     }
     var column_style = style.defaults()
     column_style.width = style.Length { Px: width }
     column_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..rows.len + 1usize])
+    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..part_count])
     var sem: widget.Semantics = zero
     sem.role = accessibility.ROLE_TREE_GRID
     sem.label = label
-    sem.row_count = u32(rows.len)
+    sem.row_count = u32(table_total)
     sem.column_count = u32(columns.len)
     ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
 }

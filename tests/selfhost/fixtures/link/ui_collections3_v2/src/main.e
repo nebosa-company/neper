@@ -622,6 +622,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if testing.by_key(&large_harness, 10000u64).count != 1usize || testing.by_key(&large_harness, 10512u64).count != 0usize || testing.by_key(&large_harness, 10020u64).count != 0usize { os.exit(88i32) }
     if widget.focus(&large_runtime, testing.by_key(&large_harness, 10000u64).element) != ok || testing.press_key(&large_harness, 35u32, zero) != ok || !(logs[0usize].offset > 16000.0) { os.exit(89i32) }
+    // (D1504) As a tree table 200 tall: its first row built, the 21st not, and
+    // End asks for the last row's reveal.
+    logs[0usize].offset = 0.0
+    var table_step = 0usize
+    while table_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let big_table_source = collection.TreeSource { ctx: ctx, count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
+        var big_table_options: collection.TreeOptions = zero
+        big_table_options.height = 200.0
+        big_table_options.scrolled = widget.Change[f32] { ctx: ctx, invoke: on_tree_scroll }
+        var big_columns: [2]collection.Column = zero
+        big_columns[0usize] = collection.Column { title: "Name", width: 200.0 }
+        big_columns[1usize] = collection.Column { title: "Size", width: 80.0 }
+        var none_keys: [1]widget.Key = zero
+        let (big_table, big_table_error) = collection.tree_table_with(&f, 9500u64, &large_theme, "Big table", big_columns[..], big_table_source, collection.CellSource { ctx: ctx, cell: tree_cell }, none_keys[0usize..0usize], none_keys[0usize..0usize], widget.Change[widget.Key] { ctx: ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0usize, false, zero, zero, zero, 0.0, big_table_options)
+        let (big_table_page, big_table_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if big_table_error != ok || big_table_page_error != ok { os.exit(90i32) }
+        big_table_page[0usize] = big_table
+        if testing.pump(&large_harness, widget.box(0u64, control.sized_style(320.0, 360.0), big_table_page[0usize..1usize]), time.Instant { nanos: 1500000000i64 + i64(table_step) }) != ok { os.exit(91i32) }
+        table_step += 1usize
+    }
+    if testing.by_key(&large_harness, 10000u64).count != 1usize || testing.by_key(&large_harness, 10020u64).count != 0usize { os.exit(92i32) }
+    if widget.focus(&large_runtime, testing.by_key(&large_harness, 10000u64).element) != ok || testing.press_key(&large_harness, 35u32, zero) != ok || !(logs[0usize].offset > 16000.0) { os.exit(93i32) }
     if testing.close(&large_harness) != ok || widget.close(&large_runtime) != ok || testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
     try io.print("ui collections3 v2 ok\n")
     ret ok
