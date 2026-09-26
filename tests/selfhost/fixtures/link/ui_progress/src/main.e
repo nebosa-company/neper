@@ -30,6 +30,13 @@ fn close_to(value: u8, expected: f32) -> bool {
     ret v - e < 4.0 && e - v < 4.0
 }
 
+// (D1390) A Retry press, counted.
+fn on_retry(ctx: *void) -> err {
+    let count = mem.cast[*u32](ctx)
+    *count += 1u32
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -198,6 +205,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if wait_step == 6usize && shown_now { os.exit(39i32) }
         wait_step += 1usize
     }
+    // (D1390) A labelled bar at 62% says its task and "62%" above and its detail
+    // below; failed, the label says so and Retry stands at the row's end.
+    var retries = 0u32
+    let s_retry = widget.Submit { ctx: mem.cast[*void](&retries), invoke: on_retry }
+    var upload_words: control.ProgressWords = zero
+    upload_words.detail = "About 20 s left"
+    var failed_words: control.ProgressWords = zero
+    failed_words.detail = "The connection dropped"
+    failed_words.action_label = "Retry"
+    failed_words.action = s_retry
+    var failed_look = control.progress_options()
+    failed_look.tone = .Error
+    frame = mem.arena_from(frame_storage)
+    let (uploading, uploading_error) = control.progress_labelled(&frame, 96u64, &theme, "Uploading", 0.62, false, 200.0, upload_words, control.progress_options())
+    let (failing, failing_error) = control.progress_labelled(&frame, 97u64, &theme, "Upload", 0.41, false, 200.0, failed_words, failed_look)
+    let (labelled_page, labelled_page_error) = mem.alloc[widget.Node](&frame, 2usize)
+    if uploading_error != ok || failing_error != ok || labelled_page_error != ok { os.exit(40i32) }
+    labelled_page[0usize] = uploading
+    labelled_page[1usize] = failing
+    if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, control.sized_style(240.0, 240.0), labelled_page[0usize..2usize]), time.Instant { nanos: 22000000000i64 }) != ok { os.exit(41i32) }
+    if testing.by_text(&harness, "Uploading").count == 0usize { os.exit(42i32) }
+    if testing.by_text(&harness, "62%").count == 0usize { os.exit(44i32) }
+    if testing.by_text(&harness, "About 20 s left").count == 0usize { os.exit(45i32) }
+    if testing.by_text(&harness, "Upload failed").count == 0usize || testing.by_key(&harness, 100u64).count != 1usize { os.exit(43i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(23i32) }
     try io.print("ui progress ok\n")
     ret ok
