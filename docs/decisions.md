@@ -27830,3 +27830,11 @@ The Outline spec gives a heading an optional section number (`body-medium` `on-s
 `TreeOptions.numbered` leads each row with its section number, and `outline_with` takes the options. `section_number` works the number out from the visible rows: the row's place among its siblings, then its parent's, up to the root, written root first as "1.1.1". The current row's number is `primary` at 600. `outline_follow(tops, scrolled, viewport)` is follow mode's rule as a function: of the headings' document tops, the last whose top has crossed a quarter of the viewport, else the first. The caller passes its answer as `current`, which D1452 already slides the marker to.
 
 `ui_collections3_v2` checks this on Windows and Linux. A numbered outline shows 1.1.1, 1.2 and 2; the current A2's "1.2" is `primary` and "1.1" is not; and `outline_follow` gives 1, 2 and 0 for three scroll positions. With `numbered` off the number check fails (exit 107). All 103 ui_* fixtures pass on both hosts. The filter field and the label's own 600 weight (the label is the caller's node) remain under the marker.
+
+## D1535 — Toasts stack three high
+
+The Snackbar spec stacks toasts "8 apart, newest on top, max 3; older ones collapse into '2 more notifications'". D1494 showed the head alone over a count of everything behind it, and its `ponytail:` marker said the stack of three was missing.
+
+The toast column now shows up to three toasts: the head, then the next two under it, 8 apart. Each of those is `stacked_toast`, keyed `key + 16 + 8 * j` with its action and close one and two above: the toast's 340 `surface-container-high` sheet, `radius-md`, elevation 3, its message in `body-medium` `on-surface-variant`, its action a text button in `primary`, its close, and a polite status named by its message. Its notice is held in the frame so its buttons outlive the build. Only the notices past three collapse into the count pill (`key + 3`) under the stack, "1 more notification" or "N more notifications".
+
+`ui_status4_v2` changes with the design. With two notices the second toast stands under the head and there is no count. With five, the third toast ("Sync finished") stands 340 wide, the fourth is not drawn, and "2 more notifications" sits under the stack. The old library shows a count for two (exit 54). All 103 ui_* fixtures pass on Windows and Linux.
