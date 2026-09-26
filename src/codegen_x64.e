@@ -1960,6 +1960,20 @@ fn emit_trap_stub(builder: *nir.Builder, current: nir.Function, stub: nir.Instru
     ret add_relocation(context.relocations, context.relocation_count, enter_displacement, trap_ref)
 }
 
+// `--fault-select-inlined` (D1528): the injected failure, named as such.
+error FaultSelect
+
+// How many bodies a copied instruction's origin chain holds (D565), zero for none.
+fn inline_depth(builder: *nir.Builder, origin: usize) -> usize {
+    var depth = 0usize
+    var cursor = origin
+    while cursor != 0usize && cursor <= builder.inlined.len && depth < 8usize {
+        depth += 1usize
+        cursor = builder.inlined[cursor - 1usize].caller_function
+    }
+    ret depth
+}
+
 // A trap's data or stub function by its name, `trap.N` (D927): no declared name has a dot.
 fn is_trap_function(name: str) -> bool {
     ret name.len > 5usize && name[0usize] == 116u8 && name[1usize] == 114u8 && name[2usize] == 97u8 && name[3usize] == 112u8 && name[4usize] == 46u8
@@ -2817,6 +2831,10 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
         let instruction = builder.instructions[at]
         context.failure_token = nir.site_token(instruction.site)
         context.failure_instruction = at
+        // `--fault-select-inlined DEPTH` (D1528): selection fails at the first copied
+        // instruction whose chain is at least DEPTH bodies deep, so a suite can read
+        // the diagnostic's provenance.
+        if builder.fault_select_inlined != 0usize && inline_depth(builder, usize(instruction.inline_origin)) >= builder.fault_select_inlined { ret FaultSelect }
         // The line table: a row wherever the line or the file changes (D209).
         if instruction.site.line != 0usize {
             if instruction.site.line > 4294967295usize { ret Unsupported }

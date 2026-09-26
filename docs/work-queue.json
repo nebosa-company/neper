@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C048",
-      "category": "compiler",
-      "group": "Front end and language",
-      "order": 48,
-      "title": "Generated-source provenance and editability (v1 precursor for T2 H19)",
-      "score": 0.86,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "A `<file>.e.map.json` beside a generated file maps diagnostics back to the original span with the generated one related; a stale or malformed map is E-TOOL-0001 with no artifact (D264, D300); version 2 names the generator and hashes its input, so a changed input is stale too, and a mapping's `edit` says whether the generated span may be edited or the original is the target (D373); no fix is ever offered on an original span; the compiler runs no generator. a generated file whose hash is not the map's while the generator's input is unchanged is a hand edit, `E-TOOL-0002`, told from a stale map, pinned by the corpus (D418); a generator's combined inputs (`generator.inputs`) are each checked and the first changed one named, and one input's line that became two declarations maps each to the one original span, pinned by the corpus (D464); a nested map -- the original itself generated under a map of its own -- is followed one level to the root original with the intermediate related, and a stale nested map is stated rather than followed, pinned by the corpus (D465); a failure inside an instance's body relates the site that first requested that instance, named with its arguments, in whichever module asked, pinned by the corpus (D466); the operand's map is an input of the build manifest with its hash, so a map-only change is visible there and nowhere in the code's identity, pinned per host (D467). The chain is bounded at eight nested levels (D499, D564), each level's mappings in its own eight slots and every intermediate related root-nearest first; `nested_deep` pins four levels past the former three-level ceiling. Provenance through inlining in a trap's backtrace (D519): a frame whose line lies in another module -- a body inlined there in release -- names that module's function holding the line as `inlined_from`, found from the checker's source ranges, where the runtime's frame could only name the function whose code holds the site; both suites pin it over `run_trap_module` in release, and the operand's own frames are under the project's identity. `dis-file --json --release` lists the release image, and each record's `inlined` names the runs of the function's code that are copies of another function's body, from the line table as backtrace frames are named (D542); a copied instruction also retains its bounded origin chain, so a run copied through another body carries `through` from the innermost intermediate outward while direct copies stay unchanged (D565). Not yet: provenance through inlining in diagnostics"
-    },
-    {
       "id": "C050",
       "category": "compiler",
       "group": "Front end and language",

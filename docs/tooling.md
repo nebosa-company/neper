@@ -892,6 +892,15 @@ be cancelled on another, which is what a harness's deadline means. `--deadline 0
 is a deadline already passed and cancels at the first checkpoint, the corpus's
 `tools/deadline` case.
 
+A selection failure on an instruction copied into a release build by inlining
+(D1528, H19) is reported at the source that holds it, under that source's module.
+It names the function it was inlined into and the bodies it came through, from
+the innermost intermediate outward, as a backtrace frame and `dis` do:
+``cannot select machine code for `deep.inner` inlined into `main.main` through
+`deep.outer` ``. `--fault-select-inlined DEPTH` makes selection fail at the first
+copied instruction at least DEPTH bodies deep, which is how the corpus's
+`select_inlined` case pins it.
+
 `--memory-budget SIZE` (D1527, H16), spelled as `--arena` spells a size, bounds
 the bytes the lowering workers' arenas may reach together.
 

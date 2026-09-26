@@ -772,7 +772,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--overlay") || same(flag, "--cpu")
+    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--overlay") || same(flag, "--cpu")
 }
 
 // `--cpu LEVEL` (D765): section 13's x64 levels, `x64-v1` the SSE2 baseline the build
@@ -989,6 +989,13 @@ fn decimal_ok(spelling: str) -> bool {
 }
 
 // `-j N` (D331): the worker count asked for, none when the flag is absent.
+// `--fault-select-inlined DEPTH` (D1528); zero without it.
+fn fault_select_flag(args: []str) -> usize {
+    let (depth, given) = decimal_flag(args, "--fault-select-inlined")
+    if given { ret depth }
+    ret 0usize
+}
+
 // `--memory-budget SIZE` (D1527, H16): as `--arena` spells a size; zero without it.
 fn memory_budget_flag(args: []str) -> usize {
     var at = 7usize
@@ -7818,19 +7825,60 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     ret emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, "E-TYPE-9999", message_storage[..message.count])
 }
 
-fn print_codegen_diagnostic(report: *Sink, g: *graph.Graph, function: nir.Function, context: *codegen_x64.FunctionContext, codegen_error: err) -> err {
+fn print_codegen_diagnostic(report: *Sink, g: *graph.Graph, builder: *nir.Builder, function: nir.Function, context: *codegen_x64.FunctionContext, codegen_error: err) -> err {
+    var module_index = function.module_index
     var path = "<unknown>"
-    if function.module_index < g.count { path = g.modules[function.module_index].path }
-    var message_storage: [512]u8 = zero
+    var message_storage: [1024]u8 = zero
     var message = capture_sink(message_storage[..])
     try write_all(&message, "cannot select machine code for `")
-    try write_all(&message, function.name)
-    try write_all(&message, "`")
+    // (D1528, H19) A failing instruction copied from another function is that
+    // function's source: the span is its module's, and the message names the
+    // function it was inlined into and every body it came through.
+    var origin = 0usize
+    if context.failure_instruction < builder.instruction_count { origin = usize(builder.instructions[context.failure_instruction].inline_origin) }
+    if origin != 0usize && origin <= builder.inlined.len {
+        // The chain from the body inlined here inward (D565): its last node is the
+        // function whose source holds the instruction.
+        var chain: [8]usize = zero
+        var depth = 0usize
+        var cursor = origin
+        while cursor != 0usize && cursor <= builder.inlined.len && depth < chain.len {
+            chain[depth] = cursor - 1usize
+            depth += 1usize
+            cursor = builder.inlined[cursor - 1usize].caller_function
+        }
+        let innermost = builder.inlined[chain[depth - 1usize]]
+        module_index = innermost.callee_module
+        if module_index < g.count { try write_all(&message, g.modules[module_index].name) }
+        try write_all(&message, ".")
+        try write_all(&message, innermost.name)
+        try write_all(&message, "` inlined into `")
+        if function.module_index < g.count { try write_all(&message, g.modules[function.module_index].name) }
+        try write_all(&message, ".")
+        try write_all(&message, function.name)
+        try write_all(&message, "`")
+        // The bodies it came through, from the innermost intermediate outward.
+        var hop = depth - 1usize
+        while hop > 0usize {
+            hop = hop - 1usize
+            let through = builder.inlined[chain[hop]]
+            if hop == depth - 2usize { try write_all(&message, " through `") } else { try write_all(&message, "`, `") }
+            if through.callee_module < g.count { try write_all(&message, g.modules[through.callee_module].name) }
+            try write_all(&message, ".")
+            try write_all(&message, through.name)
+        }
+        if depth > 1usize { try write_all(&message, "`") }
+    } else {
+        try write_all(&message, function.name)
+        try write_all(&message, "`")
+    }
+    if module_index < g.count { path = g.modules[module_index].path }
     // Which table filled, when one did: the selector's own errors are capacities.
     if codegen_error == codegen_x64.Unsupported { try write_all(&message, " (a fixup, relocation or line table is full)") }
     if codegen_error == emit_x64.Capacity { try write_all(&message, " (the machine code buffer is full)") }
+    if codegen_error == codegen_x64.FaultSelect { try write_all(&message, " (made to fail by --fault-select-inlined)") }
     if codegen_error == regalloc.Capacity { try write_all(&message, " (the register allocator's tables are full)") }
-    ret emit_diagnostic(report, path, module_text(g, function.module_index), module_lines(g, function.module_index), context.failure_token, true, "E-CODEGEN-9999", message_storage[..message.count])
+    ret emit_diagnostic(report, path, module_text(g, module_index), module_lines(g, module_index), context.failure_token, true, "E-CODEGEN-9999", message_storage[..message.count])
 }
 
 fn write_qualified_error(file: *Sink, module_name: str, error_name: str) -> err {
@@ -8669,7 +8717,7 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
             // (D1527): the generous worker does the module over (D325).
             if codegen_error == mem.Exhausted { ret codegen_error }
             if codegen_error != ok {
-                try print_codegen_diagnostic(report, loaded, builder.functions[function_at], context, codegen_error)
+                try print_codegen_diagnostic(report, loaded, builder, builder.functions[function_at], context, codegen_error)
                 try finish_report(report)
                 os.exit(1i32)
                 ret ok
@@ -9573,6 +9621,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
     w.builder.nocheck = program.nocheck
     w.builder.arena_bytes = program.arena_bytes
     w.builder.cpu_level = program.cpu_level
+    w.builder.fault_select_inlined = program.fault_select_inlined
     // The lowering's explanations (D453): the cost of every generic instance.
     w.builder.explain = program.explain
     w.builder.explain_json = program.explain_json
@@ -11879,6 +11928,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if trailing_flags {
             early_builder.inline_cap = inline_cap_flag(args)
             early_builder.cpu_level = cpu_level_flag(args)
+            early_builder.fault_select_inlined = fault_select_flag(args)
             early_builder.explain = has_flag(args, "--explain")
             early_builder.explain_json = report.json
         }
@@ -11977,6 +12027,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         builder.release = release_build
         builder.arena_bytes = arena_flag(args)
         builder.cpu_level = early_builder.cpu_level
+        builder.fault_select_inlined = early_builder.fault_select_inlined
         var oracle: nir.Builder = zero
         var oracle_signatures: nir.Signatures = zero
         let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))

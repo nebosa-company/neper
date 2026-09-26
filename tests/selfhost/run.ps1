@@ -4947,6 +4947,12 @@ $runFloodActual = Join-Path $testBuild 'conformance-tools-run-flood.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_flood.e `"$repo`" x64 windows conformance-tools-run-flood.out --json --capture 50 > `"$runFloodActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runFloodActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_flood.expected.jsonl')).Hash) { throw "run --json --capture differs from the conformance corpus" }
 if ((Get-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-run-flood.out.stdout')).Length -ne 296) { throw 'the whole flood output is not in the file beside the executable' }
+# Provenance through inlining in a diagnostic (D1528, H19): selection made to fail at
+# a copy two bodies deep names the innermost source, the caller and the body between.
+$selectInlinedActual = Join-Path $testBuild 'conformance-tools-select-inlined.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/select_inlined/src/main.e `"$repo`" x64 windows conformance-tools-select-inlined.out --release --json -j 1 --fault-select-inlined 2 > `"$selectInlinedActual`""
+if ($LASTEXITCODE -ne 1) { throw 'the build made to fail in selection did not exit 1' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $selectInlinedActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/select_inlined.expected.jsonl')).Hash) { throw 'the inlined selection diagnostic differs from the conformance corpus' }
 # A memory budget (D1527, H16): the workers admitted under it build the default
 # image, and a budget below one worker's need is refused by name, exit 1.
 $budgetDefault = Join-Path $testBuild 'budget-default.exe'
