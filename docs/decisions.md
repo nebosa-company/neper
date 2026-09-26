@@ -27162,3 +27162,9 @@ The Avatar spec sets 32's initials in `label-large` at 13, but the type ramp has
 D1371 kept the comment and blank lines before each pair, but dropped the lines after the last one when the text round-tripped. `pairs_parse_noted` now gathers those trailing lines into the note after the last pair (`notes[count]`, when the caller gave one), and `pairs_text_noted` writes that note after the pairs. The empty remainder after a final line break is not counted as a line, so a text ending in a newline does not grow a blank one.
 
 `ui_collections5_v2` round-trips `A=1`, a comment, a blank line and another comment, on Windows and Linux; they come back after the pair as written.
+
+## D1460 — Key-value identifier names stand in the code face
+
+The KeyValueEditor spec sets names in `code` when they are identifiers. `identifier_name` says whether a name is made only of letters, digits and `_` and does not start with a digit. An identifier name's field asks for the theme's fixed-pitch face (`FieldOptions.mono`, D1453); other names keep the body face, and so do the values.
+
+`ui_collections5_v2` checks on Windows and Linux that `API_KEY` and `_x9` are identifiers and that `9x`, `My name` and the empty name are not.

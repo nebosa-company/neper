@@ -396,6 +396,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (noted_count, _) = collection.pairs_parse_noted("# env\nHOME = /root\n\nPATH=/bin\n", pairs[0usize..2usize], notes[..])
     let rewritten = collection.pairs_text_noted(as_text, pairs[0usize..2usize], notes[..])
     if noted_count != 2usize || !same(as_text[0usize..rewritten], "# env\nHOME= /root\n\nPATH=/bin") { os.exit(68i32) }
+    // (D1460) Identifier names take the `code` face; others do not.
+    if !collection.identifier_name("API_KEY") || !collection.identifier_name("_x9") || collection.identifier_name("9x") || collection.identifier_name("My name") || collection.identifier_name("") { os.exit(70i32) }
     // (D1459) Lines after the last pair come back after it.
     let (tail_bytes, tail_bytes_error) = mem.alloc[u8](a, 96usize)
     if tail_bytes_error != ok { os.exit(67i32) }
