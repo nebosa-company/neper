@@ -4496,6 +4496,18 @@ fn pair_reveal_fire(ctx: *void) -> err {
     ret widget.fire_change[usize](r.reveal, r.index)
 }
 
+// (D1353, docs/ux/components/KeyValueEditor, removed) The snackbar notice a
+// removal raises: "NAME removed" ("Variable removed" when the name is empty)
+// with an Undo action; the snackbar's live status reads it out. Putting the
+// pair back is the caller's.
+fn pair_removed_notice(a: *mem.Arena, name: str, undo: widget.Submit, dismiss: widget.Submit) -> (control.Notice, err) {
+    var said = name
+    if said.len == 0usize { said = "Variable" }
+    let (text, text_error) = joined(a, said, "removed", "")
+    if text_error != ok { ret (zero, text_error) }
+    ret (control.Notice { text: text, action_label: "Undo", action: undo, dismiss: dismiss }, ok)
+}
+
 fn key_value_options() -> KeyValueOptions {
     var out: KeyValueOptions = zero
     out.name_label = "Name"
@@ -4546,8 +4558,9 @@ fn joined(a: *mem.Arena, first: str, second: str, third: []const u8) -> (str, er
 // (D1314) Text mode and its switch (`KeyValueOptions.text_mode`, `pairs_text`,
 // `pairs_parse`).
 // (D1327) The ordered variant (`KeyValueOptions.ordered`).
-// ponytail: no removal with Undo, `code` names,
-// the 30 s reveal limit or the touch list form.
+// (D1353) Removal's Undo notice (`pair_removed_notice`).
+// ponytail: `code` names, the removed row's collapse, the 30 s reveal limit or
+// the touch list form.
 fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
     if pairs.len > 128usize { ret (zero, TooLarge) }
     if options.text_mode {

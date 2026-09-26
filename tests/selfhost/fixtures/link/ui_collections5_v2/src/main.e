@@ -432,6 +432,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_first_grip || !has_first_pair { os.exit(63i32) }
     let grip_at = geometry.Point { x: first_grip.x + 12.0, y: first_grip.y + first_grip.height * 0.5 }
     if testing.drag(&harness, grip_at, geometry.Point { x: grip_at.x, y: first_pair.y + first_pair.height * 1.5 + 8.0 }, 4usize) != ok || order_log.adds != 2usize || order_log.removed != 1usize { os.exit(64i32) }
+    // (D1353) A removal's notice names the pair and offers Undo.
+    let (removed_notice, removed_notice_error) = collection.pair_removed_notice(&f, "API_URL", zero, zero)
+    if removed_notice_error != ok || !control.same_text(removed_notice.text, "API_URL removed") || !control.same_text(removed_notice.action_label, "Undo") { os.exit(65i32) }
+    let (nameless_notice, _) = collection.pair_removed_notice(&f, "", zero, zero)
+    if !control.same_text(nameless_notice.text, "Variable removed") { os.exit(66i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui collections5 v2 ok\n")
     ret ok
