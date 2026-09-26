@@ -3920,6 +3920,22 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     let start = control.if_else(tabled, 0.0, 4.0)
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let flat = style.Length { Px: 0.0 }
+    // (D1452, docs/ux/components/Outline, motion) The current marker slides
+    // between rows over `duration-medium-2` on `ease-standard`: the current row's
+    // place eases on the outline (slot `key + 1048611`) and the bar stands the
+    // part still to come away from its row; reduced motion moves it at once.
+    var current_at = 0usize
+    var has_current = false
+    var seek = 0usize
+    while current != 0u64 && seek < count {
+        if visible[seek].key == current {
+            current_at = seek
+            has_current = true
+        }
+        seek += 1usize
+    }
+    var marker_at = f32(current_at)
+    if has_current { marker_at = control.eased_on(t, key, key + 1048611u64, f32(current_at), false, t.tokens.durations.medium2) }
     var i = 0usize
     while i < count {
         let entry = visible[i]
@@ -4058,7 +4074,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             if current != 0u64 && entry.key == current {
                 var bar = control.sized_style(3.0, control.max_zero(tall - 16.0))
                 bar.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
-                inside[1usize] = widget.positioned(0u64, 0.0, 8.0, bar, zero)
+                inside[1usize] = widget.positioned(0u64, 0.0, 8.0 + (marker_at - f32(i)) * row_extent, bar, zero)
                 parts = 2usize
             }
             let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
