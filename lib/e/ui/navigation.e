@@ -4652,7 +4652,9 @@ fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Th
 // (D1398) A workspace's history from the caller: `recent`, the documents' indices
 // most recently used first (the current one first), and `reopen`, which brings
 // back the last closed document.
-type WorkspaceHistory = struct { recent: []const usize, reopen: widget.Submit }
+// (D1399) `open_recent`, when set, is the empty state's tonal Open recent button
+// (keyed `key + 3`).
+type WorkspaceHistory = struct { recent: []const usize, reopen: widget.Submit, open_recent: widget.Submit }
 
 // (D1398, docs/ux/components/MultiDocumentWorkspace, switch and close) The
 // workspace with its history: Ctrl+Tab picks the next most recently used
@@ -4669,7 +4671,14 @@ fn multi_document_workspace_with(a: *mem.Arena, key: widget.Key, t: *const contr
     if viewed_error != ok { ret (zero, TooLarge) }
     viewed[0usize] = view
     if documents.len == 0usize {
-        let (empty, empty_error) = workspace_empty(a, t, 0u64, zero)
+        var recent_press: *const widget.Submit = zero
+        if widget.submit_set(history.open_recent.invoke) {
+            let (held_recent, held_recent_error) = mem.alloc[widget.Submit](a, 1usize)
+            if held_recent_error != ok { ret (zero, TooLarge) }
+            held_recent[0usize] = history.open_recent
+            recent_press = &held_recent[0usize]
+        }
+        let (empty, empty_error) = workspace_empty(a, t, key + 3u64, recent_press)
         if empty_error != ok { ret (zero, empty_error) }
         viewed[0usize] = empty
         view_style.height = style.Length { Px: height }
