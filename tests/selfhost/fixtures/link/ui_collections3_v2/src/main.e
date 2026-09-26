@@ -139,6 +139,13 @@ fn tree_build(ctx: *void, a: *mem.Arena, key: widget.Key, out: *widget.Node) -> 
     ret ok
 }
 
+fn same_color(x: paint.Color, y: paint.Color) -> bool {
+    let dr = x.red - y.red
+    let dg = x.green - y.green
+    let db = x.blue - y.blue
+    ret dr < 0.01 && dr > -0.01 && dg < 0.01 && dg > -0.01 && db < 0.01 && db > -0.01
+}
+
 // (D1533) A row's name, which the sorted tree table orders siblings by.
 fn tree_sort_text(ctx: *void, key: widget.Key, column: usize) -> str {
     if key == 1u64 { ret "A" }
@@ -714,6 +721,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_sorted_a || !has_sorted_b || !has_sorted_a1 || !has_sorted_a2 { os.exit(101i32) }
     if !(sorted_b.y < sorted_a.y) || !(sorted_a.y < sorted_a2.y) || !(sorted_a2.y < sorted_a1.y) { os.exit(102i32) }
     if testing.by_text(&harness, "5 items shown, 1 selected").count == 0usize { os.exit(103i32) }
+    // (D1534) A numbered outline: each heading leads with its section number, the
+    // current one (A2, 1.2) in `primary`; follow mode picks the heading whose top
+    // has crossed a quarter of the viewport.
+    f = mem.arena_from(frame_storage)
+    var numbered_options: collection.TreeOptions = zero
+    numbered_options.numbered = true
+    let (fold_all, fold_all_error) = mem.alloc[widget.Submit](&f, 1usize)
+    if fold_all_error != ok { os.exit(104i32) }
+    fold_all[0usize] = widget.Submit { ctx: sorted_ctx, invoke: on_collapse }
+    let (numbered, numbered_error) = collection.outline_with(&f, 700u64, &theme, "Outline", sorted_source, sorted_open[..], sorted_chosen[..], widget.Change[widget.Key] { ctx: sorted_ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: sorted_ctx, invoke: on_pick }, 12u64, &fold_all[0usize], 0.0, 240.0, numbered_options)
+    let (numbered_page, numbered_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if numbered_error != ok || numbered_page_error != ok { os.exit(105i32) }
+    numbered_page[0usize] = numbered
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 300.0), numbered_page[0usize..1usize]), time.Instant { nanos: 2600000000i64 }) != ok { os.exit(106i32) }
+    if testing.by_text(&harness, "1.1.1").count == 0usize || testing.by_text(&harness, "1.2").count == 0usize || testing.by_text(&harness, "2").count == 0usize { os.exit(107i32) }
+    let (current_ink, has_current_ink) = testing.text_color(&harness, "1.2")
+    let (plain_ink, has_plain_ink) = testing.text_color(&harness, "1.1")
+    let primary = style.color(&tokens, .Primary)
+    if !has_current_ink || !has_plain_ink || !same_color(current_ink, primary) || same_color(plain_ink, primary) { os.exit(108i32) }
+    var tops: [3]f32 = zero
+    tops[1usize] = 100.0
+    tops[2usize] = 300.0
+    if collection.outline_follow(tops[..], 0.0, 400.0) != 1usize || collection.outline_follow(tops[..], 250.0, 400.0) != 2usize || collection.outline_follow(tops[..], 0.0, 200.0) != 0usize { os.exit(109i32) }
     if testing.close(&large_harness) != ok || widget.close(&large_runtime) != ok || testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
     try io.print("ui collections3 v2 ok\n")
     ret ok
