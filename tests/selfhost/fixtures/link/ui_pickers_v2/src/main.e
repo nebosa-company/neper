@@ -453,6 +453,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if docked_step == 1usize && testing.by_key(&harness, 3000u64 + 1048577u64).count != 1usize { os.exit(148i32) }
         docked_step += 1usize
     }
+    // (D1388) In German the calendar says "März 2026" over "Mo Di Mi ..."; in
+    // French "mars 2026".
+    var german_theme = us_theme
+    german_theme.language = "de-DE"
+    var french_theme = us_theme
+    french_theme.language = "fr-FR"
+    var no_german_marks: overlay.CalendarMarks = zero
+    f = mem.arena_from(frame_storage)
+    let (german_month, german_month_error) = overlay.calendar_with(&f, 3100u64, &german_theme, "Termin", first_of_march, first_of_march, false, false, first_of_march, first_of_march, first_of_march, false, picked_dates, picked_dates, no_german_marks)
+    let (french_month, french_month_error) = overlay.calendar_with(&f, 3200u64, &french_theme, "Date", first_of_march, first_of_march, false, false, first_of_march, first_of_march, first_of_march, false, picked_dates, picked_dates, no_german_marks)
+    let (locale_page, locale_page_error) = mem.alloc[widget.Node](&f, 2usize)
+    if german_month_error != ok || french_month_error != ok || locale_page_error != ok { os.exit(149i32) }
+    locale_page[0usize] = german_month
+    locale_page[1usize] = french_month
+    if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, control.sized_style(600.0, 720.0), locale_page[0usize..2usize]), time.Instant { nanos: 3360000000i64 }) != ok { os.exit(150i32) }
+    if testing.by_text(&harness, "März 2026").count != 1usize || testing.by_text(&harness, "Di").count == 0usize || testing.by_text(&harness, "mars 2026").count != 1usize { os.exit(151i32) }
     // (D1277) With the week of the 16th to the 22nd unavailable, Down from the
     // 11th goes to the 25th.
     var closed_week: [7]time.Date = zero
