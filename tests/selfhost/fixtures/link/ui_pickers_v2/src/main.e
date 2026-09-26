@@ -599,12 +599,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (this_year, has_this_year) = labelled(&harness, "2026")
             if !month_button.state.expanded || !has_this_year || !this_year.state.selected || testing.by_key(&harness, 1215u64).count != 0usize { os.exit(120i32) }
             // (D1363) From 2026, Right focuses 2027 and Down from there 2030.
-            if widget.focus(&runtime, testing.by_key(&harness, 1200u64 + 4096u64 + 7u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok { os.exit(133i32) }
+            // (D1422) The list runs from 1926 in a viewport, so 2026 is index 100
+            // and in view, while 1926, far above, is not built.
+            if testing.by_key(&harness, 1200u64 + 4096u64 + 100u64).count == 0usize || testing.by_key(&harness, 1200u64 + 4096u64).count != 0usize || testing.by_key(&harness, 1200u64 + 4094u64).count == 0usize { os.exit(162i32) }
+            if widget.focus(&runtime, testing.by_key(&harness, 1200u64 + 4096u64 + 100u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok { os.exit(133i32) }
             let (after_right, _) = widget.focused_key(&runtime)
-            if after_right != 1200u64 + 4096u64 + 8u64 || testing.press_key(&harness, 40u32, zero) != ok { os.exit(134i32) }
+            if after_right != 1200u64 + 4096u64 + 101u64 || testing.press_key(&harness, 40u32, zero) != ok { os.exit(134i32) }
             let (after_down, _) = widget.focused_key(&runtime)
-            if after_down != 1200u64 + 4096u64 + 11u64 { os.exit(135i32) }
-            if !tap_key(&harness, &runtime, 1200u64 + 4096u64 + 11u64) || stores[0usize].last_date.year != 2030i32 || stores[0usize].last_date.month != 3u8 || stores[0usize].toggles != toggles_before + 1usize { os.exit(121i32) }
+            if after_down != 1200u64 + 4096u64 + 104u64 { os.exit(135i32) }
+            if !tap_key(&harness, &runtime, 1200u64 + 4096u64 + 104u64) || stores[0usize].last_date.year != 2030i32 || stores[0usize].last_date.month != 3u8 || stores[0usize].toggles != toggles_before + 1usize { os.exit(121i32) }
         }
         year_step += 1usize
     }

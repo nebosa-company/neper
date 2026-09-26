@@ -3138,8 +3138,12 @@ fn year_pick_fire(ctx: *void) -> err {
 // showing that year's month and leaving the year view; `width` wide, `height`
 // tall.
 // (D1363) Left and Right move the focus a year, Up and Down a row of three.
-// ponytail: fifteen years round the shown one, not a scrolled century; each pill
-// is still its own Tab stop.
+// (D1422) The years run a century either side of the shown one (inside
+// `earliest` and `latest`) in a viewport (keyed `key + 4094`) that opens with the
+// shown year's row in the middle; the index counts from the first year listed.
+// Only the rows in view (and one either side) are built.
+// ponytail: each pill is still its own Tab stop, and arrows past the built rows
+// find nothing to focus.
 fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: time.Date, marks: *const CalendarMarks, show: widget.Change[time.Date], width: f32, height: f32) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var pill_w: f32 = 64.0
@@ -3148,25 +3152,46 @@ fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: tim
         pill_w = 72.0
         pill_h = 36.0
     }
-    var first = shown.year - 7i32
+    var first = shown.year - 100i32
     if marks.has_earliest && first < marks.earliest.year { first = marks.earliest.year }
-    var last = first + 14i32
-    if marks.has_latest && last > marks.latest.year {
-        last = marks.latest.year
-        first = last - 14i32
-        if marks.has_earliest && first < marks.earliest.year { first = marks.earliest.year }
-    }
+    var last = shown.year + 100i32
+    if marks.has_latest && last > marks.latest.year { last = marks.latest.year }
     if last < first { last = first }
     let count = usize(last - first + 1i32)
+    // (D1422, docs/ux/components/Calendar, year view) The shown year's row stands
+    // in the middle of the viewport when it opens or the shown year changes.
+    let row_total = (count + 2usize) / 3usize
+    let row_height = pill_h + 16.0
+    var shown_row: f32 = 0.0
+    if shown.year >= first && shown.year <= last { shown_row = f32(usize(shown.year - first) / 3usize) }
+    let content_height = f32(row_total) * row_height
+    var opening_offset = shown_row * row_height - (height - row_height) * 0.5
+    if opening_offset > content_height - height { opening_offset = content_height - height }
+    if opening_offset < 0.0 { opening_offset = 0.0 }
+    var seen_offset = opening_offset
+    if mem.address_of(t.runtime) != 0usize {
+        let (s, state_error) = widget.state_of(t.runtime)
+        if state_error == ok {
+            let (view_id, view_found) = widget.find_by_key(s, key + 4094u64)
+            if view_found == 1usize {
+                let (current, has_current) = widget.scroll_offset_of(t.runtime, view_id)
+                if has_current { seen_offset = current }
+            }
+        }
+    }
+    let (first_row, row_span) = widget.visible_range(seen_offset, height, row_total, row_height)
+    let start = first_row * 3usize
+    var stop = (first_row + row_span) * 3usize
+    if stop > count { stop = count }
     let (picks, picks_error) = mem.alloc[YearPick](a, count)
     let (presses, presses_error) = mem.alloc[widget.Submit](a, count)
     let (pills, pills_error) = mem.alloc[widget.Node](a, count)
-    let (rows, rows_error) = mem.alloc[widget.Node](a, (count + 2usize) / 3usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, row_span + 1usize)
     let (hops, hops_error) = mem.alloc[control.FocusTo](a, 4usize * count)
     let (hop_keys, hop_keys_error) = mem.alloc[widget.Shortcut](a, 4usize * count)
     if picks_error != ok || presses_error != ok || pills_error != ok || rows_error != ok || hops_error != ok || hop_keys_error != ok { ret (zero, TooLarge) }
-    var i = 0usize
-    while i < count {
+    var i = start
+    while i < stop {
         let year = first + i32(i)
         let chosen = year == shown.year
         let pill_key = key + 4096u64 + u64(i)
@@ -3224,15 +3249,16 @@ fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: tim
         i += 1usize
     }
     var r = 0usize
-    while r * 3usize < count {
-        var end = r * 3usize + 3usize
+    while r < row_span {
+        let row_start = (first_row + r) * 3usize
+        var end = row_start + 3usize
         if end > count { end = count }
-        rows[r] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceAround, cross: .Center, gap: 0.0 }, control.sized_style(width, pill_h + 16.0), pills[r * 3usize..end])
+        rows[r] = widget.flex(key + 8192u64 + u64(first_row + r), ui_layout.Flex { axis: .Horizontal, main: .SpaceAround, cross: .Center, gap: 0.0 }, control.sized_style(width, row_height), pills[row_start..end])
         r += 1usize
     }
     var area = control.sized_style(width, height)
     area.overflow = .Clip
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, area, rows[0usize..r]), ok)
+    ret (widget.scroll(key + 4094u64, widget.Scroll { axis: .Vertical, offset: opening_offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Outline), change: zero, virtual_first: first_row, virtual_count: row_total, virtual_extent: row_height, fades: false }, area, rows[0usize..r]), ok)
 }
 
 fn date_listed(dates: []const time.Date, d: time.Date) -> bool {
