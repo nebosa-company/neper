@@ -27877,3 +27877,11 @@ The Table spec's optional toolbar holds the table's title in `title-medium`, a s
 In selection mode the table's selection bar replaces the toolbar, and choosing which to place is the caller's.
 
 `ui_collections6_v2` checks this on Windows and Linux. With filters "Failed" and "This week", the title, both chips, Clear filters, Search and Columns stand, and the second chip's remove reports index 1. With no filters there is no Clear filters. Removing the Clear filters button fails the check (exit 183). All 103 ui_* fixtures pass on both hosts. The pinned column remains under the marker.
+
+## D1540 — Virtual grid padding, size levels and paging
+
+The VirtualGrid spec pads the grid 12 (`space-3`) and steps the tile size through 3 to 4 levels with Ctrl+plus and Ctrl+minus (pinch and Ctrl+wheel as well). Its paged variant loads a page as the viewport nears the end. `virtual_grid_of`'s marker listed these with the sticky headers, placeholders and scrub label. Placeholders were already `tile_node`'s tile with no media, so that part of the marker was stale.
+
+The grid's viewport now stands its first row 12 below its top. `VirtualGridOptions` gains `levels` (least tile widths, smallest first), `level`, `zoom` and `near_end`. With two or more levels, a scope over the grid binds Ctrl with either key row's plus (187, 107) and minus (189, 109). Each reports the next larger or smaller level through `zoom`, held at the ends. When the build window reaches the last row, `near_end` fires once for each count of tiles (`PageAsk`, kept at the grid's element), so a caller that appends a page is asked again only when the count has grown.
+
+`ui_collections6_v2` checks this on Windows and Linux. The first tile stands 12 below the grid. With all ten tiles in view, the page is asked on the second build and not again on the third. Ctrl+187 from level 1 reports 2, and Ctrl+109 reports 0. Without the padding the check fails (exit 188). All 103 ui_* fixtures pass on both hosts. Still under the marker: sticky section headers, the scrub label, pinch and Ctrl+wheel, and host mapping of the plus and minus keys on Linux.
