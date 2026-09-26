@@ -27294,3 +27294,11 @@ The HeaderRow spec: "the dragged cell lifts (`surface-container-highest`, `eleva
 D1477's ghost follows the pointer over the strip, and so it stands over D1344's drop line, which marks where the tab would land. D1478 found the same cover on table headers. As there, the drop line is repeated in an overlay after the ghost (keyed `key + 133`), anchored to the line itself, a 2 x 28 `primary` child box, so the mark shows on top.
 
 `ui_navigation5_v2` checks this on Windows and Linux: mid-drag the repeated line stands on the line's own place, 2 wide. `ui_workspace` still passes.
+
+## D1480 — A dismissed notice leaves
+
+The Snackbar spec lets a snackbar leave: "after it leaves (`duration-short-4`, `ease-emphasized-accelerate`)". The caller drops a dismissed notice from its queue, so the next frame had nothing to draw, and the snackbar or toast vanished at once. While a notice shows, the surface now keeps a copy of its text (120 bytes, cut back to a whole UTF-8 character) and action label (24 bytes). The copy lives in a `NoticeGhost` cell on the surface box (slot `key + 8195`). When the queue empties, the notice is drawn from that copy, fading out and sinking 8 on an `eased_emphasized` share over `duration-short-4` (slot `key + 8194`). Its buttons are inert, and it has no timeout. Reduced motion removes it at once.
+
+The drawn notice now lives in the frame's arena. An early version pointed its buttons at a stack copy, and `ui_status4_v2`'s action tap caught it. That fixture's state pools (256 bytes, 2 classes) are raised to 2048 and 8 for the kept copy. The split view's marker now says the empty detail is the caller's `second`.
+
+`ui_status4_v2` checks this on Windows and Linux. 100 ms after the queue empties, the snackbar still stands with its action and a surface not yet full `inverse-surface`, and a second on it is gone. Against the old control the check fails (exit 44). All 103 `ui_*` fixtures pass on both hosts.
