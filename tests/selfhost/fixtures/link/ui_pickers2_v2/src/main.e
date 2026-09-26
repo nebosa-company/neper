@@ -424,6 +424,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !has_unit_edit { os.exit(90i32) }
         unit_key += 1u64
     }
+    // (D1354) Two digits in the hours box move focus to the minutes box.
+    if widget.focus(&runtime, testing.by_key(&harness, 1801u64).element) != ok || testing.type_text(&harness, "1") != ok { os.exit(92i32) }
+    let (after_one, _) = widget.focused_key(&runtime)
+    if after_one != 1801u64 || testing.type_text(&harness, "2") != ok { os.exit(93i32) }
+    let (after_two, _) = widget.focused_key(&runtime)
+    if after_two != 1802u64 { os.exit(94i32) }
     let (rolled_h, rolled_m, rolled_s) = overlay.duration_roll(0u32, 75u32, 0u32, 999u32)
     let (held_h, _, _) = overlay.duration_roll(30u32, 90u32, 0u32, 24u32)
     if rolled_h != 1u32 || rolled_m != 15u32 || rolled_s != 0u32 || held_h != 24u32 { os.exit(91i32) }

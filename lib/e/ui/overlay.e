@@ -5017,13 +5017,16 @@ type DurationBoxes = struct { hours: []u8, hours_len: usize, minutes: []u8, minu
 // box per unit -- hours, minutes, seconds (keyed `key + 1`, `key + 2`,
 // `key + 3`), each with its unit under it -- a `display-small` ":" between; the
 // caller reads the digits and rolls them over with `duration_roll`.
-// ponytail: focus does not move on after two digits; no presets or modal around
-// the boxes.
+// (D1354) The second digit typed in hours or minutes moves focus to the next box.
+// ponytail: no presets or modal around the boxes.
 fn duration_boxes(a: *mem.Arena, key: widget.Key, t: *const control.Theme, boxes: DurationBoxes) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
-    if parts_error != ok { ret (zero, TooLarge) }
-    let (hours_box, hours_error) = typed_time_box(a, key + 1u64, t, "Hours", boxes.hours, boxes.hours_len, boxes.typed_hours)
-    let (minutes_box, minutes_error) = typed_time_box(a, key + 2u64, t, "Minutes", boxes.minutes, boxes.minutes_len, boxes.typed_minutes)
+    let (relays, relays_error) = mem.alloc[UnitBoxRelay](a, 2usize)
+    if parts_error != ok || relays_error != ok { ret (zero, TooLarge) }
+    relays[0usize] = UnitBoxRelay { typed: boxes.typed_hours, runtime: t.runtime, next: key + 2u64 }
+    relays[1usize] = UnitBoxRelay { typed: boxes.typed_minutes, runtime: t.runtime, next: key + 3u64 }
+    let (hours_box, hours_error) = typed_time_box(a, key + 1u64, t, "Hours", boxes.hours, boxes.hours_len, widget.Change[str] { ctx: mem.cast[*void](&relays[0usize]), invoke: unit_box_fire })
+    let (minutes_box, minutes_error) = typed_time_box(a, key + 2u64, t, "Minutes", boxes.minutes, boxes.minutes_len, widget.Change[str] { ctx: mem.cast[*void](&relays[1usize]), invoke: unit_box_fire })
     let (seconds_box, seconds_error) = typed_time_box(a, key + 3u64, t, "Seconds", boxes.seconds, boxes.seconds_len, boxes.typed_seconds)
     if hours_error != ok || minutes_error != ok || seconds_error != ok { ret (zero, TooLarge) }
     var colon_look = control.text_options()
@@ -5044,6 +5047,17 @@ fn duration_boxes(a: *mem.Arena, key: widget.Key, t: *const control.Theme, boxes
     sem.role = 2u8
     sem.label = "Duration"
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// (D1354) A unit box's typing, passed on; two digits move focus to `next`.
+type UnitBoxRelay = struct { typed: widget.Change[str], runtime: *widget.Runtime, next: widget.Key }
+
+fn unit_box_fire(ctx: *void, text: str) -> err {
+    let r = mem.cast[*UnitBoxRelay](ctx)
+    let told = widget.fire_change[str](r.typed, text)
+    if told != ok { ret told }
+    if text.len >= 2usize && mem.address_of(r.runtime) != 0usize { ret widget.focus_key(r.runtime, r.next) }
+    ret ok
 }
 
 // (D1352) Typed units rolled over: seconds past 59 into minutes and minutes past
