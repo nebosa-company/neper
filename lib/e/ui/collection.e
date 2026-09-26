@@ -2380,7 +2380,7 @@ fn row_actions_cell(a: *mem.Arena, t: *const control.Theme, row_key: widget.Key,
 // click is `pick`. A focused row takes Space, Shift+Up/Down, Ctrl+A and Escape as
 // a list's does (`selection_scopes`). The caller keeps `selected`.
 // (D1383) On touch, holding a row starts selection with it.
-// ponytail: Shift+Up/Down stop at the built rows' edge.
+// (D1495) Shift+Up/Down at the built rows' edge extend past it and scroll.
 fn table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, selection: TableOptions) -> (widget.Node, err) {
     let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 12u8, false, selection)
     ret (made, made_error)
@@ -3680,7 +3680,11 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         if rove_error != ok { ret (zero, rove_error) }
     }
     if selecting {
-        let scoped_error = selection_scopes_from(a, t, rows[0usize..count], row_keys[0usize..count], selection.select, 1usize, first)
+        var edges: SelectionEdges = zero
+        if !owned {
+            edges = SelectionEdges { active: true, total: total, source: KeySource { ctx: source.ctx, key: source.key }, offset: offset, height: body_height, extent: row_extent, change: change }
+        }
+        let scoped_error = selection_scopes_edged(a, t, rows[0usize..count], row_keys[0usize..count], selection.select, 1usize, first, edges)
         if scoped_error != ok { ret (zero, scoped_error) }
     }
     i = 0usize
@@ -5951,6 +5955,25 @@ fn selection_scopes(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node
 // (D1246) The same over built items that start at item `base` of the whole set:
 // the gestures report whole-set indices.
 fn selection_scopes_from(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []const widget.Key, select: widget.Change[ListSelect], across: usize, base: usize) -> err {
+    var none: SelectionEdges = zero
+    ret selection_scopes_edged(a, t, nodes, keys, select, across, base, none)
+}
+
+// (D1495) A virtual set's rows beyond the built ones: how many there are, their
+// keys, and the viewport that reveals them (as `virtual_roving` has them).
+type SelectionEdges = struct { active: bool, total: usize, source: KeySource, offset: f32, height: f32, extent: f32, change: widget.Change[f32] }
+
+// (D1495) Shift+Up or Shift+Down past the built rows: extend the selection to
+// the row, then reveal and focus it.
+type EdgeExtend = struct { pick: ListPick, move: VirtualMove }
+
+fn edge_extend_fire(ctx: *void) -> err {
+    let e = back_of[EdgeExtend](ctx)
+    try widget.fire_change[ListSelect](e.pick.select, ListSelect { kind: .Extend, index: e.pick.index })
+    ret virtual_move(ctx_of(&e.move))
+}
+
+fn selection_scopes_edged(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []const widget.Key, select: widget.Change[ListSelect], across: usize, base: usize, edges: SelectionEdges) -> err {
     let count = nodes.len
     if count == 0usize { ret ok }
     let (picks, picks_error) = mem.alloc[ListPick](a, 7usize * count)
@@ -5988,6 +6011,31 @@ fn selection_scopes_from(a: *mem.Arena, t: *const control.Theme, nodes: []widget
         keyed[b + 4usize] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&picks[b + 4usize]), invoke: list_pick_fire } }
         keyed[b + 5usize] = widget.Shortcut { key: 37u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 5usize]), invoke: list_pick_fire } }
         keyed[b + 6usize] = widget.Shortcut { key: 39u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 6usize]), invoke: list_pick_fire } }
+        // (D1495) At the built rows' edges of a virtual set, Shift+Up and
+        // Shift+Down reach the rows beyond.
+        if edges.active && across == 1usize && mem.address_of(t.runtime) != 0usize {
+            var beyond = 0usize
+            var has_beyond = false
+            var code = 38u32
+            if i == 0usize && base > 0usize {
+                beyond = base - 1usize
+                has_beyond = true
+            }
+            if i + 1usize == count && base + count < edges.total && !(i == 0usize && base > 0usize) {
+                beyond = base + count
+                has_beyond = true
+                code = 40u32
+            }
+            if has_beyond {
+                let (hops, hops_error) = mem.alloc[EdgeExtend](a, 1usize)
+                if hops_error != ok { ret TooLarge }
+                let beyond_key = edges.source.key(edges.source.ctx, beyond)
+                hops[0usize] = EdgeExtend { pick: ListPick { runtime: t.runtime, select: select, kind: .Extend, index: beyond, focus: beyond_key, has_focus: true }, move: VirtualMove { runtime: t.runtime, key: beyond_key, offset: virtual_offset(beyond, edges.total, edges.offset, edges.height, edges.extent), previous: edges.offset, change: edges.change } }
+                var slot = b + 1usize
+                if code == 40u32 { slot = b + 2usize }
+                keyed[slot] = widget.Shortcut { key: code, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&hops[0usize]), invoke: edge_extend_fire } }
+            }
+        }
         var bound = 5usize
         if across > 1usize { bound = 7usize }
         held[i] = nodes[i]

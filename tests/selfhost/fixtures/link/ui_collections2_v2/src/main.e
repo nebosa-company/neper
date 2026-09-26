@@ -669,6 +669,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if first_step == 2usize && first_lines != 0usize { os.exit(144i32) }
         first_step += 1usize
     }
+    // (D1495) A selectable virtual table scrolled 400 down: Shift+Up on its first
+    // built row extends the selection to the row before it, which is not built,
+    // and asks the viewport to reveal it.
+    var edge_chose: Chosen = zero
+    var edge_options: collection.TableOptions = zero
+    edge_options.select = widget.Change[collection.ListSelect] { ctx: mem.cast[*void](&edge_chose), invoke: on_choose }
+    logs[0usize].offset = 400.0
+    var edge_step = 0usize
+    while edge_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let edge_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        let (edge_table, edge_table_error) = collection.table_with(&f, 51u64, &theme, "Files", columns[0usize..3usize], edge_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 400.0, widget.Change[f32] { ctx: ctx, invoke: on_scroll }, 300.0, edge_options)
+        let (edge_page, edge_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if edge_table_error != ok || edge_page_error != ok { os.exit(145i32) }
+        edge_page[0usize] = edge_table
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), edge_page[0usize..1usize]), time.Instant { nanos: 5580000000i64 + i64(edge_step) }) != ok { os.exit(146i32) }
+        edge_step += 1usize
+    }
+    var edge_first = 0usize
+    while edge_first < 50usize && testing.by_key(&harness, 1000u64 + u64(edge_first)).count == 0usize { edge_first += 1usize }
+    if edge_first == 0usize || edge_first >= 50usize { os.exit(147i32) }
+    var edge_shift: input.Modifiers = zero
+    edge_shift.shift = true
+    if widget.focus(&runtime, testing.by_key(&harness, 1000u64 + u64(edge_first)).element) != ok || testing.press_key(&harness, 38u32, edge_shift) != ok { os.exit(148i32) }
+    if edge_chose.count != 1usize || edge_chose.kind != .Extend || edge_chose.index != edge_first - 1usize || !(logs[0usize].offset < 400.0) { os.exit(149i32) }
     // (D1383) A touch held 600 ms on the first row of a selectable table with
     // nothing selected toggles it into the selection; the release picks nothing.
     var held_chose: Chosen = zero
