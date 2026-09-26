@@ -440,6 +440,9 @@ type State = struct {
     last_tap: ElementId,
     has_last_tap: bool,
     last_tap_at: time.Instant,
+    // (D1469) Where an editor was last pressed: a second press counts as a double
+    // only within 4 px of it, as the host's double-click rectangle does.
+    last_press: geometry.Point,
     // Editing: a scratch region for hit-test layouts, the composition (preedit) of
     // the focused editor, the fallback clipboard for a host without one, and the
     // undo history -- entries and their byte pool -- with the redo point.
@@ -4098,6 +4101,32 @@ fn pointer_tap(s: *State, index: usize, point: geometry.Point) -> err {
     ret ok
 }
 
+// (D1469) Whether a byte belongs to a word: an ASCII letter, digit or `_`, or
+// any byte of a multi-byte character.
+fn word_byte(b: u8) -> bool {
+    ret (b >= 48u8 && b <= 57u8) || (b >= 65u8 && b <= 90u8) || (b >= 97u8 && b <= 122u8) || b == 95u8 || b >= 128u8
+}
+
+// (D1469) An editor's selection set to the word round its caret (the caret's run
+// of word bytes, or of the other bytes when it stands on none).
+fn edit_select_word(e: *Element) {
+    let bytes = e.edit_buffer
+    let len = e.edit_len
+    if len == 0usize || len > bytes.len { ret }
+    var at = e.caret
+    if at > len { at = len }
+    var probe = at
+    if probe == len { probe = len - 1usize }
+    let wordy = word_byte(bytes[probe])
+    var start = probe
+    while start > 0usize && word_byte(bytes[start - 1usize]) == wordy && bytes[start - 1usize] != 10u8 { start -= 1usize }
+    var end = probe
+    while end < len && word_byte(bytes[end]) == wordy && bytes[end] != 10u8 { end += 1usize }
+    e.anchor = start
+    e.caret = end
+    e.invalid = true
+}
+
 // While a menu owns focus, Alt plus an item's initial runs that item.
 fn menu_item_access_key(s: *State, logical: u32) -> (bool, err) {
     if !s.has_focus { ret (false, ok) }
@@ -4753,6 +4782,16 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 s.compose_len = 0usize
                 let at = edit_hit(s, region_index, p.position)
                 edit_move(&s.elements[region_index], at, false)
+                // (D1469) A second press within the tap window selects the word.
+                let pressed_id = ElementId { slot: u32(region_index), generation: s.elements[region_index].generation }
+                let since = s.animation_time.nanos - s.last_tap_at.nanos
+                let near = math.abs(p.position.x - s.last_press.x) <= 4.0 && math.abs(p.position.y - s.last_press.y) <= 4.0
+                let twice = s.has_last_tap && near && s.last_tap.slot == pressed_id.slot && s.last_tap.generation == pressed_id.generation && since >= 0i64 && since <= 500000000i64
+                s.last_press = p.position
+                if twice { edit_select_word(&s.elements[region_index]) }
+                s.last_tap = pressed_id
+                s.has_last_tap = !twice
+                s.last_tap_at = s.animation_time
             }
             if s.elements[region_index].kind == SLIDER_TAG { ret slider_press(s, region_index, p.position) }
             ret ok
