@@ -215,6 +215,10 @@ type Graph = struct {
     list: []usize,
     // Which modules the next front wave parses as headers only (D392); empty means none.
     want_headers: []bool,
+    // (D1511) Which modules declare from their artifact's Interface instead of a
+    // tree, and those artifacts' bytes; empty means none.
+    from_interface: []bool,
+    interfaces: [][]const u8,
     // What a header tree keeps of the bodies (D421): none at zero, else the bodies of
     // declarations of at most this many tokens -- the oracle's candidate bound in a
     // release build, where a kept module's short functions are still inlined from.
@@ -945,6 +949,14 @@ fn begin(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: st
         headers_at += 1usize
     }
     g.want_headers = want_headers
+    let (from_interface, from_interface_error) = mem.alloc[bool](a, g.modules.len)
+    if from_interface_error != ok { ret from_interface_error }
+    headers_at = 0usize
+    while headers_at < from_interface.len {
+        from_interface[headers_at] = false
+        headers_at += 1usize
+    }
+    g.from_interface = from_interface
     ret ok
 }
 

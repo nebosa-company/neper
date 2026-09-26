@@ -1427,7 +1427,11 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     let (body, body_error) = body_hash(c, g, builder, function_index, 0usize, false, scratch)
     if body_error != ok { ret body_error }
     try binary.byte(output, declaration_function_kind())
-    try binary.byte(output, function_flags(function))
+    // (D1511) The Interface flags an instance 4, apart from the signature's flags,
+    // so a decode can tell a generic's instance from a declared function.
+    var interface_flags = function_flags(function)
+    if c.function_generics[function_index].instance { interface_flags += 4usize }
+    try binary.byte(output, interface_flags)
     try binary.little_u16(output, 0usize)
     let length_offset = output.count
     try binary.little_u32(output, 0usize)
@@ -4234,5 +4238,411 @@ fn self_test() -> err {
     if validate(output.bytes[0usize..output.count]) != ok { ret InvalidArtifact }
     output.bytes[output.count - 1usize] = 1u8
     if validate(output.bytes[0usize..output.count]) != InvalidArtifact { ret InvalidArtifact }
+    ret ok
+}
+
+// ---------------------------------------------------------------- Interface decode (D1511, C036)
+
+// The checker kind an Interface type id names (the inverse of `type_kind_id`).
+fn type_kind_of_id(id: usize) -> (check.Kind, bool) {
+    if id == 1usize { ret (.Void, true) }
+    if id == 2usize { ret (.Bool, true) }
+    if id == 3usize { ret (.Err, true) }
+    if id == 4usize { ret (.Integer, true) }
+    if id == 5usize { ret (.Float, true) }
+    if id == 6usize { ret (.String, true) }
+    if id == 7usize { ret (.Named, true) }
+    if id == 8usize { ret (.Tag, true) }
+    if id == 9usize { ret (.Pointer, true) }
+    if id == 10usize { ret (.Slice, true) }
+    if id == 11usize { ret (.Array, true) }
+    if id == 12usize { ret (.TypeParameter, true) }
+    if id == 13usize { ret (.UntypedInteger, true) }
+    if id == 14usize { ret (.UntypedFloat, true) }
+    if id == 15usize { ret (.Other, true) }
+    if id == 16usize { ret (.Function, true) }
+    ret (.Invalid, false)
+}
+
+// A string of the artifact by index, as a slice of its bytes.
+fn artifact_string(bytes: []const u8, index: usize) -> (str, err) {
+    let (start, length, bounds_error) = string_bounds(bytes, index)
+    if bounds_error != ok { ret ("", bounds_error) }
+    ret (bytes[start..start + length], ok)
+}
+
+// One encoded type read back into the checker (an element and a function type's
+// signature stored as the checker stores its own); where it ends.
+fn decode_type(c: *check.Checker, g: *graph.Graph, bytes: []const u8, cursor: usize, end: usize, module_index: usize, depth: usize) -> (check.Type, usize, err) {
+    let invalid = check.invalid_type()
+    if depth > 64usize || cursor > end || end - cursor < 20usize { ret (invalid, 0usize, InvalidArtifact) }
+    let (kind, known) = type_kind_of_id(usize(bytes[cursor]))
+    if !known { ret (invalid, 0usize, InvalidArtifact) }
+    let flags = usize(bytes[cursor + 1usize])
+    let (module_name_index, module_error) = binary.read_u32(bytes, cursor + 4usize)
+    let (name_index, name_error) = binary.read_u32(bytes, cursor + 8usize)
+    let (length, length_error) = binary.read_u64(bytes, cursor + 12usize)
+    if module_error != ok || name_error != ok || length_error != ok { ret (invalid, 0usize, InvalidArtifact) }
+    let (name, name_read_error) = artifact_string(bytes, name_index)
+    if name_read_error != ok { ret (invalid, 0usize, name_read_error) }
+    var owner = module_index
+    if kind == .Named || kind == .Tag {
+        let (module_name, module_name_error) = artifact_string(bytes, module_name_index)
+        if module_name_error != ok { ret (invalid, 0usize, module_name_error) }
+        let (found_module, has_module) = graph.find_module(g, module_name)
+        if !has_module { ret (invalid, 0usize, InvalidArtifact) }
+        owner = found_module
+    }
+    var ty = check.make_type(kind, name, owner)
+    ty.is_const = (flags & 1usize) != 0usize
+    ty.has_length = (flags & 4usize) != 0usize
+    if ty.has_length { ty.array_length = length }
+    var next = cursor + 20usize
+    if (flags & 2usize) != 0usize && aggregate_type(kind) {
+        let (element, element_end, element_error) = decode_type(c, g, bytes, next, end, module_index, depth + 1usize)
+        if element_error != ok { ret (invalid, 0usize, element_error) }
+        let (element_index, store_error) = check.store_type(c, element)
+        if store_error != ok { ret (invalid, 0usize, store_error) }
+        ty.element = element_index
+        ty.has_element = true
+        next = element_end
+    }
+    if kind == .Function {
+        let (parameters, parameters_error) = binary.read_u32(bytes, next)
+        let (results, results_error) = binary.read_u32(bytes, next + 4usize)
+        if parameters_error != ok || results_error != ok || parameters + results > 64usize { ret (invalid, 0usize, InvalidArtifact) }
+        next += 8usize
+        // Decoded first (their own elements stored as they come), then stored side
+        // by side, as a signature's parameters and returns must stand.
+        var held: [64]check.Type = zero
+        var at = 0usize
+        while at < parameters + results {
+            let (part, part_end, part_error) = decode_type(c, g, bytes, next, end, module_index, depth + 1usize)
+            if part_error != ok { ret (invalid, 0usize, part_error) }
+            held[at] = part
+            next = part_end
+            at += 1usize
+        }
+        let (built, built_error) = check.build_function_type(c, held[0usize..parameters], held[parameters..parameters + results], module_index)
+        if built_error != ok { ret (invalid, 0usize, built_error) }
+        ty.element = built.element
+        ty.has_element = true
+    }
+    ret (ty, next, ok)
+}
+
+// Whether a kept module's declarations can come from its Interface alone: no
+// generic function, aggregate or alias, no instance, and no global.
+fn interface_decodable(bytes: []const u8) -> bool {
+    let (count, first, end, open_error) = interface_declarations(bytes)
+    if open_error != ok { ret false }
+    var cursor = first
+    var at = 0usize
+    while at < count {
+        let (declaration, next, read_error) = declaration_from(bytes, cursor, end)
+        if read_error != ok { ret false }
+        if declaration.kind == declaration_function_kind() && (declaration.flags & 5usize) != 0usize { ret false }
+        if (declaration.kind == declaration_aggregate_kind() || declaration.kind == declaration_alias_kind()) && (declaration.flags & 1usize) != 0usize { ret false }
+        // A constant record carries an integer value only: a string, float or
+        // composite constant needs its expression, so its module keeps its tree.
+        if declaration.kind == declaration_constant_kind() {
+            let type_at = cursor + 8usize + 20usize
+            if type_at >= end { ret false }
+            let type_id = usize(bytes[type_at])
+            if type_id != 2usize && type_id != 4usize && type_id != 13usize { ret false }
+        }
+        cursor = next
+        at += 1usize
+    }
+    let (globals, found_globals, globals_error) = find_section_unchecked(bytes, globals_kind())
+    if globals_error != ok || !found_globals || globals.length < 4usize { ret false }
+    let (global_count, global_count_error) = binary.read_u32(bytes, globals.offset)
+    ret global_count_error == ok && global_count == 0usize
+}
+
+// A resolver symbol with no token span (the bootstrap takes no qualified literal).
+fn interface_symbol(name: str, kind: resolve.Kind, space: resolve.Namespace, module_index: usize, target_module: usize) -> resolve.Symbol {
+    var symbol: resolve.Symbol = zero
+    symbol.name = name
+    symbol.kind = kind
+    symbol.space = space
+    symbol.module_index = module_index
+    symbol.target_module = target_module
+    ret symbol
+}
+
+// A kept module's resolver symbols from its Interface: its imports' qualifiers
+// and one symbol a declaration, as `resolve.collect_module` adds from a tree,
+// without token spans.
+fn declare_interface_symbols(r: *resolve.Resolver, g: *graph.Graph, module_index: usize, bytes: []const u8) -> err {
+    let import_end = g.modules[module_index].first_import + g.modules[module_index].import_count
+    var import_at = g.modules[module_index].first_import
+    while import_at < import_end {
+        let item = g.imports[import_at]
+        try resolve.add(r, interface_symbol(item.qualifier, .Qualifier, .Value, module_index, item.target))
+        import_at += 1usize
+    }
+    let (count, first, end, open_error) = interface_declarations(bytes)
+    if open_error != ok { ret open_error }
+    var cursor = first
+    var at = 0usize
+    while at < count {
+        let (declaration, next, read_error) = declaration_from(bytes, cursor, end)
+        if read_error != ok { ret read_error }
+        let (name, name_error) = artifact_string(bytes, declaration.name_index)
+        if name_error != ok { ret name_error }
+        var kind: resolve.Kind = .Function
+        var space: resolve.Namespace = .Value
+        if declaration.kind < declaration_function_kind() || declaration.kind > declaration_error_kind() { ret InvalidArtifact }
+        if declaration.kind == declaration_function_kind() && (declaration.flags & 2usize) != 0usize { kind = .Extern }
+        if declaration.kind == declaration_aggregate_kind() || declaration.kind == declaration_alias_kind() {
+            kind = .Type
+            space = .Type
+        }
+        if declaration.kind == declaration_constant_kind() { kind = .Const }
+        if declaration.kind == declaration_error_kind() { kind = .Error }
+        // A seeded intrinsic (`e.mem.alloc`, `e.str.format`) is in the Interface as
+        // the checker keeps it, and in the resolver already.
+        let (prior, seeded) = resolve.find(r, module_index, name, space)
+        if !(seeded && r.symbols[prior].kind == .Intrinsic) { try resolve.add(r, interface_symbol(name, kind, space, module_index, module_index)) }
+        cursor = next
+        at += 1usize
+    }
+    ret ok
+}
+
+// Whether the checker seeded the function itself (an intrinsic of `e.mem`,
+// `e.str` or `e.meta`), which its module's Interface lists as the checker keeps it.
+fn seeded_function(c: *check.Checker, module_index: usize, name: str) -> bool {
+    var at = 0usize
+    while at < c.function_count {
+        if c.functions[at].intrinsic && c.functions[at].module_index == module_index && same(c.functions[at].name, name) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// A kept module's checker records from its Interface: its aggregates and aliases,
+// constants and functions, in the order `check.declarations_module` makes them
+// from a tree, with no source spans. Errors are the resolver's symbols alone.
+fn declare_interface_records(c: *check.Checker, g: *graph.Graph, module_index: usize, bytes: []const u8) -> err {
+    let (count, first, end, open_error) = interface_declarations(bytes)
+    if open_error != ok { ret open_error }
+    var pass = 0usize
+    while pass < 4usize {
+        var cursor = first
+        var at = 0usize
+        while at < count {
+            let (declaration, next, read_error) = declaration_from(bytes, cursor, end)
+            if read_error != ok { ret read_error }
+            let (name, name_error) = artifact_string(bytes, declaration.name_index)
+            if name_error != ok { ret name_error }
+            let payload = cursor + 8usize + 20usize
+            if pass == 0usize && declaration.kind == declaration_alias_kind() { try decode_alias(c, g, bytes, payload, next, module_index, name) }
+            if pass == 1usize && declaration.kind == declaration_constant_kind() { try decode_constant(c, g, bytes, payload, next, module_index, name) }
+            if pass == 2usize && declaration.kind == declaration_aggregate_kind() { try decode_aggregate(c, g, bytes, payload, next, module_index, name) }
+            if pass == 3usize && declaration.kind == declaration_function_kind() && !seeded_function(c, module_index, name) { try decode_function(c, g, bytes, payload, next, module_index, name, (declaration.flags & 2usize) != 0usize) }
+            cursor = next
+            at += 1usize
+        }
+        pass += 1usize
+    }
+    ret ok
+}
+
+// (D1511) A non-generic function record: its borrow and no-escape lists (read
+// past; the attribute tail's strings carry their spelling), parameters, returns
+// and attributes.
+fn decode_function(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payload: usize, end: usize, module_index: usize, name: str, external: bool) -> err {
+    if c.function_count == c.functions.len { ret check.Capacity }
+    var next = payload + 4usize
+    let (noescapes, noescape_error) = binary.read_u32(bytes, next)
+    if noescape_error != ok { ret InvalidArtifact }
+    next += 4usize + 4usize * noescapes
+    let (comptimes, comptime_error) = binary.read_u32(bytes, next)
+    if comptime_error != ok || comptimes != 0usize { ret InvalidArtifact }
+    next += 4usize
+    let (parameters, parameters_error) = binary.read_u32(bytes, next)
+    if parameters_error != ok { ret InvalidArtifact }
+    next += 4usize
+    var item: check.Function = zero
+    item.name = name
+    item.module_index = module_index
+    item.owner_module_index = module_index
+    item.external = external
+    item.first_parameter = c.parameter_count
+    item.parameter_count = parameters
+    var at = 0usize
+    while at < parameters {
+        if c.parameter_count == c.parameters.len { ret check.Capacity }
+        let (parameter_name_index, parameter_name_error) = binary.read_u32(bytes, next)
+        if parameter_name_error != ok { ret InvalidArtifact }
+        let (parameter_name, parameter_string_error) = artifact_string(bytes, parameter_name_index)
+        if parameter_string_error != ok { ret parameter_string_error }
+        let (parameter_type, typed_end, type_error) = decode_type(c, g, bytes, next + 4usize, end, module_index, 0usize)
+        if type_error != ok { ret type_error }
+        var parameter: check.Parameter = zero
+        parameter.name = parameter_name
+        parameter.ty = parameter_type
+        c.parameters[c.parameter_count] = parameter
+        c.parameter_count += 1usize
+        next = typed_end
+        at += 1usize
+    }
+    let (results, results_error) = binary.read_u32(bytes, next)
+    if results_error != ok { ret InvalidArtifact }
+    next += 4usize
+    item.first_return = c.return_type_count
+    item.return_count = results
+    at = 0usize
+    while at < results {
+        if c.return_type_count == c.return_types.len { ret check.Capacity }
+        let (result_type, typed_end, type_error) = decode_type(c, g, bytes, next, end, module_index, 0usize)
+        if type_error != ok { ret type_error }
+        c.return_types[c.return_type_count] = result_type
+        c.return_type_count += 1usize
+        next = typed_end
+        at += 1usize
+    }
+    // The attribute tail (D1510).
+    if next > end || end - next < 16usize + parameters { ret InvalidArtifact }
+    let attributes = usize(bytes[next])
+    item.intrinsic = (attributes & 1usize) != 0usize
+    item.variadic = (attributes & 2usize) != 0usize
+    item.gpu = (attributes & 4usize) != 0usize
+    let (gpu_size, gpu_error) = binary.read_u32(bytes, next + 4usize)
+    let (library, library_error) = binary.read_u32(bytes, next + 8usize)
+    let (symbol, symbol_error) = binary.read_u32(bytes, next + 12usize)
+    if gpu_error != ok || library_error != ok || symbol_error != ok { ret InvalidArtifact }
+    item.gpu_size = u32(gpu_size)
+    if library != 0usize {
+        let (library_text, library_text_error) = artifact_string(bytes, library - 1usize)
+        if library_text_error != ok { ret library_text_error }
+        item.import_library = library_text
+    }
+    if symbol != 0usize {
+        let (symbol_text, symbol_text_error) = artifact_string(bytes, symbol - 1usize)
+        if symbol_text_error != ok { ret symbol_text_error }
+        item.import_symbol = symbol_text
+    }
+    next += 16usize
+    at = 0usize
+    while at < parameters {
+        c.parameters[item.first_parameter + at].own = usize(bytes[next + at]) == 1usize
+        at += 1usize
+    }
+    var generic: check.FunctionGeneric = zero
+    generic.first_comptime = c.comptime_parameter_count
+    c.functions[c.function_count] = item
+    c.function_generics[c.function_count] = generic
+    c.function_count += 1usize
+    ret ok
+}
+
+// (D1511) A non-generic aggregate record: kind, backing, fields and attributes.
+fn decode_aggregate(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payload: usize, end: usize, module_index: usize, name: str) -> err {
+    if c.aggregate_count == c.aggregates.len { ret check.Capacity }
+    var item: check.Aggregate = zero
+    item.name = name
+    item.module_index = module_index
+    let kind_id = usize(bytes[payload])
+    if kind_id < 1usize || kind_id > 4usize { ret InvalidArtifact }
+    item.kind = .Struct
+    if kind_id == 2usize { item.kind = .Union }
+    if kind_id == 3usize { item.kind = .TaggedUnion }
+    if kind_id == 4usize { item.kind = .Enum }
+    let (comptimes, comptime_error) = binary.read_u32(bytes, payload + 4usize)
+    if comptime_error != ok || comptimes != 0usize { ret InvalidArtifact }
+    var next = payload + 8usize
+    let backed = usize(bytes[next])
+    next += 1usize
+    if backed == 1usize {
+        let (backing, backing_end, backing_error) = decode_type(c, g, bytes, next, end, module_index, 0usize)
+        if backing_error != ok { ret backing_error }
+        item.backing_type = backing
+        next = backing_end
+    }
+    let (fields, fields_error) = binary.read_u32(bytes, next)
+    if fields_error != ok { ret InvalidArtifact }
+    next += 4usize
+    item.first_field = c.aggregate_field_count
+    item.field_count = fields
+    var at = 0usize
+    while at < fields {
+        if c.aggregate_field_count == c.aggregate_fields.len { ret check.Capacity }
+        let (field_name_index, field_name_error) = binary.read_u32(bytes, next)
+        if field_name_error != ok { ret InvalidArtifact }
+        let (field_name, field_string_error) = artifact_string(bytes, field_name_index)
+        if field_string_error != ok { ret field_string_error }
+        let (field_type, typed_end, type_error) = decode_type(c, g, bytes, next + 4usize, end, module_index, 0usize)
+        if type_error != ok { ret type_error }
+        if typed_end > end || end - typed_end < 12usize { ret InvalidArtifact }
+        let (enum_value, enum_error) = binary.read_u64(bytes, typed_end + 4usize)
+        if enum_error != ok { ret InvalidArtifact }
+        var field: check.AggregateField = zero
+        field.name = field_name
+        field.ty = field_type
+        field.has_enum_value = usize(bytes[typed_end]) == 1usize
+        field.enum_negative = usize(bytes[typed_end + 1usize]) == 1usize
+        field.enum_value = enum_value
+        c.aggregate_fields[c.aggregate_field_count] = field
+        c.aggregate_field_count += 1usize
+        next = typed_end + 12usize
+        at += 1usize
+    }
+    // The attribute tail (D1510).
+    if next > end || end - next < 12usize { ret InvalidArtifact }
+    let attributes = usize(bytes[next])
+    item.resource = (attributes & 1usize) != 0usize
+    item.reorder = (attributes & 2usize) != 0usize
+    item.packed = (attributes & 4usize) != 0usize
+    let (align, align_error) = binary.read_u32(bytes, next + 4usize)
+    let (cleanup, cleanup_error) = binary.read_u32(bytes, next + 8usize)
+    if align_error != ok || cleanup_error != ok { ret InvalidArtifact }
+    item.align = align
+    if cleanup != 0usize {
+        let (cleanup_text, cleanup_text_error) = artifact_string(bytes, cleanup - 1usize)
+        if cleanup_text_error != ok { ret cleanup_text_error }
+        item.cleanup = cleanup_text
+    }
+    c.aggregates[c.aggregate_count] = item
+    c.aggregate_count += 1usize
+    ret ok
+}
+
+// (D1511) A non-generic alias: its resolved type.
+fn decode_alias(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payload: usize, end: usize, module_index: usize, name: str) -> err {
+    if c.alias_count == c.aliases.len { ret check.Capacity }
+    if usize(bytes[payload]) != 1usize { ret InvalidArtifact }
+    let (resolved, resolved_end, resolved_error) = decode_type(c, g, bytes, payload + 1usize, end, module_index, 0usize)
+    if resolved_error != ok { ret resolved_error }
+    var alias: check.Alias = zero
+    alias.name = name
+    alias.module_index = module_index
+    alias.rhs = resolved
+    alias.resolved = resolved
+    alias.state = 2u8
+    c.aliases[c.alias_count] = alias
+    c.alias_count += 1usize
+    ret ok
+}
+
+// (D1511) A constant: its type and its value, already evaluated.
+fn decode_constant(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payload: usize, end: usize, module_index: usize, name: str) -> err {
+    if c.constant_count == c.constants.len { ret check.Capacity }
+    let (ty, typed_end, type_error) = decode_type(c, g, bytes, payload, end, module_index, 0usize)
+    if type_error != ok { ret type_error }
+    if typed_end > end || end - typed_end < 12usize { ret InvalidArtifact }
+    let (magnitude, magnitude_error) = binary.read_u64(bytes, typed_end + 4usize)
+    if magnitude_error != ok { ret InvalidArtifact }
+    var item: check.Constant = zero
+    item.name = name
+    item.module_index = module_index
+    item.ty = ty
+    item.value.magnitude = magnitude
+    item.value.negative = usize(bytes[typed_end]) == 1usize
+    item.state = 2u8
+    c.constants[c.constant_count] = item
+    c.constant_count += 1usize
     ret ok
 }

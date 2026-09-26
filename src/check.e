@@ -5720,7 +5720,14 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
     // tree (D392) with the callee's body skipped: then the tokens are parsed again
     // into storage of the interpreter's own.
     var kept: parse.Tree = zero
-    if g.modules[module_index].has_tree && g.modules[module_index].headers_only {
+    // (D1511) A module declared from its Interface was never lexed: its tokens are
+    // scanned now, and it is parsed into the interpreter's own storage too.
+    let unlexed = !g.modules[module_index].has_tree && g.modules[module_index].tokens.len == 0usize
+    if unlexed {
+        let scan_error = graph.scan_module(c.arena, g, module_index)
+        if scan_error != ok { ret (0usize, scan_error) }
+    }
+    if (g.modules[module_index].has_tree && g.modules[module_index].headers_only) || unlexed {
         let text_length = g.modules[module_index].text.len
         let (nodes, nodes_error) = mem.alloc[syntax.Node](c.arena, text_length / 2usize + 4096usize)
         if nodes_error != ok { ret (0usize, nodes_error) }
