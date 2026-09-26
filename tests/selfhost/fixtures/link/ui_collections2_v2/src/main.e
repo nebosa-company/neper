@@ -533,6 +533,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if filter_tree_error != ok || !has_size_head || !has_name_head || !same(size_head.hint, "filtered") || name_head.hint.len != 0usize { os.exit(101i32) }
     let (detail_head, has_detail_head) = find(filter_tree, .ColumnHeader, "Detail")
     if !has_detail_head || !near(detail_head.bounds.width, 180.0) || !near(detail_head.bounds.x, size_head.bounds.x) || !(detail_head.bounds.y + detail_head.bounds.height <= size_head.bounds.y + 0.5) { os.exit(102i32) }
+    // (D1345) A header held mid-drag lifts onto `surface-container-highest`;
+    // released, it rests.
+    var lift_step = 0usize
+    while lift_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        let lift_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        var lift_options: collection.TableOptions = zero
+        let (lifting, lifting_error) = collection.table_with(&f, 11u64, &theme, "Files", columns[0usize..3usize], lift_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, lift_options)
+        let (lift_page, lift_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if lifting_error != ok || lift_page_error != ok { os.exit(103i32) }
+        lift_page[0usize] = lifting
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), lift_page[0usize..1usize]), time.Instant { nanos: 5400000000i64 + i64(lift_step) }) != ok { os.exit(104i32) }
+        let (kind_head, has_kind_head) = bounds(&harness, &runtime, 16u64)
+        let (lift_shot, lift_shot_error) = testing.snapshot(&harness, a)
+        if !has_kind_head || lift_shot_error != ok { os.exit(105i32) }
+        let risen = is_color(lift_shot, at(kind_head.x + kind_head.width - 12.0, kind_head.y + 4.0), style.color(&tokens, .SurfaceContainerHighest))
+        if lift_step == 0usize {
+            if risen || testing.send(&harness, input.Event { PointerDown: testing.pointer_at(kind_head.x + 20.0, kind_head.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(kind_head.x + 40.0, kind_head.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(kind_head.x + 60.0, kind_head.y + 20.0) }) != ok { os.exit(106i32) }
+        }
+        if lift_step == 1usize {
+            if !risen || testing.send(&harness, input.Event { PointerUp: testing.pointer_at(kind_head.x + 60.0, kind_head.y + 20.0) }) != ok { os.exit(107i32) }
+        }
+        if lift_step == 2usize && risen { os.exit(108i32) }
+        lift_step += 1usize
+    }
     // (D1248) With no rows the header stays over the loading state (a busy
     // "Loading" group under an indeterminate progress bar) or the empty state.
     var state_step = 0usize

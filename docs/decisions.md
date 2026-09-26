@@ -25849,3 +25849,17 @@ last place. The lifted tab keeps its place rather than following the pointer.
 `ui_navigation5_v2` drags lower.e over notes: mid-drag the drop line stands;
 released, it is gone, on Windows and Linux; `ui_workspace` and `ui_drag_drop`
 still pass on both.
+
+## D1345 — Dragged table headers lift
+
+The HeaderRow spec's reordering state: a header being dragged lifts onto
+`surface-container-highest` at elevation 4. A header drag's payload now
+carries a tag (`header_payload_tag`, 2^40, plus the column plus one), so the
+lift and a drop's reorder answer only a header's own drag -- before, a
+document tab dragged over a header could have been read as a column. The
+lifted header keeps its place rather than following the pointer, and the
+landing line is still to come.
+
+`ui_collections2_v2` holds the Kind header mid-drag: it is lifted; released,
+it rests, on Windows and Linux; `ui_tabular`, `ui_collections3_v2` and
+`ui_drag_drop` still pass on both.
