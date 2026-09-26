@@ -27156,3 +27156,9 @@ The Image spec says that "a pressable image is a Button named by its action... w
 The Avatar spec sets 32's initials in `label-large` at 13, but the type ramp has no 13 and they stood at 14. `TextOptions.size`, when above 0, now sets the text's size in place of its role's, and `text_style_faced` scales the line height with it. A 32 avatar's initials ask for 13.
 
 `text_shape` checks on Windows and Linux that a 13 request sizes every face in the chain to 13 and scales the line height in proportion. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1459 — Comment lines after the last pair survive the text mode
+
+D1371 kept the comment and blank lines before each pair, but dropped the lines after the last one when the text round-tripped. `pairs_parse_noted` now gathers those trailing lines into the note after the last pair (`notes[count]`, when the caller gave one), and `pairs_text_noted` writes that note after the pairs. The empty remainder after a final line break is not counted as a line, so a text ending in a newline does not grow a blank one.
+
+`ui_collections5_v2` round-trips `A=1`, a comment, a blank line and another comment, on Windows and Linux; they come back after the pair as written.

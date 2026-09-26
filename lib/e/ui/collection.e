@@ -4819,6 +4819,21 @@ fn pairs_text_noted(out: []u8, pairs: []const Pair, notes: []const PairNote) -> 
         }
         i += 1usize
     }
+    // (D1459) The note after the last pair: the lines that followed it.
+    if pairs.len < notes.len && notes[pairs.len].len > 0usize {
+        var tail = notes[pairs.len].len
+        if notes[pairs.len].text[tail - 1usize] == 10u8 { tail -= 1usize }
+        if pairs.len > 0usize && n < out.len {
+            out[n] = 10u8
+            n += 1usize
+        }
+        var c = 0usize
+        while c < tail && n < out.len {
+            out[n] = notes[pairs.len].text[c]
+            n += 1usize
+            c += 1usize
+        }
+    }
     ret n
 }
 
@@ -4835,8 +4850,9 @@ fn pairs_parse(text: str, pairs: []Pair) -> (usize, usize) {
 }
 
 // (D1371) `pairs_parse` that keeps the comment and blank lines before each pair
-// in its note (`notes[index]`, as far as its buffer holds).
-// ponytail: lines after the last pair are dropped.
+// in its note (`notes[index]`, as far as its buffer holds). (D1459) The lines
+// after the last pair go to the note after it (`notes[count]`, when there is
+// one); the empty remainder after a final line break is not a line.
 fn pairs_parse_noted(text: str, pairs: []Pair, notes: []PairNote) -> (usize, usize) {
     var c = 0usize
     while c < notes.len {
@@ -4853,7 +4869,8 @@ fn pairs_parse_noted(text: str, pairs: []Pair, notes: []PairNote) -> (usize, usi
         var upto = end
         if upto > from && text[upto - 1usize] == 13u8 { upto -= 1usize }
         while from < upto && text[from] == 32u8 { from += 1usize }
-        if (from >= upto || text[from] == 35u8) && count < notes.len {
+        let remainder = start == text.len && start > 0usize
+        if (from >= upto || text[from] == 35u8) && count < notes.len && !remainder {
             // A comment or blank line: kept, with its newline, for the next pair.
             var k = start
             while k < upto && notes[count].len < notes[count].text.len {
