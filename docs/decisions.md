@@ -26724,3 +26724,19 @@ grip's own height, not a 48 target.
 viewport grows from 352 to 568 in the 720 window. `ui_entry`,
 `ui_overlays3_v2`, `ui_presentation` and `ui_pickers` still pass, on Windows,
 and the first three on Linux.
+
+## D1406 — Split views snap and cycle panes with F6
+
+The SplitView spec snaps the divider at 1/3, 1/2 and 2/3 within 16px and moves
+focus between the panes with F6. `split_view_with` takes `SplitOptions`.
+With `snaps`, the divider's size change passes through `split_snap_fire`, which
+lands a size within 16 of a third, the half or two thirds of the view on it.
+With `first_focus` and `second_focus`, F6 (keysym 65475) focuses the second
+pane's element while the first pane holds the focus, and the first's
+otherwise. `split_view_named` is it with no options. The snap lands at once
+rather than easing, and stacking below the breakpoint and keeping the ratio
+across window resizes are still missing.
+
+`ui_panes` drags a snapping 300-wide split's divider from 100 to 142 (it
+reports 150) and cycles the focus with F6 both ways; `ui_containers2_v2` still
+passes, on Windows and Linux.

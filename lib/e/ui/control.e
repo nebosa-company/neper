@@ -6054,12 +6054,59 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
 // as its value. The pane is keyed `key + 1` (its content `key + 2`, its sash
 // `key + 3`); a group in the tree.
 // Its sash resets on double-click and cancels a drag on Escape (D1212).
-// ponytail: no stacking below the breakpoint, snap points, ratio across window
-// resizes, F6 cycling or empty-detail slot; add them with a window-size input.
+// (D1406) `split_view_with` adds snap points and F6 cycling.
+// ponytail: no stacking below the breakpoint, ratio across window resizes or
+// empty-detail slot; add them with a window-size input.
 fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err) {
+    var plain: SplitOptions = zero
+    let (made, made_error) = split_view_with(a, key, t, label, axis, first, second, position, min_first, min_second, change, width, height, plain)
+    ret (made, made_error)
+}
+
+// (D1406) A split view's extras: `snaps` pulls the divider to a third, a half
+// or two thirds within 16; with `first_focus` and `second_focus` (keys of a
+// focusable element in each pane) F6 moves the focus from one pane to the other.
+type SplitOptions = struct { snaps: bool, first_focus: widget.Key, second_focus: widget.Key }
+
+type SplitSnap = struct { total: f32, change: widget.Change[f32] }
+
+fn split_snap_fire(ctx: *void, value: f32) -> err {
+    let s = mem.cast[*SplitSnap](ctx)
+    var kept = value
+    var point = 1usize
+    while point <= 3usize {
+        var at = s.total * f32(point) / 3.0
+        if point == 2usize { at = s.total * 0.5 }
+        if point == 3usize { at = s.total * 2.0 / 3.0 }
+        if kept > at - 16.0 && kept < at + 16.0 { kept = at }
+        point += 1usize
+    }
+    ret widget.fire_change[f32](s.change, kept)
+}
+
+type SplitCycle = struct { runtime: *widget.Runtime, first_pane: widget.Key, first_focus: widget.Key, second_focus: widget.Key }
+
+fn split_cycle_fire(ctx: *void) -> err {
+    let c = mem.cast[*SplitCycle](ctx)
+    if widget.focus_within(c.runtime, c.first_pane) { ret widget.focus_key(c.runtime, c.second_focus) }
+    ret widget.focus_key(c.runtime, c.first_focus)
+}
+
+// (D1406, docs/ux/components/SplitView, snap points and keyboard) The split view
+// with its options.
+fn split_view_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32, options: SplitOptions) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let (pane, pane_error) = pane_with_reserve(a, key + 1u64, t, label, axis, position, min_first, 0.0, key, min_second, change, first, false)
+    var sized_change = change
+    if options.snaps {
+        let (snaps, snaps_error) = mem.alloc[SplitSnap](a, 1usize)
+        if snaps_error != ok { ret (zero, TooLarge) }
+        var total = width
+        if axis == .Vertical { total = height }
+        snaps[0usize] = SplitSnap { total: total, change: change }
+        sized_change = widget.Change[f32] { ctx: mem.cast[*void](&snaps[0usize]), invoke: split_snap_fire }
+    }
+    let (pane, pane_error) = pane_with_reserve(a, key + 1u64, t, label, axis, position, min_first, 0.0, key, min_second, sized_change, first, false)
     if pane_error != ok { ret (zero, pane_error) }
     parts[0usize] = pane
     let (rest, rest_error) = mem.alloc[widget.Node](a, 1usize)
@@ -6079,6 +6126,16 @@ fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Stretch, gap: 0.0 }, sized_style(width, height), parts[0usize..2usize])
+    if options.first_focus != 0u64 && options.second_focus != 0u64 && mem.address_of(t.runtime) != 0usize {
+        let (cycles, cycles_error) = mem.alloc[SplitCycle](a, 1usize)
+        let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 1usize)
+        let (cycled, cycled_error) = mem.alloc[widget.Node](a, 1usize)
+        if cycles_error != ok || keys_error != ok || cycled_error != ok { ret (zero, TooLarge) }
+        cycles[0usize] = SplitCycle { runtime: t.runtime, first_pane: key + 1u64, first_focus: options.first_focus, second_focus: options.second_focus }
+        keys[0usize] = widget.Shortcut { key: 65475u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&cycles[0usize]), invoke: split_cycle_fire } }
+        cycled[0usize] = body[0usize]
+        body[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: keys[0usize..1usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), cycled[0usize..1usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = 2u8
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)

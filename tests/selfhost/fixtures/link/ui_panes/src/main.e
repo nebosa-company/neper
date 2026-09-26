@@ -340,6 +340,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if fold_step == 5usize && fold_area.width > 0.5 { os.exit(81i32) }
         fold_step += 1usize
     }
+    // (D1406) A snapping split 300 wide: its divider dragged from 100 to 142
+    // lands on the half, 150; F6 moves the focus between the panes.
+    var split_step = 0usize
+    while split_step < 2usize {
+        frame = mem.arena_from(frame_storage)
+        let (left_parts, left_parts_error) = mem.alloc[widget.Node](&frame, 2usize)
+        if left_parts_error != ok { os.exit(82i32) }
+        left_parts[0usize] = widget.region(991u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, control.sized_style(40.0, 20.0), zero)
+        left_parts[1usize] = widget.region(992u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, control.sized_style(40.0, 20.0), zero)
+        var snapping: control.SplitOptions = zero
+        snapping.snaps = true
+        snapping.first_focus = 991u64
+        snapping.second_focus = 992u64
+        let (snap_split, snap_split_error) = control.split_view_with(&frame, 980u64, &theme, "Divider", .Horizontal, left_parts[0usize], left_parts[1usize], 100.0, 40.0, 40.0, widget.Change[f32] { ctx: ctx, invoke: on_size }, 300.0, 60.0, snapping)
+        let (split_page, split_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if snap_split_error != ok || split_page_error != ok { os.exit(83i32) }
+        split_page[0usize] = snap_split
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 200.0), split_page[0usize..1usize]), time.Instant { nanos: 30000000000i64 + i64(split_step) }) != ok { os.exit(84i32) }
+        split_step += 1usize
+    }
+    let (snap_grip, has_snap_grip) = centre_of(&harness, &runtime, 983u64)
+    if !has_snap_grip || testing.drag(&harness, snap_grip, geometry.Point { x: snap_grip.x + 42.0, y: snap_grip.y }, 3usize) != ok || !near(logs[0usize].last_size, 150.0) { os.exit(85i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 991u64).element) != ok || testing.press_key(&harness, 65475u32, zero) != ok { os.exit(86i32) }
+    let (cycled_to, _) = widget.focused_key(&runtime)
+    if cycled_to != 992u64 || testing.press_key(&harness, 65475u32, zero) != ok { os.exit(87i32) }
+    let (cycled_back, _) = widget.focused_key(&runtime)
+    if cycled_back != 991u64 { os.exit(88i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui panes ok\n")
     ret ok
