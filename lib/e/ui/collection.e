@@ -6732,7 +6732,8 @@ type CarouselLayout = enum u8 { MultiBrowse, Hero, Uncontained }
 // A carousel's form (D982): the layout, the header's title, the width, the item
 // height (0: 200, 160 uncontained, 280 hero from 600 wide) and the uncontained
 // item width (0: 180).
-type CarouselOptions = struct { layout: CarouselLayout, title: str, width: f32, height: f32, item_width: f32 }
+// (D1348) `show_all`, when set, is the touch header's Show all text button.
+type CarouselOptions = struct { layout: CarouselLayout, title: str, width: f32, height: f32, item_width: f32, show_all: widget.Submit }
 
 fn carousel_options() -> CarouselOptions {
     var out: CarouselOptions = zero
@@ -6756,7 +6757,8 @@ fn carousel_options() -> CarouselOptions {
 // `label`, each item a group named by its title.
 // ponytail: the strip steps an item at a time through `current` rather than
 // scrolling freely with snapping; items do not grow and shrink as they pass
-// the leading edge; no "Show all" on touch.
+// the leading edge. (D1348) On touch, `show_all` puts a Show all button in the
+// header.
 fn carousel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const CarouselItem, keys: []const widget.Key, current: usize, turn: widget.Change[usize], options: CarouselOptions) -> (widget.Node, err) {
     if items.len == 0usize || keys.len != items.len || current >= items.len { ret (zero, TooLarge) }
     let inset = control.if_else(options.width < 600.0, 16.0, 24.0)
@@ -6851,6 +6853,31 @@ fn carousel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         head_style.width = style.Length { Px: options.width }
         head_style.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: flat, right: style.Length { Px: inset }, bottom: style.Length { Px: 8.0 } }
         parts[p] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, head_style, head_parts[0usize..4usize])
+        p += 1usize
+    } else if widget.submit_set(options.show_all.invoke) {
+        // (D1348, docs/ux/components/Carousel, touch header) The title and a Show
+        // all text button (keyed `key + 3`) at the end.
+        let (alls, alls_error) = mem.alloc[widget.Submit](a, 1usize)
+        if alls_error != ok { ret (zero, TooLarge) }
+        alls[0usize] = options.show_all
+        var plain = control.button_options()
+        plain.variant = .Plain
+        let (all_button, all_button_error) = control.button(a, key + 3u64, t, "Show all", &alls[0usize], plain)
+        if all_button_error != ok { ret (zero, all_button_error) }
+        var heading = control.text_options()
+        heading.role = .TitleMedium
+        heading.wrap = .None
+        let (said, said_error) = control.colored_text(a, 0u64, options.title, t, heading, style.color(t.tokens, .OnSurface))
+        if said_error != ok { ret (zero, said_error) }
+        let (head_parts, head_parts_error) = mem.alloc[widget.Node](a, 3usize)
+        if head_parts_error != ok { ret (zero, TooLarge) }
+        head_parts[0usize] = said
+        head_parts[1usize] = widget.spacer(0u64, 1.0)
+        head_parts[2usize] = all_button
+        var head_style = style.defaults()
+        head_style.width = style.Length { Px: options.width }
+        head_style.padding = style.EdgeLengths { left: style.Length { Px: inset }, top: flat, right: style.Length { Px: inset }, bottom: style.Length { Px: 8.0 } }
+        parts[p] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, head_style, head_parts[0usize..3usize])
         p += 1usize
     }
     parts[p] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), strip[0usize..1usize])
