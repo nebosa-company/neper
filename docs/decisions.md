@@ -26878,3 +26878,9 @@ The TimePicker spec says that "between five-minute marks a small knob shows the 
 The TimePicker spec moves the dial's "hand and knob over `duration-medium-2` with `ease-standard`". `dial_swept` keeps the goal on the dial's ring (`key + 7`). It unwraps each new angle to the short way round from the last goal, then eases there with `control.eased_on`. While the ring is pressed (a drag) the ease takes 0 ms, so the knob follows the finger. Reduced motion changes at once. The hand, the knob and the D1419 small knob all stand at the swept angle.
 
 `ui_pickers2_v2` turns the minute dial from the half hour to 14:07, on Windows and Linux. 100 ms later the knob is not yet at seven past; 500 ms later it is.
+
+## D1421 — The dial fades its numbers in on a switch
+
+The TimePicker spec cross-fades the numbers over `duration-short-4` when the hour dial switches to the minute dial. The dial now keeps its mode as a share on the ring (slot `key + 7 + 1048579`). After a switch, the new numbers are drawn at that share's opacity, each in a box keyed `key + 32 + index` while it fades. The old numbers are not drawn fading out (a ponytail). Reduced motion switches at once.
+
+`ui_pickers2_v2` switches from the minute dial back to hours, on Windows and Linux. 50 ms later the 6 stands in its fading box; a second later it does not. The fixture has no fonts, so the check reads keys, not glyph pixels.

@@ -4545,7 +4545,9 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // hour dial asks for the minutes (`EditMinute`).
 // (D1403) A fast drag snaps minutes to the fives.
 // (D1419) A minute off the fives turns the hand to that minute and ends it on a
-// small 16 `primary` knob.
+// small 16 `primary` knob. (D1420) The hand sweeps; (D1421) a switch of dial
+// fades the numbers in.
+// ponytail: the old numbers are not drawn fading out under the new.
 // (D1349) A wheel's drag, kept on the wheel: the value it started from.
 // (D1389) `at` is the value the drag last asked for, `last_y` and `step` the
 // last move's place and travel (a fling's speed). (D1418) `coasting` from
@@ -5215,6 +5217,15 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     // the hand points at the exact minute (6 degrees a minute).
     if !on_number { angle = f32(minute % 60u8) * 0.10471976 }
     angle = dial_swept(t, key + 7u64, angle)
+    // (D1421, docs/ux/components/TimePicker, motion) Switching between the hour
+    // and minute dials fades the new numbers in over `duration-short-4` (kept on
+    // the ring, slot `key + 7 + 1048579`), each number in a box keyed `key + 32 +
+    // index` while it fades.
+    var mode_goal: f32 = 0.0
+    if editing_minute { mode_goal = 1.0 }
+    let mode_share = control.eased_on(t, key + 7u64, key + 7u64 + 1048579u64, mode_goal, false, t.tokens.durations.short4)
+    var numbers_in = 1.0 - mode_share
+    if editing_minute { numbers_in = mode_share }
     let knob_x = 112.0 + 88.0 * math.sin[f32](angle)
     let knob_y = 112.0 - 88.0 * math.cos[f32](angle)
     // The hand: a 2 wide bar from the centre to the knob, turned by the angle.
@@ -5273,9 +5284,15 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
         if !editing_minute && label_value < 10u8 { digits = digits[1usize..2usize] }
         let (said, said_error) = control.colored_text(a, 0u64, digits, t, caption, ink)
         if said_error != ok { ret (zero, said_error) }
-        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = said
+        if numbers_in < 1.0 {
+            held[1usize] = said
+            var fading = style.defaults()
+            fading.opacity = numbers_in
+            held[0usize] = widget.box(key + 32u64 + u64(i), fading, held[1usize..2usize])
+        }
         let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(48.0, 48.0), held[0usize..1usize])
         let (cells, cells_error) = mem.alloc[widget.Node](a, 1usize)
         if cells_error != ok { ret (zero, TooLarge) }
