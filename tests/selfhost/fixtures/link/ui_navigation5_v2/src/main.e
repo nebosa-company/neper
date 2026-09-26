@@ -182,7 +182,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 2048usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 4096usize, state_classes: 32u16, max_depth: 32u16, max_commands: 2048usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -474,6 +474,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if all_tree_error != ok || !has_notes_row || testing.tap(&harness, notes_row.bounds.x + 10.0, notes_row.bounds.y + notes_row.bounds.height * 0.5) != ok || s.picks.count != picks_before + 1usize || s.picks.last != 2usize { os.exit(74i32) }
         }
         narrow_step += 1usize
+    }
+    // (D1446) Moved on a step, the content slides 8% in from the end and fades
+    // in over `duration-medium-1`: on the move's frame its block's start is not
+    // yet `primary`, a second on it is.
+    var step_block = control.sized_style(200.0, 80.0)
+    step_block.background = paint.Brush { Solid: style.color(&tokens, .Primary) }
+    var step_step = 0usize
+    while step_step < 4usize {
+        var step_at = 30000000000i64
+        var step_index = 0usize
+        if step_step == 1usize { step_at = 30000000001i64 }
+        if step_step == 2usize {
+            step_at = 30100000000i64
+            step_index = 1usize
+        }
+        if step_step == 3usize {
+            step_at = 31100000000i64
+            step_index = 1usize
+        }
+        if testing.begin(&harness, time.Instant { nanos: step_at }) != ok { os.exit(99i32) }
+        f = mem.arena_from(frame_storage)
+        let step_content = widget.box(6900u64, step_block, zero)
+        let (moving, moving_error) = navigation.wizard_of(&f, 6800u64, &theme, "Moving", s.steps[0usize..3usize], step_index, step_content, &s.subs[0usize], &s.subs[1usize], &s.subs[2usize], &s.subs[3usize], navigation.wizard_options(), 600.0, 260.0)
+        let (moving_page, moving_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if moving_error != ok || moving_page_error != ok { os.exit(103i32) }
+        moving_page[0usize] = moving
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(1000.0, 600.0), moving_page[0usize..1usize]), time.Instant { nanos: step_at }) != ok { os.exit(104i32) }
+        if step_step >= 2usize {
+            let (block, has_block) = bounds(&harness, &runtime, 6900u64)
+            let (step_shot, step_shot_error) = testing.snapshot(&harness, a)
+            if !has_block || step_shot_error != ok { os.exit(100i32) }
+            let arrived = is_color(step_shot, at(block.x + 4.0, block.y + 40.0), style.color(&tokens, .Primary))
+            if step_step == 2usize && arrived { os.exit(101i32) }
+            if step_step == 3usize && !arrived { os.exit(102i32) }
+        }
+        step_step += 1usize
     }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(32i32) }
     try io.print("ui navigation5 v2 ok\n")

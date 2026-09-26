@@ -5643,9 +5643,27 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         stepper = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: step_shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), step_held[0usize..1usize])
     }
     // The page, growing.
-    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    // (D1446, docs/ux/components/Wizard, motion) A step change slides the content
+    // 8% of the page and fades it in from the direction of travel (from the end
+    // going forward) over `duration-medium-1` on the emphasized curve: the step
+    // index eases on the wizard (slot `key + 1048607`) and the content stands the
+    // part still to come away. It always stands in its wrappers; reduced motion
+    // changes at once.
+    let step_shown = control.eased_emphasized(t, key, key + 1048607u64, f32(current), false, t.tokens.durations.medium1)
+    var travel = f32(current) - step_shown
+    if travel > 1.0 { travel = 1.0 }
+    if travel < -1.0 { travel = -1.0 }
+    var coming = travel
+    if coming < 0.0 { coming = 0.0 - coming }
+    var shift = travel * 0.08 * width
+    if t.tokens.direction == .RightToLeft { shift = 0.0 - shift }
+    let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = content
+    body[2usize] = content
+    body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: shift, y: 0.0 } }, style.defaults(), body[2usize..3usize])
+    var arriving = style.defaults()
+    arriving.opacity = 1.0 - coming
+    body[0usize] = widget.box(0u64, arriving, body[1usize..2usize])
     var page = style.defaults()
     page.width = style.Length { Flex: 1.0 }
     if !vertical {

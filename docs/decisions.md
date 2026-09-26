@@ -27056,3 +27056,9 @@ The NavigationStack spec pushes "with `ease-emphasized-decelerate` over `duratio
 Trying to always wrap the sliding page, per the D1432 lesson, moved the page 14 up under the bar, so the wrapper stays conditional. It is marked as a ponytail: content focused inside the page is remade when a slide ends, but the Back that takes the focus sits in the bar.
 
 `ui_navigation_v2` pops a stack, on Windows and Linux. 200 ms after the pop, the page beneath (a full-width block) is not yet 530 in; the old standard curve had it there, and the check fails without the change. A second later it is. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1446 — Wizard steps slide and fade in
+
+The Wizard spec slides content "8% and fades in the direction of travel (forward: from the end) with `ease-emphasized-decelerate` over `duration-medium-1`". The wizard now eases its step index on itself (slot `key + 1048607`). The content stands the part of a step still to come away, at 8% of the page's width (mirrored right to left), and faded by that same part. It always stands in its two wrappers, so the tree keeps its shape. Reduced motion changes at once. The connector and progress fills still change at once.
+
+`ui_navigation5_v2` moves a wizard on a step, on Windows and Linux: on the move's frame the content block's start is not yet `primary`, and a second later it is. Its state limits rise to 4096 bytes and 32 classes. `ui_productivity` still passes.
