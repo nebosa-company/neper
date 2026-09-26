@@ -3690,6 +3690,22 @@ fn date_range_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
 // language against `today`, reaching `picked` when it reads as a date.
 type DateCommit = struct { text: str, language: str, today: time.Date, picked: widget.Change[time.Date] }
 
+// (D1366) Whether an element held the focus at the last build, kept on it.
+type FocusMemo = struct { held: bool }
+
+fn focus_memo(t: *const control.Theme, key: widget.Key) -> (*FocusMemo, bool) {
+    var none: *FocusMemo = zero
+    if mem.address_of(t.runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    let (kept, _, kept_error) = widget.state[FocusMemo](&build, key + 4099u64, FocusMemo { held: false })
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
 fn date_commit_fire(ctx: *void) -> err {
     let c = mem.cast[*DateCommit](ctx)
     let (day, read) = parse_date(c.text, c.language, c.today)
@@ -3705,13 +3721,30 @@ fn date_commit_fire(ctx: *void) -> err {
 // focus holding text that is no date, it turns `error` and the line below says
 // "Enter a date as mm/dd/yyyy" in `error`, a live status tied to the field
 // (keyed `key + 1`).
-// ponytail: no reformatting on blur (the caller may rewrite `buffer` from the
-// picked date) and no minimum or maximum message.
+// (D1366) The build after the field loses the focus, a date it reads is
+// rewritten in the locale's form through `change` ("25 sep" becomes
+// "9/25/2026" in en-US).
+// ponytail: no minimum or maximum message.
 fn date_entry(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], picked: widget.Change[time.Date], today: time.Date, width: f32) -> (widget.Node, err) {
     let text = buffer[0usize..len]
-    let (_, read) = parse_date(text, t.language, today)
+    let (day, read) = parse_date(text, t.language, today)
     var focused = false
     if mem.address_of(t.runtime) != 0usize { focused = widget.focus_within(t.runtime, key) }
+    // (D1366, docs/ux/components/DatePicker, input mode) Reformatted on blur.
+    let (memo, has_memo) = focus_memo(t, key)
+    if has_memo {
+        if memo.held && !focused && read {
+            let (formed, formed_error) = mem.alloc[u8](a, 16usize)
+            if formed_error != ok { ret (zero, TooLarge) }
+            let formed_len = write_date_in(formed, day, t.language)
+            let rewritten = formed[0usize..formed_len]
+            if formed_len > 0usize && !control.same_text(rewritten, text) {
+                let told = widget.fire_change[str](change, rewritten)
+                if told != ok { ret (zero, told) }
+            }
+        }
+        memo.held = focused
+    }
     let wrong = len > 0usize && !read && !focused
     let hint = date_format_hint(t.language)
     let (commits, commits_error) = mem.alloc[DateCommit](a, 1usize)
