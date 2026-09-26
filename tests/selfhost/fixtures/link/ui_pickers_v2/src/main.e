@@ -567,6 +567,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     warm_page[0usize] = warm_sheet
     if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), warm_page[0usize..1usize]), time.Instant { nanos: 3605000000i64 }) != ok { os.exit(161i32) }
     let (tall_handle, has_tall_handle) = bounds(&harness, &runtime, 1300u64 + 1048580u64)
+    // (D1463) The handle's drag target is 48 tall.
+    if !has_tall_handle || !near(tall_handle.height, 48.0) { os.exit(179i32) }
     if !has_tall_handle || testing.drag(&harness, geometry.Point { x: tall_handle.x + tall_handle.width * 0.5, y: tall_handle.y + tall_handle.height * 0.5 }, geometry.Point { x: tall_handle.x + tall_handle.width * 0.5, y: tall_handle.y + tall_handle.height * 0.5 - 60.0 }, 4usize) != ok { os.exit(156i32) }
     f = mem.arena_from(frame_storage)
     let (grown_sheet, grown_sheet_error) = control.picker(&f, 1300u64, &theme, "Many", many_words[..], 0usize, true, &stores[0usize].press, many_picks[..], .Sheet)

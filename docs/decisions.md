@@ -27187,3 +27187,9 @@ A day's press reaches `pick`. The form is a modal dialog named "Select range" an
 The AppBar spec hides a disabled action rather than dimming it, "unless its absence would move the others". `app_bar_of` now drops the disabled actions at the outer end of each group, where removing them moves nothing: the end of the leading group and the start of the trailing group. Keys stay by index, and a disabled action between enabled ones is still dimmed in place. An overflowing trailing group (More) is unchanged.
 
 `ui_navigation_v2` builds a bar with two disabled trailing actions before Search and a disabled Share between two enabled leading actions, on Windows and Linux. The trailing two are hidden and Search stands; Share stands, dimmed. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1463 — The picker sheet's handle is a 48 drag target
+
+D1405 made the picker sheet's handle drag the sheet, but the drag region was only as tall as the 4 grip. The region is now 48 tall. It reaches 16 above the grip, to the sheet's top, and 28 below it, over the gap before the title. Negative margins keep the sheet's layout exactly as it stood.
+
+`ui_pickers_v2` checks on Windows and Linux that the handle region is 48 tall; the D1405 drag and the grown viewport's 568 still hold. All 103 `ui_*` fixtures pass on both hosts.

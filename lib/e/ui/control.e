@@ -7787,7 +7787,7 @@ type PickerForm = enum u8 { Popup, Sheet }
 // modal, no focus trap, no dismiss) and its scrim fading, until it is gone.
 // (D1376) It rises decelerating and sinks accelerating.
 // (D1405) Its handle drags it up to 90% of the window and back.
-// ponytail: the handle's drag target is the grip's own height, not a 48 target.
+// (D1463) The handle's drag target is 48 tall.
 // (D1405) Whether a picker's sheet stands expanded, kept on its field.
 type SheetExpandCell = struct { expanded: bool }
 type SheetExpand = struct { cell: *SheetExpandCell, has_cell: bool }
@@ -7865,7 +7865,15 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         let (handle_parts, handle_parts_error) = mem.alloc[widget.Node](a, 1usize)
         if handle_parts_error != ok { ret (zero, TooLarge) }
         handle_parts[0usize] = widget.aligned(0u64, .Center, .Start, handle_style, grips[0usize..1usize])
-        rows[0usize] = widget.region(key + 1048580u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&expanders[0usize]), invoke: sheet_expand_gesture }, gestures: widget.GESTURE_DRAG, enabled: true, focusable: false }, handle_style, handle_parts[0usize..1usize])
+        // (D1463) The drag target is 48 tall, reaching 16 above the grip (to the
+        // sheet's top) and 28 below it, over the gap before the title, so the
+        // sheet's layout does not move.
+        var target_style = handle_style
+        target_style.min_height = style.Length { Px: 48.0 }
+        target_style.padding.top = style.Length { Px: 16.0 }
+        target_style.margin.top = style.Length { Px: 0.0 - 16.0 }
+        target_style.margin.bottom = style.Length { Px: 0.0 - 28.0 }
+        rows[0usize] = widget.region(key + 1048580u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&expanders[0usize]), invoke: sheet_expand_gesture }, gestures: widget.GESTURE_DRAG, enabled: true, focusable: false }, target_style, handle_parts[0usize..1usize])
         var heading = text_options()
         heading.role = .TitleLarge
         heading.wrap = .None
