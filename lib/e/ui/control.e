@@ -3279,6 +3279,16 @@ fn eased_over(t: *const Theme, key: widget.Key, goal: f32, forward: bool, millis
 // (D1285) The same kept under `slot` on the element keyed `key`, so one element
 // can hold several eases.
 fn eased_on(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32, forward: bool, millis: u32) -> f32 {
+    ret eased_on_curve(t, key, slot, goal, forward, millis, false)
+}
+
+// (D1376) `eased_on` on the emphasized pair: decelerating toward a higher goal
+// (an entry), accelerating toward a lower one (an exit).
+fn eased_emphasized(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32, forward: bool, millis: u32) -> f32 {
+    ret eased_on_curve(t, key, slot, goal, forward, millis, true)
+}
+
+fn eased_on_curve(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32, forward: bool, millis: u32, emphasized: bool) -> f32 {
     if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret goal }
     let (s, state_error) = widget.state_of(t.runtime)
     if state_error != ok { ret goal }
@@ -3314,7 +3324,12 @@ fn eased_on(t: *const Theme, key: widget.Key, slot: widget.Key, goal: f32, forwa
         cell.shown = cell.to
         ret cell.to
     }
-    cell.shown = cell.from + (cell.to - cell.from) * animation.ease(.EaseInOut, progress)
+    var curve: animation.Curve = .EaseInOut
+    if emphasized {
+        curve = .EmphasizedDecelerate
+        if cell.to < cell.from { curve = .EmphasizedAccelerate }
+    }
+    cell.shown = cell.from + (cell.to - cell.from) * animation.ease(curve, progress)
     widget.request_animation_frame(t.runtime)
     ret cell.shown
 }
@@ -5645,8 +5660,8 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 // `low` or the sash's double-click opens it again.
 // (D1333) While its sash is dragged it shows its size in a plain tooltip.
 // (D1334) Over or dragging its sash, the pointer is the resize cursor.
-// (D1356) Collapse and reopen ease the size over `duration-medium-2`.
-// ponytail: the standard ease-in-out curve, not the emphasized pair.
+// (D1356) Collapse and reopen ease the size over `duration-medium-2`
+// (D1376: decelerating open, accelerating shut).
 fn resizable_pane_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node, collapsible: bool) -> (widget.Node, err) {
     let (named, named_error) = mem.alloc[u8](a, label.len + 7usize)
     if named_error != ok { ret (zero, TooLarge) }
@@ -5706,7 +5721,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
         if size > 0.0 { kept.open = size }
         var open_goal: f32 = 0.0
         if size > 0.0 { open_goal = 1.0 }
-        let opened = eased_on(t, key + 2u64, key + 3u64, open_goal, false, t.tokens.durations.medium2)
+        let opened = eased_emphasized(t, key + 2u64, key + 3u64, open_goal, false, t.tokens.durations.medium2)
         shown = kept.open * opened
     }
     handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: hit, low: low, high: high, reserve: reserve, change: change, cell: kept, has_cell: has_kept, collapsible: collapsible }
@@ -7252,7 +7267,8 @@ type PickerForm = enum u8 { Popup, Sheet }
 // `duration-medium-2` (the ease kept on the field); reduced motion shows it at once.
 // (D1360) Closing, it slides back down the same way, built but inert (not
 // modal, no focus trap, no dismiss) and its scrim fading, until it is gone.
-// ponytail: no drag to expand; the curve is the standard one both ways.
+// (D1376) It rises decelerating and sinks accelerating.
+// ponytail: no drag to expand.
 fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, presentation: PickerForm) -> (widget.Node, err) {
     if presentation == .Popup {
         let (popup, popup_error) = select(a, key, t, label, options, selected, open, toggle, picks)
@@ -7265,7 +7281,7 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     // (D1332) How far the sheet has risen, kept on the field while it is shut too.
     var rise_goal: f32 = 0.0
     if open { rise_goal = 1.0 }
-    let risen = eased_on(t, key, key + 2097152u64, rise_goal, false, t.tokens.durations.medium2)
+    let risen = eased_emphasized(t, key, key + 2097152u64, rise_goal, false, t.tokens.durations.medium2)
     let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
     let (head, head_error) = field_head(a, key, t, label, shown, chosen, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense)
     if head_error != ok { ret (zero, head_error) }

@@ -1222,8 +1222,8 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
 // (D1317) A newly active pill fills from its centre outwards over
 // `duration-medium-1` (the fill keyed `key + 1 + index + 1048576`); reduced
 // motion shows it at once.
-// ponytail: the fill eases in-out, not emphasized-decelerate; no hiding on
-// scroll; tabs rather than links in a navigation landmark (the spec allows
+// (D1376) The fill grows on `ease-emphasized-decelerate`.
+// ponytail: no hiding on scroll; tabs rather than links in a navigation landmark (the spec allows
 // tabs where the content changes without a URL).
 // (D1266) A destination bar's extras: the rail's `menu` button (firing `menu`,
 // which opens the modal drawer) and its FAB (`fab`, the caller's 56 button), and
@@ -1332,7 +1332,7 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         // (D1317) The active fill's share of the pill, eased from the centre.
         var fill_goal: f32 = 0.0
         if chosen { fill_goal = 1.0 }
-        let grown = control.eased_on(t, tab_key, tab_key + 1048576u64, fill_goal, false, t.tokens.durations.medium1)
+        let grown = control.eased_emphasized(t, tab_key, tab_key + 1048576u64, fill_goal, false, t.tokens.durations.medium1)
         if chosen {
             icon_ink = style.color(t.tokens, .OnSecondaryContainer)
             label_ink = style.color(t.tokens, .OnSurface)

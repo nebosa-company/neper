@@ -60,6 +60,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let ease_in_out = animation.controller(start, time.millis(100i64), .EaseInOut)
     let half = time.instant_add(start, time.millis(50i64))
     if !near(animation.value(&ease_in, half), 0.25) || !near(animation.value(&ease_out, half), 0.75) || !near(animation.value(&ease_in_out, half), 0.5) { os.exit(4i32) }
+    // (D1376) The emphasized pair half way: decelerate is 0.950 along, accelerate
+    // 0.154 (the CSS cubic Beziers), and both hold their ends.
+    let decelerate = animation.controller(start, time.millis(100i64), .EmphasizedDecelerate)
+    let accelerate = animation.controller(start, time.millis(100i64), .EmphasizedAccelerate)
+    if !near(animation.value(&decelerate, half), 0.950) || !near(animation.value(&accelerate, half), 0.154) { os.exit(133i32) }
+    if !near(animation.value(&decelerate, start), 0.0) || !near(animation.value(&accelerate, time.instant_add(start, time.millis(100i64))), 1.0) { os.exit(134i32) }
     var repeating = animation.controller(start, time.millis(100i64), .Linear)
     repeating.repeating = true
     if !near(animation.value(&repeating, time.instant_add(start, time.millis(125i64))), 0.25) || animation.finished(&repeating, time.instant_add(start, time.seconds(9i64))) { os.exit(5i32) }
