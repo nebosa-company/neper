@@ -26242,3 +26242,18 @@ and writes back "# env
 HOME= /root
 
 PATH=/bin", on Windows and Linux.
+
+## D1372 — Tree rows drag onto branches
+
+The Tree spec's drag and drop. With `TreeOptions.move` set, a tree's rows take
+drags as well as taps (`tree_row_gesture` passes taps on to
+`row_pick_gesture`). A drag carries `tree_payload_tag()` (2^43) plus the
+visible row plus one. The dragged row lifts (`surface-container-high`,
+elevation 4). A branch under the pointer takes the drop look, a 2px `primary`
+outline over `primary` at 8%, and a drop on it reports a `TreeMove` (the
+dragged node and the branch). Dropping a row on itself reports nothing.
+Without `move` the rows are as before. A held drag does not expand a branch,
+drops are not announced, and a tree table's rows do not drag.
+
+`ui_collections3_v2` drags A2 onto B: B's top edge turns `primary`, and the
+drop reports A2 into B, on Windows and Linux.

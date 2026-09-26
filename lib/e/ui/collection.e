@@ -3559,7 +3559,12 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // (D1330) Disabled and loading nodes from `tree_with`; the icon and meta are the
 // caller's content (`build`).
 // (D1342) F2 and the rename field from `TreeOptions`.
-// ponytail: rows are not virtualised; no drag and drop.
+// (D1372) Drag and drop from `TreeOptions.move`: a row drags away lifted
+// (`surface-container-high`, elevation 4); a branch under the pointer takes the
+// drop look (a 2px `primary` outline over `primary` at 8%) and a drop on it
+// reports a `TreeMove`.
+// ponytail: rows are not virtualised; a held drag does not expand a branch, and
+// a tree table's rows do not drag.
 // (D1330) A tree's per-node states, by key: `disabled` nodes are drawn at 38%,
 // take focus but no pick and say Disabled; an open node in `loading` is Busy and
 // its children wait under a "Loading" row.
@@ -3567,7 +3572,43 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // names a node (0: none) its content is a 24 tall outlined field over the
 // caller's `name` (`name_len` long, told through `typed`), Enter firing
 // `commit` and Escape `cancel`.
-type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit }
+// (D1372) `move`, when set, lets a tree's rows be dragged onto its branches.
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove] }
+
+// (D1372) A row dropped on a branch: the dragged node and the branch it goes into.
+type TreeMove = struct { node: widget.Key, into: widget.Key }
+
+// (D1372) A tree drag's payload: this tag plus the visible row plus one.
+fn tree_payload_tag() -> u64 {
+    ret 8796093022208u64
+}
+
+// (D1372) Which visible row a drag carries, when it is this tree's.
+fn tree_lifted(t: *const control.Theme, count: usize) -> (usize, bool) {
+    if mem.address_of(t.runtime) == 0usize { ret (0usize, false) }
+    let (payload, has_payload) = widget.dragging(t.runtime)
+    if !has_payload || payload <= tree_payload_tag() || payload > tree_payload_tag() + u64(count) { ret (0usize, false) }
+    ret (usize(payload - tree_payload_tag() - 1u64), true)
+}
+
+// (D1372) A tree row's gestures with moving: taps as before, a drag carrying the
+// row, and a drop of another row on a branch.
+type TreeRowDrag = struct { pick: *RowPick, runtime: *widget.Runtime, index: usize, key: widget.Key, rows: []const TreeRow, move: widget.Change[TreeMove] }
+
+fn tree_row_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*TreeRowDrag](ctx)
+    switch g {
+    case .DragStart as began:
+        ret widget.begin_drag(d.runtime, tree_payload_tag() + u64(d.index) + 1u64)
+    case .Drop as dropped:
+        if dropped.payload <= tree_payload_tag() || dropped.payload > tree_payload_tag() + u64(d.rows.len) { ret ok }
+        let from = usize(dropped.payload - tree_payload_tag() - 1u64)
+        if from == d.index { ret ok }
+        ret widget.fire_change[TreeMove](d.move, TreeMove { node: d.rows[from].key, into: d.key })
+    default:
+        ret row_pick_gesture(mem.cast[*void](d.pick), g)
+    }
+}
 
 // (D1342) F2's report: the node.
 fn tree_rename_fire(ctx: *void) -> err {
@@ -3598,6 +3639,11 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     let (moves, moves_error) = mem.alloc[control.FocusTo](a, 9usize * count)
     if moves_error != ok { ret (none, TooLarge) }
     let tabled = columns.len > 0usize
+    // (D1372) Moving: the row a drag carries, and the gestures a row takes.
+    let moving = widget.change_set[TreeMove](options.move.invoke)
+    let (lifted_row, has_lifted_row) = tree_lifted(t, count)
+    let (drags, drags_error) = mem.alloc[TreeRowDrag](a, count)
+    if drags_error != ok { ret (none, TooLarge) }
     let touch = density_of(t) == 2usize
     let step = control.if_else(touch, 24.0, 20.0)
     var row_extent = extent
@@ -3705,6 +3751,19 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             var row_style = control.sized_style(control.max_zero(width - 16.0), tall)
             row_style.margin = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: flat, right: style.Length { Px: 8.0 }, bottom: flat }
             row_style.radius = t.tokens.radii.sm
+            // (D1372) Lifted while dragged; the drop look on a branch under it.
+            if moving && has_lifted_row && lifted_row == i {
+                fill = style.color(t.tokens, .SurfaceContainerHigh)
+                row_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
+            }
+            if moving && has_lifted_row && lifted_row != i && entry.branch {
+                let (row_box, has_row_box) = widget.bounds_for_key(t.runtime, entry.key)
+                let at = widget.pointer_position(t.runtime)
+                if has_row_box && at.x >= row_box.x && at.x < row_box.x + row_box.width && at.y >= row_box.y && at.y < row_box.y + row_box.height {
+                    fill = control.with_alpha(style.color(t.tokens, .Primary), 0.08)
+                    row_style.border = style.Border { width: 2.0, color: style.color(t.tokens, .Primary) }
+                }
+            }
             row_style.background = paint.Brush { Solid: fill }
             if off { row_style.opacity = t.tokens.states.disabled_content }
             let (inside, inside_error) = mem.alloc[widget.Node](a, 2usize)
@@ -3721,7 +3780,15 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             if body_error != ok { ret (none, TooLarge) }
             body[0usize] = widget.stack(0u64, control.sized_style(control.max_zero(width - 16.0), tall), inside[0usize..parts])
             control.focus_look(t)
-            made = widget.region(entry.key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&picks[i]), invoke: row_pick_gesture }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, body[0usize..1usize])
+            var row_gesture = widget.GestureAction { ctx: ctx_of(&picks[i]), invoke: row_pick_gesture }
+            var row_gestures = 1u8 | 4u8
+            if moving {
+                drags[i] = TreeRowDrag { pick: &picks[i], runtime: t.runtime, index: i, key: entry.key, rows: visible[0usize..count], move: options.move }
+                row_gesture = widget.GestureAction { ctx: ctx_of(&drags[i]), invoke: tree_row_gesture }
+                row_gestures = row_gestures | widget.GESTURE_DRAG
+                if entry.branch { row_gestures = row_gestures | widget.GESTURE_DROP }
+            }
+            made = widget.region(entry.key, widget.Region { gesture: row_gesture, gestures: row_gestures, enabled: true, focusable: true }, row_style, body[0usize..1usize])
         }
         // The keyboard: Left collapses or finds the nearest visible parent;
         // Right expands or takes the immediately following first child.
