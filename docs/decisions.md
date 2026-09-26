@@ -28066,3 +28066,13 @@ Fixtures, on Windows and Linux:
 - `accept/thread_global_joined`: the global named after the join, and another the thread never names, named before it.
 
 The D1555 conformance cases, `sync_dataguard`, `sync_guard`, `thread_group`, `thread_spawn`, `thread_pool` and `task_pool` still pass on Linux. Stage 2 equals stage 3 on both hosts. A sweep of every link fixture and accept case with HEAD's compiler and the new one found none newly refused. The 18 sources HEAD's compiler cannot judge, because they import the new `e.sync`, were each checked to be accepted as D1555's compiler accepted them. That second check is what caught `net_tls`: D1555's sweep had no blind spot there, but this one would have had.
+
+## D1557 — A perturbation fixture for a program's own threads
+
+H04's acceptance takes schedule perturbation as evidence over tested runs, not an exhaustive race proof. D331's `--perturb` reorders the compiler's own workers, and the suites compare the images. No fixture perturbed a program's own threads, and C057 kept that as its last line.
+
+`e.thread` gains a perturbation any test can use. `perturb(seed, most)` makes a `Perturb`, and `perturb_point(&p)` advances a xorshift state and spins a pseudo-random 0..`most` steps, the steps kept in `p.spun` so the spin is work the program did. It needs no host call, so it perturbs the same way on both hosts. There is no portable sleep or yield in the library to reach for.
+
+`link/thread_perturb` runs four workers under `thread.spawn_all`, six times, one seed per round and a distinct seed per worker. Each step perturbs, increments a tally reached only through `sync.data_guard`/`data_of` (D1555), perturbs again, and adds to an atomic counter. Every round must end with 12,000 on both, and it does on Windows and Linux, in both suites. As a check that the fixture can see a race, a copy with the guard removed, reading and writing the tally with a perturbation between, loses increments and fails. The fixture would fail on a real race rather than pass by luck of the schedule.
+
+With D1555's data guards and D1556's slices and globals, all three of C057's lines have landed and the item closes.

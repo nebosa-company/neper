@@ -5853,6 +5853,13 @@ $syncDataGuardWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $syncDataGuardWritten -ne 'executable written') { throw 'sync dataguard executable emission failed' }
 & $syncDataGuardPath
 if ($LASTEXITCODE -ne 0) { throw 'a data guard did not exclude or was not released' }
+# Schedule perturbation over a program's own threads (D1557, H04): six seeds, the
+# same answer.
+$threadPerturbPath = Join-Path $testBuild 'thread-perturb-selfhost.exe'
+$threadPerturbWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\thread_perturb\src\main.e') $repo 'x64' 'windows' $threadPerturbPath
+if ($LASTEXITCODE -ne 0 -or $threadPerturbWritten -ne 'executable written') { throw 'thread perturb executable emission failed' }
+& $threadPerturbPath
+if ($LASTEXITCODE -ne 0) { throw 'a perturbed schedule changed what the threads computed' }
 # A group of threads as one resource (D434, H04): joined on every exit, by `defer` too.
 $threadGroupPath = Join-Path $testBuild 'thread-group-selfhost.exe'
 $threadGroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\thread_group\src\main.e') $repo 'x64' 'windows' $threadGroupPath

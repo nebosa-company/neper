@@ -5639,6 +5639,12 @@ sync_dataguard_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$sync_dataguard_written" = 'executable written' ]
 chmod +x "$sync_dataguard_path"
 "$sync_dataguard_path"
+# Schedule perturbation over a program's own threads (D1557, H04).
+thread_perturb_path="$test_build/thread-perturb-selfhost"
+thread_perturb_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/thread_perturb/src/main.e" "$repo" x64 linux "$thread_perturb_path")
+[ "$thread_perturb_written" = 'executable written' ]
+chmod +x "$thread_perturb_path"
+"$thread_perturb_path"
 # A group of threads as one resource (D434, H04).
 thread_group_path="$test_build/thread-group-selfhost"
 thread_group_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/thread_group/src/main.e" "$repo" x64 linux "$thread_group_path")
