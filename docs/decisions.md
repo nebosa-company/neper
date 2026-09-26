@@ -27062,3 +27062,16 @@ Trying to always wrap the sliding page, per the D1432 lesson, moved the page 14 
 The Wizard spec slides content "8% and fades in the direction of travel (forward: from the end) with `ease-emphasized-decelerate` over `duration-medium-1`". The wizard now eases its step index on itself (slot `key + 1048607`). The content stands the part of a step still to come away, at 8% of the page's width (mirrored right to left), and faded by that same part. It always stands in its two wrappers, so the tree keeps its shape. Reduced motion changes at once. The connector and progress fills still change at once.
 
 `ui_navigation5_v2` moves a wizard on a step, on Windows and Linux: on the move's frame the content block's start is not yet `primary`, and a second later it is. Its state limits rise to 4096 bytes and 32 classes. `ui_productivity` still passes.
+
+## D1447 — Drawer and destination page motion
+
+**Drawer.** The NavigationDrawer spec says the modal drawer "enters with `ease-emphasized-decelerate` over `duration-medium-2`... leaves with `ease-emphasized-accelerate` over `duration-short-4`". D1286 eased both ways on the standard curve, with those durations. The drawer's slide and scrim now ease with `control.eased_emphasized`, which decelerates toward open and accelerates toward shut. Reduced motion still jumps.
+
+**Destination page.** The DestinationBar spec changes content between destinations with a fade through: out over `duration-short-3`, in over `duration-medium-1` on emphasized-decelerate. The new `destination_page(key, selected, content)` wraps the caller's page in a box keyed `key`, which is always there. It eases the chosen index on the page (slot `key + 1048608`) and draws the page at the arrived share, so a change fades the new page in. Reduced motion changes at once. The leaving page is not drawn fading out first, because the caller builds only the new one (a ponytail).
+
+`ui_navigation3_v2` checks both on Windows and Linux:
+
+- A quarter of the way into the drawer's entry, 100 in from the edge is already the drawer while 280 in is still the page; the old curve fails this.
+- On a destination change's frame the new page's block is not yet `primary`, and a second later it is.
+
+The fixture's state limits rise to 4096 bytes and 32 classes. `ui_navigation` and `ui_navigation_v2` still pass on both hosts.
