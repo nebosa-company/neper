@@ -249,18 +249,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (failed_tree, failed_tree_error) = testing.semantics(&harness)
     let (failed_node, has_failed_node) = find(failed_tree, .Status, "Build 4128 finished")
     if failed_tree_error != ok || !has_failed_node || failed_node.live != .Assertive { os.exit(50i32) }
-    // (D1494) With two notices queued the toast's head stands over "1 more
-    // notification" (keyed `key + 3`); with one there is no count.
+    // (D1494, D1535) Toasts stack up to three, the head on top and each next 8
+    // under the last (keyed 880 + 16 + 8j); past three the rest collapse into "N
+    // more notifications" (keyed `key + 3`) under the stack. With one there is
+    // no count.
     if testing.by_key(&harness, 883u64).count != 0usize { os.exit(51i32) }
+    var five: [5]control.Notice = zero
+    five[0usize] = s.notices[0usize]
+    five[1usize] = control.Notice { text: "Download done", action_label: "Open", action: s.press, dismiss: s.press }
+    five[2usize] = control.Notice { text: "Sync finished", action_label: "", action: s.press, dismiss: s.press }
+    five[3usize] = control.Notice { text: "Backup ready", action_label: "", action: s.press, dismiss: s.press }
+    five[4usize] = control.Notice { text: "Update available", action_label: "", action: s.press, dismiss: s.press }
     f = mem.arena_from(frame_storage)
-    let (stacked_toast, stacked_toast_error) = control.toast_with(&f, 880u64, &theme, s.notices[0usize..2usize], 320.0, failed_toast)
-    let (stacked_page, stacked_page_error) = mem.alloc[widget.Node](&f, 1usize)
-    if stacked_toast_error != ok || stacked_page_error != ok { os.exit(52i32) }
-    stacked_page[0usize] = stacked_toast
-    if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), stacked_page[0usize..1usize]), time.Instant { nanos: 43100000000i64 }) != ok { os.exit(53i32) }
-    let (count_pill, has_count_pill) = widget.bounds_of(&runtime, testing.by_key(&harness, 883u64).element)
+    let (pair_toast, pair_toast_error) = control.toast_with(&f, 880u64, &theme, five[0usize..2usize], 320.0, failed_toast)
+    let (pair_page, pair_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if pair_toast_error != ok || pair_page_error != ok { os.exit(52i32) }
+    pair_page[0usize] = pair_toast
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), pair_page[0usize..1usize]), time.Instant { nanos: 43100000000i64 }) != ok { os.exit(53i32) }
+    let (second_toast, has_second_toast) = widget.bounds_of(&runtime, testing.by_key(&harness, 904u64).element)
     let (head_close, has_head_close) = widget.bounds_of(&runtime, testing.by_key(&harness, 882u64).element)
-    if testing.by_text(&harness, "1 more notification").count != 1usize || !has_count_pill || !has_head_close || !(count_pill.y > head_close.y + head_close.height) { os.exit(54i32) }
+    if testing.by_text(&harness, "Download done").count == 0usize || testing.by_key(&harness, 883u64).count != 0usize || !has_second_toast || !has_head_close || !(second_toast.y > head_close.y + head_close.height) { os.exit(54i32) }
+    f = mem.arena_from(frame_storage)
+    let (stacked_toast, stacked_toast_error) = control.toast_with(&f, 880u64, &theme, five[0usize..5usize], 320.0, failed_toast)
+    let (stacked_page, stacked_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if stacked_toast_error != ok || stacked_page_error != ok { os.exit(55i32) }
+    stacked_page[0usize] = stacked_toast
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), stacked_page[0usize..1usize]), time.Instant { nanos: 43200000000i64 }) != ok { os.exit(56i32) }
+    let (third_toast, has_third_toast) = widget.bounds_of(&runtime, testing.by_key(&harness, 912u64).element)
+    let (count_pill, has_count_pill) = widget.bounds_of(&runtime, testing.by_key(&harness, 883u64).element)
+    if !has_third_toast || !has_count_pill || testing.by_text(&harness, "Sync finished").count == 0usize || testing.by_text(&harness, "Backup ready").count != 0usize || testing.by_text(&harness, "2 more notifications").count != 1usize { os.exit(57i32) }
+    if !(count_pill.y > third_toast.y + third_toast.height) || third_toast.width < 339.5 || third_toast.width > 340.5 { os.exit(58i32) }
     // (D1394) In a compact window, 360 wide, the snackbar spans it less 16 a
     // side: its surface at 20 and at 340 across, the ground at 8.
     let (compact_rt, compact_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 2048usize, state_classes: 8u16, max_depth: 32u16, max_commands: 2048usize })

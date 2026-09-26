@@ -9009,8 +9009,8 @@ fn glyph_action(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // (D1480) A dismissed notice leaves fading out and sinking 8.
 // (D1493) `toast_with` gives the head its title and severity.
 // (D1494) The toasts behind the head collapse into "N more notifications".
-// ponytail: the stack of three shows the head over its count, not three toasts;
-// a leaving notice keeps 120 bytes of its text and 24 of its action.
+// (D1535) Three toasts stand before the rest collapse into the count.
+// ponytail: a leaving notice keeps 120 bytes of its text and 24 of its action.
 // (D1480) The last notice shown, kept on the surface so it can leave after the
 // caller drops it.
 type NoticeGhost = struct { text: [120]u8, text_len: usize, label: [24]u8, label_len: usize, set: bool }
@@ -9269,30 +9269,48 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
     // `on-surface-variant` on a `surface-container-high` pill, keyed `key + 3`)
     // 8 under it, end-aligned; the toast always stands in that column, so the
     // head is not remade when the count appears.
+    // (D1535) Up to three toasts stand, the head on top and the next two under it
+    // 8 apart (keyed `key + 16 + 8 * j`, their actions and closes one and two
+    // above), and only the ones past three collapse into the count.
     if !bottom && notices.len > 0usize {
-        let (column, column_error) = mem.alloc[widget.Node](a, 3usize)
+        let (column, column_error) = mem.alloc[widget.Node](a, 5usize)
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = body[0usize]
         var stacked = 1usize
-        if notices.len > 1usize {
+        var shown = notices.len
+        if shown > 3usize { shown = 3usize }
+        if shown > 1usize {
+            let (held_rest, held_rest_error) = mem.alloc[Notice](a, shown)
+            if held_rest_error != ok { ret (zero, TooLarge) }
+            var j = 1usize
+            while j < shown {
+                held_rest[j] = notices[j]
+                let (under, under_error) = stacked_toast(a, key + 16u64 + 8u64 * u64(j), t, &held_rest[j])
+                if under_error != ok { ret (zero, under_error) }
+                column[stacked] = under
+                stacked += 1usize
+                j += 1usize
+            }
+        }
+        if notices.len > 3usize {
             let (more_bytes, more_bytes_error) = mem.alloc[u8](a, 40usize)
             if more_bytes_error != ok { ret (zero, TooLarge) }
-            var m = write_i64(more_bytes, i64(notices.len - 1usize))
-            if notices.len == 2usize { m += copy_text(more_bytes[m..40usize], " more notification") } else { m += copy_text(more_bytes[m..40usize], " more notifications") }
+            var m = write_i64(more_bytes, i64(notices.len - 3usize))
+            if notices.len == 4usize { m += copy_text(more_bytes[m..40usize], " more notification") } else { m += copy_text(more_bytes[m..40usize], " more notifications") }
             var small = text_options()
             small.role = .BodySmall
             small.wrap = .None
             let (more_words, more_words_error) = colored_text(a, 0u64, more_bytes[0usize..m], t, small, style.color(t.tokens, .OnSurfaceVariant))
             if more_words_error != ok { ret (zero, more_words_error) }
-            column[2usize] = more_words
+            column[4usize] = more_words
             var pill = style.defaults()
             pill.radius = t.tokens.radii.md
             pill.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
             let across = style.Length { Px: 12.0 }
             let down = style.Length { Px: 6.0 }
             pill.padding = style.EdgeLengths { left: across, top: down, right: across, bottom: down }
-            column[1usize] = widget.box(key + 3u64, pill, column[2usize..3usize])
-            stacked = 2usize
+            column[stacked] = widget.box(key + 3u64, pill, column[4usize..5usize])
+            stacked += 1usize
         }
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .End, gap: 8.0 }, style.defaults(), column[0usize..stacked])
     }
@@ -9324,6 +9342,53 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: geometry.Point { x: 0.0, y: 0.0 }, modal: false, dismiss: zero }, style.defaults(), kept[0usize..1usize])
     ret (widget.box(key + 8192u64, style.defaults(), framed[0usize..1usize]), ok)
+}
+
+// (D1535, docs/ux/components/Snackbar, toast stack) A toast standing under the
+// head: its message in `body-medium` `on-surface-variant`, its action a text
+// button in `primary` (`key + 1`) and the close (`key + 2`), on the toast's
+// `surface-container-high` 340 sheet with `radius-md`, elevation 3, 12 vertically,
+// 16 at the start and 8 at the end; a polite status named by its message.
+fn stacked_toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notice: *Notice) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let ink = style.color(t.tokens, .OnSurfaceVariant)
+    var caption = text_options()
+    caption.role = .BodyMedium
+    let (message, message_error) = colored_text(a, 0u64, notice.text, t, caption, ink)
+    if message_error != ok { ret (zero, message_error) }
+    var grown = message
+    grown.style.width = style.Length { Flex: 1.0 }
+    parts[0usize] = grown
+    var at = 1usize
+    if notice.action_label.len != 0usize {
+        let (act, act_error) = tinted_button(a, key + 1u64, t, notice.action_label, &notice.action, style.color(t.tokens, .Primary))
+        if act_error != ok { ret (zero, act_error) }
+        parts[at] = act
+        at += 1usize
+    }
+    let (close, close_error) = tinted_glyph_button(a, key + 2u64, t, .Cross, "Dismiss", &notice.dismiss, t.tokens.sizes.control_md, t.tokens.sizes.icon_md, ink)
+    if close_error != ok { ret (zero, close_error) }
+    parts[at] = close
+    at += 1usize
+    var options = surface_options(t)
+    options.background = .SurfaceContainerHigh
+    options.radius = t.tokens.radii.md
+    options.elevation = 3u8
+    var sheet = surface_style(t, options)
+    sheet.overflow = .Visible
+    sheet.width = style.Length { Px: 340.0 }
+    sheet.min_height = style.Length { Px: 48.0 }
+    let down = style.Length { Px: 12.0 }
+    sheet.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: down, right: style.Length { Px: 8.0 }, bottom: down }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, sheet, parts[0usize..at])
+    var sem: widget.Semantics = zero
+    sem.role = 26u8
+    sem.label = notice.text
+    sem.live = 1u8
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }
 
 // A snackbar: the queue's head along the bottom of the window.
