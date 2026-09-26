@@ -26346,3 +26346,18 @@ unchanged. The reduced-motion cross-fade is still missing.
 `ui_collections4_v2`, after a frame to settle in, swipes 40 of a 240 page with a
 last step of 24 (the page turns) and 40 in steps of 8 (it does not). `ui_paged`
 passes, on Windows and Linux.
+
+## D1379 — Page views cross-fade under reduced motion
+
+The PageView spec slides the strip over `duration-medium-4` on
+`ease-emphasized-decelerate`, and under reduced motion cross-fades the pages in
+`duration-short-2` with no slide. `page_settle` now answers the strip's offset
+and the current page's opacity. Normally it slides for `duration-medium-4` on
+the emphasized curve (it was `duration-medium-2`, in-out). Under reduced motion
+the offset is 0 and the new page fades from clear to solid over
+`duration-short-2`, laid on the page's positioned box. The old page is not
+faded out.
+
+`ui_collections4_v2` turns a reduced-motion page view: 50 ms in, the second page
+already stands at the view's start but is not yet solid, and settled it is.
+D1288's slide checks and `ui_paged` still pass, on Windows and Linux.

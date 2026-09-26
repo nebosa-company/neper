@@ -712,6 +712,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         fling_step += 1usize
     }
+    // (D1379) Under reduced motion a turn does not slide: 50 ms in, the second
+    // page already stands at the view's start, part faded in; settled, it is
+    // solid.
+    var calm_tokens = tokens
+    calm_tokens.motion.reduced = true
+    let calm_theme = control.Theme { tokens: &calm_tokens, fonts: theme.fonts, language: "", runtime: &runtime }
+    var fade_step = 0usize
+    var faded_mid: u8 = 0u8
+    var faded_end: u8 = 0u8
+    while fade_step < 5usize {
+        var fade_at = 53000000000i64 + i64(fade_step) * 1000000000i64
+        var fade_page = 0usize
+        if fade_step >= 2usize { fade_page = 1usize }
+        if fade_step == 2usize { fade_at = 55000000000i64 }
+        if fade_step == 3usize { fade_at = 55050000000i64 }
+        if fade_step == 4usize { fade_at = 56000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: fade_at }) != ok { os.exit(203i32) }
+        f = mem.arena_from(frame_storage)
+        var solid = control.sized_style(240.0, 120.0)
+        solid.background = paint.Brush { Solid: style.color(&tokens, .Primary) }
+        settle_pages[0usize] = widget.box(1970u64, solid, zero)
+        settle_pages[1usize] = widget.box(1971u64, solid, zero)
+        settle_pages[2usize] = widget.box(1972u64, solid, zero)
+        var fade_view = collection.page_view_options()
+        fade_view.label = "Fade"
+        fade_view.width = 240.0
+        fade_view.height = 120.0
+        let (fading, fading_error) = collection.page_view_of(&f, 1960u64, &calm_theme, settle_pages[0usize..3usize], fade_page, zero, fade_view)
+        let (fade_root, fade_root_error) = mem.alloc[widget.Node](&f, 1usize)
+        if fading_error != ok || fade_root_error != ok { os.exit(204i32) }
+        fade_root[0usize] = fading
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), fade_root[0usize..1usize]), time.Instant { nanos: fade_at }) != ok { os.exit(205i32) }
+        if fade_step >= 3usize {
+            let (fade_box, has_fade_box) = bounds(&harness, &runtime, 1960u64)
+            let (fade_second, has_fade_second) = bounds(&harness, &runtime, 1971u64)
+            let (fade_shot, fade_shot_error) = testing.snapshot(&harness, a)
+            if !has_fade_box || !has_fade_second || fade_shot_error != ok || !near(fade_second.x, fade_box.x) { os.exit(206i32) }
+            let fade_spot = at(fade_box.x + 120.0, fade_box.y + 60.0)
+            if fade_step == 3usize { faded_mid = fade_shot.pixels[fade_spot] }
+            if fade_step == 4usize { faded_end = fade_shot.pixels[fade_spot] }
+        }
+        fade_step += 1usize
+    }
+    if faded_mid == faded_end { os.exit(207i32) }
     // (D1289) While refreshing the arc spins: a quarter turn later its circle is
     // drawn differently.
     var spin_sums: [2]u64 = zero
