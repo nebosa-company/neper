@@ -791,7 +791,9 @@ compile time, runtime and memory rather than isolated best cases.
   rejects `--json` and `--absolute-paths`; it is the intentional exception to the
   finite-command JSONL envelope
 - Optimiser depth: better inlining heuristics, load/store forwarding, scheduling;
-  cross-`.em` inlining stays under the M2 cap
+  cross-`.em` inlining stays under the M2 cap; a vector register class whose ABI is
+  section 5's `xmm`/`ymm` convention for `Vec`/`Mask` (D786, D1524), measured
+  against GP-09 once that workload exists
 
 M4 expands the platform matrix for all applicable conformance, ABI, determinism,
 debugging and GP workloads. It does not by itself claim general-purpose completion:

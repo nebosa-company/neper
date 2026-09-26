@@ -27666,3 +27666,21 @@ A finer laziness, such as reading only the header and directory and then the sec
 On Linux under WSL, where the tree sits on a Windows drive, the same load takes 0.9-1.3 s. That is the cost of file reads through the 9P mount, and it falls on the sources as much as the artifacts; laziness inside an artifact does not remove it.
 
 This is the definition H20 asked for, with the measurement behind it. The line closes without new reading code.
+
+## D1524 — The vector register class goes to M4 under H20's later-delivery rule
+
+D786 put the vector register class, the one whose ABI is section 5's `xmm` convention for `Vec` and `Mask`, among C044's lines. That line is optimizer work, and H20 says how such work is scheduled: advanced loop and vector optimizers "require separate workload-backed decisions and named milestones", and T2 "closes their architectural constraints and disposition, not nonexistent implementation/performance evidence". This row is that disposition.
+
+**Constraint.** The x64 back end allocates general registers only. A packed operation borrows `xmm0`-`xmm3` around a memory operand (D751). A vector register class would keep `Vec` values in `xmm`/`ymm` registers across operations. It needs:
+
+- its own live ranges and spill slots of 16 or 32 bytes;
+- each host's split between caller-saved and callee-saved registers (on Windows, `xmm6`-`xmm15` are callee-saved);
+- the calling convention section 5 names.
+
+Section 5's convention alone, a vector loaded into `xmm` at the call and stored to a slot on entry, is the same copy D786's by-address convention makes today, so it gains nothing until values stay in registers.
+
+**Evidence.** The workload that would measure it is GP-09, a SIMD codec or compressor, which does not exist as a program. D1521's M2 CPU programs use no vectors. Nothing today can show the class paying for its complexity.
+
+**Disposition.** The class and its `xmm`/`ymm` ABI join M4's optimiser-depth line in the roadmap, to be measured against GP-09 once it exists. D786's deviation stands until then: a `Vec` or `Mask` crosses a neper call as copied storage, `extern` never takes a vector by value, and no program can observe the difference. `--explain` already reports the vectorizer as unavailable (D1520).
+
+With allocation counts (D1520), the cap re-evaluation (D1521), serialized alias facts (D1522) and lazy section access (D1523), every C044 line is now either delivered or disposed of as H20 prescribes. C044 closes at 1.
