@@ -3292,7 +3292,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     if head_error != ok { ret (zero, TooLarge) }
     let (title_bytes, title_error) = mem.alloc[u8](a, 24usize)
     if title_error != ok { ret (zero, TooLarge) }
-    var title_len = control.copy_text(title_bytes, month_name(month))
+    var title_len = control.copy_text(title_bytes, month_name_in(month, t.language))
     title_bytes[title_len] = 32u8
     title_len += 1usize
     title_len += control.write_i64(title_bytes[title_len..], year)
@@ -3360,7 +3360,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
         var caption = control.text_options()
         caption.role = .LabelMedium
         caption.wrap = .None
-        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_name((week_start + weekday) % 7usize, touch), t, caption, muted)
+        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_name_in((week_start + weekday) % 7usize, touch, t.language), t, caption, muted)
         if name_error != ok { ret (zero, name_error) }
         let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
         if named_error != ok { ret (zero, TooLarge) }
@@ -3470,7 +3470,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 said += control.copy_text(spoken[said..40usize], ", ")
                 said += control.write_i64(spoken[said..40usize], i64(day))
                 said += control.copy_text(spoken[said..40usize], " ")
-                said += control.copy_text(spoken[said..40usize], month_name(month))
+                said += control.copy_text(spoken[said..40usize], month_name_in(month, t.language))
                 said += control.copy_text(spoken[said..40usize], " ")
                 said += control.write_i64(spoken[said..40usize], year)
                 let (pressed, pressed_error) = control.pressable_states(a, day_key, t, 3u8, spoken[0usize..said], look, true, end, day_states, 0u32, 0u64, day_action, content)
@@ -3619,6 +3619,118 @@ fn month_turn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, kind: con
     let content = widget.aligned(0u64, .Center, .Center, control.sized_style(size, size), inner[0usize..1usize])
     let (made, made_error) = control.pressable(a, key, t, 3u8, label, look, true, false, action, content)
     ret (made, made_error)
+}
+
+// (D1388) The theme language's two-letter code, lower case ("de" of "de-AT").
+fn language_code(language: str) -> str {
+    if language.len < 2usize { ret "" }
+    ret language[0usize..2usize]
+}
+
+// (D1388, docs/ux/components/DatePicker, locale) A month's name in German,
+// French or Spanish when the theme language is one, else English.
+fn month_name_in(month: i64, language: str) -> str {
+    let code = language_code(language)
+    if control.same_text(code, "de") {
+        if month == 1i64 { ret "Januar" }
+        if month == 2i64 { ret "Februar" }
+        if month == 3i64 { ret "März" }
+        if month == 4i64 { ret "April" }
+        if month == 5i64 { ret "Mai" }
+        if month == 6i64 { ret "Juni" }
+        if month == 7i64 { ret "Juli" }
+        if month == 8i64 { ret "August" }
+        if month == 9i64 { ret "September" }
+        if month == 10i64 { ret "Oktober" }
+        if month == 11i64 { ret "November" }
+        ret "Dezember"
+    }
+    if control.same_text(code, "fr") {
+        if month == 1i64 { ret "janvier" }
+        if month == 2i64 { ret "février" }
+        if month == 3i64 { ret "mars" }
+        if month == 4i64 { ret "avril" }
+        if month == 5i64 { ret "mai" }
+        if month == 6i64 { ret "juin" }
+        if month == 7i64 { ret "juillet" }
+        if month == 8i64 { ret "août" }
+        if month == 9i64 { ret "septembre" }
+        if month == 10i64 { ret "octobre" }
+        if month == 11i64 { ret "novembre" }
+        ret "décembre"
+    }
+    if control.same_text(code, "es") {
+        if month == 1i64 { ret "enero" }
+        if month == 2i64 { ret "febrero" }
+        if month == 3i64 { ret "marzo" }
+        if month == 4i64 { ret "abril" }
+        if month == 5i64 { ret "mayo" }
+        if month == 6i64 { ret "junio" }
+        if month == 7i64 { ret "julio" }
+        if month == 8i64 { ret "agosto" }
+        if month == 9i64 { ret "septiembre" }
+        if month == 10i64 { ret "octubre" }
+        if month == 11i64 { ret "noviembre" }
+        ret "diciembre"
+    }
+    ret month_name(month)
+}
+
+// (D1388) A weekday's column head (Monday 0) in German, French or Spanish when
+// the theme language is one, else English.
+fn weekday_name_in(day: usize, narrow: bool, language: str) -> str {
+    let code = language_code(language)
+    if control.same_text(code, "de") {
+        if narrow {
+            if day == 0usize { ret "M" }
+            if day == 1usize || day == 3usize { ret "D" }
+            if day == 2usize { ret "M" }
+            if day == 4usize { ret "F" }
+            ret "S"
+        }
+        if day == 0usize { ret "Mo" }
+        if day == 1usize { ret "Di" }
+        if day == 2usize { ret "Mi" }
+        if day == 3usize { ret "Do" }
+        if day == 4usize { ret "Fr" }
+        if day == 5usize { ret "Sa" }
+        ret "So"
+    }
+    if control.same_text(code, "fr") {
+        if narrow {
+            if day == 0usize { ret "L" }
+            if day == 1usize || day == 2usize { ret "M" }
+            if day == 3usize { ret "J" }
+            if day == 4usize { ret "V" }
+            if day == 5usize { ret "S" }
+            ret "D"
+        }
+        if day == 0usize { ret "lu" }
+        if day == 1usize { ret "ma" }
+        if day == 2usize { ret "me" }
+        if day == 3usize { ret "je" }
+        if day == 4usize { ret "ve" }
+        if day == 5usize { ret "sa" }
+        ret "di"
+    }
+    if control.same_text(code, "es") {
+        if narrow {
+            if day == 0usize { ret "L" }
+            if day == 1usize || day == 2usize { ret "M" }
+            if day == 3usize { ret "J" }
+            if day == 4usize { ret "V" }
+            if day == 5usize { ret "S" }
+            ret "D"
+        }
+        if day == 0usize { ret "lu" }
+        if day == 1usize { ret "ma" }
+        if day == 2usize { ret "mi" }
+        if day == 3usize { ret "ju" }
+        if day == 4usize { ret "vi" }
+        if day == 5usize { ret "sá" }
+        ret "do"
+    }
+    ret weekday_name(day, narrow)
 }
 
 fn month_name(month: i64) -> str {
@@ -3812,7 +3924,7 @@ fn date_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pe
         let weekday = weekday_full(usize(weekday_of(i64(pending.year), i64(pending.month), i64(pending.day))))
         n = control.copy_text(said, weekday[0usize..3usize])
         n += control.copy_text(said[n..24usize], ", ")
-        let month = month_name(i64(pending.month))
+        let month = month_name_in(i64(pending.month), t.language)
         n += control.copy_text(said[n..24usize], month[0usize..3usize])
         n += control.copy_text(said[n..24usize], " ")
         n += control.write_i64(said[n..24usize], i64(pending.day))
@@ -4658,7 +4770,7 @@ fn date_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, date: ti
     if months_error != ok || day_error != ok || years_error != ok || relays_error != ok || parts_error != ok { ret (zero, TooLarge) }
     var m = 0usize
     while m < 12usize {
-        months[m] = month_name(i64(m + 1usize))
+        months[m] = month_name_in(i64(m + 1usize), t.language)
         m += 1usize
     }
     let first_year = date.year - 50i32

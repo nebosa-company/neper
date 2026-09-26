@@ -26486,3 +26486,16 @@ note in `error`, now led by a 16 `error` icon 4 before it.
 `ui_pickers2_v2` shows "25:99" unfocused, which says how to write a time, beside
 a readable time, which does not. The fixture's own field had held five NUL
 bytes and now holds "09:30". Windows and Linux.
+
+## D1388 — Calendars name months and weekdays in German, French and Spanish
+
+The DatePicker spec's names follow the locale, and they were English only.
+`month_name_in` and `weekday_name_in` answer German, French or Spanish when the
+theme language's two-letter code (`language_code`) is `de`, `fr` or `es`, and
+English otherwise; the old English functions are their fallback. The calendar's
+title, its weekday row (short and narrow), its spoken day names, the modal's
+pending date and the date wheels' months use them. Other languages still read
+English until there is a host locale service.
+
+`ui_pickers_v2` builds March 2026 in de-DE ("März 2026" over "Mo Di Mi ...") and
+in fr-FR ("mars 2026"); `ui_pickers2_v2` still passes, on Windows and Linux.
