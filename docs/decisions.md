@@ -27684,3 +27684,22 @@ Section 5's convention alone, a vector loaded into `xmm` at the call and stored 
 **Disposition.** The class and its `xmm`/`ymm` ABI join M4's optimiser-depth line in the roadmap, to be measured against GP-09 once it exists. D786's deviation stands until then: a `Vec` or `Mask` crosses a neper call as copied storage, `extern` never takes a vector by value, and no program can observe the difference. `--explain` already reports the vectorizer as unavailable (D1520).
 
 With allocation counts (D1520), the cap re-evaluation (D1521), serialized alias facts (D1522) and lazy section access (D1523), every C044 line is now either delivered or disposed of as H20 prescribes. C044 closes at 1.
+
+## D1525 — Chunked capture records with binary chunks
+
+D370 bounded `run --json`: the record holds a prefix of each stream, the result holds the counts, and the files beside the executable hold the rest. It left chunked capture records and binary chunks for later. The prefix was one JSON string, which cannot carry bytes that are not text.
+
+`run ... --json --chunked` now sends the captured prefixes as `output` records, stdout's then stderr's, each at most 4,096 bytes.
+
+- Each chunk record carries `stream`, a contiguous one-based `sequence`, the byte `offset` of its first byte, its `bytes`, and `data`.
+- `data` is a JSON string (`encoding` `utf-8`) when the chunk is UTF-8 without a NUL, and base64 otherwise.
+- A multi-byte character the chunk size would split ends its chunk early and opens the next.
+- A character cut by the capture limit leaves its chunk base64, since that chunk is not valid text.
+- A last record per stream carries `end: true`, the stream's `total_bytes`, whether the capture was `truncated`, and the `file` holding the whole stream.
+- The `run` record's `stdout` and `stderr` are then empty.
+
+Nothing changes without the flag.
+
+The chunks are emitted when the child has exited, not while it runs. The capture is two files, not pipes, so a flooding child never blocks. The bootstrap's fixed OS surface has no sleep or timed wait, so a live reader would have to spin on the files for the child's whole life. Sequence order is H18's other open line, and its progress half landed in D561: every `progress` record carries a contiguous `sequence`. The output records add a `sequence` per stream, and the `result` stays the last record, holding the final status.
+
+The schema gains the `output` record. The conformance corpus gains `run_chunked`: `run_flood` under `--capture 50 --chunked`, one golden for both hosts and pinned by both suites, validated against the schema. `build/ux/c045_chunks.sh` covers a 6,003-byte stream whose 4,096th byte falls inside a character, five binary bytes on stderr, and the same run under `--capture 5000`. The chunks reassemble to each stream's captured prefix, the sequences and offsets are contiguous, the split character moves whole to the second chunk, stderr is base64, the end records match the files, and a run without the flag has no `output` records. All of it passes on Windows and Linux, and the fixed point holds on both.

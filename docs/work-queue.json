@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C045",
-      "category": "compiler",
-      "group": "Front end and language",
-      "order": 45,
-      "title": "Bounded, versioned harness transport (v1 precursor for T2 H18)",
-      "score": 0.68,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "One versioned JSONL stream with a header, a closed record set and `result.data` as the extension map, validated against `docs/schemas/neper-v1.schema.json` by the suites (D227-D300); two-site diagnostics carry `related` (D364); `run --json` is bounded -- `--capture N` bytes per stream in the record, whole counts and `captured_complete` in the result, the files beside the executable holding the rest (D370); a build past `--deadline` ends with one diagnostic and exit 3 (D399); a context page reports its serialized `bytes` and takes a byte budget (D400), and its cursor is bound to the program's `snapshot` on the subject record (D407). a `fix` carries the plans' preconditions, the identity and SHA-256 of the source its edits are offsets into (D432). under `--json --time` every phase of a build is a `progress` record of the stream with its milliseconds, the arena and the elapsed time (D454). Typed name facts (D514): an unknown value name, an unknown type and a module without the member named carry `symbol`, `owner` and `near` as fields beside the message, as a mismatch carries `expected` and `actual` (D401), pinned by the near fixtures and the project goldens. Every E-SAFETY diagnostic carries `symbol`, the resource, view or type its rule is about (D545), pinned by the forty-nine safety and region fixtures. A program that does not load answers as a stream from every query (D521): the header is held until the first record, so the loader's parse or import diagnostic comes under it and a result of exit 1 follows, where the diagnostic had been text on stderr, and `index-file` over a file that does not parse had a stream with no header; pinned over `query_syntax` for three queries and the index on both hosts; `dis-file` and `build-manifest-file` answer the same way (D522), the manifest command under a `manifest` header in place of its object, and a batch over a program that does not check or load is one stream under a `query-batch` header (D523). Not yet: streamed capture chunks, sequence IDs"
-    },
-    {
       "id": "C047",
       "category": "compiler",
       "group": "Front end and language",
