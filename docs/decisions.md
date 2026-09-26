@@ -26208,3 +26208,20 @@ dialog keeps `headline-small` in `on-surface`.
 `ui_pickers_v2` finds the date modal's title one 16 line tall (a headline is
 32), and the time modal checks in `ui_pickers2_v2` still pass, on Windows and
 Linux.
+
+## D1370 — The docked date field can be typed
+
+The DatePicker spec's field is always typeable, and the docked form was
+read-only. `DateFooter` gains `typing`, `buffer`, `len` and `typed`. Typed, the
+head is D960's clocked field with a calendar mark: `clocked_field_glyph` is
+`clocked_field` with the mark chosen, the editor keyed `key`, the mark
+`key + 1` opening the calendar, the frame `key + 2`. Enter commits what
+`parse_date` reads through `pick` (D1257's `DateCommit`). The calendar's parts
+move to a base of `key + 1048576` (overlay `+ 1`, month `+ 2`, focus day
+`+ 5 + day`, Today and Clear `+ 64` and `+ 65`), because at `key + 1` and
+`key + 2` they would collide with the field's mark and frame. The overlay
+anchors on the frame. The untyped form and its keys are unchanged.
+
+`ui_pickers_v2` types into the docked field: Enter on "9/25/2026" picks the
+25th, the mark opens the calendar, and the open calendar stands at its new
+keys. `ui_pickers` and `ui_pickers2_v2` still pass, on Windows and Linux.

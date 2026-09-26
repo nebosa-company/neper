@@ -419,6 +419,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, today_box.x + today_box.width * 0.5, today_box.y + today_box.height * 0.5) != ok || stores[0usize].last_date.day != 25u8 || stores[0usize].last_date.month != 9u8 { os.exit(101i32) }
     let toggles_before_clear = stores[0usize].toggles
     if testing.tap(&harness, clear_box.x + clear_box.width * 0.5, clear_box.y + clear_box.height * 0.5) != ok || stores[0usize].toggles != toggles_before_clear + 1usize { os.exit(102i32) }
+    // (D1370) Typed, the docked field edits: Enter on "9/25/2026" picks it, and
+    // the calendar mark opens the calendar, which then stands at its own keys.
+    let (docked_bytes, docked_bytes_error) = mem.alloc[u8](a, 16usize)
+    if docked_bytes_error != ok { os.exit(143i32) }
+    let docked_text = "9/25/2026"
+    var db = 0usize
+    while db < docked_text.len {
+        docked_bytes[db] = docked_text[db]
+        db += 1usize
+    }
+    var docked_step = 0usize
+    while docked_step < 2usize {
+        var docked_footer: overlay.DateFooter = zero
+        docked_footer.typing = true
+        docked_footer.buffer = docked_bytes
+        docked_footer.len = docked_text.len
+        docked_footer.today = footer_today
+        f = mem.arena_from(frame_storage)
+        let (docked, docked_error) = overlay.date_picker_with(&f, 3000u64, &us_theme, "Release date", footer_today, false, docked_step == 1usize, &stores[0usize].press, footer_today, no_dates, picked_dates, docked_footer)
+        let (docked_page, docked_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if docked_error != ok || docked_page_error != ok { os.exit(144i32) }
+        docked_page[0usize] = docked
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), docked_page[0usize..1usize]), time.Instant { nanos: 3350000000i64 + i64(docked_step) }) != ok { os.exit(145i32) }
+        if docked_step == 0usize {
+            let (_, _, docked_edits) = widget.edit_selection(&runtime, testing.by_key(&harness, 3000u64).element)
+            var docked_cleared: time.Date = zero
+            stores[0usize].last_date = docked_cleared
+            if !docked_edits || widget.focus(&runtime, testing.by_key(&harness, 3000u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || stores[0usize].last_date.day != 25u8 { os.exit(146i32) }
+            let docked_toggles = stores[0usize].toggles
+            if !tap_key(&harness, &runtime, 3001u64) || stores[0usize].toggles != docked_toggles + 1usize { os.exit(147i32) }
+        }
+        if docked_step == 1usize && testing.by_key(&harness, 3000u64 + 1048577u64).count != 1usize { os.exit(148i32) }
+        docked_step += 1usize
+    }
     // (D1277) With the week of the 16th to the 22nd unavailable, Down from the
     // 11th goes to the 25th.
     var closed_week: [7]time.Date = zero
