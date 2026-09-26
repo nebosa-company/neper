@@ -3322,7 +3322,7 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 // before `earliest` or after `latest`.
 // (D1307) With `toggle_years` set the month and year are a button (keyed
 // `key + 4095`) that fires it, and with `year_view` the days give way to years.
-type CalendarMarks = struct { week_numbers: bool, events: []const time.Date, unavailable: []const time.Date, earliest: time.Date, has_earliest: bool, latest: time.Date, has_latest: bool, year_view: bool, toggle_years: *const widget.Submit }
+type CalendarMarks = struct { week_numbers: bool, events: []const time.Date, unavailable: []const time.Date, earliest: time.Date, has_earliest: bool, latest: time.Date, has_latest: bool, year_view: bool, toggle_years: *const widget.Submit, bare: bool }
 
 // (D1307) A year pill's press: show `day`'s month, then leave the year view.
 type YearPick = struct { day: time.Date, show: widget.Change[time.Date], toggle: *const widget.Submit }
@@ -3883,6 +3883,9 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
+    // (D1461) `bare`: the days alone, without the month header or weekdays (a
+    // month of the full-screen range form, whose weekdays stand once above all).
+    if marks.bare { column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), fading[1usize..2usize]) }
     var sem: widget.Semantics = zero
     sem.role = 30u8
     sem.label = label
@@ -4263,6 +4266,155 @@ fn date_entry_within(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), parts[0usize..2usize]), ok)
 }
 
+// (D1461) A date's short words: "Sep 14".
+fn short_date(a: *mem.Arena, d: time.Date, language: str) -> str {
+    let (said, said_error) = mem.alloc[u8](a, 16usize)
+    if said_error != ok || d.month < 1u8 || d.month > 12u8 { ret "" }
+    let month = month_name_in(i64(d.month), language)
+    var n = control.copy_text(said, month[0usize..3usize])
+    n += control.copy_text(said[n..16usize], " ")
+    n += control.write_i64(said[n..16usize], i64(d.day))
+    ret said[0usize..n]
+}
+
+// (D1461, docs/ux/components/DatePicker, range, compact) The full-screen range
+// form on compact touch hosts: on `surface-container-high`, `width` by `height`,
+// a 56 top bar with Close (`key + 1`, firing `close`, as does Escape) and a Save
+// text button (`key + 2`, firing `save`); "Select range" in `label-medium`
+// `on-surface-variant`; the range in `headline-small` ("Sep 14 – Sep 18", "Sep 14
+// – End date" while the end is open, "Start date – End date" before either); a
+// sticky weekday row over a divider; then `months` months from `first`, each a
+// `title-small` heading ("October 2026") over its days (a bare `calendar_with`
+// keyed `key + 16384 x (index + 1)`, the range banded), scrolling vertically
+// (`key + 3`). A day's press reaches `pick`. A modal dialog named "Select range";
+// it slides up from the bottom over `duration-medium-4` as it first appears.
+fn date_range_fullscreen(a: *mem.Arena, key: widget.Key, t: *const control.Theme, from: time.Date, has_from: bool, to: time.Date, has_to: bool, first: time.Date, months: usize, pick: widget.Change[time.Date], close: *const widget.Submit, save: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
+    if months == 0usize || months > 24usize { ret (zero, TooLarge) }
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    let ink = style.color(t.tokens, .OnSurface)
+    // The top bar.
+    let (bar, bar_error) = mem.alloc[widget.Node](a, 3usize)
+    if bar_error != ok { ret (zero, TooLarge) }
+    let (closer, closer_error) = control.glyph_action(a, key + 1u64, t, .Cross, "Close", close, 48.0, t.tokens.sizes.icon_md, ink, true, 0u32, 0u32, 0u64)
+    if closer_error != ok { ret (zero, closer_error) }
+    var plain = control.button_options()
+    plain.variant = .Plain
+    let (saver, saver_error) = control.button(a, key + 2u64, t, "Save", save, plain)
+    if saver_error != ok { ret (zero, saver_error) }
+    bar[0usize] = closer
+    bar[1usize] = widget.spacer(0u64, 1.0)
+    bar[2usize] = saver
+    var bar_style = control.sized_style(width, 56.0)
+    bar_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+    // The title and the range.
+    var small = control.text_options()
+    small.role = .LabelMedium
+    small.wrap = .None
+    let (titled, titled_error) = control.colored_text(a, 0u64, "Select range", t, small, muted)
+    if titled_error != ok { ret (zero, titled_error) }
+    let (summary_bytes, summary_error) = mem.alloc[u8](a, 48usize)
+    if summary_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if has_from { n = control.copy_text(summary_bytes, short_date(a, from, t.language)) } else { n = control.copy_text(summary_bytes, "Start date") }
+    n += control.copy_text(summary_bytes[n..48usize], " – ")
+    if has_to { n += control.copy_text(summary_bytes[n..48usize], short_date(a, to, t.language)) } else { n += control.copy_text(summary_bytes[n..48usize], "End date") }
+    var big = control.text_options()
+    big.role = .HeadlineSmall
+    big.wrap = .None
+    let (summary, summary_node_error) = control.colored_text(a, key + 4u64, summary_bytes[0usize..n], t, big, ink)
+    if summary_node_error != ok { ret (zero, summary_node_error) }
+    let (headed, headed_error) = mem.alloc[widget.Node](a, 2usize)
+    if headed_error != ok { ret (zero, TooLarge) }
+    headed[0usize] = titled
+    headed[1usize] = summary
+    // The sticky weekdays.
+    let week_start = week_start_of(t.language)
+    let cell = t.tokens.sizes.control_md
+    let (names, names_error) = mem.alloc[widget.Node](a, 14usize)
+    if names_error != ok { ret (zero, TooLarge) }
+    var weekday = 0usize
+    while weekday < 7usize {
+        var caption = control.text_options()
+        caption.role = .LabelMedium
+        caption.wrap = .None
+        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_name_in((week_start + weekday) % 7usize, true, t.language), t, caption, muted)
+        if name_error != ok { ret (zero, name_error) }
+        names[7usize + weekday] = name_node
+        names[weekday] = widget.aligned(0u64, .Center, .Center, control.sized_style(cell, cell), names[7usize + weekday..8usize + weekday])
+        weekday += 1usize
+    }
+    let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+    if rule_error != ok { ret (zero, rule_error) }
+    // The months, scrolling.
+    let (month_parts, month_parts_error) = mem.alloc[widget.Node](a, 2usize * months)
+    if month_parts_error != ok { ret (zero, TooLarge) }
+    var heading = control.text_options()
+    heading.role = .TitleSmall
+    heading.wrap = .None
+    var no_marks: CalendarMarks = zero
+    no_marks.bare = true
+    var m = 0usize
+    while m < months {
+        var year = i64(first.year)
+        var month = i64(first.month) + i64(m)
+        while month > 12i64 {
+            month -= 12i64
+            year += 1i64
+        }
+        let shown = time.Date { year: i32(year), month: u8(month), day: 1u8 }
+        let (title_bytes, title_error) = mem.alloc[u8](a, 32usize)
+        if title_error != ok { ret (zero, TooLarge) }
+        var tn = control.copy_text(title_bytes, month_name_in(month, t.language))
+        tn += control.copy_text(title_bytes[tn..32usize], " ")
+        tn += control.write_i64(title_bytes[tn..32usize], year)
+        let (title_node, title_node_error) = control.colored_text(a, 0u64, title_bytes[0usize..tn], t, heading, ink)
+        if title_node_error != ok { ret (zero, title_node_error) }
+        let (padded_title, padded_error) = mem.alloc[widget.Node](a, 1usize)
+        if padded_error != ok { ret (zero, TooLarge) }
+        padded_title[0usize] = title_node
+        month_parts[2usize * m] = widget.padded(0u64, 24.0, 16.0, 24.0, 8.0, style.defaults(), padded_title[0usize..1usize])
+        var selected = from
+        if !has_from { selected = shown }
+        var end = to
+        if !has_to { end = from }
+        let (days, days_error) = calendar_with(a, key + 16384u64 * u64(m + 1usize), t, title_bytes[0usize..tn], shown, selected, has_from, true, from, end, shown, false, zero, pick, no_marks)
+        if days_error != ok { ret (zero, days_error) }
+        month_parts[2usize * m + 1usize] = days
+        m += 1usize
+    }
+    let (listing, listing_error) = mem.alloc[widget.Node](a, 1usize)
+    if listing_error != ok { ret (zero, TooLarge) }
+    listing[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), month_parts[0usize..2usize * months])
+    let fixed_height = 56.0 + 16.0 + 40.0 + cell + t.tokens.sizes.divider + 24.0
+    var viewport = control.sized_style(width, control.max_zero(height - fixed_height))
+    viewport.overflow = .Clip
+    // The page.
+    let (column, column_error) = mem.alloc[widget.Node](a, 6usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar_style, bar[0usize..3usize])
+    column[1usize] = widget.padded(0u64, 24.0, 16.0, 24.0, 24.0, style.defaults(), headed[0usize..2usize])
+    column[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(width, cell), names[0usize..7usize])
+    column[3usize] = rule
+    column[4usize] = widget.scroll(key + 3u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(muted, 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, viewport, listing[0usize..1usize])
+    var page = control.sized_style(width, height)
+    page.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+    page.overflow = .Clip
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 4usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, page, column[0usize..5usize])
+    var none: []const widget.Shortcut = zero
+    framed[1usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *close, keys: zero }, style.defaults(), framed[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 23u8
+    sem.label = "Select range"
+    sem.states = accessibility.STATE_MODAL
+    framed[2usize] = widget.semantics(0u64, sem, style.defaults(), framed[1usize..2usize])
+    // It slides up as it first appears.
+    let arrived = appeared_share(t, key, t.tokens.durations.medium4)
+    framed[3usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: height * (1.0 - arrived) } }, style.defaults(), framed[2usize..3usize])
+    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *close }, style.defaults(), framed[3usize..4usize]), ok)
+}
+
 // (D1293) A modal date picker's state beyond the date: whether it is in input
 // mode and what toggles it, the typed text's buffer and length and whom it tells,
 // and today (for typed words like "tomorrow").
@@ -4277,7 +4429,7 @@ type DateModalOptions = struct { typing: bool, toggle_mode: *const widget.Submit
 // `confirm`, and a pick in either mode reaches `pick` as the pending date.
 // (D1369) "Select date" is a `label-medium` label in `on-surface-variant`
 // (`dialog_labelled`).
-// ponytail: no full-screen range form.
+// (D1461) `date_range_fullscreen` is the compact range form.
 fn date_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pending: time.Date, has_pending: bool, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date], open: bool, cancel: *const widget.Submit, confirm: *const widget.Submit, options: DateModalOptions) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (said, said_error) = mem.alloc[u8](a, 24usize)

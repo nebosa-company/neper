@@ -778,6 +778,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, date_word_ok) = overlay.parse_date("someday", "en-US", today_date)
     let (leap, leap_ok) = overlay.parse_date("29.02.2028", "de-DE", today_date)
     if feb_ok || month_ok || date_word_ok || !leap_ok || leap.day != 29u8 { os.exit(81i32) }
+    // (D1461) The full-screen range form: "Select range", the open range
+    // "Sep 14 – End date", months from September scrolling; a press on 3 October
+    // reaches the pick and Save fires.
+    let range_start = time.Date { year: 2026i32, month: 9u8, day: 14u8 }
+    var range_step = 0usize
+    while range_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (range_form, range_form_error) = overlay.date_range_fullscreen(&f, 7800u64, &theme, range_start, true, range_start, false, time.Date { year: 2026i32, month: 9u8, day: 1u8 }, 3usize, picked_dates, &stores[0usize].press, &stores[0usize].press, 600.0, 720.0)
+        let (range_page, range_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if range_form_error != ok || range_page_error != ok { os.exit(173i32) }
+        range_page[0usize] = range_form
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), range_page[0usize..1usize]), time.Instant { nanos: 20000000000i64 + i64(range_step) }) != ok { os.exit(174i32) }
+        range_step += 1usize
+    }
+    if testing.by_text(&harness, "Select range").count == 0usize || testing.by_text(&harness, "October 2026").count == 0usize { os.exit(175i32) }
+    let (range_said, has_range_said) = labelled(&harness, "Sep 14 – End date")
+    if !has_range_said { os.exit(176i32) }
+    if !tap_key(&harness, &runtime, 7800u64 + 2u64 * 16384u64 + 6u64) || stores[0usize].last_date.month != 10u8 || stores[0usize].last_date.day != 3u8 { os.exit(177i32) }
+    let saves_before = stores[0usize].toggles
+    if !tap_key(&harness, &runtime, 7802u64) || stores[0usize].toggles != saves_before + 1usize { os.exit(178i32) }
     try io.print("ui pickers v2 ok\n")
     ret ok
 }

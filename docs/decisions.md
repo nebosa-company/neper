@@ -27168,3 +27168,16 @@ D1371 kept the comment and blank lines before each pair, but dropped the lines a
 The KeyValueEditor spec sets names in `code` when they are identifiers. `identifier_name` says whether a name is made only of letters, digits and `_` and does not start with a digit. An identifier name's field asks for the theme's fixed-pitch face (`FieldOptions.mono`, D1453); other names keep the body face, and so do the values.
 
 `ui_collections5_v2` checks on Windows and Linux that `API_KEY` and `_x9` are identifiers and that `9x`, `My name` and the empty name are not.
+
+## D1461 — The full-screen range form
+
+The DatePicker spec puts range selection full screen on compact touch hosts. The new `date_range_fullscreen` lays it out on `surface-container-high`:
+
+- a 56 top bar with Close (`key + 1`, as are Escape and the scrim) and a Save text button (`key + 2`);
+- "Select range" in `label-medium`, then the range in `headline-small`: "Sep 14 – Sep 18", "Sep 14 – End date" while the end is open, or "Start date – End date";
+- a weekday row that stands still over a divider;
+- `months` months from `first`, scrolling vertically (`key + 3`). Each month is a `title-small` heading over its days, a `calendar_with` keyed `key + 16384 x (index + 1)` with the range banded. The calendar's new `bare` mark draws only the days, without the month header and weekdays.
+
+A day's press reaches `pick`. The form is a modal dialog named "Select range" and slides up over `duration-medium-4` as it first appears (`appeared_share`). `short_date` writes "Sep 14".
+
+`ui_pickers_v2` opens the form from 14 September with three months, on Windows and Linux. It finds "Select range", "October 2026" and the summary "Sep 14 – End date"; a tap on 3 October reaches the pick, and Save fires. `ui_pickers2_v2` still passes.
