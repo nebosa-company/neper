@@ -176,7 +176,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1024usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 24u16, max_commands: 8192usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1024usize, max_states: 64usize, state_bytes: 4096usize, state_classes: 32u16, max_depth: 24u16, max_commands: 8192usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -480,6 +480,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.by_text(&harness, "Monospace").count == 0usize || testing.by_key(&harness, 1600u64 + 1048701u64).count != 1usize { os.exit(97i32) }
     let (recent_row, has_recent_row) = bounds(&harness, &runtime, 1600u64 + 1048601u64)
     if !has_recent_row || testing.tap(&harness, recent_row.x + 20.0, recent_row.y + recent_row.height * 0.5) != ok || s.family != 2usize { os.exit(96i32) }
+    // (D1444) A new colour moves the hue strip's thumb over `duration-short-3`: on
+    // the change's frame the strip differs from how it settles a second on.
+    var strip_sums: [2]u32 = zero
+    var strip_step = 0usize
+    while strip_step < 4usize {
+        var strip_at = 9000000000i64
+        if strip_step == 1usize { strip_at = 9500000000i64 }
+        if strip_step == 2usize { strip_at = 9600000000i64 }
+        if strip_step == 3usize { strip_at = 10600000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: strip_at }) != ok { os.exit(98i32) }
+        f = mem.arena_from(frame_storage)
+        var strip_value = copper()
+        if strip_step >= 2usize { strip_value = paint.rgba(0.2, 0.4, 0.6, 1.0) }
+        let (stepping, stepping_error) = overlay.color_field_with(&f, 1700u64, &theme, "Stepping", strip_value, true, recent_pick, true, &s.press, s.swatches[0usize..6usize], recent_colours[..], s.hex[0usize..16usize], 7usize, recent_typed, 296.0)
+        let (strip_page, strip_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if stepping_error != ok || strip_page_error != ok { os.exit(98i32) }
+        strip_page[0usize] = stepping
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), strip_page[0usize..1usize]), time.Instant { nanos: strip_at }) != ok { os.exit(98i32) }
+        if strip_step >= 2usize {
+            let (strip, has_strip) = widget.bounds_of(&runtime, testing.by_key(&harness, 1703u64).element)
+            let (strip_shot, strip_shot_error) = testing.snapshot(&harness, a)
+            if !has_strip || strip_shot_error != ok { os.exit(99i32) }
+            var sum = 0u32
+            var y = 0usize
+            while y < usize(strip.height) {
+                var x = 0usize
+                while x < usize(strip.width) {
+                    sum += u32(strip_shot.pixels[((usize(strip.y) + y) * usize(strip_shot.width) + usize(strip.x) + x) * 4usize + 1usize])
+                    x += 1usize
+                }
+                y += 1usize
+            }
+            strip_sums[strip_step - 2usize] = sum
+        }
+        strip_step += 1usize
+    }
+    if strip_sums[0usize] == strip_sums[1usize] { os.exit(100i32) }
     try io.print("ui pickers3 v2 ok\n")
     ret ok
 }

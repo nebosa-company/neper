@@ -6615,6 +6615,16 @@ fn read_hex(text: str) -> (paint.Color, bool) {
     ret (paint.rgba(f32(digits[0usize] * 16u32 + digits[1usize]) / 255.0, f32(digits[2usize] * 16u32 + digits[3usize]) / 255.0, f32(digits[4usize] * 16u32 + digits[5usize]) / 255.0, alpha), true)
 }
 
+// (D1444) Where a colour picker's thumb stands for `value`, kept on the picker
+// keyed `key` (slot `key + offset`; its spectrum and strips are remade as their
+// colours change): easing there over `duration-short-3`, at once while the
+// thumb's own `area` is pressed.
+fn thumb_eased(t: *const control.Theme, key: widget.Key, offset: u64, area: widget.Key, value: f32) -> f32 {
+    var millis = t.tokens.durations.short3
+    if control.control_state(t, area, true, false).pressed { millis = 0u32 }
+    ret control.eased_on(t, key, key + offset, value, false, millis)
+}
+
 // A spectrum, a strip or a swatch: what it paints (`kind` 0 the saturation and
 // brightness area, 1 the hue strip, 2 the opacity strip, 3 a swatch), the colour
 // as hue, saturation, brightness and alpha, the checkerboard's and the thumb's
@@ -7008,6 +7018,13 @@ fn color_field_typed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
         }
         i += 1usize
     }
+    // (D1444, docs/ux/components/ColorPicker, motion) A keyboard step moves the
+    // thumbs over `duration-short-3` on `ease-standard` (kept on each spectrum or
+    // strip); a drag and reduced motion move them at once.
+    tints[0usize].saturation = thumb_eased(t, key, 1048603u64, tints[0usize].key, saturation)
+    tints[0usize].bright = thumb_eased(t, key, 1048604u64, tints[0usize].key, bright)
+    tints[1usize].hue = thumb_eased(t, key, 1048605u64, tints[1usize].key, hue)
+    tints[2usize].alpha = thumb_eased(t, key, 1048606u64, tints[2usize].key, value.alpha)
     // The trigger: the value's swatch and hex.
     let (shown, shown_error) = mem.alloc[u8](a, 9usize)
     if shown_error != ok { ret (zero, TooLarge) }
