@@ -27081,3 +27081,15 @@ The fixture's state limits rise to 4096 bytes and 32 classes. `ui_navigation` an
 The VirtualGrid spec animates tiles "to new positions on a size change over `duration-medium-2` with `ease-standard`". `reflow_share_over` is D1401's `reflow_share` with the duration given; `reflow_share` keeps `duration-medium-1` for GridView. `virtual_grid_of` now keeps the reflow on the grid. When a width change alters the columns, each built tile stands the part of its move still to come away from its new place: `(old column - new column) x (side + 4)` across and `(old row - new row) x extent` down. Every tile always stands in its moving wrapper, and reduced motion moves the tiles at once. The spec's reduced-motion cross-fade is not drawn.
 
 `ui_collections_v2` narrows a virtual grid from 600 to 300, on Windows and Linux. On the change's frame the grid's first 300 x 300 differs from how it settles a second later; it matches without the motion. `ui_collection` still passes on both hosts.
+
+## D1449 — The select menu grows in
+
+The Select spec opens the menu "over `duration-medium-1` with `ease-emphasized-decelerate` (scaling down from the field in y, fading in)". `control.select` keeps an opening share on its field (slot `key + 1048609`). The share eases up while the menu is open and drops at once when it shuts. The listbox is drawn at that share's opacity and scaled from 80%, and always stands in those two wrappers while open. The scale is uniform rather than y only. Closing and reduced motion are at once.
+
+Checks on Windows and Linux:
+
+- `ui_selection2_v2` opens a select. On the open's frame its menu overlay differs from how it settles a second later; it matches without the motion.
+- `ui_choice`'s depth limit rises from 12 to 16 for the wrappers.
+- All 103 `ui_*` fixtures pass.
+
+The D1445 full-suite milestone ran in this stretch, with the Windows suite in the suite worktree. It stops at the known `tool.Capacity` at ui_navigation4_v2. With the uncommitted foreign `src/tool.e` fix applied there only, it passes every UI fixture and stops at the known stale `plan-rename-file` goldens; both are the user's decisions.

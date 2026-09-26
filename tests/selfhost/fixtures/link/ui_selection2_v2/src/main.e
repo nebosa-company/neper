@@ -207,6 +207,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         pick_step += 1usize
     }
+    // (D1449) Opened, the select's menu fades and grows in over
+    // `duration-medium-1`: on the open's frame its overlay looks other than it
+    // settles a second on.
+    var menu_sums: [2]u32 = zero
+    var menu_step = 0usize
+    while menu_step < 4usize {
+        var menu_at = 10000000000i64
+        if menu_step == 1usize { menu_at = 10000000001i64 }
+        if menu_step == 2usize { menu_at = 10100000000i64 }
+        if menu_step == 3usize { menu_at = 11100000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: menu_at }) != ok { os.exit(32i32) }
+        f = mem.arena_from(frame_storage)
+        let (opening_select, opening_select_error) = control.select(&f, 950u64, &theme, "Opening", store.words[0usize..3usize], 1usize, menu_step >= 2usize, &store.picks[0usize], store.picks[0usize..3usize])
+        let (select_page, select_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if opening_select_error != ok || select_page_error != ok { os.exit(32i32) }
+        select_page[0usize] = opening_select
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 300.0), select_page[0usize..1usize]), time.Instant { nanos: menu_at }) != ok { os.exit(32i32) }
+        if menu_step >= 2usize {
+            let (menu_box, has_menu_box) = testing.overlay_of(&harness, testing.by_key(&harness, 951u64).element)
+            let (menu_shot, menu_shot_error) = testing.snapshot(&harness, a)
+            if !has_menu_box || menu_shot_error != ok { os.exit(33i32) }
+            var sum = 0u32
+            var y = 0usize
+            while y < usize(menu_box.height) {
+                var x = 0usize
+                while x < usize(menu_box.width) {
+                    sum += u32(menu_shot.pixels[at(menu_box.x + f32(x), menu_box.y + f32(y)) + 1usize])
+                    x += 1usize
+                }
+                y += 1usize
+            }
+            menu_sums[menu_step - 2usize] = sum
+        }
+        menu_step += 1usize
+    }
+    if menu_sums[0usize] == menu_sums[1usize] { os.exit(34i32) }
     try io.print("ui selection2 v2 ok\n")
     ret ok
 }

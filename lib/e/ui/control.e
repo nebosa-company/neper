@@ -4427,10 +4427,21 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var menu_sem: widget.Semantics = zero
         menu_sem.role = accessibility.ROLE_LISTBOX
         menu_sem.label = label
-        let (popup, popup_error) = mem.alloc[widget.Node](a, 1usize)
+        // (D1449, docs/ux/components/Select, motion) The menu opens fading and
+        // growing from 80% over `duration-medium-1` on the emphasized-decelerate
+        // curve (kept on the field, slot `key + 1048609`); closing is at once and
+        // reduced motion opens at once. It always stands in its two wrappers.
+        let opened = eased_emphasized(t, key, key + 1048609u64, 1.0, true, t.tokens.durations.medium1)
+        let (popup, popup_error) = mem.alloc[widget.Node](a, 3usize)
         if popup_error != ok { ret (zero, TooLarge) }
-        popup[0usize] = widget.semantics(0u64, menu_sem, style.defaults(), menu[0usize..1usize])
+        popup[2usize] = widget.semantics(0u64, menu_sem, style.defaults(), menu[0usize..1usize])
+        popup[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 0.8 + 0.2 * opened, rotation: 0.0, offset: zero }, style.defaults(), popup[2usize..3usize])
+        var fading = style.defaults()
+        fading.opacity = opened
+        popup[0usize] = widget.box(0u64, fading, popup[1usize..2usize])
         parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .BelowMatch, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: true, dismiss: *toggle }, style.defaults(), popup[0usize..1usize])
+    } else {
+        let _ = eased_emphasized(t, key, key + 1048609u64, 0.0, true, t.tokens.durations.medium1)
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
