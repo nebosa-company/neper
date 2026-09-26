@@ -231,6 +231,8 @@ type Element = struct {
     node_offset: f32,
     content_extent: f32,
     viewport_extent: f32,
+    // (D1487) A viewport's padded inside, where its thumb strip stands.
+    viewport_rect: geometry.Rect,
     scroll_velocity: f32,
     // (D1400) The frame time a viewport last moved (0: never).
     scrolled_at: i64,
@@ -2136,6 +2138,7 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
     let e = &s.elements[element]
     e.content_extent = content
     if vertical { e.viewport_extent = inner.height } else { e.viewport_extent = inner.width }
+    e.viewport_rect = inner
     let most = max_f(content - e.viewport_extent, 0.0)
     if e.overscroll == .Clamp {
         if e.scroll_offset > most { e.scroll_offset = most }
@@ -3218,25 +3221,25 @@ fn text_width(a: *mem.Arena, node: Node) -> f32 {
 // (D1249) A press on a viewport's thumb strip -- the trailing 12 of a viewport
 // that paints its thumb over more content than it shows: the viewport, which
 // the press now drags by its thumb. A press off the thumb first moves it to
-// centre under the pointer.
-// ponytail: the strip is measured from the viewport's bounds, not its padded
-// inside; a padded viewport's strip sits its padding off.
+// centre under the pointer. (D1487) The strip is measured from the viewport's
+// padded inside, where the thumb is painted.
 fn thumb_grab(s: *State, from: usize, p: geometry.Point) -> (usize, bool, err) {
     let (viewport, has_viewport) = hit_scroll(s, from, p)
     if !has_viewport { ret (0usize, false, ok) }
     let e = &s.elements[viewport]
     if !e.scrollbar || e.content_extent <= e.viewport_extent || e.viewport_extent <= 0.0 { ret (0usize, false, ok) }
     let vertical = e.scroll_axis == .Vertical
-    if vertical && p.x < e.bounds.x + e.bounds.width - 12.0 { ret (0usize, false, ok) }
-    if !vertical && p.y < e.bounds.y + e.bounds.height - 12.0 { ret (0usize, false, ok) }
+    let inside = e.viewport_rect
+    if vertical && (p.x < inside.x + inside.width - 12.0 || p.x > inside.x + inside.width) { ret (0usize, false, ok) }
+    if !vertical && (p.y < inside.y + inside.height - 12.0 || p.y > inside.y + inside.height) { ret (0usize, false, ok) }
     let viewport_size = e.viewport_extent
     var length = viewport_size * viewport_size / e.content_extent
     if length < 32.0 { length = min_f(32.0, viewport_size) }
     var at = e.scroll_offset / e.content_extent * viewport_size
     if at > viewport_size - length { at = viewport_size - length }
     if at < 0.0 { at = 0.0 }
-    var along = p.y - e.bounds.y
-    if !vertical { along = p.x - e.bounds.x }
+    var along = p.y - inside.y
+    if !vertical { along = p.x - inside.x }
     if along < at || along > at + length {
         let wanted = (along - length * 0.5) * e.content_extent / viewport_size
         let jumped = scroll_by(s, viewport, wanted - e.scroll_offset, false)

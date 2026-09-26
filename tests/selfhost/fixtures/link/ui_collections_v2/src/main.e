@@ -784,6 +784,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, thumbed.x + 296.0, jump_y) != ok { os.exit(154i32) }
     let jumped = s.list_offset - (130.0 - 16.0) * 4800.0 / 144.0
     if after_drag > (130.0 - 16.0) * 4800.0 / 144.0 || jumped > 0.5 || jumped < -0.5 { os.exit(155i32) }
+    // (D1487) A viewport padded 16 keeps its thumb strip inside the padding: a
+    // press 4 in from the inside's end grabs it (the content jumps), a press in
+    // the padding does not.
+    var padded_step = 0usize
+    while padded_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (padded_content, padded_content_error) = mem.alloc[widget.Node](&f, 1usize)
+        if padded_content_error != ok { os.exit(239i32) }
+        padded_content[0usize] = widget.box(0u64, control.sized_style(168.0, 1440.0), zero)
+        var padded_look = control.sized_style(200.0, 176.0)
+        let pad16 = style.Length { Px: 16.0 }
+        padded_look.padding = style.EdgeLengths { left: pad16, top: pad16, right: pad16, bottom: pad16 }
+        let padded_view = widget.scroll(3000u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: style.color(&tokens, .OnSurfaceVariant), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, padded_look, padded_content[0usize..1usize])
+        let (padded_page, padded_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if padded_page_error != ok { os.exit(239i32) }
+        padded_page[0usize] = padded_view
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 600.0), padded_page[0usize..1usize]), time.Instant { nanos: 7100000000i64 + i64(padded_step) }) != ok { os.exit(240i32) }
+        padded_step += 1usize
+    }
+    let (padded_box, has_padded_box) = bounds(&harness, &runtime, 3000u64)
+    if !has_padded_box { os.exit(241i32) }
+    let padded_id = testing.by_key(&harness, 3000u64).element
+    if testing.tap(&harness, padded_box.x + 196.0, padded_box.y + 140.0) != ok { os.exit(242i32) }
+    let (unmoved, _) = widget.scroll_offset_of(&runtime, padded_id)
+    if unmoved != 0.0 { os.exit(243i32) }
+    if testing.tap(&harness, padded_box.x + 180.0, padded_box.y + 140.0) != ok { os.exit(244i32) }
+    let (moved_padded, _) = widget.scroll_offset_of(&runtime, padded_id)
+    if !(moved_padded > 0.0) { os.exit(245i32) }
     // (D1264) Control rows: a checkbox row and a switch row are those controls in
     // the tree, Checked when on; a press anywhere on the switch row runs it.
     var control_rows: [2]collection.RowItem = zero
