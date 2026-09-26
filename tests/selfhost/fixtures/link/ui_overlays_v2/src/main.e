@@ -630,6 +630,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if tip_step == 7usize && testing.by_key(&harness, 5100u64 + 8195u64).count != 0usize { os.exit(200i32) }
         tip_step += 1usize
     }
+    // (D1428) A menu scales and fades in: 50 ms after it opens its panel's
+    // start is not yet `surface-container`, a second on it is.
+    var menu_step = 0usize
+    while menu_step < 5usize {
+        var menu_at = 95000000000i64
+        if menu_step == 1usize { menu_at = 95005000000i64 }
+        if menu_step == 2usize { menu_at = 95010000000i64 }
+        if menu_step == 3usize { menu_at = 95060000000i64 }
+        if menu_step == 4usize { menu_at = 96000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: menu_at }) != ok { os.exit(201i32) }
+        var menu_frame = mem.arena_from(frame_storage)
+        let (menu_anchor, menu_anchor_error) = control.button(&menu_frame, 5000u64, &theme, "Anchor", &s.subs[4usize], control.button_options())
+        let (opening_menu, opening_menu_error) = overlay.menu_of(&menu_frame, 5200u64, &theme, 5000u64, "File", s.commands[0usize..5usize], menu_step >= 2usize, &s.subs[2usize])
+        let (menu_parts, menu_parts_error) = mem.alloc[widget.Node](&menu_frame, 2usize)
+        if menu_anchor_error != ok || opening_menu_error != ok || menu_parts_error != ok { os.exit(201i32) }
+        menu_parts[0usize] = menu_anchor
+        menu_parts[1usize] = opening_menu
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), menu_parts[0usize..2usize]), time.Instant { nanos: menu_at }) != ok { os.exit(202i32) }
+        if menu_step >= 3usize {
+            let (menu_box, has_menu_box) = lifted(&harness, 5200u64)
+            let (menu_shot, menu_shot_error) = testing.snapshot(&harness, a)
+            if !has_menu_box || menu_shot_error != ok { os.exit(203i32) }
+            let panelled = is_color(menu_shot, at(menu_box.x + 2.0, menu_box.y + menu_box.height * 0.5), style.color(&tokens, .SurfaceContainer))
+            if menu_step == 3usize && panelled { os.exit(204i32) }
+            if menu_step == 4usize && !panelled { os.exit(205i32) }
+        }
+        menu_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(51i32) }
     try io.print("ui overlays v2 ok\n")
     ret ok
