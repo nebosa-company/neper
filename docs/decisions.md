@@ -26618,3 +26618,16 @@ caller does not pass.
 
 `ui_workspace` presses Alt+3 (the third tab picked) and Alt+1 (the first), and
 `ui_containers2_v2` still passes, on Windows and Linux.
+
+## D1398 — Workspaces switch by recent use and reopen closed documents
+
+The MultiDocumentWorkspace spec switches with Ctrl+Tab in most-recently-used
+order and reopens the last closed document with Ctrl+Shift+T. Both need a
+history the single-group workspace did not take. `multi_document_workspace_with`
+takes a `WorkspaceHistory`: `recent`, the documents' indices most recently used
+first, and `reopen`. Ctrl+Tab picks the next most recent, Ctrl+Shift+Tab the
+least recent, and Ctrl+Shift+T fires `reopen`. `multi_document_workspace` is
+the same with no history.
+
+`ui_workspace` gives a history of notes, todo, main.e: Ctrl+Tab picks todo,
+Ctrl+Shift+Tab main.e, and Ctrl+Shift+T reopens, on Windows and Linux.

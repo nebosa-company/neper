@@ -4638,10 +4638,26 @@ fn max_f(a: f32, b: f32) -> f32 {
 // `title-medium` over `body-medium` `on-surface-variant` rows 240 wide, 8 apart,
 // naming the shortcuts that open and switch documents, 12 between the blocks.
 // (D1397) Alt+1..9 pick a tab by position.
+// (D1398) `multi_document_workspace_with` adds most-recently-used Ctrl+Tab and
+// Ctrl+Shift+T from the caller's history.
 // ponytail: one editor group; split groups, the location bar, the compact count
-// button, most-recently-used Ctrl+Tab, Ctrl+Shift+T, the Open recent
+// button, the Open recent
 // button and restore hooks need a group model the caller does not pass yet.
 fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, view: widget.Node, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], width: f32, height: f32) -> (widget.Node, err) {
+    var no_history: WorkspaceHistory = zero
+    let (made, made_error) = multi_document_workspace_with(a, key, t, label, documents, current, view, pick, close, move, width, height, no_history)
+    ret (made, made_error)
+}
+
+// (D1398) A workspace's history from the caller: `recent`, the documents' indices
+// most recently used first (the current one first), and `reopen`, which brings
+// back the last closed document.
+type WorkspaceHistory = struct { recent: []const usize, reopen: widget.Submit }
+
+// (D1398, docs/ux/components/MultiDocumentWorkspace, switch and close) The
+// workspace with its history: Ctrl+Tab picks the next most recently used
+// document and Ctrl+Shift+Tab the least recent, and Ctrl+Shift+T fires `reopen`.
+fn multi_document_workspace_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, view: widget.Node, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], width: f32, height: f32, history: WorkspaceHistory) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var view_style = style.defaults()
@@ -4669,7 +4685,7 @@ fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Th
     if strip_error != ok { ret (zero, strip_error) }
     parts[0usize] = strip
     parts[1usize] = widget.box(0u64, view_style, viewed[0usize..1usize])
-    let (keys, keys_error) = mem.alloc[TabClose](a, 12usize)
+    let (keys, keys_error) = mem.alloc[TabClose](a, 15usize)
     if keys_error != ok { ret (zero, TooLarge) }
     var next = 0usize
     if current + 1usize < documents.len { next = current + 1usize }
@@ -4680,7 +4696,7 @@ fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Th
     keys[2usize] = TabClose { index: previous, close: pick }
     var held: input.Modifiers = zero
     held.control = true
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 12usize)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 15usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     shortcuts[0usize] = widget.Shortcut { key: 87u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&keys[0usize]), invoke: tab_close_fire } }
     shortcuts[1usize] = widget.Shortcut { key: 34u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&keys[1usize]), invoke: tab_close_fire } }
@@ -4693,6 +4709,22 @@ fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Th
     while bound - 3usize < 9usize && bound - 3usize < documents.len {
         keys[bound] = TabClose { index: bound - 3usize, close: pick }
         shortcuts[bound] = widget.Shortcut { key: 49u32 + u32(bound - 3usize), modifiers: alt_held, action: widget.Submit { ctx: mem.cast[*void](&keys[bound]), invoke: tab_close_fire } }
+        bound += 1usize
+    }
+    // (D1398) The history's keys: Ctrl+Tab and Ctrl+Shift+Tab through `recent`,
+    // Ctrl+Shift+T `reopen`.
+    var shift_held = held
+    shift_held.shift = true
+    if history.recent.len > 1usize && history.recent[1usize] < documents.len && history.recent[history.recent.len - 1usize] < documents.len {
+        keys[bound] = TabClose { index: history.recent[1usize], close: pick }
+        shortcuts[bound] = widget.Shortcut { key: 9u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&keys[bound]), invoke: tab_close_fire } }
+        bound += 1usize
+        keys[bound] = TabClose { index: history.recent[history.recent.len - 1usize], close: pick }
+        shortcuts[bound] = widget.Shortcut { key: 9u32, modifiers: shift_held, action: widget.Submit { ctx: mem.cast[*void](&keys[bound]), invoke: tab_close_fire } }
+        bound += 1usize
+    }
+    if widget.submit_set(history.reopen.invoke) {
+        shortcuts[bound] = widget.Shortcut { key: 84u32, modifiers: shift_held, action: history.reopen }
         bound += 1usize
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
