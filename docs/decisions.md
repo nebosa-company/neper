@@ -25955,3 +25955,15 @@ come.
 
 `ui_pickers2_v2` sets the wheels at 1 h 20 min 5 s: Down on the seconds sets
 6, and a press under the minutes picks 21, on Windows and Linux.
+
+## D1351 — Date pickers have wheels
+
+The DatePicker spec's iOS wheels: `overlay.date_wheels` sets a month wheel by
+name (120 wide), a day wheel from 1 to the month's last (56) and a year wheel
+of the date's year and fifty either side (80), 8 apart, all D1349's `wheel`. A
+turn reports the whole date with its day kept in the month it lands in (31
+January turned a month on is 28 February). The names are English and the
+order is month, day, year whatever the locale.
+
+`ui_pickers2_v2` sets the wheels on 31 January 2026: Down on the month gives 28
+February, and Up on the year gives 2025, on Windows and Linux.

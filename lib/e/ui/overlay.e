@@ -4465,6 +4465,76 @@ fn duration_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour
     ret (widget.semantics(0u64, sem, style.defaults(), grouped[0usize..1usize]), ok)
 }
 
+// (D1351) A date wheel's turn: the date with that part changed, the day kept in
+// the month it lands in.
+type DateWheelRelay = struct { part: u8, date: time.Date, first_year: i32, change: widget.Change[time.Date] }
+
+fn date_wheel_fire(ctx: *void, index: usize) -> err {
+    let r = mem.cast[*DateWheelRelay](ctx)
+    var moved = r.date
+    if r.part == 0u8 { moved.month = u8(index + 1usize) }
+    if r.part == 1u8 { moved.day = u8(index + 1usize) }
+    if r.part == 2u8 { moved.year = r.first_year + i32(index) }
+    let days = time.days_in_month(i64(moved.year), i64(moved.month))
+    if i64(moved.day) > days { moved.day = u8(days) }
+    ret widget.fire_change[time.Date](r.change, moved)
+}
+
+// (D1351, docs/ux/components/DatePicker, wheels) The iOS date wheels: the month by
+// name (120 wide), the day (1 to the month's last, 56) and the year (the date's
+// year and 50 either side, 80), 8 apart (keyed `key`, `key + 16`, `key + 32`); a
+// turn reports the whole date, its day kept in its month.
+// ponytail: English month names; the order is month, day, year whatever the
+// locale.
+fn date_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, date: time.Date, change: widget.Change[time.Date]) -> (widget.Node, err) {
+    if date.month < 1u8 || date.month > 12u8 { ret (zero, TooLarge) }
+    let days = usize(time.days_in_month(i64(date.year), i64(date.month)))
+    let (months, months_error) = mem.alloc[str](a, 12usize)
+    let (day_values, day_error) = wheel_numbers(a, days, 1usize)
+    let (years, years_error) = mem.alloc[str](a, 101usize)
+    let (relays, relays_error) = mem.alloc[DateWheelRelay](a, 3usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if months_error != ok || day_error != ok || years_error != ok || relays_error != ok || parts_error != ok { ret (zero, TooLarge) }
+    var m = 0usize
+    while m < 12usize {
+        months[m] = month_name(i64(m + 1usize))
+        m += 1usize
+    }
+    let first_year = date.year - 50i32
+    var y = 0usize
+    while y < 101usize {
+        let (digits, digits_error) = mem.alloc[u8](a, 12usize)
+        if digits_error != ok { ret (zero, TooLarge) }
+        let n = control.write_i64(digits, i64(first_year) + i64(y))
+        years[y] = digits[0usize..n]
+        y += 1usize
+    }
+    var part = 0usize
+    while part < 3usize {
+        relays[part] = DateWheelRelay { part: u8(part), date: date, first_year: first_year, change: change }
+        part += 1usize
+    }
+    var day_at = usize(date.day)
+    if day_at < 1usize { day_at = 1usize }
+    if day_at > days { day_at = days }
+    let (month_wheel, month_error) = wheel(a, key, t, "Month", months[0usize..12usize], usize(date.month) - 1usize, widget.Change[usize] { ctx: mem.cast[*void](&relays[0usize]), invoke: date_wheel_fire }, 120.0)
+    if month_error != ok { ret (zero, month_error) }
+    let (day_wheel, day_wheel_error) = wheel(a, key + 16u64, t, "Day", day_values, day_at - 1usize, widget.Change[usize] { ctx: mem.cast[*void](&relays[1usize]), invoke: date_wheel_fire }, 56.0)
+    if day_wheel_error != ok { ret (zero, day_wheel_error) }
+    let (year_wheel, year_error) = wheel(a, key + 32u64, t, "Year", years[0usize..101usize], 50usize, widget.Change[usize] { ctx: mem.cast[*void](&relays[2usize]), invoke: date_wheel_fire }, 80.0)
+    if year_error != ok { ret (zero, year_error) }
+    parts[0usize] = month_wheel
+    parts[1usize] = day_wheel
+    parts[2usize] = year_wheel
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts[0usize..3usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = "Date"
+    ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
 // (D1349) A time wheel's turn as the `TimeChoice` it sets: a 12-hour wheel's
 // hour kept in the half of the day the period says.
 type TimeWheelRelay = struct { kind: TimeChoiceKind, change: widget.Change[TimeChoice], twelve: bool, pm: bool }
