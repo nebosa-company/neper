@@ -27308,3 +27308,11 @@ The drawn notice now lives in the frame's arena. An early version pointed its bu
 D1456's text area kept the caret's line in view by counting the hard line breaks before the caret. A long paragraph that wrapped put the caret below the viewport until the next break. A new `widget.edit_caret_line` gives the laid-out line the caret stands on, counting soft-wrapped lines, from the editor's own layout (`layout.line_of_offset`). The text area uses it, and falls back to hard lines when there are no fonts or no text.
 
 `ui_content` checks this on Windows and Linux: one unbroken line of twenty words in a two-row, 200 wide area, with the caret at its end, scrolls its viewport past the first rows. Against the old sources the check fails (exit 49). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1482 — A keyboard key in rich text is 24 tall with a 2px foot
+
+The RichText spec draws an inline key as `nu-kbd`: "24 tall, `surface-container-lowest`, 1 px `outline-variant` with a 2 px bottom edge". D1453's key was the code line's height with a 1px border all round. Styles have no per-side border, so a key is now a `surface-container-lowest` cap, 21 tall, inside an `outline-variant` frame of 1 at the sides and top and 2 at the foot, 24 in all. The chip is centred on its line on a whole pixel, and the words are padded down to the line's baseline inside it. A key piece is 2 wider for the frame's sides. A paragraph holding a key taller than its line keeps an overhang of half the difference, as it does for tall link targets, so the chip is not clipped.
+
+On the way, `24.0 > line_h` failed to lower (`check.MissingContext`), and a typed local stands in for it. An untyped float literal alone on the left of a comparison has no context, while `h < 24.0` and `(24.0 - h) > o` lower. That is a compiler defect of its own.
+
+`ui_content3_v2` checks this on Windows and Linux. Down the cap's last padding column there is one row of edge, the fill, then two rows of foot, 24 in all. The visited link after the key sits 2 further on. All 103 `ui_*` fixtures pass on both hosts.

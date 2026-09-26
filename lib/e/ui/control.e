@@ -334,9 +334,9 @@ fn run_metrics_faced(a: *mem.Arena, t: *const Theme, options: TextOptions, words
 // Text named by all its words.
 // (D1453) Emphasis takes the theme's italic face and code and keys its
 // fixed-pitch one, where the theme has them.
-// ponytail: a key is the code line's
-// height with a 1px edge (not 24 with a 2px foot), and the word pieces are also
-// Text nodes of their own; a Custom paragraph node would fold them into one.
+// (D1482) A key is 24 tall with a 2px foot.
+// ponytail: the word pieces are Text nodes of their own; a Custom paragraph
+// node would fold them into one.
 fn paragraph(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const RichSpan, options: RichOptions) -> (widget.Node, err) {
     focus_look(t)
     // The pieces: whole spans, or words with their trailing spaces.
@@ -359,11 +359,13 @@ fn paragraph(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ric
     if pieces_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     var pressable_seen = false
+    var key_seen = false
     i = 0usize
     while i < spans.len {
         let span = &spans[i]
         let role = span_role(span.kind, options.role)
         if (span.kind == .Link || span.kind == .Mention) && widget.submit_set(span.action.invoke) { pressable_seen = true }
+        if span.kind == .Key { key_seen = true }
         var k = 0usize
         while k < span.value.len {
             var end = span.value.len
@@ -376,6 +378,7 @@ fn paragraph(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ric
             if width_error != ok { ret (zero, width_error) }
             var sides: f32 = 0.0
             if span.kind == .Code || span.kind == .Key { sides = 2.0 * t.tokens.spacing.xs }
+            if span.kind == .Key { sides += 2.0 }
             pieces[n] = Piece { span: i, start: k, end: end, width: width + sides, fit: fit + sides, baseline: baseline }
             n += 1usize
             k = end
@@ -429,6 +432,9 @@ fn paragraph(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ric
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { tall_target = t.tokens.sizes.target_touch }
     var overhang: f32 = 0.0
     if pressable_seen && tall_target > line_h { overhang = (tall_target - line_h) * 0.5 }
+    // (D1482) A 24 key standing taller than the line keeps its edges inside.
+    let key_h: f32 = 24.0
+    if key_seen && key_h > line_h && (key_h - line_h) * 0.5 > overhang { overhang = (key_h - line_h) * 0.5 }
     // The pieces placed on their lines' baselines.
     let (placed, placed_error) = mem.alloc[widget.Node](a, shown + 2usize)
     if placed_error != ok { ret (zero, TooLarge) }
@@ -515,8 +521,24 @@ fn rich_piece(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ri
         look.radius = t.tokens.radii.xs
         look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
         if span.kind == .Key {
-            look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
-            look.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+            // (D1482, docs/ux/components/RichText, key) 24 tall: the
+            // `surface-container-lowest` cap inside an `outline-variant` frame 1
+            // at the sides and top and 2 at the foot, centred on its line on a
+            // whole pixel, the words on the line's baseline inside it.
+            let chip_y = f32(i64(top + (line_h - 24.0) * 0.5 + 0.5))
+            let cap_pad = max_zero(top + drop - chip_y - 1.0)
+            var cap = style.defaults()
+            cap.padding = style.EdgeLengths { left: side, top: style.Length { Px: cap_pad }, right: side, bottom: none }
+            cap.height = style.Length { Px: 21.0 }
+            cap.radius = max_zero(t.tokens.radii.xs - 1.0)
+            cap.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+            parts[1usize] = widget.box(0u64, cap, parts[0usize..1usize])
+            var frame = style.defaults()
+            let edge = style.Length { Px: 1.0 }
+            frame.padding = style.EdgeLengths { left: edge, top: edge, right: edge, bottom: style.Length { Px: 2.0 } }
+            frame.radius = t.tokens.radii.xs
+            frame.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            ret (widget.positioned(0u64, x, chip_y, frame, parts[1usize..2usize]), ok)
         }
     }
     let live_link = (span.kind == .Link || span.kind == .Mention) && widget.submit_set(span.action.invoke)
