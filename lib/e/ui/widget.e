@@ -403,6 +403,8 @@ type State = struct {
     thumb_drag: bool,
     long_press_feedback: Submit,
     has_long_press_feedback: bool,
+    // (D1549) The window has lost the focus to another (a Blur since the last Focus).
+    window_blurred: bool,
     rich_anchor_key: Key,
     rich_tooltip_key: Key,
     has_rich_tooltip: bool,
@@ -777,6 +779,14 @@ fn menu_access_keys_visible(widget_runtime: *Runtime) -> bool {
     let (s, state_error) = state_of(widget_runtime)
     if state_error != ok { ret false }
     ret s.menu_alt_down
+}
+
+// (D1549) Whether the window holds the focus (no Blur since the last Focus); a
+// runtime not yet open counts as active.
+fn window_active(widget_runtime: *const Runtime) -> bool {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret true }
+    ret !s.window_blurred
 }
 
 fn request_animation_frame(widget_runtime: *Runtime) {
@@ -5233,8 +5243,12 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         s.has_rich_tooltip = false
         ret ok
     case .Focus as w:
+        s.window_blurred = false
+        s.animation_due = true
         ret ok
     case .Blur as w:
+        s.window_blurred = true
+        s.animation_due = true
         s.held_modifiers.shift = false
         s.held_modifiers.control = false
         s.held_modifiers.alt = false

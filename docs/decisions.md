@@ -27959,3 +27959,11 @@ The Carousel spec scrolls the strip with the drag and snaps to an item edge. D13
 A fling bonus of one item for each 1000 px/s was tried and dropped. The "velocity" is the last move's travel, and a test that moves 60 px in one event reads as a fast fling, so a slow long drag gained items. A multi-item fling waits on a velocity kept over time.
 
 `ui_collections4_v2`'s D1380 check changes with the behaviour. It measures the item pitch, pulls 220 plus one pitch, and expects the rounded count (at least 2) instead of 1. With the carousel's pitch at 0 it fails (exit 213). All 103 ui_* fixtures pass on Windows and Linux. The strip still steps on release rather than scrolling freely under the finger, and items do not resize at the leading edge.
+
+## D1549 — Selection in an inactive window
+
+The SelectableText spec draws the selection in `primary-container` behind `on-primary-container` glyphs. In an unfocused window it becomes `surface-container-highest`, with the text keeping its colour, as AppKit greys it. The runtime heard the window's Focus and Blur events but kept nothing from them; `selectable`'s marker named the unfocused-window colour.
+
+The widget state now keeps `window_blurred`, set by Blur and cleared by Focus, and both ask for a frame. `widget.window_active(runtime)` answers it; a runtime not yet open counts as active. `selectable` (and so `selectable_text` and `selectable_block`) fills the selection with `surface-container-highest` and draws the selected glyphs in the text's own colour while the window is inactive.
+
+`ui_content2_v2` checks this on Windows and Linux, continuing from its Shift+End selection. After a Blur the selection band shows `surface-container-highest` and no `primary-container`; after a Focus it is `primary-container` again. With the inactive branch disabled the check fails (exit 45). All 103 ui_* fixtures pass on both hosts. Touch handles and the touch toolbar remain under the marker.

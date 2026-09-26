@@ -171,8 +171,9 @@ fn selectable_block(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t:
 
 // Its context menu is `overlay.editor_context_menu` round a `context_target` (D1228).
 // A double press selects the word (D1469).
-// ponytail: the unfocused-window colour, touch handles and toolbar, and
-// `align`/`max_lines` are not yet the editor's.
+// (D1549) An inactive window's selection is `surface-container-highest`.
+// ponytail: touch handles and toolbar, and `align`/`max_lines` are not yet the
+// editor's.
 fn selectable(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *const Theme, options: TextOptions, block: bool) -> (widget.Node, err) {
     let (text_look, style_error) = text_style(a, t, options.role)
     if style_error != ok { ret (zero, style_error) }
@@ -185,9 +186,18 @@ fn selectable(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *cons
         let top = style.Length { Px: 12.0 }
         look.padding = style.EdgeLengths { left: side, top: top, right: side, bottom: top }
     }
+    // (D1549, docs/ux/components/SelectableText, selection) While the window
+    // has lost the focus the selection is `surface-container-highest` and the
+    // selected text keeps its colour.
+    var fill = style.color(t.tokens, .PrimaryContainer)
+    var marked = style.color(t.tokens, .OnPrimaryContainer)
+    if mem.address_of(t.runtime) != 0usize && !widget.window_active(t.runtime) {
+        fill = style.color(t.tokens, .SurfaceContainerHighest)
+        marked = style.color(t.tokens, options.color)
+    }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, options.color), selection: style.color(t.tokens, .PrimaryContainer), change: zero, submit: zero, enabled: true, read_only: true, multiline: options.wrap != .None || block, secret: false, marked: style.color(t.tokens, .OnPrimaryContainer), caret: style.color(t.tokens, .Primary), untabbed: !block, ringed: block }, look)
+    body[0usize] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, options.color), selection: fill, change: zero, submit: zero, enabled: true, read_only: true, multiline: options.wrap != .None || block, secret: false, marked: marked, caret: style.color(t.tokens, .Primary), untabbed: !block, ringed: block }, look)
     var sem: widget.Semantics = zero
     sem.role = ROLE_TEXT
     sem.label = buffer[0usize..len]
