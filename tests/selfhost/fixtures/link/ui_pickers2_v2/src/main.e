@@ -467,6 +467,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 1632u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || span_log.unit != 2u32 || span_log.value != 6u32 { os.exit(80i32) }
     let (next_minute, has_next_minute) = bounds(&harness, &runtime, 1620u64)
     if !has_next_minute || testing.tap(&harness, next_minute.x + 20.0, next_minute.y + 18.0) != ok || span_log.unit != 1u32 || span_log.value != 21u32 { os.exit(81i32) }
+    // (D1389) A quick flick of the hours up 90 in three moves of 30 turns it three
+    // rows with the finger and coasts three more: 1 becomes 7.
+    var flick_log: SpanLog = zero
+    var flick_step = 0usize
+    while flick_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (flicks, flicks_error) = overlay.duration_wheels(&f, 1760u64, &theme, 1u32, 0u32, 0u32, widget.Change[overlay.DurationChoice] { ctx: mem.cast[*void](&flick_log), invoke: on_span })
+        let (flick_page, flick_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if flicks_error != ok || flick_page_error != ok { os.exit(113i32) }
+        flick_page[0usize] = flicks
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), flick_page[0usize..1usize]), time.Instant { nanos: 6550000000i64 + i64(flick_step) }) != ok { os.exit(114i32) }
+        flick_step += 1usize
+    }
+    let (flick_wheel, has_flick_wheel) = bounds(&harness, &runtime, 1760u64)
+    if !has_flick_wheel { os.exit(115i32) }
+    let flick_from = geometry.Point { x: flick_wheel.x + 30.0, y: flick_wheel.y + 160.0 }
+    if testing.drag(&harness, flick_from, geometry.Point { x: flick_from.x, y: flick_from.y - 90.0 }, 3usize) != ok || flick_log.unit != 0u32 || flick_log.value != 7u32 { os.exit(116i32) }
     // (D1351) Date wheels on 31 January 2026: Down on the month lands on 28
     // February; Up on the year sets 2025.
     var wheel_date: time.Date = zero
