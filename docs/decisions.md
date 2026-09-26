@@ -27478,3 +27478,9 @@ D1372 gave a tree's rows drag and drop through `TreeOptions.move`, but a tree ta
 The List spec: "Rows enter (a new item) with a 100% height grow plus fade in `duration-medium-1`, `ease-emphasized-decelerate`". A row added to a list stood at full height in one frame. A row cannot know from its own state that it is new, because a cell only exists once its element does. So the list keeps its arrivals (`ListArrivals`, up to eight keys and when each first appeared, slot `key + 1048614`). A row whose key is not yet in the tree, while the list already stands, is an arrival. Over `duration-medium-1` it stands in a clipping box that grows to its row height, fading in. Every row stands in that box, so none is remade when its arrival ends. The list's own first rows, and reduced motion, stand at once. The removed row's collapse needs a row the caller no longer passes and is not drawn.
 
 `ui_collections_v2` checks this on Windows and Linux: 50 ms after a third row is added to a two-row list it is shorter than the second, and a second later it is as tall. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1508 — A gauge has a loading state
+
+The Gauge spec: "Loading: the track with a Skeleton block in the readout". The caller had to build that itself. `GaugeOptions.loading` draws it: the ring with no value arc, a `skeleton_of` line half the gauge's size wide and a fifth tall in place of the digits (keyed `key + 2`), and the progress node Busy in the tree with no value.
+
+`ui_status_v2` checks this on Windows and Linux: a loading gauge shows its skeleton block and not its digits, and it is Busy with an empty value. All 103 `ui_*` fixtures pass on both hosts.
