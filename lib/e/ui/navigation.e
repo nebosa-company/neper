@@ -2281,7 +2281,23 @@ fn breadcrumbs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // (D1326) With `sibling_toggle` set, a hovered or focused ancestor crumb shows a
 // `chevron-down` (keyed `key + 100 + index`) reporting its index; `sibling_open`
 // (the index plus one, 0 for none) opens that crumb's menu of `siblings`.
-type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool, width: f32, root_icon: bool, root_glyph: control.GlyphKind, edit: widget.Submit, editing: bool, path: []u8, path_len: usize, typed: widget.Change[str], go: widget.Submit, cancel: widget.Submit, path_error: str, sibling_toggle: widget.Change[usize], sibling_open: usize, siblings: []const overlay.MenuItem }
+// (D1361) A drag dropped on a crumb: the crumb's index and the drag's payload.
+type CrumbDrop = struct { index: usize, payload: u64 }
+type CrumbDropAsk = struct { index: usize, drop: widget.Change[CrumbDrop] }
+
+fn crumb_drop_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*CrumbDropAsk](ctx)
+    switch g {
+    case .Drop as dropped:
+        ret widget.fire_change[CrumbDrop](d.drop, CrumbDrop { index: d.index, payload: dropped.payload })
+    default:
+        ret ok
+    }
+}
+
+// (D1361) `drop`, when set, makes each crumb before the current place a drop
+// target.
+type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool, width: f32, root_icon: bool, root_glyph: control.GlyphKind, edit: widget.Submit, editing: bool, path: []u8, path_len: usize, typed: widget.Change[str], go: widget.Submit, cancel: widget.Submit, path_error: str, sibling_toggle: widget.Change[usize], sibling_open: usize, siblings: []const overlay.MenuItem, drop: widget.Change[CrumbDrop] }
 
 // (D1326) A sibling chevron's press: which crumb.
 type SiblingAsk = struct { index: usize, toggle: widget.Change[usize] }
@@ -2490,7 +2506,9 @@ fn breadcrumbs_fit(a: *mem.Arena, t: *const control.Theme, names: []const str, w
 // (D1308) The root crumb's icon and the editable path (`BreadcrumbsOptions`):
 // the path field is keyed `key + 60`, the empty space after the trail `key + 61`.
 // (D1326) Sibling menus from `BreadcrumbsOptions.sibling_toggle`.
-// ponytail: no drop targets; no Tab completion of folder names.
+// (D1361) Drop targets from `BreadcrumbsOptions.drop`.
+// ponytail: holding a drag over a crumb does not navigate; no Tab completion of
+// folder names.
 fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit, given: BreadcrumbsOptions) -> (widget.Node, err) {
     if picks.len != names.len || names.len == 0usize { ret (zero, TooLarge) }
     var options = given
@@ -2625,6 +2643,28 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
                 let (made, made_error) = trail_crumb_icon(a, key + 1u64 + u64(i), t, names[i], &picks[i], h, widest, i == 0usize && options.root_icon, options.root_glyph)
                 if made_error != ok { ret (zero, made_error) }
                 parts[n] = made
+                // (D1361, docs/ux/components/Breadcrumbs, drop target) With `drop`
+                // the crumb stands in a drop region (keyed `key + 200 + index`)
+                // that fills `primary-container` while a drag is over it.
+                if widget.change_set[CrumbDrop](options.drop.invoke) {
+                    let drop_key = key + 200u64 + u64(i)
+                    let (drop_asks, drop_asks_error) = mem.alloc[CrumbDropAsk](a, 1usize)
+                    let (held_crumb, held_crumb_error) = mem.alloc[widget.Node](a, 1usize)
+                    if drop_asks_error != ok || held_crumb_error != ok { ret (zero, TooLarge) }
+                    drop_asks[0usize] = CrumbDropAsk { index: i, drop: options.drop }
+                    held_crumb[0usize] = made
+                    var target_look = style.defaults()
+                    target_look.radius = t.tokens.radii.sm
+                    let (_, has_drag) = widget.dragging(t.runtime)
+                    if has_drag {
+                        let (drop_box, has_drop_box) = widget.bounds_for_key(t.runtime, drop_key)
+                        let at = widget.pointer_position(t.runtime)
+                        if has_drop_box && at.x >= drop_box.x && at.x < drop_box.x + drop_box.width && at.y >= drop_box.y && at.y < drop_box.y + drop_box.height {
+                            target_look.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) }
+                        }
+                    }
+                    parts[n] = widget.region(drop_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drop_asks[0usize]), invoke: crumb_drop_gesture }, gestures: widget.GESTURE_DROP, enabled: true, focusable: false }, target_look, held_crumb[0usize..1usize])
+                }
                 n += 1usize
                 // (D1326) The crumb's sibling chevron, while hovered or focused or open.
                 if widget.change_set[usize](options.sibling_toggle.invoke) {

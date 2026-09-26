@@ -43,6 +43,26 @@ fn on_count(ctx: *void) -> err {
     ret ok
 }
 
+// (D1361) A drag source: its drag carries payload 77; and a crumb drop, kept as
+// the index plus one and the payload.
+fn start_carry(ctx: *void, g: widget.Gesture) -> err {
+    switch g {
+    case .DragStart as began:
+        ret widget.begin_drag(mem.cast[*widget.Runtime](ctx), 77u64)
+    default:
+        ret ok
+    }
+}
+
+type CrumbLog = struct { index: u64, payload: u64 }
+
+fn on_crumb_drop(ctx: *void, value: navigation.CrumbDrop) -> err {
+    let kept = mem.cast[*CrumbLog](ctx)
+    kept.index = u64(value.index) + 1u64
+    kept.payload = value.payload
+    ret ok
+}
+
 // (D1326) A sibling chevron's report, kept as the index plus one.
 fn on_sibling(ctx: *void, value: usize) -> err {
     let seen = mem.cast[*usize](ctx)
@@ -573,6 +593,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if sib_tree_error != ok || !has_tests_row || testing.tap(&harness, tests_row.bounds.x + 10.0, tests_row.bounds.y + tests_row.bounds.height * 0.5) != ok || s.counters[10usize].count != tests_before + 1usize { os.exit(111i32) }
         }
         sibling_step += 1usize
+    }
+    // (D1361) A drag from the source over "lib" fills it `primary-container`;
+    // dropped there, the trail reports crumb 1 and the payload.
+    var drop_log: CrumbLog = zero
+    var carry_step = 0usize
+    while carry_step < 2usize {
+        var dropping = navigation.breadcrumbs_options()
+        dropping.drop = widget.Change[navigation.CrumbDrop] { ctx: mem.cast[*void](&drop_log), invoke: on_crumb_drop }
+        f = mem.arena_from(frame_storage)
+        let (drop_trail, drop_trail_error) = navigation.breadcrumbs_of(&f, 2700u64, &theme, "Path", path_names[..], s.crumbs[0usize..3usize], dropping)
+        let (carry_parts, carry_parts_error) = mem.alloc[widget.Node](&f, 2usize)
+        if drop_trail_error != ok || carry_parts_error != ok { os.exit(112i32) }
+        carry_parts[0usize] = drop_trail
+        carry_parts[1usize] = widget.region(2690u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&runtime), invoke: start_carry }, gestures: 2u8 | 4u8, enabled: true, focusable: false }, control.sized_style(80.0, 80.0), zero)
+        let (carry_page, carry_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if carry_page_error != ok { os.exit(113i32) }
+        carry_page[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 40.0 }, control.sized_style(640.0, 400.0), carry_parts[0usize..2usize])
+        if testing.pump(&harness, carry_page[0usize], time.Instant { nanos: 7200000000i64 + i64(carry_step) }) != ok { os.exit(114i32) }
+        let (lib_target, has_lib_target) = bounds(&harness, &runtime, 2901u64)
+        let (source, has_source) = bounds(&harness, &runtime, 2690u64)
+        if !has_lib_target || !has_source { os.exit(115i32) }
+        let over = geometry.Point { x: lib_target.x + 6.0, y: lib_target.y + lib_target.height * 0.5 }
+        if carry_step == 0usize {
+            if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(source.x + 40.0, source.y + 40.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(source.x + 40.0, source.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(over.x, over.y) }) != ok { os.exit(116i32) }
+        }
+        if carry_step == 1usize {
+            let (carry_shot, carry_shot_error) = testing.snapshot(&harness, a)
+            let fill = style.color(&tokens, .PrimaryContainer)
+            if carry_shot_error != ok || !is_color(carry_shot, at(lib_target.x + 2.0, lib_target.y + lib_target.height * 0.5), fill) { os.exit(117i32) }
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(over.x, over.y) }) != ok || drop_log.index != 2u64 || drop_log.payload != 77u64 { os.exit(118i32) }
+        }
+        carry_step += 1usize
     }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui navigation2 v2 ok\n")
