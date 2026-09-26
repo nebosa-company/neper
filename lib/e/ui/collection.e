@@ -2112,11 +2112,20 @@ fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, ce
 // (D1246) `check`, when given, is the row's selection cell, first.
 // (D1312) A table's row actions come from `TableOptions.row_actions`.
 // (D1313) Its disclosure and detail rows from `TableOptions.expandable`.
+// (D1500) `table_row_full` adds the disabled look.
 // ponytail: an open row's detail is not counted by the virtual range (it scrolls
-// as part of its row); no disabled, dragged or loading looks; the caller's cells keep their
+// as part of its row); no dragged or loading looks; the caller's cells keep their
 // own colours when the row is selected.
 // (D1246) `has_check` puts `check` (a selection cell) first.
 fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool) -> (widget.Node, err) {
+    let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, count, extent, selected, pick, double, has_double, role, pad, grid, owned, check, has_check, false)
+    ret (made, made_error)
+}
+
+// (D1500, docs/ux/components/TableRow, disabled) A `disabled` row: its content
+// (and its selection cell) at 38%, under no state layer, taking no pick, still
+// focusable so its words can be read, and Disabled in the tree.
+fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool, disabled: bool) -> (widget.Node, err) {
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
     let sides = style.Length { Px: pad }
@@ -2176,15 +2185,22 @@ fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column,
     let (picks, picks_error) = mem.alloc[RowPick](a, 1usize)
     if picks_error != ok { ret (zero, TooLarge) }
     picks[0usize] = RowPick { key: row_key, pick: pick, double: double, has_double: has_double }
-    let state = control.control_state(t, row_key, true, selected)
+    if disabled {
+        var inert: widget.Change[widget.Key] = zero
+        picks[0usize] = RowPick { key: row_key, pick: inert, double: inert, has_double: false }
+    }
+    let state = control.control_state(t, row_key, !disabled, selected)
     var fill = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
     if selected { fill = style.layer(style.color(t.tokens, .SecondaryContainer), style.color(t.tokens, .OnSecondaryContainer), control.state_opacity(t, state)) }
+    if disabled && !selected { fill = control.with_alpha(style.color(t.tokens, .OnSurface), 0.0) }
     var row_style = style.defaults()
     row_style.height = style.Length { Px: extent }
     row_style.background = paint.Brush { Solid: fill }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
     if lined_error != ok { ret (zero, TooLarge) }
-    lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), boxed[0usize..n])
+    var content_look = style.defaults()
+    if disabled { content_look.opacity = t.tokens.states.disabled_content }
+    lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, content_look, boxed[0usize..n])
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
     control.focus_look(t)
@@ -2195,11 +2211,12 @@ fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column,
     sem.role = role
     sem.row = u32(index + 1usize)
     sem.row_count = u32(count)
-    if !owned {
+    if !owned && !disabled {
         sem.actions = accessibility.ACTION_PRESS
         sem.on_action = widget.Change[u32] { ctx: ctx_of(&picks[0usize]), invoke: row_pick_action }
     }
     if selected { sem.states = accessibility.STATE_SELECTED }
+    if disabled { sem.states = sem.states | accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
 }
 
@@ -2228,7 +2245,9 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // and cells stand at the end.
 // (D1340) `filtered` marks the columns (by index) a filter applies to.
 // (D1341) `groups` spans titles over runs of columns: the header's upper tier.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit }
+// (D1500) `disabled` marks rows (by key) that take no action: drawn at 38%,
+// their selection cell inert, still focusable and Disabled in the tree.
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -3652,11 +3671,16 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         let lined = index + 1usize < total
         let row_tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
         let chosen = is_selected(selected, row_key)
+        let row_disabled = is_selected(selection.disabled, row_key)
         var row_pick = pick
         var check: widget.Node = zero
         if selecting {
             toggles[i] = ListPick { runtime: t.runtime, select: selection.select, kind: .Toggle, index: index, focus: 0u64, has_focus: false }
             toggle_presses[i] = widget.Submit { ctx: ctx_of(&toggles[i]), invoke: list_pick_fire }
+            if row_disabled {
+                var no_toggle: widget.Submit = zero
+                toggle_presses[i] = no_toggle
+            }
             let (row_check, row_check_error) = selection_check(a, row_key ^ hash.fnv1a64("row-check"), t, "Select", chosen, false, &toggle_presses[i], check_side, row_tall)
             if row_check_error != ok { ret (zero, row_check_error) }
             check = row_check
@@ -3669,7 +3693,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 if hold_error != ok { ret (zero, hold_error) }
             }
         }
-        let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting)
+        let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_disabled)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
