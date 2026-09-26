@@ -261,7 +261,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let touch_tokens = style.adapt(&tokens, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1200usize, max_states: 64usize, state_bytes: 384usize, state_classes: 2u16, max_depth: 40u16, max_commands: 4096usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1200usize, max_states: 64usize, state_bytes: 512usize, state_classes: 2u16, max_depth: 40u16, max_commands: 4096usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -375,6 +375,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot_5, at(phone.x + 104.0, phone.y + 41.0), style.color(&tokens, .PrimaryContainer)) || !is_color(shot_5, at(phone.x + 10.0, phone.y + 90.0), background) || !is_color(shot_5, at(phone.x + 10.0, phone.y + 100.0), style.color(&tokens, .TertiaryContainer)) { os.exit(40i32) }
     if !release(&harness, phone.x + 120.0, phone.y + 170.0) || s.refreshes != 3usize { os.exit(41i32) }
     s.refreshing = true
+    // (D1414) The content settles from the pull to 64 over `duration-short-4`.
+    let (root_settling, root_settling_error) = build(&f, &theme, &touch, s)
+    if root_settling_error != ok || testing.pump(&harness, root_settling, now) != ok { os.exit(42i32) }
+    now = time.Instant { nanos: now.nanos + 400000000i64 }
+    if testing.begin(&harness, now) != ok { os.exit(42i32) }
     let (root_6, build_6_error) = build(&f, &theme, &touch, s)
     if build_6_error != ok || testing.pump(&harness, root_6, now) != ok { os.exit(42i32) }
     let (shot_6, shot_6_error) = testing.snapshot(&harness, a)
@@ -392,6 +397,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (not_top, has_not_top) = bounds(&harness, &runtime, 400u64)
     if !has_not_top || testing.drag(&harness, geometry.Point { x: not_top.x + 120.0, y: not_top.y + 20.0 }, geometry.Point { x: not_top.x + 120.0, y: not_top.y + 170.0 }, 4usize) != ok || s.refreshes != 3usize { os.exit(77i32) }
     s.at_top = true
+    // (D1414) A pull released short of the threshold springs back: 50 ms after
+    // the release the content still stands down, 400 ms after it is home.
+    let (root_short, root_short_error) = build(&f, &theme, &touch, s)
+    if root_short_error != ok || testing.pump(&harness, root_short, now) != ok { os.exit(194i32) }
+    if !press(&harness, phone.x + 120.0, phone.y + 20.0) || !move_to(&harness, phone.x + 120.0, phone.y + 40.0) || !move_to(&harness, phone.x + 120.0, phone.y + 70.0) { os.exit(195i32) }
+    let (root_short_held, root_short_held_error) = build(&f, &theme, &touch, s)
+    if root_short_held_error != ok || testing.pump(&harness, root_short_held, now) != ok || !release(&harness, phone.x + 120.0, phone.y + 70.0) || s.refreshes != 3usize { os.exit(196i32) }
+    var spring_step = 0usize
+    while spring_step < 2usize {
+        now = time.Instant { nanos: now.nanos + 25000000i64 }
+        if testing.begin(&harness, now) != ok { os.exit(197i32) }
+        let (root_spring, root_spring_error) = build(&f, &theme, &touch, s)
+        if root_spring_error != ok || testing.pump(&harness, root_spring, now) != ok { os.exit(197i32) }
+        spring_step += 1usize
+    }
+    let (shot_spring, shot_spring_error) = testing.snapshot(&harness, a)
+    if shot_spring_error != ok || !is_color(shot_spring, at(phone.x + 10.0, phone.y + 5.0), background) { os.exit(198i32) }
+    now = time.Instant { nanos: now.nanos + 400000000i64 }
+    if testing.begin(&harness, now) != ok { os.exit(199i32) }
+    let (root_home, root_home_error) = build(&f, &theme, &touch, s)
+    if root_home_error != ok || testing.pump(&harness, root_home, now) != ok { os.exit(199i32) }
+    let (shot_home, shot_home_error) = testing.snapshot(&harness, a)
+    if shot_home_error != ok || !is_color(shot_home, at(phone.x + 10.0, phone.y + 5.0), style.color(&tokens, .TertiaryContainer)) { os.exit(200i32) }
     // Swipe actions: nothing behind a closed row; a drag past 40% of 160 opens
     // it, the tiles 80 wide in `secondary-container` and `error`; Escape closes;
     // a full swipe runs Delete.

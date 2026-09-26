@@ -3450,7 +3450,8 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
 // (D1246) `selection` (from `table_with`) adds the check column and bar;
 // (D1248) with no rows, its loading or empty state (`table_state`).
 // (D1283) `view_width` scrolls a wide table sideways.
-// ponytail: no toolbar, footer, pinned column or error state; `data_grid` keeps the caller's cells
+// (D1413) `failed` stands an error banner in the body.
+// ponytail: no toolbar, footer or pinned column; `data_grid` keeps the caller's cells
 // as its editors -- `data_grid_of` is the one with the DataGrid's core.
 fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, role: u8, owned: bool, selection: TableOptions) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
@@ -7726,7 +7727,8 @@ fn pull_options() -> PullOptions {
 // and Ctrl+R refreshing from within, and an indeterminate linear progress
 // under it while refreshing. A group named `label`, busy while refreshing.
 // (D1289) The refreshing arc spins from the frame clock.
-// ponytail: no new-row tag, outcome snackbar or settle motion.
+// (D1414) Released, the content and indicator settle back.
+// ponytail: no new-row tag or outcome snackbar.
 fn pull_to_refresh_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, refreshing: bool, refresh: *const widget.Submit, options: PullOptions) -> (widget.Node, err) {
     let w = options.width
     let h = options.height
@@ -7791,8 +7793,16 @@ fn pull_to_refresh_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, c
     var quiet: widget.Submit = zero
     pulls[0usize] = Pulling { cell: kept, has_cell: has_cell, threshold: 80.0, refresh: *refresh, settle: true }
     if refreshing { pulls[0usize].refresh = quiet }
-    var offset = pulled
-    if refreshing { offset = 64.0 }
+    // (D1414, docs/ux/components/PullToRefresh, motion) The content follows the
+    // finger at once, and otherwise settles to its rest (64 while refreshing, 0
+    // after) over `duration-short-4` on `ease-standard`, the indicator riding
+    // with it; reduced motion does not animate the offset.
+    var goal = pulled
+    if refreshing { goal = 64.0 }
+    var settle_millis = t.tokens.durations.short4
+    if pulled > 0.0 { settle_millis = 0u32 }
+    let offset = control.eased_on(t, key, key ^ hash.fnv1a64("pull-settle"), goal, false, settle_millis)
+    if !refreshing && pulled == 0.0 { pulled = offset }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = widget.positioned(0u64, 0.0, offset, control.sized_style(w, h), held[0usize..1usize])
