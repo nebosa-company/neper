@@ -26821,3 +26821,18 @@ banner carries a Retry action.
 
 `ui_collections2_v2` fails a table's load and taps Retry once. The message and
 the column headers show, and the tap is counted once, on Windows and Linux.
+
+## D1414 — Pull to refresh settles back
+
+The PullToRefresh spec springs a short release back over `duration-short-4`
+on `ease-standard`, and keeps the refreshing content 64 down. The content now
+follows the finger directly (an ease of 0 ms while pulling). Otherwise it eases
+to its rest: 64 while refreshing, 0 after. The ease uses `control.eased_on`
+under slot `key ^ fnv("pull-settle")`, and the indicator rides the settling
+offset. Under reduced motion the offset does not animate.
+
+`ui_collections4_v2` checks the settle on Windows and Linux. A pull released
+short of the threshold still stands down 50 ms later and is home 400 ms later.
+After an armed release, the refreshing content reaches 64. The fixture's
+runtime `state_bytes` rise from 384 to 512 for the new cell. `ui_interaction`
+still passes.
