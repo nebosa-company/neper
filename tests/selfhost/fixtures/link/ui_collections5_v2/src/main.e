@@ -376,6 +376,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if reveal_step == 1usize && (value_now.secret || !eye.state.checked) { os.exit(46i32) }
         reveal_step += 1usize
     }
+    // (D1536) Shown with its value field unfocused, the secret keeps for 20 s and
+    // past 30 s (seen on the next build) its reveal fires with the pair, once.
+    var limit_step = 0usize
+    while limit_step < 5usize {
+        f = mem.arena_from(storage)
+        let (limit_editor, limit_error) = collection.key_value_editor_of(&f, 700u64, &theme, "Secrets", pairs[0usize..2usize], widget.Change[collection.PairEdit] { ctx: mem.cast[*void](&edits), invoke: on_pair_edit }, zero, &adds[0usize], 400.0, kv)
+        let (limit_page, limit_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if limit_error != ok || limit_page_error != ok { os.exit(71i32) }
+        limit_page[0usize] = limit_editor
+        var limit_at = 4200000000i64
+        if limit_step == 1usize { limit_at += 20000000000i64 }
+        if limit_step >= 2usize { limit_at += 31000000000i64 + i64(limit_step) }
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(420.0, 700.0), limit_page[0usize..1usize]), time.Instant { nanos: limit_at }) != ok { os.exit(71i32) }
+        if limit_step < 3usize && reveal_log.count != 1usize { os.exit(72i32) }
+        if limit_step >= 3usize && (reveal_log.count != 2usize || reveal_log.index != 1usize) { os.exit(72i32) }
+        limit_step += 1usize
+    }
     if testing.by_label(&harness, "Add variable").count == 0usize { os.exit(47i32) }
     // (D1314) Text mode: the pairs written one a line; parsed back, blank lines
     // and comments pass and a line with no `=` is named; the Text segment fires
