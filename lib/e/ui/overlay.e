@@ -1533,15 +1533,34 @@ fn popup_loading(a: *mem.Arena, key: widget.Key, t: *const control.Theme, messag
 // v2 (D976/D987, docs/ux/components/Popup): the popup surface matches its anchor
 // within 200..480 and sits 4 off it on the `placement` side (flipping when that
 // side overflows), a group in the tree named `label`.
+// (D1364) Opening, it fades in and grows 8 from the anchor's edge over
+// `duration-short-4`; it stands in a box keyed `key + 8192` that is there open or
+// shut, so the opening is remembered. Reduced motion shows it at once.
 // ponytail: no match highlighting; the anchor keeps the focus
-// because the popup takes none.
+// because the popup takes none; closing is at once.
 fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var open_goal: f32 = 0.0
+    if open { open_goal = 1.0 }
+    let opened = control.eased_on(t, key + 8192u64, key + 8193u64, open_goal, true, t.tokens.durations.short4)
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (surface, surface_error) = popup_surface(a, t, content)
     if surface_error != ok { ret (zero, surface_error) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = surface
+    if opened < 1.0 {
+        // (D1364, docs/ux/components/Popup, motion) Part way open: faded, and 8
+        // nearer the anchor for the share still to come.
+        var toward: f32 = 0.0 - 8.0 * (1.0 - opened)
+        if placement == .Above { toward = 0.0 - toward }
+        let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
+        if growing_error != ok { ret (zero, TooLarge) }
+        growing[0usize] = surface
+        growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: toward } }, style.defaults(), growing[0usize..1usize])
+        var faded = style.defaults()
+        faded.opacity = opened
+        body[0usize] = widget.box(0u64, faded, growing[1usize..2usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
@@ -1554,7 +1573,10 @@ fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
     var overlay_style = style.defaults()
     overlay_style.min_width = style.Length { Px: 200.0 }
     overlay_style.max_width = style.Length { Px: 480.0 }
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placed, offset: gap_offset(placed, 4.0), modal: false, dismiss: zero }, overlay_style, framed[0usize..1usize]), ok)
+    let (kept, kept_error) = mem.alloc[widget.Node](a, 1usize)
+    if kept_error != ok { ret (zero, TooLarge) }
+    kept[0usize] = widget.overlay(key, widget.Overlay { anchor: anchor, placement: placed, offset: gap_offset(placed, 4.0), modal: false, dismiss: zero }, overlay_style, framed[0usize..1usize])
+    ret (widget.box(key + 8192u64, style.defaults(), kept[0usize..1usize]), ok)
 }
 
 // v2 (D976, docs/ux/components/Popup): a suggestion row, full width, 40 tall (48
