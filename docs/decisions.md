@@ -27246,3 +27246,9 @@ D1199's edge auto-scroll set its speed per second but moved a 60 Hz frame's shar
 The TimePicker spec cross-fades the numbers when the dial switches between hours and minutes. D1421 faded the new numbers in over `duration-short-4` and dropped the old ones at once. While the new numbers fade in, each place now also draws the old dial's number beneath them at the rest of the opacity, in a box keyed `key + 48 + index`: the minutes in fives under the hours, and the hours under the minutes, 12-hour or 24-hour as the dial shows them. Once the switch settles, the old numbers leave the tree.
 
 `ui_pickers2_v2` checks this on Windows and Linux: 50 ms after the switch back to hours, the minute dial's 30 stands fading under the 6, and a second later it is gone.
+
+## D1472 — Split views keep a ratio across resizes
+
+The SplitView spec asks the view to "keep a ratio across window resizes". Until now a split view took its divider's place in pixels, so a resized window kept the first pane's width and gave all the change to the second. `SplitOptions.ratio` makes `position` a share of the view's length (0.5 is half), and `change` then reports the dragged size as a share too. The caller keeps one number, and the divider holds its share at any width. A thin adapter over the pane's change divides by the length. With `snaps`, the snap is applied first, in pixels, then the share is taken. The empty-detail slot is still not done.
+
+`ui_panes` checks this on Windows and Linux: a quarter of 400 is 100 (108 with the sash), a 100 drag reports 0.5, and 0.5 of a 200 wide window is 100 again. `ui_navigation4_v2` still passes.
