@@ -232,6 +232,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_share || testing.tap(&harness, share_at.x, share_at.y) != ok || logs[0usize].shares != 1usize { os.exit(36i32) }
     let (cancel_at, has_cancel) = centre_of(&harness, &runtime, 75u64)
     if !has_cancel || testing.tap(&harness, cancel_at.x, cancel_at.y) != ok || logs[0usize].dismisses != 6usize { os.exit(37i32) }
+    // (D1416) Closed, a popup fades out over `duration-short-2`: 40 ms on it still
+    // shows, out of the tree; 400 ms on it is gone.
+    var closing_step = 0usize
+    while closing_step < 6usize {
+        frame = mem.arena_from(frame_storage)
+        var closing_nanos = 2000000000i64 + i64(closing_step) * 300000000i64
+        if closing_step == 3usize { closing_nanos = 2610000000i64 }
+        if closing_step == 4usize { closing_nanos = 2650000000i64 }
+        if closing_step == 5usize { closing_nanos = 3000000000i64 }
+        let closing_at = time.Instant { nanos: closing_nanos }
+        if testing.begin(&harness, closing_at) != ok { os.exit(39i32) }
+        let (closing_anchor, closing_anchor_error) = control.button(&frame, 1u64, &theme, "Anchor", &subs[0usize], control.button_options())
+        let (closing_inside, closing_inside_error) = control.text(&frame, 0u64, "Leaving", &theme, control.text_options())
+        let (closing_popup, closing_popup_error) = overlay.popup(&frame, 10u64, &theme, 1u64, .Below, closing_inside, closing_step < 3usize)
+        let (closing_parts, closing_parts_error) = mem.alloc[widget.Node](&frame, 2usize)
+        if closing_anchor_error != ok || closing_inside_error != ok || closing_popup_error != ok || closing_parts_error != ok { os.exit(39i32) }
+        closing_parts[0usize] = closing_anchor
+        closing_parts[1usize] = closing_popup
+        if testing.pump(&harness, widget.box(0u64, style.defaults(), closing_parts[0usize..2usize]), closing_at) != ok { os.exit(40i32) }
+        if closing_step == 4usize && testing.by_text(&harness, "Leaving").count == 0usize { os.exit(41i32) }
+        closing_step += 1usize
+    }
+    if testing.by_text(&harness, "Leaving").count != 0usize { os.exit(42i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(38i32) }
     try io.print("ui presentation ok\n")
     ret ok
