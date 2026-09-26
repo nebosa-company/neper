@@ -110,7 +110,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 160usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 14u16, max_commands: 400usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 160usize, max_states: 48usize, state_bytes: 2048usize, state_classes: 8u16, max_depth: 14u16, max_commands: 400usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -223,6 +223,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if fill_step == 3usize && !filled { os.exit(44i32) }
         }
         fill_step += 1usize
+    }
+    // (D1474) The pill is 24 x 8 and slides: turned from page 2 to page 3, 150 ms
+    // in the third dot stands between 8 and 24 wide, a second on it is the pill.
+    var slide_step = 0usize
+    while slide_step < 5usize {
+        var slide_at = 11000000000i64 + i64(slide_step)
+        var slide_page = 1usize
+        if slide_step >= 2usize { slide_page = 2usize }
+        if slide_step == 3usize { slide_at = 11150000000i64 }
+        if slide_step == 4usize { slide_at = 12200000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: slide_at }) != ok { os.exit(45i32) }
+        frame = mem.arena_from(frame_storage)
+        let (slider, slider_error) = collection.page_indicator_of(&frame, 900u64, &theme, 4usize, slide_page, widget.Change[usize] { ctx: ctx, invoke: on_jump }, collection.indicator_options())
+        let (slide_page_nodes, slide_nodes_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if slider_error != ok || slide_nodes_error != ok { os.exit(46i32) }
+        slide_page_nodes[0usize] = slider
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 100.0), slide_page_nodes[0usize..1usize]), time.Instant { nanos: slide_at }) != ok { os.exit(47i32) }
+        let (sliding, has_sliding) = widget.bounds_of(&runtime, testing.by_key(&harness, 904u64).element)
+        if !has_sliding { os.exit(48i32) }
+        if slide_step == 1usize && (sliding.width > 8.5 || sliding.height > 8.5) { os.exit(49i32) }
+        if slide_step == 3usize && (sliding.width < 9.0 || sliding.width > 23.0) { os.exit(50i32) }
+        if slide_step == 4usize && (sliding.width < 23.5 || sliding.height > 8.5) { os.exit(51i32) }
+        slide_step += 1usize
     }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(40i32) }
     try io.print("ui paged ok\n")
