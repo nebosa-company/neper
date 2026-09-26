@@ -437,6 +437,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_off_ring || off_shot_error != ok { os.exit(127i32) }
     let off_hub = geometry.Point { x: off_ring.x + off_ring.width * 0.5, y: off_ring.y + off_ring.height * 0.5 }
     if !is_color(off_shot, at(off_hub.x + 58.88, off_hub.y - 65.4), style.color(&tokens, .Primary)) { os.exit(128i32) }
+    // (D1421) Back on the hour dial the numbers fade in: 50 ms on the 6 stands in
+    // its fading box (`key + 32 + 6`), a second on it does not.
+    var fade_step = 0usize
+    while fade_step < 3usize {
+        var fade_at = 6800000000i64
+        if fade_step == 1usize { fade_at = 6850000000i64 }
+        if fade_step == 2usize { fade_at = 7800000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: fade_at }) != ok { os.exit(132i32) }
+        f = mem.arena_from(frame_storage)
+        let (fade_modal, fade_modal_error) = overlay.time_picker_modal(&f, 1300u64, &theme, 14u8, 7u8, false, true, true, time_change, &s.press, &s.press)
+        let (fade_page, fade_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if fade_modal_error != ok || fade_page_error != ok { os.exit(132i32) }
+        fade_page[0usize] = fade_modal
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), fade_page[0usize..1usize]), time.Instant { nanos: fade_at }) != ok { os.exit(133i32) }
+        let fading = testing.by_key(&harness, 1338u64).count > 0usize
+        if fade_step == 1usize && !fading { os.exit(134i32) }
+        if fade_step == 2usize && fading { os.exit(135i32) }
+        fade_step += 1usize
+    }
     // (D1295) Input mode: the boxes are typed fields, the dial gives way, and the
     // mode toggle is there to switch back.
     let (hour_text, hour_text_error) = mem.alloc[u8](a, 4usize)
