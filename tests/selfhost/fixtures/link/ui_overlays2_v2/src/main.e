@@ -601,6 +601,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
         grow_step += 1usize
     }
     if early_pixel[0usize] == settled_pixel[0usize] && early_pixel[1usize] == settled_pixel[1usize] && early_pixel[2usize] == settled_pixel[2usize] { os.exit(136i32) }
+    // (D1491) Under reduced motion a popup fades only: 50 ms in its middle is
+    // not yet the settled colour, but its top row is already on the surface (no
+    // 8 of travel leaves the ground showing there).
+    var calm_tokens = tokens
+    calm_tokens.motion.reduced = true
+    let calm_theme = control.Theme { tokens: &calm_tokens, fonts: fonts, language: "", runtime: &runtime }
+    var calm_step = 0usize
+    var calm_early: [3]u8 = zero
+    var calm_settled: [3]u8 = zero
+    var calm_top_ground = true
+    while calm_step < 5usize {
+        var calm_at = 55000000000i64
+        if calm_step == 1usize { calm_at = 55016000000i64 }
+        if calm_step == 2usize { calm_at = 55100000000i64 }
+        if calm_step == 3usize { calm_at = 55150000000i64 }
+        if calm_step == 4usize { calm_at = 56000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: calm_at }) != ok { os.exit(146i32) }
+        f = mem.arena_from(frame_storage)
+        let (calm_words, calm_words_error) = control.text(&f, 0u64, "Build logs", &calm_theme, control.text_options())
+        let (calm_popup, calm_popup_error) = overlay.popup_of(&f, 975u64, &calm_theme, 965u64, .Below, "Suggestions", calm_words, calm_step >= 2usize)
+        let (calm_parts, calm_parts_error) = mem.alloc[widget.Node](&f, 2usize)
+        if calm_words_error != ok || calm_popup_error != ok || calm_parts_error != ok { os.exit(147i32) }
+        calm_parts[0usize] = widget.box(965u64, control.sized_style(240.0, 40.0), zero)
+        calm_parts[1usize] = calm_popup
+        var calm_ground = control.sized_style(640.0, 480.0)
+        calm_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, calm_ground, calm_parts[0usize..2usize]), time.Instant { nanos: calm_at }) != ok { os.exit(148i32) }
+        if calm_step == 3usize || calm_step == 4usize {
+            let (calm_box, has_calm_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 975u64).element)
+            let (calm_shot, calm_shot_error) = testing.snapshot(&harness, a)
+            if !has_calm_box || calm_shot_error != ok { os.exit(149i32) }
+            let calm_spot = at(calm_box.x + 6.0, calm_box.y + calm_box.height * 0.5)
+            var k = 0usize
+            while k < 3usize {
+                if calm_step == 3usize { calm_early[k] = calm_shot.pixels[calm_spot + k] }
+                if calm_step == 4usize { calm_settled[k] = calm_shot.pixels[calm_spot + k] }
+                k += 1usize
+            }
+            if calm_step == 3usize { calm_top_ground = is_color(calm_shot, at(calm_box.x + calm_box.width * 0.5, calm_box.y + 2.0), style.color(&tokens, .Background)) }
+        }
+        calm_step += 1usize
+    }
+    if calm_early[0usize] == calm_settled[0usize] && calm_early[1usize] == calm_settled[1usize] && calm_early[2usize] == calm_settled[2usize] { os.exit(150i32) }
+    if calm_top_ground { os.exit(151i32) }
     // (D1365) The docked search view fades in the same way.
     var view_step = 0usize
     var view_early: u8 = 0u8

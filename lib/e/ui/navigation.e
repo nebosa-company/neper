@@ -1871,7 +1871,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     // (D1432, docs/ux/components/MenuBar, motion) A menu comes in with a fade
     // and a 4 slide down over `duration-short-4` from its first build.
     let arrived = overlay.appeared_share(t, key, t.tokens.durations.short4)
-    let (slid, slid_error) = overlay.slid_in(a, lifted[0usize], arrived, 4.0)
+    let (slid, slid_error) = overlay.slid_in(a, t, lifted[0usize], arrived, 4.0)
     if slid_error != ok { ret (zero, slid_error) }
     lifted[0usize] = slid
     ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
@@ -6253,11 +6253,11 @@ fn centred_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     // and scales up from 95%.
     let arrived = overlay.appeared_share(t, key, t.tokens.durations.short4)
     if dimmed {
-        let (dropped, dropped_error) = overlay.slid_in(a, framed[0usize], arrived, 8.0)
+        let (dropped, dropped_error) = overlay.slid_in(a, t, framed[0usize], arrived, 8.0)
         if dropped_error != ok { ret (zero, dropped_error) }
         framed[0usize] = dropped
     } else {
-        let (scaled, scaled_error) = overlay.scaled_in(a, framed[0usize], arrived, 0.95)
+        let (scaled, scaled_error) = overlay.scaled_in(a, t, framed[0usize], arrived, 0.95)
         if scaled_error != ok { ret (zero, scaled_error) }
         framed[0usize] = scaled
     }

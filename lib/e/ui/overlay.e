@@ -96,15 +96,17 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (tip, tip_error) = mem.alloc[widget.Node](a, 1usize)
     if tip_error != ok { ret (zero, TooLarge) }
     tip[0usize] = widget.semantics(0u64, sem, style.defaults(), surface[0usize..1usize])
-    let (placed_node, placed_error) = transient_placed(a, key, shown, entering, leaving, 0.8, tip[0usize], surface[0usize], widget.Overlay { anchor: anchor, placement: .AboveCenter, offset: geometry.Point { x: 0.0, y: -4.0 }, modal: false, dismiss: zero })
+    let (placed_node, placed_error) = transient_placed(a, t, key, shown, entering, leaving, 0.8, tip[0usize], surface[0usize], widget.Overlay { anchor: anchor, placement: .AboveCenter, offset: geometry.Point { x: 0.0, y: -4.0 }, modal: false, dismiss: zero })
     ret (placed_node, placed_error)
 }
 
 // (D1427) How far a transient surface keyed `key` has come in over `millis`,
 // kept on its box `key + 8192` (slot `key + 8193`); shutting is at once.
+// (D1491) Under reduced motion it fades over `duration-short-2`.
 fn opening_share_over(t: *const control.Theme, key: widget.Key, open: bool, millis: u32) -> f32 {
     var open_goal: f32 = 0.0
     if open { open_goal = 1.0 }
+    if t.tokens.motion.reduced { ret control.faded_on(t, key + 8192u64, key + 8193u64, open_goal, t.tokens.durations.short2) }
     ret control.eased_emphasized(t, key + 8192u64, key + 8193u64, open_goal, true, millis)
 }
 
@@ -113,6 +115,7 @@ fn opening_share_over(t: *const control.Theme, key: widget.Key, open: bool, mill
 fn closing_share_over(t: *const control.Theme, key: widget.Key, open: bool, millis: u32) -> f32 {
     var stay_goal: f32 = 0.0
     if open { stay_goal = 1.0 }
+    if t.tokens.motion.reduced { ret control.faded_on(t, key + 8192u64, key + 8194u64, stay_goal, t.tokens.durations.short2) }
     ret control.eased_emphasized(t, key + 8192u64, key + 8194u64, stay_goal, false, millis)
 }
 
@@ -120,12 +123,15 @@ fn closing_share_over(t: *const control.Theme, key: widget.Key, open: bool, mill
 // place (below for a negative distance) for the share still to come.
 // Like `scaled_in` and `grown_in` it always wraps, so the tree keeps its shape
 // when the motion ends and nothing inside is remade (a focused field keeps
-// its focus).
-fn slid_in(a: *mem.Arena, surface: widget.Node, share: f32, distance: f32) -> (widget.Node, err) {
+// its focus). (D1491) Under reduced motion these helpers fade only: the surface
+// stands in its place at full size.
+fn slid_in(a: *mem.Arena, t: *const control.Theme, surface: widget.Node, share: f32, distance: f32) -> (widget.Node, err) {
     let (sliding, sliding_error) = mem.alloc[widget.Node](a, 2usize)
     if sliding_error != ok { ret (zero, TooLarge) }
     sliding[0usize] = surface
-    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - distance * (1.0 - share) } }, style.defaults(), sliding[0usize..1usize])
+    var travel = distance * (1.0 - share)
+    if t.tokens.motion.reduced { travel = 0.0 }
+    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - travel } }, style.defaults(), sliding[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = share
     ret (widget.box(0u64, faded, sliding[1usize..2usize]), ok)
@@ -133,11 +139,13 @@ fn slid_in(a: *mem.Arena, surface: widget.Node, share: f32, distance: f32) -> (w
 
 // (D1427) A surface part way in or out: faded to the share and scaled from
 // `from` (1 for none).
-fn scaled_in(a: *mem.Arena, surface: widget.Node, share: f32, from: f32) -> (widget.Node, err) {
+fn scaled_in(a: *mem.Arena, t: *const control.Theme, surface: widget.Node, share: f32, from: f32) -> (widget.Node, err) {
     let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
     if growing_error != ok { ret (zero, TooLarge) }
     growing[0usize] = surface
-    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: from + (1.0 - from) * share, rotation: 0.0, offset: zero }, style.defaults(), growing[0usize..1usize])
+    var scale = from + (1.0 - from) * share
+    if t.tokens.motion.reduced { scale = 1.0 }
+    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: scale, rotation: 0.0, offset: zero }, style.defaults(), growing[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = share
     ret (widget.box(0u64, faded, growing[1usize..2usize]), ok)
@@ -146,7 +154,7 @@ fn scaled_in(a: *mem.Arena, surface: widget.Node, share: f32, from: f32) -> (wid
 // (D1427) A transient overlay in its box `key + 8192`: shown, `named` (the
 // surface in its semantics) at the entering share, keyed `key`; leaving, the
 // bare `surface` at the leaving share, keyed `key + 8195`.
-fn transient_placed(a: *mem.Arena, key: widget.Key, shown: bool, entering: f32, leaving: f32, from: f32, named: widget.Node, surface: widget.Node, placed: widget.Overlay) -> (widget.Node, err) {
+fn transient_placed(a: *mem.Arena, t: *const control.Theme, key: widget.Key, shown: bool, entering: f32, leaving: f32, from: f32, named: widget.Node, surface: widget.Node, placed: widget.Overlay) -> (widget.Node, err) {
     var share = entering
     var drawn_node = named
     var overlay_key = key
@@ -155,7 +163,7 @@ fn transient_placed(a: *mem.Arena, key: widget.Key, shown: bool, entering: f32, 
         drawn_node = surface
         overlay_key = key + 8195u64
     }
-    let (scaled, scaled_error) = scaled_in(a, drawn_node, share, from)
+    let (scaled, scaled_error) = scaled_in(a, t, drawn_node, share, from)
     if scaled_error != ok { ret (zero, scaled_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
     if held_error != ok { ret (zero, TooLarge) }
@@ -249,7 +257,7 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     let (tip, tip_error) = mem.alloc[widget.Node](a, 1usize)
     if tip_error != ok { ret (zero, TooLarge) }
     tip[0usize] = widget.semantics(0u64, sem, style.defaults(), surface[0usize..1usize])
-    let (placed_node, placed_error) = transient_placed(a, key, shown, entering, leaving, 0.8, tip[0usize], surface[0usize], widget.Overlay { anchor: anchor, placement: .BelowEnd, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero })
+    let (placed_node, placed_error) = transient_placed(a, t, key, shown, entering, leaving, 0.8, tip[0usize], surface[0usize], widget.Overlay { anchor: anchor, placement: .BelowEnd, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero })
     ret (placed_node, placed_error)
 }
 
@@ -325,7 +333,7 @@ fn menu_at_moving(a: *mem.Arena, key: widget.Key, t: *const control.Theme, ancho
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus, "", 0u64, dismiss)
     if panel_error != ok { ret (zero, panel_error) }
-    let (scaled, scaled_error) = scaled_in(a, panel, entering, from)
+    let (scaled, scaled_error) = scaled_in(a, t, panel, entering, from)
     if scaled_error != ok { ret (zero, scaled_error) }
     let (lifted, lifted_error) = mem.alloc[widget.Node](a, 2usize)
     if lifted_error != ok { ret (zero, TooLarge) }
@@ -1071,7 +1079,7 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
     var outside = cancel
     if semantic_role == accessibility.ROLE_ALERT_DIALOG { outside = widget.Submit { ctx: zero, invoke: zero } }
-    let (scaled, scaled_error) = scaled_in(a, framed[0usize], entering, 0.9)
+    let (scaled, scaled_error) = scaled_in(a, t, framed[0usize], entering, 0.9)
     if scaled_error != ok { ret (zero, scaled_error) }
     framed[0usize] = scaled
     let (made, made_error) = with_scrim_share(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]), entering)
@@ -1440,7 +1448,7 @@ fn search_view_loading(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     }
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
-    let (grown, grown_error) = grown_in(a, widget.box(0u64, plate, column[0usize..1usize]), opened, false)
+    let (grown, grown_error) = grown_in(a, t, widget.box(0u64, plate, column[0usize..1usize]), opened, false)
     if grown_error != ok { ret (zero, grown_error) }
     framed[0usize] = grown
     var sem: widget.Semantics = zero
@@ -1703,7 +1711,7 @@ fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
     if surface_error != ok { ret (zero, surface_error) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    let (grown, grown_error) = grown_in(a, surface, shown, placement == .Above)
+    let (grown, grown_error) = grown_in(a, t, surface, shown, placement == .Above)
     if grown_error != ok { ret (zero, grown_error) }
     body[0usize] = grown
     var sem: widget.Semantics = zero
@@ -1728,27 +1736,25 @@ fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
 // (D1364) How far a popup keyed `key` has opened, kept on its box `key + 8192`
 // (slot `key + 8193`) over `duration-short-4`; shutting is at once.
 fn opening_share(t: *const control.Theme, key: widget.Key, open: bool) -> f32 {
-    var open_goal: f32 = 0.0
-    if open { open_goal = 1.0 }
-    ret control.eased_emphasized(t, key + 8192u64, key + 8193u64, open_goal, true, t.tokens.durations.short4)
+    ret opening_share_over(t, key, open, t.tokens.durations.short4)
 }
 
 // (D1416, docs/ux/components/Popup, motion) How far a popup keyed `key` still
 // stands while it closes, kept on its box (slot `key + 8194`): it follows the
 // popup open over `duration-short-2` and leaves on the emphasized-accelerate
-// curve; reduced motion (0 at once) or never opened, nothing.
+// curve; never opened, nothing. (D1491) Under reduced motion both fade over
+// `duration-short-2`.
 fn closing_share(t: *const control.Theme, key: widget.Key, open: bool) -> f32 {
-    var stay_goal: f32 = 0.0
-    if open { stay_goal = 1.0 }
-    ret control.eased_emphasized(t, key + 8192u64, key + 8194u64, stay_goal, false, t.tokens.durations.short2)
+    ret closing_share_over(t, key, open, t.tokens.durations.short2)
 }
 
 // (D1364, docs/ux/components/Popup, motion) A surface part way open: faded to
 // the share, and 8 nearer the anchor (above it when `above`) for the share still
 // to come.
-fn grown_in(a: *mem.Arena, surface: widget.Node, opened: f32, above: bool) -> (widget.Node, err) {
+fn grown_in(a: *mem.Arena, t: *const control.Theme, surface: widget.Node, opened: f32, above: bool) -> (widget.Node, err) {
     var toward: f32 = 0.0 - 8.0 * (1.0 - opened)
     if above { toward = 0.0 - toward }
+    if t.tokens.motion.reduced { toward = 0.0 }
     let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
     if growing_error != ok { ret (zero, TooLarge) }
     growing[0usize] = surface
@@ -1933,24 +1939,24 @@ fn flyout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widge
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (made, made_error) = light_dismissed(a, key, t, anchor, placement, label, content, dismiss)
     if made_error != ok { ret (zero, made_error) }
-    let (moved, moved_error) = entered_overlay(a, key, made, entering, 1.0, placement == .Above || placement == .AboveCenter || placement == .AboveMatch)
+    let (moved, moved_error) = entered_overlay(a, t, key, made, entering, 1.0, placement == .Above || placement == .AboveCenter || placement == .AboveMatch)
     ret (moved, moved_error)
 }
 
 // (D1429) An overlay `made` in its box `key + 8192` with its content part way
 // in at `share`: grown 8 from the anchor's edge (`from` 1), or scaled up from
 // `from`, and faded.
-fn entered_overlay(a: *mem.Arena, key: widget.Key, made: widget.Node, share: f32, from: f32, above: bool) -> (widget.Node, err) {
+fn entered_overlay(a: *mem.Arena, t: *const control.Theme, key: widget.Key, made: widget.Node, share: f32, from: f32, above: bool) -> (widget.Node, err) {
     var moved = made
     if made.children.len == 1usize {
         let (kids, kids_error) = mem.alloc[widget.Node](a, 1usize)
         if kids_error != ok { ret (zero, TooLarge) }
         if from < 1.0 {
-            let (scaled, scaled_error) = scaled_in(a, made.children[0usize], share, from)
+            let (scaled, scaled_error) = scaled_in(a, t, made.children[0usize], share, from)
             if scaled_error != ok { ret (zero, scaled_error) }
             kids[0usize] = scaled
         } else {
-            let (grown, grown_error) = grown_in(a, made.children[0usize], share, above)
+            let (grown, grown_error) = grown_in(a, t, made.children[0usize], share, above)
             if grown_error != ok { ret (zero, grown_error) }
             kids[0usize] = grown
         }
@@ -2139,7 +2145,7 @@ fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor
     if dirty { outside = widget.Submit { ctx: zero, invoke: zero } }
     let (made, made_error) = dismissable_by_offset_outside(a, key, anchor, placement, title, joined, dismiss, outside, offset, key + 1u64)
     if made_error != ok { ret (zero, made_error) }
-    let (moved, moved_error) = entered_overlay(a, key, made, entering, 0.9, false)
+    let (moved, moved_error) = entered_overlay(a, t, key, made, entering, 0.9, false)
     ret (moved, moved_error)
 }
 
@@ -2570,7 +2576,8 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     // (D1431, docs/ux/components/Sheet, motion) It slides in from its edge over
     // `duration-medium-4` on the emphasized-decelerate curve from when it is
     // first built (`appeared_share`), the scrim fading in with it.
-    let arrived = appeared_share(t, key, t.tokens.durations.medium4)
+    var arrived = appeared_share(t, key, t.tokens.durations.medium4)
+    if t.tokens.motion.reduced { arrived = 1.0 }
     var away: geometry.Point = zero
     if bottom {
         var travel: f32 = 480.0
@@ -2613,8 +2620,11 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // 1 under reduced motion or once there, and from then on whatever the clock).
 type AppearSince = struct { set: bool, since: i64, arrived: bool }
 
+// (D1491) Under reduced motion it comes in over `duration-short-2`, a fade.
 fn appeared_share(t: *const control.Theme, key: widget.Key, millis: u32) -> f32 {
-    if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret 1.0 }
+    if mem.address_of(t.runtime) == 0usize { ret 1.0 }
+    var span_millis = millis
+    if t.tokens.motion.reduced { span_millis = t.tokens.durations.short2 }
     let (s, state_error) = widget.state_of(t.runtime)
     if state_error != ok { ret 1.0 }
     let (id, found) = widget.find_by_key(s, key)
@@ -2632,7 +2642,7 @@ fn appeared_share(t: *const control.Theme, key: widget.Key, millis: u32) -> f32 
         kept.set = true
         kept.since = now
     }
-    let span = i64(millis) * 1000000i64
+    let span = i64(span_millis) * 1000000i64
     if span <= 0i64 || now < kept.since { ret 1.0 }
     let progress = f32(now - kept.since) / f32(span)
     if progress >= 1.0 {
@@ -4421,7 +4431,8 @@ fn date_range_fullscreen(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     sem.states = accessibility.STATE_MODAL
     framed[2usize] = widget.semantics(0u64, sem, style.defaults(), framed[1usize..2usize])
     // It slides up as it first appears.
-    let arrived = appeared_share(t, key, t.tokens.durations.medium4)
+    var arrived = appeared_share(t, key, t.tokens.durations.medium4)
+    if t.tokens.motion.reduced { arrived = 1.0 }
     framed[3usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: height * (1.0 - arrived) } }, style.defaults(), framed[2usize..3usize])
     ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *close }, style.defaults(), framed[3usize..4usize]), ok)
 }
