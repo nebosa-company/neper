@@ -4503,7 +4503,8 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // (D1362) A press or drag on the dial turns it: the hour at the nearest of the
 // twelve places, or the whole minute at the nearest of sixty; releasing the
 // hour dial asks for the minutes (`EditMinute`).
-// ponytail: minutes do not snap to five on a fast drag; a minute off the fives
+// (D1403) A fast drag snaps minutes to the fives.
+// ponytail: a minute off the fives
 // puts the knob on no number.
 // (D1349) A wheel's drag, kept on the wheel: the value it started from.
 // (D1389) `at` is the value the drag last asked for, `last_y` and `step` the
@@ -5058,7 +5059,7 @@ fn period_segment(a: *mem.Arena, key: widget.Key, t: *const control.Theme, word:
 // dial region (keyed `ring`) picks the hour or minute.
 type DialTurn = struct { runtime: *widget.Runtime, ring: widget.Key, hour: u8, editing_minute: bool, change: widget.Change[TimeChoice] }
 
-fn dial_turn_to(d: *DialTurn, at: geometry.Point) -> err {
+fn dial_turn_to(d: *DialTurn, at: geometry.Point, fast: bool) -> err {
     let (area, has_area) = widget.bounds_for_key(d.runtime, d.ring)
     if !has_area { ret ok }
     let dx = at.x - (area.x + area.width * 0.5)
@@ -5068,7 +5069,10 @@ fn dial_turn_to(d: *DialTurn, at: geometry.Point) -> err {
     var turn = math.atan2[f32](dx, 0.0 - dy) / 6.2831853
     if turn < 0.0 { turn += 1.0 }
     if d.editing_minute {
-        let minute = u8(usize(math.round[f32](turn * 60.0)) % 60usize)
+        var minute = u8(usize(math.round[f32](turn * 60.0)) % 60usize)
+        // (D1403, docs/ux/components/TimePicker, dial) A fast drag snaps to the
+        // fives; only a slow one (under 4 a move) picks single minutes.
+        if fast { minute = u8((usize(math.round[f32](turn * 12.0)) % 12usize) * 5usize) }
         ret widget.fire_change[TimeChoice](d.change, TimeChoice { kind: .Minute, value: minute })
     }
     var value = u8(usize(math.round[f32](turn * 12.0)) % 12usize)
@@ -5080,9 +5084,10 @@ fn dial_turn_gesture(ctx: *void, g: widget.Gesture) -> err {
     let d = mem.cast[*DialTurn](ctx)
     switch g {
     case .DragStart as began:
-        ret dial_turn_to(d, began)
+        ret dial_turn_to(d, began, false)
     case .DragMove as moved:
-        ret dial_turn_to(d, moved.position)
+        let travel = moved.delta.x * moved.delta.x + moved.delta.y * moved.delta.y
+        ret dial_turn_to(d, moved.position, travel > 16.0)
     case .DragEnd as ended:
         if d.editing_minute { ret ok }
         ret widget.fire_change[TimeChoice](d.change, TimeChoice { kind: .EditMinute, value: 0u8 })
