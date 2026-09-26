@@ -2507,8 +2507,8 @@ fn breadcrumbs_fit(a: *mem.Arena, t: *const control.Theme, names: []const str, w
 // the path field is keyed `key + 60`, the empty space after the trail `key + 61`.
 // (D1326) Sibling menus from `BreadcrumbsOptions.sibling_toggle`.
 // (D1361) Drop targets from `BreadcrumbsOptions.drop`.
-// ponytail: holding a drag over a crumb does not navigate; no Tab completion of
-// folder names.
+// (D1374) A drag held there `duration-long-2` navigates to the crumb.
+// ponytail: no Tab completion of folder names.
 fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit, given: BreadcrumbsOptions) -> (widget.Node, err) {
     if picks.len != names.len || names.len == 0usize { ret (zero, TooLarge) }
     var options = given
@@ -2656,12 +2656,25 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
                     var target_look = style.defaults()
                     target_look.radius = t.tokens.radii.sm
                     let (_, has_drag) = widget.dragging(t.runtime)
+                    var held_over = false
                     if has_drag {
                         let (drop_box, has_drop_box) = widget.bounds_for_key(t.runtime, drop_key)
                         let at = widget.pointer_position(t.runtime)
                         if has_drop_box && at.x >= drop_box.x && at.x < drop_box.x + drop_box.width && at.y >= drop_box.y && at.y < drop_box.y + drop_box.height {
                             target_look.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) }
+                            held_over = true
                         }
+                    }
+                    // (D1374, docs/ux/components/Breadcrumbs, drop target) Held over
+                    // the crumb `duration-long-2`, the drag navigates there: an ease on
+                    // the region (asked every frame, so it starts from rest) that
+                    // fires the crumb's pick on arriving.
+                    var hold_goal: f32 = 0.0
+                    if held_over { hold_goal = 1.0 }
+                    let crumb_held = control.eased_on(t, drop_key, drop_key + 1048576u64, hold_goal, true, t.tokens.durations.long2)
+                    if held_over && !(crumb_held < 1.0) {
+                        let went = widget.fire_submit(picks[i])
+                        if went != ok { ret (zero, went) }
                     }
                     parts[n] = widget.region(drop_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drop_asks[0usize]), invoke: crumb_drop_gesture }, gestures: widget.GESTURE_DROP, enabled: true, focusable: false }, target_look, held_crumb[0usize..1usize])
                 }

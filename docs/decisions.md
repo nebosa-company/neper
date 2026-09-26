@@ -26270,3 +26270,14 @@ the toggle is asked again each frame until the drag leaves.
 
 `ui_collections3_v2` holds A2's drag over B for a second: B is asked to open,
 and the drop still reports A2 into B, on Windows and Linux.
+
+## D1374 — A held drag navigates to a crumb
+
+The Breadcrumbs spec navigates to a crumb a drag holds over for
+`duration-long-2`. Each drop region from D1361 keeps a hold ease (`eased_on`,
+slot `drop_key + 1048576`, forward only). Its goal is 1 while a drag's pointer
+is inside and 0 otherwise, asked every frame so it starts from rest. Arriving
+at 1 fires the crumb's pick during the build, as D1373 does for a tree branch.
+
+`ui_navigation2_v2` holds a drag over "lib" for a second: the trail goes to
+"lib", and the fill and the drop still hold, on Windows and Linux.
