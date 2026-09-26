@@ -26089,3 +26089,18 @@ Checked the `name = zero` refusal again: an empty Submit is written out.
 `ui_pickers_v2` shuts the sheet: a frame later it is still there, and a second
 later it is gone. The picker fixtures (`ui_pickers_v2`, `ui_entry`,
 `ui_overlays3_v2`, `ui_presentation`) pass on Windows and Linux.
+
+## D1361 — Breadcrumbs take drops
+
+The Breadcrumbs spec makes crumbs drop targets: a crumb fills
+`primary-container` while items are dragged over it. With
+`BreadcrumbsOptions.drop` set, each crumb before the current place stands in a
+drop region (keyed `key + 200 + index`, `radius-sm`). The region fills
+`primary-container` while a drag's pointer is inside its last bounds, and a
+drop reports a `CrumbDrop` (the crumb's index and the drag's payload). The
+wrap happens only when `drop` is set, so other trails keep their shape.
+Holding a drag over a crumb does not navigate there yet.
+
+`ui_navigation2_v2` drags from a test source (payload 77) over "lib": the crumb
+fills `primary-container`, and the drop reports crumb 1 with payload 77, on
+Windows and Linux.
