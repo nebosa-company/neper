@@ -622,6 +622,13 @@ plain, it prints `applied N edits to PATH` per file and the `postcondition`; wit
 edit table is sized from the plan (D562), rather than imposing a 4,096-edit ceiling,
 and rendering allocates one output per file rather than one per edit, so one
 transactional compiler-wide change fits the ordinary arena and stays all-or-nothing.
+A plan over more than one program (D1552) is each program's plan named in one
+apply: `--also PLAN2 --root DIR2 [--project-src DIR2]` (up to eight plans), the
+roots after a plan being its program's. All of them apply in one transaction, whose
+lock and journal are under the first root, or none does. A file two plans name (a
+library both programs use) is read once and must hash as both record; an edit
+both make is made once, and any other overlap refuses the apply. The
+postconditions are joined with `; `.
 An `edit` inside a range any loaded module's source map marks `"edit": "generator"`
 (D512, D563, H17/H19) carries `"owner": "generator"` and `original` -- the generator's input
 and the byte where the edited text begins in it -- since the generated file is
