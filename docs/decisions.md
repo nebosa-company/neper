@@ -26754,3 +26754,14 @@ group is still missing.
 
 `ui_pickers3_v2` lists family 2 as recent: "Recent" and "All fonts" stand, and
 a press on the recent row picks family 2, on Windows and Linux.
+
+## D1408 — Font pickers group monospace families
+
+The FontPicker spec's list groups Recent, Monospace and All fonts.
+`font_panel_with` gains `monospace`, one flag a family. The flagged families
+are listed again under a "Monospace" subheader (their list keyed
+`key + 1048700`, each row firing its family's own pick), between Recent (when
+any) and "All fonts". With neither group the list stands alone as before.
+
+`ui_pickers3_v2` flags the fourth family monospace: "Monospace" stands with its
+one row, and D1407's recent group and pick still hold, on Windows and Linux.
