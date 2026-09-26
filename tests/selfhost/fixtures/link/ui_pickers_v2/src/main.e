@@ -639,6 +639,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         slide_step += 1usize
     }
+    // (D1424) The year view fades in: 50 ms after the toggle the chosen 2026 is
+    // not yet `primary`, a second on it is.
+    var fade_step = 0usize
+    while fade_step < 3usize {
+        var fade_at = 4700000000i64
+        if fade_step == 1usize { fade_at = 4750000000i64 }
+        if fade_step == 2usize { fade_at = 5750000000i64 }
+        var fade_marks: overlay.CalendarMarks = zero
+        fade_marks.toggle_years = &stores[0usize].press
+        fade_marks.year_view = fade_step >= 1usize
+        if testing.begin(&harness, time.Instant { nanos: fade_at }) != ok { os.exit(168i32) }
+        f = mem.arena_from(frame_storage)
+        let (fading_cal, fading_cal_error) = overlay.calendar_with(&f, 7700u64, &theme, "Sliding", tenth_of_april, tenth_of_april, true, false, tenth_of_april, tenth_of_april, tenth_of_april, false, picked_dates, picked_dates, fade_marks)
+        let (fade_page, fade_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if fading_cal_error != ok || fade_page_error != ok { os.exit(168i32) }
+        fade_page[0usize] = fading_cal
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), fade_page[0usize..1usize]), time.Instant { nanos: fade_at }) != ok { os.exit(169i32) }
+        if fade_step >= 1usize {
+            let (year_pill, has_year_pill) = bounds(&harness, &runtime, 7700u64 + 4096u64 + 100u64)
+            let (fade_shot, fade_shot_error) = testing.snapshot(&harness, a)
+            if !has_year_pill || fade_shot_error != ok { os.exit(170i32) }
+            let pill_primary = is_color(fade_shot, at(year_pill.x + 6.0, year_pill.y + year_pill.height * 0.5), style.color(&tokens, .Primary))
+            if fade_step == 1usize && pill_primary { os.exit(171i32) }
+            if fade_step == 2usize && !pill_primary { os.exit(172i32) }
+        }
+        fade_step += 1usize
+    }
     // (D1293) The touch picker: a dialog titled "Select date" saying "Tue, Sep 15",
     // a day press picking, OK confirming; in input mode its typed field stands in
     // the calendar's place.

@@ -3664,6 +3664,24 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
         parts[1usize] = years
         part_count = 2usize
     }
+    // (D1424, docs/ux/components/Calendar, motion) Toggling the year view fades
+    // the view coming in over `duration-short-4` (a share kept on the calendar,
+    // slot `key + 1048591`).
+    var view_goal: f32 = 0.0
+    if years_toggle && marks.year_view { view_goal = 1.0 }
+    let view_share = control.eased_on(t, key, key + 1048591u64, view_goal, false, t.tokens.durations.short4)
+    var coming_in = 1.0 - view_share
+    if view_goal > 0.0 { coming_in = view_share }
+    if coming_in < 1.0 {
+        let (fading, fading_error) = mem.alloc[widget.Node](a, 2usize)
+        if fading_error != ok { ret (zero, TooLarge) }
+        fading[0usize] = parts[1usize]
+        fading[1usize] = parts[2usize]
+        var faded = style.defaults()
+        faded.opacity = coming_in
+        parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, faded, fading[0usize..part_count - 1usize])
+        part_count = 2usize
+    }
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
