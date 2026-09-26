@@ -116,10 +116,24 @@ fn closing_share_over(t: *const control.Theme, key: widget.Key, open: bool, mill
     ret control.eased_emphasized(t, key + 8192u64, key + 8194u64, stay_goal, false, millis)
 }
 
+// (D1432) A surface part way in: faded to the share and `distance` above its
+// place (below for a negative distance) for the share still to come. It,
+// Like `scaled_in` and `grown_in` it always wraps, so the tree keeps its shape
+// when the motion ends and nothing inside is remade (a focused field keeps
+// its focus).
+fn slid_in(a: *mem.Arena, surface: widget.Node, share: f32, distance: f32) -> (widget.Node, err) {
+    let (sliding, sliding_error) = mem.alloc[widget.Node](a, 2usize)
+    if sliding_error != ok { ret (zero, TooLarge) }
+    sliding[0usize] = surface
+    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - distance * (1.0 - share) } }, style.defaults(), sliding[0usize..1usize])
+    var faded = style.defaults()
+    faded.opacity = share
+    ret (widget.box(0u64, faded, sliding[1usize..2usize]), ok)
+}
+
 // (D1427) A surface part way in or out: faded to the share and scaled from
 // `from` (1 for none).
 fn scaled_in(a: *mem.Arena, surface: widget.Node, share: f32, from: f32) -> (widget.Node, err) {
-    if !(share < 1.0) { ret (surface, ok) }
     let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
     if growing_error != ok { ret (zero, TooLarge) }
     growing[0usize] = surface
@@ -1733,7 +1747,6 @@ fn closing_share(t: *const control.Theme, key: widget.Key, open: bool) -> f32 {
 // the share, and 8 nearer the anchor (above it when `above`) for the share still
 // to come.
 fn grown_in(a: *mem.Arena, surface: widget.Node, opened: f32, above: bool) -> (widget.Node, err) {
-    if !(opened < 1.0) { ret (surface, ok) }
     var toward: f32 = 0.0 - 8.0 * (1.0 - opened)
     if above { toward = 0.0 - toward }
     let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
@@ -1931,7 +1944,7 @@ fn flyout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widge
 // `from`, and faded.
 fn entered_overlay(a: *mem.Arena, key: widget.Key, made: widget.Node, share: f32, from: f32, above: bool) -> (widget.Node, err) {
     var moved = made
-    if share < 1.0 && made.children.len == 1usize {
+    if made.children.len == 1usize {
         let (kids, kids_error) = mem.alloc[widget.Node](a, 1usize)
         if kids_error != ok { ret (zero, TooLarge) }
         if from < 1.0 {
@@ -2560,26 +2573,24 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     // `duration-medium-4` on the emphasized-decelerate curve from when it is
     // first built (`appeared_share`), the scrim fading in with it.
     let arrived = appeared_share(t, key, t.tokens.durations.medium4)
-    if arrived < 1.0 {
-        var away: geometry.Point = zero
-        if bottom {
-            var travel: f32 = 480.0
-            if mem.address_of(t.runtime) != 0usize {
-                let window = widget.surface_size(t.runtime)
-                if window.height > 0.0 { travel = window.height }
-            }
-            away.y = travel * (1.0 - arrived)
-        } else {
-            var travel: f32 = 360.0
-            if width > 0.0 { travel = width }
-            away.x = travel * (1.0 - arrived)
-            if placement == .Left { away.x = 0.0 - away.x }
+    var away: geometry.Point = zero
+    if bottom {
+        var travel: f32 = 480.0
+        if mem.address_of(t.runtime) != 0usize {
+            let window = widget.surface_size(t.runtime)
+            if window.height > 0.0 { travel = window.height }
         }
-        let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
-        if sliding_error != ok { ret (zero, TooLarge) }
-        sliding[0usize] = placed
-        placed = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: away }, style.defaults(), sliding[0usize..1usize])
+        away.y = travel * (1.0 - arrived)
+    } else {
+        var travel: f32 = 360.0
+        if width > 0.0 { travel = width }
+        away.x = travel * (1.0 - arrived)
+        if placement == .Left { away.x = 0.0 - away.x }
     }
+    let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
+    if sliding_error != ok { ret (zero, TooLarge) }
+    sliding[0usize] = placed
+    placed = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: away }, style.defaults(), sliding[0usize..1usize])
     // Its own slot: body[4] is the aligned node's child, and a node listed among
     // its own children would nest without end (TooDeep at any depth).
     body[5usize] = placed
@@ -3838,15 +3849,13 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     if slide > grid_width { slide = grid_width }
     if slide < 0.0 - grid_width { slide = 0.0 - grid_width }
     if t.tokens.direction == .RightToLeft { slide = 0.0 - slide }
-    if slide != 0.0 {
-        let (sliding, sliding_error) = mem.alloc[widget.Node](a, 2usize)
-        if sliding_error != ok { ret (zero, TooLarge) }
-        sliding[0usize] = parts[2usize]
-        sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: slide, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
-        var clip = style.defaults()
-        clip.overflow = .Clip
-        parts[2usize] = widget.box(0u64, clip, sliding[1usize..2usize])
-    }
+    let (sliding, sliding_error) = mem.alloc[widget.Node](a, 2usize)
+    if sliding_error != ok { ret (zero, TooLarge) }
+    sliding[0usize] = parts[2usize]
+    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: slide, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
+    var clip = style.defaults()
+    clip.overflow = .Clip
+    parts[2usize] = widget.box(0u64, clip, sliding[1usize..2usize])
     var part_count = 3usize
     if years_toggle && marks.year_view {
         // (D1307) The years stand where the weekdays and days would.
@@ -3863,16 +3872,14 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     let view_share = control.eased_on(t, key, key + 1048591u64, view_goal, false, t.tokens.durations.short4)
     var coming_in = 1.0 - view_share
     if view_goal > 0.0 { coming_in = view_share }
-    if coming_in < 1.0 {
-        let (fading, fading_error) = mem.alloc[widget.Node](a, 2usize)
-        if fading_error != ok { ret (zero, TooLarge) }
-        fading[0usize] = parts[1usize]
-        fading[1usize] = parts[2usize]
-        var faded = style.defaults()
-        faded.opacity = coming_in
-        parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, faded, fading[0usize..part_count - 1usize])
-        part_count = 2usize
-    }
+    let (fading, fading_error) = mem.alloc[widget.Node](a, 2usize)
+    if fading_error != ok { ret (zero, TooLarge) }
+    fading[0usize] = parts[1usize]
+    fading[1usize] = parts[2usize]
+    var faded = style.defaults()
+    faded.opacity = coming_in
+    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, faded, fading[0usize..part_count - 1usize])
+    part_count = 2usize
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..part_count])

@@ -1806,6 +1806,12 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
     if lifted_error != ok { ret (zero, TooLarge) }
     lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    // (D1432, docs/ux/components/MenuBar, motion) A menu comes in with a fade
+    // and a 4 slide down over `duration-short-4` from its first build.
+    let arrived = overlay.appeared_share(t, key, t.tokens.durations.short4)
+    let (slid, slid_error) = overlay.slid_in(a, lifted[0usize], arrived, 4.0)
+    if slid_error != ok { ret (zero, slid_error) }
+    lifted[0usize] = slid
     ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
 }
 
@@ -2022,7 +2028,7 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     var push_goal: f32 = 0.0
     if showing_detail { push_goal = 1.0 }
     let pushed = control.eased_emphasized(t, key, key + 1048003u64, push_goal, true, t.tokens.durations.medium2)
-    if showing_detail && pushed < 1.0 {
+    if showing_detail {
         let (pushing, pushing_error) = mem.alloc[widget.Node](a, 1usize)
         if pushing_error != ok { ret (zero, TooLarge) }
         var toward = width * (1.0 - pushed)
@@ -6102,9 +6108,24 @@ fn centred_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), boxed[0usize..1usize])
+    // (D1432, docs/ux/components/CommandPalette and WindowSwitcher, motion) It
+    // comes in over `duration-short-4` on the emphasized-decelerate curve from
+    // its first build (`overlay.appeared_share`): the dimmed palette fades and
+    // moves down 8 into place over its fading scrim, the undimmed switcher fades
+    // and scales up from 95%.
+    let arrived = overlay.appeared_share(t, key, t.tokens.durations.short4)
+    if dimmed {
+        let (dropped, dropped_error) = overlay.slid_in(a, framed[0usize], arrived, 8.0)
+        if dropped_error != ok { ret (zero, dropped_error) }
+        framed[0usize] = dropped
+    } else {
+        let (scaled, scaled_error) = overlay.scaled_in(a, framed[0usize], arrived, 0.95)
+        if scaled_error != ok { ret (zero, scaled_error) }
+        framed[0usize] = scaled
+    }
     let top = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .TopCenter, offset: geometry.Point { x: 0.0, y: 64.0 }, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize])
     if !dimmed { ret (top, ok) }
-    let (made, made_error) = overlay.with_scrim(a, t, top)
+    let (made, made_error) = overlay.with_scrim_share(a, t, top, arrived)
     ret (made, made_error)
 }
 
