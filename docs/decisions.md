@@ -25836,3 +25836,16 @@ come.
 `ui_pickers3_v2` opens a touch field: the swatches stand and the spectrum does
 not; a press on Spectrum swaps them. D1338's touch-thumb check now switches to
 the spectrum first. This passes on Windows and Linux.
+
+## D1344 — Dragged document tabs lift and show where they will land
+
+The DocumentTabs spec's dragged state: while a tab is dragged (the runtime's
+`dragging` payload, D844's move), the strip draws it lifted on
+`surface-container-highest` at elevation 2, and stands a 2 x 28 `primary`
+fully rounded drop line (keyed `key + 131`) before the tab the pointer is over,
+the tabs parting for it. `widget.pointer_position` gives a build the pointer's
+last place. The lifted tab keeps its place rather than following the pointer.
+
+`ui_navigation5_v2` drags lower.e over notes: mid-drag the drop line stands;
+released, it is gone, on Windows and Linux; `ui_workspace` and `ui_drag_drop`
+still pass on both.

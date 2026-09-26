@@ -5133,6 +5133,13 @@ fn begin_drag(widget_runtime: *Runtime, payload: u64) -> err {
     ret ok
 }
 
+// (D1344) Where the pointer last stood, for a build that follows a drag.
+fn pointer_position(widget_runtime: *const Runtime) -> geometry.Point {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret zero }
+    ret s.arena_state.last
+}
+
 fn dragging(widget_runtime: *const Runtime) -> (u64, bool) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize { ret (0u64, false) }
