@@ -252,6 +252,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if count(lit, band, style.color(&tokens, .Text)) != 0usize { os.exit(26i32) }
     let caret_x = inline_bounds.x + 3.0 * advance + 1.0
     if !is_color(lit, px(caret_x, inline_bounds.y + body.line_height * 0.5), style.color(&tokens, .Primary)) { os.exit(27i32) }
+    // (D1549) The window blurred, the selection turns `surface-container-highest`
+    // and its glyphs keep the text's colour; focused again, it is as before.
+    var blur_step = 0usize
+    while blur_step < 2usize {
+        if blur_step == 0usize && testing.send(&harness, input.Event { Blur: zero }) != ok { os.exit(44i32) }
+        if blur_step == 1usize && testing.send(&harness, input.Event { Focus: zero }) != ok { os.exit(44i32) }
+        frame = mem.arena_from(frame_storage)
+        let (blur_root, blur_build_error) = build(&frame, &theme, &pages[0usize])
+        if blur_build_error != ok { os.exit(44i32) }
+        if testing.pump(&harness, blur_root, time.Instant { nanos: 1210000000i64 + i64(blur_step) }) != ok { os.exit(44i32) }
+        let (dim, dim_error) = testing.snapshot(&harness, a)
+        if dim_error != ok { os.exit(44i32) }
+        if blur_step == 0usize && (count(dim, band, style.color(&tokens, .SurfaceContainerHighest)) == 0usize || count(dim, band, style.color(&tokens, .PrimaryContainer)) != 0usize) { os.exit(45i32) }
+        if blur_step == 1usize && count(dim, band, style.color(&tokens, .PrimaryContainer)) == 0usize { os.exit(46i32) }
+        blur_step += 1usize
+    }
     // (D1250) A builder measures text as layout will: eight a's are twice four.
     // Five crumbs of ten a's fit whole at their full width, collapse one level a
     // pixel narrower, and at a pixel wide collapse all two they may.
