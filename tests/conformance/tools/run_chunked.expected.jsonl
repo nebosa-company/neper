@@ -1,0 +1,7 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"run","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"output","stream":"stdout","sequence":1,"offset":0,"bytes":50,"encoding":"utf-8","data":"0123456789abcdefghijklmnopqrstuvwxyz\n0123456789abc"}
+{"record":"output","stream":"stdout","sequence":2,"offset":50,"bytes":0,"encoding":"utf-8","data":"","end":true,"total_bytes":296,"truncated":true,"file":"conformance-tools-run-chunked.out.stdout"}
+{"record":"output","stream":"stderr","sequence":1,"offset":0,"bytes":16,"encoding":"utf-8","data":"a short warning\n"}
+{"record":"output","stream":"stderr","sequence":2,"offset":16,"bytes":0,"encoding":"utf-8","data":"","end":true,"total_bytes":16,"truncated":false,"file":"conformance-tools-run-chunked.out.stderr"}
+{"record":"run","process_exit_code":0,"stdout":"","stderr":"","trap":null}
+{"record":"result","ok":true,"exit_code":0,"data":{"executable":"conformance-tools-run-chunked.out","process_exit_code":0,"stdout_bytes":296,"stderr_bytes":16,"capture_limit":50,"captured_complete":false,"diagnostics":0}}

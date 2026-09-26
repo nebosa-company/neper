@@ -884,7 +884,7 @@ fn flags_known(args: []str) -> bool {
                     if !same(args[at], "-j") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
-                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") { ret false }
+                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") { ret false }
                 }
             }
         }
@@ -1527,6 +1527,124 @@ fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str) -> (i3
 
 // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
 // Its own function because the bootstrap caps a function's locals (main is at the cap).
+// (D1525, H18) `run --json --chunked`: the child's captured output as `output`
+// records, one stream's after the other, each chunk at most OUTPUT_CHUNK bytes:
+// `stream`, a contiguous one-based `sequence` per stream, the `offset` of its first
+// byte, its byte count, and `data` -- the text as a JSON string when the chunk is
+// UTF-8, else its base64 (`encoding` says which; a character split by the chunk
+// size ends the chunk before it). A final record per stream carries `end`, the
+// stream's `total_bytes`, whether the capture was `truncated`, and the `file`
+// beside the executable that holds the whole stream.
+const OUTPUT_CHUNK: usize = 4096usize
+
+// Both streams' chunks, when `--chunked` asks, the `run` record then carrying none.
+fn chunk_output(a: *mem.Arena, report: *Sink, args: []str, stdout_captured: str, stderr_captured: str) -> err {
+    if !has_flag(args, "--chunked") { ret ok }
+    let (stdout_path, stdout_path_error) = with_suffix(a, args[6usize], ".stdout")
+    if stdout_path_error != ok { ret stdout_path_error }
+    let (stderr_path, stderr_path_error) = with_suffix(a, args[6usize], ".stderr")
+    if stderr_path_error != ok { ret stderr_path_error }
+    try emit_output_chunks(report, "stdout", stdout_captured, report.build.stdout_bytes, stdout_path)
+    ret emit_output_chunks(report, "stderr", stderr_captured, report.build.stderr_bytes, stderr_path)
+}
+
+fn unless_chunked(args: []str, captured: str) -> str {
+    if has_flag(args, "--chunked") { ret "" }
+    ret captured
+}
+
+fn emit_output_chunks(report: *Sink, stream: str, captured: str, total: usize, file: str) -> err {
+    var sequence = 1usize
+    var offset = 0usize
+    while offset < captured.len {
+        var end = offset + OUTPUT_CHUNK
+        if end > captured.len { end = captured.len }
+        // A character the chunk size split goes whole into the next chunk.
+        let (text, text_end) = utf8_prefix(captured[offset..end], end == captured.len)
+        var chunk_end = offset + text_end
+        if !text || text_end == 0usize { chunk_end = end }
+        try write_all(report, "{\"record\":\"output\",\"stream\":\"")
+        try write_all(report, stream)
+        try write_all(report, "\",\"sequence\":")
+        try write_usize(report, sequence)
+        try write_all(report, ",\"offset\":")
+        try write_usize(report, offset)
+        try write_all(report, ",\"bytes\":")
+        try write_usize(report, chunk_end - offset)
+        if text && text_end != 0usize {
+            try write_all(report, ",\"encoding\":\"utf-8\",\"data\":")
+            try write_json_string(report, captured[offset..chunk_end])
+        } else {
+            try write_all(report, ",\"encoding\":\"base64\",\"data\":\"")
+            try write_base64(report, captured[offset..chunk_end])
+            try write_all(report, "\"")
+        }
+        try write_all(report, "}\n")
+        sequence += 1usize
+        offset = chunk_end
+    }
+    try write_all(report, "{\"record\":\"output\",\"stream\":\"")
+    try write_all(report, stream)
+    try write_all(report, "\",\"sequence\":")
+    try write_usize(report, sequence)
+    try write_all(report, ",\"offset\":")
+    try write_usize(report, offset)
+    try write_all(report, ",\"bytes\":0,\"encoding\":\"utf-8\",\"data\":\"\",\"end\":true,\"total_bytes\":")
+    try write_usize(report, total)
+    if total > captured.len { try write_all(report, ",\"truncated\":true,\"file\":") } else { try write_all(report, ",\"truncated\":false,\"file\":") }
+    try write_json_string(report, file)
+    ret write_all(report, "}\n")
+}
+
+// Whether `bytes` is UTF-8 up to where it ends, and where the valid text ends: at the
+// end, or -- when `last` is false -- before a sequence cut short at the end, which
+// the next chunk takes. A NUL or an invalid sequence makes it not text.
+fn utf8_prefix(bytes: []const u8, last: bool) -> (bool, usize) {
+    var at = 0usize
+    while at < bytes.len {
+        let lead = usize(bytes[at])
+        var width = 0usize
+        if lead == 0usize { ret (false, 0usize) }
+        if lead < 128usize { width = 1usize }
+        if lead >= 194usize && lead < 224usize { width = 2usize }
+        if lead >= 224usize && lead < 240usize { width = 3usize }
+        if lead >= 240usize && lead < 245usize { width = 4usize }
+        if width == 0usize { ret (false, 0usize) }
+        if at + width > bytes.len {
+            if last { ret (false, 0usize) }
+            ret (true, at)
+        }
+        var follow = 1usize
+        while follow < width {
+            let next = usize(bytes[at + follow])
+            if next < 128usize || next >= 192usize { ret (false, 0usize) }
+            follow += 1usize
+        }
+        at += width
+    }
+    ret (true, at)
+}
+
+fn write_base64(report: *Sink, bytes: []const u8) -> err {
+    let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    var quad: [4]u8 = zero
+    var at = 0usize
+    while at < bytes.len {
+        var word = usize(bytes[at]) * 65536usize
+        if at + 1usize < bytes.len { word += usize(bytes[at + 1usize]) * 256usize }
+        if at + 2usize < bytes.len { word += usize(bytes[at + 2usize]) }
+        quad[0usize] = alphabet[(word / 262144usize) % 64usize]
+        quad[1usize] = alphabet[(word / 4096usize) % 64usize]
+        quad[2usize] = 61u8
+        quad[3usize] = 61u8
+        if at + 1usize < bytes.len { quad[2usize] = alphabet[(word / 64usize) % 64usize] }
+        if at + 2usize < bytes.len { quad[3usize] = alphabet[word % 64usize] }
+        try write_all(report, quad[..])
+        at += 3usize
+    }
+    ret ok
+}
+
 // Append a string to a byte buffer at `at`, returning the new length.
 fn nptest_append(dst: []u8, at: usize, src: str) -> usize {
     var i = 0usize
@@ -11727,7 +11845,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                         os.exit(2i32)
                         ret ok
                     }
-                    try tool.run_record(a, &loaded, checker.functions[0usize..checker.signature_function_count], status, stdout_captured, stderr_captured, loaded.modules[0usize].name, basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].spelling)
+                    try chunk_output(a, &report, args, stdout_captured, stderr_captured)
+                    try tool.run_record(a, &loaded, checker.functions[0usize..checker.signature_function_count], status, unless_chunked(args, stdout_captured), unless_chunked(args, stderr_captured), loaded.modules[0usize].name, basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].spelling)
                     try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"executable\":")
                     try write_json_string(&report, args[6usize])
                     try write_all(&report, ",\"process_exit_code\":")

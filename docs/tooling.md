@@ -702,7 +702,15 @@ span are under the operand's identity, `project-src` in a project. The record is
 which case the files hold the rest. A flooding child therefore costs the harness at
 most two bounds of memory and never a pipe: the streams are files, drained by the
 OS. It does not stream raw child bytes into the JSONL
-channel. `dis --json` emits one `disassembly` record per function with `symbol`,
+channel. With `--chunked` (D1525), the captured prefixes come as `output` records
+instead, the `run` record's `stdout` and `stderr` left empty. Each stream's records
+come in turn, stdout first, each at most 4,096 bytes, with `stream`, a contiguous
+one-based `sequence`, the `offset` of its first byte, `bytes`, and `data` as a JSON
+string (`encoding` `utf-8`) or, when the chunk is not UTF-8 or holds a NUL,
+base64 (`encoding` `base64`). A character the 4,096 bytes would split ends its chunk
+early and opens the next. A last record per stream carries `end: true`,
+`total_bytes`, `truncated` and the `file` beside the executable holding the whole
+stream. `dis --json` emits one `disassembly` record per function with `symbol`,
 `target`, `text` and `inlined` (D542): with `--release` after `--json`, the release
 image is listed, and `inlined` names each run of the function's code that is the
 copy of another function's body -- `from` as `module.function`, `start` and `end`

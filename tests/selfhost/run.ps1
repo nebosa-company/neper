@@ -4947,6 +4947,13 @@ $runFloodActual = Join-Path $testBuild 'conformance-tools-run-flood.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_flood.e `"$repo`" x64 windows conformance-tools-run-flood.out --json --capture 50 > `"$runFloodActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runFloodActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_flood.expected.jsonl')).Hash) { throw "run --json --capture differs from the conformance corpus" }
 if ((Get-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-run-flood.out.stdout')).Length -ne 296) { throw 'the whole flood output is not in the file beside the executable' }
+# The capture as chunk records (D1525, H18): `--chunked` streams each stream's
+# captured prefix as `output` records with a closing record per stream.
+$runChunkedActual = Join-Path $testBuild 'conformance-tools-run-chunked.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_flood.e `"$repo`" x64 windows conformance-tools-run-chunked.out --json --capture 50 --chunked > `"$runChunkedActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runChunkedActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_chunked.expected.jsonl')).Hash) { throw "run --json --chunked differs from the conformance corpus" }
+& python (Join-Path $repo 'scripts/validate_stream.py') $runChunkedActual
+if ($LASTEXITCODE -ne 0) { throw 'the chunked run stream does not validate' }
 # `--explain --json` (D408, H20): every inlining decision a record of the build stream,
 # in worker order -- one worker here, so module order -- byte for byte per host.
 $explainInlineActual = Join-Path $testBuild 'conformance-tools-explain-inline.jsonl'
