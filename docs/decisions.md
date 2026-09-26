@@ -27636,3 +27636,14 @@ Results are in `benchmarks/baseline/results/inline-cap-{windows,linux}-d1521.jso
 The CPU programs do not respond to the cap. Their few calls are in loops over arrays, and every cap is within the run-to-run noise (about ±5 %) on both hosts. Their images differ by at most a few hundred bytes. On Windows the compiler job is flat within its noise. On Linux, where the job runs longer, 40 is the fastest cap and 80 and above are slower, while each doubling past 40 adds a fifth to a third more image. Every cap's compiler reaches its fixed point.
 
 Forty is retained. It is never measurably slower, it is the fastest where any cap matters, and it costs 7.6 % more image than no inlining. The versioned budget beside it: on GP-01 the cap-40 image stays within 10 % of the cap-0 image, and the cap-40 fixed job is no slower than cap 0's beyond the run-to-run range. `inline_cap.py` is how the next re-evaluation reruns this, with this table as the baseline, when another GP workload exists as a program.
+
+## D1522 — Alias facts cross a decoded module
+
+H20 asks that enough checked type, effect and alias information be serialized for valid optimization and checking without re-importing whole bodies. For a function, the checker's alias facts are its borrow source (`@borrows`: which parameter the result views) and its no-escape parameters (`@noescape`). D1325 made the Interface carry both. D1510's attribute tail carries their spellings. D1511's decode reads them back into the checker record, into the fields the checker keeps them in.
+
+Nothing had shown the facts doing their work across a decoded module. `build/ux/c044_alias.sh` does, on Windows and Linux. `dep` declares `@borrows("right") fn choose(left, right)` and `@noescape("bytes") fn measure(bytes)`. `main` is built warm and debug, so `dep` is stable and declared from its artifact; the stats count two modules decoded, `dep` and `e.os`.
+
+- A `main` that changes `right` and then uses the view `choose` returned is rejected with E-SAFETY-0014, as the clean build rejects it.
+- A `main` whose own `@noescape("b")` parameter is passed on to `dep.measure` is accepted, and the image is the clean build's.
+
+The same script against a compiler whose decode drops the two strings fails both ways. That warm build accepts the use of the stale view, a wrong program, and rejects the valid forward. So the serialized facts are what the checker relies on, not an unused copy.
