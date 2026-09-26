@@ -207,6 +207,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         enter_step += 1usize
     }
+    // (D1394) In a compact window, 360 wide, the snackbar spans it less 16 a
+    // side: its surface at 20 and at 340 across, the ground at 8.
+    let (compact_rt, compact_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 2048usize })
+    if compact_runtime_error != ok { os.exit(34i32) }
+    var compact_runtime = compact_rt
+    let compact_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &compact_runtime }
+    let (compact_h, compact_harness_error) = testing.harness(a, &compact_runtime, 360u32, 400u32, 1.0)
+    if compact_harness_error != ok { os.exit(35i32) }
+    var compact_harness = compact_h
+    f = mem.arena_from(frame_storage)
+    let (compact_snack, compact_snack_error) = control.snackbar(&f, 790u64, &compact_theme, s.notices[0usize..1usize], 320.0)
+    let (compact_page, compact_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if compact_snack_error != ok || compact_page_error != ok { os.exit(36i32) }
+    compact_page[0usize] = compact_snack
+    var compact_ground = control.sized_style(360.0, 400.0)
+    compact_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+    if testing.pump(&compact_harness, widget.box(0u64, compact_ground, compact_page[0usize..1usize]), time.Instant { nanos: 41000000000i64 }) != ok { os.exit(37i32) }
+    // A second frame: the first build could not yet see the window's width.
+    f = mem.arena_from(frame_storage)
+    let (compact_again, compact_again_error) = control.snackbar(&f, 790u64, &compact_theme, s.notices[0usize..1usize], 320.0)
+    let (again_page, again_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if compact_again_error != ok || again_page_error != ok { os.exit(36i32) }
+    again_page[0usize] = compact_again
+    if testing.pump(&compact_harness, widget.box(0u64, compact_ground, again_page[0usize..1usize]), time.Instant { nanos: 41016000000i64 }) != ok { os.exit(37i32) }
+    let (compact_shot, compact_shot_error) = testing.snapshot(&compact_harness, a)
+    if compact_shot_error != ok { os.exit(38i32) }
+    let surface_ink = style.color(&tokens, .InverseSurface)
+    let compact_row: f32 = 364.0
+    let compact_at_start = (usize(compact_row) * 360usize + 20usize) * 4usize
+    let compact_at_end = (usize(compact_row) * 360usize + 340usize) * 4usize
+    let compact_outside = (usize(compact_row) * 360usize + 8usize) * 4usize
+    if !is_color(compact_shot, compact_at_start, surface_ink) || !is_color(compact_shot, compact_at_end, surface_ink) || is_color(compact_shot, compact_outside, surface_ink) { os.exit(39i32) }
+    if testing.close(&compact_harness) != ok || widget.close(&compact_runtime) != ok { os.exit(40i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui status4 v2 ok\n")
     ret ok

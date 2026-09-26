@@ -8112,7 +8112,8 @@ fn glyph_action(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // is empty.
 // (D1278) The head notice times out (`notice_timeout`), paused by hover and focus.
 // (D1287) It enters fading in and rising 8.
-// ponytail: the compact (bottom-centre) placement, exit motion, the
+// (D1394) In a compact window it spans the width less 16 a side.
+// ponytail: exit motion, the
 // two-line layout and the toast's title and severity well wait on a richer
 // Notice; the toast's stack of three shows the head alone.
 // (D1278) A notice's countdown, kept on its surface across frames: which notice
@@ -8231,6 +8232,17 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
         wide = 340.0
         pad_y = style.Length { Px: 12.0 }
     }
+    // (D1394, docs/ux/components/Snackbar, placement) In a compact window (under
+    // 600 wide) the snackbar spans the window less 16 each side, 16 above its
+    // foot, centred.
+    var compact_window = false
+    if bottom && mem.address_of(t.runtime) != 0usize {
+        let window = widget.surface_size(t.runtime)
+        if window.width > 0.0 && style.size_class(window.width) == .Compact {
+            compact_window = true
+            wide = max_zero(window.width - 32.0)
+        }
+    }
     var sheet = surface_style(t, options)
     sheet.overflow = .Visible
     sheet.width = style.Length { Px: wide }
@@ -8249,6 +8261,7 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
     // The margin rides inside the overlay as padding, which the clamp keeps.
     var margin: f32 = 24.0
     if !bottom { margin = 12.0 }
+    if compact_window { margin = 16.0 }
     let (kept, kept_error) = mem.alloc[widget.Node](a, 1usize)
     if kept_error != ok { ret (zero, TooLarge) }
     if bottom {
