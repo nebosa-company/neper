@@ -5034,6 +5034,35 @@ $aliasBuilt = & $compiler emit-executable (Join-Path $aliasScratch 'src\main.e')
 if ($LASTEXITCODE -ne 0 -or $aliasBuilt -ne 'executable written') { throw "the renamed program through an alias does not build: $aliasBuilt" }
 & $aliasExe
 if ($LASTEXITCODE -ne 8) { throw "the renamed program through an alias behaves differently (exit $LASTEXITCODE)" }
+# The transaction boundary (D1519, H15): a held lock refuses; an apply that dies after
+# one of its two files leaves a lock the next apply refuses, and `--recover` puts the
+# originals back; a writer that does not take the lock is caught before its file is
+# replaced, and the file already written goes back.
+$txnScratch = Join-Path $testBuild 'txn-scratch'
+$txnSrc = Join-Path $txnScratch 'src'
+$txnMain = Join-Path $aliasFixture 'src\main.e'
+$txnDeep = Join-Path $aliasFixture 'src\deep.e'
+function Test-TxnOriginal { ((Get-FileHash -LiteralPath (Join-Path $txnSrc 'main.e')).Hash -eq (Get-FileHash -LiteralPath $txnMain).Hash) -and ((Get-FileHash -LiteralPath (Join-Path $txnSrc 'deep.e')).Hash -eq (Get-FileHash -LiteralPath $txnDeep).Hash) }
+if (Test-Path -LiteralPath $txnScratch) { Remove-Item -LiteralPath $txnScratch -Recurse -Force }
+Copy-Item -Recurse $aliasFixture $txnScratch
+New-Item -ItemType Directory -Force (Join-Path $txnSrc '.neper') | Out-Null
+Set-Content -LiteralPath (Join-Path $txnSrc '.neper\transaction.lock') -Value '' -NoNewline
+$txnHeld = & $compiler apply-plan $aliasPlanActual --root $txnSrc 2>&1
+if ($LASTEXITCODE -ne 2 -or -not ($txnHeld -match 'transaction.lock. is held') -or -not (Test-TxnOriginal)) { throw 'an apply under a held lock was not refused whole' }
+Remove-Item -LiteralPath $txnScratch -Recurse -Force
+Copy-Item -Recurse $aliasFixture $txnScratch
+& $compiler apply-plan $aliasPlanActual --root $txnSrc --fault-apply 1 2>$null | Out-Null
+if ($LASTEXITCODE -ne 3 -or (Test-TxnOriginal)) { throw 'an apply made to die after one file did not leave one file applied' }
+& $compiler apply-plan $aliasPlanActual --root $txnSrc 2>$null | Out-Null
+if ($LASTEXITCODE -ne 2) { throw 'an apply after an interrupted one was not refused' }
+$txnRecovered = & $compiler apply-plan --recover --root $txnSrc 2>&1
+if ($LASTEXITCODE -ne 0 -or -not ($txnRecovered -match 'recovered: 1 restored, 1 untouched') -or -not (Test-TxnOriginal)) { throw "--recover did not put the originals back: $txnRecovered" }
+& $compiler apply-plan $aliasPlanActual --root $txnSrc | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the plan did not apply after --recover' }
+Remove-Item -LiteralPath $txnScratch -Recurse -Force
+Copy-Item -Recurse $aliasFixture $txnScratch
+$txnIntervened = & $compiler apply-plan $aliasPlanActual --root $txnSrc --fault-edit 1 2>&1
+if ($LASTEXITCODE -ne 2 -or -not ($txnIntervened -match 'changed during the apply') -or (Test-Path -LiteralPath (Join-Path $txnSrc '.neper\transaction.lock'))) { throw 'an edit made during the apply was not caught' }
 # A function only a constant reaches (D510, H17): its call in the initializer is a
 # use, and the rename plan rewrites it; before, the plan had the declaration alone.
 $comptimeFixture = Join-Path $conformanceRoot 'tools\uses_comptime'

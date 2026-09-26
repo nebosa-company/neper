@@ -27582,3 +27582,28 @@ C036 closes at 1.
 C043's gap clause named CPU features in the identity. D765 had already put the instruction level in the compiler identity's top byte, beside D431's inline cap. Nothing pinned it on the incremental path, and the queue never recorded it.
 
 Verified on the incremental fixture, debug and release, on Windows and Linux: a warm build under `--cpu x64-v3` over x64-v1 artifacts rebuilds every module as `options-changed` and is byte-identical to a clean v3 build. The plain warm build after it rebuilds every module back and is the clean v1 build. The cache filename is the same for both levels, and the identity is what keeps them apart, which is what H15 asks for "even where today's cache filename would collide". Both suites now assert this sequence after the inline-cap case.
+
+## D1519 — apply-plan's transaction boundary
+
+H15 asks for a defined transaction boundary. A source transaction must lock or otherwise coordinate the editors taking part and validate all its preconditions. It must detect conflicts, keep recoverable originals, never silently overwrite an intervening edit, and document its crash-recovery and visibility guarantees. `apply-plan` (D481) hashed every precondition once, then replaced the files one after another. An edit made between the hash and the replace was overwritten. A crash between two replaces left a mixed plan, with nothing on disk saying so.
+
+The boundary is now the lock file `<root>/.neper/transaction.lock`, made by one exclusive create. That create is atomic on both hosts and is already in the bootstrap's fixed surface. An apply that finds the lock refuses at once (E-TOOL-0003, exit 2) and writes nothing. Under the lock, `apply-plan`:
+
+1. hashes every precondition again;
+2. keeps each changed file's original as `transaction.N.orig`;
+3. writes the journal `transaction.journal`, which names each file with its original and new SHA-256;
+4. replaces the files, each by one atomic replace and each hashed again just before it.
+
+If a file no longer holds its precondition, a writer that does not take the lock has edited it. The files already replaced go back, each only while it still holds the digest the apply wrote. The lock is retired and the apply is refused. A completed apply retires the journal and then the lock, each by one rename. The bootstrap's fixed surface removes nothing, and a lock without a journal is an apply that replaced nothing. The originals stay beside the lock until the next apply writes its own.
+
+A crash leaves the journal and the lock, and the next apply refuses. `apply-plan --recover --root DIR` then goes through the journal:
+
+- A file holding its new digest gets its original back.
+- A file holding its original is left alone.
+- Any other file was edited after the crash. It is left as it is, its original stays where the journal names it, the lock stays, and recovery refuses and names the file.
+
+Visibility: each file changes at once. The set is consistent to a reader that takes the lock. A writer that does not take the lock is detected, never prevented; a last-moment hash check cannot make it atomic, as H15 says.
+
+`--fault-apply N` makes the apply die after N replaces. `--fault-edit N` appends to the next file after N replaces, as an uncooperating writer would. Both suites run the two-file alias rename plan through four cases: a held lock refuses and leaves both files; a death after one file leaves the lock, the next apply is refused, and `--recover` reports one restored and one untouched with both originals back, after which the plan applies; an intervening edit is refused, the first file goes back, and the lock is retired; an edit made after a crash makes recovery refuse, and the edit and the original are both kept. The build/ux script covers all four on Windows and Linux. The suites cover the first three, and running their fragments passes on both hosts.
+
+C043's two remaining lines, the instruction level in the identity (D1518) and this boundary, have both landed, so C043 closes at 1.

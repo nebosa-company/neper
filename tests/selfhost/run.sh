@@ -5249,6 +5249,36 @@ cmp -s "$test_build/conformance-tools-uses-alias.jsonl" "$conformance_root/tools
 cmp -s "$test_build/conformance-tools-plan-rename-alias.jsonl" "$conformance_root/tools/plan_rename_alias.x64-linux.expected.jsonl" || { echo "plan-rename-file --json through an alias differs from the conformance corpus" >&2; exit 1; }
 rm -rf "$test_build/alias-scratch"
 cp -r "$alias_fixture" "$test_build/alias-scratch"
+# The transaction boundary (D1519, H15): a held lock refuses; an apply that dies after
+# one of its two files leaves a lock the next apply refuses, and `--recover` puts the
+# originals back; a writer that does not take the lock is caught before its file is
+# replaced, and the file already written goes back.
+txn_scratch="$test_build/txn-scratch"
+txn_plan="$test_build/conformance-tools-plan-rename-alias.jsonl"
+txn_original() { cmp -s "$txn_scratch/src/main.e" "$alias_fixture/src/main.e" && cmp -s "$txn_scratch/src/deep.e" "$alias_fixture/src/deep.e"; }
+rm -rf "$txn_scratch" && cp -r "$alias_fixture" "$txn_scratch" && mkdir -p "$txn_scratch/src/.neper" && : > "$txn_scratch/src/.neper/transaction.lock"
+txn_status=0
+"$test_build/neper-self" apply-plan "$txn_plan" --root "$txn_scratch/src" > "$test_build/txn-held.txt" 2>&1 || txn_status=$?
+[ "$txn_status" -eq 2 ]
+grep -q 'transaction.lock. is held' "$test_build/txn-held.txt"
+txn_original
+rm -rf "$txn_scratch" && cp -r "$alias_fixture" "$txn_scratch"
+txn_status=0
+"$test_build/neper-self" apply-plan "$txn_plan" --root "$txn_scratch/src" --fault-apply 1 > /dev/null 2>&1 || txn_status=$?
+[ "$txn_status" -eq 3 ]
+if txn_original; then echo "an apply made to die after one file applied none" >&2; exit 1; fi
+txn_status=0
+"$test_build/neper-self" apply-plan "$txn_plan" --root "$txn_scratch/src" > /dev/null 2>&1 || txn_status=$?
+[ "$txn_status" -eq 2 ]
+"$test_build/neper-self" apply-plan --recover --root "$txn_scratch/src" | grep -q 'recovered: 1 restored, 1 untouched'
+txn_original
+"$test_build/neper-self" apply-plan "$txn_plan" --root "$txn_scratch/src" > /dev/null
+rm -rf "$txn_scratch" && cp -r "$alias_fixture" "$txn_scratch"
+txn_status=0
+"$test_build/neper-self" apply-plan "$txn_plan" --root "$txn_scratch/src" --fault-edit 1 > "$test_build/txn-edit.txt" 2>&1 || txn_status=$?
+[ "$txn_status" -eq 2 ]
+grep -q 'changed during the apply' "$test_build/txn-edit.txt"
+[ ! -e "$txn_scratch/src/.neper/transaction.lock" ]
 "$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename-alias.jsonl" --root "$test_build/alias-scratch/src" > /dev/null
 cmp -s "$test_build/alias-scratch/src/other.e" "$alias_fixture/src/other.e"
 [ "$("$test_build/neper-self" emit-executable "$test_build/alias-scratch/src/main.e" "$repo" x64 linux "$test_build/alias" 2>/dev/null)" = 'executable written' ]
