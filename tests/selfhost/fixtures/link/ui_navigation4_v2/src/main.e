@@ -335,6 +335,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 27u32, zero) != ok { os.exit(144i32) }
     let (escaped_key, _) = widget.focused_key(&runtime)
     if escaped_key != 4611u64 { os.exit(145i32) }
+    // (D1412) In a single pane, showing the detail pushes it in: 50 ms in the
+    // page's start is not yet what it settles to.
+    var push_step = 0usize
+    var push_mid: u32 = 0u32
+    var push_end: u32 = 0u32
+    while push_step < 5usize {
+        var push_at = 42000000000i64 + i64(push_step) * 16000000i64
+        if push_step == 3usize { push_at = 42082000000i64 }
+        if push_step == 4usize { push_at = 43000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: push_at }) != ok { os.exit(146i32) }
+        f = mem.arena_from(frame_storage)
+        let (push_list, push_list_error) = control.text(&f, 0u64, "Build list", &theme, control.text_options())
+        let (push_log, push_log_error) = control.text(&f, 0u64, "Log", &theme, control.text_options())
+        var push_options = navigation.navigation_split_options()
+        push_options.list_label = "Builds"
+        let (push_split, push_split_error) = navigation.navigation_split_of(&f, 4700u64, &theme, push_list, push_log, push_step >= 2usize, 280.0, zero, 400.0, 200.0, push_options)
+        let (push_page, push_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if push_list_error != ok || push_log_error != ok || push_split_error != ok || push_page_error != ok { os.exit(147i32) }
+        push_page[0usize] = push_split
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(900.0, 560.0), push_page[0usize..1usize]), time.Instant { nanos: push_at }) != ok { os.exit(148i32) }
+        if push_step >= 3usize {
+            let (push_box, has_push_box) = bounds(&harness, &runtime, 4700u64)
+            let (push_shot, push_shot_error) = testing.snapshot(&harness, a)
+            if !has_push_box || push_shot_error != ok { os.exit(149i32) }
+            let push_spot = (usize(push_box.y + 100.0) * 900usize + usize(push_box.x + 20.0)) * 4usize
+            let push_rgb = u32(push_shot.pixels[push_spot]) * 65536u32 + u32(push_shot.pixels[push_spot + 1usize]) * 256u32 + u32(push_shot.pixels[push_spot + 2usize])
+            if push_step == 3usize { push_mid = push_rgb }
+            if push_step == 4usize { push_end = push_rgb }
+        }
+        push_step += 1usize
+    }
+    if push_mid == push_end { os.exit(150i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation4 v2 ok\n")
     ret ok
