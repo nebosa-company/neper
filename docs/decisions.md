@@ -25924,3 +25924,22 @@ leading edge are still to come.
 
 `ui_collections4_v2` builds a touch carousel: Show all stands, Previous does
 not, and a tap presses it, on Windows and Linux.
+
+## D1349 — Time pickers have wheels
+
+The TimePicker spec's iOS form. `overlay.wheel` is a picker column: five rows
+36 tall over a `surface-container-highest` `radius-sm` band across the middle.
+The chosen value is in `title-large` `on-surface`, its neighbours in
+`body-large` `on-surface-variant`, and the outer rows in `body-small` at 60%.
+One region takes a press (picking the row under it), a drag (a detent every
+36, from where the drag began, kept on the wheel) and Up and Down; it is a spin
+button named by its label with the value as its value. `time_wheels` sets an
+hour wheel (1-12 or 00-23), a minute wheel and, on a 12-hour clock, an AM/PM
+wheel, each reporting the `TimeChoice` it sets; a 12-hour wheel keeps the
+hour in the half of the day the period says. Momentum and fling, and the
+date and duration wheels, are still to come.
+
+`ui_pickers2_v2` sets the wheels at 14:30 on a 12-hour clock. They show 02
+and PM. A tap under the hour picks 15, Down on the minutes sets 31, and a
+two-row drag up turns the hours to 16. This passes on Windows and Linux, and
+`ui_pickers_v2` still passes on both.

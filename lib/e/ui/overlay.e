@@ -4188,6 +4188,236 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // Left back, and Page Up and Page Down five minutes on the minute dial.
 // ponytail: no drag round the dial; a minute off the fives puts the knob on no
 // number.
+// (D1349) A wheel's drag, kept on the wheel: the value it started from.
+type WheelCell = struct { base: usize, held: bool }
+type WheelPick = struct { index: usize, pick: widget.Change[usize] }
+type WheelDrag = struct { cell: *WheelCell, has_cell: bool, selected: usize, count: usize, pick: widget.Change[usize], runtime: *widget.Runtime, key: widget.Key }
+
+fn wheel_pick_fire(ctx: *void) -> err {
+    let p = mem.cast[*WheelPick](ctx)
+    ret widget.fire_change[usize](p.pick, p.index)
+}
+
+fn wheel_drag_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*WheelDrag](ctx)
+    switch g {
+    case .Tap as at:
+        // A press picks the row it lands on.
+        let (s, state_error) = widget.state_of(d.runtime)
+        if state_error != ok { ret ok }
+        let (id, found) = widget.find_by_key(s, d.key)
+        if found != 1usize { ret ok }
+        let (area, has_area) = widget.bounds_of(d.runtime, id)
+        if !has_area || at.y < area.y { ret ok }
+        let row = i64((at.y - area.y) / 36.0)
+        let wanted = i64(d.selected) + row - 2i64
+        if row > 4i64 || wanted < 0i64 || wanted >= i64(d.count) { ret ok }
+        ret widget.fire_change[usize](d.pick, usize(wanted))
+    case .DragStart as at:
+        if !d.has_cell { ret ok }
+        d.cell.base = d.selected
+        d.cell.held = true
+        ret ok
+    case .DragMove as moved:
+        if !d.has_cell { ret ok }
+        // A detent every 36 up or down from where the drag began.
+        let rows = (moved.position.y - moved.start.y) / 36.0
+        var steps = i64(rows)
+        if rows < 0.0 { steps = i64(rows - 0.5) } else { steps = i64(rows + 0.5) }
+        var wanted = i64(d.cell.base) - steps
+        if wanted < 0i64 { wanted = 0i64 }
+        if wanted >= i64(d.count) { wanted = i64(d.count) - 1i64 }
+        if usize(wanted) == d.selected { ret ok }
+        ret widget.fire_change[usize](d.pick, usize(wanted))
+    case .DragEnd as at:
+        if d.has_cell { d.cell.held = false }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// (D1349, docs/ux/components/TimePicker, wheels) A wheel: 5 rows 36 tall (180),
+// `width` wide, over a `surface-container-highest` `radius-sm` band across the
+// middle row. The chosen value stands in the band in `title-large` `on-surface`,
+// its neighbours `body-large` `on-surface-variant`, the outer rows `body-small` at
+// 60%; beyond the ends the rows are blank. A press on a row picks it, a drag
+// turns the wheel a detent every 36, and Up and Down step it. A spin button
+// named `label` with the value as its value, keyed `key` (its rows `key + 1 +
+// offset`, 0..4).
+// ponytail: no momentum or fling; the wheel steps with the drag.
+fn wheel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, values: []const str, selected: usize, pick: widget.Change[usize], width: f32) -> (widget.Node, err) {
+    if values.len == 0usize || selected >= values.len { ret (zero, TooLarge) }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 5usize)
+    let (picks, picks_error) = mem.alloc[WheelPick](a, 7usize)
+    let (presses, presses_error) = mem.alloc[widget.Submit](a, 7usize)
+    let (held, held_error) = mem.alloc[widget.Node](a, 12usize)
+    if rows_error != ok || picks_error != ok || presses_error != ok || held_error != ok { ret (zero, TooLarge) }
+    var r = 0usize
+    while r < 5usize {
+        let offset = i64(r) - 2i64
+        let at = i64(selected) + offset
+        var row_style = control.sized_style(width, 36.0)
+        if at < 0i64 || at >= i64(values.len) {
+            rows[r] = widget.box(0u64, row_style, zero)
+            r += 1usize
+            continue
+        }
+        var words = control.text_options()
+        words.wrap = .None
+        var ink = style.color(t.tokens, .OnSurfaceVariant)
+        words.role = .BodyLarge
+        if offset == 0i64 {
+            words.role = .TitleLarge
+            ink = style.color(t.tokens, .OnSurface)
+        }
+        if offset == -2i64 || offset == 2i64 {
+            words.role = .BodySmall
+            ink = control.with_alpha(ink, 0.6)
+        }
+        let (said, said_error) = control.colored_text(a, 0u64, values[usize(at)], t, words, ink)
+        if said_error != ok { ret (zero, said_error) }
+        held[2usize * r] = said
+        held[2usize * r + 1usize] = widget.aligned(0u64, .Center, .Center, row_style, held[2usize * r..2usize * r + 1usize])
+        rows[r] = widget.box(key + 1u64 + u64(r), row_style, held[2usize * r + 1usize..2usize * r + 2usize])
+        r += 1usize
+    }
+    // The band behind the middle row, the rows over it.
+    var band = control.sized_style(width, 36.0)
+    band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+    band.radius = t.tokens.radii.sm
+    held[10usize] = widget.positioned(0u64, 0.0, 72.0, band, zero)
+    held[11usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 180.0), rows[0usize..5usize])
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = held[10usize]
+    layers[1usize] = held[11usize]
+    layers[2usize] = widget.stack(0u64, control.sized_style(width, 180.0), layers[0usize..2usize])
+    // The drag, kept on the wheel.
+    let (drags, drags_error) = mem.alloc[WheelDrag](a, 1usize)
+    if drags_error != ok { ret (zero, TooLarge) }
+    var no_cell: *WheelCell = zero
+    drags[0usize] = WheelDrag { cell: no_cell, has_cell: false, selected: selected, count: values.len, pick: pick, runtime: t.runtime, key: key }
+    if mem.address_of(t.runtime) != 0usize {
+        let (s, state_error) = widget.state_of(t.runtime)
+        if state_error == ok {
+            let (id, found) = widget.find_by_key(s, key)
+            if found == 1usize {
+                var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+                var fresh: WheelCell = zero
+                let (kept, _, kept_error) = widget.state[WheelCell](&build, key + 1048576u64, fresh)
+                if kept_error == ok {
+                    drags[0usize].cell = kept
+                    drags[0usize].has_cell = true
+                }
+            }
+        }
+    }
+    var up = selected
+    if up > 0usize { up -= 1usize }
+    var down = selected
+    if down + 1usize < values.len { down += 1usize }
+    picks[5usize] = WheelPick { index: up, pick: pick }
+    picks[6usize] = WheelPick { index: down, pick: pick }
+    presses[5usize] = widget.Submit { ctx: mem.cast[*void](&picks[5usize]), invoke: wheel_pick_fire }
+    presses[6usize] = widget.Submit { ctx: mem.cast[*void](&picks[6usize]), invoke: wheel_pick_fire }
+    let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if keys_error != ok { ret (zero, TooLarge) }
+    keys[0usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: presses[5usize] }
+    keys[1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: presses[6usize] }
+    control.focus_look(t)
+    layers[3usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[0usize]), invoke: wheel_drag_gesture }, gestures: 1u8 | widget.GESTURE_DRAG, enabled: true, focusable: true }, control.sized_style(width, 180.0), layers[2usize..3usize])
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: keys[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), layers[3usize..4usize])
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    sem.value = values[selected]
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// (D1349) The two-digit strings 00..count-1, for a wheel of hours or minutes.
+fn wheel_numbers(a: *mem.Arena, count: usize, from: usize) -> ([]str, err) {
+    var none: []str = zero
+    let (values, values_error) = mem.alloc[str](a, count)
+    if values_error != ok { ret (none, TooLarge) }
+    var i = 0usize
+    while i < count {
+        values[i] = two_digits(a, u8(from + i))
+        i += 1usize
+    }
+    ret (values, ok)
+}
+
+// (D1349, docs/ux/components/TimePicker, wheels) The iOS time picker: an hour
+// wheel (1-12 or 00-23), a minute wheel (00-59) and, on a 12-hour clock, an
+// AM/PM wheel, 8 apart, each 72 wide (keyed `key`, `key + 16`, `key + 32`); a
+// turn reports the `TimeChoice` its wheel sets.
+fn time_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, minute: u8, twelve: bool, change: widget.Change[TimeChoice]) -> (widget.Node, err) {
+    var hour_count = 24usize
+    var hour_from = 0usize
+    if twelve {
+        hour_count = 12usize
+        hour_from = 1usize
+    }
+    let (hour_values, hour_error) = wheel_numbers(a, hour_count, hour_from)
+    let (minute_values, minute_error) = wheel_numbers(a, 60usize, 0usize)
+    if hour_error != ok || minute_error != ok { ret (zero, TooLarge) }
+    let (relays, relays_error) = mem.alloc[TimeWheelRelay](a, 3usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    let (periods, periods_error) = mem.alloc[str](a, 2usize)
+    if relays_error != ok || parts_error != ok || periods_error != ok { ret (zero, TooLarge) }
+    relays[0usize] = TimeWheelRelay { kind: .Hour, change: change, twelve: twelve, pm: hour >= 12u8 }
+    relays[1usize] = TimeWheelRelay { kind: .Minute, change: change, twelve: twelve, pm: hour >= 12u8 }
+    relays[2usize] = TimeWheelRelay { kind: .Period, change: change, twelve: twelve, pm: hour >= 12u8 }
+    var hour_at = usize(hour % 24u8)
+    if twelve {
+        hour_at = usize(hour % 12u8)
+        if hour_at == 0usize { hour_at = 12usize }
+        hour_at -= 1usize
+    }
+    let (hours_wheel, hours_error) = wheel(a, key, t, "Hour", hour_values, hour_at, widget.Change[usize] { ctx: mem.cast[*void](&relays[0usize]), invoke: time_wheel_fire }, 72.0)
+    if hours_error != ok { ret (zero, hours_error) }
+    let (minutes_wheel, minutes_error) = wheel(a, key + 16u64, t, "Minute", minute_values, usize(minute % 60u8), widget.Change[usize] { ctx: mem.cast[*void](&relays[1usize]), invoke: time_wheel_fire }, 72.0)
+    if minutes_error != ok { ret (zero, minutes_error) }
+    parts[0usize] = hours_wheel
+    parts[1usize] = minutes_wheel
+    var n = 2usize
+    if twelve {
+        periods[0usize] = "AM"
+        periods[1usize] = "PM"
+        var period_at = 0usize
+        if hour >= 12u8 { period_at = 1usize }
+        let (period_wheel, period_error) = wheel(a, key + 32u64, t, "AM or PM", periods[0usize..2usize], period_at, widget.Change[usize] { ctx: mem.cast[*void](&relays[2usize]), invoke: time_wheel_fire }, 72.0)
+        if period_error != ok { ret (zero, period_error) }
+        parts[2usize] = period_wheel
+        n = 3usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = "Time"
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts[0usize..n])
+    ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// (D1349) A time wheel's turn as the `TimeChoice` it sets: a 12-hour wheel's
+// hour kept in the half of the day the period says.
+type TimeWheelRelay = struct { kind: TimeChoiceKind, change: widget.Change[TimeChoice], twelve: bool, pm: bool }
+
+fn time_wheel_fire(ctx: *void, index: usize) -> err {
+    let r = mem.cast[*TimeWheelRelay](ctx)
+    var value = u8(index)
+    if r.kind == .Hour && r.twelve {
+        value = u8((index + 1usize) % 12usize)
+        if r.pm { value += 12u8 }
+    }
+    ret widget.fire_change[TimeChoice](r.change, TimeChoice { kind: r.kind, value: value })
+}
+
 fn time_picker_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, minute: u8, editing_minute: bool, twelve: bool, open: bool, change: widget.Change[TimeChoice], cancel: *const widget.Submit, confirm: *const widget.Submit) -> (widget.Node, err) {
     var dial_only: TimeModalOptions = zero
     let (made, made_error) = time_picker_modal_with(a, key, t, hour, minute, editing_minute, twelve, open, change, cancel, confirm, dial_only)
@@ -4515,7 +4745,8 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
 // (D1275) Typing filters the list to the times the text starts.
 // (D1294) `time_picker_modal` is the touch dial form.
 // (D1295) `time_picker_modal_with` adds its input mode.
-// ponytail: no wheels for touch, and there is no error icon; the caller's text and picks
+// (D1349) `time_wheels` is the iOS form.
+// ponytail: there is no error icon; the caller's text and picks
 // carry the value.
 fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, times: []const str, offsets: []const str, selected: usize, picks: []const widget.Submit, note: str, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != times.len || offsets.len != times.len { ret (zero, TooLarge) }

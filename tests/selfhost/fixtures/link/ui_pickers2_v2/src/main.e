@@ -334,6 +334,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (first_chip, has_first_chip) = bounds(&harness, &runtime, 1403u64)
     let (third_chip, has_third_chip) = bounds(&harness, &runtime, 1405u64)
     if !has_first_chip || !has_third_chip || !(third_chip.y > first_chip.y + 1.0) { os.exit(66i32) }
+    // (D1349) The time wheels at 14:30 on a 12-hour clock: a tap on the row
+    // under the hour's picks 3 PM (15); Down on the minutes sets 31; a drag of
+    // two rows up turns the hours to 4 PM (16).
+    var wheel_step = 0usize
+    while wheel_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (wheels, wheels_error) = overlay.time_wheels(&f, 1500u64, &theme, 14u8, 30u8, true, time_change)
+        let (wheel_page, wheel_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if wheels_error != ok || wheel_page_error != ok { os.exit(71i32) }
+        wheel_page[0usize] = wheels
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), wheel_page[0usize..1usize]), time.Instant { nanos: 6400000000i64 + i64(wheel_step) }) != ok { os.exit(72i32) }
+        wheel_step += 1usize
+    }
+    if testing.by_text(&harness, "02").count == 0usize || testing.by_text(&harness, "PM").count == 0usize { os.exit(73i32) }
+    let (next_hour, has_next_hour) = bounds(&harness, &runtime, 1504u64)
+    if !has_next_hour || testing.tap(&harness, next_hour.x + 20.0, next_hour.y + 18.0) != ok || chose.kind != .Hour || chose.value != 15u8 { os.exit(74i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 1516u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || chose.kind != .Minute || chose.value != 31u8 { os.exit(75i32) }
+    let (hour_wheel, has_hour_wheel) = bounds(&harness, &runtime, 1500u64)
+    if !has_hour_wheel { os.exit(76i32) }
+    let turn_from = geometry.Point { x: hour_wheel.x + 36.0, y: hour_wheel.y + 150.0 }
+    if testing.drag(&harness, turn_from, geometry.Point { x: turn_from.x, y: turn_from.y - 72.0 }, 8usize) != ok || chose.kind != .Hour || chose.value != 16u8 { os.exit(77i32) }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }
