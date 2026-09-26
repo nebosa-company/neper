@@ -481,6 +481,11 @@ type Builder = struct {
     trap_path: str,
     trap_path_ref: usize,
     trap_path_known: bool,
+    // (D1515) Each lowered function's emission identity, by NIR function index over
+    // [emission_first, emission_end): what the artifact's Emission section records.
+    emission: []usize,
+    emission_first: usize,
+    emission_end: usize,
     // What the verifier refused, for the diagnostic: the instruction and the operand.
     verify_instruction: usize,
     verify_operand: usize,

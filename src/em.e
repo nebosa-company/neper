@@ -117,7 +117,8 @@ type CodeRelocation = struct {
 
 // (D1510) Format 15: function and aggregate records carry an attribute tail.
 // (D1514) Format 16: the Globals section carries each global's type after its records.
-fn format_version() -> usize { ret 16usize }
+// (D1515) Format 17: the Emission section.
+fn format_version() -> usize { ret 17usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -136,6 +137,10 @@ fn lines_kind() -> usize { ret 8usize }
 fn imports_kind() -> usize { ret 9usize }
 // The unsafe inventory (D457): the manifest's records for the module, rendered.
 fn inventory_kind() -> usize { ret 10usize }
+// (D1515) Per code function, in the Code section's order: the identity of what
+// instruction selection read, zero for none, and a trap stub's operand moves.
+fn emission_kind() -> usize { ret 11usize }
+fn emission_record_size() -> usize { ret 16usize }
 
 fn declaration_function_kind() -> usize { ret 1usize }
 fn declaration_aggregate_kind() -> usize { ret 2usize }
@@ -163,7 +168,7 @@ fn mode_id(mode: BuildMode) -> usize {
 }
 
 fn known_kind(kind: usize) -> bool {
-    ret kind >= strings_kind() && kind <= inventory_kind()
+    ret kind >= strings_kind() && kind <= emission_kind()
 }
 
 // One row of a code function's line table as an artifact carries it.
@@ -2907,7 +2912,7 @@ fn write_interface_artifact(c: *check.Checker, g: *graph.Graph, module_index: us
 }
 
 fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, target_triple: str, mode: BuildMode, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, line_count: usize, strings: *StringTable, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
-    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 9usize || output.count != 0usize { ret InvalidArtifact }
+    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 10usize || output.count != 0usize { ret InvalidArtifact }
     try reset_strings(strings)
     let (target_index, target_error) = intern(strings, target_triple)
     if target_error != ok { ret target_error }
@@ -2948,7 +2953,122 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     try binary.little_u32(output, g.modules[module_index].inventory_count)
     try binary.copy_bytes(output, g.modules[module_index].inventory)
     try end_section(&writer)
+    try begin_section(&writer, emission_kind(), required_flag())
+    try write_emission(builder, c, module_index, output)
+    try end_section(&writer)
     ret finish(&writer)
+}
+
+// (D1515) The Emission section: the count, then per code function its emission
+// identity -- zero when it has none -- and, for a trap stub, its operand moves.
+fn write_emission(builder: *nir.Builder, c: *check.Checker, module_index: usize, output: *binary.Buffer) -> err {
+    try binary.little_u32(output, module_nir_function_count(builder, c, module_index))
+    try binary.little_u32(output, 0usize)
+    let (nir_first, nir_end) = span_of(c, span_nir(), module_index)
+    var function_at = nir_first
+    while function_at < nir_end {
+        if builder.functions[function_at].module_index == module_index {
+            var identity = 0usize
+            if function_at >= builder.emission_first && function_at < builder.emission_end && function_at < builder.emission.len { identity = builder.emission[function_at] }
+            var moves = 0usize
+            let function = builder.functions[function_at]
+            if function.instruction_count == 1usize && builder.instructions[function.first_instruction].opcode == .TrapStub { moves = builder.instructions[function.first_instruction].immediate }
+            try binary.little_u64(output, identity)
+            try binary.little_u64(output, moves)
+        }
+        function_at += 1usize
+    }
+    ret ok
+}
+
+// (D1515) What instruction selection reads of one function, hashed: its canonical
+// NIR (D203), and what that leaves out -- each instruction's line, column, path and
+// inline origin, a callee's import binding -- with the function's own names, path
+// and the build's selection settings. Two functions with one identity select to
+// the same bytes, relocations and line rows.
+fn emission_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, function_index: usize, scratch: *binary.Buffer) -> (usize, err) {
+    if function_index >= builder.function_count { ret (0usize, InvalidArtifact) }
+    let function = builder.functions[function_index]
+    scratch.count = 0usize
+    let prefix_error = emission_prefix(builder, function, scratch)
+    if prefix_error != ok { ret (0usize, prefix_error) }
+    let nir_error = write_nir_canonical(c, g, builder, function_index, scratch)
+    if nir_error != ok { ret (0usize, nir_error) }
+    var at = function.first_instruction
+    while at < function.first_instruction + function.instruction_count {
+        let instruction = builder.instructions[at]
+        let site_error = emission_site(builder, instruction, scratch)
+        if site_error != ok { ret (0usize, site_error) }
+        at += 1usize
+    }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    // Zero stands for none.
+    if hash == 0usize { ret (1usize, hash_error) }
+    ret (hash, hash_error)
+}
+
+fn emission_prefix(builder: *nir.Builder, function: nir.Function, scratch: *binary.Buffer) -> err {
+    try canonical_text(scratch, function.module_name)
+    try canonical_text(scratch, function.name)
+    try binary.little_u32(scratch, function.instance)
+    try canonical_text(scratch, function.path)
+    var release = 0usize
+    if builder.release { release = 1usize }
+    try binary.byte(scratch, release)
+    ret binary.little_u32(scratch, builder.cpu_level)
+}
+
+fn emission_site(builder: *nir.Builder, instruction: nir.Instruction, scratch: *binary.Buffer) -> err {
+    try binary.little_u32(scratch, instruction.site.line)
+    try binary.little_u32(scratch, instruction.site.column)
+    try binary.little_u32(scratch, usize(instruction.inline_origin))
+    try canonical_text(scratch, instruction.path)
+    if (instruction.opcode == .Call || instruction.opcode == .FunctionAddress) && instruction.immediate < builder.function_ref_count {
+        let reference = builder.function_refs[instruction.immediate]
+        try canonical_text(scratch, reference.library)
+        try canonical_text(scratch, reference.symbol)
+    }
+    ret ok
+}
+
+// (D1515) A validated artifact's Emission section: how many records, and where the
+// first starts; none when the section is absent or its count is not the Code's.
+fn emission_records(bytes: []const u8, code_count: usize) -> (usize, bool) {
+    let (section, found, section_error) = find_section_unchecked(bytes, emission_kind())
+    if section_error != ok || !found || section.length < 8usize { ret (0usize, false) }
+    let (count, count_error) = binary.read_u32(bytes, section.offset)
+    if count_error != ok || count != code_count || section.length != 8usize + count * emission_record_size() { ret (0usize, false) }
+    ret (section.offset + 8usize, true)
+}
+
+// (D1515) Where each code function's line rows start in a validated artifact, and
+// how many, in one pass over the Lines section: rows of three words each.
+fn code_lines_index(bytes: []const u8, count: usize, starts: []usize, counts: []usize) -> err {
+    let (section, found, section_error) = find_section_unchecked(bytes, lines_kind())
+    if section_error != ok || !found || section.length < 4usize || starts.len < count || counts.len < count { ret InvalidArtifact }
+    let (function_count, count_error) = binary.read_u32(bytes, section.offset)
+    if count_error != ok || function_count != count { ret InvalidArtifact }
+    let end = section.offset + section.length
+    var cursor = section.offset + 4usize
+    var at = 0usize
+    while at < count {
+        if cursor > end || 4usize > end - cursor { ret InvalidArtifact }
+        let row_count = binary.read_u32_at(bytes, cursor)
+        cursor += 4usize
+        if row_count > (end - cursor) / 12usize { ret InvalidArtifact }
+        starts[at] = cursor
+        counts[at] = row_count
+        cursor += row_count * 12usize
+        at += 1usize
+    }
+    ret ok
+}
+
+// One record of the Emission section at `first`: the identity and the moves.
+fn emission_at(bytes: []const u8, first: usize, index: usize) -> (usize, usize) {
+    let record = first + index * emission_record_size()
+    let identity = binary.read_u32_at(bytes, record) | (binary.read_u32_at(bytes, record + 4usize) << 32usize)
+    ret (identity, binary.read_u32_at(bytes, record + 8usize))
 }
 
 // The Inventory section read (D457): the count and the bytes, or nothing for an

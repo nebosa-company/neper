@@ -219,6 +219,9 @@ type Graph = struct {
     // tree, and those artifacts' bytes; empty means none.
     from_interface: []bool,
     interfaces: [][]const u8,
+    // (D1515) A source-changed module's previous artifact, verified, whose function
+    // emission a debug hot build may reuse; empty for none.
+    previous: [][]const u8,
     // What a header tree keeps of the bodies (D421): none at zero, else the bodies of
     // declarations of at most this many tokens -- the oracle's candidate bound in a
     // release build, where a kept module's short functions are still inlined from.
@@ -957,6 +960,15 @@ fn begin(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: st
         headers_at += 1usize
     }
     g.from_interface = from_interface
+    let (previous, previous_error) = mem.alloc[[]const u8](a, g.modules.len)
+    if previous_error != ok { ret previous_error }
+    var no_bytes: []const u8 = zero
+    headers_at = 0usize
+    while headers_at < previous.len {
+        previous[headers_at] = no_bytes
+        headers_at += 1usize
+    }
+    g.previous = previous
     ret ok
 }
 
