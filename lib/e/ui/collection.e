@@ -284,7 +284,8 @@ fn swipe_settle_cell(t: *const control.Theme, key: widget.Key) -> (*SwipeSettle,
 // A page view's drag: the cell the swipe keeps (none on the view's first frame),
 // where the pages stand, and whom to tell; (D982) settling, the drag only moves
 // the strip and the release turns past the threshold.
-type Paging = struct { cell: *Swipe, has_cell: bool, current: usize, count: usize, threshold: f32, turn: widget.Change[usize], settle: bool, rtl: bool }
+// (D1378) `settling` keeps the last move's travel for a fling.
+type Paging = struct { cell: *Swipe, has_cell: bool, current: usize, count: usize, threshold: f32, turn: widget.Change[usize], settle: bool, rtl: bool, settling: *SwipeSettle, has_settling: bool }
 
 fn page_drag(ctx: *void, g: widget.Gesture) -> err {
     let p = mem.cast[*Paging](ctx)
@@ -298,7 +299,9 @@ fn page_drag(ctx: *void, g: widget.Gesture) -> err {
     case .DragMove as d:
         if !p.has_cell { ret ok }
         if p.settle {
-            p.cell.moved = d.position.x - d.start.x
+            let now_moved = d.position.x - d.start.x
+            if p.has_settling { p.settling.step = now_moved - p.cell.moved }
+            p.cell.moved = now_moved
             ret ok
         }
         if p.cell.turned { ret ok }
@@ -320,9 +323,22 @@ fn page_drag(ctx: *void, g: widget.Gesture) -> err {
         var moved = p.cell.moved
         p.cell.moved = 0.0
         if !p.settle { ret ok }
-        if p.rtl { moved = 0.0 - moved }
-        if moved < 0.0 - p.threshold && p.current + 1usize < p.count { ret widget.fire_change[usize](p.turn, p.current + 1usize) }
-        if moved > p.threshold && p.current > 0usize { ret widget.fire_change[usize](p.turn, p.current - 1usize) }
+        // (D1378, docs/ux/components/PageView, swipe threshold) A fling faster
+        // than 1000 px/s (16 a frame at 60) in the drag's direction turns the page
+        // whatever the distance.
+        var step: f32 = 0.0
+        if p.has_settling {
+            step = p.settling.step
+            p.settling.step = 0.0
+        }
+        if p.rtl {
+            moved = 0.0 - moved
+            step = 0.0 - step
+        }
+        let fling_on = step < -16.0 && moved < 0.0
+        let fling_back = step > 16.0 && moved > 0.0
+        if (moved < 0.0 - p.threshold || fling_on) && p.current + 1usize < p.count { ret widget.fire_change[usize](p.turn, p.current + 1usize) }
+        if (moved > p.threshold || fling_back) && p.current > 0usize { ret widget.fire_change[usize](p.turn, p.current - 1usize) }
         ret ok
     default:
         ret ok
@@ -341,7 +357,8 @@ fn page_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []c
     if pagings_error != ok { ret (zero, TooLarge) }
     var none_cell: *Swipe = zero
     let rtl = t.tokens.direction == .RightToLeft
-    pagings[0usize] = Paging { cell: none_cell, has_cell: false, current: current, count: pages.len, threshold: width * 0.25, turn: turn, settle: false, rtl: rtl }
+    var no_settle: *SwipeSettle = zero
+    pagings[0usize] = Paging { cell: none_cell, has_cell: false, current: current, count: pages.len, threshold: width * 0.25, turn: turn, settle: false, rtl: rtl, settling: no_settle, has_settling: false }
     // The swipe's cell lives on the view's element from the frame before; on the
     // first frame there is none and a drag that frame turns nothing.
     let (s, state_error) = widget.state_of(t.runtime)
@@ -6746,8 +6763,9 @@ fn page_view_options() -> PageViewOptions {
 // media pill 16 above the bottom edge. A group named `label` saying "2 of 4",
 // said politely.
 // (D1288) A change of page slides the strip there (`page_settle`).
-// ponytail: no fling velocity or reduced-motion cross-fade; the neighbours are
-// built only while the strip is dragged or settling.
+// (D1378) A fling past 1000 px/s turns the page short of half its width.
+// ponytail: no reduced-motion cross-fade; the neighbours are built only while
+// the strip is dragged or settling.
 // (D1288) A page view's settle, kept across frames: the page shown last frame,
 // the strip offset the settle began at, and when.
 type PageSettle = struct { last: usize, from: f32, since: i64, set: bool }
@@ -6806,7 +6824,8 @@ fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: 
     if moved == 0.0 { moved = page_settle(t, key, current, w, rtl) }
     let (pagings, pagings_error) = mem.alloc[Paging](a, 1usize)
     if pagings_error != ok { ret (zero, TooLarge) }
-    pagings[0usize] = Paging { cell: kept, has_cell: has_cell, current: current, count: pages.len, threshold: w * 0.5, turn: turn, settle: true, rtl: rtl }
+    let (page_step, has_page_step) = swipe_settle_cell(t, key)
+    pagings[0usize] = Paging { cell: kept, has_cell: has_cell, current: current, count: pages.len, threshold: w * 0.5, turn: turn, settle: true, rtl: rtl, settling: page_step, has_settling: has_page_step }
     // The strip: the current page and, while dragged, its neighbours.
     let (strip, strip_error) = mem.alloc[widget.Node](a, 3usize)
     if strip_error != ok { ret (zero, TooLarge) }
