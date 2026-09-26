@@ -115,7 +115,8 @@ type CodeRelocation = struct {
     symbol_index: usize,
 }
 
-fn format_version() -> usize { ret 14usize }
+// (D1510) Format 15: function and aggregate records carry an attribute tail.
+fn format_version() -> usize { ret 15usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -1144,6 +1145,15 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
                 try collect_type_strings(c, g, table, c.return_types[function.first_return + at])
                 at += 1usize
             }
+            // (D1510) The attribute tail's strings.
+            if function.import_library.len > 0usize {
+                let (library_name, library_name_error) = intern(table, function.import_library)
+                if library_name_error != ok { ret library_name_error }
+            }
+            if function.import_symbol.len > 0usize {
+                let (symbol_name, symbol_name_error) = intern(table, function.import_symbol)
+                if symbol_name_error != ok { ret symbol_name_error }
+            }
         }
         function_at += 1usize
     }
@@ -1184,6 +1194,11 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
                 if field_name_error != ok { ret field_name_error }
                 try collect_type_strings(c, g, table, field.ty)
                 at += 1usize
+            }
+            // (D1510) The attribute tail's cleanup name.
+            if aggregate.cleanup.len > 0usize {
+                let (cleanup_name, cleanup_name_error) = intern(table, aggregate.cleanup)
+                if cleanup_name_error != ok { ret cleanup_name_error }
             }
         }
         aggregate_at += 1usize
@@ -1459,7 +1474,34 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
         try write_type_indexed(c, g, table, c.return_types[function.first_return + at], output)
         at += 1usize
     }
+    // (D1510) The attribute tail: what the checker keeps of a function beyond its
+    // signature, so a kept module's declarations can come from here -- intrinsic 1,
+    // variadic 2, gpu 4; the packed workgroup size; the import library and symbol
+    // (for a non-extern function the `@borrows` name and `@noescape` spelling) as
+    // string indexes plus one, zero for none; and each parameter's `own`.
+    var attributes = 0usize
+    if function.intrinsic { attributes += 1usize }
+    if function.variadic { attributes += 2usize }
+    if function.gpu { attributes += 4usize }
+    try binary.byte(output, attributes)
+    try binary.zeroes(output, 3usize)
+    try binary.little_u32(output, usize(function.gpu_size))
+    try write_optional_string(table, function.import_library, output)
+    try write_optional_string(table, function.import_symbol, output)
+    at = 0usize
+    while at < function.parameter_count {
+        if c.parameters[function.first_parameter + at].own { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+        at += 1usize
+    }
     ret binary.patch_little_u32(output, length_offset, output.count - payload_start)
+}
+
+// (D1510) A string that may be empty: its index plus one, or zero.
+fn write_optional_string(table: *StringTable, value: str, output: *binary.Buffer) -> err {
+    if value.len == 0usize { ret binary.little_u32(output, 0usize) }
+    let (index, index_error) = string_index(table, value)
+    if index_error != ok { ret index_error }
+    ret binary.little_u32(output, index + 1usize)
 }
 
 fn write_aggregate_interface(c: *check.Checker, g: *graph.Graph, table: *StringTable, aggregate_index: usize, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
@@ -1517,6 +1559,16 @@ fn write_aggregate_interface(c: *check.Checker, g: *graph.Graph, table: *StringT
         try binary.little_u64(output, field.enum_value)
         at += 1usize
     }
+    // (D1510) The attribute tail: resource 1, reorder 2, packed 4; `@align`; and
+    // the cleanup function's name as a string index plus one, zero for none.
+    var attributes = 0usize
+    if aggregate.resource { attributes += 1usize }
+    if aggregate.reorder { attributes += 2usize }
+    if aggregate.packed { attributes += 4usize }
+    try binary.byte(output, attributes)
+    try binary.zeroes(output, 3usize)
+    try binary.little_u32(output, aggregate.align)
+    try write_optional_string(table, aggregate.cleanup, output)
     ret binary.patch_little_u32(output, length_offset, output.count - payload_start)
 }
 
@@ -3881,7 +3933,16 @@ fn interface_payload_end(bytes: []const u8, kind: usize, payload: usize, end: us
             next = after
             at += 1usize
         }
-        ret (next, ok)
+        // (D1510) The attribute tail: 16 bytes and one `own` byte a parameter.
+        if next > end || end - next < 16usize || usize(bytes[next]) > 7usize { ret (0usize, InvalidArtifact) }
+        next += 16usize
+        if parameters > end - next { ret (0usize, InvalidArtifact) }
+        at = 0usize
+        while at < parameters {
+            if usize(bytes[next + at]) > 1usize { ret (0usize, InvalidArtifact) }
+            at += 1usize
+        }
+        ret (next + parameters, ok)
     }
     if kind == declaration_aggregate_kind() {
         if next > end || end - next < 4usize || usize(bytes[next]) == 0usize || usize(bytes[next]) > 4usize { ret (0usize, InvalidArtifact) }
@@ -3911,7 +3972,9 @@ fn interface_payload_end(bytes: []const u8, kind: usize, payload: usize, end: us
             next = after
             at += 1usize
         }
-        ret (next, ok)
+        // (D1510) The attribute tail: 12 bytes.
+        if next > end || end - next < 12usize || usize(bytes[next]) > 7usize { ret (0usize, InvalidArtifact) }
+        ret (next + 12usize, ok)
     }
     if kind == declaration_alias_kind() {
         if next >= end { ret (0usize, InvalidArtifact) }
