@@ -26333,3 +26333,16 @@ with a 22 pull (last step 12), finds it part way 50 ms later, and at its 160
 stop once settled. The earlier checks now settle a second after each release,
 and the fixture's state pool grows from 256 to 384 bytes for the new cell.
 `ui_interaction` and `ui_paged` pass, on Windows and Linux.
+
+## D1378 — A fast swipe turns the page
+
+The PageView spec turns a page past half its width or on a fling faster than
+1000 px/s in the page's direction. `page_view_of` keeps the last move's travel
+in D1377's `SwipeSettle` cell (`Paging.settling`). On release, a last step
+over 16 (1000 px/s at 60 Hz) in the drag's direction turns the page whatever
+the distance, mirrored for right-to-left. The older unsettled `page_view` is
+unchanged. The reduced-motion cross-fade is still missing.
+
+`ui_collections4_v2`, after a frame to settle in, swipes 40 of a 240 page with a
+last step of 24 (the page turns) and 40 in steps of 8 (it does not). `ui_paged`
+passes, on Windows and Linux.

@@ -681,6 +681,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         settle_step += 1usize
     }
+    // (D1378) After a frame to settle in, a short fast swipe -- 40 of the 240, its
+    // last step 24 -- turns the page; a slow one as far does not.
+    var fling_step = 0usize
+    while fling_step < 3usize {
+        s.page = 0usize
+        let pages_before = s.page
+        f = mem.arena_from(frame_storage)
+        settle_pages[0usize] = widget.box(1910u64, control.sized_style(240.0, 120.0), zero)
+        settle_pages[1usize] = widget.box(1911u64, control.sized_style(240.0, 120.0), zero)
+        settle_pages[2usize] = widget.box(1912u64, control.sized_style(240.0, 120.0), zero)
+        var fling_view = collection.page_view_options()
+        fling_view.label = "Fling"
+        fling_view.width = 240.0
+        fling_view.height = 120.0
+        let (flinging, flinging_error) = collection.page_view_of(&f, 1950u64, &theme, settle_pages[0usize..3usize], 0usize, widget.Change[usize] { ctx: mem.cast[*void](s), invoke: on_page }, fling_view)
+        let (fling_root, fling_root_error) = mem.alloc[widget.Node](&f, 1usize)
+        if flinging_error != ok || fling_root_error != ok { os.exit(198i32) }
+        fling_root[0usize] = flinging
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), fling_root[0usize..1usize]), time.Instant { nanos: 51000000000i64 + i64(fling_step) * 1000000000i64 }) != ok { os.exit(199i32) }
+        let (fling_box, has_fling_box) = bounds(&harness, &runtime, 1950u64)
+        if !has_fling_box { os.exit(200i32) }
+        let fy = fling_box.y + 60.0
+        let fx = fling_box.x + 200.0
+        if fling_step == 1usize {
+            if !press(&harness, fx, fy) || !move_to(&harness, fx - 8.0, fy) || !move_to(&harness, fx - 16.0, fy) || !move_to(&harness, fx - 40.0, fy) || !release(&harness, fx - 40.0, fy) || s.page == pages_before { os.exit(201i32) }
+        }
+        if fling_step == 2usize {
+            if !press(&harness, fx, fy) || !move_to(&harness, fx - 8.0, fy) || !move_to(&harness, fx - 16.0, fy) || !move_to(&harness, fx - 24.0, fy) || !move_to(&harness, fx - 32.0, fy) || !move_to(&harness, fx - 40.0, fy) || !release(&harness, fx - 40.0, fy) || s.page != pages_before { os.exit(202i32) }
+        }
+        fling_step += 1usize
+    }
     // (D1289) While refreshing the arc spins: a quarter turn later its circle is
     // drawn differently.
     var spin_sums: [2]u64 = zero
