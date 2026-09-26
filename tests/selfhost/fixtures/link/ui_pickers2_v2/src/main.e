@@ -57,6 +57,16 @@ fn close_to(value: u8, expected: f32) -> bool {
 // (D1294) The last choice a modal time picker reported.
 type Chose = struct { count: usize, kind: overlay.TimeChoiceKind, value: u8 }
 
+// (D1350) A duration turn, kept as the unit and the value.
+type SpanLog = struct { unit: u32, value: u32 }
+
+fn on_span(ctx: *void, value: overlay.DurationChoice) -> err {
+    let log = mem.cast[*SpanLog](ctx)
+    log.unit = u32(value.unit)
+    log.value = value.value
+    ret ok
+}
+
 fn on_time(ctx: *void, value: overlay.TimeChoice) -> err {
     let c = mem.cast[*Chose](ctx)
     c.count += 1usize
@@ -355,6 +365,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_hour_wheel { os.exit(76i32) }
     let turn_from = geometry.Point { x: hour_wheel.x + 36.0, y: hour_wheel.y + 150.0 }
     if testing.drag(&harness, turn_from, geometry.Point { x: turn_from.x, y: turn_from.y - 72.0 }, 8usize) != ok || chose.kind != .Hour || chose.value != 16u8 { os.exit(77i32) }
+    // (D1350) Duration wheels at 1 h 20 min 5 s: Down on the seconds sets 6, a
+    // press under the minutes picks 21.
+    var span_log: SpanLog = zero
+    var span_step = 0usize
+    while span_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (spans, spans_error) = overlay.duration_wheels(&f, 1600u64, &theme, 1u32, 20u32, 5u32, widget.Change[overlay.DurationChoice] { ctx: mem.cast[*void](&span_log), invoke: on_span })
+        let (span_page, span_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if spans_error != ok || span_page_error != ok { os.exit(78i32) }
+        span_page[0usize] = spans
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), span_page[0usize..1usize]), time.Instant { nanos: 6500000000i64 + i64(span_step) }) != ok { os.exit(79i32) }
+        span_step += 1usize
+    }
+    if widget.focus(&runtime, testing.by_key(&harness, 1632u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || span_log.unit != 2u32 || span_log.value != 6u32 { os.exit(80i32) }
+    let (next_minute, has_next_minute) = bounds(&harness, &runtime, 1620u64)
+    if !has_next_minute || testing.tap(&harness, next_minute.x + 20.0, next_minute.y + 18.0) != ok || span_log.unit != 1u32 || span_log.value != 21u32 { os.exit(81i32) }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }
