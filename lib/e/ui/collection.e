@@ -2161,7 +2161,7 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // and cells stand at the end.
 // (D1340) `filtered` marks the columns (by index) a filter applies to.
 // (D1341) `groups` spans titles over runs of columns: the header's upper tier.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup }
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -2324,13 +2324,32 @@ fn table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
 // `key ^ fnv1a64("table-progress")`) over skeleton rows `extent` tall -- a bar
 // 12 tall across 60% of the row, `pad` in -- as many as fit, 3 to 8, in a busy
 // group named "Loading"; otherwise the compact empty state, centred.
-// ponytail: no error state (a Banner with Retry is the caller's, in place of
-// the table).
+// (D1413) `failed` puts an error banner with Retry in the body.
 fn table_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, options: TableOptions, width: f32, height: f32, extent: f32, pad: f32) -> (widget.Node, err) {
     var area = control.sized_style(width, height)
     area.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
+    // (D1413, docs/ux/components/Table, error) A failed load: an `error` banner
+    // (keyed `key + 2`) at the body's top with the caller's message and, when
+    // `retry` is set, a Retry action; the header stays.
+    if options.failed.len > 0usize {
+        var labels: []const str = zero
+        var actions: []const widget.Submit = zero
+        let (retry_labels, retry_labels_error) = mem.alloc[str](a, 1usize)
+        let (retry_actions, retry_actions_error) = mem.alloc[widget.Submit](a, 1usize)
+        if retry_labels_error != ok || retry_actions_error != ok { ret (zero, TooLarge) }
+        if widget.submit_set(options.retry.invoke) {
+            retry_labels[0usize] = "Retry"
+            retry_actions[0usize] = options.retry
+            labels = retry_labels[0usize..1usize]
+            actions = retry_actions[0usize..1usize]
+        }
+        let (failed_banner, failed_banner_error) = control.banner(a, key + 2u64, t, .Error, options.failed, labels, actions, width)
+        if failed_banner_error != ok { ret (zero, failed_banner_error) }
+        held[0usize] = failed_banner
+        ret (widget.box(0u64, area, held[0usize..1usize]), ok)
+    }
     if !options.loading {
         var empty = control.empty_options()
         empty.compact = true
@@ -3645,7 +3664,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     parts[p] = head
     parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent, fades: false }, view_style, rows[0usize..count])
     // (D1248) With no rows the body is the loading or empty state; the header stays.
-    if total == 0usize && (selection.loading || selection.empty_title.len > 0usize) {
+    // (D1413) A failed load (`failed`) stands in the body whatever the rows.
+    if selection.failed.len > 0usize || (total == 0usize && (selection.loading || selection.empty_title.len > 0usize)) {
         let (state_node, state_error) = table_state(a, key, t, selection, width, body_height, row_extent, pad)
         if state_error != ok { ret (zero, state_error) }
         parts[p + 1usize] = state_node
