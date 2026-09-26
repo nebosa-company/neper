@@ -4186,7 +4186,11 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             if current != 0u64 && entry.key == current {
                 var bar = control.sized_style(3.0, control.max_zero(tall - 16.0))
                 bar.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
-                inside[1usize] = widget.positioned(0u64, 0.0, 8.0 + (marker_at - f32(i)) * row_extent, bar, zero)
+                // (D1502, docs/ux/components/Outline, current) The bar stands at
+                // the pane's leading edge: the row's 8 inset before it.
+                var bar_x: f32 = 0.0
+                if !tabled { bar_x = 0.0 - 8.0 }
+                inside[1usize] = widget.positioned(0u64, bar_x, 8.0 + (marker_at - f32(i)) * row_extent, bar, zero)
                 parts = 2usize
             }
             let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
@@ -4341,9 +4345,9 @@ fn outline(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
 // Collapse all text button (keyed `key + 2`) firing `collapse` at its end --
 // with the `current` node, the heading whose section is in view, marked by its
 // 3px `primary` bar and reported Current.
-// ponytail: the bar sits at the row's start, 8 in from the pane, not on the
-// pane's edge; no numbers, filter, follow mode or `primary` 600 label (the
-// caller builds the label).
+// (D1502) The bar stands at the pane's leading edge.
+// ponytail: no numbers, filter, follow mode or `primary` 600 label (the caller
+// builds the label).
 fn outline_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], current: widget.Key, collapse: *const widget.Submit, extent: f32, width: f32) -> (widget.Node, err) {
     let (made, made_error) = treed(a, key, t, label, source, expanded, selected, toggle, pick, true, extent, width, current)
     if made_error != ok { ret (zero, made_error) }
