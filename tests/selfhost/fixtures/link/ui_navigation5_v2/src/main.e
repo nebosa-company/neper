@@ -439,6 +439,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if testing.send(&harness, input.Event { PointerMove: testing.pointer_at(lower_tab.x + 40.0, lower_tab.y + 10.0) }) != ok { os.exit(96i32) }
             if testing.send(&harness, input.Event { PointerMove: testing.pointer_at(over_tab.x + 20.0, over_tab.y + 10.0) }) != ok { os.exit(96i32) }
         }
+        // (D1477) Mid-drag a ghost of lower.e stands over notes, where the pointer
+        // carried it; released, it is gone.
+        let ghosted = testing.by_key(&harness, 5900u64 + 132u64).count
+        if drag_step == 1usize {
+            let (ghost_box, has_ghost_box) = bounds(&harness, &runtime, 5900u64 + 132u64)
+            let (notes_under, has_notes_under) = bounds(&harness, &runtime, 5905u64)
+            // The drop line (2 and its 2 gap) has moved notes 4 on; the ghost
+            // stands where notes stood.
+            if ghosted != 1usize || !has_ghost_box || !has_notes_under || ghost_box.x < notes_under.x - 5.0 || ghost_box.x > notes_under.x - 3.0 { os.exit(105i32) }
+        }
+        if drag_step == 2usize && ghosted != 0usize { os.exit(106i32) }
         if drag_step == 1usize {
             let (notes_now, has_notes_now) = bounds(&harness, &runtime, 5905u64)
             if lined != 1usize || !has_notes_now || testing.send(&harness, input.Event { PointerUp: testing.pointer_at(notes_now.x + 20.0, notes_now.y + 10.0) }) != ok { os.exit(97i32) }

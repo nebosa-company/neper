@@ -3037,8 +3037,8 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // (D1337) The menu's further commands from `DocumentTabsOptions.more`.
 // (D1344) A dragged tab lifts and a drop line stands where it would land.
 // (D1453) A preview tab's title is italic where the theme has the face.
-// ponytail: the lifted tab
-// stays in its place rather than following the pointer.
+// (D1477) A ghost of the lifted tab follows the pointer along the strip (an
+// overlay keyed `key + 132`); the tab keeps its place until the drop.
 // (D1233) A document strip's tab menu, kept across frames on the strip: whether
 // it is open and for which tab.
 type TabMenu = struct { open: bool, index: usize }
@@ -3254,6 +3254,7 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     // (D1344) A tab being dragged: which, and which tab the pointer stands over.
     var lifted = documents.len
     var landing = documents.len
+    var lift_shift: f32 = 0.0
     if mem.address_of(t.runtime) != 0usize {
         let (payload, has_payload) = widget.dragging(t.runtime)
         let (payload_group, payload_index, is_tab_payload) = tab_payload_of(payload)
@@ -3261,6 +3262,7 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             lifted = payload_index
             let (rs, rs_error) = widget.state_of(t.runtime)
             let at = widget.pointer_position(t.runtime)
+            lift_shift = at.x - widget.pointer_origin(t.runtime).x
             var look = 0usize
             while rs_error == ok && look < documents.len {
                 let (look_id, look_count) = widget.find_by_key(rs, key + 1u64 + 2u64 * u64(look))
@@ -3495,8 +3497,8 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     // (D1344) The drop line, 2 by 28 `primary`, before the tab the pointer stands
     // over while another is dragged (keyed `key + 131`); the tabs part for it.
     var strip_tabs = tabs[0usize..documents.len]
-    if lifted < documents.len && landing < documents.len && landing != lifted {
-        let (with_line, with_line_error) = mem.alloc[widget.Node](a, documents.len + 1usize)
+    if lifted < documents.len {
+        let (with_line, with_line_error) = mem.alloc[widget.Node](a, documents.len + 3usize)
         if with_line_error != ok { ret (zero, TooLarge) }
         var drop_line = control.sized_style(2.0, 28.0)
         drop_line.radius = 1.0
@@ -3504,13 +3506,36 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         var w = 0usize
         var r = 0usize
         while r < documents.len {
-            if r == landing {
+            if r == landing && landing != lifted {
                 with_line[w] = widget.box(key + 131u64, drop_line, zero)
                 w += 1usize
             }
             with_line[w] = tabs[r]
             w += 1usize
             r += 1usize
+        }
+        // (D1477) The ghost: the lifted tab's `surface-container-highest` at
+        // elevation 2, its width last frame, its title, moved by the pointer's
+        // travel over the strip.
+        let lifted_key = key + 1u64 + 2u64 * u64(lifted)
+        let (lifted_box, has_lifted_box) = control.keyed_bounds(t.runtime, lifted_key)
+        if has_lifted_box {
+            var ghost_look = control.sized_style(lifted_box.width, lifted_box.height)
+            ghost_look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+            ghost_look.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[2usize]) }
+            let sm = t.tokens.radii.sm
+            ghost_look.corners = style.Corners { top_left: sm, top_right: sm, bottom_right: 0.0, bottom_left: 0.0 }
+            var ghost_words = control.text_options()
+            ghost_words.role = .BodyMedium
+            ghost_words.wrap = .None
+            let (ghost_title, ghost_title_error) = control.colored_text(a, 0u64, documents[lifted].title, t, ghost_words, style.color(t.tokens, .OnSurface))
+            if ghost_title_error != ok { ret (zero, ghost_title_error) }
+            let (ghost, ghost_error) = mem.alloc[widget.Node](a, 2usize)
+            if ghost_error != ok { ret (zero, TooLarge) }
+            ghost[0usize] = ghost_title
+            ghost[1usize] = widget.aligned(0u64, .Center, .Center, ghost_look, ghost[0usize..1usize])
+            with_line[w] = widget.overlay(key + 132u64, widget.Overlay { anchor: lifted_key, placement: .Below, offset: geometry.Point { x: lift_shift, y: 0.0 - lifted_box.height }, modal: false, dismiss: zero }, style.defaults(), ghost[1usize..2usize])
+            w += 1usize
         }
         strip_tabs = with_line[0usize..w]
     }

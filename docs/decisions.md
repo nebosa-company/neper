@@ -27276,3 +27276,9 @@ The Row spec animates selection: "Selection changes animate the fill in `duratio
 The SwipeActions spec settles a released row over `duration-medium-1` "with `ease-emphasized-decelerate`; close with `ease-standard`". D1377 used the emphasized curve both ways, so a closing row snapped most of the way back in its first frames. When the row is not revealed, the settle now uses `ease-standard`. The opening settle keeps the emphasized curve.
 
 `ui_collections4_v2` checks this on Windows and Linux. A row pulled 30 past its rest and let go stands half way back, between 10 and 20, at 125 ms. The emphasized curve would leave about 3, and against the old collection the check fails (exit 242).
+
+## D1477 — A dragged document tab's ghost follows the pointer
+
+D1344 lifted a dragged document tab in place and drew a drop line where it would land. The tab did not move with the pointer. The strip now draws a ghost of the lifted tab: its `surface-container-highest` at elevation 2, its width and height from the last frame, and its title. The ghost is an overlay (keyed `key + 132`) anchored to the tab and moved by the pointer's travel since the press. A new `widget.pointer_origin` gives where the pointer went down for the gesture under way. A shift on the tab itself did not work: the strip paints in order, so the tabs to its right covered it, and an overlay paints above them. The tab keeps its place and hit bounds until the drop. The ghost is appended after the tabs, so no tab is re-wrapped and focus is kept. The lifted table header (D1345) still keeps its place.
+
+`ui_navigation5_v2` checks this on Windows and Linux. Mid-drag, the ghost stands where the pointer carried it, over notes' old place (notes has moved 4 on for the drop line). Released, the ghost is gone. All 103 `ui_*` fixtures pass on both hosts.
