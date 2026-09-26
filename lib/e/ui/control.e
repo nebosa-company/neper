@@ -619,7 +619,8 @@ fn image_options() -> ImageOptions {
 // (D1252) With `options.action` the frame is pressable: the `on-surface` state
 // layer over the picture, the runtime's focus ring, Enter and Space, and a
 // Button named `action_label` in place of the Image.
-// ponytail: no fade; a pressable image's alt text is not its description.
+// (D1404) A picture that arrives fades in.
+// ponytail: a pressable image's alt text is not its description.
 fn framed_image(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, options: ImageOptions) -> (widget.Node, err) {
     var ratio = options.aspect
     if !(ratio > 0.0) { ratio = 1.0 }
@@ -635,8 +636,16 @@ fn framed_image(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.
     if inside_error != ok { ret (zero, TooLarge) }
     var inside_count = 0usize
     var message: str = ""
+    // (D1404, docs/ux/components/Image, loading) A picture that loads after the
+    // frame was first built fades in over `duration-short-4` (kept on the frame,
+    // slot `key + 1048002`); one loaded from the first frame shows at once.
+    var loaded_goal: f32 = 0.0
+    if options.status == .Loaded { loaded_goal = 1.0 }
+    let loaded_shown = eased_on(t, key, key + 1048002u64, loaded_goal, true, t.tokens.durations.short4)
     if options.status == .Loaded {
-        inside[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: options.fit }, sized_style(width, height))
+        var picture_look = sized_style(width, height)
+        if loaded_shown < 1.0 { picture_look.opacity = loaded_shown }
+        inside[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: options.fit }, picture_look)
         inside_count = 1usize
     }
     if options.status == .Failed || options.status == .Empty {
