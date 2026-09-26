@@ -204,7 +204,7 @@ fn link_tap(ctx: *void, g: widget.Gesture) -> err {
 // Rich text: the spans laid side by side, each in its own role and colour, a
 // linked span a tap region with the link role. `paragraph` is the v2 rich text
 // (D964).
-// ponytail: the spans sit on one line; wrapping across spans waits on a span-aware layout.
+// (D1547) This form keeps its spans on one line; `paragraph` wraps across spans.
 fn rich_text(a: *mem.Arena, key: widget.Key, spans: []const Span, t: *const Theme) -> (widget.Node, err) {
     let (children, children_error) = mem.alloc[widget.Node](a, spans.len)
     if children_error != ok { ret (zero, TooLarge) }
@@ -879,9 +879,9 @@ fn canvas_options() -> CanvasOptions {
 // clipping the paint, sized by the options (48 x 48 at least) and inset by their
 // padding (`space-4` 16 for a chart); bare, the paint alone. Disabled, the paint
 // is at 38% opacity. It is an Image named by its takeaway.
-// ponytail: static only; the interactive form (focus, keyboard, point children),
-// the loading, empty and error content and the chart overlays and series tokens
-// are not drawn.
+// (D1547) The interactive form is `overlay.interactive_canvas`.
+// ponytail: the loading, empty and error content, the legend and the series
+// stroke tokens are not drawn.
 fn framed_canvas(a: *mem.Arena, key: widget.Key, t: *const Theme, custom: widget.Custom, options: CanvasOptions) -> (widget.Node, err) {
     var frame = sized_style(max_of(options.width, 48.0), max_of(options.height, 48.0))
     if !options.bare {

@@ -25,6 +25,7 @@ use e.text.shape
 use e.ui.accessibility
 use e.ui.control
 use e.ui.layout as ui_layout
+use e.ui.overlay
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -213,6 +214,25 @@ fn is_color(shot: image.Image, i: usize, c: paint.Color) -> bool {
 
 fn over(top: paint.Color, alpha: f32, under: paint.Color) -> paint.Color {
     ret paint.rgba(top.red * alpha + under.red * (1.0 - alpha), top.green * alpha + under.green * (1.0 - alpha), top.blue * alpha + under.blue * (1.0 - alpha), 1.0)
+}
+
+// (D1547) An interactive canvas's focused and opened points.
+type CanvasLog = struct { focused: usize, opened: usize }
+
+fn on_plot_focus(ctx: *void, value: usize) -> err {
+    let log = mem.cast[*CanvasLog](ctx)
+    log.focused = value
+    ret ok
+}
+
+fn on_plot_open(ctx: *void, value: usize) -> err {
+    let log = mem.cast[*CanvasLog](ctx)
+    log.opened = value
+    ret ok
+}
+
+fn custom_plot() -> widget.Custom {
+    ret widget.Custom { ctx: zero, measure: canvas_measure, paint: canvas_paint, state: zero }
 }
 
 fn bounds(h: *const testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> geometry.Rect {
@@ -584,6 +604,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if buttons_shot_error != ok { os.exit(121i32) }
     let toggled_box = bounds(&harness, &runtime, 772u64)
     if !is_color(buttons_shot, at(toggled_box.x + 20.0, toggled_box.y + 16.6), style.color(&tokens, .OnSecondaryContainer)) { os.exit(122i32) }
+    // (D1547) An interactive canvas of three points in one series and one in
+    // another: Right, Right, Down, Enter and Escape walk them -- the first, the
+    // second, the other series' nearest, opened, then none -- the focused one
+    // under its marker and named "Tuesday, 66 s" in the tree.
+    var plot: [4]overlay.CanvasPoint = zero
+    plot[0usize] = overlay.CanvasPoint { x: 20.0, y: 40.0, series: 0usize, name: "Monday", value: "48 s" }
+    plot[1usize] = overlay.CanvasPoint { x: 80.0, y: 20.0, series: 0usize, name: "Tuesday", value: "66 s" }
+    plot[2usize] = overlay.CanvasPoint { x: 140.0, y: 60.0, series: 0usize, name: "Wednesday", value: "41 s" }
+    plot[3usize] = overlay.CanvasPoint { x: 85.0, y: 70.0, series: 1usize, name: "Tuesday target", value: "53 s" }
+    var plot_log = CanvasLog { focused: 4usize, opened: 99usize }
+    var plot_step = 0usize
+    while plot_step < 6usize {
+        fr = mem.arena_from(frame_storage)
+        var plot_options = control.canvas_options()
+        plot_options.padding = 16.0
+        plot_options.label = "Build time, last week"
+        let (plot_node, plot_error) = overlay.interactive_canvas(&fr, 800u64, &theme, custom_plot(), plot_options, plot[..], plot_log.focused, widget.Change[usize] { ctx: mem.cast[*void](&plot_log), invoke: on_plot_focus }, widget.Change[usize] { ctx: mem.cast[*void](&plot_log), invoke: on_plot_open })
+        let (plot_page, plot_page_error) = mem.alloc[widget.Node](&fr, 1usize)
+        if plot_error != ok || plot_page_error != ok { os.exit(123i32) }
+        plot_page[0usize] = plot_node
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 520.0), plot_page[0usize..1usize]), time.Instant { nanos: 7200000000i64 + i64(plot_step) }) != ok { os.exit(123i32) }
+        if plot_step == 2usize && (testing.by_key(&harness, 808u64).count == 0usize || testing.by_label(&harness, "Tuesday, 66 s").count == 0usize) { os.exit(124i32) }
+        if plot_step == 0usize && testing.by_key(&harness, 808u64).count != 0usize { os.exit(125i32) }
+        if plot_step == 0usize && widget.focus(&runtime, testing.by_key(&harness, 800u64).element) != ok { os.exit(126i32) }
+        var code = 39u32
+        if plot_step == 2usize { code = 40u32 }
+        if plot_step == 3usize { code = 13u32 }
+        if plot_step == 4usize { code = 27u32 }
+        if plot_step < 5usize && testing.press_key(&harness, code, zero) != ok { os.exit(127i32) }
+        if plot_step == 0usize && plot_log.focused != 0usize { os.exit(128i32) }
+        if plot_step == 1usize && plot_log.focused != 1usize { os.exit(129i32) }
+        if plot_step == 2usize && plot_log.focused != 3usize { os.exit(130i32) }
+        if plot_step == 3usize && plot_log.opened != 3usize { os.exit(131i32) }
+        if plot_step == 4usize && plot_log.focused != 4usize { os.exit(132i32) }
+        plot_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui content v2 ok\n")
     ret ok

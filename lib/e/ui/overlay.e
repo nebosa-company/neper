@@ -7482,3 +7482,208 @@ fn color_field_typed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
     if open { sem.states = accessibility.STATE_EXPANDED }
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
 }
+
+// (D1547, docs/ux/components/Canvas, interactive) A point of an interactive
+// canvas: where it stands in the paint area, its series, and what it says
+// ("Thursday", "build 66 s, target 53 s").
+type CanvasPoint = struct { x: f32, y: f32, series: usize, name: str, value: str }
+
+// (D1547) A canvas key's move: the point it goes to, told to `focus`.
+type CanvasStep = struct { index: usize, change: widget.Change[usize] }
+
+fn canvas_step_fire(ctx: *void) -> err {
+    let c = mem.cast[*CanvasStep](ctx)
+    ret widget.fire_change[usize](c.change, c.index)
+}
+
+// (D1547) A tap or hover on an interactive canvas inspects the nearest point
+// within 48 (in the paint area's space: the canvas keyed `key` less its
+// `pad`); leaving it inspects none (`points.len`).
+type CanvasTouch = struct { runtime: *widget.Runtime, key: widget.Key, pad: f32, points: []const CanvasPoint, focus: widget.Change[usize] }
+
+fn canvas_touch(ctx: *void, g: widget.Gesture) -> err {
+    let c = mem.cast[*CanvasTouch](ctx)
+    var at: geometry.Point = zero
+    switch g {
+    case .Tap as tapped:
+        at = tapped
+    case .Hover as hovered:
+        at = hovered
+    case .HoverEnd:
+        ret widget.fire_change[usize](c.focus, c.points.len)
+    default:
+        ret ok
+    }
+    let (area, has_area) = widget.bounds_for_key(c.runtime, c.key)
+    if !has_area { ret ok }
+    let x = at.x - area.x - c.pad
+    let y = at.y - area.y - c.pad
+    var best = c.points.len
+    var best_d: f32 = 48.0 * 48.0
+    var i = 0usize
+    while i < c.points.len {
+        let dx = c.points[i].x - x
+        let dy = c.points[i].y - y
+        let d = dx * dx + dy * dy
+        if d <= best_d {
+            best = i
+            best_d = d
+        }
+        i += 1usize
+    }
+    if best == c.points.len { ret ok }
+    ret widget.fire_change[usize](c.focus, best)
+}
+
+// (D1547) The point a key moves to from `at`: along its series by `step` (-1,
+// +1) in index order, or to the neighbouring series' point nearest in x
+// (`across`); `at` itself when there is none, and the first with none focused.
+fn canvas_next(points: []const CanvasPoint, at: usize, step: i32, across: bool) -> usize {
+    if at >= points.len { ret 0usize }
+    let here = points[at]
+    var best = at
+    var best_d: f32 = 1.0e30
+    var i = 0usize
+    while i < points.len {
+        let p = points[i]
+        var wanted = false
+        var d: f32 = 0.0
+        if across {
+            wanted = (step < 0i32 && p.series + 1usize == here.series) || (step > 0i32 && p.series == here.series + 1usize)
+            d = p.x - here.x
+            if d < 0.0 { d = -d }
+        } else {
+            wanted = p.series == here.series && ((step < 0i32 && i < at) || (step > 0i32 && i > at))
+            if i < at { d = f32(at - i) } else { d = f32(i - at) }
+        }
+        if wanted && d < best_d {
+            best = i
+            best_d = d
+        }
+        i += 1usize
+    }
+    ret best
+}
+
+// (D1547) The key code of a canvas move: Left, Right, Up, Down, Home, End.
+fn canvas_code(k: usize) -> u32 {
+    if k == 0usize { ret 37u32 }
+    if k == 1usize { ret 39u32 }
+    if k == 2usize { ret 38u32 }
+    if k == 3usize { ret 40u32 }
+    if k == 4usize { ret 36u32 }
+    ret 35u32
+}
+
+// (D1547, docs/ux/components/Canvas, interactive) `control.framed_canvas`
+// (keyed `key + 1`) taking input: a focusable region (keyed `key`) in a group
+// named by the options' label. Left and Right move `focused` along its series,
+// Up and Down to the neighbouring series' nearest point, Home and End to the
+// first and last point, each told to `focus`; Enter tells `open` the focused
+// point and Escape leaves it (`focus` hears `points.len`). A tap or hover
+// inspects the nearest point within 48. Each point is a list item in the tree
+// named "NAME, VALUE" (keyed `key + 16 + index`), selected while focused. The
+// focused point stands under a 1px `on-surface-variant` cursor line with its
+// marker, a 5 radius `primary` dot in a 2px ring of the frame's colour (keyed
+// `key + 8`), and its rich tooltip (keyed `key + 12`): the name over the value.
+// ponytail: the cursor line is solid, not dashed 2/3; markers keep one shape and
+// colour whatever the series; no loading, empty or error content or legend; the
+// hover shows at once rather than after `duration-short-2`.
+fn interactive_canvas(a: *mem.Arena, key: widget.Key, t: *const control.Theme, custom: widget.Custom, options: control.CanvasOptions, points: []const CanvasPoint, focused: usize, focus: widget.Change[usize], open: widget.Change[usize]) -> (widget.Node, err) {
+    if points.len > 256usize { ret (zero, TooLarge) }
+    let (framed, framed_error) = control.framed_canvas(a, key + 1u64, t, custom, options)
+    if framed_error != ok { ret (zero, framed_error) }
+    let width = control.max_of(options.width, 48.0)
+    let height = control.max_of(options.height, 48.0)
+    let pad = options.padding
+    let (layers, layers_error) = mem.alloc[widget.Node](a, points.len + 4usize)
+    let (held, held_error) = mem.alloc[widget.Node](a, 2usize * points.len + 8usize)
+    if layers_error != ok || held_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = framed
+    var n = 1usize
+    // The points as the reader's elements, each a 10 square over its place.
+    var i = 0usize
+    while i < points.len {
+        let (said, said_error) = mem.alloc[u8](a, points[i].name.len + points[i].value.len + 2usize)
+        if said_error != ok { ret (zero, TooLarge) }
+        var m = control.copy_text(said, points[i].name)
+        if points[i].value.len > 0usize {
+            m += control.copy_text(said[m..said.len], ", ")
+            m += control.copy_text(said[m..said.len], points[i].value)
+        }
+        var item: widget.Semantics = zero
+        item.role = 11u8
+        item.label = said[0usize..m]
+        if i == focused { item.states = accessibility.STATE_SELECTED }
+        held[2usize * i] = widget.box(0u64, control.sized_style(10.0, 10.0), zero)
+        held[2usize * i + 1usize] = widget.semantics(key + 16u64 + u64(i), item, style.defaults(), held[2usize * i..2usize * i + 1usize])
+        layers[n] = widget.positioned(0u64, pad + points[i].x - 5.0, pad + points[i].y - 5.0, style.defaults(), held[2usize * i + 1usize..2usize * i + 2usize])
+        n += 1usize
+        i += 1usize
+    }
+    let extra = 2usize * points.len
+    if focused < points.len {
+        let p = points[focused]
+        var cursor = control.sized_style(1.0, control.max_zero(height - 2.0 * pad))
+        cursor.background = paint.Brush { Solid: style.color(t.tokens, .OnSurfaceVariant) }
+        held[extra] = widget.box(0u64, cursor, zero)
+        layers[n] = widget.positioned(0u64, pad + p.x, pad, style.defaults(), held[extra..extra + 1usize])
+        n += 1usize
+        var dot = control.sized_style(14.0, 14.0)
+        dot.radius = 7.0
+        dot.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        dot.border = style.Border { width: 2.0, color: style.color(t.tokens, .SurfaceContainerLowest) }
+        held[extra + 1usize] = widget.box(key + 8u64, dot, zero)
+        layers[n] = widget.positioned(0u64, pad + p.x - 7.0, pad + p.y - 7.0, style.defaults(), held[extra + 1usize..extra + 2usize])
+        n += 1usize
+        var no_actions: []const MenuItem = zero
+        let (tip, tip_error) = rich_tooltip(a, key + 12u64, t, key + 8u64, p.name, p.value, no_actions, true)
+        if tip_error != ok { ret (zero, tip_error) }
+        layers[n] = tip
+        n += 1usize
+    }
+    held[extra + 2usize] = widget.stack(0u64, control.sized_style(width, height), layers[0usize..n])
+    // The keys.
+    let (steps, steps_error) = mem.alloc[CanvasStep](a, 8usize)
+    let (presses, presses_error) = mem.alloc[widget.Submit](a, 8usize)
+    let (bound, bound_error) = mem.alloc[widget.Shortcut](a, 8usize)
+    let (touches, touches_error) = mem.alloc[CanvasTouch](a, 1usize)
+    if steps_error != ok || presses_error != ok || bound_error != ok || touches_error != ok { ret (zero, TooLarge) }
+    var last = 0usize
+    if points.len > 0usize { last = points.len - 1usize }
+    steps[0usize] = CanvasStep { index: canvas_next(points, focused, -1i32, false), change: focus }
+    steps[1usize] = CanvasStep { index: canvas_next(points, focused, 1i32, false), change: focus }
+    steps[2usize] = CanvasStep { index: canvas_next(points, focused, -1i32, true), change: focus }
+    steps[3usize] = CanvasStep { index: canvas_next(points, focused, 1i32, true), change: focus }
+    steps[4usize] = CanvasStep { index: 0usize, change: focus }
+    steps[5usize] = CanvasStep { index: last, change: focus }
+    steps[6usize] = CanvasStep { index: points.len, change: focus }
+    steps[7usize] = CanvasStep { index: focused, change: open }
+    var k = 0usize
+    while k < 8usize {
+        presses[k] = widget.Submit { ctx: mem.cast[*void](&steps[k]), invoke: canvas_step_fire }
+        k += 1usize
+    }
+    var count = 0usize
+    if points.len > 0usize {
+        k = 0usize
+        while k < 6usize {
+            bound[k] = widget.Shortcut { key: canvas_code(k), modifiers: zero, action: presses[k] }
+            k += 1usize
+        }
+        count = 6usize
+    }
+    if focused < points.len {
+        bound[count] = widget.Shortcut { key: 13u32, modifiers: zero, action: presses[7usize] }
+        bound[count + 1usize] = widget.Shortcut { key: 27u32, modifiers: zero, action: presses[6usize] }
+        count += 2usize
+    }
+    touches[0usize] = CanvasTouch { runtime: t.runtime, key: key, pad: pad, points: points, focus: focus }
+    held[extra + 3usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&touches[0usize]), invoke: canvas_touch }, gestures: 5u8, enabled: options.enabled, focusable: options.enabled }, style.defaults(), held[extra + 2usize..extra + 3usize])
+    held[extra + 4usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: bound[0usize..count], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[extra + 3usize..extra + 4usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = options.label
+    if !options.enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), held[extra + 4usize..extra + 5usize]), ok)
+}
