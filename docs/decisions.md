@@ -26996,3 +26996,9 @@ The Link spec says that "the wash fades in `duration-short-2` with `ease-standar
 The HeaderRow spec rotates the sort arrow when it flips, over `duration-short-3` with `ease-standard`. The header now always draws the up arrow and turns it by half a turn times a share. That share eases toward descending on the header cell (slot `header_key + 1048595`). The arrow always stands in its turning wrapper, so the header keeps its shape. Reduced motion flips at once. Reordered columns still do not slide.
 
 `ui_collections2_v2` turns a table from ascending to descending, on Windows and Linux. On the turn's first frame, the upper half of the header cell differs from how it settles a second later. Without the turn the two would match. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1437 — Tree twisties turn as branches open
+
+The TreeTable spec rotates the twisty over `duration-short-3`, and Tree and TreeTable expand as one. A tree row's twisty already stood in a turning wrapper, set straight to a quarter turn while open. It now eases that quarter on the twisty, under slot `twisty_key + 1048596`. Reduced motion still swaps to the down chevron at once. The children's height and fade on expand and collapse are still not drawn.
+
+`ui_collections3_v2` opens a branch, on Windows and Linux. On the open's first frame the twisty's upper half differs from how it settles a second later. With the old instant turn the two would match. All 103 `ui_*` fixtures pass on both hosts.

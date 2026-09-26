@@ -500,6 +500,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         move_step += 1usize
     }
+    // (D1437) Opened, the first twisty turns a quarter over `duration-short-3`:
+    // on the open's first frame its box differs from how it settles a second on.
+    var twist_sums: [2]u32 = zero
+    var twist_step = 0usize
+    while twist_step < 4usize {
+        var twist_at = 1800000000i64
+        if twist_step == 1usize { twist_at = 1800000001i64 }
+        if twist_step == 2usize { twist_at = 1900000000i64 }
+        if twist_step == 3usize { twist_at = 2900000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: twist_at }) != ok { os.exit(80i32) }
+        f = mem.arena_from(frame_storage)
+        var twist_options: collection.TreeOptions = zero
+        var twist_open = with_open[0usize..0usize]
+        if twist_step >= 2usize { twist_open = with_open[0usize..1usize] }
+        let twist_source = collection.TreeSource { ctx: ctx, count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
+        let (twisting_tree, twisting_tree_error) = collection.tree_with(&f, 800u64, &theme, "Twist", twist_source, twist_open, no_chosen[0usize..0usize], widget.Change[widget.Key] { ctx: ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, 240.0, twist_options)
+        let (twist_page, twist_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if twisting_tree_error != ok || twist_page_error != ok { os.exit(80i32) }
+        twist_page[0usize] = twisting_tree
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 360.0), twist_page[0usize..1usize]), time.Instant { nanos: twist_at }) != ok { os.exit(80i32) }
+        if twist_step >= 2usize {
+            let (twisty_box, has_twisty_box) = bounds(&harness, &runtime, 801u64)
+            let (twist_shot, twist_shot_error) = testing.snapshot(&harness, a)
+            if !has_twisty_box || twist_shot_error != ok { os.exit(81i32) }
+            var sum = 0u32
+            var y = 0usize
+            while y < 12usize {
+                var x = 0usize
+                while x < 24usize {
+                    sum += u32(twist_shot.pixels[at(twisty_box.x + f32(x), twisty_box.y + f32(y)) + 1usize])
+                    x += 1usize
+                }
+                y += 1usize
+            }
+            twist_sums[twist_step - 2usize] = sum
+        }
+        twist_step += 1usize
+    }
+    if twist_sums[0usize] == twist_sums[1usize] { os.exit(82i32) }
     logs[0usize].large = true
     let (large_rt, large_runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 6000usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 32u16, max_commands: 16384usize })
     if large_runtime_error != ok { os.exit(53i32) }
