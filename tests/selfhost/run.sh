@@ -4148,6 +4148,17 @@ for hot_mode in --release --time; do
     [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:options-changed dep=rebuilt:options-changed
     cmp "$hot_exe" "$hot_clean"
+    # The instruction level is in the identity (D765, D1518): a warm build under
+    # `--cpu x64-v3` rebuilds every module as `options-changed` and is the clean v3
+    # build; the plain warm build after it rebuilds them back and is the clean build.
+    [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --cpu x64-v3 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:options-changed dep=rebuilt:options-changed e.os=rebuilt:options-changed
+    hot_clean_v3="$test_build/hot-clean-v3$hot_mode"
+    [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_clean_v3" $hot_mode --cpu x64-v3 2>/dev/null)" = "executable written" ]
+    cmp "$hot_exe" "$hot_clean_v3"
+    [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:options-changed dep=rebuilt:options-changed
+    cmp "$hot_exe" "$hot_clean"
     # A constant's value is a value edge (D492, H14): the module folding on it is rebuilt.
     value_scratch="$test_build/value-scratch"
     rm -rf "$value_scratch"

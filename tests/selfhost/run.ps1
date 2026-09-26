@@ -4164,6 +4164,22 @@ foreach ($hotMode in @('--release', '--time')) {
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:options-changed' 'dep=rebuilt:options-changed'
     if ($LASTEXITCODE -ne 0) { throw "the manifest after a capped build's artifacts does not say options-changed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after an inline cap is not the clean build ($hotMode)" }
+    # The instruction level is in the identity (D765, D1518): a warm build under
+    # `--cpu x64-v3` rebuilds every module as `options-changed` and is the clean v3
+    # build; the plain warm build after it rebuilds them back and is the clean build.
+    $hotV3 = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --cpu x64-v3 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotV3 -ne 'executable written') { throw "the warm hot build under --cpu x64-v3 failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:options-changed' 'dep=rebuilt:options-changed' 'e.os=rebuilt:options-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest of a build under --cpu x64-v3 does not say options-changed ($hotMode)" }
+    $hotCleanV3 = Join-Path $testBuild "hot-clean-v3$hotMode.exe"
+    $hotV3Clean = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotCleanV3 $hotMode --cpu x64-v3 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotV3Clean -ne 'executable written') { throw "the clean build under --cpu x64-v3 failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotCleanV3).Hash) { throw "a warm hot build under --cpu x64-v3 is not the clean v3 build ($hotMode)" }
+    $hotV1 = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotV1 -ne 'executable written') { throw "the warm hot build after --cpu x64-v3 failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:options-changed' 'dep=rebuilt:options-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after a v3 build's artifacts does not say options-changed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after --cpu x64-v3 is not the clean build ($hotMode)" }
     # A constant's value is a value edge (D492, H14): a warm build after the constant a
     # module folds on changed rebuilds that module as `edge-changed`, exits the other way,
     # and is the clean build of the edited tree. Before D492 the module was kept and the
