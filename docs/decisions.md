@@ -26765,3 +26765,15 @@ any) and "All fonts". With neither group the list stands alone as before.
 
 `ui_pickers3_v2` flags the fourth family monospace: "Monospace" stands with its
 one row, and D1407's recent group and pick still hold, on Windows and Linux.
+
+## D1409 — Touch navigation splits snap the list
+
+The NavigationSplit spec snaps the list on touch to 360, 50% or collapsed.
+D1406's `SplitOptions` gains `points`: when given, a size within 16 of one of
+them lands on it, in place of the thirds and the half. On touch the navigation
+split now builds its side-by-side split through `split_view_with` with
+`points` 360 and half the split's width. Collapsing is still bounded by the
+list's minimum.
+
+`ui_navigation4_v2` drags a touch split's divider from 300 toward 350, and it
+reports 360. `ui_adaptive` and `ui_panes` still pass, on Windows and Linux.

@@ -6066,13 +6066,23 @@ fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // (D1406) A split view's extras: `snaps` pulls the divider to a third, a half
 // or two thirds within 16; with `first_focus` and `second_focus` (keys of a
 // focusable element in each pane) F6 moves the focus from one pane to the other.
-type SplitOptions = struct { snaps: bool, first_focus: widget.Key, second_focus: widget.Key }
+// (D1409) `points`, when given, are the sizes the divider snaps to in place of
+// the thirds and the half.
+type SplitOptions = struct { snaps: bool, first_focus: widget.Key, second_focus: widget.Key, points: []const f32 }
 
-type SplitSnap = struct { total: f32, change: widget.Change[f32] }
+type SplitSnap = struct { total: f32, change: widget.Change[f32], points: []const f32 }
 
 fn split_snap_fire(ctx: *void, value: f32) -> err {
     let s = mem.cast[*SplitSnap](ctx)
     var kept = value
+    if s.points.len > 0usize {
+        var p = 0usize
+        while p < s.points.len {
+            if kept > s.points[p] - 16.0 && kept < s.points[p] + 16.0 { kept = s.points[p] }
+            p += 1usize
+        }
+        ret widget.fire_change[f32](s.change, kept)
+    }
     var point = 1usize
     while point <= 3usize {
         var at = s.total * f32(point) / 3.0
@@ -6103,7 +6113,7 @@ fn split_view_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         if snaps_error != ok { ret (zero, TooLarge) }
         var total = width
         if axis == .Vertical { total = height }
-        snaps[0usize] = SplitSnap { total: total, change: change }
+        snaps[0usize] = SplitSnap { total: total, change: change, points: options.points }
         sized_change = widget.Change[f32] { ctx: mem.cast[*void](&snaps[0usize]), invoke: split_snap_fire }
     }
     let (pane, pane_error) = pane_with_reserve(a, key + 1u64, t, label, axis, position, min_first, 0.0, key, min_second, sized_change, first, false)
