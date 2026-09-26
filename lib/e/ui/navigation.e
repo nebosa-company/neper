@@ -4186,8 +4186,10 @@ fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: Doc
 // (D1298) A floating panel drags by its header (`Drag`, which `dock_apply` applies).
 // (D1346) A docked panel drags by its header: the ghost, the dock guide with its
 // drop preview, and a drop elsewhere tearing it off to float, each a `Move`.
-// ponytail: one guide over the layout's centre (not one per slot under the
-// pointer), no top or centre targets, and no fade or slide.
+// (D1358) The guide stands over the slot under the pointer.
+// ponytail: the targets dock to the layout's left, right and bottom slots, not
+// the sides of the slot under the pointer; no top or centre targets, and no fade
+// or slide.
 fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: DockModel, placements: []const DockPlacement, contents: []const widget.Node, centre: widget.Node, change: widget.Change[DockEvent], width: f32, height: f32) -> (widget.Node, err) {
     if contents.len != placements.len { ret (zero, TooLarge) }
     let (main_child, main_child_error) = mem.alloc[widget.Node](a, 1usize)
@@ -4418,10 +4420,24 @@ fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model
             }
         }
         let local = geometry.Point { x: pointer.x - origin.x, y: pointer.y - origin.y }
-        // The guide: a 3 x 3 grid of 32 targets 4 apart, 4 in, centred.
+        // The guide: a 3 x 3 grid of 32 targets 4 apart, 4 in, centred on the
+        // layout -- (D1358) or on the docked slot's panel (`key + 40`, `key + 56`,
+        // `key + 72`) the pointer stands over.
         let side: f32 = 32.0 * 3.0 + 4.0 * 2.0 + 8.0
-        let gx = (width - side) * 0.5
-        let gy = (height - side) * 0.5
+        var over_area = geometry.Rect { x: 0.0, y: 0.0, width: width, height: height }
+        var slot_look = 0usize
+        while rs_error == ok && slot_look < 3usize {
+            let (slot_id, slot_count) = widget.find_by_key(rs, key + 40u64 + 16u64 * u64(slot_look))
+            if slot_count == 1usize {
+                let (slot_box, has_slot_box) = widget.bounds_of(t.runtime, slot_id)
+                if has_slot_box && pointer.x >= slot_box.x && pointer.x < slot_box.x + slot_box.width && pointer.y >= slot_box.y && pointer.y < slot_box.y + slot_box.height {
+                    over_area = geometry.Rect { x: slot_box.x - origin.x, y: slot_box.y - origin.y, width: slot_box.width, height: slot_box.height }
+                }
+            }
+            slot_look += 1usize
+        }
+        let gx = max_f(over_area.x + (over_area.width - side) * 0.5, 0.0)
+        let gy = max_f(over_area.y + (over_area.height - side) * 0.5, 0.0)
         var guide = control.sized_style(side, side)
         guide.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
         guide.radius = t.tokens.radii.md

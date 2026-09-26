@@ -26044,3 +26044,16 @@ keeps its place.
 
 `ui_collections2_v2` drags Name over Kind: the handle after Kind turns
 `primary`, and on release it goes back, on Windows and Linux.
+
+## D1358 — The dock guide stands over the slot under the pointer
+
+The DockLayout spec puts the guide over the slot under the pointer. While a
+panel is dragged, the guide now centres on the docked slot panel (`key + 40`,
+`key + 56` or `key + 72`) whose bounds hold the pointer, and on the layout
+when the pointer is over none. Its targets still dock to the layout's left,
+right and bottom slots rather than the sides of the slot beneath, and there
+are still no top or centre targets.
+
+`ui_containers4_v2` drags the left panel by its header and finds the guide's
+targets inside the left slot, and the move and tear-off still land, on Windows
+and Linux.
