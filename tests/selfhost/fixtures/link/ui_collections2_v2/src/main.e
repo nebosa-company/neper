@@ -558,6 +558,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if lift_step == 2usize && risen { os.exit(108i32) }
         lift_step += 1usize
     }
+    // (D1357) Name dragged over Kind: the handle after Kind turns `primary`;
+    // released, it goes back.
+    var land_step = 0usize
+    while land_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        let land_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        var land_options: collection.TableOptions = zero
+        let (landing_table, landing_table_error) = collection.table_with(&f, 11u64, &theme, "Files", columns[0usize..3usize], land_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, land_options)
+        let (land_page, land_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if landing_table_error != ok || land_page_error != ok { os.exit(109i32) }
+        land_page[0usize] = landing_table
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), land_page[0usize..1usize]), time.Instant { nanos: 5500000000i64 + i64(land_step) }) != ok { os.exit(110i32) }
+        let (kind_at, has_kind_at) = bounds(&harness, &runtime, 16u64)
+        let (name_at, has_name_at) = bounds(&harness, &runtime, 12u64)
+        let (after_kind, has_after_kind) = bounds(&harness, &runtime, 17u64)
+        let (land_shot, land_shot_error) = testing.snapshot(&harness, a)
+        if !has_kind_at || !has_name_at || !has_after_kind || land_shot_error != ok { os.exit(111i32) }
+        let lit = is_color(land_shot, at(after_kind.x + 4.0, after_kind.y + 2.0), style.color(&tokens, .Primary))
+        if land_step == 0usize {
+            if lit || testing.send(&harness, input.Event { PointerDown: testing.pointer_at(name_at.x + 20.0, name_at.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(name_at.x + 30.0, name_at.y + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(kind_at.x + 30.0, kind_at.y + 20.0) }) != ok { os.exit(112i32) }
+        }
+        if land_step == 1usize {
+            if !lit { os.exit(113i32) }
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(kind_at.x + 30.0, kind_at.y + 20.0) }) != ok { os.exit(114i32) }
+        }
+        if land_step == 2usize && lit { os.exit(115i32) }
+        land_step += 1usize
+    }
     // (D1248) With no rows the header stays over the loading state (a busy
     // "Loading" group under an indeterminate progress bar) or the empty state.
     var state_step = 0usize
