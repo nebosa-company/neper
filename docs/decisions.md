@@ -26699,3 +26699,14 @@ and a slower one picks the whole minute; hours are unchanged.
 
 `ui_pickers2_v2` drags the minute dial quickly to seven past (5), then nudges
 it slowly (7), on Windows and Linux.
+
+## D1404 — Pictures fade in when they finish loading
+
+The Image spec fades the picture in over `duration-short-4` once it loads.
+`framed_image` keeps a loaded share on its frame (`eased_on`, slot
+`key + 1048002`, forward only). A picture that turns `.Loaded` after the frame
+was built fades in from the ground, and one loaded from the first frame shows
+at once.
+
+`ui_content_v2` finishes loading a picture: 50 ms in, the frame's middle is not
+yet what it settles to, on Windows and Linux.

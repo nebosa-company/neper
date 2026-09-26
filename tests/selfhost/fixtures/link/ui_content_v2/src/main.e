@@ -484,6 +484,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if arrive_step == 4usize && initials_left != 0usize { os.exit(64i32) }
         arrive_step += 1usize
     }
+    // (D1404) A picture that finishes loading fades in: 50 ms in, the frame's
+    // middle is not yet what it settles to.
+    var picture_step = 0usize
+    var picture_mid: u32 = 0u32
+    var picture_end: u32 = 0u32
+    while picture_step < 5usize {
+        var picture_at = 5000000000i64 + i64(picture_step) * 16000000i64
+        if picture_step == 3usize { picture_at = 5082000000i64 }
+        if picture_step == 4usize { picture_at = 6000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: picture_at }) != ok { os.exit(65i32) }
+        var arriving_picture = control.image_options()
+        arriving_picture.width = 160.0
+        arriving_picture.status = .Loading
+        if picture_step >= 2usize { arriving_picture.status = .Loaded }
+        fr = mem.arena_from(frame_storage)
+        let (picture_node, picture_node_error) = control.framed_image(&fr, 750u64, &theme, texture, arriving_picture)
+        let (picture_page, picture_page_error) = mem.alloc[widget.Node](&fr, 1usize)
+        if picture_node_error != ok || picture_page_error != ok { os.exit(66i32) }
+        picture_page[0usize] = picture_node
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 520.0), picture_page[0usize..1usize]), time.Instant { nanos: picture_at }) != ok { os.exit(67i32) }
+        if picture_step >= 3usize {
+            let picture_box = bounds(&harness, &runtime, 750u64)
+            let (picture_shot, picture_shot_error) = testing.snapshot(&harness, a)
+            if picture_shot_error != ok { os.exit(68i32) }
+            let picture_spot = at(picture_box.x + picture_box.width * 0.5, picture_box.y + 20.0)
+            let picture_rgb = u32(picture_shot.pixels[picture_spot]) * 65536u32 + u32(picture_shot.pixels[picture_spot + 1usize]) * 256u32 + u32(picture_shot.pixels[picture_spot + 2usize])
+            if picture_step == 3usize { picture_mid = picture_rgb }
+            if picture_step == 4usize { picture_end = picture_rgb }
+        }
+        picture_step += 1usize
+    }
+    if picture_mid == picture_end { os.exit(69i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui content v2 ok\n")
     ret ok
