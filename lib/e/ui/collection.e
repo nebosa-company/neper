@@ -6632,6 +6632,46 @@ type GridOptions = struct { min_width: f32, selecting: bool, width: f32, select:
 // (D1384) A tile dropped on a folder tile: the dragged tile's index and the folder's.
 type GridMove = struct { from: usize, into: usize }
 
+// (D1401) A grid's reflow, kept on it: the column count it last had, the count
+// before a change and when the change began.
+type ReflowCell = struct { set: bool, columns: usize, from: usize, since: i64 }
+
+// (D1401) The column count the tiles are moving from and the share of the move
+// still to come (0 when settled), asking for frames while it runs.
+fn reflow_share(t: *const control.Theme, key: widget.Key, columns: usize) -> (usize, f32) {
+    if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret (columns, 0.0) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (columns, 0.0) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (columns, 0.0) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: ReflowCell = zero
+    let (reflow, _, cell_error) = widget.state[ReflowCell](&build, key ^ hash.fnv1a64("grid-reflow"), fresh)
+    if cell_error != ok { ret (columns, 0.0) }
+    let now = widget.frame_time(t.runtime).nanos
+    if !reflow.set {
+        reflow.set = true
+        reflow.columns = columns
+        reflow.from = columns
+        ret (columns, 0.0)
+    }
+    if reflow.columns != columns {
+        reflow.from = reflow.columns
+        reflow.columns = columns
+        reflow.since = now
+    }
+    if reflow.from == columns { ret (columns, 0.0) }
+    let span = i64(t.tokens.durations.medium1) * 1000000i64
+    var gone: f32 = 1.0
+    if span > 0i64 && now >= reflow.since { gone = f32(now - reflow.since) / f32(span) }
+    if gone >= 1.0 {
+        reflow.from = columns
+        ret (columns, 0.0)
+    }
+    widget.request_animation_frame(t.runtime)
+    ret (reflow.from, 1.0 - animation.ease(.EaseInOut, gone))
+}
+
 // (D1385) A rubber band in progress, kept on its region: whether it is drawn,
 // and its corners in window points.
 type BandCell = struct { active: bool, from: geometry.Point, to: geometry.Point }
@@ -6727,8 +6767,9 @@ fn grid_options() -> GridOptions {
 // grid's column count across); the caller keeps the set and its app bar.
 // (D1247) With no tiles, `loading` skeleton tiles or the empty state.
 // (D1385) A pointer drag rubber-bands a selection.
-// ponytail: no reflow motion; the band starts on tiles too (a drag from a tile
-// reaches it); the caller keeps the page margins.
+// (D1401) A change of column count moves the tiles to their new places.
+// ponytail: the band starts on tiles too (a drag from a tile reaches it); the
+// caller keeps the page margins.
 fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, tiles: []const Tile, keys: []const widget.Key, options: GridOptions) -> (widget.Node, err) {
     if keys.len != tiles.len { ret (zero, TooLarge) }
     var least = options.min_width
@@ -6850,9 +6891,30 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     }
     var flow_style = style.defaults()
     flow_style.width = style.Length { Px: options.width }
+    // (D1401, docs/ux/components/GridView, reflow) When the column count changes,
+    // each tile starts where it stood in the old grid and eases to its new place
+    // over `duration-medium-1` (standard curve, paint only); reduced motion snaps.
+    // Every tile always stands in its transform, so the tree keeps its shape.
+    var tile_high = side
+    if tiles.len > 0usize && mem.address_of(t.runtime) != 0usize {
+        let (first_tile, has_first_tile) = keyed_bounds_of(t.runtime, keys[0usize])
+        if has_first_tile && first_tile.height > 0.0 { tile_high = first_tile.height }
+    }
+    let (old_columns, reflow_left) = reflow_share(t, key, columns)
+    let (moved_cells, moved_cells_error) = mem.alloc[widget.Node](a, tiles.len)
+    if moved_cells_error != ok { ret (zero, TooLarge) }
+    var r = 0usize
+    while r < tiles.len {
+        var shift: geometry.Point = zero
+        if reflow_left > 0.0 && old_columns > 0usize {
+            shift = geometry.Point { x: (f32(r % old_columns) - f32(r % columns)) * (side + 8.0) * reflow_left, y: (f32(r / old_columns) - f32(r / columns)) * (tile_high + 8.0) * reflow_left }
+        }
+        moved_cells[r] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: shift }, style.defaults(), cells[r..r + 1usize])
+        r += 1usize
+    }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.wrap(key, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: 8.0 }, flow_style, cells[0usize..tiles.len])
+    body[0usize] = widget.wrap(key, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: 8.0 }, flow_style, moved_cells[0usize..tiles.len])
     // (D1385, docs/ux/components/GridView, selection) With a pointer, a drag on a
     // multi-select grid draws a band (`primary` at 12% inside a 1px `primary`
     // edge) and on release selects the tiles it touches: `Clear`, then a

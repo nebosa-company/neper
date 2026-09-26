@@ -886,6 +886,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         tile_step += 1usize
     }
+    // (D1401) Narrowed from 600 to 380 the grid loses a column: 50 ms in, the
+    // third tile's new place does not yet show what it will once settled.
+    var flow_keys: [3]widget.Key = zero
+    flow_keys[0usize] = 7301u64
+    flow_keys[1usize] = 7302u64
+    flow_keys[2usize] = 7303u64
+    var flow_step = 0usize
+    var flow_mid: u32 = 0u32
+    var flow_end: u32 = 0u32
+    while flow_step < 5usize {
+        var flow_at = 73000000000i64 + i64(flow_step) * 16000000i64
+        if flow_step == 3usize { flow_at = 73082000000i64 }
+        if flow_step == 4usize { flow_at = 74000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: flow_at }) != ok { os.exit(223i32) }
+        var flowing = collection.grid_options()
+        flowing.width = 600.0
+        if flow_step >= 2usize { flowing.width = 380.0 }
+        f = mem.arena_from(frame_storage)
+        let (flow_tiles, flow_tiles_error) = collection.grid_view_of(&f, 7300u64, &theme, "Flow", s.tiles[0usize..3usize], flow_keys[..], flowing)
+        let (flow_page, flow_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if flow_tiles_error != ok || flow_page_error != ok { os.exit(224i32) }
+        var flow_ground = control.sized_style(640.0, 600.0)
+        flow_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        flow_page[0usize] = flow_tiles
+        if testing.pump(&harness, widget.box(0u64, flow_ground, flow_page[0usize..1usize]), time.Instant { nanos: flow_at }) != ok { os.exit(225i32) }
+        if flow_step >= 3usize {
+            let (third_tile, has_third_tile) = bounds(&harness, &runtime, 7303u64)
+            let (flow_shot, flow_shot_error) = testing.snapshot(&harness, a)
+            if !has_third_tile || flow_shot_error != ok { os.exit(226i32) }
+            let flow_spot = at(third_tile.x + 8.0, third_tile.y + third_tile.height - 8.0)
+            let flow_rgb = u32(flow_shot.pixels[flow_spot]) * 65536u32 + u32(flow_shot.pixels[flow_spot + 1usize]) * 256u32 + u32(flow_shot.pixels[flow_spot + 2usize])
+            if flow_step == 3usize { flow_mid = flow_rgb }
+            if flow_step == 4usize { flow_end = flow_rgb }
+        }
+        flow_step += 1usize
+    }
+    if flow_mid == flow_end { os.exit(227i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok

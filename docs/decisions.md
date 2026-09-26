@@ -26659,3 +26659,18 @@ touch fast-scroll handle is still missing.
 `ui_collections4_v2` scrolls a fading viewport with the wheel: no thumb before,
 the thumb just after, none three seconds later. `ui_scroll`, `ui_gesture`,
 `ui_collections_v2` and `ui_collections3_v2` still pass, on Windows and Linux.
+
+## D1401 — Grid tiles glide to their new places on reflow
+
+The GridView spec animates tiles to their new positions when the column count
+changes with the width, over `duration-medium-1`; reduced motion snaps. A grid
+now keeps a `ReflowCell` (the column count it last had, the one before a
+change, and when the change began). While a change runs, each tile is painted
+offset from its new place toward its old row and column (the pitch is the tile
+side, or the first tile's laid-out height, plus 8) by the share of the move
+still to come, on the standard curve. Every tile always stands in its
+transform, so the tree keeps its shape.
+
+`ui_collections_v2` narrows a grid from 600 to 380: 50 ms in, the third tile's
+new place does not yet show what it shows once settled. `ui_ripple_v2` still
+passes, on Windows and Linux.
