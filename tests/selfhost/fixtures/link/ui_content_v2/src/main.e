@@ -425,7 +425,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var open_images = 0usize
     n = 0usize
     while n < opener_tree.nodes.len {
-        if opener_tree.nodes[n].role == .Button && mem.eq[u8](opener_tree.nodes[n].label, "Open screenshot") { open_buttons += 1usize }
+        // (D1457) The Button is described by the alt text.
+        if opener_tree.nodes[n].role == .Button && mem.eq[u8](opener_tree.nodes[n].label, "Open screenshot") && mem.eq[u8](opener_tree.nodes[n].hint, "Screenshot") { open_buttons += 1usize }
         if opener_tree.nodes[n].role == .Image && mem.eq[u8](opener_tree.nodes[n].label, "Screenshot") { open_images += 1usize }
         n += 1usize
     }

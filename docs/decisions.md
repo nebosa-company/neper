@@ -27144,3 +27144,9 @@ Built with `neper-try emit-executable tools/patch/src/main.e <repo> x64 windows 
 A text area stood `rows` lines tall but grew with its text and could not scroll. A multiline editor now stands in a viewport `rows` lines tall, keyed `key + 1048612`. The viewport and the editor inside it take the field's inner width, because a scroll lays out its content unbounded only along its axis; the full width had made the text layout fail. The viewport's offset keeps the caret's line in view. That line is counted from the line breaks before the caret, from the editor's selection. Under D807 the runtime takes the offset whenever it moves, and a wheel scroll in between is kept. Soft-wrapped lines are not counted (a ponytail).
 
 `ui_content` holds five lines in a two-row text area, on Windows and Linux. With the caret moved down to the last line, the viewport's offset is past the first lines. The fixture's synthetic font maps only `a`, and Ctrl+End does not move a caret, so the check uses Down. Its limits rise for the field. The check fails without the change, since no viewport exists. `ui_field` and all 103 `ui_*` fixtures pass on both hosts.
+
+## D1457 — A pressable image is described by its alt text
+
+The Image spec says that "a pressable image is a Button named by its action... with the alt as description." D1252 had made the Button and dropped the alt. `framed_image` now puts the alt text (`options.label`) on the Button's semantics as its hint, which the tree reports as the node's description.
+
+`ui_content_v2`'s pressable image check now also requires the "Open screenshot" Button's hint to be "Screenshot", on Windows and Linux.

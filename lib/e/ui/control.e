@@ -682,7 +682,7 @@ fn image_options() -> ImageOptions {
 // layer over the picture, the runtime's focus ring, Enter and Space, and a
 // Button named `action_label` in place of the Image.
 // (D1404) A picture that arrives fades in.
-// ponytail: a pressable image's alt text is not its description.
+// (D1457) A pressable image's Button carries the alt text as its description.
 fn framed_image(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, options: ImageOptions) -> (widget.Node, err) {
     var ratio = options.aspect
     if !(ratio > 0.0) { ratio = 1.0 }
@@ -772,6 +772,16 @@ fn framed_image(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.
         let (pressed, pressed_error) = pressable_states(a, press_key, t, 3u8, options.action_label, look, true, false, 0u32, 0u32, 0u64, options.action, stacked)
         if pressed_error != ok { ret (zero, pressed_error) }
         framed[1usize] = pressed
+        // (D1457, docs/ux/components/Image, accessibility) The Button carries the
+        // alt text as its description (the node's hint).
+        switch pressed.kind {
+        case .Semantics as said:
+            var described = said
+            described.hint = options.label
+            framed[1usize] = widget.semantics(pressed.key, described, pressed.style, pressed.children)
+        default:
+            framed[1usize] = pressed
+        }
     }
     framed[0usize] = framed[1usize]
     if options.caption.len != 0usize {
