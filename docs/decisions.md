@@ -26074,3 +26074,18 @@ is scrolled.
 `ui_status5_v2` raises `inserted` from 0 to 1: 100 ms later the first row stands
 higher than at rest, and a second later it is back, on Windows and Linux;
 `ui_desktop` still passes on both.
+
+## D1360 — Picker sheets slide down when they close
+
+The Picker spec dismisses the touch sheet with a slide. D1332's rise is
+already kept on the field, so the sheet is now built while `open` or while it
+has not yet sunk (`risen > 0`). Shut but sinking, it is inert: not modal, no
+focus trap, no dismiss or Escape action, and not STATE_MODAL in the tree. Its
+scrim fades with the same share. Drag to expand is still missing, and both
+ways use the standard curve rather than the spec's emphasized pair.
+
+Checked the `name = zero` refusal again: an empty Submit is written out.
+
+`ui_pickers_v2` shuts the sheet: a frame later it is still there, and a second
+later it is gone. The picker fixtures (`ui_pickers_v2`, `ui_entry`,
+`ui_overlays3_v2`, `ui_presentation`) pass on Windows and Linux.
