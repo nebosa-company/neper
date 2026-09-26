@@ -604,6 +604,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // (D1422) The list runs from 1926 in a viewport, so 2026 is index 100
             // and in view, while 1926, far above, is not built.
             if testing.by_key(&harness, 1200u64 + 4096u64 + 100u64).count == 0usize || testing.by_key(&harness, 1200u64 + 4096u64).count != 0usize || testing.by_key(&harness, 1200u64 + 4094u64).count == 0usize { os.exit(162i32) }
+            // (D1473) The grid is one Tab stop: Tab from 2026 leaves it, not for 2027.
+            if widget.focus(&runtime, testing.by_key(&harness, 1200u64 + 4096u64 + 100u64).element) != ok || testing.press_key(&harness, 9u32, zero) != ok { os.exit(180i32) }
+            let (after_tab, _) = widget.focused_key(&runtime)
+            if after_tab == 1200u64 + 4096u64 + 101u64 { os.exit(181i32) }
             if widget.focus(&runtime, testing.by_key(&harness, 1200u64 + 4096u64 + 100u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok { os.exit(133i32) }
             let (after_right, _) = widget.focused_key(&runtime)
             if after_right != 1200u64 + 4096u64 + 101u64 || testing.press_key(&harness, 40u32, zero) != ok { os.exit(134i32) }
