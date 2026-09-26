@@ -212,7 +212,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (offset, has_offset) = widget.scroll_offset_of(&runtime, viewport_id)
     let step: f32 = 100.0 * 43.0 / 48.0 / 60.0
     if viewport_count != 1usize || !has_offset || offset < step - 0.01 || offset > step + 0.01 || log.last_start_y < 40.0 - step - 0.01 || log.last_start_y > 40.0 - step + 0.01 { os.exit(57i32) }
-    if widget.dispatch(&runtime, input.Event { PointerUp: pointer(5.0, 95.0) }) != ok || widget.dispatch(&runtime, input.Event { Frame: zero }) != ok || log.drag_moves != moves_before + 3usize { os.exit(58i32) }
+    // (D1470) A frame two 60 Hz frames later steps twice as far.
+    widget.begin_frame(&runtime, time.Instant { nanos: 33333333i64 })
+    if widget.dispatch(&runtime, input.Event { Frame: zero }) != ok { os.exit(59i32) }
+    let (later, has_later) = widget.scroll_offset_of(&runtime, viewport_id)
+    if !has_later || later < 3.0 * step - 0.02 || later > 3.0 * step + 0.02 { os.exit(60i32) }
+    if widget.dispatch(&runtime, input.Event { PointerUp: pointer(5.0, 95.0) }) != ok || widget.dispatch(&runtime, input.Event { Frame: zero }) != ok || log.drag_moves != moves_before + 4usize { os.exit(58i32) }
     if widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(43i32) }
     try io.print("ui gesture ok\n")
     ret ok
