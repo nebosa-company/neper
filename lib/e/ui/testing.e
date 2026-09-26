@@ -438,7 +438,7 @@ fn gallery(a: *mem.Arena, t: *const style.ThemeTokens, text_style: layout.Style,
     var viewport = style.defaults()
     viewport.width = style.Length { Px: 120.0 }
     viewport.height = style.Length { Px: t.metrics.control_height * 2.0 }
-    items[4usize] = widget.scroll(7u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: style.color(t, .Border), change: widget.Change[f32] { ctx: ctx, invoke: on_gallery_scroll }, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, viewport, column[0usize..1usize])
+    items[4usize] = widget.scroll(7u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: style.color(t, .Border), change: widget.Change[f32] { ctx: ctx, invoke: on_gallery_scroll }, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, viewport, column[0usize..1usize])
     items[5usize] = widget.overlay(8u64, widget.Overlay { anchor: 3u64, placement: .Below, offset: geometry.Point { x: 0.0, y: t.spacing.xs }, modal: false, dismiss: zero }, style.defaults(), labels[2usize..3usize])
     var page = style.defaults()
     page.background = paint.Brush { Solid: style.color(t, .Background) }

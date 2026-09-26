@@ -198,7 +198,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
     if scrolled_error != ok { os.exit(51i32) }
     scrolled[0usize] = widget.region(21u64, widget.Region { gesture: widget.GestureAction { ctx: ctx, invoke: on_gesture }, gestures: 2u8, enabled: true, focusable: false }, sized(40.0, 400.0), zero)
-    let viewport = widget.scroll(20u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: zero, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, sized(64.0, 100.0), scrolled[0usize..1usize])
+    let viewport = widget.scroll(20u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: zero, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, sized(64.0, 100.0), scrolled[0usize..1usize])
     frame = mem.arena_from(frame_storage)
     let (_, scroll_reconcile_error) = widget.reconcile(&runtime, &frame, viewport, ui_layout.Constraints { min_width: 0.0, max_width: 64.0, min_height: 0.0, max_height: 100.0 })
     if scroll_reconcile_error != ok { os.exit(52i32) }

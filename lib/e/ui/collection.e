@@ -122,7 +122,7 @@ fn virtual_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     view_style.overflow = .Clip
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: extent }, view_style, rows[0usize..count])
+    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: extent, fades: false }, view_style, rows[0usize..count])
     // v2 (D979, docs/ux/components/VirtualList): a list with the full count.
     var sem: widget.Semantics = zero
     sem.role = 10u8
@@ -237,7 +237,7 @@ fn virtual_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     view_style.overflow = .Clip
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: row_total, virtual_extent: extent }, view_style, rows[0usize..count])
+    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: row_total, virtual_extent: extent, fades: false }, view_style, rows[0usize..count])
     var sem: widget.Semantics = zero
     sem.role = 30u8
     sem.label = label
@@ -3598,7 +3598,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         head = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), tiers[0usize..2usize])
     }
     parts[p] = head
-    parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent }, view_style, rows[0usize..count])
+    parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent, fades: false }, view_style, rows[0usize..count])
     // (D1248) With no rows the body is the loading or empty state; the header stays.
     if total == 0usize && (selection.loading || selection.empty_title.len > 0usize) {
         let (state_node, state_error) = table_state(a, key, t, selection, width, body_height, row_extent, pad)
@@ -3620,7 +3620,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         var view = style.defaults()
         view.width = style.Length { Px: selection.view_width }
         view.overflow = .Clip
-        column_node[0usize] = widget.scroll(key + 2097152u64, widget.Scroll { axis: .Horizontal, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view, wide[0usize..1usize])
+        column_node[0usize] = widget.scroll(key + 2097152u64, widget.Scroll { axis: .Horizontal, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view, wide[0usize..1usize])
     }
     var sem: widget.Semantics = zero
     sem.role = role
@@ -6344,7 +6344,8 @@ fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: places, virtual_extent: extent }, view_style, rows[0usize..count])
+    // (D1400) On touch its thumb fades after 1.5 s idle (an overlay scrollbar).
+    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: places, virtual_extent: extent, fades: density_of(t) == 2usize }, view_style, rows[0usize..count])
     // (D1324) The pinned section header.
     let (shown_body, shown_body_error) = pinned_header(a, key, t, source, options, total, offset, extent, body[0usize])
     if shown_body_error != ok { ret (zero, shown_body_error) }
@@ -7009,7 +7010,7 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.change, virtual_first: first, virtual_count: row_total, virtual_extent: extent }, view_style, rows[0usize..made_rows])
+    body[0usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: options.change, virtual_first: first, virtual_count: row_total, virtual_extent: extent, fades: false }, view_style, rows[0usize..made_rows])
     var sem: widget.Semantics = zero
     sem.role = 30u8
     sem.label = label

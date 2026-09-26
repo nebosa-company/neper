@@ -89,9 +89,9 @@ fn build(a: *mem.Arena, ctx: *void, c_offset: f32) -> (widget.Node, err) {
     let (top, top_error) = mem.alloc[widget.Node](a, 3usize)
     if top_error != ok { ret (zero, top_error) }
     let red = paint.rgba(1.0, 0.0, 0.0, 1.0)
-    top[0usize] = widget.scroll(1u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: red, change: widget.Change[f32] { ctx: ctx, invoke: on_scroll }, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, sized(64.0, 40.0), columns[0usize..1usize])
-    top[1usize] = widget.scroll(2u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Bounce, momentum: false, scrollbar: false, thumb: red, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, sized(64.0, 40.0), columns[1usize..2usize])
-    top[2usize] = widget.scroll(3u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: red, change: zero, virtual_first: first, virtual_count: 100usize, virtual_extent: 10.0 }, sized(64.0, 40.0), c_children[0usize..count])
+    top[0usize] = widget.scroll(1u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: red, change: widget.Change[f32] { ctx: ctx, invoke: on_scroll }, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, sized(64.0, 40.0), columns[0usize..1usize])
+    top[1usize] = widget.scroll(2u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Bounce, momentum: false, scrollbar: false, thumb: red, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, sized(64.0, 40.0), columns[1usize..2usize])
+    top[2usize] = widget.scroll(3u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: red, change: zero, virtual_first: first, virtual_count: 100usize, virtual_extent: 10.0, fades: false }, sized(64.0, 40.0), c_children[0usize..count])
     var column = style.defaults()
     column.width = style.Length { Px: 64.0 }
     column.height = style.Length { Px: 128.0 }

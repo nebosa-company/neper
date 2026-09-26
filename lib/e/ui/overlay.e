@@ -5362,7 +5362,7 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         if column_error != ok { ret (zero, TooLarge) }
         column[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..built])
         let view_style = control.sized_style(options.width, f32(shown) * row_height)
-        column[0usize] = widget.scroll(key + 4u64, widget.Scroll { axis: .Vertical, offset: f32(first) * row_height, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Outline), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view_style, column[1usize..2usize])
+        column[0usize] = widget.scroll(key + 4u64, widget.Scroll { axis: .Vertical, offset: f32(first) * row_height, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Outline), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view_style, column[1usize..2usize])
         var raised = control.surface_options(t)
         raised.background = .SurfaceContainer
         raised.elevation = 2u8

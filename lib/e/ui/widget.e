@@ -51,7 +51,9 @@ type Image = struct { texture: scene.TextureId, fit: Fit }
 // the ones `visible_range` names -- keyed by the caller so the reconciler recycles
 // the rest. A scrollbar thumb is painted on the trailing edge when asked.
 type Overscroll = enum u8 { Clamp, Bounce }
-type Scroll = struct { axis: ui_layout.Axis, offset: f32, overscroll: Overscroll, momentum: bool, scrollbar: bool, thumb: paint.Color, change: Change[f32], virtual_first: usize, virtual_count: usize, virtual_extent: f32 }
+// (D1400) `fades`: an overlay-scrollbar host's thumb, shown while scrolling and
+// fading out after 1.5 s idle.
+type Scroll = struct { axis: ui_layout.Axis, offset: f32, overscroll: Overscroll, momentum: bool, scrollbar: bool, thumb: paint.Color, change: Change[f32], virtual_first: usize, virtual_count: usize, virtual_extent: f32, fades: bool }
 // A custom's `state` is the bytes its measure and paint read through `ctx` and
 // nothing else (D917): with them the runtime can tell an unchanged custom from a
 // changed one and skip its subtree; empty, the custom is painted every frame.
@@ -230,6 +232,8 @@ type Element = struct {
     content_extent: f32,
     viewport_extent: f32,
     scroll_velocity: f32,
+    // (D1400) The frame time a viewport last moved (0: never).
+    scrolled_at: i64,
     // A zoom view's scale and offset, the node's last, its limits, its reporter and
     // its content's natural size.
     zoom_scale: f32,
@@ -598,7 +602,7 @@ fn scroll_view(a: *mem.Arena, key: Key, axis: ui_layout.Axis, value_style: style
     if stacked_error != ok { ret (zero, TooLarge) }
     stacked[0usize] = flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), children)
     let thumb = paint.rgba(0.5, 0.5, 0.5, 0.6)
-    ret (scroll(key, Scroll { axis: axis, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, value_style, stacked[0usize..1usize]), ok)
+    ret (scroll(key, Scroll { axis: axis, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, value_style, stacked[0usize..1usize]), ok)
 }
 
 fn zoom(key: Key, value: Zoom, value_style: style.Style, children: []const Node) -> Node {
@@ -2156,7 +2160,9 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         // v2 (D979, docs/ux/components/VirtualList): 4 wide, fully rounded, 2 from
         // the trailing edge, viewport squared over the content long, 32 at least.
         // (D1219) 8 wide while the pointer is over the viewport's trailing 12.
-        // ponytail: no fade after 1.5 s or touch handle.
+        // (D1400) A fading thumb shows for 1.5 s after the viewport last moved,
+        // then fades over `duration-medium-1` (250 ms).
+        // ponytail: no touch fast-scroll handle.
         let viewport = e.viewport_extent
         var length = viewport * viewport / content
         if length < 32.0 { length = min_f(32.0, viewport) }
@@ -2170,7 +2176,18 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         }
         var thumb = geometry.Rect { x: inner.x + inner.width - 2.0 - wide, y: inner.y + at, width: wide, height: length }
         if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 2.0 - wide, width: length, height: wide } }
-        try fill_shape(a, b, thumb, wide * 0.5, paint.Brush { Solid: sc.thumb })
+        var thumb_ink = sc.thumb
+        var thumb_shown = true
+        if sc.fades {
+            let idle = s.animation_time.nanos - e.scrolled_at
+            if e.scrolled_at == 0i64 || idle >= 1750000000i64 {
+                thumb_shown = false
+            } else {
+                s.animation_due = true
+                if idle > 1500000000i64 { thumb_ink.alpha = thumb_ink.alpha * (1.0 - f32(idle - 1500000000i64) / 250000000.0) }
+            }
+        }
+        if thumb_shown { try fill_shape(a, b, thumb, wide * 0.5, paint.Brush { Solid: thumb_ink }) }
     }
     try scene.push(b, restore)
     ret ok
@@ -3230,6 +3247,7 @@ fn scroll_by(s: *State, element: usize, delta: f32, soft: bool) -> err {
     }
     if next == e.scroll_offset { ret ok }
     e.scroll_offset = next
+    e.scrolled_at = s.animation_time.nanos
     e.invalid = true
     ret fire_change[f32](e.scroll_change, next)
 }
