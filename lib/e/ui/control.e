@@ -455,8 +455,16 @@ fn rich_piece(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ri
     var state: style.ControlState = zero
     if live_link { state = control_state(t, link_key, true, false) }
     var body = sized_style(piece.width, line_h)
-    if state.pressed { body.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .Primary), t.tokens.states.pressed) } }
-    if state.hovered && !state.pressed { body.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .Primary), t.tokens.states.hover) } }
+    // (D1442, docs/ux/components/RichText, motion) The wash fades to its state's
+    // opacity over `duration-short-2` on `ease-standard` (kept on the link, slot
+    // `+ 1048601`; a link broken over two lines changes at once); reduced motion
+    // changes at once.
+    var wash_goal: f32 = 0.0
+    if state.hovered { wash_goal = t.tokens.states.hover }
+    if state.pressed { wash_goal = t.tokens.states.pressed }
+    var wash = wash_goal
+    if live_link { wash = eased_on(t, link_key, link_key + 1048601u64, wash_goal, false, t.tokens.durations.short2) }
+    body.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .Primary), wash) }
     parts[1usize] = widget.positioned(0u64, 0.0, drop, style.defaults(), parts[0usize..1usize])
     var count = 1usize
     if span.kind == .Link {

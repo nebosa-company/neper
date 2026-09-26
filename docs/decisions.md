@@ -27030,3 +27030,9 @@ The ListBox spec says "the selection fill and the checkbox change over `duration
 The FormField spec cross-fades messages in place (`duration-short-2`, `ease-standard`), and the form never animates reflow. `message_share` keeps what a field's message last was (its length, its validity and two byte sums) and when it changed, on the field (slot `key + 1048600`). `form_field` draws its message, or its help, in a box at that share's opacity, and the box is always there. The share is 1 until the message changes, and then eases in over `duration-short-2`. Reduced motion shows the message at once. The old message is not drawn fading out.
 
 `ui_form` turns the email invalid, on Windows and Linux: on that frame its error stands part way in, and a second later it is whole. The fixture's limits rise to 32 states, 1024 bytes and 8 classes. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1442 — Rich text links fade their wash
+
+The RichText spec fades the link hover wash in over `duration-short-2` with `ease-standard`. A live link fragment in a `paragraph` now eases its wash toward its state's opacity (hover 8%, pressed 10%) on the link, under slot `link_key + 1048601`. The wash is always drawn, at 0 at rest. A link broken over two lines has two elements under its key, so it falls back to changing at once, as reduced motion does.
+
+`ui_content3_v2` checks this on Windows and Linux: on the hover's own frame the wash is not yet at 8%, and 500 ms later it is. The fixture builds once more before hovering so the cell exists, and its limits rise to 32 states, 1024 bytes and 8 classes. Its old hover check had passed only because the cell could not be kept. All 103 `ui_*` fixtures pass on both hosts.
