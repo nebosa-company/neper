@@ -4023,7 +4023,55 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // row's text in a column (by the row's key), siblings ordered by it, folded, in
 // the header's direction -- branches first with `folders_first` -- and the
 // hierarchy never flattens. With `footer` a counts line closes the table.
-type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool }
+// (D1534) With `numbered` each row leads with its section number ("2.1.3", its
+// place among its siblings at every level) in `body-medium` `on-surface-variant`,
+// at least 28 wide; the current row's number is `primary` at weight 600.
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool, numbered: bool }
+
+// (D1534) Row `at`'s section number into `out`: its place among its siblings,
+// then its parent's, up to the root, written root first ("2.1.3").
+fn section_number(visible: []const TreeRow, at: usize, out: []u8) -> usize {
+    var places: [32]usize = zero
+    var depth = 0usize
+    var walk = at
+    var want = visible[at].depth
+    var walking = true
+    while walking && depth < places.len {
+        places[depth] = visible[walk].index + 1usize
+        depth += 1usize
+        if want == 0usize {
+            walking = false
+        } else {
+            want = want - 1usize
+            while walk > 0usize && visible[walk].depth != want { walk = walk - 1usize }
+        }
+    }
+    var n = 0usize
+    while depth > 0usize {
+        depth = depth - 1usize
+        n = footer_decimal(out, n, places[depth])
+        if depth > 0usize && n < out.len {
+            out[n] = 46u8
+            n += 1usize
+        }
+    }
+    ret n
+}
+
+// (D1534, docs/ux/components/Outline, follow mode) The heading current for a
+// document scrolled so: of the headings' tops (in the document, in order), the
+// last whose top has crossed 25% of the viewport's height from its top; the
+// first when none has.
+fn outline_follow(tops: []const f32, scrolled: f32, viewport: f32) -> usize {
+    let line = scrolled + viewport * 0.25
+    var current = 0usize
+    var i = 0usize
+    while i < tops.len {
+        if tops[i] <= line { current = i }
+        i += 1usize
+    }
+    ret current
+}
 
 // (D1533) A tree source whose siblings come in sorted order: each parent's order
 // is worked out once, when its first child is asked for, and kept on a stack as
@@ -4298,15 +4346,40 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             }
             indent = widget.stack(0u64, control.sized_style(indent_width, tall), lines[0usize..entry.depth])
         }
-        let (lead, lead_error) = mem.alloc[widget.Node](a, 4usize)
+        let (lead, lead_error) = mem.alloc[widget.Node](a, 5usize)
         if lead_error != ok { ret (none, TooLarge) }
         lead[0usize] = indent
         lead[1usize] = twisty
         lead[2usize] = widget.box(0u64, control.sized_style(8.0, 0.0), zero)
-        lead[3usize] = built
+        var lead_count = 3usize
+        if options.numbered {
+            let (digits, digits_error) = mem.alloc[u8](a, 48usize)
+            if digits_error != ok { ret (none, TooLarge) }
+            let written = section_number(visible[0usize..count], i, digits)
+            var number_text = control.text_options()
+            number_text.role = .BodyMedium
+            number_text.wrap = .None
+            var number_ink = muted
+            if has_current && entry.key == current {
+                number_ink = style.color(t.tokens, .Primary)
+                number_text.weight = 600u32
+            }
+            let (number, number_error) = control.colored_text(a, 0u64, digits[0usize..written], t, number_text, number_ink)
+            if number_error != ok { ret (none, number_error) }
+            let (number_held, number_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if number_held_error != ok { ret (none, TooLarge) }
+            number_held[0usize] = number
+            var number_box = style.defaults()
+            number_box.min_width = style.Length { Px: 28.0 }
+            number_box.padding = style.EdgeLengths { left: flat, top: flat, right: style.Length { Px: 8.0 }, bottom: flat }
+            lead[lead_count] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, number_box, number_held[0usize..1usize])
+            lead_count += 1usize
+        }
+        lead[lead_count] = built
+        lead_count += 1usize
         var lead_style = style.defaults()
         lead_style.height = style.Length { Px: tall }
-        let first_cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, lead_style, lead[0usize..4usize])
+        let first_cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, lead_style, lead[0usize..lead_count])
         // (D1330) A disabled node takes no pick.
         let off = is_selected(options.disabled, entry.key)
         var row_pick = pick
@@ -4569,10 +4642,41 @@ fn outline(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
 // with the `current` node, the heading whose section is in view, marked by its
 // 3px `primary` bar and reported Current.
 // (D1502) The bar stands at the pane's leading edge.
-// ponytail: no numbers, filter, follow mode or `primary` 600 label (the caller
-// builds the label).
+// (D1534) Numbers and follow mode: `outline_with` passes `TreeOptions`, whose
+// `numbered` leads each heading with its section number, and `outline_follow`
+// finds the current heading from the document's scroll.
+// ponytail: no filter field, and the label's own 600 weight is the caller's.
 fn outline_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], current: widget.Key, collapse: *const widget.Submit, extent: f32, width: f32) -> (widget.Node, err) {
     let (made, made_error) = treed(a, key, t, label, source, expanded, selected, toggle, pick, true, extent, width, current)
+    if made_error != ok { ret (zero, made_error) }
+    var heading = control.text_options()
+    heading.role = .TitleSmall
+    heading.wrap = .None
+    let (title, title_error) = control.colored_text(a, 0u64, "Outline", t, heading, style.color(t.tokens, .OnSurface))
+    if title_error != ok { ret (zero, title_error) }
+    var plain = control.button_options()
+    plain.variant = .Plain
+    let (fold, fold_error) = control.button(a, key + 2u64, t, "Collapse all", collapse, plain)
+    if fold_error != ok { ret (zero, fold_error) }
+    let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if bar_parts_error != ok { ret (zero, TooLarge) }
+    bar_parts[0usize] = title
+    bar_parts[1usize] = widget.spacer(0u64, 1.0)
+    bar_parts[2usize] = fold
+    var band = control.sized_style(width, control.if_else(density_of(t) == 2usize, 48.0, 40.0))
+    band.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    let flat = style.Length { Px: 0.0 }
+    band.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: flat, right: style.Length { Px: 4.0 }, bottom: flat }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, band, bar_parts[0usize..3usize])
+    parts[1usize] = made
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+// (D1534) An outline with `TreeOptions` (numbers).
+fn outline_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], current: widget.Key, collapse: *const widget.Submit, extent: f32, width: f32, options: TreeOptions) -> (widget.Node, err) {
+    let (made, made_error) = treed_with(a, key, t, label, source, expanded, selected, toggle, pick, true, extent, width, current, options)
     if made_error != ok { ret (zero, made_error) }
     var heading = control.text_options()
     heading.role = .TitleSmall
