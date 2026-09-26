@@ -7474,7 +7474,40 @@ type PickerForm = enum u8 { Popup, Sheet }
 // (D1360) Closing, it slides back down the same way, built but inert (not
 // modal, no focus trap, no dismiss) and its scrim fading, until it is gone.
 // (D1376) It rises decelerating and sinks accelerating.
-// ponytail: no drag to expand.
+// (D1405) Its handle drags it up to 90% of the window and back.
+// ponytail: the handle's drag target is the grip's own height, not a 48 target.
+// (D1405) Whether a picker's sheet stands expanded, kept on its field.
+type SheetExpandCell = struct { expanded: bool }
+type SheetExpand = struct { cell: *SheetExpandCell, has_cell: bool }
+
+fn sheet_expand_state(t: *const Theme, key: widget.Key) -> (*SheetExpandCell, bool) {
+    var none: *SheetExpandCell = zero
+    if mem.address_of(t.runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: SheetExpandCell = zero
+    let (kept, _, kept_error) = widget.state[SheetExpandCell](&build, key + 1048581u64, fresh)
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
+fn sheet_expand_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let e = mem.cast[*SheetExpand](ctx)
+    if !e.has_cell { ret ok }
+    switch g {
+    case .DragMove as moved:
+        let rise = moved.start.y - moved.position.y
+        if rise > 24.0 { e.cell.expanded = true }
+        if rise < -24.0 { e.cell.expanded = false }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, presentation: PickerForm) -> (widget.Node, err) {
     if presentation == .Popup {
         let (popup, popup_error) = select(a, key, t, label, options, selected, open, toggle, picks)
@@ -7507,7 +7540,20 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         let (grips, grips_error) = mem.alloc[widget.Node](a, 1usize)
         if grips_error != ok { ret (zero, TooLarge) }
         grips[0usize] = widget.box(0u64, grip, zero)
-        rows[0usize] = widget.aligned(0u64, .Center, .Start, style.defaults(), grips[0usize..1usize])
+        // (D1405, docs/ux/components/Picker, sheet) The handle is a drag region
+        // (keyed `key + 1048580`): drawn up past 24 the sheet grows to 90% of the
+        // window, drawn down past 24 back to 60%; the choice is kept on the field
+        // (slot `key + 1048581`) until the sheet shuts.
+        let (expand_cell, has_expand_cell) = sheet_expand_state(t, key)
+        let (expanders, expanders_error) = mem.alloc[SheetExpand](a, 1usize)
+        if expanders_error != ok { ret (zero, TooLarge) }
+        expanders[0usize] = SheetExpand { cell: expand_cell, has_cell: has_expand_cell }
+        var handle_style = style.defaults()
+        handle_style.width = style.Length { Percent: 100.0 }
+        let (handle_parts, handle_parts_error) = mem.alloc[widget.Node](a, 1usize)
+        if handle_parts_error != ok { ret (zero, TooLarge) }
+        handle_parts[0usize] = widget.aligned(0u64, .Center, .Start, handle_style, grips[0usize..1usize])
+        rows[0usize] = widget.region(key + 1048580u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&expanders[0usize]), invoke: sheet_expand_gesture }, gestures: widget.GESTURE_DRAG, enabled: true, focusable: false }, handle_style, handle_parts[0usize..1usize])
         var heading = text_options()
         heading.role = .TitleLarge
         heading.wrap = .None
@@ -7559,7 +7605,9 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var body = rows[0usize..options.len + 2usize]
         if mem.address_of(t.runtime) != 0usize {
             let window_high = widget.surface_size(t.runtime).height
-            let room = window_high * 0.6 - 80.0
+            var share: f32 = 0.6
+            if has_expand_cell && expand_cell.expanded { share = 0.9 }
+            let room = window_high * share - 80.0
             if window_high > 0.0 && f32(options.len) * 56.0 > room && room > 56.0 {
                 var view_style = style.defaults()
                 view_style.width = style.Length { Percent: 100.0 }

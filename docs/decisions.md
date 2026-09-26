@@ -26710,3 +26710,17 @@ at once.
 
 `ui_content_v2` finishes loading a picture: 50 ms in, the frame's middle is not
 yet what it settles to, on Windows and Linux.
+
+## D1405 — Picker sheets expand when their handle is drawn up
+
+The Picker spec's sheet stands at most 60% of the window and expands when
+dragged up. The sheet's handle is now a drag region (keyed `key + 1048580`).
+Drawn up past 24 the sheet's rows get room up to 90% of the window, and drawn
+down past 24 back to 60%. The choice is kept on the field in a
+`SheetExpandCell` (slot `key + 1048581`). The handle's drag target is the
+grip's own height, not a 48 target.
+
+`ui_pickers_v2` draws the twelve-option sheet's handle up 60: its rows'
+viewport grows from 352 to 568 in the 720 window. `ui_entry`,
+`ui_overlays3_v2`, `ui_presentation` and `ui_pickers` still pass, on Windows,
+and the first three on Linux.
