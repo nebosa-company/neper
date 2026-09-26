@@ -26914,3 +26914,9 @@ D1351's date wheels always stood month, day, year. The new `date_order_of(langua
 `date_wheels` places its three wheels in that order. Their keys do not change (`key`, `key + 16`, `key + 32`).
 
 `ui_pickers2_v2` checks the order on Windows and Linux: in German the day wheel stands left of the month and the month left of the year, and in Japanese the year leads, then the month and the day. The existing English checks still pass.
+
+## D1426 — The duration picker's touch modal
+
+The DurationPicker spec's modal picker holds "a box per unit... presets as chips, and Cancel / OK". The new `duration_modal` builds it as a dialog labelled with the caller's title, keyed `key`. Inside are the D1352 unit boxes (`duration_boxes`, keyed `key + 16`) and, when presets are given, their filter chips under them. The chips are keyed `key + 32 + index`, stand 8 apart in a 312 wide wrap and form a group named "Presets"; the chip at `chosen` is selected and each chip fires its pick. Cancel fires `cancel`, as do Escape and the scrim, and OK fires `confirm`.
+
+`ui_pickers2_v2` opens a "Set timer" modal, on Windows and Linux. The title, the unit boxes and the chips show; a tap on the first chip fires its pick, and Enter in a unit box confirms. The same commit moves the D1425 wheel checks to keys 1900-1932, off the unit boxes' 1800.

@@ -5656,7 +5656,7 @@ type DurationBoxes = struct { hours: []u8, hours_len: usize, minutes: []u8, minu
 // `key + 3`), each with its unit under it -- a `display-small` ":" between; the
 // caller reads the digits and rolls them over with `duration_roll`.
 // (D1354) The second digit typed in hours or minutes moves focus to the next box.
-// ponytail: no presets or modal around the boxes.
+// (D1426) `duration_modal` puts them in a modal with presets.
 fn duration_boxes(a: *mem.Arena, key: widget.Key, t: *const control.Theme, boxes: DurationBoxes) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
     let (relays, relays_error) = mem.alloc[UnitBoxRelay](a, 2usize)
@@ -5743,6 +5743,48 @@ fn duration_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// (D1426, docs/ux/components/DurationPicker, modal picker) The touch modal: a
+// dialog labelled `title` (keyed `key`) holding the unit boxes (`duration_boxes`
+// keyed `key + 16`) and, with `presets`, their filter chips (keyed `key + 32 +
+// index`, the one at `chosen` selected, each firing its pick) 8 apart under
+// them in a group named "Presets"; Cancel fires `cancel` (as do Escape and the
+// scrim) and OK `confirm`.
+fn duration_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, boxes: DurationBoxes, presets: []const str, chosen: usize, picks: []const widget.Submit, cancel: *const widget.Submit, confirm: *const widget.Submit) -> (widget.Node, err) {
+    if picks.len != presets.len { ret (zero, TooLarge) }
+    let (units, units_error) = duration_boxes(a, key + 16u64, t, boxes)
+    if units_error != ok { ret (zero, units_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = units
+    var used = 1usize
+    if presets.len > 0usize {
+        let (chips, chips_error) = mem.alloc[widget.Node](a, presets.len)
+        if chips_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < presets.len {
+            let (made, made_error) = control.chip(a, key + 32u64 + u64(i), t, presets[i], .Filter, i == chosen, &picks[i], &picks[i])
+            if made_error != ok { ret (zero, made_error) }
+            chips[i] = made
+            i += 1usize
+        }
+        var row_style = style.defaults()
+        row_style.width = style.Length { Px: 312.0 }
+        parts[2usize] = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: 8.0 }, row_style, chips[0usize..presets.len])
+        var group: widget.Semantics = zero
+        group.role = 2u8
+        group.label = "Presets"
+        parts[1usize] = widget.semantics(0u64, group, style.defaults(), parts[2usize..3usize])
+        used = 2usize
+    }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 24.0 }, style.defaults(), parts[0usize..used])
+    let (buttons, buttons_error) = mem.alloc[DialogButton](a, 2usize)
+    if buttons_error != ok { ret (zero, TooLarge) }
+    buttons[0usize] = DialogButton { label: "Cancel", action: *cancel, kind: .Cancel }
+    buttons[1usize] = DialogButton { label: "OK", action: *confirm, kind: .Default }
+    let (made, made_error) = dialog_labelled(a, key, t, title, content, buttons[0usize..2usize], cancel)
+    ret (made, made_error)
 }
 
 // A time of day as zero-padded `HH:MM` into `out`; the length (0 when it does not fit).

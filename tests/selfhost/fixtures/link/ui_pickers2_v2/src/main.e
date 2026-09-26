@@ -584,14 +584,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         f = mem.arena_from(frame_storage)
         var order_theme = &german
         if order_step == 1usize { order_theme = &japanese }
-        let (ordered, ordered_error) = overlay.date_wheels(&f, 1800u64, order_theme, time.Date { year: 2026i32, month: 1u8, day: 31u8 }, widget.Change[time.Date] { ctx: mem.cast[*void](&wheel_date), invoke: on_wheel_date })
+        let (ordered, ordered_error) = overlay.date_wheels(&f, 1900u64, order_theme, time.Date { year: 2026i32, month: 1u8, day: 31u8 }, widget.Change[time.Date] { ctx: mem.cast[*void](&wheel_date), invoke: on_wheel_date })
         let (ordered_page, ordered_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if ordered_error != ok || ordered_page_error != ok { os.exit(136i32) }
         ordered_page[0usize] = ordered
         if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), ordered_page[0usize..1usize]), time.Instant { nanos: 6610000000i64 + i64(order_step) }) != ok { os.exit(136i32) }
-        let (month_at, has_month_at) = bounds(&harness, &runtime, 1800u64)
-        let (day_at, has_day_at) = bounds(&harness, &runtime, 1816u64)
-        let (year_at, has_year_at) = bounds(&harness, &runtime, 1832u64)
+        let (month_at, has_month_at) = bounds(&harness, &runtime, 1900u64)
+        let (day_at, has_day_at) = bounds(&harness, &runtime, 1916u64)
+        let (year_at, has_year_at) = bounds(&harness, &runtime, 1932u64)
         if !has_month_at || !has_day_at || !has_year_at { os.exit(137i32) }
         if order_step == 0usize && !(day_at.x < month_at.x && month_at.x < year_at.x) { os.exit(138i32) }
         if order_step == 1usize && !(year_at.x < month_at.x && month_at.x < day_at.x) { os.exit(139i32) }
@@ -626,6 +626,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (rolled_h, rolled_m, rolled_s) = overlay.duration_roll(0u32, 75u32, 0u32, 999u32)
     let (held_h, _, _) = overlay.duration_roll(30u32, 90u32, 0u32, 24u32)
     if rolled_h != 1u32 || rolled_m != 15u32 || rolled_s != 0u32 || held_h != 24u32 { os.exit(91i32) }
+    // (D1426) The duration modal: the three unit boxes and the presets in a
+    // dialog titled "Set timer"; a chip fires its pick, Enter confirms.
+    let picked_before = s.picked[0usize]
+    let toggles_before = s.toggles
+    var modal_step = 0usize
+    while modal_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (span_modal, span_modal_error) = overlay.duration_modal(&f, 2000u64, &theme, "Set timer", unit_boxes, s.presets[0usize..3usize], 1usize, s.picks[0usize..3usize], &s.press, &s.press)
+        let (span_page, span_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if span_modal_error != ok || span_page_error != ok { os.exit(140i32) }
+        span_page[0usize] = span_modal
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 480.0), span_page[0usize..1usize]), time.Instant { nanos: 6800000000i64 + i64(modal_step) }) != ok { os.exit(141i32) }
+        modal_step += 1usize
+    }
+    if testing.by_text(&harness, "Set timer").count == 0usize || testing.by_key(&harness, 2017u64).count == 0usize || testing.by_key(&harness, 2034u64).count == 0usize { os.exit(142i32) }
+    let (span_chip, has_span_chip) = bounds(&harness, &runtime, 2032u64)
+    if !has_span_chip || testing.tap(&harness, span_chip.x + span_chip.width * 0.5, span_chip.y + span_chip.height * 0.5) != ok || s.picked[0usize] != picked_before + 1u32 { os.exit(143i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 2017u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.toggles != toggles_before + 1u32 { os.exit(144i32) }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }
