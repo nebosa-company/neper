@@ -15149,6 +15149,7 @@ fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         ret
     }
     if call_returns_pointer(c, info) { ret }
+    region_retain(c, g, tree, module_index, node, info)
     var argument_at = 0usize
     while argument_at < info.function.parameter_count {
         let (argument_index, has_argument) = call_argument_node(tree, node, argument_at)
@@ -15177,6 +15178,48 @@ fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     }
 }
 
+
+// (D1562, H02) A container that keeps what it is given: a call given `&c` through a
+// mutable pointer parameter and, to an `own` parameter, a region value or a view --
+// or the address of one -- leaves `c` holding it, so `c` is in that region (the
+// innermost, when it holds several) or views that container from here. A reset or a
+// change of the source then leaves `c` dangling, and a later use of `c` -- a read
+// back of what it kept, or any other -- is refused as a use of the kept value would
+// be. An `own` parameter is the callee taking the value (`list.push`'s element);
+// a value a callee only borrows -- read, copied out -- is not kept. Whether it
+// then kept it is not asked: a container given one to own is taken to keep it.
+// ponytail: the whole container dangles, not the one element; clearing it does not
+// revive it; what a callee keeps through other than an argument is not followed.
+fn region_retain(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, info: CallInfo) {
+    var container_at = 0usize
+    while container_at < info.function.parameter_count {
+        let (container_index, has_container) = call_argument_node(tree, node, container_at)
+        if !has_container { break }
+        let parameter_index = info.function.first_parameter + container_at
+        if parameter_index < c.parameter_count && c.parameters[parameter_index].ty.kind == .Pointer && !c.parameters[parameter_index].ty.is_const {
+            let (container, is_address) = address_argument_local(c, g, tree, module_index, container_index)
+            if is_address && container < c.local_count {
+                var kept_at = 0usize
+                while kept_at < info.function.parameter_count {
+                    let (kept_index, has_kept) = call_argument_node(tree, node, kept_at)
+                    if !has_kept { break }
+                    let kept_parameter = info.function.first_parameter + kept_at
+                    if kept_at != container_at && kept_parameter < c.parameter_count && c.parameters[kept_parameter].own {
+                        var (kept, is_local) = resource_local_of(c, g, tree, module_index, kept_index)
+                        if !is_local { (kept, is_local) = place_base_local(c, g, tree, module_index, kept_index) }
+                        if is_local && kept != container && kept < c.local_count && (c.resources[kept].region != 0usize || c.resources[kept].view_of != 0usize) {
+                            if c.resources[kept].region > c.resources[container].region { c.resources[container].region = c.resources[kept].region }
+                            if c.resources[container].view_of == 0usize { c.resources[container].view_of = c.resources[kept].view_of }
+                            region_tag(c, container, usize(node.token_start))
+                        }
+                    }
+                    kept_at += 1usize
+                }
+            }
+        }
+        container_at += 1usize
+    }
+}
 
 // `mem.Arena` is affine and owed nothing (D351): an arena lives in one place, and
 // what it holds is reclaimed by the process, not a closer.
