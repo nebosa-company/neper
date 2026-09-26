@@ -367,6 +367,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if cycled_to != 992u64 || testing.press_key(&harness, 65475u32, zero) != ok { os.exit(87i32) }
     let (cycled_back, _) = widget.focused_key(&runtime)
     if cycled_back != 991u64 { os.exit(88i32) }
+    // (D1464) 300 wide for minimums of 240 and 320, the split stacks: the first
+    // pane alone; showing the second, it stands under a Back that fires.
+    var stack_step = 0usize
+    while stack_step < 3usize {
+        frame = mem.arena_from(frame_storage)
+        let (stack_parts, stack_parts_error) = mem.alloc[widget.Node](&frame, 2usize)
+        if stack_parts_error != ok { os.exit(89i32) }
+        stack_parts[0usize] = widget.box(1991u64, control.sized_style(40.0, 20.0), zero)
+        stack_parts[1usize] = widget.box(1992u64, control.sized_style(40.0, 20.0), zero)
+        var stacking: control.SplitOptions = zero
+        stacking.stack = true
+        stacking.showing_second = stack_step >= 1usize
+        stacking.back = widget.Submit { ctx: ctx, invoke: on_toggle }
+        stacking.second_title = "Build 4127"
+        let (stacked_split, stacked_split_error) = control.split_view_with(&frame, 1980u64, &theme, "Builds", .Horizontal, stack_parts[0usize], stack_parts[1usize], 200.0, 240.0, 320.0, widget.Change[f32] { ctx: ctx, invoke: on_size }, 300.0, 400.0, stacking)
+        let (stack_page, stack_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if stacked_split_error != ok || stack_page_error != ok { os.exit(89i32) }
+        stack_page[0usize] = stacked_split
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 420.0), stack_page[0usize..1usize]), time.Instant { nanos: 31000000000i64 + i64(stack_step) }) != ok { os.exit(90i32) }
+        let firsts = testing.by_key(&harness, 1991u64).count
+        let seconds = testing.by_key(&harness, 1992u64).count
+        if stack_step == 0usize && (firsts == 0usize || seconds != 0usize || testing.by_key(&harness, 1983u64).count != 0usize) { os.exit(91i32) }
+        if stack_step == 2usize {
+            if firsts != 0usize || seconds == 0usize { os.exit(92i32) }
+            let backs_before = logs[0usize].toggles
+            let (back_at, has_back_at) = centre_of(&harness, &runtime, 1984u64)
+            if !has_back_at || testing.tap(&harness, back_at.x, back_at.y) != ok || logs[0usize].toggles != backs_before + 1usize { os.exit(93i32) }
+        }
+        stack_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui panes ok\n")
     ret ok

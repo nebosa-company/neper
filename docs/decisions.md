@@ -27193,3 +27193,9 @@ The AppBar spec hides a disabled action rather than dimming it, "unless its abse
 D1405 made the picker sheet's handle drag the sheet, but the drag region was only as tall as the 4 grip. The region is now 48 tall. It reaches 16 above the grip, to the sheet's top, and 28 below it, over the gap before the title. Negative margins keep the sheet's layout exactly as it stood.
 
 `ui_pickers_v2` checks on Windows and Linux that the handle region is 48 tall; the D1405 drag and the grown viewport's 568 still hold. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1464 — Split views stack where both panes do not fit
+
+The SplitView spec folds into a stack on compact windows: "the view stacks when both minimums do not fit", with the second pane pushed over the first under a top bar and Back. `SplitOptions` gains `stack`, `showing_second`, `back` and `second_title`. With `stack` set and the two minimums wider than the view along its axis, `split_view_with` shows the first pane alone. While `showing_second`, it shows the second under a 56 bar with an `arrow-back` Back (`key + 4`, firing `back`) and the title in `title-large`. There is no sash either way, and the view stays a group named by its label. Split views without `stack` are unchanged.
+
+`ui_panes` checks this on Windows and Linux with a 300 wide split whose minimums are 240 and 320. First only the first pane stands and no sash; then the second stands under a Back that fires. All 103 `ui_*` fixtures pass on both hosts.

@@ -6300,8 +6300,9 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
 // `key + 3`); a group in the tree.
 // Its sash resets on double-click and cancels a drag on Escape (D1212).
 // (D1406) `split_view_with` adds snap points and F6 cycling.
-// ponytail: no stacking below the breakpoint, ratio across window resizes or
-// empty-detail slot; add them with a window-size input.
+// (D1464) `SplitOptions.stack` folds it into a stack where both minimums do not
+// fit.
+// ponytail: no ratio across window resizes or empty-detail slot.
 fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err) {
     var plain: SplitOptions = zero
     let (made, made_error) = split_view_with(a, key, t, label, axis, first, second, position, min_first, min_second, change, width, height, plain)
@@ -6313,7 +6314,10 @@ fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // focusable element in each pane) F6 moves the focus from one pane to the other.
 // (D1409) `points`, when given, are the sizes the divider snaps to in place of
 // the thirds and the half.
-type SplitOptions = struct { snaps: bool, first_focus: widget.Key, second_focus: widget.Key, points: []const f32 }
+// (D1464) With `stack`, a split whose two minimums do not fit stacks: `first`
+// alone, or, while `showing_second`, `second` under a 56 bar with Back (firing
+// `back`) and `second_title`.
+type SplitOptions = struct { snaps: bool, first_focus: widget.Key, second_focus: widget.Key, points: []const f32, stack: bool, showing_second: bool, back: widget.Submit, second_title: str }
 
 type SplitSnap = struct { total: f32, change: widget.Change[f32], points: []const f32 }
 
@@ -6350,6 +6354,47 @@ fn split_cycle_fire(ctx: *void) -> err {
 // (D1406, docs/ux/components/SplitView, snap points and keyboard) The split view
 // with its options.
 fn split_view_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32, options: SplitOptions) -> (widget.Node, err) {
+    // (D1464, docs/ux/components/SplitView, compact stack) Where both minimums do
+    // not fit, the view stacks: the first pane alone, or the second pushed over it
+    // under a 56 bar with an `arrow-back` Back (`key + 4`) and its title in
+    // `title-large`. A group in the tree named `label` either way.
+    var along = width
+    if axis == .Vertical { along = height }
+    if options.stack && along < min_first + min_second {
+        let (stacked, stacked_error) = mem.alloc[widget.Node](a, 5usize)
+        if stacked_error != ok { ret (zero, TooLarge) }
+        var page = sized_style(width, height)
+        page.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+        page.overflow = .Clip
+        var count = 1usize
+        stacked[0usize] = first
+        if options.showing_second {
+            let (backs, backs_error) = mem.alloc[widget.Submit](a, 1usize)
+            if backs_error != ok { ret (zero, TooLarge) }
+            backs[0usize] = options.back
+            let (going, going_error) = glyph_action(a, key + 4u64, t, .ArrowBack, "Back", &backs[0usize], 48.0, t.tokens.sizes.icon_md, style.color(t.tokens, .OnSurface), true, 0u32, 0u32, 0u64)
+            if going_error != ok { ret (zero, going_error) }
+            var heading = text_options()
+            heading.role = .TitleLarge
+            heading.wrap = .None
+            let (titled, titled_error) = colored_text(a, 0u64, options.second_title, t, heading, style.color(t.tokens, .OnSurface))
+            if titled_error != ok { ret (zero, titled_error) }
+            stacked[3usize] = going
+            stacked[4usize] = titled
+            var bar = sized_style(width, 56.0)
+            bar.padding.left = style.Length { Px: 4.0 }
+            stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, bar, stacked[3usize..5usize])
+            stacked[1usize] = second
+            count = 2usize
+        }
+        let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+        if column_error != ok { ret (zero, TooLarge) }
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, page, stacked[0usize..count])
+        var stacked_sem: widget.Semantics = zero
+        stacked_sem.role = 2u8
+        stacked_sem.label = label
+        ret (widget.semantics(key, stacked_sem, style.defaults(), column[0usize..1usize]), ok)
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var sized_change = change
