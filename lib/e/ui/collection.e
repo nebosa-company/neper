@@ -1561,13 +1561,30 @@ fn header_gesture(ctx: *void, g: widget.Gesture) -> err {
     case .Tap as at:
         ret widget.fire_change[usize](h.sort, h.column)
     case .DragStart as at:
-        ret widget.begin_drag(h.runtime, u64(h.column) + 1u64)
+        ret widget.begin_drag(h.runtime, header_payload_tag() + u64(h.column) + 1u64)
     case .Drop as d:
-        if d.payload == 0u64 || usize(d.payload - 1u64) == h.column { ret ok }
-        ret widget.fire_change[Reorder](h.reorder, Reorder { from: usize(d.payload - 1u64), to: h.column })
+        // (D1345) Only a header's drag reorders: its payload carries the tag.
+        if d.payload <= header_payload_tag() || d.payload > header_payload_tag() + 4096u64 { ret ok }
+        let from = usize(d.payload - header_payload_tag() - 1u64)
+        if from == h.column { ret ok }
+        ret widget.fire_change[Reorder](h.reorder, Reorder { from: from, to: h.column })
     default:
         ret ok
     }
+}
+
+// (D1345) A header drag's payload: this tag plus the column plus one, so a
+// document tab's drag (its index plus one) neither lifts nor reorders a header.
+fn header_payload_tag() -> u64 {
+    ret 1099511627776u64
+}
+
+// (D1345) The column whose header is being dragged, if one is.
+fn lifted_column(t: *const control.Theme) -> (usize, bool) {
+    if mem.address_of(t.runtime) == 0usize { ret (0usize, false) }
+    let (payload, has_payload) = widget.dragging(t.runtime)
+    if !has_payload || payload <= header_payload_tag() || payload > header_payload_tag() + 4096u64 { ret (0usize, false) }
+    ret (usize(payload - header_payload_tag() - 1u64), true)
 }
 
 fn header_sort(ctx: *void) -> err {
@@ -1664,7 +1681,9 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // (D1328) A numeric column's title stands at the end, its sort arrow before it.
 // (D1340) A filtered column's header carries the filter mark.
 // (D1341) `TableOptions.groups` adds the grouped tier (`header_groups`).
-// ponytail: no reorder lift.
+// (D1345) A dragged header lifts.
+// ponytail: the lifted header keeps its place rather than following the pointer,
+// and there is no landing line.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     var plain: []const bool = zero
     let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain, plain)
@@ -1755,6 +1774,12 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         // A tap sorts; a drag begins a reorder; a drop on it ends one.
         var head_style = control.sized_style(control.max_zero(columns[i].width - grip), inner)
         head_style.background = paint.Brush { Solid: control.with_alpha(strong, control.state_opacity(t, state)) }
+        // (D1345) The dragged header lifts: `surface-container-highest` at elevation 4.
+        let (lifted, has_lifted) = lifted_column(t)
+        if has_lifted && lifted == i {
+            head_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+            head_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
+        }
         let sides = style.Length { Px: pad }
         let flat = style.Length { Px: 0.0 }
         head_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
