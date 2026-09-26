@@ -27222,3 +27222,9 @@ Themes without a 600 face draw these in the regular face at the same size.
 The Snackbar spec has a two-line form: "a result that needs a sentence of reason; the action moves under the text", at least 68 tall. When the message and the action do not fit on one line beside Dismiss, a snackbar now stands in that form. The message and the action are measured with the theme's fonts. The message stands beside Dismiss, then the action at the end under them. A short message stays on one line. The entry's fade and rise now always wrap the snackbar (identity once in), per D1432, so a focused action is not remade when the entry ends. Exit motion and the toast's richer forms are still not done.
 
 `ui_content` gives the check its own 800 wide window, since in the fixture's 64 wide one every snackbar is compact. On Windows and Linux, a long message puts the action under Dismiss, and a short one keeps it on Dismiss's line. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1468 — The font picker's trigger
+
+The FontPicker spec opens its panel from a trigger in compact layouts and forms: "a field showing 'Family, size'... with a trailing chevron", and, for a saved family that is not installed, a `warning` and "Not installed, using <fallback>". The new `font_trigger` builds it on the select's field head (keyed `key`): the label in the notch, "Inter, 12" as the value, and the chevron. A press fires `toggle`, and the field says Expanded while `open`. The caller anchors the panel to it. With `missing`, a `warning` mark and the error note stand under the field in `body-small` `error` (keyed `key + 1`). The value is not yet set in the chosen family's face, and there are still no feature chips or sheet form.
+
+`ui_pickers3_v2` checks this on Windows and Linux: "Inter, 12" and "Not installed, using Segoe UI" show, and a tap on the trigger fires its toggle once.
