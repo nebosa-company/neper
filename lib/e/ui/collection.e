@@ -4005,8 +4005,9 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // reports a `TreeMove`.
 // (D1373) A drag held 700 ms over a shut branch opens it (`toggle`).
 // (D1503) `TreeOptions.height` virtualises the rows.
-// ponytail: a tree table's rows do not drag; a virtual tree assumes one row
-// height (a loading child row makes its row taller).
+// (D1506) A tree table's rows drag too.
+// ponytail: a virtual tree assumes one row height (a loading child row makes its
+// row taller).
 // (D1330) A tree's per-node states, by key: `disabled` nodes are drawn at 38%,
 // take focus but no pick and say Disabled; an open node in `loading` is Busy and
 // its children wait under a "Loading" row.
@@ -4227,6 +4228,23 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             let (tabled_row, tabled_error) = table_row_of(a, t, columns, cells, entry.key, entry.index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, cell_padding(t), false, false, zero, false)
             if tabled_error != ok { ret (none, tabled_error) }
             made = tabled_row
+            // (D1506) A tree table's row drags as a tree's does: an outer region
+            // (keyed by the row's key and "tree-drag") takes the drag, and a
+            // branch the drop, while the row inside keeps its taps.
+            if moving {
+                drags[i] = TreeRowDrag { pick: &picks[i], runtime: t.runtime, index: i, key: entry.key, rows: visible[0usize..count], move: options.move }
+                var drag_gestures = widget.GESTURE_DRAG
+                if entry.branch { drag_gestures = drag_gestures | widget.GESTURE_DROP }
+                let (carried, carried_error) = mem.alloc[widget.Node](a, 1usize)
+                if carried_error != ok { ret (none, TooLarge) }
+                carried[0usize] = tabled_row
+                var carried_style = style.defaults()
+                if has_lifted_row && lifted_row == i {
+                    carried_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+                    carried_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
+                }
+                made = widget.region(entry.key ^ hash.fnv1a64("tree-drag"), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&drags[i]), invoke: tree_row_gesture }, gestures: drag_gestures, enabled: true, focusable: false }, carried_style, carried[0usize..1usize])
+            }
         } else {
             let state = control.control_state(t, entry.key, true, chosen)
             var fill = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))

@@ -508,6 +508,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         move_step += 1usize
     }
+    // (D1506) The same move in a tree table: A2's row dragged onto B's reports
+    // A2 into B.
+    var table_moved = TreeMoveLog { node: 0u64, into: 0u64 }
+    var table_move_step = 0usize
+    while table_move_step < 3usize {
+        var table_moving: collection.TreeOptions = zero
+        table_moving.move = widget.Change[collection.TreeMove] { ctx: mem.cast[*void](&table_moved), invoke: on_tree_move }
+        f = mem.arena_from(frame_storage)
+        let table_move_source = collection.TreeSource { ctx: ctx, count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
+        var move_columns: [2]collection.Column = zero
+        move_columns[0usize] = collection.Column { title: "Name", width: 200.0 }
+        move_columns[1usize] = collection.Column { title: "Size", width: 80.0 }
+        let (moving_table, moving_table_error) = collection.tree_table_with(&f, 750u64, &theme, "Move table", move_columns[..], table_move_source, collection.CellSource { ctx: ctx, cell: tree_cell }, with_open[0usize..1usize], no_chosen[0usize..0usize], widget.Change[widget.Key] { ctx: ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0usize, false, zero, zero, zero, 0.0, table_moving)
+        let (table_move_page, table_move_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if moving_table_error != ok || table_move_page_error != ok { os.exit(94i32) }
+        table_move_page[0usize] = moving_table
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 360.0), table_move_page[0usize..1usize]), time.Instant { nanos: 4600000000i64 + i64(table_move_step) * 1000000000i64 }) != ok { os.exit(95i32) }
+        let (a2_cell, has_a2_cell) = bounds(&harness, &runtime, 12u64)
+        let (b_cell, has_b_cell) = bounds(&harness, &runtime, 2u64)
+        if !has_a2_cell || !has_b_cell { os.exit(96i32) }
+        if table_move_step == 0usize {
+            if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(a2_cell.x + 60.0, a2_cell.y + a2_cell.height * 0.5) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(a2_cell.x + 60.0, a2_cell.y + a2_cell.height * 0.5 + 20.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(b_cell.x + 60.0, b_cell.y + b_cell.height * 0.5) }) != ok { os.exit(97i32) }
+        }
+        if table_move_step == 2usize {
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(b_cell.x + 60.0, b_cell.y + b_cell.height * 0.5) }) != ok || table_moved.node != 12u64 || table_moved.into != 2u64 { os.exit(98i32) }
+        }
+        table_move_step += 1usize
+    }
     // (D1437) Opened, the first twisty turns a quarter over `duration-short-3`:
     // on the open's first frame its box differs from how it settles a second on.
     var twist_sums: [2]u32 = zero

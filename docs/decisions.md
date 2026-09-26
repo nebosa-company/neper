@@ -27466,3 +27466,9 @@ The DataGrid spec: "edited values cross-fade in `duration-short-2`. Reduced moti
 To see a text's colour in a test without fonts, the runtime now records each text node's colour on its element (`Element.text_ink`). `testing.text_color(harness, text)` reads it, through `widget.text_ink_of`.
 
 `ui_collections6_v2` checks this on Windows and Linux: 30 ms after an edit turns "old" into "new", the new value's ink is not yet opaque, and a second on it is. Against the old collection the check fails (exit 176). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1506 — Tree table rows drag and drop
+
+D1372 gave a tree's rows drag and drop through `TreeOptions.move`, but a tree table's rows are table rows, whose region takes only taps, so they did not drag. With D1504's `tree_table_with` carrying `TreeOptions`, a tree table's row with `move` set now stands in an outer region, keyed by the row's key and "tree-drag". That region takes the drag, and a branch's region also takes the drop, through the same `tree_row_gesture` and `TreeRowDrag` as a tree row. The table row inside keeps its taps, since D1380 gives a press to the nearest region that takes drags when it becomes one. The row a drag carries lifts to `surface-container-high` at elevation 4. The hover-open hold and the drop look on a branch are still a tree's alone.
+
+`ui_collections3_v2` checks this on Windows and Linux: A2's row dragged onto B's in a tree table reports A2 into B. Against the old collection it reports nothing (exit 98). All 103 `ui_*` fixtures pass on both hosts.
