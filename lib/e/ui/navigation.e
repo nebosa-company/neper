@@ -1849,7 +1849,9 @@ fn navigation_split(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pri
 // Back); the statement the detail shows while nothing is selected (empty: the
 // detail itself); and in a single pane, the detail's title under a Back bar
 // firing `pop` (no title: no bar).
-type NavigationSplitOptions = struct { medium: bool, list_label: str, detail_label: str, empty: str, detail_title: str, pop: widget.Submit }
+// (D1410) `list_focus` and `detail_focus` (keys of a focusable element in each
+// pane) let F6 move the focus between the panes side by side.
+type NavigationSplitOptions = struct { medium: bool, list_label: str, detail_label: str, empty: str, detail_title: str, pop: widget.Submit, list_focus: widget.Key, detail_focus: widget.Key }
 
 fn navigation_split_options() -> NavigationSplitOptions {
     var out: NavigationSplitOptions = zero
@@ -1870,7 +1872,7 @@ fn navigation_split_options() -> NavigationSplitOptions {
 // under a v2 app bar (keyed `key + 4`) led by Back (`key + 5`) named "Back to
 // <the list>"; Escape and Alt+Left share its `pop` action.
 // ponytail: the touch divider is D966's sash, not the 24 gutter with its 4 x 48
-// handle; no supporting pane, push motion or focus moves. (D1409) On touch the
+// handle; no supporting pane or push motion. (D1409) On touch the
 // list snaps to 360 and half.
 fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, primary: widget.Node, detail: widget.Node, showing_detail: bool, position: f32, change: widget.Change[f32], width: f32, height: f32, options: NavigationSplitOptions) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -1956,6 +1958,9 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         // (D1409, docs/ux/components/NavigationSplit, snap points) On touch the
         // list snaps to 360 and to half the split within 16.
         var split_options: control.SplitOptions = zero
+        // (D1410, docs/ux/components/NavigationSplit, keyboard) F6 cycles the panes.
+        split_options.first_focus = options.list_focus
+        split_options.second_focus = options.detail_focus
         let (points, points_error) = mem.alloc[f32](a, 2usize)
         if points_error != ok { ret (zero, TooLarge) }
         if touch {
