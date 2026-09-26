@@ -26104,3 +26104,17 @@ Holding a drag over a crumb does not navigate there yet.
 `ui_navigation2_v2` drags from a test source (payload 77) over "lib": the crumb
 fills `primary-container`, and the drop reports crumb 1 with payload 77, on
 Windows and Linux.
+
+## D1362 — The time dial turns under a drag
+
+The TimePicker spec's dial follows a press or drag, and releasing the hour dial
+moves to minutes. The dial's focus region (`key + 7`) now takes drags:
+`dial_turn_to` measures the pointer's turn round the region's centre (0 at the
+top, clockwise, `math.atan2`). The hour is the nearest of the twelve places
+(plus 12 in the afternoon half, as the numbers are) and the minute the nearest
+whole minute. Each start and move reports a `TimeChoice`, and the end of an hour
+drag reports `EditMinute`. Presses within 4 of the centre are ignored. Minutes
+do not snap to five on a fast drag.
+
+`ui_pickers2_v2` drags from the top of the dial round to three o'clock at 14:30:
+the hour is 15, and the release asks for the minutes, on Windows and Linux.

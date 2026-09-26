@@ -310,6 +310,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // (D1306) Focused, the dial's Up sets 15 and Down 13.
             if widget.focus(&runtime, testing.by_key(&harness, 1307u64).element) != ok || testing.press_key(&harness, 38u32, zero) != ok || chose.kind != .Hour || chose.value != 15u8 { os.exit(67i32) }
             if testing.press_key(&harness, 40u32, zero) != ok || chose.value != 13u8 { os.exit(68i32) }
+            // (D1362) Dragged from the top round to three o'clock the hour is 15;
+            // released, the minutes are asked for.
+            let (ring, has_ring) = bounds(&harness, &runtime, 1307u64)
+            if !has_ring { os.exit(95i32) }
+            let hub = geometry.Point { x: ring.x + ring.width * 0.5, y: ring.y + ring.height * 0.5 }
+            if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(hub.x, hub.y - 50.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(hub.x + 10.0, hub.y - 50.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(hub.x + 50.0, hub.y) }) != ok { os.exit(96i32) }
+            if chose.kind != .Hour || chose.value != 15u8 { os.exit(97i32) }
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(hub.x + 50.0, hub.y) }) != ok || chose.kind != .EditMinute { os.exit(98i32) }
         }
         if dial_step == 1usize {
             let (thirty, has_thirty) = bounds(&harness, &runtime, 1316u64)
