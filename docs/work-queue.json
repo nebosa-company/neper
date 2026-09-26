@@ -497,6 +497,39 @@
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "benchmarks/llm_edit"
+    },
+    {
+      "id": "T026",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 26,
+      "title": "Agent workflow adoption: context-file before file reads, patch or plan-* before scripts",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "The tools exist (context-file C053/D361, tools/patch D1455, plan-*-file C052) and nothing routes agents to them: scripts/lang-stats.py on every transcript to 2026-09-26 puts the median context at a turn that lands Neper code at 515K tokens against Dart's 235K, while context-file answers in 1.2K-5K (D948); 39% of landed Neper source arrived inside Python patch scripts and heredocs at 5x the cost per byte of a direct edit, and 5.0% of edit applications failed, almost all of them heredoc scripts. Done when the AGENTS.md rule and a card section route both paths and lang-stats.py's ctx Ktk and script% move on new sessions; the two numbers are the score."
+    },
+    {
+      "id": "T027",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 27,
+      "title": "H12 v1 precursor: held-out two-family evaluation on real tools",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "post-m2-llm-hardening.md section 15 specifies the only evidence that can support a superiority claim -- correctness first, then total interaction tokens per verified success, repair turns and source-token pressure, 20 seeds per case, Neper's own tools against each baseline's native ones, rank first or statistically tied or expand rather than assert -- and nothing in this queue schedules it. benchmarks/llm_edit/neper_advantage_matrix.md and benchmarks/llm_gen are smoke runs by their own READMEs. Done when ten held-out tasks in two model families run under the acceptance rule with the harness, prompts, cards and baseline results frozen and the report versioned."
+    },
+    {
+      "id": "T028",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 28,
+      "title": "Repeated diagnostics: fixtures and fingerprints for the codes that recur across a repair",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Over 198 observed repairs in the transcripts (lang-stats.py, REPAIR table), a compile diagnostic is fixed in the next reply but only 15.7% of repairs took one edit, and 61.5% of consecutive failed builds repeat an error code from the failure before -- E-TYPE-0002 and the other kind-level codes cannot tell a second site from an unfixed first one. H31's cross-run fingerprints are T2; the v1 precursor is a fixture per recurring code that pins what the message must name (the span, the expected and found types, the binding) so a model can act on it once, tracked by lang-stats.py's repeat% and 1-edit%."
     }
   ]
 }
