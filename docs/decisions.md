@@ -27316,3 +27316,11 @@ The RichText spec draws an inline key as `nu-kbd`: "24 tall, `surface-container-
 On the way, `24.0 > line_h` failed to lower (`check.MissingContext`), and a typed local stands in for it. An untyped float literal alone on the left of a comparison has no context, while `h < 24.0` and `(24.0 - h) > o` lower. That is a compiler defect of its own.
 
 `ui_content3_v2` checks this on Windows and Linux. Down the cap's last padding column there is one row of edge, the fill, then two rows of foot, 24 in all. The visited link after the key sits 2 further on. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1483 — An untyped float literal on the left of a comparison takes the right's width
+
+A comparison checks its operands without the result's context, since the result is a `bool`. Lowering then typed the left operand first, with nothing to go on. `24.0 > h`, and `let b = 24.0 > h`, passed the checker and then failed in lowering as a location-less `E-TYPE-9999 ... check.MissingContext`: `float_literal_bits` had no width for an unsuffixed float. `h < 24.0` and `(24.0 - h) > o` lowered, because the literal took its type from a typed operand beside it. D1482 met this in `paragraph`.
+
+`lower_binary_expr` now checks the right operand first, with no expectation, when a comparison's left operand is an untyped float, and lowers the left in that type when it is a float. Only code that failed to lower before takes the new path, so nothing that compiled changes meaning. Untyped integers on the left keep their existing path. The `missing_context`, `cast_untyped` and `constant_missing_context` refusals still refuse.
+
+`float_scalar` checks this on Windows and Linux: `1.0 > p.y`, `0.5 >= p.y` and `0.75 != p.y` with an `f32` on the right, `10.0 >= p.x`, `5.0 != p.x` and `6.0 < p.x` with an `f64`, and `let under = 0.25 < heap[0]`. The self-hosted compiler rebuilt with the change reaches its fixed point on Windows: stage 2 and stage 3 are byte-identical.

@@ -5264,8 +5264,16 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     }
     var operand_expected = result_type
     if check.is_comparison(operator) { operand_expected = check.invalid_type() }
-    let (left_type, left_type_error) = check.check_expr(c, g, tree, module_index, children[0usize], operand_expected)
-    if left_type_error != ok { ret (0usize, left_type, left_type_error) }
+    let (checked_left_type, left_type_error) = check.check_expr(c, g, tree, module_index, children[0usize], operand_expected)
+    if left_type_error != ok { ret (0usize, checked_left_type, left_type_error) }
+    var left_type = checked_left_type
+    // (D1483) An untyped float literal alone on the left of a comparison (`24.0 >
+    // h`) takes the right operand's type, as the checker already lets it; lowered
+    // with no context it had no width.
+    if check.is_comparison(operator) && left_type.kind == .UntypedFloat {
+        let (context_type, context_error) = check.check_expr(c, g, tree, module_index, children[1usize], check.invalid_type())
+        if context_error == ok && context_type.kind == .Float { left_type = context_type }
+    }
     let (left, lowered_left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], left_type, builder, bindings, binding_count)
     if left_error != ok { ret (0usize, lowered_left_type, left_error) }
     var right_expected = left_type

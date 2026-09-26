@@ -168,5 +168,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     heap[0usize] = 0.75f64
     heap[1usize] = 0.25f64
     if total(heap) != 1.0f64 { ret Failed }
+
+    // (D1483) An untyped float literal alone on the left of a comparison takes
+    // the right operand's width.
+    if !(1.0 > p.y) || 0.5 >= p.y || 0.75 != p.y { ret Failed }
+    if !(10.0 >= p.x) || 5.0 != p.x || 6.0 < p.x { ret Failed }
+    let under = 0.25 < heap[0usize]
+    if !under { ret Failed }
     ret ok
 }
