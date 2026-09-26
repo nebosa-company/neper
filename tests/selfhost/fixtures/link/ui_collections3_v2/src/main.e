@@ -31,7 +31,14 @@ use e.ui.widget
 
 const W: usize = 320usize
 
-type Log = struct { toggles: usize, toggled: widget.Key, picks: usize, collapses: usize, large: bool }
+type Log = struct { toggles: usize, toggled: widget.Key, picks: usize, collapses: usize, large: bool, offset: f32 }
+
+// (D1503) A virtual tree's scroll, kept.
+fn on_tree_scroll(ctx: *void, value: f32) -> err {
+    let log = mem.cast[*Log](ctx)
+    log.offset = value
+    ret ok
+}
 
 fn on_toggle(ctx: *void, value: widget.Key) -> err {
     let log = mem.cast[*Log](ctx)
@@ -596,6 +603,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     f = mem.arena_from(frame_storage)
     let (root_4, build_4_error) = build(&f, &large_theme, ctx, 0usize)
     if build_4_error != ok || testing.pump(&large_harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok || testing.by_key(&large_harness, 10512u64).count != 1usize { os.exit(53i32) }
+    // (D1503) The same 513 nodes in a virtual tree 200 tall: the first rows are
+    // built and the last is not; End asks the viewport to reveal the last row.
+    var virtual_step = 0usize
+    while virtual_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let big_source = collection.TreeSource { ctx: ctx, count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
+        var big_options: collection.TreeOptions = zero
+        big_options.height = 200.0
+        big_options.scrolled = widget.Change[f32] { ctx: ctx, invoke: on_tree_scroll }
+        var no_keys: [1]widget.Key = zero
+        let (big_tree, big_tree_error) = collection.tree_with(&f, 9000u64, &large_theme, "Big", big_source, no_keys[0usize..0usize], no_keys[0usize..0usize], widget.Change[widget.Key] { ctx: ctx, invoke: on_toggle }, widget.Change[widget.Key] { ctx: ctx, invoke: on_pick }, 0.0, 300.0, big_options)
+        let (big_page, big_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if big_tree_error != ok || big_page_error != ok { os.exit(86i32) }
+        big_page[0usize] = big_tree
+        if testing.pump(&large_harness, widget.box(0u64, control.sized_style(320.0, 360.0), big_page[0usize..1usize]), time.Instant { nanos: 1400000000i64 + i64(virtual_step) }) != ok { os.exit(87i32) }
+        virtual_step += 1usize
+    }
+    if testing.by_key(&large_harness, 10000u64).count != 1usize || testing.by_key(&large_harness, 10512u64).count != 0usize || testing.by_key(&large_harness, 10020u64).count != 0usize { os.exit(88i32) }
+    if widget.focus(&large_runtime, testing.by_key(&large_harness, 10000u64).element) != ok || testing.press_key(&large_harness, 35u32, zero) != ok || !(logs[0usize].offset > 16000.0) { os.exit(89i32) }
     if testing.close(&large_harness) != ok || widget.close(&large_runtime) != ok || testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
     try io.print("ui collections3 v2 ok\n")
     ret ok
