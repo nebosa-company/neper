@@ -577,6 +577,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         path_step += 1usize
     }
+    // (D1443) Switched to editing, the path field fades in over
+    // `duration-short-3`: on the switch's frame it stands part way in, a second
+    // on whole.
+    var fade_step = 0usize
+    while fade_step < 4usize {
+        var fade_at = 7100000000i64
+        if fade_step == 1usize { fade_at = 7100000001i64 }
+        if fade_step == 2usize { fade_at = 7200000000i64 }
+        if fade_step == 3usize { fade_at = 8200000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: fade_at }) != ok { os.exit(129i32) }
+        var fading_path = navigation.breadcrumbs_options()
+        fading_path.width = 500.0
+        fading_path.edit = s.subs[6usize]
+        fading_path.go = s.subs[7usize]
+        fading_path.cancel = s.subs[8usize]
+        fading_path.editing = fade_step >= 2usize
+        fading_path.path = path_bytes
+        fading_path.path_len = path_len
+        f = mem.arena_from(frame_storage)
+        let (fading_trail, fading_trail_error) = navigation.breadcrumbs_of(&f, 2900u64, &theme, "Fading", path_names[..], s.crumbs[0usize..3usize], fading_path)
+        let (fading_page, fading_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if fading_trail_error != ok || fading_page_error != ok { os.exit(129i32) }
+        fading_page[0usize] = fading_trail
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), fading_page[0usize..1usize]), time.Instant { nanos: fade_at }) != ok { os.exit(129i32) }
+        if fade_step >= 2usize {
+            let shown_share = control.eased_on(&theme, 2900u64, 2900u64 + 1048602u64, 1.0, false, tokens.durations.short3)
+            if fade_step == 2usize && !(shown_share < 1.0) { os.exit(130i32) }
+            if fade_step == 3usize && shown_share != 1.0 { os.exit(131i32) }
+        }
+        fade_step += 1usize
+    }
     // (D1326) Sibling menus: a resting crumb has no chevron; hovered, "lib" shows
     // one that reports index 1; open, its menu lists the siblings and a pick fires.
     var sibling_log: [1]usize = zero
