@@ -5547,10 +5547,12 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
     var fill = control.with_alpha(surface_ink, control.state_opacity(t, state))
     // (D1475, docs/ux/components/Row, motion) Selection changes ease the fill and
     // the text colours over `duration-short-3` on `ease-standard` (kept on the
-    // row, slot `key + 1048599`); reduced motion changes at once.
+    // row, slot `key + 1048599`); (D1490) reduced motion cross-fades over
+    // `duration-short-2`.
     var picked_goal: f32 = 0.0
     if item.selected { picked_goal = 1.0 }
-    let picked_share = control.eased_on(t, key, key + 1048599u64, picked_goal, false, t.tokens.durations.short3)
+    var picked_share = control.eased_on(t, key, key + 1048599u64, picked_goal, false, t.tokens.durations.short3)
+    if t.tokens.motion.reduced { picked_share = control.faded_on(t, key, key + 1048599u64, picked_goal, t.tokens.durations.short2) }
     if picked_share > 0.0 {
         let picked_ink = style.color(t.tokens, .OnSecondaryContainer)
         let picked_fill = style.layer(style.color(t.tokens, .SecondaryContainer), picked_ink, control.state_opacity(t, state))
