@@ -820,10 +820,16 @@ fn alert_dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
 // window, an overlay of its own under `top`; a press on it misses the modal
 // overlay, which dismisses it.
 fn with_scrim(a: *mem.Arena, t: *const control.Theme, top: widget.Node) -> (widget.Node, err) {
+    let (made, made_error) = with_scrim_share(a, t, top, 1.0)
+    ret (made, made_error)
+}
+
+// (D1430) `with_scrim` with the scrim at `share` of its opacity.
+fn with_scrim_share(a: *mem.Arena, t: *const control.Theme, top: widget.Node, share: f32) -> (widget.Node, err) {
     var dim = style.defaults()
     dim.width = style.Length { Percent: 100.0 }
     dim.height = style.Length { Percent: 100.0 }
-    dim.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Scrim), t.tokens.states.scrim) }
+    dim.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Scrim), t.tokens.states.scrim * share) }
     let (dims, dims_error) = mem.alloc[widget.Node](a, 1usize)
     if dims_error != ok { ret (zero, TooLarge) }
     dims[0usize] = widget.box(0u64, dim, zero)
@@ -938,8 +944,13 @@ fn dialog_labelled(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
 }
 
 // (D1369) `dialog_as_state` with the title's role and colour.
+// (D1430, docs/ux/components/Dialog, motion) It enters over `duration-medium-4`
+// on the emphasized-decelerate curve, the scrim fading in and the card fading
+// and scaling up from 90%, in a box keyed `key + 8192` there open or shut;
+// leaving is at once.
 fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit, has_icon: bool, icon: control.GlyphKind, destructive_icon: bool, title_role: style.TextRole, title_ink: style.ColorRole) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let entering = opening_share_over(t, key, open, t.tokens.durations.medium4)
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     var submit: widget.Submit = zero
     var cancel: widget.Submit = zero
     let (row, row_error) = mem.alloc[widget.Node](a, buttons.len)
@@ -1045,8 +1056,15 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
     var outside = cancel
     if semantic_role == accessibility.ROLE_ALERT_DIALOG { outside = widget.Submit { ctx: zero, invoke: zero } }
-    let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]))
-    ret (made, made_error)
+    let (scaled, scaled_error) = scaled_in(a, framed[0usize], entering, 0.9)
+    if scaled_error != ok { ret (zero, scaled_error) }
+    framed[0usize] = scaled
+    let (made, made_error) = with_scrim_share(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]), entering)
+    if made_error != ok { ret (zero, made_error) }
+    let (dialog_held, dialog_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if dialog_held_error != ok { ret (zero, TooLarge) }
+    dialog_held[0usize] = made
+    ret (widget.box(key + 8192u64, style.defaults(), dialog_held[0usize..1usize]), ok)
 }
 
 // Below the medium window threshold a form dialog becomes a full-window surface
