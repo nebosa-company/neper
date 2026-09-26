@@ -1662,14 +1662,17 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // full-height 3px `primary` bar while hovered or dragged.
 // (D1246) A selectable table's select-all checkbox stands before these cells.
 // (D1328) A numeric column's title stands at the end, its sort arrow before it.
-// ponytail: no filter mark, grouped tier or reorder lift.
+// (D1340) A filtered column's header carries the filter mark.
+// ponytail: no grouped tier or reorder lift.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     var plain: []const bool = zero
-    let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain)
+    let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain, plain)
     ret (made, made_error)
 }
 
-fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key, numeric: []const bool) -> (widget.Node, err) {
+// (D1340) A filtered column's header shows the 18 `filter` mark 4 after its title
+// (and arrow) and says "filtered" as its hint.
+fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key, numeric: []const bool, filtered: []const bool) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
     let (drags, drags_error) = mem.alloc[HeaderDrag](a, columns.len)
@@ -1712,7 +1715,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if sorted { ink = strong }
         let (title_node, title_node_error) = control.colored_text(a, 0u64, columns[i].title, t, caption, ink)
         if title_node_error != ok { ret (zero, title_node_error) }
-        let (body, body_error) = mem.alloc[widget.Node](a, 2usize)
+        let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = title_node
         var b = 1usize
@@ -1729,6 +1732,13 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         line_style.height = style.Length { Flex: 1.0 }
         let (content, content_error) = mem.alloc[widget.Node](a, 1usize)
         if content_error != ok { ret (zero, TooLarge) }
+        let column_filtered = numeric_column(filtered, i)
+        if column_filtered {
+            let (funnel, funnel_error) = control.icon_square(a, muted, .Filter, t.tokens.sizes.icon_sm)
+            if funnel_error != ok { ret (zero, funnel_error) }
+            body[b] = funnel
+            b += 1usize
+        }
         var line_main: ui_layout.MainAlign = .Start
         if numeric_column(numeric, i) {
             // (D1328) At the end, the arrow before the title.
@@ -1797,6 +1807,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         var sem: widget.Semantics = zero
         sem.role = 32u8
         sem.label = columns[i].title
+        if column_filtered { sem.hint = "filtered" }
         sem.column = u32(i + 1usize)
         sem.column_count = u32(columns.len)
         sem.actions = accessibility.ACTION_PRESS
@@ -2018,7 +2029,8 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // row's key through `expand`; a row in `expanded` is followed by its `detail`.
 // (D1328) `numeric` marks the columns (by index) that hold numbers: their headers
 // and cells stand at the end.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool }
+// (D1340) `filtered` marks the columns (by index) a filter applies to.
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool }
 
 // (D1328) Whether column `c` is numeric.
 fn numeric_column(numeric: []const bool, c: usize) -> bool {
@@ -3078,7 +3090,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let total = source.count(source.ctx)
     var below: widget.Key = 0u64
     if total > 0usize { below = source.key(source.ctx, 0usize) }
-    let (header, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric)
+    let (header, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric, selection.filtered)
     if head_error != ok { ret (zero, head_error) }
     var head = header
     // (D1246) A selectable table's check column and select-all checkbox.

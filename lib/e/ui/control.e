@@ -2305,7 +2305,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32 }
 
 // An ellipse of four quarter arcs about a centre.
@@ -2571,6 +2571,16 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.move_to(&builder, geometry.Point { x: cx - r * 0.45, y: cy - r * 1.45 })
         try geometry.line_to(&builder, geometry.Point { x: cx, y: cy - r })
         try geometry.line_to(&builder, geometry.Point { x: cx - r * 0.45, y: cy - r * 0.55 })
+    }
+    if g.kind == .Filter {
+        // (D1340) A funnel: a wide top narrowing to a short stem.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.18, y: y + h * 0.25 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.82, y: y + h * 0.25 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.57, y: y + h * 0.55 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.57, y: y + h * 0.78 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.43, y: y + h * 0.7 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.43, y: y + h * 0.55 })
+        try geometry.close_path(&builder)
     }
     if g.kind == .ArrowUp || g.kind == .ArrowDown {
         // (D980) A shaft and a head, pointing up or down.

@@ -25781,3 +25781,15 @@ trailing "%" as the share, refusing anything else.
 `ui_pickers3_v2` reads "40 %" as 0.4 and refuses "140" and "x", and finds the
 opacity readout an editable field over the caller's "50", on Windows and
 Linux.
+
+## D1340 — Table headers mark filtered columns
+
+The HeaderRow spec's filter mark: `TableOptions.filtered` marks columns by
+index, and a filtered column's header shows an 18 `filter` glyph (a new
+funnel, `GlyphKind.Filter`) in `on-surface-variant` 4 after its title and any
+sort arrow, and says "filtered" as its column header's hint so the mark is not
+only an icon. The grouped tier and the reorder lift are still to come.
+
+`ui_collections2_v2` filters the Size column: its header's hint is
+"filtered" and Name's is empty, on Windows and Linux; `ui_tabular` and
+`ui_collections3_v2` still pass on both.
