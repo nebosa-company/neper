@@ -27354,3 +27354,9 @@ D1249's thumb press measured the 12 wide strip from the viewport's bounds, but t
 D1303 folds a run of three or more notices from one source into a row. Up and Down still aimed at the run's own rows, which a shut fold does not build, so Up from the row below a shut fold went nowhere. The fold row had no arrows of its own either. The shortcuts read their `FocusTo` targets when pressed, so while a fold is shut each of its notices' targets now names the fold row (`key + 256 + first index`). The fold row stands in a scope whose Up and Down go to the rows either side of its run. The scope is always there, open or shut, so its identity holds.
 
 `ui_status5_v2` checks this on Windows and Linux: with "4 builds failed" shut, Up from the review below it focuses the fold row, and Down comes back. Against the old control the check fails (exit 70).
+
+## D1489 — The page indicator cross-fades under reduced motion
+
+The PageIndicator spec: "Reduced motion: the pill moves without the stretch, cross-fading in `duration-short-2`". Every `eased_*` helper returns its goal at once under reduced motion, so D1474's pill jumped and changed colour in one frame. `control.eased_on_curve` now keeps its reduced-motion short cut and hands the rest to `eased_core`. The new `faded_on` is that core on the standard curve with no short cut, for the places the spec swaps a movement for a fade. Under reduced motion, a dot's size still takes the pill's at once, while its colour eases between `outline` and `primary` over `duration-short-2` (slot `key + 1 + 2097160 + visible index`).
+
+`ui_paged` checks this on Windows and Linux under reduced motion. 50 ms after a turn the third dot is already 24 x 8 but not yet `primary`, and a second on it is. Against the old collection the check fails (exit 56). All 103 `ui_*` fixtures pass on both hosts.

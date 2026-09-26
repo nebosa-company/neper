@@ -247,6 +247,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if slide_step == 4usize && (sliding.width < 23.5 || sliding.height > 8.5) { os.exit(51i32) }
         slide_step += 1usize
     }
+    // (D1489) Under reduced motion the pill does not stretch: 50 ms after the
+    // turn the third dot is already 24 x 8 but not yet `primary`; a second on
+    // it is.
+    var calm_tokens = tokens
+    calm_tokens.motion.reduced = true
+    let calm_theme = control.Theme { tokens: &calm_tokens, fonts: theme.fonts, language: "", runtime: &runtime }
+    var calm_step = 0usize
+    while calm_step < 5usize {
+        var calm_at = 13000000000i64 + i64(calm_step)
+        var calm_page = 1usize
+        if calm_step >= 2usize { calm_page = 2usize }
+        if calm_step == 3usize { calm_at = 13050000000i64 }
+        if calm_step == 4usize { calm_at = 14200000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: calm_at }) != ok { os.exit(52i32) }
+        frame = mem.arena_from(frame_storage)
+        let (calm, calm_error) = collection.page_indicator_of(&frame, 950u64, &calm_theme, 4usize, calm_page, widget.Change[usize] { ctx: ctx, invoke: on_jump }, collection.indicator_options())
+        let (calm_nodes, calm_nodes_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if calm_error != ok || calm_nodes_error != ok { os.exit(53i32) }
+        calm_nodes[0usize] = calm
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 100.0), calm_nodes[0usize..1usize]), time.Instant { nanos: calm_at }) != ok { os.exit(54i32) }
+        if calm_step >= 3usize {
+            let (calm_dot, has_calm_dot) = widget.bounds_of(&runtime, testing.by_key(&harness, 954u64).element)
+            let (calm_shot, calm_shot_error) = testing.snapshot(&harness, a)
+            if !has_calm_dot || calm_shot_error != ok || calm_dot.width < 23.5 || calm_dot.height > 8.5 { os.exit(55i32) }
+            let spot = ((usize(calm_dot.y + calm_dot.height * 0.5)) * usize(calm_shot.width) + usize(calm_dot.x + calm_dot.width * 0.5)) * 4usize
+            let pill = style.color(&tokens, .Primary)
+            let green = f32(calm_shot.pixels[spot + 1usize])
+            let full = green < pill.green * 255.0 + 3.0 && green > pill.green * 255.0 - 3.0
+            if calm_step == 3usize && full { os.exit(56i32) }
+            if calm_step == 4usize && !full { os.exit(57i32) }
+        }
+        calm_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(40i32) }
     try io.print("ui paged ok\n")
     ret ok

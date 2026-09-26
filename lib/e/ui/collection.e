@@ -556,7 +556,9 @@ fn scrub_gesture(ctx: *void, g: widget.Gesture) -> err {
 // `ease-standard` (kept on the track, slot `key + 1 + 2097152 + visible index`),
 // so the old pill shrinks as the new one stretches. A dot is keyed `key + 2 +
 // visible index`.
-// ponytail: no touch haptics or reduced-motion cross-fade; the focus ring is the runtime's.
+// (D1489) Under reduced motion the pill moves without the stretch, the dots
+// cross-fading between dot and pill colours over `duration-short-2`.
+// ponytail: no touch haptics; the focus ring is the runtime's.
 fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, current: usize, turn: widget.Change[usize], options: IndicatorOptions) -> (widget.Node, err) {
     if count == 0usize || current >= count { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -601,7 +603,9 @@ fn page_indicator_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
         let dot_height = rest + (8.0 - rest) * pill_share
         var dot = control.sized_style(rest + (24.0 - rest) * pill_share, dot_height)
         dot.radius = dot_height * 0.5
-        dot.background = paint.Brush { Solid: style.mix(dot_ink, pill_ink, pill_share) }
+        var ink_share = pill_share
+        if t.tokens.motion.reduced { ink_share = control.faded_on(t, key + 1u64, key + 1u64 + 2097160u64 + u64(v), pill_goal, t.tokens.durations.short2) }
+        dot.background = paint.Brush { Solid: style.mix(dot_ink, pill_ink, ink_share) }
         if page == current { middle += 12.0 }
         if (!rtl && page < current) || (rtl && page > current) { middle += size + 8.0 }
         dots[v] = widget.box(key + 2u64 + u64(v), dot, zero)
