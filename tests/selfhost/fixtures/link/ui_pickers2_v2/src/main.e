@@ -576,6 +576,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.by_text(&harness, "January").count == 0usize { os.exit(84i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 1700u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || wheel_date.month != 2u8 || wheel_date.day != 28u8 { os.exit(85i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 1732u64).element) != ok || testing.press_key(&harness, 38u32, zero) != ok || wheel_date.year != 2025i32 || wheel_date.month != 1u8 { os.exit(86i32) }
+    // (D1425) In German the day wheel leads, then the month; in Japanese the year.
+    let german = control.Theme { tokens: &tokens, fonts: fonts, language: "de", runtime: &runtime }
+    let japanese = control.Theme { tokens: &tokens, fonts: fonts, language: "ja", runtime: &runtime }
+    var order_step = 0usize
+    while order_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        var order_theme = &german
+        if order_step == 1usize { order_theme = &japanese }
+        let (ordered, ordered_error) = overlay.date_wheels(&f, 1800u64, order_theme, time.Date { year: 2026i32, month: 1u8, day: 31u8 }, widget.Change[time.Date] { ctx: mem.cast[*void](&wheel_date), invoke: on_wheel_date })
+        let (ordered_page, ordered_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if ordered_error != ok || ordered_page_error != ok { os.exit(136i32) }
+        ordered_page[0usize] = ordered
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), ordered_page[0usize..1usize]), time.Instant { nanos: 6610000000i64 + i64(order_step) }) != ok { os.exit(136i32) }
+        let (month_at, has_month_at) = bounds(&harness, &runtime, 1800u64)
+        let (day_at, has_day_at) = bounds(&harness, &runtime, 1816u64)
+        let (year_at, has_year_at) = bounds(&harness, &runtime, 1832u64)
+        if !has_month_at || !has_day_at || !has_year_at { os.exit(137i32) }
+        if order_step == 0usize && !(day_at.x < month_at.x && month_at.x < year_at.x) { os.exit(138i32) }
+        if order_step == 1usize && !(year_at.x < month_at.x && month_at.x < day_at.x) { os.exit(139i32) }
+        order_step += 1usize
+    }
     // (D1352) Unit boxes: three editable boxes; 75 min rolls to 1 h 15 min, and
     // 30 h 90 min holds at 24 h.
     let (unit_bytes, unit_bytes_error) = mem.alloc[u8](a, 12usize)

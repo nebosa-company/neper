@@ -3730,6 +3730,23 @@ fn month_turn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, kind: con
     ret (made, made_error)
 }
 
+// (D1425) The order a language writes a date in: 0 month-day-year (no language,
+// English in the US or with no region, and en-PH), 1 day-month-year (most), 2
+// year-month-day (ja, zh, ko, hu, lt).
+fn date_order_of(language: str) -> u8 {
+    let code = language_code(language)
+    if code.len == 0usize { ret 0u8 }
+    if mem.eq[u8](code, "ja") || mem.eq[u8](code, "zh") || mem.eq[u8](code, "ko") || mem.eq[u8](code, "hu") || mem.eq[u8](code, "lt") { ret 2u8 }
+    if mem.eq[u8](code, "en") {
+        if language.len == 2usize { ret 0u8 }
+        if language.len >= 5usize {
+            let region = language[3usize..5usize]
+            if mem.eq[u8](region, "US") || mem.eq[u8](region, "PH") { ret 0u8 }
+        }
+    }
+    ret 1u8
+}
+
 // (D1388) The theme language's two-letter code, lower case ("de" of "de-AT").
 fn language_code(language: str) -> str {
     if language.len < 2usize { ret "" }
@@ -4959,7 +4976,7 @@ fn date_wheel_fire(ctx: *void, index: usize) -> err {
 // year and 50 either side, 80), 8 apart (keyed `key`, `key + 16`, `key + 32`); a
 // turn reports the whole date, its day kept in its month.
 // (D1388) Its months follow the theme language.
-// ponytail: the order is month, day, year whatever the locale.
+// (D1425) The wheels stand in the theme language's date order (`date_order_of`).
 fn date_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, date: time.Date, change: widget.Change[time.Date]) -> (widget.Node, err) {
     if date.month < 1u8 || date.month > 12u8 { ret (zero, TooLarge) }
     let days = usize(time.days_in_month(i64(date.year), i64(date.month)))
@@ -5000,6 +5017,16 @@ fn date_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, date: ti
     parts[0usize] = month_wheel
     parts[1usize] = day_wheel
     parts[2usize] = year_wheel
+    let order = date_order_of(t.language)
+    if order == 1u8 {
+        parts[0usize] = day_wheel
+        parts[1usize] = month_wheel
+    }
+    if order == 2u8 {
+        parts[0usize] = year_wheel
+        parts[1usize] = month_wheel
+        parts[2usize] = day_wheel
+    }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts[0usize..3usize])
