@@ -3636,6 +3636,26 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head[0usize..3usize])
     parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), names[0usize..7usize + lead])
     parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: week_gap }, style.defaults(), rows[0usize..weeks])
+    // (D1423, docs/ux/components/Calendar, motion) A change of month slides the
+    // days in from the side it came from (the end for a later month, mirrored
+    // right to left) over `duration-medium-2` on `ease-standard`: the month
+    // index eases on the calendar (slot `key + 1048590`) and the days stand the
+    // part still to come a grid's width away, clipped to the grid.
+    let month_index = f32(i64(shown.year) * 12i64 + i64(shown.month))
+    let month_shown = control.eased_on(t, key, key + 1048590u64, month_index, false, t.tokens.durations.medium2)
+    var slide = (month_index - month_shown) * grid_width
+    if slide > grid_width { slide = grid_width }
+    if slide < 0.0 - grid_width { slide = 0.0 - grid_width }
+    if t.tokens.direction == .RightToLeft { slide = 0.0 - slide }
+    if slide != 0.0 {
+        let (sliding, sliding_error) = mem.alloc[widget.Node](a, 2usize)
+        if sliding_error != ok { ret (zero, TooLarge) }
+        sliding[0usize] = parts[2usize]
+        sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: slide, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
+        var clip = style.defaults()
+        clip.overflow = .Clip
+        parts[2usize] = widget.box(0u64, clip, sliding[1usize..2usize])
+    }
     var part_count = 3usize
     if years_toggle && marks.year_view {
         // (D1307) The years stand where the weekdays and days would.

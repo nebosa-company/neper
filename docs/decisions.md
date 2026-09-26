@@ -26890,3 +26890,9 @@ The TimePicker spec cross-fades the numbers over `duration-short-4` when the hou
 D1307 listed only the fifteen years around the shown one. The year view now runs from a hundred years before the shown year to a hundred after, held inside `earliest` and `latest`. It sits in a virtual viewport keyed `key + 4094`: rows of three, `pill + 16` tall. The viewport opens with the shown year's row in the middle, following D807's offset rule, so a scroll the runtime keeps is not undone. Only the rows in view, plus one either side (`widget.visible_range`), are built; each row is keyed `key + 8192 + row`. Pill keys still count from the first year listed (`key + 4096 + index`). Each pill is still its own Tab stop, and an arrow past the built rows finds nothing to focus (a ponytail).
 
 `ui_pickers_v2` checks the view on Windows and Linux. With March 2026 shown, 2026 is index 100 and in view, 1926 is not built, and the D1363 arrows and the press on 2030 work at their new indexes.
+
+## D1423 — Calendar months slide
+
+The Calendar spec slides the grid horizontally when the month changes, over `duration-medium-2` with `ease-standard`, in the direction of the turn. The calendar eases its month index (year x 12 + month) on its own element, under slot `key + 1048590`. The day rows stand the part still to come a grid's width away (held to one width), mirrored right to left, inside a clip. The header and weekday names stay put. Reduced motion changes at once; the spec's reduced-motion cross-fade is not drawn.
+
+`ui_pickers_v2` turns a calendar from March to April 2026, on Windows and Linux. 50 ms later the chosen 10 April is not yet `primary` where it settles; a second later it is. `ui_adaptive`, `ui_navigation`, `ui_navigation3_v2`, `ui_pickers` and `ui_pickers2_v2` still pass on both hosts.

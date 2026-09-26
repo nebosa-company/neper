@@ -611,6 +611,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         year_step += 1usize
     }
+    // (D1423) Turned from March to April, the days slide in from the end: 50 ms
+    // on, the chosen 10 April is not yet where it settles a second on.
+    let tenth_of_april = time.Date { year: 2026i32, month: 4u8, day: 10u8 }
+    var slide_step = 0usize
+    while slide_step < 4usize {
+        var slide_at = 3600000000i64
+        var slide_shown = first_of_march
+        if slide_step >= 2usize { slide_shown = tenth_of_april }
+        if slide_step == 1usize { slide_at = 3600000001i64 }
+        if slide_step == 2usize { slide_at = 3650000000i64 }
+        if slide_step == 3usize { slide_at = 4650000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: slide_at }) != ok { os.exit(163i32) }
+        f = mem.arena_from(frame_storage)
+        let (sliding_cal, sliding_cal_error) = overlay.calendar(&f, 7700u64, &theme, "Sliding", slide_shown, tenth_of_april, true, false, tenth_of_april, tenth_of_april, picked_dates, picked_dates)
+        let (slide_page, slide_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if sliding_cal_error != ok || slide_page_error != ok { os.exit(163i32) }
+        slide_page[0usize] = sliding_cal
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), slide_page[0usize..1usize]), time.Instant { nanos: slide_at }) != ok { os.exit(164i32) }
+        if slide_step >= 2usize {
+            let (april_tenth, has_april_tenth) = bounds(&harness, &runtime, 7713u64)
+            let (slide_shot, slide_shot_error) = testing.snapshot(&harness, a)
+            if !has_april_tenth || slide_shot_error != ok { os.exit(165i32) }
+            let settled_there = is_color(slide_shot, at(april_tenth.x + april_tenth.width * 0.5, april_tenth.y + april_tenth.height * 0.5), style.color(&tokens, .Primary))
+            if slide_step == 2usize && settled_there { os.exit(166i32) }
+            if slide_step == 3usize && !settled_there { os.exit(167i32) }
+        }
+        slide_step += 1usize
+    }
     // (D1293) The touch picker: a dialog titled "Select date" saying "Tue, Sep 15",
     // a day press picking, OK confirming; in input mode its typed field stands in
     // the calendar's place.
