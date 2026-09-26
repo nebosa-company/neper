@@ -5780,6 +5780,50 @@ fn key_value_text(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     ret (widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, column_style, parts[0usize..3usize]), ok)
 }
 
+// (D1541, docs/ux/components/KeyValueEditor, removed) What an editor saw last
+// frame: how many pairs and the first 16 names' hashes (64 overran the
+// test harness's state storage), and the row leaving.
+type PairsSeen = struct { count: usize, names: [16]u64, gone: usize, since: i64, leaving: bool }
+
+// (D1541) A removed pair's row collapses where it stood: the index it stood at
+// and the share of its height still standing (0 when none is leaving), over
+// `duration-short-4` on `ease-emphasized-accelerate`. One pair fewer than last
+// frame is a removal, at the first name that differs. Reduced motion removes it
+// at once. Kept at the editor's column (`key`).
+fn pair_leaving(t: *const control.Theme, key: widget.Key, pairs: []const Pair) -> (usize, f32) {
+    if mem.address_of(t.runtime) == 0usize { ret (0usize, 0.0) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (0usize, 0.0) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (0usize, 0.0) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: PairsSeen = zero
+    let (seen, _, seen_error) = widget.state[PairsSeen](&build, key + 1048610u64, fresh)
+    if seen_error != ok { ret (0usize, 0.0) }
+    let now = widget.frame_time(t.runtime).nanos
+    if seen.count == pairs.len + 1usize && !t.tokens.motion.reduced {
+        var at = 0usize
+        while at < pairs.len && at < 16usize && hash.fnv1a64(pairs[at].name[0usize..pairs[at].name_len]) == seen.names[at] { at += 1usize }
+        seen.gone = at
+        seen.since = now
+        seen.leaving = true
+    }
+    seen.count = pairs.len
+    var i = 0usize
+    while i < pairs.len && i < 16usize {
+        seen.names[i] = hash.fnv1a64(pairs[i].name[0usize..pairs[i].name_len])
+        i += 1usize
+    }
+    if !seen.leaving { ret (0usize, 0.0) }
+    let p = f32(now - seen.since) / (f32(t.tokens.durations.short4) * 1000000.0)
+    if p >= 1.0 {
+        seen.leaving = false
+        ret (0usize, 0.0)
+    }
+    widget.request_animation_frame(t.runtime)
+    ret (seen.gone, 1.0 - animation.bezier(0.3, 0.0, 0.8, 0.15, p))
+}
+
 // (D1260) A pair's Show value press.
 type PairReveal = struct { index: usize, reveal: widget.Change[usize] }
 
@@ -5890,7 +5934,9 @@ fn joined(a: *mem.Arena, first: str, second: str, third: []const u8) -> (str, er
 // (D1353) Removal's Undo notice (`pair_removed_notice`).
 // (D1460) Identifier names stand in the `code` face.
 // (D1536) A shown secret hides after 30 s without focus in its value field.
-// ponytail: the removed row's collapse or the touch list form.
+// (D1541) A removed row collapses where it stood (`pair_leaving`).
+// ponytail: the row's gap closes at the end of the collapse, not with it; a
+// removal past the 16th pair collapses at the 16th; no touch list form.
 fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
     if pairs.len > 128usize { ret (zero, TooLarge) }
     if options.text_mode {
@@ -5908,8 +5954,11 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let name_w = avail * 0.4
     let value_w = avail - name_w
     let muted = style.color(t.tokens, .OnSurfaceVariant)
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * pairs.len + 5usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * pairs.len + 6usize)
     if rows_error != ok { ret (zero, TooLarge) }
+    // (D1541) The removed row's place, closing.
+    let (gone_at, gone_share) = pair_leaving(t, key, pairs)
+    let gone_height = control.max_zero((field_h + gap) * gone_share - gap)
     let (changes, changes_error) = mem.alloc[PairChange](a, 2usize * pairs.len + 2usize)
     if changes_error != ok { ret (zero, TooLarge) }
     let (removes, removes_error) = mem.alloc[PairRemove](a, pairs.len)
@@ -5939,6 +5988,10 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     n += 1usize
     var i = 0usize
     while i < pairs.len {
+        if gone_share > 0.0 && gone_at == i {
+            rows[n] = widget.box(0u64, control.sized_style(width, gone_height), zero)
+            n += 1usize
+        }
         changes[2usize * i] = PairChange { index: i, value: false, edit: edit }
         changes[2usize * i + 1usize] = PairChange { index: i, value: true, edit: edit }
         removes[i] = PairRemove { index: i, remove: remove }
@@ -6078,6 +6131,10 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             n += 1usize
         }
         i += 1usize
+    }
+    if gone_share > 0.0 && gone_at >= pairs.len {
+        rows[n] = widget.box(0u64, control.sized_style(width, gone_height), zero)
+        n += 1usize
     }
     // (D1259) The empty row: "Add a name" and "Value" over the caller's spare
     // buffers (keyed `key + 1 + 3 * pairs.len` and one more), no Remove; typing
