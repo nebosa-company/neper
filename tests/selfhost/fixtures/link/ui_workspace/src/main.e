@@ -204,6 +204,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     alt_held.alt = true
     if testing.press_key(&harness, 51u32, alt_held) != ok || logs[0usize].picked != 2usize { os.exit(60i32) }
     if testing.press_key(&harness, 49u32, alt_held) != ok || logs[0usize].picked != 0usize { os.exit(61i32) }
+    // (D1398) With a history of notes, todo, main.e: Ctrl+Tab picks todo (2),
+    // Ctrl+Shift+Tab main.e (0), and Ctrl+Shift+T reopens.
+    var recent_order: [3]usize = zero
+    recent_order[0usize] = 1usize
+    recent_order[1usize] = 2usize
+    recent_order[2usize] = 0usize
+    let history = navigation.WorkspaceHistory { recent: recent_order[..], reopen: closers[0usize] }
+    frame = mem.arena_from(frame_storage)
+    let (history_view, history_view_error) = control.text(&frame, 0u64, "Editor", &theme, control.text_options())
+    let (historied, historied_error) = navigation.multi_document_workspace_with(&frame, 1u64, &theme, "Documents", documents[0usize..3usize], 1usize, history_view, widget.Change[usize] { ctx: ctx, invoke: on_pick }, widget.Change[usize] { ctx: ctx, invoke: on_close }, zero, 600.0, 300.0, history)
+    if history_view_error != ok || historied_error != ok || testing.pump(&harness, historied, now) != ok { os.exit(62i32) }
+    var shift_control: input.Modifiers = zero
+    shift_control.control = true
+    shift_control.shift = true
+    if widget.focus(&runtime, testing.by_key(&harness, 4u64 - 1u64).element) != ok { os.exit(63i32) }
+    if testing.press_key(&harness, 9u32, held) != ok || logs[0usize].picked != 2usize { os.exit(64i32) }
+    if testing.press_key(&harness, 9u32, shift_control) != ok || logs[0usize].picked != 0usize { os.exit(65i32) }
+    let reopens_before = logs[0usize].panel_closes
+    if testing.press_key(&harness, 84u32, shift_control) != ok || logs[0usize].panel_closes != reopens_before + 1usize { os.exit(66i32) }
+    logs[0usize].panel_closes = reopens_before
     // The dock layout, 800 by 400 so v2's minimums hold (D966): the left panel
     // 200 wide with a titled dock panel whose close fires; the bottom a hundred
     // tall; the left sash dragged twenty right reports left 220 with the rest
