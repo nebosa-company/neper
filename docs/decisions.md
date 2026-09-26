@@ -26643,3 +26643,19 @@ field.
 `ui_workspace` empties the workspace with `open_recent` set: "No open files"
 stands with an Open recent button, and `ui_containers2_v2` still passes, on
 Windows and Linux.
+
+## D1400 — Overlay scrollbars fade when idle
+
+The VirtualList spec's thumb fades out after 1.5 s without scrolling on hosts
+with overlay scrollbars; hosts with classic scrollbars keep it. `widget.Scroll`
+gains `fades`, and the runtime stamps each viewport's last move
+(`Element.scrolled_at`, from `scroll_by`). A fading viewport's thumb is not
+drawn before it has scrolled. It shows for 1.5 s after a move and then fades
+over `duration-medium-1` (250 ms), asking for frames while it does. The touch
+virtual list (`virtual_list_of` at touch density) sets it; every other
+viewport and literal says `fades: false`, so pointer hosts are unchanged. The
+touch fast-scroll handle is still missing.
+
+`ui_collections4_v2` scrolls a fading viewport with the wheel: no thumb before,
+the thumb just after, none three seconds later. `ui_scroll`, `ui_gesture`,
+`ui_collections_v2` and `ui_collections3_v2` still pass, on Windows and Linux.

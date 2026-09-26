@@ -791,6 +791,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         drag_step += 1usize
     }
+    // (D1400) A fading viewport's thumb: none before it scrolls, shown just after a
+    // wheel scroll, gone once it has sat 1.5 s and faded.
+    var fade_thumb_step = 0usize
+    var thumb_seen: [3]bool = zero
+    while fade_thumb_step < 3usize {
+        var fade_thumb_at = 62000000000i64
+        if fade_thumb_step == 1usize { fade_thumb_at = 62016000000i64 }
+        if fade_thumb_step == 2usize { fade_thumb_at = 65000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: fade_thumb_at }) != ok { os.exit(216i32) }
+        f = mem.arena_from(frame_storage)
+        let (tall_boxes, tall_boxes_error) = mem.alloc[widget.Node](&f, 2usize)
+        if tall_boxes_error != ok { os.exit(217i32) }
+        tall_boxes[1usize] = widget.box(0u64, control.sized_style(80.0, 400.0), zero)
+        tall_boxes[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(80.0, 400.0), tall_boxes[1usize..2usize])
+        var fading_ground = control.sized_style(80.0, 100.0)
+        fading_ground.background = paint.Brush { Solid: style.color(&tokens, .Surface) }
+        let fading = widget.scroll(8500u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: true, thumb: paint.rgba(1.0, 0.0, 0.0, 1.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: true }, fading_ground, tall_boxes[0usize..1usize])
+        let (fading_page, fading_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if fading_page_error != ok { os.exit(218i32) }
+        fading_page[0usize] = fading
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), fading_page[0usize..1usize]), time.Instant { nanos: fade_thumb_at }) != ok { os.exit(219i32) }
+        let (fading_box, has_fading_box) = bounds(&harness, &runtime, 8500u64)
+        let (thumb_shot, thumb_shot_error) = testing.snapshot(&harness, a)
+        if !has_fading_box || thumb_shot_error != ok { os.exit(220i32) }
+        var scan_y: f32 = 2.0
+        while scan_y < 98.0 {
+            if is_color(thumb_shot, at(fading_box.x + fading_box.width - 4.0, fading_box.y + scan_y), paint.rgba(1.0, 0.0, 0.0, 1.0)) { thumb_seen[fade_thumb_step] = true }
+            scan_y += 2.0
+        }
+        if fade_thumb_step == 0usize && testing.wheel(&harness, fading_box.x + 40.0, fading_box.y + 50.0, -1i32) != ok { os.exit(221i32) }
+        fade_thumb_step += 1usize
+    }
+    if thumb_seen[0usize] { os.exit(222i32) }
+    if !thumb_seen[1usize] { os.exit(223i32) }
+    if thumb_seen[2usize] { os.exit(224i32) }
     // (D1289) While refreshing the arc spins: a quarter turn later its circle is
     // drawn differently.
     var spin_sums: [2]u64 = zero

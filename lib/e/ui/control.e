@@ -5554,7 +5554,7 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         var view = style.defaults()
         view.width = style.Length { Px: options.width }
         view.overflow = .Clip
-        strips[0usize] = widget.scroll(strip_key, widget.Scroll { axis: .Horizontal, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view, strips[3usize..4usize])
+        strips[0usize] = widget.scroll(strip_key, widget.Scroll { axis: .Horizontal, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view, strips[3usize..4usize])
         var at = 1usize
         if back_page {
             pages[0usize] = TabPage { runtime: t.runtime, strip: strip_key, step: 0.0 - shown }
@@ -9593,7 +9593,7 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
     let (rows_column, rows_column_error) = mem.alloc[widget.Node](a, 1usize)
     if rows_column_error != ok { ret (zero, TooLarge) }
     rows_column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, rows_style, rows[0usize..n])
-    let view = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: paint.rgba(0.5, 0.5, 0.5, 0.6), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view_style, rows_column[0usize..1usize])
+    let view = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: paint.rgba(0.5, 0.5, 0.5, 0.6), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view_style, rows_column[0usize..1usize])
     // The header bar.
     var title_look = text_options()
     title_look.role = .TitleMedium

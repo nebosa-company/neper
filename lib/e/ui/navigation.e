@@ -3410,7 +3410,7 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         view.overflow = .Clip
         view.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
         overflow[3usize] = row[0usize]
-        overflow[0usize] = widget.scroll(strip_key, widget.Scroll { axis: .Horizontal, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view, overflow[3usize..4usize])
+        overflow[0usize] = widget.scroll(strip_key, widget.Scroll { axis: .Horizontal, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false }, view, overflow[3usize..4usize])
         var states = 0u32
         if options.all_open { states = accessibility.STATE_EXPANDED }
         let (all_button, all_button_error) = control.glyph_action(a, key + 128u64, t, .ChevronDown, "Show all open files", &all_presses[0usize], 32.0, 18.0, muted, true, states, accessibility.ACTION_SHOW_MENU, key + 129u64)
