@@ -26001,3 +26001,17 @@ box is the last one and keeps focus.
 
 `ui_pickers2_v2` types "1" into hours (focus stays) and then "2" (focus is on
 minutes), on Windows and Linux.
+
+## D1355 — Colour pickers open a bottom sheet on touch
+
+The ColorPicker spec's panel is a popover on pointer hosts and a modal bottom
+sheet on touch. On touch the colour field's panel now goes into
+`overlay.bottom_sheet`, as tall as its content and titled by the field's label,
+and drops its own raised surface since the sheet is the surface. The sheet is
+keyed `key + 1048600`: at `key + 1` its own parts (`key + 2` to `key + 4`)
+collided with the area, hue strip and opacity strip. The host panel ("More
+colours...") is still missing.
+
+`ui_pickers3_v2` finds the touch panel well below the trigger rather than 4
+under it, and its thumb and mode checks still pass. Its later pumps are now a
+second apart. On Windows and Linux.

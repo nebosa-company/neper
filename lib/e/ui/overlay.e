@@ -6020,7 +6020,8 @@ fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
 // (D1338) Thumbs are 28 on touch and grow to 24 hovered.
 // (D1339) `color_field_typed` makes the opacity readout a field.
 // (D1343) On touch a Swatches / Spectrum switch shows one part at a time.
-// ponytail: no sheet for touch, no host panel.
+// (D1355) On touch the panel is a bottom sheet.
+// ponytail: no host panel ("More colours...").
 fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     var no_recent: []const paint.Color = zero
     let (made, made_error) = color_field_with(a, key, t, label, value, with_alpha, change, open, toggle, swatches, no_recent, hex, hex_len, typed, width)
@@ -6281,6 +6282,8 @@ fn color_field_typed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
         raised.elevation = 3u8
         raised.padding = 16.0
         var raised_style = control.surface_style(t, raised)
+        // (D1355) On touch the sheet is the surface; the panel only lays out.
+        if touch { raised_style = style.defaults() }
         raised_style.width = style.Length { Px: width }
         raised_style.overflow = .Visible
         let (panel_body, panel_error) = mem.alloc[widget.Node](a, 1usize)
@@ -6323,9 +6326,18 @@ fn color_field_typed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
             shown_blocks = moded[0usize..m]
         }
         panel_body[0usize] = widget.flex(key + 7u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, raised_style, shown_blocks)
-        let (made, made_error) = dismissable(a, key + 1u64, key, .Below, label, panel_body[0usize], toggle, 4.0)
-        if made_error != ok { ret (zero, made_error) }
-        parts[1usize] = made
+        if touch {
+            // (D1355, docs/ux/components/ColorPicker, touch) The panel is a modal
+            // bottom sheet (keyed `key + 1048600`, clear of the panel's keys) as tall
+            // as its content, titled by the label.
+            let (sheeted, sheeted_error) = bottom_sheet(a, key + 1048600u64, t, label, panel_body[0usize], true, toggle, 0.0)
+            if sheeted_error != ok { ret (zero, sheeted_error) }
+            parts[1usize] = sheeted
+        } else {
+            let (made, made_error) = dismissable(a, key + 1u64, key, .Below, label, panel_body[0usize], toggle, 4.0)
+            if made_error != ok { ret (zero, made_error) }
+            parts[1usize] = made
+        }
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
