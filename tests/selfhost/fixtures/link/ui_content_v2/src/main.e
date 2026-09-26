@@ -517,6 +517,53 @@ fn main(a: *mem.Arena, args: []str) -> err {
         picture_step += 1usize
     }
     if picture_mid == picture_end { os.exit(69i32) }
+    // (D1530) The filled "on" form: a person's head is filled with the tint, where
+    // the outline form leaves it the ground; a check, which has no body, is the
+    // same in both forms.
+    fr = mem.arena_from(frame_storage)
+    let (forms, forms_error) = mem.alloc[widget.Node](&fr, 4usize)
+    if forms_error != ok { os.exit(109i32) }
+    var on_form = control.icon_options()
+    on_form.label = "Profile on"
+    on_form.filled = true
+    var off_form = control.icon_options()
+    off_form.label = "Profile off"
+    let (on_icon, on_error) = control.icon_of(&fr, 760u64, &theme, .Person, on_form)
+    let (off_icon, off_error) = control.icon_of(&fr, 761u64, &theme, .Person, off_form)
+    on_form.label = "Done on"
+    off_form.label = "Done off"
+    let (on_check, on_check_error) = control.icon_of(&fr, 762u64, &theme, .Check, on_form)
+    let (off_check, off_check_error) = control.icon_of(&fr, 763u64, &theme, .Check, off_form)
+    if on_error != ok || off_error != ok || on_check_error != ok || off_check_error != ok { os.exit(110i32) }
+    forms[0usize] = on_icon
+    forms[1usize] = off_icon
+    forms[2usize] = on_check
+    forms[3usize] = off_check
+    var forms_page = style.defaults()
+    forms_page.width = style.Length { Px: 600.0 }
+    forms_page.height = style.Length { Px: 520.0 }
+    forms_page.background = paint.Brush { Solid: style.color(&tokens, .Surface) }
+    if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 16.0 }, forms_page, forms[0usize..4usize]), time.Instant { nanos: 7000000000i64 }) != ok { os.exit(111i32) }
+    let (forms_shot, forms_shot_error) = testing.snapshot(&harness, a)
+    if forms_shot_error != ok { os.exit(112i32) }
+    let tint = style.color(&tokens, .OnSurfaceVariant)
+    let on_box = bounds(&harness, &runtime, 760u64)
+    let off_box = bounds(&harness, &runtime, 761u64)
+    if !is_color(forms_shot, at(on_box.x + 12.0, on_box.y + 8.6), tint) { os.exit(113i32) }
+    if is_color(forms_shot, at(off_box.x + 12.0, off_box.y + 8.6), tint) { os.exit(114i32) }
+    let on_check_box = bounds(&harness, &runtime, 762u64)
+    let off_check_box = bounds(&harness, &runtime, 763u64)
+    var glyph_row = 0usize
+    while glyph_row < 24usize {
+        var column = 0usize
+        while column < 24usize {
+            let on_at = at(on_check_box.x + f32(column), on_check_box.y + f32(glyph_row))
+            let off_at = at(off_check_box.x + f32(column), off_check_box.y + f32(glyph_row))
+            if forms_shot.pixels[on_at] != forms_shot.pixels[off_at] || forms_shot.pixels[on_at + 1usize] != forms_shot.pixels[off_at + 1usize] { os.exit(115i32) }
+            column += 1usize
+        }
+        glyph_row += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui content v2 ok\n")
     ret ok

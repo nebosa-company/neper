@@ -639,11 +639,13 @@ fn canvas(a: *mem.Arena, key: widget.Key, custom: widget.Custom, label: str) -> 
 // ------------------------------------------------ content, v2 (D962, P5-07)
 
 // An icon's look: its size (snapped to `icon-sm` 18, `icon-md` 24 or `icon-lg`
-// 36), its colour role, whether it is enabled, and its name (empty: decorative).
-type IconOptions = struct { size: f32, color: style.ColorRole, enabled: bool, label: str }
+// 36), its colour role, whether it is enabled, and its name (empty: decorative);
+// (D1530) whether it shows its filled "on" form, and the role of the ground it
+// sits on, which the marks on its body are cut in.
+type IconOptions = struct { size: f32, color: style.ColorRole, enabled: bool, label: str, filled: bool, ground: style.ColorRole }
 
 fn icon_options() -> IconOptions {
-    ret IconOptions { size: 24.0, color: .OnSurfaceVariant, enabled: true, label: "" }
+    ret IconOptions { size: 24.0, color: .OnSurfaceVariant, enabled: true, label: "", filled: false, ground: .Surface }
 }
 
 // The token size nearest a requested icon size.
@@ -656,11 +658,28 @@ fn icon_token_size(t: *const Theme, size: f32) -> f32 {
 // A drawn glyph in its square: the live area 2/24 in on every side, stroked 1.75
 // at 24 and in proportion at other sizes, round caps and joins.
 fn icon_square(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32) -> (widget.Node, err) {
+    let (square, square_error) = icon_square_of(a, color, kind, size, false, color)
+    ret (square, square_error)
+}
+
+// (D1530) An icon square in its outline or its filled "on" form over `ground`.
+fn icon_square_of(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32, filled: bool, ground: paint.Color) -> (widget.Node, err) {
     let inset = size * 2.0 / 24.0
     let (marks, marks_error) = mem.alloc[widget.Node](a, 1usize)
     if marks_error != ok { ret (zero, TooLarge) }
-    let (mark, mark_error) = stroked_glyph(a, color, kind, size - 2.0 * inset, size * 1.75 / 24.0)
+    let (made, mark_error) = stroked_glyph(a, color, kind, size - 2.0 * inset, size * 1.75 / 24.0)
     if mark_error != ok { ret (zero, mark_error) }
+    var mark = made
+    if filled {
+        switch mark.kind {
+        case .Custom as c:
+            let glyph = mem.cast[*Glyph](c.ctx)
+            glyph.filled = true
+            glyph.ground = ground
+        default:
+            mark = made
+        }
+    }
     marks[0usize] = mark
     ret (widget.padded(0u64, inset, inset, inset, inset, sized_style(size, size), marks[0usize..1usize]), ok)
 }
@@ -669,7 +688,8 @@ fn icon_square(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32) ->
 // tinted by a colour role (`on-surface-variant` by default), at a token size;
 // disabled it is `on-surface` at 38%. Named, it is an Image; unnamed, it is left
 // out of the tree as a decoration.
-// ponytail: outline forms only; filled "on" forms wait on the full 49-icon set.
+// (D1530) `filled` draws the "on" form of a glyph with a body, its marks cut in
+// the `ground` role; a glyph without one is the same either way.
 fn icon_of(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, options: IconOptions) -> (widget.Node, err) {
     var tint = style.color(t.tokens, options.color)
     if !options.enabled { tint = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
@@ -682,7 +702,7 @@ fn icon_of(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, opt
         if kind == .ArrowBack { shown = .ArrowForward }
         if kind == .ArrowForward { shown = .ArrowBack }
     }
-    let (square, square_error) = icon_square(a, tint, shown, icon_token_size(t, options.size))
+    let (square, square_error) = icon_square_of(a, tint, shown, icon_token_size(t, options.size), options.filled && options.enabled, style.color(t.tokens, options.ground))
     if square_error != ok { ret (zero, square_error) }
     body[0usize] = square
     var sem: widget.Semantics = zero
@@ -2582,7 +2602,172 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
 type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter }
-type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32 }
+type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32, filled: bool, ground: paint.Color }
+
+// (D1530) Whether a glyph has a body its filled "on" form fills; one without (a
+// check, a chevron, an arrow, the rules of a menu) is the same in both forms.
+fn glyph_has_body(kind: GlyphKind) -> bool {
+    ret kind == .Person || kind == .Alert || kind == .Info || kind == .CheckCircle || kind == .Warning || kind == .Picture || kind == .Visibility || kind == .VisibilityOff || kind == .Clock || kind == .Calendar || kind == .Settings || kind == .Edit || kind == .Filter || kind == .DockLeft || kind == .Maximize
+}
+
+// (D1530, docs/ux/components/Icon) The filled "on" form: the glyph's body filled
+// with the tint, the marks that lie on it stroked in the ground it sits on -- the
+// container's colour -- and the marks that stand off it stroked in the tint.
+fn filled_glyph_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> err {
+    let (body_builder, body_error) = geometry.path_builder(g.arena, 16usize, 48usize)
+    let (cut_builder, cut_error) = geometry.path_builder(g.arena, 16usize, 32usize)
+    let (tint_builder, tint_error) = geometry.path_builder(g.arena, 32usize, 48usize)
+    if body_error != ok || cut_error != ok || tint_error != ok { ret TooLarge }
+    var body = body_builder
+    var cut = cut_builder
+    var marks = tint_builder
+    let x = area.x
+    let y = area.y
+    let w = area.width
+    let h = area.height
+    if g.kind == .Person {
+        try oval(&body, x + w * 0.5, y + h * 0.33, w * 0.17, h * 0.17)
+        try geometry.move_to(&body, geometry.Point { x: x + w * 0.18, y: y + h * 0.86 })
+        try geometry.cubic_to(&body, geometry.Point { x: x + w * 0.18, y: y + h * 0.58 }, geometry.Point { x: x + w * 0.82, y: y + h * 0.58 }, geometry.Point { x: x + w * 0.82, y: y + h * 0.86 })
+        try geometry.close_path(&body)
+    }
+    if g.kind == .Alert || g.kind == .Info || g.kind == .CheckCircle || g.kind == .Clock {
+        try oval(&body, x + w * 0.5, y + h * 0.5, w * 0.4, h * 0.4)
+    }
+    if g.kind == .Alert {
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.3 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.54 })
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.69 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.70 })
+    }
+    if g.kind == .Info {
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.46 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.70 })
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.31 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.32 })
+    }
+    if g.kind == .CheckCircle {
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.32, y: y + h * 0.51 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.45, y: y + h * 0.64 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.69, y: y + h * 0.39 })
+    }
+    if g.kind == .Clock {
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.26 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.5 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.68, y: y + h * 0.5 })
+    }
+    if g.kind == .Warning {
+        try geometry.move_to(&body, geometry.Point { x: x + w * 0.5, y: y + h * 0.14 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.9, y: y + h * 0.84 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.1, y: y + h * 0.84 })
+        try geometry.close_path(&body)
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.40 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.60 })
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.72 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.5, y: y + h * 0.73 })
+    }
+    if g.kind == .Picture || g.kind == .DockLeft || g.kind == .Maximize || g.kind == .Calendar {
+        var top: f32 = 0.2
+        var bottom: f32 = 0.8
+        var left: f32 = 0.15
+        var right: f32 = 0.85
+        if g.kind != .Picture {
+            left = 0.17
+            right = 0.83
+        }
+        if g.kind == .Calendar {
+            top = 0.25
+            bottom = 0.85
+        }
+        try geometry.move_to(&body, geometry.Point { x: x + w * left, y: y + h * top })
+        try geometry.line_to(&body, geometry.Point { x: x + w * right, y: y + h * top })
+        try geometry.line_to(&body, geometry.Point { x: x + w * right, y: y + h * bottom })
+        try geometry.line_to(&body, geometry.Point { x: x + w * left, y: y + h * bottom })
+        try geometry.close_path(&body)
+    }
+    if g.kind == .Picture {
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.15, y: y + h * 0.7 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.4, y: y + h * 0.46 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.6, y: y + h * 0.64 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.7, y: y + h * 0.56 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.85, y: y + h * 0.68 })
+    }
+    if g.kind == .DockLeft {
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.4, y: y + h * 0.2 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.4, y: y + h * 0.8 })
+    }
+    if g.kind == .Calendar {
+        // The rule lies on the page; the rings stand above it, in the tint.
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.17, y: y + h * 0.42 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.83, y: y + h * 0.42 })
+        try geometry.move_to(&marks, geometry.Point { x: x + w * 0.35, y: y + h * 0.12 })
+        try geometry.line_to(&marks, geometry.Point { x: x + w * 0.35, y: y + h * 0.24 })
+        try geometry.move_to(&marks, geometry.Point { x: x + w * 0.65, y: y + h * 0.12 })
+        try geometry.line_to(&marks, geometry.Point { x: x + w * 0.65, y: y + h * 0.24 })
+    }
+    if g.kind == .Visibility || g.kind == .VisibilityOff {
+        let ey = y + h * 0.5
+        try geometry.move_to(&body, geometry.Point { x: x + w * 0.1, y: ey })
+        try geometry.cubic_to(&body, geometry.Point { x: x + w * 0.3, y: y + h * 0.2 }, geometry.Point { x: x + w * 0.7, y: y + h * 0.2 }, geometry.Point { x: x + w * 0.9, y: ey })
+        try geometry.cubic_to(&body, geometry.Point { x: x + w * 0.7, y: y + h * 0.8 }, geometry.Point { x: x + w * 0.3, y: y + h * 0.8 }, geometry.Point { x: x + w * 0.1, y: ey })
+        try geometry.close_path(&body)
+        try oval(&cut, x + w * 0.5, ey, w * 0.12, h * 0.12)
+        if g.kind == .VisibilityOff {
+            try geometry.move_to(&marks, geometry.Point { x: x + w * 0.18, y: y + h * 0.18 })
+            try geometry.line_to(&marks, geometry.Point { x: x + w * 0.82, y: y + h * 0.82 })
+        }
+    }
+    if g.kind == .Settings {
+        // The disk filled, its hub cut out, the teeth in the tint round it.
+        let gx = x + w * 0.5
+        let gy = y + h * 0.5
+        try oval(&body, gx, gy, w * 0.3, h * 0.3)
+        try oval(&cut, gx, gy, w * 0.14, h * 0.14)
+        var tooth = 0usize
+        while tooth < 8usize {
+            let dx = tooth_x(tooth)
+            let dy = tooth_x((tooth + 6usize) % 8usize)
+            try geometry.move_to(&marks, geometry.Point { x: gx + dx * w * 0.3, y: gy + dy * h * 0.3 })
+            try geometry.line_to(&marks, geometry.Point { x: gx + dx * w * 0.42, y: gy + dy * h * 0.42 })
+            tooth += 1usize
+        }
+    }
+    if g.kind == .Edit {
+        try geometry.move_to(&body, geometry.Point { x: x + w * 0.2, y: y + h * 0.8 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.2, y: y + h * 0.65 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.68, y: y + h * 0.17 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.83, y: y + h * 0.32 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.35, y: y + h * 0.8 })
+        try geometry.close_path(&body)
+        try geometry.move_to(&cut, geometry.Point { x: x + w * 0.6, y: y + h * 0.25 })
+        try geometry.line_to(&cut, geometry.Point { x: x + w * 0.75, y: y + h * 0.4 })
+    }
+    if g.kind == .Filter {
+        try geometry.move_to(&body, geometry.Point { x: x + w * 0.18, y: y + h * 0.25 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.82, y: y + h * 0.25 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.57, y: y + h * 0.55 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.57, y: y + h * 0.78 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.43, y: y + h * 0.7 })
+        try geometry.line_to(&body, geometry.Point { x: x + w * 0.43, y: y + h * 0.55 })
+        try geometry.close_path(&body)
+    }
+    // The body's edge carries the outline's stroke too, so the two forms keep one size.
+    let edge = paint.Stroke { width: g.stroke, cap: .Round, join: .Round, miter_limit: 4.0 }
+    let body_path = geometry.finish(&body)
+    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: body_path, brush: paint.Brush { Solid: g.color } } })
+    try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: body_path, brush: paint.Brush { Solid: g.color }, stroke: edge } })
+    try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&cut), brush: paint.Brush { Solid: g.ground }, stroke: edge } })
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&marks), brush: paint.Brush { Solid: g.color }, stroke: edge } })
+}
+
+// A gear tooth's direction component: 1, 0.7071, 0, -0.7071, -1, ... round the circle.
+fn tooth_x(tooth: usize) -> f32 {
+    if tooth == 0usize { ret 1.0 }
+    if tooth == 1usize || tooth == 7usize { ret 0.7071 }
+    if tooth == 2usize || tooth == 6usize { ret 0.0 }
+    if tooth == 3usize || tooth == 5usize { ret 0.0 - 0.7071 }
+    ret 0.0 - 1.0
+}
 
 // An ellipse of four quarter arcs about a centre.
 fn oval(b: *geometry.PathBuilder, cx: f32, cy: f32, rx: f32, ry: f32) -> err {
@@ -2598,6 +2783,7 @@ fn oval(b: *geometry.PathBuilder, cx: f32, cy: f32, rx: f32, ry: f32) -> err {
 
 fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*Glyph](ctx)
+    if g.filled && glyph_has_body(g.kind) { ret filled_glyph_paint(g, b, area) }
     // (D1302) The gear's two rings and eight teeth need the larger builder.
     var verbs = 16usize
     var points = 24usize
@@ -2927,7 +3113,7 @@ fn mark_glyph(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32) -> 
 fn stroked_glyph(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32, stroke: f32) -> (widget.Node, err) {
     let (glyphs, glyphs_error) = mem.alloc[Glyph](a, 1usize)
     if glyphs_error != ok { ret (zero, TooLarge) }
-    glyphs[0usize] = Glyph { color: color, kind: kind, arena: a, stroke: stroke }
+    glyphs[0usize] = Glyph { color: color, kind: kind, arena: a, stroke: stroke, filled: false, ground: color }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&glyphs[0usize]), measure: mark_measure, paint: glyph_paint, state: widget.bytes_of[Glyph](&glyphs[0usize]) } }, style: sized_style(size, size), children: none }, ok)
 }

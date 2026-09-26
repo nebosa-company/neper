@@ -1226,7 +1226,8 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
         if parts_error != ok { ret (zero, TooLarge) }
         var p = 0usize
         if item.pictured {
-            let (icon, icon_error) = control.icon_square(a, ink, item.glyph, 24.0)
+            // (D1530) The selected destination's icon is its filled "on" form.
+            let (icon, icon_error) = control.icon_square_of(a, ink, item.glyph, 24.0, chosen, style.color(t.tokens, .SecondaryContainer))
             if icon_error != ok { ret (zero, icon_error) }
             parts[p] = icon
             p += 1usize
@@ -1552,7 +1553,7 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         if parts_error != ok { ret (zero, TooLarge) }
         var p = 1usize
         if item.pictured {
-            let (icon, icon_error) = control.icon_square(a, icon_ink, item.glyph, 24.0)
+            let (icon, icon_error) = control.icon_square_of(a, icon_ink, item.glyph, 24.0, chosen, style.color(t.tokens, .SecondaryContainer))
             if icon_error != ok { ret (zero, icon_error) }
             held[0usize] = icon
             if item.dot || item.badge.len > 0usize {
