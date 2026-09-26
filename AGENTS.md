@@ -12,3 +12,7 @@
 - `docs/progress.html` is the only readiness document and is never hand-edited.
 - Append design decisions to `docs/decisions.md` as `## D<n> — <title>`; preserve
   earlier entries.
+- Change source and docs with the Edit tool, not Python patch scripts that carry
+  `old`/`new` strings: a script pays output tokens for the anchor text too and costs
+  about 4x as much per byte of new code. Use a script only when it computes the content
+  (constants, tables) or applies one mechanical change across many files.
