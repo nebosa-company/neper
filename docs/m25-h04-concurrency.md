@@ -79,9 +79,18 @@ identity (`g.m`), not to the data it protects.
 `try_read_guard` / `read_release`, `write_guard` / `try_write_guard` /
 `write_release`; the fixtures `sync_rwguard` and `reject/safety_rwguard_leak`.
 
-Not designed yet, the second half: the data as a view of the guard (H02's view
-rule over the guard's lifetime, so a borrow of the protected data cannot survive
-the release), reentrancy, condition-variable wait and reacquire through a guard
+The data as a view of the guard (D1555): `sync.data_guard[T](&m, &data)` takes
+the mutex with the data it protects and returns a `sync.DataGuard`, owed to
+`data_release`; the data is reached through `sync.data_of[T](&g)`, declared
+`@borrows("g")`, so its result is a view of the guard and H02's view rule holds
+it inside the guard's life. A release while a view lives in the same block is
+E-SAFETY-0004 (the pointer to the guard lives to the block's end); consuming the
+guard ends every view of it, one carried out in another local included, so a
+later use is E-SAFETY-0014; and a view returned past a deferred release is
+E-SAFETY-0014 at the `ret`. The rule is general: consuming any resource -- a
+file closed, a guard released -- ends the views of it.
+
+Not designed yet: reentrancy, condition-variable wait and reacquire through a guard
 (`condition_wait` takes the mutex, not the guard, and stays that way until the
 view rule exists), cancellation.
 

@@ -28022,3 +28022,25 @@ Two faults surfaced only in the self-hosted compiler, since the bootstrap's aren
 `query_partial.e` puts `later` after a `main` whose body does not check. `context-file --symbol query_partial.later` answers on both hosts with its page, including its call to `twice`, a function checked only because the checker went on. `context_partial.x64-{windows,linux}.expected.jsonl` pin it, with exit 1 and nothing on stderr. `query_broken`'s context case now asks for `main`, the function that fails, so it still pins the D520 answer; its golden is unchanged. The context, subjects, contract, nested-instance, catalogue and batch outputs are unchanged by this on both hosts. On Linux that was checked against the goldens with only the pre-existing `e.os` hash and snapshot drift masked. Stage 2 equals stage 3 on both hosts.
 
 With D1553's borrow origins, both of C053's lines have landed and the item closes.
+
+## D1555 — The protected data as a view of the guard
+
+D379 made a lock held as a value a resource, and deferred the second half of H04 section 4: the protected data as a view of the guard, so a borrow of the data cannot survive the release. The guard named the lock, not the data, so the data was reached however the program liked, and nothing tied a pointer to it to the lock's life.
+
+`e.sync` gains a guard that holds the data. `data_guard[T](m, data)` takes the mutex and returns a `DataGuard { m, data: *void }`, owed to `data_release` as `Guard` is to `release`. The data is reached through `data_of[T](&g)`, declared `@borrows("g")`. At a call, D734 makes its result a view of the guard, so H02's view rule holds the data to the guard's life. Two changes to the checker make that hold:
+
+- A `mem.cast[*T](x)` proves a `@borrows` return when `x` does (`result_borrows_from`). A cast is the address it was given, so provenance does not change. This lets `data_of` hand back the typed pointer stored as `*void`.
+- Consuming a resource (`resource_consume`: closed, released, handed to an `own` parameter) ends every view of it, including a local that took the view by assignment. `x = p`, with `p` a view, now gives `x` the same container (`view_of`), where D416's alias left it untagged. A use after the consumption is then E-SAFETY-0014, "a view of a container that was changed". The rule is general: a view of a closed file is as dead as a view of a released guard.
+- `ret p`, with `p` a view of a local whose release is deferred, is refused at the `ret` (E-SAFETY-0014, pointing at the `defer`). The deferred release runs as the `ret` leaves, so the caller would hold a view of a released guard.
+
+The in-block case needed nothing new. A pointer taken to the guard lives to the end of its block, so releasing while a view lives in the same block was already E-SAFETY-0004. The views that matter are taken in an inner block or under a deferred release, and those are what the fixtures pin:
+
+- `accept/dataguard_scoped`: a view in an inner block, and one under `defer`.
+- `reject/safety_dataguard_held`: E-SAFETY-0004.
+- `reject/safety_dataguard_carried`: E-SAFETY-0014 at the use after the release.
+- `reject/safety_dataguard_returned`: E-SAFETY-0014 at the `ret`.
+- `link/sync_dataguard`: two workers reaching a count only through `data_of` exclude each other (40,001 increments), and a deferred release survives an early return.
+
+The goldens agree on both hosts, and so do `sync_guard`, `sync_rwguard` and `thread_group` on Linux. A sweep of every link fixture and accept case (601 sources) with HEAD's compiler and the new one found none newly refused. The 18 it lists as newly accepted are HEAD's compiler refusing the new `sync.e`, whose `data_of` needs the cast rule. Stage 2 equals stage 3 on both hosts, so the compiler's own source is clean under the stricter rule.
+
+Out of scope, and noticed on the way: returning `&x` of a plain local, or a pointer that came back from a call given `&x`, is not refused. The frame-escape rule is threads' only (D357).
