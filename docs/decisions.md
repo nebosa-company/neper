@@ -26607,3 +26607,14 @@ leaving it. Without `complete`, Tab moves on as before.
 `ui_navigation2_v2` presses Tab in the editing path field: the completion is
 asked for once and the field still holds the focus; Enter and Escape still go
 and cancel, on Windows and Linux.
+
+## D1397 — Alt and a digit pick a workspace tab
+
+The MultiDocumentWorkspace spec picks a tab by position with Alt+1..9. The
+single-group workspace's scope now binds Alt+1 to Alt+9 (as many as there are
+documents) to its `pick` with that index, beside Ctrl+W and Ctrl+PageDown and
+PageUp. Most-recently-used Ctrl+Tab and Ctrl+Shift+T still need a history the
+caller does not pass.
+
+`ui_workspace` presses Alt+3 (the third tab picked) and Alt+1 (the first), and
+`ui_containers2_v2` still passes, on Windows and Linux.
