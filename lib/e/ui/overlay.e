@@ -1279,16 +1279,39 @@ fn search_view_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
 // (D1262) `search_shortcuts` opens it with Ctrl+K or `/`.
 // (D1263) `search_view_full` is the compact form.
 // (D1365) It fades and grows in as a popup does (`opening_share`, `grown_in`).
-// ponytail: no loading bar under the header -- pass `popup_loading` content round
-// the view's owner instead.
+// (D1417) `search_view_loading` runs a loading bar at its top.
 fn search_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, query: str, groups: []const SearchGroup, fallback_label: str, fallback: *const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = search_view_loading(a, key, t, anchor, label, query, groups, fallback_label, fallback, open, dismiss, width, false)
+    ret (made, made_error)
+}
+
+// (D1417, docs/ux/components/SearchBar, loading) `search_view` while `loading`:
+// once the suggestions have been loading for 300 ms (`control.busy_visible`,
+// held on the view's box, then shown at least 500 ms), a 2px indeterminate
+// `primary` bar on `secondary-container` (keyed `key + 8196`) runs across the
+// panel's top, over the previous suggestions, which stay.
+fn search_view_loading(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, query: str, groups: []const SearchGroup, fallback_label: str, fallback: *const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32, loading: bool) -> (widget.Node, err) {
     let opened = opening_share(t, key, open)
+    let busy = control.busy_visible(t, key + 8192u64, open && loading)
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (rows_node, rows_error) = search_rows(a, key, t, query, groups, fallback_label, fallback)
     if rows_error != ok { ret (zero, rows_error) }
-    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    let (column, column_error) = mem.alloc[widget.Node](a, 3usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = rows_node
+    if busy {
+        let (loads, loads_error) = mem.alloc[PopupLoad](a, 1usize)
+        if loads_error != ok { ret (zero, TooLarge) }
+        loads[0usize] = PopupLoad { fill: style.color(t.tokens, .Primary), phase: control.progress_turn(t, 0.0 - 1.0, time.seconds(2i64)) }
+        var bar = control.sized_style(0.0, 2.0)
+        bar.width = style.Length { Percent: 100.0 }
+        bar.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) }
+        bar.overflow = .Clip
+        var none: []const widget.Node = zero
+        column[1usize] = widget.Node { key: key + 8196u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&loads[0usize]), measure: control.mark_measure, paint: popup_load_paint, state: widget.bytes_of[PopupLoad](&loads[0usize]) } }, style: bar, children: none }
+        column[2usize] = rows_node
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), column[1usize..3usize])
+    }
     var raised = control.surface_options(t)
     raised.background = .SurfaceContainerHigh
     raised.elevation = 3u8

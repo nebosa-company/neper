@@ -26854,3 +26854,9 @@ still pass.
 The Popup spec closes the surface "over `duration-short-2` with `ease-emphasized-accelerate`". `popup_of` now keeps a second share, `closing_share`, on its box (slot `key + 8194`). While the popup is open, that share follows it up over `duration-short-2`. Once the popup is closed, the share leaves on the emphasized-accelerate curve. While it is above 0, the surface is drawn faded and shrunk toward the anchor (`grown_in`) without its group semantics, so the tree no longer lists the popup. Reduced motion, or a popup that was never opened, draws nothing at once.
 
 `ui_presentation` opens a popup and then closes it, on Windows and Linux. 40 ms after the close its text still shows; 390 ms after it, the text is gone.
+
+## D1417 — The search view shows a loading bar
+
+The SearchBar spec runs "a 2px indeterminate progress bar" under the header when suggestions take longer than 300 ms, and keeps the previous suggestions until new ones arrive. The new `search_view_loading` is `search_view` with a `loading` flag; `search_view` itself passes false. The 300 ms wait and the 500 ms minimum come from `control.busy_visible`, held on the view's box (`key + 8192`). The bar reuses the popup-loading painter (`popup_load_paint`), 2 tall, keyed `key + 8196`, and sits across the panel's top over the rows, which stay.
+
+`ui_overlays2_v2` checks the timing on Windows and Linux. A loading view shows no bar at 0 and 100 ms. At 400 ms the bar shows, and the fallback row is still there.
