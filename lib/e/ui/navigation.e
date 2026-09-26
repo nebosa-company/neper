@@ -1251,7 +1251,8 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
 // `duration-medium-1` (the fill keyed `key + 1 + index + 1048576`); reduced
 // motion shows it at once.
 // (D1376) The fill grows on `ease-emphasized-decelerate`.
-// ponytail: no hiding on scroll; tabs rather than links in a navigation landmark (the spec allows
+// (D1450) `destination_bar_hiding` hides the bottom bar on scroll.
+// ponytail: tabs rather than links in a navigation landmark (the spec allows
 // tabs where the content changes without a URL).
 // (D1266) A destination bar's extras: the rail's `menu` button (firing `menu`,
 // which opens the modal drawer) and its FAB (`fab`, the caller's 56 button), and
@@ -1307,6 +1308,28 @@ fn destination_bar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: cross, gap: 8.0 }, top, parts[0usize..n])
     column[1usize] = bar
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), column[0usize..2usize]), ok)
+}
+
+// (D1450, docs/ux/components/DestinationBar, hidden) A bottom bar that hides
+// while its content scrolls down: `bar` (`height` tall) in a clipping box keyed
+// `key`, slid down out of it while `hidden` (the caller's "scrolled down") and
+// back on scroll up, over `duration-medium-2` on the emphasized pair (kept on the
+// box, slot `key + 1048610`); reduced motion changes at once. Hidden, the bar is
+// out of the tree.
+fn destination_bar_hiding(a: *mem.Arena, key: widget.Key, t: *const control.Theme, bar: widget.Node, hidden: bool, width: f32, height: f32) -> (widget.Node, err) {
+    var goal: f32 = 0.0
+    if hidden { goal = 1.0 }
+    let gone = control.eased_emphasized(t, key, key + 1048610u64, goal, false, t.tokens.durations.medium2)
+    let (held, held_error) = mem.alloc[widget.Node](a, 3usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[2usize] = bar
+    var quiet: widget.Semantics = zero
+    quiet.hidden = hidden
+    held[1usize] = widget.semantics(0u64, quiet, style.defaults(), held[2usize..3usize])
+    held[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: height * gone } }, style.defaults(), held[1usize..2usize])
+    var clip = control.sized_style(width, height)
+    clip.overflow = .Clip
+    ret (widget.box(key, clip, held[0usize..1usize]), ok)
 }
 
 // (D1448, docs/ux/components/DestinationBar, motion) The page a destination

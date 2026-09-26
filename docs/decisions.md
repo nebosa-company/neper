@@ -27093,3 +27093,11 @@ Checks on Windows and Linux:
 - All 103 `ui_*` fixtures pass.
 
 The D1445 full-suite milestone ran in this stretch, with the Windows suite in the suite worktree. It stops at the known `tool.Capacity` at ui_navigation4_v2. With the uncommitted foreign `src/tool.e` fix applied there only, it passes every UI fixture and stops at the known stale `plan-rename-file` goldens; both are the user's decisions.
+
+## D1450 — The bottom destination bar hides on scroll
+
+The DestinationBar spec gives the bottom bar an optional Hidden state: it "slides down with content scrolled down, returns on scroll up." The new `destination_bar_hiding(key, bar, hidden, width, height)` stands the bar in a clipping box keyed `key`. It slides the bar down out of that box while `hidden`, which is the caller's "scrolled down", and back when it clears. The slide runs over `duration-medium-2` on the emphasized pair, kept on the box under slot `key + 1048610`. While hidden, the bar is out of the tree (`semantics.hidden`). Reduced motion changes at once.
+
+`ui_navigation3_v2` checks this on Windows and Linux. Part way through hiding, the slot's top still shows the bar. A second later it shows the page and no tabs are in the tree. Scrolled back up, the tabs return.
+
+Milestone record: the D1445 full suites ran in the suite worktree at 4f5ee28d. Windows stops at the known `tool.Capacity` at ui_navigation4_v2; with the uncommitted foreign `src/tool.e` applied there only, it reaches the stale `plan-rename-file` golden. Linux passes ui_navigation4_v2 and stops at the stale `context-file --json` conformance golden. The goldens and the `src/tool.e` commit are the user's decisions.

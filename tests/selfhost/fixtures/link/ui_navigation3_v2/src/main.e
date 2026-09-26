@@ -453,6 +453,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         page_step += 1usize
     }
+    // (D1450) Scrolled down, the bottom bar slides out of its 80 slot over
+    // `duration-medium-2` and leaves the tree: part way its top is not yet the
+    // page, a second on the whole slot is; scrolled back up it returns.
+    var hide_step = 0usize
+    while hide_step < 5usize {
+        var hide_at = 22000000000i64
+        var hiding = false
+        if hide_step == 1usize { hide_at = 22000000001i64 }
+        if hide_step == 2usize {
+            hide_at = 22100000000i64
+            hiding = true
+        }
+        if hide_step == 3usize {
+            hide_at = 23100000000i64
+            hiding = true
+        }
+        if hide_step == 4usize { hide_at = 24100000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: hide_at }) != ok { os.exit(86i32) }
+        f = mem.arena_from(frame_storage)
+        let (hid_bar, hid_bar_error) = navigation.destination_bar_of(&f, 3960u64, &theme, s.places[0usize..3usize], 0usize, s.picks[0usize..3usize], .Bottom, 400.0)
+        if hid_bar_error != ok { os.exit(86i32) }
+        let (hider, hider_error) = navigation.destination_bar_hiding(&f, 3990u64, &theme, hid_bar, hiding, 400.0, 80.0)
+        let (hide_parts, hide_parts_error) = mem.alloc[widget.Node](&f, 1usize)
+        if hider_error != ok || hide_parts_error != ok { os.exit(86i32) }
+        hide_parts[0usize] = hider
+        var hide_page = control.sized_style(640.0, 520.0)
+        hide_page.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.box(0u64, hide_page, hide_parts[0usize..1usize]), time.Instant { nanos: hide_at }) != ok { os.exit(86i32) }
+        if hide_step >= 2usize {
+            let (slot, has_slot) = bounds(&harness, &runtime, 3990u64)
+            let (hide_shot, hide_shot_error) = testing.snapshot(&harness, a)
+            if !has_slot || hide_shot_error != ok { os.exit(87i32) }
+            let top_is_page = is_color(hide_shot, at(slot.x + 200.0, slot.y + 2.0), style.color(&tokens, .Background))
+            if hide_step == 2usize && top_is_page { os.exit(88i32) }
+            if hide_step == 3usize && (!top_is_page || testing.by_role(&harness, .Tab).count != 0usize) { os.exit(89i32) }
+            if hide_step == 4usize && testing.by_role(&harness, .Tab).count == 0usize { os.exit(90i32) }
+        }
+        hide_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation3 v2 ok\n")
     ret ok
