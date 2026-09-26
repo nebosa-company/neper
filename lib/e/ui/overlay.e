@@ -3311,6 +3311,22 @@ type CalendarMarks = struct { week_numbers: bool, events: []const time.Date, una
 // (D1307) A year pill's press: show `day`'s month, then leave the year view.
 type YearPick = struct { day: time.Date, show: widget.Change[time.Date], toggle: *const widget.Submit }
 
+// (D1513) An arrow in the year grid: the pill it moves to (keyed `target`), and,
+// when that pill is past the built rows, the viewport (keyed `viewport`) and the
+// offset that puts its row in view.
+type YearHop = struct { runtime: *widget.Runtime, target: widget.Key, viewport: widget.Key, offset: f32 }
+
+fn year_hop_fire(ctx: *void) -> err {
+    let h = mem.cast[*YearHop](ctx)
+    let (s, state_error) = widget.state_of(h.runtime)
+    if state_error != ok { ret ok }
+    let (id, count) = widget.find_by_key(s, h.target)
+    if count != 0usize { ret widget.focus(h.runtime, id) }
+    let (view_id, view_count) = widget.find_by_key(s, h.viewport)
+    if view_count != 0usize { try widget.scroll_to(h.runtime, view_id, h.offset) }
+    ret widget.focus_key(h.runtime, h.target)
+}
+
 fn year_pick_fire(ctx: *void) -> err {
     let p = mem.cast[*YearPick](ctx)
     try widget.fire_change[time.Date](p.show, p.day)
@@ -3330,7 +3346,7 @@ fn year_pick_fire(ctx: *void) -> err {
 // Only the rows in view (and one either side) are built.
 // (D1473) The grid is one Tab stop: the focused pill, else the shown year's,
 // else the first built.
-// ponytail: arrows past the built rows find nothing to focus.
+// (D1513) An arrow past the built rows scrolls its row into view and focuses it.
 fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: time.Date, marks: *const CalendarMarks, show: widget.Change[time.Date], width: f32, height: f32) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var pill_w: f32 = 64.0
@@ -3374,7 +3390,7 @@ fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: tim
     let (presses, presses_error) = mem.alloc[widget.Submit](a, count)
     let (pills, pills_error) = mem.alloc[widget.Node](a, count)
     let (rows, rows_error) = mem.alloc[widget.Node](a, row_span + 1usize)
-    let (hops, hops_error) = mem.alloc[control.FocusTo](a, 4usize * count)
+    let (hops, hops_error) = mem.alloc[YearHop](a, 4usize * count)
     let (hop_keys, hop_keys_error) = mem.alloc[widget.Shortcut](a, 4usize * count)
     if picks_error != ok || presses_error != ok || pills_error != ok || rows_error != ok || hops_error != ok || hop_keys_error != ok { ret (zero, TooLarge) }
     var tab_index = start
@@ -3437,8 +3453,12 @@ fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: tim
             if hop == 1usize && i >= 3usize { to = i - 3usize }
             if hop == 2usize && i + 1usize < count { to = i + 1usize }
             if hop == 3usize && i + 3usize < count { to = i + 3usize }
-            hops[4usize * i + hop] = control.FocusTo { runtime: t.runtime, key: key + 4096u64 + u64(to) }
-            hop_keys[4usize * i + hop] = widget.Shortcut { key: 37u32 + u32(hop), modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&hops[4usize * i + hop]), invoke: control.focus_to_fire } }
+            // (D1513) A hop past the built rows scrolls its row into the middle.
+            var hop_offset = f32(to / 3usize) * row_height - (height - row_height) * 0.5
+            if hop_offset > content_height - height { hop_offset = content_height - height }
+            if hop_offset < 0.0 { hop_offset = 0.0 }
+            hops[4usize * i + hop] = YearHop { runtime: t.runtime, target: key + 4096u64 + u64(to), viewport: key + 4094u64, offset: hop_offset }
+            hop_keys[4usize * i + hop] = widget.Shortcut { key: 37u32 + u32(hop), modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&hops[4usize * i + hop]), invoke: year_hop_fire } }
             hop += 1usize
         }
         let (held_pill, held_pill_error) = mem.alloc[widget.Node](a, 1usize)

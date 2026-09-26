@@ -617,6 +617,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         year_step += 1usize
     }
+    // (D1513) Up from 2026 eight times, a frame after each, walks out of the rows
+    // first built: the grid scrolls and 2002 takes the focus.
+    var climb_step = 0usize
+    while climb_step < 10usize {
+        var climb_marks: overlay.CalendarMarks = zero
+        climb_marks.toggle_years = &stores[0usize].press
+        climb_marks.year_view = true
+        f = mem.arena_from(frame_storage)
+        let (climbing, climbing_error) = overlay.calendar_with(&f, 1200u64, &theme, "March", first_of_march, first_of_march, false, false, first_of_march, first_of_march, first_of_march, false, picked_dates, picked_dates, climb_marks)
+        let (climb_page, climb_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if climbing_error != ok || climb_page_error != ok { os.exit(182i32) }
+        climb_page[0usize] = climbing
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), climb_page[0usize..1usize]), time.Instant { nanos: 3600000000i64 + i64(climb_step) }) != ok { os.exit(183i32) }
+        if climb_step == 0usize && widget.focus(&runtime, testing.by_key(&harness, 1200u64 + 4096u64 + 100u64).element) != ok { os.exit(184i32) }
+        if climb_step >= 1usize && climb_step <= 8usize && testing.press_key(&harness, 38u32, zero) != ok { os.exit(185i32) }
+        climb_step += 1usize
+    }
+    let (climbed, _) = widget.focused_key(&runtime)
+    if climbed != 1200u64 + 4096u64 + 76u64 { os.exit(186i32) }
     // (D1423) Turned from March to April, the days slide in from the end: 50 ms
     // on, the chosen 10 April is not yet where it settles a second on.
     let tenth_of_april = time.Date { year: 2026i32, month: 4u8, day: 10u8 }
