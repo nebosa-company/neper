@@ -4849,6 +4849,21 @@ fn pairs_parse(text: str, pairs: []Pair) -> (usize, usize) {
     ret (count, bad)
 }
 
+// (D1460) Whether a pair's name is an identifier: letters, digits and `_`, not
+// starting with a digit.
+fn identifier_name(name: []const u8) -> bool {
+    if name.len == 0usize || (name[0usize] >= 48u8 && name[0usize] <= 57u8) { ret false }
+    var i = 0usize
+    while i < name.len {
+        let b = name[i]
+        let letter = (b >= 65u8 && b <= 90u8) || (b >= 97u8 && b <= 122u8)
+        let digit = b >= 48u8 && b <= 57u8
+        if !letter && !digit && b != 95u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // (D1371) `pairs_parse` that keeps the comment and blank lines before each pair
 // in its note (`notes[index]`, as far as its buffer holds). (D1459) The lines
 // after the last pair go to the note after it (`notes[count]`, when there is
@@ -5039,8 +5054,9 @@ fn joined(a: *mem.Arena, first: str, second: str, third: []const u8) -> (str, er
 // `pairs_parse`).
 // (D1327) The ordered variant (`KeyValueOptions.ordered`).
 // (D1353) Removal's Undo notice (`pair_removed_notice`).
-// ponytail: `code` names, the removed row's collapse, the 30 s reveal limit or
-// the touch list form.
+// (D1460) Identifier names stand in the `code` face.
+// ponytail: the removed row's collapse, the 30 s reveal limit or the touch list
+// form.
 fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
     if pairs.len > 128usize { ret (zero, TooLarge) }
     if options.text_mode {
@@ -5107,8 +5123,12 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         field.height = field_h
         field.placeholder = options.name_label
         field.invalid = repeated
+        // (D1460, docs/ux/components/KeyValueEditor, fields) A name that is an
+        // identifier stands in the theme's fixed-pitch (`code`) face.
+        field.mono = identifier_name(pairs[i].name[0usize..pairs[i].name_len])
         let (name_field, name_error) = control.text_field(a, key + 1u64 + 3u64 * u64(i), t, options.name_label, pairs[i].name, pairs[i].name_len, widget.Change[str] { ctx: ctx_of(&changes[2usize * i]), invoke: pair_change_fire }, zero, field)
         if name_error != ok { ret (zero, name_error) }
+        field.mono = false
         let (value_name, value_name_error) = joined(a, options.value_label, "of", name_text)
         if value_name_error != ok { ret (zero, value_name_error) }
         field.width = value_w
