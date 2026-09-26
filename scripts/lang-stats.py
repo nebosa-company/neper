@@ -1,20 +1,52 @@
 """Compare what it costs an LLM to write Neper, Dart, Rust, JS, TS and Python.
 
-Reads every Claude Code transcript under ~/.claude/projects. Code reaches a file three
-ways and all three count: the Write/Edit tools, `cat > file <<EOF` heredocs, and Python
-patch or generator scripts (written to a .py file or inlined as `python - <<EOF`) whose
+Reads every Claude Code transcript under ~/.claude/projects, every Codex rollout under
+~/.codex, and the DeepSeek steps in opencode's database. A row is a language, all agents
+pooled; with --harness it is a language as one agent wrote it. Codex's apply_patch counts as Write/Edit and its shell commands as Bash. Every
+agent is costed with Claude's token weights and priced at the Opus list rate, so $ compares
+effort, not bills.
+
+Code reaches a file three ways and all three count: the Write/Edit tools, `cat > file <<EOF`
+heredocs, and Python patch or generator scripts (written to a .py file or inlined as `python - <<EOF`) whose
 old/new strings carry the code. A script's new code is credited to the language it
 patches, and so is the script's whole cost; a run of the script is one edit application,
 so an `assert count == 1` failure is an edit that did not apply. All other Python in a
 session (test oracles, analysis, doc patches) is tooling for that session's host
 language: it costs the host and lands no code. Python's own row is project scripts:
-.py files inside a repo, outside scratch and build folders. Four sections follow, each
-with its columns explained beneath it; a KB is 1000 bytes of source, never tokens.
+.py files inside a repo, outside scratch and build folders. A scorecard and the four
+tables it scores follow; with --help each has its columns explained beneath it. A KB is 1000 bytes of
+source, never tokens.
 """
-import ast, json, glob, os, re, sys, ntpath, warnings, statistics, collections as C
+import argparse, ast, io, json, glob, os, re, sys, ntpath, textwrap, time, warnings, statistics, sqlite3, itertools, collections as C
 from datetime import datetime
 
-COLOR = sys.stdout.isatty() or '--color' in sys.argv
+AXES = {  # every judged column, by what it measures
+    'Cost (tokens / USD)': ['cost/B', '$/KB', 'direct $/KB', 'script $/KB', 'outK/KB', 'tok/B', 'thk/B', 'direct tok/B', 'script tok/B'],
+    'Rework (iterations)': ['ed/fil', 'selfcor%', 'turns/ed', 'fix turns', '1-edit%'],
+    'Correctness (right first time)': ['edit%', 'fail%', '1st-ok%', 'repeat%'],
+    'Time': ['bld ms', 'p90 ms', 'mdl s/KB', 'tool s/KB'],
+    'Context load': ['ctx Ktk', 'read/KB', 'diag B', 'cache%'],
+    'Style': ['prose K/KB', 'script%']}
+JUDGED = sum(map(len, AXES.values()))
+AXES_HELP = 'score axes: each judged column weighs equally in the scorecard\n\n%-32s %-6s %s\n' % ('axis', 'share', 'columns') + '\n'.join(
+    '%-32s %-6s %s' % (a if i == 0 else '', '%d/%d' % (len(cs), JUDGED) if i == 0 else '', ln)
+    for a, cs in AXES.items() for i, ln in enumerate(textwrap.wrap(', '.join(cs), 50)))
+ap = argparse.ArgumentParser(description=__doc__, epilog=AXES_HELP, formatter_class=argparse.RawDescriptionHelpFormatter, add_help=False)
+ap.add_argument('-h', '--help', action='store_true', help='run as usual and explain every column beneath its table')
+ap.add_argument('-c', '--color', action='store_true', help='mark best, second best and worst per column even when not on a terminal')
+ap.add_argument('-d', '--days', type=float, help='only data from the last DAYS days')
+ap.add_argument('-a', '--harness', action='store_true', help='split every row by agent (claude, codex, deepseek) and score each harness apart')
+ARGS = ap.parse_args()
+if ARGS.help: print(ap.format_help())
+
+
+def explain(text):
+    """A column legend, printed only with --help."""
+    if ARGS.help: print(text)
+NOW = time.time()
+CUTOFF = NOW - ARGS.days * 86400 if ARGS.days else 0  # a reply older than this is left out
+
+COLOR = sys.stdout.isatty() or ARGS.color
 if COLOR and os.name == 'nt': os.system('')  # switches the console to honour ANSI escapes
 GREEN, CYAN, RED, END = ('\033[32m', '\033[36m', '\033[31m', '\033[0m') if COLOR else ('', '', '', '')
 
@@ -113,6 +145,137 @@ def when(o):
     except (KeyError, ValueError, AttributeError): return None
 
 
+def claude():
+    """Each Claude Code transcript as (agent, msgs, order, results): msgs maps an assistant message id to
+    its content blocks, usage, the time of the record before it and its own time; results maps a
+    tool_use id to its output text, time and whether it failed. The other agents are read into this shape."""
+    for f in glob.glob(ROOT + '/**/*.jsonl', recursive=True):
+        if os.path.getmtime(f) < CUTOFF: continue  # last written before the window: nothing in it counts
+        msgs, order, results, last_user = {}, [], {}, None
+        for line in open(f, encoding='utf8', errors='replace'):
+            try: o = json.loads(line)
+            except ValueError: continue
+            m = o.get('message') or {}; ts = when(o)
+            if o.get('type') == 'assistant' and m.get('id'):
+                if m['id'] not in msgs: msgs[m['id']] = {'content': [], 'usage': {}, 'after': last_user, 'ts': ts}; order.append(m['id'])
+                msgs[m['id']]['content'] += m.get('content') or []
+                msgs[m['id']]['usage'] = m.get('usage') or {}
+                msgs[m['id']]['ts'] = ts or msgs[m['id']]['ts']
+            elif o.get('type') == 'user':
+                last_user = ts or last_user
+                if isinstance(m.get('content'), list):
+                    for c in m['content']:
+                        if isinstance(c, dict) and c.get('type') == 'tool_result':
+                            text = str(c.get('content')); head = text[:300].lower()
+                            results[c.get('tool_use_id')] = {'text': text, 'ts': ts, 'failed': bool(c.get('is_error')) or ('exit code' in head and 'exit code 0' not in head)}
+        yield 'claude', msgs, order, results
+
+
+JS_STR = r'"(?:[^"\\]|\\.)*"|`[^`]*`'
+CMD = re.compile(r'\b(?:cmd|command)"?\s*:\s*(' + JS_STR + ')')
+PATCH = re.compile(r'"\*\*\* Begin Patch(?:[^"\\]|\\.)*"|`\*\*\* Begin Patch[^`]*`')
+HUNK = re.compile(r'^\*\*\* (Add|Update) File: (.+?)\s*$((?:\n(?!\*\*\* ).*)*)', re.M)
+EXIT = re.compile(r'(?i)^Script failed|\bexit(?:_code| code)?"?\s*[=:]\s*-?[1-9]', re.M)
+
+
+def js_str(s):
+    """The value of a JS string literal: a double-quoted one is JSON, a template literal is raw."""
+    if s[0] == '`': return s[1:-1]
+    try: return json.loads(s)
+    except ValueError: return s[1:-1]
+
+
+def codex_calls(p, cid):
+    """Claude-shaped tool_use blocks for one Codex call. apply_patch becomes a Write per added file and an
+    Edit per updated one (new side = added and context lines, like an Edit's new_string); every shell
+    command becomes a Bash. The newer Codex wraps both in an `exec` JavaScript cell, possibly several."""
+    src = p.get('input') or p.get('arguments') or ''
+    if p.get('type') == 'function_call':
+        try: a = json.loads(src)
+        except ValueError: a = {}
+        c = a.get('command') or a.get('cmd')
+        cmds, patches = [' '.join(c) if isinstance(c, list) else c] if c else [], []
+    elif p.get('name') == 'apply_patch': cmds, patches = [], [src]
+    else: cmds, patches = [js_str(m.group(1)) for m in CMD.finditer(src)], [js_str(m.group(0)) for m in PATCH.finditer(src)]
+    out = [{'name': 'Bash', 'input': {'command': c}} for c in cmds]
+    for patch in patches:
+        for m in HUNK.finditer(patch):
+            lines = m.group(3).split('\n')
+            new = '\n'.join(l[1:] for l in lines if l[:1] in '+ ' and l)
+            old = '\n'.join(l[1:] for l in lines if l[:1] in '- ' and l)
+            out.append({'name': 'Write', 'input': {'file_path': m.group(2), 'content': new}} if m.group(1) == 'Add'
+                       else {'name': 'Edit', 'input': {'file_path': m.group(2), 'old_string': old, 'new_string': new}})
+    return [dict(b, type='tool_use', id='%s#%d' % (cid, n)) for n, b in enumerate(out)]
+
+
+def codex():
+    """Codex rollouts. A model response is the items up to its token_count event (later duplicates are
+    dropped); shell exit codes reach the log only when the model printed them, so a failure is a failed
+    script cell, a printed non-zero exit, or an apply_patch error."""
+    home = os.path.expanduser('~/.codex')
+    for f in glob.glob(home + '/sessions/**/*.jsonl', recursive=True) + glob.glob(home + '/archived_sessions/*.jsonl'):
+        if os.path.getmtime(f) < CUTOFF: continue
+        msgs, order, results, last_user, cur = {}, [], {}, None, None
+        for line in open(f, encoding='utf8', errors='replace'):
+            try: o = json.loads(line)
+            except ValueError: continue
+            p = o.get('payload') or {}; k = p.get('type'); ts = when(o)
+            if o.get('type') != 'response_item' and k != 'token_count': continue
+            if k in ('function_call', 'custom_tool_call', 'reasoning') or (k == 'message' and p.get('role') == 'assistant'):
+                if cur is None: cur = len(order); msgs[cur] = {'content': [], 'usage': {}, 'after': last_user, 'ts': ts}; order.append(cur)
+                msgs[cur]['ts'] = ts or msgs[cur]['ts']
+                if k == 'message': msgs[cur]['content'] += [{'type': 'text', 'text': c.get('text', '')} for c in p.get('content') or []]
+                elif k != 'reasoning': msgs[cur]['content'] += codex_calls(p, p.get('call_id'))
+            elif k in ('function_call_output', 'custom_tool_call_output'):
+                out = p.get('output')
+                text = ''.join(x.get('text', '') for x in out if isinstance(x, dict)) if isinstance(out, list) else str(out)
+                results[p.get('call_id')] = {'text': text, 'ts': ts, 'failed': bool(EXIT.search(text[:2000]))}
+                last_user = ts or last_user
+            elif k == 'message': last_user = ts or last_user
+            elif k == 'token_count' and cur is not None and (p.get('info') or {}).get('last_token_usage'):
+                u = p['info']['last_token_usage']; cached = u.get('cached_input_tokens', 0)
+                msgs[cur]['usage'] = {'input_tokens': u.get('input_tokens', 0) - cached, 'cache_read_input_tokens': cached,
+                                      'output_tokens': u.get('output_tokens', 0), 'output_tokens_details': {'thinking_tokens': u.get('reasoning_output_tokens', 0)}}
+                cur = None
+        yield 'codex', msgs, order, results
+
+
+OPENCODE = {'read': 'Read', 'grep': 'Grep', 'glob': 'Glob', 'bash': 'Bash', 'write': 'Write', 'edit': 'Edit'}
+
+
+def deepseek():
+    """DeepSeek steps from the opencode database, one message per step (step-start to step-finish).
+    Only steps a deepseek-* model ran count; the other models' steps in a session are skipped."""
+    db = os.path.expanduser('~/.local/share/opencode/opencode.db')
+    if not os.path.exists(db): return
+    rows = sqlite3.connect('file:%s?mode=ro' % db, uri=True).execute(
+        'select p.session_id, m.data, p.data, p.time_created from part p join message m on p.message_id = m.id order by p.session_id, p.time_created, p.id')
+    for _, grp in itertools.groupby(rows, key=lambda r: r[0]):
+        msgs, order, results, last_user, cur = {}, [], {}, None, None
+        for _, md, pd, t in grp:
+            m, p = json.loads(md), json.loads(pd); ts = t / 1000
+            if m.get('role') != 'assistant': last_user = ts; continue
+            if 'deepseek' not in m.get('modelID', ''): cur = None; continue
+            k = p.get('type')
+            if k == 'step-start': cur = len(order); msgs[cur] = {'content': [], 'usage': {}, 'after': ts, 'ts': None}; order.append(cur)
+            elif cur is None: continue
+            elif k == 'text': msgs[cur]['content'].append({'type': 'text', 'text': p.get('text', '')})
+            elif k == 'tool':
+                s = p.get('state') or {}; i = s.get('input') or {}; n = OPENCODE.get(p.get('tool'), p.get('tool'))
+                if n in ('Write', 'Edit', 'Read'): i = {'file_path': i.get('filePath', ''), 'content': i.get('content'), 'old_string': i.get('oldString', ''), 'new_string': i.get('newString', '')}
+                st = (s.get('time') or {}).get('start'); msgs[cur]['ts'] = min(filter(None, (msgs[cur]['ts'], st and st / 1000)), default=None)
+                msgs[cur]['content'].append({'type': 'tool_use', 'id': p.get('callID'), 'name': n, 'input': i})
+                end = (s.get('time') or {}).get('end')
+                results[p.get('callID')] = {'text': str(s.get('output') or s.get('error') or ''), 'ts': end / 1000 if end else ts,
+                                            'failed': s.get('status') == 'error' or (s.get('metadata') or {}).get('exit') not in (None, 0)}
+            elif k == 'step-finish':
+                tk = p.get('tokens') or {}; c = tk.get('cache') or {}
+                msgs[cur]['usage'] = {'input_tokens': tk.get('input', 0), 'cache_read_input_tokens': c.get('read', 0), 'cache_creation_input_tokens': c.get('write', 0),
+                                      'output_tokens': tk.get('output', 0) + tk.get('reasoning', 0), 'output_tokens_details': {'thinking_tokens': tk.get('reasoning', 0)}}
+                msgs[cur]['ts'] = msgs[cur]['ts'] or ts; cur = None
+        yield 'deepseek', msgs, order, results
+
+
 S = C.defaultdict(C.Counter)       # (lang, mode) -> counters
 build_s = C.defaultdict(list)      # host lang -> wall seconds of each build/test command
 ctx_tok = C.defaultdict(list)      # lang -> context tokens at each turn that landed its code
@@ -120,24 +283,12 @@ fix_t = C.defaultdict(list)        # host lang -> assistant turns from a compile
 diag_b = C.defaultdict(list)       # host lang -> bytes of each failed build/test output
 cache = C.defaultdict(lambda: [0, 0])  # lang -> [cache-read tokens, context tokens] over turns that landed its code
 
-for f in glob.glob(ROOT + '/**/*.jsonl', recursive=True):
-    msgs, order, results, last_user = {}, [], {}, None
-    for line in open(f, encoding='utf8', errors='replace'):
-        try: o = json.loads(line)
-        except ValueError: continue
-        m = o.get('message') or {}; ts = when(o)
-        if o.get('type') == 'assistant' and m.get('id'):
-            if m['id'] not in msgs: msgs[m['id']] = {'content': [], 'usage': {}, 'after': last_user, 'ts': ts}; order.append(m['id'])
-            msgs[m['id']]['content'] += m.get('content') or []
-            msgs[m['id']]['usage'] = m.get('usage') or {}
-            msgs[m['id']]['ts'] = ts or msgs[m['id']]['ts']
-        elif o.get('type') == 'user':
-            last_user = ts or last_user
-            if isinstance(m.get('content'), list):
-                for c in m['content']:
-                    if isinstance(c, dict) and c.get('type') == 'tool_result':
-                        text = str(c.get('content')); head = text[:300].lower()
-                        results[c.get('tool_use_id')] = {'text': text, 'ts': ts, 'failed': bool(c.get('is_error')) or ('exit code' in head and 'exit code 0' not in head)}
+AGENTS = ['claude', 'codex', 'deepseek']
+span = []  # times of every reply counted, for the period line
+for agent, msgs, order, results in itertools.chain(claude(), codex(), deepseek()):
+    tag = lambda L: '%s %s' % (L, agent) if ARGS.harness else L  # with --harness a row is a language as one agent wrote it
+    order = [mid for mid in order if (msgs[mid]['ts'] or 0) >= CUTOFF]
+    span += [msgs[mid]['ts'] for mid in order if msgs[mid]['ts']]
     # first pass: what each turn lands, and the session's host language (most new code)
     full, turn, host_bytes = {}, {}, C.Counter()
     for mid in order:
@@ -146,8 +297,8 @@ for f in glob.glob(ROOT + '/**/*.jsonl', recursive=True):
             for L, mode, b, _ in es:
                 if L: host_bytes[L] += b
     if not host_bytes: continue
-    host = max(host_bytes, key=host_bytes.get)
-    H = S[(host, 'helper')]
+    host = max(host_bytes, key=host_bytes.get); hk = tag(host)
+    H = S[(hk, 'helper')]
     pending, since_build, repair, last_codes, recent = C.Counter(), 0, None, set(), C.defaultdict(list)
     for ti, mid in enumerate(order):
         msg = msgs[mid]; u = msg['usage']
@@ -164,23 +315,23 @@ for f in glob.glob(ROOT + '/**/*.jsonl', recursive=True):
         if msg['ts'] and msg['after']: pending['model_s'] += min(max(msg['ts'] - msg['after'], 0), 600)
         edits = []
         for t, es in turn[mid]:
-            r = results.get(t['id']) or {}
+            r = results.get(str(t.get('id')).split('#')[0]) or {}  # a Codex cell's calls share its result
             failed = r.get('failed', False)
             dur = min(max(r['ts'] - msg['ts'], 0), 1800) if r.get('ts') and msg['ts'] else 0
             pending['tool_s'] += dur
             pulled = t.get('name') in READS or (t.get('name') == 'PowerShell' and not BUILD.search(str((t.get('input') or {}).get('command', ''))))
             for L, mode, b, files in es:
-                key = (L or host, mode)
+                key = (tag(L or host), mode)
                 edits.append((key, b))
                 S[key]['edits'] += 1; S[key]['bytes'] += b
                 for p in files: S[key]['files:' + p] = 1
                 if mode == 'direct':
                     S[key]['applied'] += 1; S[key]['apply_err'] += failed; since_build += not failed
                     if repair: repair[1] += not failed
-                if b: ctx_tok[L].append(ctx); cache[L][0] += u.get('cache_read_input_tokens', 0); cache[L][1] += ctx
+                if b: ctx_tok[tag(L)].append(ctx); cache[tag(L)][0] += u.get('cache_read_input_tokens', 0); cache[tag(L)][1] += ctx
             i = t.get('input') or {}
             if t.get('name') in ('Write', 'Edit') and es and es[0][1] == 'direct':  # rework of the model's own recent text
-                path, L = i.get('file_path', ''), es[0][0]
+                path, L = i.get('file_path', ''), tag(es[0][0])
                 if t['name'] == 'Edit':
                     S[(L, 'direct')]['edit_calls'] += 1
                     prev = '\n'.join(txt for tt, txt in recent[path] if ti - tt <= 5)
@@ -192,15 +343,15 @@ for f in glob.glob(ROOT + '/**/*.jsonl', recursive=True):
                 ks = runs(cmd)
                 for k in ks:  # a patch run is an edit application; any other python run is a test run
                     if k and k[1]:
-                        S[(k[1], 'script')]['applied'] += 1; S[(k[1], 'script')]['apply_err'] += failed; since_build += not failed
+                        S[(tag(k[1]), 'script')]['applied'] += 1; S[(tag(k[1]), 'script')]['apply_err'] += failed; since_build += not failed
                         if repair: repair[1] += not failed
                     else: ks = []
                 if not ks and (BUILD.search(cmd) or PYRUN.search(cmd)):  # a build or test run, or a script written outside these transcripts
                     text = r.get('text', '')
-                    H['builds'] += 1; H['build_fail'] += failed; build_s[host].append(dur)
+                    H['builds'] += 1; H['build_fail'] += failed; build_s[hk].append(dur)
                     H['fb_n'] += since_build; H['fb_ok'] += since_build * (not failed); since_build = 0
                     if failed:
-                        diag_b[host].append(len(text))
+                        diag_b[hk].append(len(text))
                         codes = set(CODES[host].findall(text)) if host in CODES else set()
                         if codes and last_codes: H['rediag_n'] += 1; H['rediag_hit'] += bool(codes & last_codes)
                         if codes: last_codes = codes
@@ -210,12 +361,12 @@ for f in glob.glob(ROOT + '/**/*.jsonl', recursive=True):
                     else:
                         last_codes = set()
                         if repair is not None:
-                            fix_t[host].append(ti - repair[0]); H['fix_n'] += 1; H['fix_one'] += repair[1] == 1; repair = None
+                            fix_t[hk].append(ti - repair[0]); H['fix_n'] += 1; H['fix_one'] += repair[1] == 1; repair = None
                 elif not ks and not es: pulled = True  # a shell command that only looked: cat, sed, tgrep, git, ls
             if pulled: pending['read_b'] += len(r.get('text', ''))
         if edits:  # the work leading up to an edit is charged to what it landed, by new bytes
             code = [(k, b) for k, b in edits if b]
-            share = code or [((host, 'helper'), 1)]
+            share = code or [((hk, 'helper'), 1)]
             tot = sum(b for _, b in share)
             for k, b in share:
                 for q, v in pending.items(): S[k][q] += v * b / tot
@@ -231,20 +382,29 @@ def merged(L):
     return d, s, h, t, d['bytes'] + s['bytes']
 
 
+first, last = (CUTOFF, NOW) if ARGS.days else (min(span, default=NOW), max(span, default=NOW))
+print('period: %s -> %s (%s days)%s\n' % (datetime.fromtimestamp(first).strftime('%Y-%m-%d %H:%M'), datetime.fromtimestamp(last).strftime('%Y-%m-%d %H:%M'),
+                                          '%g' % ARGS.days if ARGS.days else '%.0f' % ((last - first) / 86400), '' if ARGS.days else ', all data'))
+
 FLOOR = 100 * KB  # a language with less landed source than this is too thin to compare
+if ARGS.harness: ROWS = ['%s %s' % (L, a) for L in ROWS for a in AGENTS]
 thin = ['%s %d KB' % (L, merged(L)[4] // KB) for L in ROWS if merged(L)[4] < FLOOR]
 ROWS = [L for L in ROWS if merged(L)[4] >= FLOOR]
 if thin: print('under %d KB of landed source, not shown: %s\n' % (FLOOR // KB, ', '.join(thin)))
-print(('colours: %sbest%s  %ssecond best%s  %sworst%s in each judged column; sample-size columns (KB, builds, fixes, pairs, helper $) and cmpl%% are not judged\n'
-       % (GREEN, END, CYAN, END, RED, END)) if COLOR else 'run with --color (or on a terminal) to mark best, second best and worst per column\n')
+explain(('colours: %sbest%s  %ssecond best%s  %sworst%s in each judged column; sample-size columns (KB, builds, fixes, pairs, helper $) and cmpl%% are not judged\n'
+         % (GREEN, END, CYAN, END, RED, END)) if COLOR else 'run with -c/--color (or on a terminal) to mark best, second best and worst per column\n')
+
+
+CONTESTS = []  # (column, better, {row label: value}) of every judged column, for the scorecard
 
 
 def table(title, cols, rows):
     """cols are (name, width, format, better) with better 'low', 'high' or None for a column that
     is a sample size rather than a quality; rows are (label, values). In a judged column the best
     value is green, the second best cyan, the worst red; a None value prints as - and is not judged."""
+    CONTESTS.extend((n, better, {label: vals[c] for label, vals in rows}) for c, (n, _, _, better) in enumerate(cols) if better)
     print(title)
-    print('%-7s ' % 'lang' + ' '.join('%*s' % (w, n) for n, w, _, _ in cols))
+    print('%-15s ' % ('lang agent' if ARGS.harness else 'lang') +' '.join('%*s' % (w, n) for n, w, _, _ in cols))
     for label, vals in rows:
         cells = []
         for c, (_, w, fmt, better) in enumerate(cols):
@@ -255,9 +415,10 @@ def table(title, cols, rows):
                 elif v == ranked[-1]: text = RED + text + END
                 elif v == ranked[1]: text = CYAN + text + END
             cells.append(' ' * (w - len('-' if v is None else fmt % v)) + text)
-        print('%-7s ' % label + ' '.join(cells))
+        print('%-15s ' % label + ' '.join(cells))
 
 
+sys.stdout, TABLES = io.StringIO(), sys.stdout  # the scorecard is scored from these tables but printed above them
 rows = []
 for L in ROWS:
     d, s, h, t, kb = merged(L)
@@ -270,7 +431,7 @@ table('COST  (KB is kilobytes, 1000 bytes, of source text landed in files; never
       [('KB', 7, '%d', None), ('tok/B', 6, '%.3f', 'low'), ('thk/B', 6, '%.3f', 'low'), ('edit%', 6, '%.1f', 'low'), ('builds', 7, '%d', None),
        ('fail%', 6, '%.1f', 'low'), ('ed/fil', 6, '%.1f', 'low'), ('script%', 7, '%.0f%%', 'low'), ('cost/B', 9, '%.1f', 'low'), ('$/KB', 8, '%.3f', 'low')], rows)
 
-print('''
+explain('''
 KB       kilobytes (1000 bytes) of UTF-8 source text that landed in files of this language: the
          content of Write/Edit calls and cat heredocs, plus the new-side strings of Python
          patch/generator scripts. Source bytes, not tokens.
@@ -299,7 +460,7 @@ table('\nPROCESS  (how the code got written)',
       [('outK/KB', 8, '%.1f', 'low'), ('ctx Ktk', 8, '%.0f', 'low'), ('read/KB', 8, '%.1f', 'low'), ('turns/ed', 8, '%.1f', 'low'), ('1st-ok%', 8, '%.1f', 'high'),
        ('bld ms', 8, '%.0f', 'low'), ('p90 ms', 8, '%.0f', 'low'), ('cmpl%', 6, '%.1f', None), ('mdl s/KB', 9, '%.0f', 'low'), ('tool s/KB', 9, '%.0f', 'low')], rows)
 
-print('''
+explain('''
 outK/KB   thousand output tokens (visible + thinking) generated per KB of source landed; the raw
           writing effort, before input and cache costs
 ctx Ktk   median context size, in thousand tokens, of the turns that landed this language's code
@@ -328,7 +489,7 @@ for L in ROWS:
 table('\nREPAIR & REWORK  (what happened after the model got it wrong)',
       [('fixes', 6, '%d', None), ('fix turns', 9, '%.0f', 'low'), ('1-edit%', 8, '%.1f', 'high'), ('diag B', 8, '%.0f', 'low'), ('pairs', 6, '%d', None),
        ('repeat%', 8, '%.1f', 'low'), ('selfcor%', 8, '%.1f', 'low'), ('cache%', 7, '%.1f', 'high'), ('prose K/KB', 10, '%.2f', 'low')], rows)
-print('''
+explain('''
 fixes      repairs observed: a build that failed with compiler diagnostics followed later by a passing
            build (sample size for the next two columns)
 fix turns  median assistant replies from that failing build to the passing one: how far a diagnostic
@@ -359,9 +520,49 @@ for L in ROWS:
                      s['cost'] / s['bytes'] * USD * KB if s['bytes'] else None, s['d_vis'] / s['d_bytes'] if s['d_bytes'] else None, h['cost'] * USD)))
 table('\nDELIVERY  (how the code reached the file)',
       [('direct $/KB', 11, '%.3f', 'low'), ('direct tok/B', 12, '%.2f', 'low'), ('script $/KB', 11, '%.3f', 'low'), ('script tok/B', 12, '%.2f', 'low'), ('helper $', 9, '%.0f', None)], rows)
-print('''
+explain('''
 direct    code the Write/Edit tools or a cat heredoc put in the file: $ per KB of that source, and
           visible output tokens per byte of it in replies that were exactly one such edit
 script    code that arrived as the new side of a Python patch/generator script: the same two figures,
           per KB and per byte of the new code only (the script's anchors and boilerplate are cost)
 helper $  dollars spent on Python that landed no code: test oracles, analysis, doc patches''')
+
+sys.stdout, TABLES = TABLES, sys.stdout.getvalue()
+
+# SCORECARD: every judged column above is a contest; with --harness one per harness, so a language
+# only meets the languages the same agent wrote. Best scores 1, worst 0, the rest evenly by distinct value.
+assert {c for c, _, _ in CONTESTS} == {c for cs in AXES.values() for c in cs}, 'AXES must name every judged column'
+SPLIT = AGENTS if ARGS.harness else []  # the per-harness score columns
+pts, medals = C.defaultdict(list), C.defaultdict(C.Counter)
+for col, better, vals in CONTESTS:
+    for a in SPLIT or ['all']:
+        field = {L.split()[0]: v for L, v in vals.items() if v is not None and (not SPLIT or L.split()[1] == a)}
+        ranked = sorted(set(field.values()), reverse=better == 'high')
+        if len(ranked) < 2: continue
+        for L, v in field.items():
+            pos = ranked.index(v)
+            pts[(L, 'all')].append(1 - pos / (len(ranked) - 1))
+            if SPLIT: pts[(L, a)].append(pts[(L, 'all')][-1])
+            if pos < 3: medals[L][pos] += 1
+langs = sorted({L for L, _ in pts}, key=lambda L: -statistics.mean(pts[(L, 'all')]))
+PLACE = {0: GREEN + '1st' + END, 1: CYAN + '2nd' + END, 2: '3rd'}
+print('SCORECARD  (every judged column%s)' % (', each harness ranking only its own languages' if SPLIT else ''))
+print('place %-7s ' % 'lang' + ''.join('%9s ' % a for a in SPLIT) + '%7s %8s %5s %5s %5s' % ('overall', 'contests', '1st', '2nd', '3rd'))
+for i, L in enumerate(langs):
+    per = ['%9s ' % ('%.0f' % (100 * statistics.mean(pts[(L, a)])) if pts[(L, a)] else '-') for a in SPLIT]
+    print('%s   %-7s ' % (PLACE.get(i, '%dth' % (i + 1)), L) + ''.join(per) + '%7.0f %8d %5d %5d %5d' % (
+        100 * statistics.mean(pts[(L, 'all')]), len(pts[(L, 'all')]), medals[L][0], medals[L][1], medals[L][2]))
+explain('''
+place     order by overall score
+overall   mean score, 0-100, over every contest the language entered: 100 means best in every
+          judged column, 0 worst in every one; this orders the table
+contests  judged columns the language was compared in
+1st..3rd  times the language ranked first, second or third in a contest''' + ('''
+claude..  the same mean within one harness, where each agent's languages only meet each other;
+          - means the agent landed too little of it. A contest there needs two languages, so
+          contests counts columns x harnesses. The harnesses are unequal: Claude compares five
+          languages, Codex and DeepSeek two each, where winning a column takes only beating one
+          rival. Read overall with contests beside it.''' if SPLIT else '''
+Without --harness every agent's work in a language is pooled into one row; run with -a to
+split it by agent.'''))
+print('\n' + TABLES, end='')
