@@ -2828,8 +2828,9 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // preview tab's name.
 // (D1336) With `width`, overflow scrolling and Show all open files.
 // (D1337) The menu's further commands from `DocumentTabsOptions.more`.
-// ponytail: a preview tab's title is upright (no italic face); no dragged lift or
-// drop line.
+// (D1344) A dragged tab lifts and a drop line stands where it would land.
+// ponytail: a preview tab's title is upright (no italic face); the lifted tab
+// stays in its place rather than following the pointer.
 // (D1233) A document strip's tab menu, kept across frames on the strip: whether
 // it is open and for which tab.
 type TabMenu = struct { open: bool, index: usize }
@@ -3020,6 +3021,26 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         }
         focused += 1usize
     }
+    // (D1344) A tab being dragged: which, and which tab the pointer stands over.
+    var lifted = documents.len
+    var landing = documents.len
+    if mem.address_of(t.runtime) != 0usize {
+        let (payload, has_payload) = widget.dragging(t.runtime)
+        if has_payload && payload >= 1u64 && usize(payload - 1u64) < documents.len {
+            lifted = usize(payload - 1u64)
+            let (rs, rs_error) = widget.state_of(t.runtime)
+            let at = widget.pointer_position(t.runtime)
+            var look = 0usize
+            while rs_error == ok && look < documents.len {
+                let (look_id, look_count) = widget.find_by_key(rs, key + 1u64 + 2u64 * u64(look))
+                if look_count == 1usize {
+                    let (look_box, has_look_box) = widget.bounds_of(t.runtime, look_id)
+                    if has_look_box && at.x >= look_box.x && at.x < look_box.x + look_box.width { landing = look }
+                }
+                look += 1usize
+            }
+        }
+    }
     var i = 0usize
     while i < documents.len {
         let d = documents[i]
@@ -3128,6 +3149,11 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), lined[0usize..2usize])
         var tab_style = style.defaults()
         tab_style.background = paint.Brush { Solid: ground }
+        // (D1344) The dragged tab lifted: `surface-container-highest` at elevation 2.
+        if i == lifted {
+            tab_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+            tab_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[2usize]) }
+        }
         tab_style.height = style.Length { Px: tab_height }
         tab_style.min_width = style.Length { Px: least }
         tab_style.max_width = style.Length { Px: most }
@@ -3233,7 +3259,29 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     let sides = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
     strip.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 2.0 }, strip, tabs[0usize..documents.len])
+    // (D1344) The drop line, 2 by 28 `primary`, before the tab the pointer stands
+    // over while another is dragged (keyed `key + 131`); the tabs part for it.
+    var strip_tabs = tabs[0usize..documents.len]
+    if lifted < documents.len && landing < documents.len && landing != lifted {
+        let (with_line, with_line_error) = mem.alloc[widget.Node](a, documents.len + 1usize)
+        if with_line_error != ok { ret (zero, TooLarge) }
+        var drop_line = control.sized_style(2.0, 28.0)
+        drop_line.radius = 1.0
+        drop_line.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        var w = 0usize
+        var r = 0usize
+        while r < documents.len {
+            if r == landing {
+                with_line[w] = widget.box(key + 131u64, drop_line, zero)
+                w += 1usize
+            }
+            with_line[w] = tabs[r]
+            w += 1usize
+            r += 1usize
+        }
+        strip_tabs = with_line[0usize..w]
+    }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 2.0 }, strip, strip_tabs)
     // (D1336) Past its width the strip scrolls, and ends in Show all open files.
     var all_menu: widget.Node = zero
     var has_all_menu = false

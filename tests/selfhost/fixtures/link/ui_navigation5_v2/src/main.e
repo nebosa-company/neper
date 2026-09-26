@@ -419,6 +419,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         more_step += 1usize
     }
+    // (D1344) Dragging lower.e over notes: mid-drag the drop line stands before
+    // notes; released, it is gone.
+    var drag_step = 0usize
+    while drag_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        var plain_extras: navigation.DocumentTabsOptions = zero
+        let (drag_strip, drag_strip_error) = navigation.document_tabs_with(&f, 5900u64, &theme, "Open files", s.documents[0usize..3usize], 1usize, zero, zero, zero, plain_extras)
+        let (drag_page, drag_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if drag_strip_error != ok || drag_page_error != ok { os.exit(93i32) }
+        drag_page[0usize] = drag_strip
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), drag_page[0usize..1usize]), time.Instant { nanos: 9300000000i64 + i64(drag_step) }) != ok { os.exit(94i32) }
+        let lined = testing.by_key(&harness, 5900u64 + 131u64).count
+        if drag_step == 0usize {
+            let (lower_tab, has_lower_tab) = bounds(&harness, &runtime, 5903u64)
+            let (over_tab, has_over_tab) = bounds(&harness, &runtime, 5905u64)
+            if !has_lower_tab || !has_over_tab || lined != 0usize { os.exit(95i32) }
+            if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(lower_tab.x + 20.0, lower_tab.y + 10.0) }) != ok { os.exit(96i32) }
+            if testing.send(&harness, input.Event { PointerMove: testing.pointer_at(lower_tab.x + 40.0, lower_tab.y + 10.0) }) != ok { os.exit(96i32) }
+            if testing.send(&harness, input.Event { PointerMove: testing.pointer_at(over_tab.x + 20.0, over_tab.y + 10.0) }) != ok { os.exit(96i32) }
+        }
+        if drag_step == 1usize {
+            let (notes_now, has_notes_now) = bounds(&harness, &runtime, 5905u64)
+            if lined != 1usize || !has_notes_now || testing.send(&harness, input.Event { PointerUp: testing.pointer_at(notes_now.x + 20.0, notes_now.y + 10.0) }) != ok { os.exit(97i32) }
+        }
+        if drag_step == 2usize && lined != 0usize { os.exit(98i32) }
+        drag_step += 1usize
+    }
     // (D1336) In 200 the strip scrolls and ends in Show all open files; open, its
     // menu lists every document and a row picks it.
     var narrow_step = 0usize
