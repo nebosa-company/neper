@@ -244,6 +244,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !frame(&harness, &f, &theme, s) || testing.by_key(&harness, 200u64 + 1048700u64).count != 1usize { os.exit(55i32) }
     let (right_target, has_right_target) = bounds(&harness, &runtime, 200u64 + 1048802u64)
     if !has_right_target { os.exit(56i32) }
+    // (D1358) The guide stands over the left slot, where the pointer is.
+    let (left_slot, has_left_slot) = bounds(&harness, &runtime, 240u64)
+    let target_mid = right_target.x + 16.0
+    if !has_left_slot || target_mid < left_slot.x || target_mid > left_slot.x + left_slot.width { os.exit(66i32) }
     let aim = geometry.Point { x: right_target.x + 16.0, y: right_target.y + 16.0 }
     if testing.send(&harness, input.Event { PointerMove: testing.pointer_at(aim.x, aim.y) }) != ok { os.exit(57i32) }
     f = mem.arena_from(frame_storage)
