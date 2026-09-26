@@ -72,6 +72,38 @@ fn join_all(g: own Group) -> err {
     ret first
 }
 
+// ---- schedule perturbation (D1557, H04) ------------------------------------------
+//
+// Evidence over tested runs, not a race proof: a test seeds a `Perturb` per worker
+// and calls `perturb_point` before each step that synchronises, and the spin of a
+// pseudo-random 0..`most` steps (xorshift over the seed) shifts where the workers
+// meet. A program the rules accept should answer the same under every seed; a
+// fixture runs it under several. The spin needs no host call, so it perturbs the
+// same way on every host.
+type Perturb = struct { state: u64, most: u32, spun: u64 }
+
+fn perturb(seed: u64, most: u32) -> Perturb {
+    var start = seed
+    if start == 0u64 { start = 88172645463325252u64 }
+    ret Perturb { state: start, most: most, spun: 0u64 }
+}
+
+fn perturb_point(p: *Perturb) {
+    var x = p.state
+    x = x ^ (x << 13u64)
+    x = x ^ (x >> 7u64)
+    x = x ^ (x << 17u64)
+    p.state = x
+    if p.most == 0u32 { ret }
+    let steps = x % u64(p.most)
+    var at = 0u64
+    while at < steps {
+        // Kept in `spun`, so the spin is work the program did.
+        p.spun = p.spun + at
+        at += 1u64
+    }
+}
+
 // ---- fibers (algo 1336) -------------------------------------------------------
 //
 // Green threads over caller storage: a fiber is an index into the caller's `[]Fiber`,

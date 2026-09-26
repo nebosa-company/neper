@@ -6572,6 +6572,7 @@ type Group = resource(join_all) struct { threads: []Thread, count: usize }
 type FiberState = enum u8 { Ready, Running, Suspended, Done }
 type Fiber = struct { permit: sync.Event, thread: Thread, owner: *void, id: u32, state: FiberState, started: bool, joined: bool }
 type Scheduler[Ctx: type] = struct { ctx: *Ctx, fibers: []Fiber, bodies: []fn(*Ctx, u32), count: usize, limit: usize, running: u32, cursor: u32, done: usize, host: sync.Event }
+type Perturb = struct { state: u64, most: u32, spun: u64 }
 error Invalid
 error Full
 const DEFAULT_STACK: usize = 1048576usize
@@ -6582,6 +6583,8 @@ fn join(thread: own Thread) -> err
 fn detach(thread: own Thread) -> err
 fn spawn_all[Ctx: type](a: *mem.Arena, entry: fn(*Ctx), contexts: []Ctx, stack: usize) -> (Group, err)
 fn join_all(g: own Group) -> err
+fn perturb(seed: u64, most: u32) -> Perturb
+fn perturb_point(p: *Perturb)
 fn scheduler[Ctx: type](ctx: *Ctx, fibers: []Fiber, bodies: []fn(*Ctx, u32), worker_count: usize) -> (Scheduler[Ctx], err)
 fn fiber_main[Ctx: type](f: *Fiber)
 fn fiber[Ctx: type](s: *Scheduler[Ctx], body: fn(*Ctx, u32)) -> (u32, err)
