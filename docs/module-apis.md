@@ -4627,6 +4627,7 @@ type Options = struct { direction: Direction, script: u32, language: str, featur
 type Table = struct { at: usize, len: usize }
 type Buffer = struct { gid: []u32, cluster: []usize, adv_x: []i32, adv_y: []i32, off_x: []i32, off_y: []i32, count: usize }
 type FontRun = struct { font: usize, start: usize, end: usize }
+type FaceTraits = struct { weight: u32, italic: bool, mono: bool }
 error InvalidFont
 error InvalidText
 error Unsupported
@@ -4648,12 +4649,15 @@ const TAG_LOCL: u32 = 1819239276u32
 const TAG_RLIG: u32 = 1919707495u32
 const TAG_LIGA: u32 = 1818847073u32
 const TAG_CLIG: u32 = 1668049255u32
+const TAG_OS2: u32 = 1330851634u32
+const TAG_POST: u32 = 1886352244u32
 
 fn u16_at(d: []const u8, at: usize) -> u32
 fn i16_at(d: []const u8, at: usize) -> i32
 fn u32_at(d: []const u8, at: usize) -> u32
 fn face_offset(font: Font) -> (usize, err)
 fn find_table(font: Font, tag: u32) -> (Table, bool)
+fn face_traits(font: Font) -> FaceTraits
 fn validate_font(font: Font) -> err
 fn cmap_subtable(d: []const u8, cmap: Table) -> (usize, bool)
 fn glyph_of(d: []const u8, sub: usize, scalar: u32) -> u32
