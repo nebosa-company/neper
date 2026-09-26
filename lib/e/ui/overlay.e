@@ -2577,7 +2577,13 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     // `duration-medium-4` on the emphasized-decelerate curve from when it is
     // first built (`appeared_share`), the scrim fading in with it.
     var arrived = appeared_share(t, key, t.tokens.durations.medium4)
-    if t.tokens.motion.reduced { arrived = 1.0 }
+    // (D1492) Under reduced motion it does not slide: it fades in over
+    // `duration-short-2`.
+    var sheet_fade: f32 = 1.0
+    if t.tokens.motion.reduced {
+        sheet_fade = arrived
+        arrived = 1.0
+    }
     var away: geometry.Point = zero
     if bottom {
         var travel: f32 = 480.0
@@ -2595,7 +2601,9 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
     if sliding_error != ok { ret (zero, TooLarge) }
     sliding[0usize] = placed
-    placed = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: away }, style.defaults(), sliding[0usize..1usize])
+    var sheet_look = style.defaults()
+    sheet_look.opacity = sheet_fade
+    placed = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: away }, sheet_look, sliding[0usize..1usize])
     // Its own slot: body[4] is the aligned node's child, and a node listed among
     // its own children would nest without end (TooDeep at any depth).
     body[5usize] = placed
@@ -4431,9 +4439,14 @@ fn date_range_fullscreen(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     sem.states = accessibility.STATE_MODAL
     framed[2usize] = widget.semantics(0u64, sem, style.defaults(), framed[1usize..2usize])
     // It slides up as it first appears.
+    // (D1492) Under reduced motion it fades in instead.
     var arrived = appeared_share(t, key, t.tokens.durations.medium4)
-    if t.tokens.motion.reduced { arrived = 1.0 }
-    framed[3usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: height * (1.0 - arrived) } }, style.defaults(), framed[2usize..3usize])
+    var modal_look = style.defaults()
+    if t.tokens.motion.reduced {
+        modal_look.opacity = arrived
+        arrived = 1.0
+    }
+    framed[3usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: height * (1.0 - arrived) } }, modal_look, framed[2usize..3usize])
     ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *close }, style.defaults(), framed[3usize..4usize]), ok)
 }
 

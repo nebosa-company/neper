@@ -27374,3 +27374,9 @@ Popup, Menu and Select specify "Reduced motion: fade only". The shared open, clo
 Under reduced motion the shares now cross-fade over `duration-short-2` through D1489's `faded_on`. `appeared_share` counts over `duration-short-2`. The movement helpers now take the theme, and under reduced motion they keep the surface in place at full size, with only the fade. The popup's own `opening_share` and `closing_share` route through the `_over` helpers. The two sheets that slide on `appeared_share` directly (standard and modal) are pinned to 1 under reduced motion, so they still appear at once rather than slide briefly.
 
 `ui_overlays2_v2` checks this on Windows and Linux under reduced motion: 50 ms after a popup opens its middle is not yet the settled colour, and its top row is already on the surface, with no ground showing where 8 of travel would leave it. Against the old overlay the check fails (exit 150). All 103 `ui_*` fixtures pass on both hosts.
+
+## D1492 — Sheets fade in under reduced motion
+
+Select's spec: "Reduced motion: menus and sheets cross-fade". D1491 pinned the standard sheet and the modal sheet to appear at once under reduced motion, because they slide on `appeared_share` directly. Under reduced motion they now stand in place from their first frame. The share, which D1491 counts over `duration-short-2` there, fades them in, carried as the opacity of the transform wrapper they already stand in, so the tree keeps its shape.
+
+`ui_overlays3_v2` checks this on Windows and Linux under reduced motion. A side sheet built fresh stands at the window's end. 50 ms on, its body is not yet `surface-container-low`, and a second on it is. Against the old overlay the check fails (exit 144). All 103 `ui_*` fixtures pass on both hosts.
