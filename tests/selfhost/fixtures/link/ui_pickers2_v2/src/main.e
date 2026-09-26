@@ -408,6 +408,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         dial_step += 1usize
     }
+    // (D1419) At 14:07 on the minute dial the hand ends on a small knob at seven
+    // past (42 degrees), between the 5 and the 10.
+    var off_step = 0usize
+    while off_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (off_modal, off_modal_error) = overlay.time_picker_modal(&f, 1300u64, &theme, 14u8, 7u8, true, true, true, time_change, &s.press, &s.press)
+        let (off_page, off_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if off_modal_error != ok || off_page_error != ok { os.exit(126i32) }
+        off_page[0usize] = off_modal
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), off_page[0usize..1usize]), time.Instant { nanos: 6200000000i64 + i64(off_step) }) != ok { os.exit(126i32) }
+        off_step += 1usize
+    }
+    let (off_ring, has_off_ring) = bounds(&harness, &runtime, 1307u64)
+    let (off_shot, off_shot_error) = testing.snapshot(&harness, a)
+    if !has_off_ring || off_shot_error != ok { os.exit(127i32) }
+    let off_hub = geometry.Point { x: off_ring.x + off_ring.width * 0.5, y: off_ring.y + off_ring.height * 0.5 }
+    if !is_color(off_shot, at(off_hub.x + 58.88, off_hub.y - 65.4), style.color(&tokens, .Primary)) { os.exit(128i32) }
     // (D1295) Input mode: the boxes are typed fields, the dial gives way, and the
     // mode toggle is there to switch back.
     let (hour_text, hour_text_error) = mem.alloc[u8](a, 4usize)
@@ -500,16 +517,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var coast_at = 6560000000i64
         if coast_step == 1usize { coast_at = 6660000000i64 }
         if coast_step == 2usize { coast_at = 7560000000i64 }
-        if testing.begin(&harness, time.Instant { nanos: coast_at }) != ok { os.exit(117i32) }
+        if testing.begin(&harness, time.Instant { nanos: coast_at }) != ok { os.exit(122i32) }
         f = mem.arena_from(frame_storage)
         let (coasts, coasts_error) = overlay.duration_wheels(&f, 1760u64, &theme, 7u32, 0u32, 0u32, widget.Change[overlay.DurationChoice] { ctx: mem.cast[*void](&flick_log), invoke: on_span })
         let (coast_page, coast_page_error) = mem.alloc[widget.Node](&f, 1usize)
-        if coasts_error != ok || coast_page_error != ok { os.exit(117i32) }
+        if coasts_error != ok || coast_page_error != ok { os.exit(122i32) }
         coast_page[0usize] = coasts
-        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), coast_page[0usize..1usize]), time.Instant { nanos: coast_at }) != ok { os.exit(118i32) }
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), coast_page[0usize..1usize]), time.Instant { nanos: coast_at }) != ok { os.exit(123i32) }
         let ninth = testing.by_text(&harness, "09").count > 0usize
-        if coast_step == 1usize && ninth { os.exit(119i32) }
-        if coast_step == 2usize && !ninth { os.exit(120i32) }
+        if coast_step == 1usize && ninth { os.exit(124i32) }
+        if coast_step == 2usize && !ninth { os.exit(125i32) }
         coast_step += 1usize
     }
     // (D1351) Date wheels on 31 January 2026: Down on the month lands on 28

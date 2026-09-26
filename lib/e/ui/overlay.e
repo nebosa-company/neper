@@ -4544,8 +4544,8 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // twelve places, or the whole minute at the nearest of sixty; releasing the
 // hour dial asks for the minutes (`EditMinute`).
 // (D1403) A fast drag snaps minutes to the fives.
-// ponytail: a minute off the fives
-// puts the knob on no number.
+// (D1419) A minute off the fives turns the hand to that minute and ends it on a
+// small 16 `primary` knob.
 // (D1349) A wheel's drag, kept on the wheel: the value it started from.
 // (D1389) `at` is the value the drag last asked for, `last_y` and `step` the
 // last move's place and travel (a fling's speed). (D1418) `coasting` from
@@ -5180,7 +5180,10 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     if editing_minute { place = usize(minute % 60u8) / 5usize }
     let on_number = !editing_minute || minute % 5u8 == 0u8
     let primary = style.color(t.tokens, .Primary)
-    let angle = f32(place) * 0.5235988
+    var angle = f32(place) * 0.5235988
+    // (D1419, docs/ux/components/TimePicker, dial) Between the five-minute marks
+    // the hand points at the exact minute (6 degrees a minute).
+    if !on_number { angle = f32(minute % 60u8) * 0.10471976 }
     let knob_x = 112.0 + 88.0 * math.sin[f32](angle)
     let knob_y = 112.0 - 88.0 * math.cos[f32](angle)
     // The hand: a 2 wide bar from the centre to the knob, turned by the angle.
@@ -5203,6 +5206,12 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
         knob.radius = 22.0
         knob.background = paint.Brush { Solid: primary }
         layers[n] = widget.positioned(0u64, knob_x - 22.0, knob_y - 22.0, knob, zero)
+        n += 1usize
+    } else {
+        var small_knob = control.sized_style(16.0, 16.0)
+        small_knob.radius = 8.0
+        small_knob.background = paint.Brush { Solid: primary }
+        layers[n] = widget.positioned(0u64, knob_x - 8.0, knob_y - 8.0, small_knob, zero)
         n += 1usize
     }
     var i = 0usize

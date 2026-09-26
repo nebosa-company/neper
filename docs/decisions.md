@@ -26866,3 +26866,9 @@ The SearchBar spec runs "a 2px indeterminate progress bar" under the header when
 The TimePicker spec's wheels "flick to spin with momentum and detents". D1389 landed a fling's coast on its final value at once. Now the value is still set at once, and the wheel draws its rows running from where the fling left it to that value over `duration-medium-4`, on an ease-out cubic curve. The `WheelCell` records `coasting`, `coast_from` and `coast_since` (stamped on the next build), and the wheel asks for frames while it runs. Reduced motion lands at once. The cell lookup moves ahead of the rows, so they are built around the drawn value; the semantics value stays the chosen one.
 
 `ui_pickers2_v2` flings the hour wheel from 1 to 7, on Windows and Linux. 100 ms after the fling the rows stand short of 7 (no "09" row), and a second later they stand at 7.
+
+## D1419 — The dial shows a minute between the fives
+
+The TimePicker spec says that "between five-minute marks a small knob shows the exact minute". Before, a minute off the fives left the hand on the five-mark below it with no knob. Now the hand turns to the exact minute, at 6 degrees a minute, and ends on a 16 `primary` knob. No number is marked chosen.
+
+`ui_pickers2_v2` opens the minute dial at 14:07 and finds `primary` at seven past (42 degrees, 88 from the hub), on Windows and Linux; the check fails without the change. The same commit gives the D1418 checks their own exit codes (122-125), which had reused D1403's.
