@@ -199,6 +199,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 87u32, held) != ok || logs[0usize].closes != 2usize || logs[0usize].closed != 1usize { os.exit(23i32) }
     if testing.press_key(&harness, 34u32, held) != ok || logs[0usize].picked != 2usize { os.exit(24i32) }
     if testing.press_key(&harness, 33u32, held) != ok || logs[0usize].picked != 0usize { os.exit(25i32) }
+    // (D1397) Alt+3 picks the third tab, Alt+1 the first.
+    var alt_held: input.Modifiers = zero
+    alt_held.alt = true
+    if testing.press_key(&harness, 51u32, alt_held) != ok || logs[0usize].picked != 2usize { os.exit(60i32) }
+    if testing.press_key(&harness, 49u32, alt_held) != ok || logs[0usize].picked != 0usize { os.exit(61i32) }
     // The dock layout, 800 by 400 so v2's minimums hold (D966): the left panel
     // 200 wide with a titled dock panel whose close fires; the bottom a hundred
     // tall; the left sash dragged twenty right reports left 220 with the rest

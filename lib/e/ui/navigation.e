@@ -4637,8 +4637,9 @@ fn max_f(a: f32, b: f32) -> f32 {
 // the strip gives way to the empty state centred in the view: "No open files" in
 // `title-medium` over `body-medium` `on-surface-variant` rows 240 wide, 8 apart,
 // naming the shortcuts that open and switch documents, 12 between the blocks.
+// (D1397) Alt+1..9 pick a tab by position.
 // ponytail: one editor group; split groups, the location bar, the compact count
-// button, most-recently-used Ctrl+Tab, Alt+1..9, Ctrl+Shift+T, the Open recent
+// button, most-recently-used Ctrl+Tab, Ctrl+Shift+T, the Open recent
 // button and restore hooks need a group model the caller does not pass yet.
 fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, view: widget.Node, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], width: f32, height: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
@@ -4668,7 +4669,7 @@ fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Th
     if strip_error != ok { ret (zero, strip_error) }
     parts[0usize] = strip
     parts[1usize] = widget.box(0u64, view_style, viewed[0usize..1usize])
-    let (keys, keys_error) = mem.alloc[TabClose](a, 3usize)
+    let (keys, keys_error) = mem.alloc[TabClose](a, 12usize)
     if keys_error != ok { ret (zero, TooLarge) }
     var next = 0usize
     if current + 1usize < documents.len { next = current + 1usize }
@@ -4679,17 +4680,27 @@ fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Th
     keys[2usize] = TabClose { index: previous, close: pick }
     var held: input.Modifiers = zero
     held.control = true
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 3usize)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 12usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     shortcuts[0usize] = widget.Shortcut { key: 87u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&keys[0usize]), invoke: tab_close_fire } }
     shortcuts[1usize] = widget.Shortcut { key: 34u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&keys[1usize]), invoke: tab_close_fire } }
     shortcuts[2usize] = widget.Shortcut { key: 33u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&keys[2usize]), invoke: tab_close_fire } }
+    // (D1397, docs/ux/components/MultiDocumentWorkspace, switch) Alt+1 to Alt+9
+    // pick the tab at that position.
+    var alt_held: input.Modifiers = zero
+    alt_held.alt = true
+    var bound = 3usize
+    while bound - 3usize < 9usize && bound - 3usize < documents.len {
+        keys[bound] = TabClose { index: bound - 3usize, close: pick }
+        shortcuts[bound] = widget.Shortcut { key: 49u32 + u32(bound - 3usize), modifiers: alt_held, action: widget.Submit { ctx: mem.cast[*void](&keys[bound]), invoke: tab_close_fire } }
+        bound += 1usize
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, height), parts[0usize..2usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..3usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])
+    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
