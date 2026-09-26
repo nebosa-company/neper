@@ -263,6 +263,24 @@ fn turn_fire(ctx: *void) -> err {
 type ReorderNotice = enum u8 { None, Picked, Moved, Dropped, Cancelled }
 type Swipe = struct { turned: bool, moved: f32, target: usize, item: widget.Key, notice: ReorderNotice, menu: bool }
 
+// (D1377) A swipe row's settle, kept beside its `Swipe`: `step` is the last
+// move's travel (a fling's speed, as the runtime's scroll momentum reads it),
+// `residue` how far a released row still stands from its rest and `since` when
+// that settle began (0: not yet stamped).
+type SwipeSettle = struct { step: f32, residue: f32, since: i64 }
+
+fn swipe_settle_cell(t: *const control.Theme, key: widget.Key) -> (*SwipeSettle, bool) {
+    var none: *SwipeSettle = zero
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    let (kept, _, kept_error) = widget.state[SwipeSettle](&build, key ^ hash.fnv1a64("swipe-settle"), SwipeSettle { step: 0.0, residue: 0.0, since: 0i64 })
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
 // A page view's drag: the cell the swipe keeps (none on the view's first frame),
 // where the pages stand, and whom to tell; (D982) settling, the drag only moves
 // the strip and the release turns past the threshold.
@@ -1429,7 +1447,7 @@ fn pull_to_refresh(a: *mem.Arena, key: widget.Key, t: *const control.Theme, cont
 // the actions are revealed; (D982) settling, the drag moves the row and the
 // release opens past `threshold`, closes, runs the leading action past it the
 // other way, or runs the outermost action past `full`.
-type Revealing = struct { cell: *Swipe, has_cell: bool, threshold: f32, reveal: widget.Change[bool], settle: bool, revealed: bool, full: f32, outer: widget.Submit, has_outer: bool, lead: widget.Submit, has_lead: bool }
+type Revealing = struct { cell: *Swipe, has_cell: bool, threshold: f32, reveal: widget.Change[bool], settle: bool, revealed: bool, full: f32, outer: widget.Submit, has_outer: bool, lead: widget.Submit, has_lead: bool, stop: f32, settling: *SwipeSettle, has_settling: bool }
 
 fn reveal_drag(ctx: *void, g: widget.Gesture) -> err {
     let r = mem.cast[*Revealing](ctx)
@@ -1443,7 +1461,9 @@ fn reveal_drag(ctx: *void, g: widget.Gesture) -> err {
     case .DragMove as d:
         if !r.has_cell { ret ok }
         if r.settle {
-            r.cell.moved = d.position.x - d.start.x
+            let now_moved = d.position.x - d.start.x
+            if r.has_settling { r.settling.step = now_moved - r.cell.moved }
+            r.cell.moved = now_moved
             ret ok
         }
         if r.cell.turned { ret ok }
@@ -1463,13 +1483,42 @@ fn reveal_drag(ctx: *void, g: widget.Gesture) -> err {
         let moved = r.cell.moved
         r.cell.moved = 0.0
         if !r.settle { ret ok }
+        var step: f32 = 0.0
+        var parked = SwipeSettle { step: 0.0, residue: 0.0, since: 0i64 }
+        var settling = &parked
+        if r.has_settling {
+            step = r.settling.step
+            settling = r.settling
+        }
+        settling.step = 0.0
+        // (D1377) The row settles from where it was let go: the residue is that
+        // place less the rest it is headed for.
+        var rest: f32 = 0.0
+        if r.revealed { rest = 0.0 - r.stop }
+        let let_go = rest + moved
         if r.has_outer && moved < 0.0 - r.full {
+            settling.residue = let_go
+            settling.since = 0i64
             let ran = widget.fire_submit(r.outer)
             if ran != ok { ret ran }
             ret widget.fire_change[bool](r.reveal, false)
         }
-        if !r.revealed && moved < 0.0 - r.threshold { ret widget.fire_change[bool](r.reveal, true) }
-        if r.revealed && moved > r.threshold { ret widget.fire_change[bool](r.reveal, false) }
+        // (D1377, docs/ux/components/SwipeActions, open threshold) A fling faster
+        // than 500 px/s (8 a frame at 60) opens or closes whatever the distance.
+        let flung_open = step < -8.0
+        let flung_shut = step > 8.0
+        if !r.revealed && (moved < 0.0 - r.threshold || (flung_open && moved < 0.0)) {
+            settling.residue = let_go + r.stop
+            settling.since = 0i64
+            ret widget.fire_change[bool](r.reveal, true)
+        }
+        if r.revealed && (moved > r.threshold || (flung_shut && moved > 0.0)) {
+            settling.residue = let_go
+            settling.since = 0i64
+            ret widget.fire_change[bool](r.reveal, false)
+        }
+        settling.residue = let_go - rest
+        settling.since = 0i64
         if !r.revealed && r.has_lead && moved > 32.0 { ret widget.fire_submit(r.lead) }
         ret ok
     default:
@@ -1487,7 +1536,7 @@ fn swipe_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, conten
     let (reveals, reveals_error) = mem.alloc[Revealing](a, 1usize)
     if reveals_error != ok { ret (zero, TooLarge) }
     let (kept, has_cell) = swipe_cell(t, key)
-    reveals[0usize] = Revealing { cell: kept, has_cell: has_cell, threshold: width * 0.25, reveal: reveal, settle: false, revealed: revealed, full: 0.0, outer: zero, has_outer: false, lead: zero, has_lead: false }
+    reveals[0usize] = Revealing { cell: kept, has_cell: has_cell, threshold: width * 0.25, reveal: reveal, settle: false, revealed: revealed, full: 0.0, outer: zero, has_outer: false, lead: zero, has_lead: false, stop: 0.0, settling: zero, has_settling: false }
     var count = 2usize
     if revealed { count = 1usize + labels.len }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
@@ -7396,8 +7445,10 @@ fn swipe_tile(a: *mem.Arena, key: widget.Key, t: *const control.Theme, act: *con
 // closes. Pressing a revealed tile runs it, then closes the row. A list item in
 // the tree, Expanded while revealed; (D1200) its named accessibility actions
 // are the tiles' labels, trailing then leading.
-// ponytail: no fling velocity, rubber band or settle motion; the actions reach
-// the keyboard as the hover buttons.
+// (D1377) A fling opens or closes, the row rubber-bands past its leading stop,
+// and a released row settles from where it was let go.
+// ponytail: the actions reach the keyboard as the hover buttons; closing settles
+// on the emphasized curve rather than `ease-standard`.
 fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, actions: []const SwipeAction, revealed: bool, reveal: widget.Change[bool], options: SwipeOptions) -> (widget.Node, err) {
     if actions.len == 0usize || actions.len > 3usize || options.leading.len > 1usize { ret (zero, TooLarge) }
     let tile_count = actions.len + options.leading.len
@@ -7421,17 +7472,36 @@ fn swipe_actions_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, con
     let h = options.height
     let stop = 80.0 * f32(actions.len)
     let (kept, has_cell) = swipe_cell(t, key)
+    let (settle_kept, has_settle_kept) = swipe_settle_cell(t, key)
     let (reveals, reveals_error) = mem.alloc[Revealing](a, 1usize)
     if reveals_error != ok { ret (zero, TooLarge) }
-    reveals[0usize] = Revealing { cell: kept, has_cell: has_cell, threshold: stop * 0.4, reveal: reveal, settle: true, revealed: revealed, full: w * 0.6, outer: actions[actions.len - 1usize].action, has_outer: true, lead: zero, has_lead: options.leading.len == 1usize }
+    reveals[0usize] = Revealing { cell: kept, has_cell: has_cell, threshold: stop * 0.4, reveal: reveal, settle: true, revealed: revealed, full: w * 0.6, outer: actions[actions.len - 1usize].action, has_outer: true, lead: zero, has_lead: options.leading.len == 1usize, stop: stop, settling: settle_kept, has_settling: has_settle_kept }
     if options.leading.len == 1usize { reveals[0usize].lead = options.leading[0usize].action }
     var offset: f32 = 0.0
     if revealed { offset = 0.0 - stop }
     if has_cell { offset += kept.moved }
+    // (D1377, docs/ux/components/SwipeActions, settle) Let go, the row settles
+    // the rest of the way over `duration-medium-1` on
+    // `ease-emphasized-decelerate`; reduced motion puts it there at once.
+    if has_settle_kept && settle_kept.residue != 0.0 {
+        let now = widget.frame_time(t.runtime).nanos
+        if settle_kept.since == 0i64 { settle_kept.since = now }
+        let span = i64(t.tokens.durations.medium1) * 1000000i64
+        var gone: f32 = 1.0
+        if span > 0i64 && !t.tokens.motion.reduced && now >= settle_kept.since { gone = f32(now - settle_kept.since) / f32(span) }
+        if gone >= 1.0 {
+            settle_kept.residue = 0.0
+            settle_kept.since = 0i64
+        } else {
+            offset += settle_kept.residue * (1.0 - animation.ease(.EmphasizedDecelerate, gone))
+            widget.request_animation_frame(t.runtime)
+        }
+    }
     if offset < 0.0 - w { offset = 0.0 - w }
     var most: f32 = 0.0
     if options.leading.len == 1usize { most = 80.0 }
-    if offset > most { offset = most }
+    // (D1377) Past the leading stop the row follows at 0.3 (a rubber band).
+    if offset > most { offset = most + (offset - most) * 0.3 }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 6usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var l = 0usize

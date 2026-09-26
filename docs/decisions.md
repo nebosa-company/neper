@@ -26314,3 +26314,22 @@ The pane, picker, popup and navigation fixtures (`ui_panes`, `ui_pickers_v2`,
 `ui_pickers`, `ui_entry`, `ui_overlays2_v2`, `ui_overlays3_v2`,
 `ui_presentation`, `ui_navigation`, `ui_navigation3_v2`, `ui_desktop`) pass
 on Windows, and the first six on Linux.
+
+## D1377 — Swipe rows fling, rubber-band and settle
+
+The SwipeActions spec's physics. A row's settle is kept in its own cell beside
+its `Swipe` (`SwipeSettle`, slot `key ^ fnv1a64("swipe-settle")`), so pagers
+and reorder lists that share `Swipe` do not grow. The release reads the last
+move's travel as the fling speed, the way the runtime's scroll momentum does:
+a step over 8 (about 500 px/s at 60 Hz) opens or closes the row whatever the
+distance. Past its leading stop the row follows at 0.3, a rubber band. Let go,
+it settles from where it was released over `duration-medium-1` on
+`ease-emphasized-decelerate`: the residue is stamped at the next build and
+fades out, a clock that went back finishes it, and reduced motion puts it at
+rest at once. Closing settles on the same curve rather than `ease-standard`.
+
+`ui_collections4_v2` pulls a row 100 past its rest (it moves 30), flings it open
+with a 22 pull (last step 12), finds it part way 50 ms later, and at its 160
+stop once settled. The earlier checks now settle a second after each release,
+and the fixture's state pool grows from 256 to 384 bytes for the new cell.
+`ui_interaction` and `ui_paged` pass, on Windows and Linux.

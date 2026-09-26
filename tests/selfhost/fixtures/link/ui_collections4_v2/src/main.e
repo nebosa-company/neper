@@ -199,6 +199,19 @@ fn tab_to(h: *testing.Harness, key: widget.Key) -> bool {
     ret focused_is(h, key)
 }
 
+// (D1377) A released swipe row settles: a frame stamps the settle at `clock`, a
+// second a second on finishes it.
+fn settle_rows(h: *testing.Harness, a: *mem.Arena, t: *const control.Theme, touch: *const control.Theme, s: *Store, clock: *time.Instant) -> bool {
+    let (first, first_error) = build(a, t, touch, s)
+    if first_error != ok || testing.pump(h, first, *clock) != ok { ret false }
+    let later = time.Instant { nanos: clock.nanos + 1000000000i64 }
+    let (second, second_error) = build(a, t, touch, s)
+    if second_error != ok || testing.pump(h, second, later) != ok { ret false }
+    let (third, third_error) = build(a, t, touch, s)
+    *clock = later
+    ret third_error == ok && testing.pump(h, third, later) == ok
+}
+
 fn press(h: *testing.Harness, x: f32, y: f32) -> bool {
     ret testing.send(h, input.Event { PointerDown: testing.pointer_at(x, y) }) == ok
 }
@@ -248,7 +261,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let touch_tokens = style.adapt(&tokens, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1200usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 40u16, max_commands: 4096usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 1200usize, max_states: 64usize, state_bytes: 384usize, state_classes: 2u16, max_depth: 40u16, max_commands: 4096usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -291,7 +304,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (frame_storage, storage_error) = mem.alloc[u8](a, 8388608usize)
     if storage_error != ok { os.exit(8i32) }
     var f = mem.arena_from(frame_storage)
-    let now = time.Instant { nanos: 1000000000i64 }
+    var now = time.Instant { nanos: 1000000000i64 }
     let background = style.color(&tokens, .Background)
     let (root, build_error) = build(&f, &theme, &touch, s)
     if build_error != ok || testing.pump(&harness, root, now) != ok { os.exit(9i32) }
@@ -385,8 +398,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (row, has_row) = bounds(&harness, &runtime, 500u64)
     if !has_row || !is_color(shot, at(row.x + 290.0, row.y + 5.0), background) { os.exit(48i32) }
     if !press(&harness, row.x + 250.0, row.y + 50.0) || !move_to(&harness, row.x + 200.0, row.y + 50.0) || !move_to(&harness, row.x + 150.0, row.y + 50.0) || !release(&harness, row.x + 150.0, row.y + 50.0) || !s.revealed { os.exit(49i32) }
-    let (root_7, build_7_error) = build(&f, &theme, &touch, s)
-    if build_7_error != ok || testing.pump(&harness, root_7, now) != ok { os.exit(50i32) }
+    if !settle_rows(&harness, &f, &theme, &touch, s, &now) { os.exit(50i32) }
     let (shot_7, shot_7_error) = testing.snapshot(&harness, a)
     if shot_7_error != ok { os.exit(51i32) }
     let (slid, has_slid) = bounds(&harness, &runtime, 500u64)
@@ -396,12 +408,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_tile_closed, root_tile_closed_error) = build(&f, &theme, &touch, s)
     if root_tile_closed_error != ok || testing.pump(&harness, root_tile_closed, now) != ok { os.exit(79i32) }
     if !press(&harness, row.x + 250.0, row.y + 50.0) || !move_to(&harness, row.x + 200.0, row.y + 50.0) || !move_to(&harness, row.x + 150.0, row.y + 50.0) || !release(&harness, row.x + 150.0, row.y + 50.0) || !s.revealed { os.exit(80i32) }
-    let (root_tile_open, root_tile_open_error) = build(&f, &theme, &touch, s)
-    if root_tile_open_error != ok || testing.pump(&harness, root_tile_open, now) != ok { os.exit(81i32) }
+    if !settle_rows(&harness, &f, &theme, &touch, s, &now) { os.exit(81i32) }
     if !tab_to(&harness, 500u64) || testing.press_key(&harness, 27u32, zero) != ok || s.revealed { os.exit(53i32) }
     let (root_8, build_8_error) = build(&f, &theme, &touch, s)
     if build_8_error != ok || testing.pump(&harness, root_8, now) != ok { os.exit(54i32) }
     if !press(&harness, row.x + 280.0, row.y + 50.0) || !move_to(&harness, row.x + 230.0, row.y + 50.0) || !move_to(&harness, row.x + 60.0, row.y + 50.0) || !release(&harness, row.x + 60.0, row.y + 50.0) || s.deletes != 1usize || s.revealed { os.exit(55i32) }
+    if !settle_rows(&harness, &f, &theme, &touch, s, &now) { os.exit(186i32) }
+    // (D1377) Pulled right past its rest the row follows at 0.3 (100 moves it
+    // 30); a short fast pull left (22, its last step 12) flings it open, and 50
+    // ms after the release it is still on its way to its stop.
+    if !press(&harness, row.x + 250.0, row.y + 50.0) || !move_to(&harness, row.x + 260.0, row.y + 50.0) || !move_to(&harness, row.x + 350.0, row.y + 50.0) { os.exit(187i32) }
+    let (root_band, root_band_error) = build(&f, &theme, &touch, s)
+    if root_band_error != ok || testing.pump(&harness, root_band, now) != ok { os.exit(188i32) }
+    let (banded, has_banded) = bounds(&harness, &runtime, 500u64)
+    if !has_banded || !near(banded.x, row.x + 30.0) { os.exit(189i32) }
+    if !release(&harness, row.x + 350.0, row.y + 50.0) || s.revealed || !settle_rows(&harness, &f, &theme, &touch, s, &now) { os.exit(190i32) }
+    if !press(&harness, row.x + 250.0, row.y + 50.0) || !move_to(&harness, row.x + 240.0, row.y + 50.0) || !move_to(&harness, row.x + 228.0, row.y + 50.0) || !release(&harness, row.x + 228.0, row.y + 50.0) || !s.revealed { os.exit(191i32) }
+    let (root_fling, root_fling_error) = build(&f, &theme, &touch, s)
+    if root_fling_error != ok || testing.pump(&harness, root_fling, time.Instant { nanos: now.nanos + 50000000i64 }) != ok { os.exit(192i32) }
+    let (root_flung, root_flung_error) = build(&f, &theme, &touch, s)
+    if root_flung_error != ok || testing.pump(&harness, root_flung, time.Instant { nanos: now.nanos + 50000000i64 }) != ok { os.exit(193i32) }
+    let (flung, has_flung) = bounds(&harness, &runtime, 500u64)
+    if !has_flung || !(flung.x > row.x - 159.0) || !(flung.x < row.x - 22.0) { os.exit(194i32) }
+    now = time.Instant { nanos: now.nanos + 50000000i64 }
+    if !settle_rows(&harness, &f, &theme, &touch, s, &now) { os.exit(195i32) }
+    let (settled_open, has_settled_open) = bounds(&harness, &runtime, 500u64)
+    if !has_settled_open || !near(settled_open.x, row.x - 160.0) { os.exit(196i32) }
+    if !tab_to(&harness, 500u64) || testing.press_key(&harness, 27u32, zero) != ok || s.revealed || !settle_rows(&harness, &f, &theme, &touch, s, &now) { os.exit(197i32) }
     // Under the pointer the actions are hover buttons at the row's end.
     if testing.hover(&harness, row.x + 100.0, row.y + 28.0) != ok { os.exit(56i32) }
     let (root_9, build_9_error) = build(&f, &theme, &touch, s)
