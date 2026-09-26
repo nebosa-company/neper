@@ -6406,6 +6406,7 @@ type ArtifactWorker = struct {
     artifact_sha_now: []str,
     sha_now: []str,
     fault_collision: bool,
+    previous: [][]const u8,
 }
 
 fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
@@ -6428,7 +6429,18 @@ fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     w.reason[module_index] = reason
     w.unchanged[module_index] = unchanged
     if unchanged { w.held[module_index] = old }
+    // (D1515) A module whose source changed keeps its artifact aside when this
+    // compiler wrote it and the manifest vouches for it: the rebuild may reuse the
+    // emission of the functions whose selection reads the same.
+    if reason == 1u8 && module_index < w.previous.len && previous_trusted(&w.arena, old, w.compiler_identity, w.recorded[module_index], w.recorded_artifact_sha[module_index], w.recorded_known[module_index]) { w.previous[module_index] = old }
     ret ok
+}
+
+fn previous_trusted(a: *mem.Arena, old: []const u8, compiler_identity: usize, recorded: usize, recorded_sha: str, recorded_known: bool) -> bool {
+    let (old_compiler, old_compiler_error) = em.artifact_compiler_hash(old)
+    if old_compiler_error != ok || compiler_identity == 0usize || old_compiler != compiler_identity { ret false }
+    let (hash, sha, verified) = artifact_content_verified(a, old, recorded, recorded_sha, recorded_known)
+    ret verified
 }
 
 // The artifact's checksum, checked against the manifest's record when there is one
@@ -6585,6 +6597,7 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
         workers[worker_at].artifact_sha_now = hot.artifact_sha_now
         workers[worker_at].sha_now = hot.sha_now
         workers[worker_at].fault_collision = hot.fault_collision
+        workers[worker_at].previous = loaded.previous
         workers[worker_at].mode_id = mode_id
         workers[worker_at].compiler_identity = loaded.compiler_identity
         worker_at += 1usize
@@ -8157,7 +8170,10 @@ fn fold_function(loaded: *graph.Graph, builder: *nir.Builder, output: *emit_x64.
 // Section 13's per-function pass for the functions from `first` on: live ranges and
 // registers, then the machine code into the context's output, with the fold when an
 // executable is being made. A selection failure is printed and ends the build here.
-fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder: *nir.Builder, context: *codegen_x64.FunctionContext, first: usize, function_offsets: []usize, emit: bool, fold: *Fold) -> err {
+fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder: *nir.Builder, context: *codegen_x64.FunctionContext, first: usize, function_offsets: []usize, emit: bool, fold: *Fold, reuse: *Reuse) -> err {
+    // The lowered functions end here; a trap's data and stubs come after, made as the
+    // functions before them are selected.
+    let lowered_end = builder.function_count
     var function_at = first
     while function_at < builder.function_count {
         if report.timing { report.regalloc_ns = report.regalloc_ns -% nptest_now() }
@@ -8173,6 +8189,19 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
             function_offsets[function_at] = function_start
             let relocation_start = *context.relocation_count
             let line_start = *context.line_count
+            if reuse.on && function_at < lowered_end {
+                let (spliced, splice_error) = splice_function(loaded, builder, function_at, reuse, context)
+                if splice_error != ok { ret splice_error }
+                if spliced {
+                    reuse.reused += 1usize
+                    function_at += 1usize
+                    continue
+                }
+                // Undone: the asks a replay made are the ones selection makes first.
+                context.output.count = function_start
+                *context.relocation_count = relocation_start
+                *context.line_count = line_start
+            }
             if report.timing { report.codegen_ns = report.codegen_ns -% nptest_now() }
             let codegen_error = codegen_x64.function(builder, function_at, stack_slots, context)
             if report.timing { report.codegen_ns = report.codegen_ns +% nptest_now() }
@@ -8198,6 +8227,203 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
             }
         }
         function_at += 1usize
+    }
+    ret ok
+}
+
+// (D1515, C036) A rebuilt module's previous artifact, open for reuse: its code
+// functions, their Emission records and line rows, and an index by name and
+// instance. A function whose emission identity is its previous one takes its
+// previous bytes, relocations and rows instead of being selected again.
+type Reuse = struct {
+    on: bool,
+    bytes: []const u8,
+    functions: []em.CodeFunction,
+    count: usize,
+    emission_first: usize,
+    line_starts: []usize,
+    line_counts: []usize,
+    names: lookup.Index,
+    module_index: usize,
+    reused: usize,
+}
+
+// The previous artifact opened, or `on` false when it cannot be: no Emission
+// section, or one that does not match its Code section.
+fn reuse_open(a: *mem.Arena, bytes: []const u8, module_index: usize, reuse: *Reuse) -> err {
+    reuse.on = false
+    let (count, count_error) = em.artifact_code_count(bytes)
+    if count_error != ok || count == 0usize { ret ok }
+    let (emission_first, has_emission) = em.emission_records(bytes, count)
+    if !has_emission { ret ok }
+    let (functions, functions_error) = mem.alloc[em.CodeFunction](a, count)
+    if functions_error != ok { ret functions_error }
+    let (read_count, read_error) = em.read_code_functions(bytes, functions)
+    if read_error != ok || read_count != count { ret ok }
+    let (starts, starts_error) = mem.alloc[usize](a, count)
+    if starts_error != ok { ret starts_error }
+    let (counts, counts_error) = mem.alloc[usize](a, count)
+    if counts_error != ok { ret counts_error }
+    if em.code_lines_index(bytes, count, starts, counts) != ok { ret ok }
+    let (entries, entries_error) = mem.alloc[lookup.Entry](a, count * 8usize + 256usize)
+    if entries_error != ok { ret entries_error }
+    var names: lookup.Index = zero
+    try lookup.attach(&names, entries)
+    var at = 0usize
+    while at < count {
+        let (name, name_error) = em.artifact_string(bytes, functions[at].name_index)
+        if name_error != ok { ret ok }
+        try lookup.insert(&names, functions[at].instance, 0usize, name, at)
+        at += 1usize
+    }
+    reuse.bytes = bytes
+    reuse.functions = functions
+    reuse.count = count
+    reuse.emission_first = emission_first
+    reuse.line_starts = starts
+    reuse.line_counts = counts
+    reuse.names = names
+    reuse.module_index = module_index
+    reuse.on = true
+    ret ok
+}
+
+// One function's previous emission laid in place of its selection, when its
+// identity is the previous one's: the bytes, each relocation to the target it
+// named, a trap stub asked for again (D927) so this build names it as a selection
+// would, and the line rows. False, with what was laid left for the caller to undo,
+// when anything does not carry over.
+fn splice_function(loaded: *graph.Graph, builder: *nir.Builder, function_at: usize, reuse: *Reuse, context: *codegen_x64.FunctionContext) -> (bool, err) {
+    if function_at < builder.emission_first || function_at >= builder.emission_end || function_at >= builder.emission.len { ret (false, ok) }
+    let current = builder.functions[function_at]
+    let (old_index, found) = lookup.find(&reuse.names, current.instance, 0usize, current.name)
+    if !found { ret (false, ok) }
+    let (old_identity, old_moves) = em.emission_at(reuse.bytes, reuse.emission_first, old_index)
+    if old_identity == 0usize || old_identity != builder.emission[function_at] { ret (false, ok) }
+    let old = reuse.functions[old_index]
+    let start = context.output.count
+    if old.code_length > context.output.bytes.len - start { ret (false, ok) }
+    if codegen_x64.emit_text(context.output, reuse.bytes[old.code_start..old.code_start + old.code_length]) != ok { ret (false, ok) }
+    var at = 0usize
+    while at < old.relocation_count {
+        let (relocation, relocation_error) = em.code_relocation_raw(reuse.bytes, old, at)
+        if relocation_error != ok { ret (false, ok) }
+        let (module_name, module_name_error) = em.artifact_string(reuse.bytes, relocation.module_index)
+        let (name, name_error) = em.artifact_string(reuse.bytes, relocation.name_index)
+        if module_name_error != ok || name_error != ok { ret (false, ok) }
+        let (target_module, has_module) = graph.find_module(loaded, module_name)
+        if !has_module { ret (false, ok) }
+        if *context.relocation_count == context.relocations.len { ret (false, ok) }
+        if relocation.global {
+            let (global_index, has_global) = builder_global(builder, target_module, name)
+            if !has_global { ret (false, ok) }
+            if codegen_x64.add_global_relocation(context.relocations, context.relocation_count, start + relocation.displacement_at, global_index) != ok { ret (false, ok) }
+        } else {
+            var reference = 0usize
+            if target_module == reuse.module_index && codegen_x64.is_trap_function(name) {
+                let (stub_ref, stub_made, stub_error) = replay_stub(builder, current, reuse, name)
+                if stub_error != ok { ret (false, stub_error) }
+                if !stub_made { ret (false, ok) }
+                reference = stub_ref
+            } else {
+                // A site that laid its own records called the runtime directly, which
+                // the module's trap state decided; it is selected again.
+                if same(name, "neper_trap") || same(name, "neper_symbols") { ret (false, ok) }
+                let (interned, intern_error) = nir.intern_function(builder, target_module, name, relocation.instance)
+                if intern_error != ok { ret (false, intern_error) }
+                if relocation.imported && builder.function_refs[interned].library.len == 0usize { ret (false, ok) }
+                reference = interned
+            }
+            if codegen_x64.add_relocation(context.relocations, context.relocation_count, start + relocation.displacement_at, reference) != ok { ret (false, ok) }
+        }
+        at += 1usize
+    }
+    let rows = reuse.line_counts[old_index]
+    if rows > context.lines.len - *context.line_count { ret (false, ok) }
+    var row_at = 0usize
+    while row_at < rows {
+        let row = reuse.line_starts[old_index] + row_at * 12usize
+        let (path, path_error) = em.artifact_string(reuse.bytes, binary.read_u32_at(reuse.bytes, row + 8usize))
+        if path_error != ok { ret (false, ok) }
+        var entry: codegen_x64.LineEntry = zero
+        entry.offset = start + binary.read_u32_at(reuse.bytes, row)
+        entry.line = u32(binary.read_u32_at(reuse.bytes, row + 4usize))
+        entry.path = path
+        context.lines[*context.line_count] = entry
+        *context.line_count = *context.line_count + 1usize
+        row_at += 1usize
+    }
+    ret (true, ok)
+}
+
+// A trap stub the previous artifact named, asked for again: its path and message
+// records read from the previous data functions it points at, and its operand moves
+// from the Emission section. The ask is the one a selection of the site makes.
+fn replay_stub(builder: *nir.Builder, current: nir.Function, reuse: *Reuse, stub_name: str) -> (usize, bool, err) {
+    let (stub_index, has_stub) = lookup.find(&reuse.names, 0usize, 0usize, stub_name)
+    if !has_stub { ret (0usize, false, ok) }
+    let stub = reuse.functions[stub_index]
+    if stub.relocation_count < 2usize { ret (0usize, false, ok) }
+    let (identity, moves) = em.emission_at(reuse.bytes, reuse.emission_first, stub_index)
+    let (path_text, path_found) = replay_record(reuse, stub, 0usize)
+    let (message_text, message_found) = replay_record(reuse, stub, 1usize)
+    if !path_found || !message_found { ret (0usize, false, ok) }
+    var path: [1]codegen_x64.TrapPiece = zero
+    path[0usize] = codegen_x64.trap_piece(path_text)
+    var message: [1]codegen_x64.TrapPiece = zero
+    message[0usize] = codegen_x64.trap_piece(message_text)
+    let (stub_ref, is_shared, shared_error) = codegen_x64.trap_shared_stub(builder, current, path[..], message[..], moves)
+    ret (stub_ref, is_shared, shared_error)
+}
+
+// The record a stub's relocation `which` names: the data function's bytes past the
+// two of its length.
+fn replay_record(reuse: *Reuse, stub: em.CodeFunction, which: usize) -> (str, bool) {
+    let (relocation, relocation_error) = em.code_relocation_raw(reuse.bytes, stub, which)
+    if relocation_error != ok { ret ("", false) }
+    let (name, name_error) = em.artifact_string(reuse.bytes, relocation.name_index)
+    if name_error != ok { ret ("", false) }
+    let (data_index, has_data) = lookup.find(&reuse.names, 0usize, 0usize, name)
+    if !has_data { ret ("", false) }
+    let data = reuse.functions[data_index]
+    if data.code_length < 2usize { ret ("", false) }
+    ret (reuse.bytes[data.code_start + 2usize..data.code_start + data.code_length], true)
+}
+
+fn builder_global(builder: *nir.Builder, module_index: usize, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < builder.global_count {
+        if builder.globals[at].module_index == module_index && same(builder.globals[at].name, name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// (D1515) Each lowered function's emission identity, from `first` to the end, into
+// the builder's table the writer reads; the scratch grows to the function (D541).
+fn note_emission(w: *LowerWorker, a: *mem.Arena, first: usize) -> err {
+    if w.builder.emission.len < w.builder.functions.len {
+        let (storage, storage_error) = mem.alloc[usize](a, w.builder.functions.len)
+        if storage_error != ok { ret storage_error }
+        w.builder.emission = storage
+    }
+    w.builder.emission_first = first
+    w.builder.emission_end = w.builder.function_count
+    var at = first
+    while at < w.builder.function_count {
+        var (identity, identity_error) = em.emission_hash(&w.checker, w.loaded, &w.builder, at, &w.hot.scratch)
+        var grown = 0usize
+        while identity_error == binary.Capacity && grown < 8usize {
+            let (bigger, bigger_error) = mem.alloc[u8](a, w.hot.scratch.bytes.len * 2usize)
+            if bigger_error != ok { ret bigger_error }
+            try binary.init(&w.hot.scratch, bigger)
+            (identity, identity_error) = em.emission_hash(&w.checker, w.loaded, &w.builder, at, &w.hot.scratch)
+            grown += 1usize
+        }
+        // A function the canonical form cannot write has no identity, and is selected.
+        if identity_error != ok { identity = 0usize }
+        w.builder.emission[at] = identity
+        at += 1usize
     }
     ret ok
 }
@@ -8286,7 +8512,8 @@ fn emit_whole_program(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
     var line_count = 0usize
     codegen_context.lines = line_entries
     codegen_context.line_count = &line_count
-    try codegen_functions(a, report, loaded, builder, &codegen_context, 0usize, function_offsets, emit_machine_code, &fold)
+    var no_reuse: Reuse = zero
+    try codegen_functions(a, report, loaded, builder, &codegen_context, 0usize, function_offsets, emit_machine_code, &fold, &no_reuse)
     code.machine = machine
     code.function_offsets = function_offsets
     code.relocations = relocations
@@ -8347,7 +8574,7 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild, largest_bytes: usize) -> err {
     let (string_slots, string_slots_error) = mem.alloc[usize](a, 131072usize)
     if string_slots_error != ok { ret string_slots_error }
     try em.init_strings(&hot.strings, string_values, string_slots)
-    let (sections, sections_error) = mem.alloc[em.Section](a, 9usize)
+    let (sections, sections_error) = mem.alloc[em.Section](a, 10usize)
     if sections_error != ok { ret sections_error }
     hot.sections = sections
     let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
@@ -8567,6 +8794,8 @@ type LowerWorker = struct {
     // it lowered.
     bodies_checked: usize,
     functions_lowered: usize,
+    // (D1515) The lowered functions whose previous emission was laid in place.
+    functions_reused: usize,
     second_ns: usize,
     lower_ns: usize,
     write_ns: usize,
@@ -9124,7 +9353,15 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     w.relocation_count = 0usize
     w.line_count = 0usize
     var no_fold: Fold = zero
-    try codegen_functions(a, &w.report, w.loaded, &w.builder, &w.context, first, w.stage_offsets, true, &no_fold)
+    // (D1515) What the artifact records for the next build to reuse, and, in a debug
+    // hot build of a module whose source changed, the previous artifact's emission.
+    var reuse: Reuse = zero
+    if w.hot.on {
+        try note_emission(w, a, first)
+        if !w.hot.release && !w.builder.explain && module_index < w.loaded.previous.len && w.loaded.previous[module_index].len != 0usize { try reuse_open(a, w.loaded.previous[module_index], module_index, &reuse) }
+    }
+    try codegen_functions(a, &w.report, w.loaded, &w.builder, &w.context, first, w.stage_offsets, true, &no_fold, &reuse)
+    w.functions_reused += reuse.reused
     let write_started = nptest_now()
     try write_hot_artifact(a, &w.checker, w.loaded, &w.builder, module_index, &w.context, w.stage_offsets, &w.hot, w.held)
     w.write_ns += nptest_now() - write_started
@@ -9715,6 +9952,7 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         }
         report.build.bodies_checked += crew.workers[worker_at].bodies_checked
         report.build.functions_lowered += crew.workers[worker_at].functions_lowered
+        report.build.functions_reused += crew.workers[worker_at].functions_reused
         report.regalloc_ns = report.regalloc_ns +% crew.workers[worker_at].report.regalloc_ns
         report.codegen_ns = report.codegen_ns +% crew.workers[worker_at].report.codegen_ns
         builder.instruction_total += crew.workers[worker_at].builder.instruction_total
@@ -9724,6 +9962,7 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
     if crew.generous_made {
         report.build.bodies_checked += crew.workers[LOWER_WORKERS].bodies_checked
         report.build.functions_lowered += crew.workers[LOWER_WORKERS].functions_lowered
+        report.build.functions_reused += crew.workers[LOWER_WORKERS].functions_reused
         report.regalloc_ns = report.regalloc_ns +% crew.workers[LOWER_WORKERS].report.regalloc_ns
         report.codegen_ns = report.codegen_ns +% crew.workers[LOWER_WORKERS].report.codegen_ns
         builder.instruction_total += crew.workers[LOWER_WORKERS].builder.instruction_total
@@ -11005,7 +11244,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 if string_slots_error != ok { ret string_slots_error }
                 var strings: em.StringTable = zero
                 try em.init_strings(&strings, string_values, string_slots)
-                let (sections, sections_error) = mem.alloc[em.Section](a, 9usize)
+                let (sections, sections_error) = mem.alloc[em.Section](a, 10usize)
                 if sections_error != ok { ret sections_error }
                 let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
                 if triple_error != ok { ret triple_error }

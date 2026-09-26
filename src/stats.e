@@ -83,6 +83,8 @@ type Build = struct {
     modules_decoded: usize,
     modules_lowered: usize,
     functions_lowered: usize,
+    // (D1515) Of those, the ones whose previous emission was reused.
+    functions_reused: usize,
     ran: bool,
     run_ms: usize,
     exit_code: i32,
@@ -487,6 +489,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try row_number(b, "bodies checked", b.bodies_checked)
     try row_number(b, "modules lowered", b.modules_lowered)
     try row_number(b, "functions lowered", b.functions_lowered)
+    try row_number(b, "functions reused", b.functions_reused)
     try row_number(b, "bounds checks elided", b.bounds_elided)
     try row_number(b, "by-value copies", b.snapshots_copied)
     try row_number(b, "by-value copies elided", b.snapshots_elided)
