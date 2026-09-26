@@ -393,6 +393,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if limit_step >= 3usize && (reveal_log.count != 2usize || reveal_log.index != 1usize) { os.exit(72i32) }
         limit_step += 1usize
     }
+    // (D1541) Down to one pair, the removed row's place stands a row tall on the
+    // first frame and has closed half a second later: the Add button (keyed
+    // `key + 3 * 1 + 4`) rises by a row.
+    var gone_step = 0usize
+    var add_before: f32 = 0.0
+    var add_after: f32 = 0.0
+    while gone_step < 4usize {
+        var kept = pairs[0usize..2usize]
+        if gone_step > 0usize { kept = pairs[1usize..2usize] }
+        var gone_at = 36000000000i64 + i64(gone_step)
+        if gone_step >= 2usize { gone_at = 36500000000i64 + i64(gone_step) }
+        f = mem.arena_from(storage)
+        let (gone_editor, gone_error) = collection.key_value_editor_of(&f, 700u64, &theme, "Secrets", kept, widget.Change[collection.PairEdit] { ctx: mem.cast[*void](&edits), invoke: on_pair_edit }, zero, &adds[0usize], 400.0, kv)
+        let (gone_page, gone_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if gone_error != ok || gone_page_error != ok { os.exit(73i32) }
+        gone_page[0usize] = gone_editor
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(420.0, 700.0), gone_page[0usize..1usize]), time.Instant { nanos: gone_at }) != ok { os.exit(73i32) }
+        let (add_box, has_add_box) = bounds(&harness, &runtime, 707u64)
+        if gone_step == 1usize && has_add_box { add_before = add_box.y }
+        if gone_step == 3usize && has_add_box { add_after = add_box.y }
+        gone_step += 1usize
+    }
+    if !(add_before - add_after > 40.0) { os.exit(74i32) }
     if testing.by_label(&harness, "Add variable").count == 0usize { os.exit(47i32) }
     // (D1314) Text mode: the pairs written one a line; parsed back, blank lines
     // and comments pass and a line with no `=` is named; the Text segment fires
