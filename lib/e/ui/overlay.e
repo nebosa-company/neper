@@ -1556,16 +1556,22 @@ fn popup_loading(a: *mem.Arena, key: widget.Key, t: *const control.Theme, messag
 // (D1364) Opening, it fades in and grows 8 from the anchor's edge over
 // `duration-short-4`; it stands in a box keyed `key + 8192` that is there open or
 // shut, so the opening is remembered. Reduced motion shows it at once.
+// (D1416) Closing, it fades and shrinks back over `duration-short-2`
+// (`closing_share`), out of the tree while it leaves.
 // ponytail: no match highlighting; the anchor keeps the focus
-// because the popup takes none; closing is at once.
+// because the popup takes none.
 fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
-    let opened = opening_share(t, key, open)
-    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
+    var shown = opening_share(t, key, open)
+    let leaving = closing_share(t, key, open)
+    if !open {
+        if !(leaving > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
+        shown = leaving
+    }
     let (surface, surface_error) = popup_surface(a, t, content)
     if surface_error != ok { ret (zero, surface_error) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    let (grown, grown_error) = grown_in(a, surface, opened, placement == .Above)
+    let (grown, grown_error) = grown_in(a, surface, shown, placement == .Above)
     if grown_error != ok { ret (zero, grown_error) }
     body[0usize] = grown
     var sem: widget.Semantics = zero
@@ -1574,6 +1580,7 @@ fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize])
+    if !open { framed[0usize] = widget.box(0u64, style.defaults(), body[0usize..1usize]) }
     var placed = placement
     if placement == .Below { placed = .BelowMatch }
     if placement == .Above { placed = .AboveMatch }
@@ -1592,6 +1599,16 @@ fn opening_share(t: *const control.Theme, key: widget.Key, open: bool) -> f32 {
     var open_goal: f32 = 0.0
     if open { open_goal = 1.0 }
     ret control.eased_emphasized(t, key + 8192u64, key + 8193u64, open_goal, true, t.tokens.durations.short4)
+}
+
+// (D1416, docs/ux/components/Popup, motion) How far a popup keyed `key` still
+// stands while it closes, kept on its box (slot `key + 8194`): it follows the
+// popup open over `duration-short-2` and leaves on the emphasized-accelerate
+// curve; reduced motion (0 at once) or never opened, nothing.
+fn closing_share(t: *const control.Theme, key: widget.Key, open: bool) -> f32 {
+    var stay_goal: f32 = 0.0
+    if open { stay_goal = 1.0 }
+    ret control.eased_emphasized(t, key + 8192u64, key + 8194u64, stay_goal, false, t.tokens.durations.short2)
 }
 
 // (D1364, docs/ux/components/Popup, motion) A surface part way open: faded to

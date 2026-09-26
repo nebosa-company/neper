@@ -26848,3 +26848,9 @@ Rows under 64 get one text bar (a one-line row) and rows under 80 get two; from
 `ui_collections_v2` loads a list of one-line rows. Its five skeleton rows stand
 280 tall, on Windows and Linux. `ui_containers_v2` and `ui_collections2_v2`
 still pass.
+
+## D1416 — Popups fade out when closed
+
+The Popup spec closes the surface "over `duration-short-2` with `ease-emphasized-accelerate`". `popup_of` now keeps a second share, `closing_share`, on its box (slot `key + 8194`). While the popup is open, that share follows it up over `duration-short-2`. Once the popup is closed, the share leaves on the emphasized-accelerate curve. While it is above 0, the surface is drawn faded and shrunk toward the anchor (`grown_in`) without its group semantics, so the tree no longer lists the popup. Reduced motion, or a popup that was never opened, draws nothing at once.
+
+`ui_presentation` opens a popup and then closes it, on Windows and Linux. 40 ms after the close its text still shows; 390 ms after it, the text is gone.
