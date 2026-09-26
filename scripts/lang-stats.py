@@ -1,4 +1,4 @@
-"""Compare what it costs an LLM to write Neper, Dart, Rust and Python.
+"""Compare what it costs an LLM to write Neper, Dart, Rust, JS, TS and Python.
 
 Reads every Claude Code transcript under ~/.claude/projects. Code reaches a file three
 ways and all three count: the Write/Edit tools, `cat > file <<EOF` heredocs, and Python
@@ -8,22 +8,27 @@ patches, and so is the script's whole cost; a run of the script is one edit appl
 so an `assert count == 1` failure is an edit that did not apply. All other Python in a
 session (test oracles, analysis, doc patches) is tooling for that session's host
 language: it costs the host and lands no code. Python's own row is project scripts:
-.py files inside a repo, outside scratch and build folders. The columns are explained
-below the table.
+.py files inside a repo, outside scratch and build folders. Three sections follow, each
+with its columns explained beneath it.
 """
-import ast, json, glob, os, re, ntpath, warnings, collections as C
+import ast, json, glob, os, re, ntpath, warnings, statistics, collections as C
+from datetime import datetime
 
 warnings.filterwarnings('ignore', category=SyntaxWarning)  # transcript scripts are parsed, not run
 
 ROOT = os.path.expanduser('~/.claude/projects')
-LANG = {'.e': 'Neper', '.dart': 'Dart', '.rs': 'Rust', '.py': 'Python'}
-CODE = {'e': 'Neper', 'dart': 'Dart', 'rs': 'Rust'}  # what a script may patch and be credited for
-ROWS = ['Neper', 'Dart', 'Rust', 'Python']
-BUILD = re.compile(r'\b(cargo|flutter|dart|neper|tsc|npm|pnpm|node|pytest|run\.sh|suite|make|gcc|clang|bootstrap|go (build|test)|dotnet)\b')
-TARGET = re.compile(r"""['"]([^'"\n]{1,200}?\.(e|dart|rs|md|json|jsonl|ps1|sh|html|txt|ebnf|py|c|h|toml|yaml|pas|dpr))['"]""")
+LANG = {'.e': 'Neper', '.dart': 'Dart', '.rs': 'Rust', '.js': 'JS', '.mjs': 'JS', '.jsx': 'JS', '.ts': 'TS', '.tsx': 'TS', '.py': 'Python'}
+CODE = {'e': 'Neper', 'dart': 'Dart', 'rs': 'Rust', 'js': 'JS', 'ts': 'TS'}  # what a script may patch and be credited for
+ROWS = ['Neper', 'Dart', 'Rust', 'JS', 'TS', 'Python']
+BUILD = re.compile(r'\b(cargo|flutter|dart|neper|tsc|npm|pnpm|node|vitest|jest|pytest|run\.sh|suite|make|gcc|clang|bootstrap|go (build|test)|dotnet)\b')
+COMPILE = {'Neper': re.compile(r'\bE-[A-Z]+-\d{4}\b'), 'Rust': re.compile(r'error(\[E\d{4}\]|: )'), 'Dart': re.compile(r'\bError: |\berror •'),
+           'JS': re.compile(r'\b(SyntaxError|TypeError|ReferenceError)\b'), 'TS': re.compile(r'\berror TS\d{4}\b'), 'Python': re.compile(r'Traceback|SyntaxError')}
+READS = ('Read', 'Grep', 'Glob')
+TARGET = re.compile(r"""['"]([^'"\n]{1,200}?\.(e|dart|rs|js|ts|md|json|jsonl|ps1|sh|html|txt|ebnf|py|c|h|toml|yaml|pas|dpr))['"]""")
 HEREDOC = re.compile(r"(?ms)^([^\n]*?<<-?\s*['\"]?(\w+)['\"]?[^\n]*)\n(.*?)\n\2[ \t]*$")
 PYRUN = re.compile(r'\bpython3?\s+(?:"[^"]*[/\\])?([\w.-]+\.py)\b')
 SCRATCH = re.compile(r'scratchpad|[\\/](build|tmp|Temp)[\\/]', re.I)
+USD = 5e-6  # dollars per input-token equivalent: Opus 5 list price, $5 per million
 
 
 def script_kind(code):
@@ -96,23 +101,33 @@ def runs(cmd):
     return ks
 
 
-S = C.defaultdict(C.Counter)  # (lang, mode) -> counters
+def when(o):
+    try: return datetime.fromisoformat(o['timestamp'].replace('Z', '+00:00')).timestamp()
+    except (KeyError, ValueError, AttributeError): return None
+
+
+S = C.defaultdict(C.Counter)       # (lang, mode) -> counters
+build_s = C.defaultdict(list)      # host lang -> wall seconds of each build/test command
+ctx_tok = C.defaultdict(list)      # lang -> context tokens at each turn that landed its code
 
 for f in glob.glob(ROOT + '/**/*.jsonl', recursive=True):
-    msgs, order, results = {}, [], {}
+    msgs, order, results, last_user = {}, [], {}, None
     for line in open(f, encoding='utf8', errors='replace'):
         try: o = json.loads(line)
         except ValueError: continue
-        m = o.get('message') or {}
+        m = o.get('message') or {}; ts = when(o)
         if o.get('type') == 'assistant' and m.get('id'):
-            if m['id'] not in msgs: msgs[m['id']] = {'content': [], 'usage': {}}; order.append(m['id'])
+            if m['id'] not in msgs: msgs[m['id']] = {'content': [], 'usage': {}, 'after': last_user, 'ts': ts}; order.append(m['id'])
             msgs[m['id']]['content'] += m.get('content') or []
             msgs[m['id']]['usage'] = m.get('usage') or {}
-        elif o.get('type') == 'user' and isinstance(m.get('content'), list):
-            for c in m['content']:
-                if isinstance(c, dict) and c.get('type') == 'tool_result':
-                    head = str(c.get('content'))[:300].lower()
-                    results[c.get('tool_use_id')] = bool(c.get('is_error')) or ('exit code' in head and 'exit code 0' not in head)
+            msgs[m['id']]['ts'] = ts or msgs[m['id']]['ts']
+        elif o.get('type') == 'user':
+            last_user = ts or last_user
+            if isinstance(m.get('content'), list):
+                for c in m['content']:
+                    if isinstance(c, dict) and c.get('type') == 'tool_result':
+                        text = str(c.get('content')); head = text[:300].lower()
+                        results[c.get('tool_use_id')] = {'text': text, 'ts': ts, 'failed': bool(c.get('is_error')) or ('exit code' in head and 'exit code 0' not in head)}
     # first pass: what each turn lands, and the session's host language (most new code)
     full, turn, host_bytes = {}, {}, C.Counter()
     for mid in order:
@@ -122,72 +137,131 @@ for f in glob.glob(ROOT + '/**/*.jsonl', recursive=True):
                 if L: host_bytes[L] += b
     if not host_bytes: continue
     host = max(host_bytes, key=host_bytes.get)
-    pending = 0
+    H = S[(host, 'helper')]
+    pending, since_build = C.Counter(), 0
     for mid in order:
         msg = msgs[mid]; u = msg['usage']
         out = u.get('output_tokens', 0); think = (u.get('output_tokens_details') or {}).get('thinking_tokens', 0)
         cc = u.get('cache_creation')
         write = cc.get('ephemeral_1h_input_tokens', 0) * 2 + cc.get('ephemeral_5m_input_tokens', 0) * 1.25 if cc \
             else u.get('cache_creation_input_tokens', 0) * 1.25
-        pending += u.get('input_tokens', 0) + write + u.get('cache_read_input_tokens', 0) * 0.1 + out * 5
+        ctx = u.get('input_tokens', 0) + u.get('cache_read_input_tokens', 0) + u.get('cache_creation_input_tokens', 0)
+        pending['cost'] += u.get('input_tokens', 0) + write + u.get('cache_read_input_tokens', 0) * 0.1 + out * 5
+        pending['out'] += out; pending['turns'] += 1
+        if msg['ts'] and msg['after']: pending['model_s'] += min(max(msg['ts'] - msg['after'], 0), 600)
         edits = []
         for t, es in turn[mid]:
-            failed = results.get(t['id'], False)
+            r = results.get(t['id']) or {}
+            failed = r.get('failed', False)
+            dur = min(max(r['ts'] - msg['ts'], 0), 1800) if r.get('ts') and msg['ts'] else 0
+            pending['tool_s'] += dur
+            pulled = t.get('name') in READS or (t.get('name') == 'PowerShell' and not BUILD.search(str((t.get('input') or {}).get('command', ''))))
             for L, mode, b, files in es:
                 key = (L or host, mode)
                 edits.append((key, b))
                 S[key]['edits'] += 1; S[key]['bytes'] += b
                 for p in files: S[key]['files:' + p] = 1
-                if mode == 'direct': S[key]['applied'] += 1; S[key]['apply_err'] += failed
+                if mode == 'direct': S[key]['applied'] += 1; S[key]['apply_err'] += failed; since_build += not failed
+                if b: ctx_tok[L].append(ctx)
             if t.get('name') == 'Bash':
                 cmd = str((t.get('input') or {}).get('command', ''))
                 ks = runs(cmd)
                 for k in ks:  # a patch run is an edit application; any other python run is a test run
-                    if k and k[1]: S[(k[1], 'script')]['applied'] += 1; S[(k[1], 'script')]['apply_err'] += failed
-                    else: S[(host, 'helper')]['builds'] += 1; S[(host, 'helper')]['build_fail'] += failed
-                if not ks and (BUILD.search(cmd) or PYRUN.search(cmd)):  # a build, or a script written outside these transcripts
-                    S[(host, 'helper')]['builds'] += 1; S[(host, 'helper')]['build_fail'] += failed
+                    if k and k[1]: S[(k[1], 'script')]['applied'] += 1; S[(k[1], 'script')]['apply_err'] += failed; since_build += not failed
+                    else: ks = []
+                if not ks and (BUILD.search(cmd) or PYRUN.search(cmd)):  # a build or test run, or a script written outside these transcripts
+                    H['builds'] += 1; H['build_fail'] += failed; build_s[host].append(dur)
+                    H['compile_err'] += bool(failed and host in COMPILE and COMPILE[host].search(r.get('text', '')))
+                    H['fb_n'] += since_build; H['fb_ok'] += since_build * (not failed); since_build = 0
+                elif not ks and not es: pulled = True  # a shell command that only looked: cat, sed, tgrep, git, ls
+            if pulled: pending['read_b'] += len(r.get('text', ''))
         if edits:  # the work leading up to an edit is charged to what it landed, by new bytes
             code = [(k, b) for k, b in edits if b]
             share = code or [((host, 'helper'), 1)]
             tot = sum(b for _, b in share)
-            for k, b in share: S[k]['cost'] += pending * b / tot
-            pending = 0
+            for k, b in share:
+                for q, v in pending.items(): S[k][q] += v * b / tot
+            pending = C.Counter()
         if len(turn[mid]) == 1 and len(edits) == 1 and edits[0][1] >= 200 and not any(c.get('type') == 'text' for c in msg['content']):
             k = edits[0][0]; S[k]['d_bytes'] += edits[0][1]; S[k]['d_vis'] += out - think; S[k]['d_think'] += think
-    S[(host, 'helper')]['cost'] += pending  # tail work (verification) belongs to the session's code
+    for q, v in pending.items(): H[q] += v  # tail work (verification) belongs to the session's code
 
-USD = 5e-6 * 1024  # $5 per million input-token equivalents, per KB
+
+def merged(L):
+    d, s, h = S[(L, 'direct')], S[(L, 'script')], S[(L, 'helper')]
+    t = d + s + h
+    return d, s, h, t, d['bytes'] + s['bytes']
+
+
+FLOOR = 100 * 1024  # a language with less landed source than this is too thin to compare
+thin = ['%s %d KB' % (L, merged(L)[4] // 1024) for L in ROWS if merged(L)[4] < FLOOR]
+ROWS = [L for L in ROWS if merged(L)[4] >= FLOOR]
+if thin: print('under %d KB of landed source, not shown: %s\n' % (FLOOR // 1024, ', '.join(thin)))
+
+
+print('COST  (KB is kibibytes of source text landed in files, never tokens)')
 print('%-7s %7s %6s %6s %6s %7s %6s %6s %7s %9s %8s' % ('lang', 'KB', 'tok/B', 'thk/B', 'edit%', 'builds', 'fail%', 'ed/fil', 'script%', 'cost/B', '$/KB'))
 for L in ROWS:
-    d, s, h = S[(L, 'direct')], S[(L, 'script')], S[(L, 'helper')]
-    kb = d['bytes'] + s['bytes']
+    d, s, h, t, kb = merged(L)
     if not kb: continue
     files = sum(1 for k in list(d) + list(s) if k.startswith('files:'))
-    cost_b = (d['cost'] + s['cost'] + h['cost']) / kb
+    cost_b = t['cost'] / kb
     print('%-7s %7d %6.3f %6.3f %6.1f %7d %6.1f %6.1f %6.0f%% %9.1f %8.3f' % (
         L, kb // 1024, d['d_vis'] / max(d['d_bytes'], 1), d['d_think'] / max(d['d_bytes'], 1),
         100 * (d['apply_err'] + s['apply_err']) / max(d['applied'] + s['applied'], 1), h['builds'],
-        100 * h['build_fail'] / max(h['builds'], 1), (d['edits'] + s['edits']) / max(files, 1), 100 * s['bytes'] / kb, cost_b, cost_b * USD))
-
-print('\nhow the code was delivered ($/KB of new code, and output tokens per new byte in single-edit replies):')
-for L in ROWS:
-    d, s, h = S[(L, 'direct')], S[(L, 'script')], S[(L, 'helper')]
-    if not d['bytes']: continue
-    print('%-7s direct %5.3f $/KB %5.2f tok/B   via python scripts %5.3f $/KB %5.2f tok/B   helper python (oracles, analysis, docs) $%.0f' % (
-        L, d['cost'] / max(d['bytes'], 1) * USD, d['d_vis'] / max(d['d_bytes'], 1),
-        s['cost'] / max(s['bytes'], 1) * USD, s['d_vis'] / max(s['d_bytes'], 1), h['cost'] * 5e-6))
+        100 * h['build_fail'] / max(h['builds'], 1), (d['edits'] + s['edits']) / max(files, 1), 100 * s['bytes'] / kb, cost_b, cost_b * USD * 1024))
 
 print('''
-KB      new code landed, in KB: direct edits plus the new strings of Python patch/generator scripts
-tok/B   visible output tokens per byte of code in replies that are exactly one direct edit
-thk/B   thinking tokens per byte of code, from the same replies
-edit%   edit applications that failed: a Write/Edit error, or a patch script run that failed
-builds  build and test commands run in sessions whose host language this is (python oracles included)
-fail%   those commands that failed
-ed/fil  edits per distinct target file, a measure of rework
-script% share of the new code that arrived inside Python patch/generator scripts
-cost/B  tokens spent per byte of new code, in input-token equivalents: all the reading, thinking,
-        testing and helper scripting that led to the edit (output x5, 1h cache write x2,
-        5m cache write x1.25, cache read x0.1)
-$/KB    cost/B in USD per KB at $5 per million input tokens (Opus 5 list price)''')
+KB       kibibytes (1024 bytes) of UTF-8 source text that landed in files of this language: the
+         content of Write/Edit calls and cat heredocs, plus the new-side strings of Python
+         patch/generator scripts. Source bytes, not tokens.
+tok/B    visible output tokens the model emitted per byte of source landed, measured only on replies
+         that were exactly one direct edit and nothing else (so the anchor text of an Edit counts)
+thk/B    thinking tokens per byte of source landed, from the same replies
+edit%    edit applications that failed: a Write/Edit tool error, or a patch-script run that failed
+builds   build and test commands run in sessions whose host language this is (python oracles included)
+fail%    those commands that returned an error
+ed/fil   edit applications per distinct target file; higher means the same files were reworked more
+script%  share of the landed source bytes that arrived inside Python patch/generator scripts
+cost/B   input-token equivalents spent per byte of source landed, counting every token of the turns
+         that led to the edit (reading, thinking, testing, helper scripting): input x1, 1h cache
+         write x2, 5m cache write x1.25, cache read x0.1, output x5
+$/KB     cost/B priced at $5 per million input-token equivalents (Opus 5 list), per KB of source''')
+
+print('\nPROCESS  (how the code got written)')
+print('%-7s %9s %8s %8s %9s %9s %11s %8s %8s %8s' % ('lang', 'outK/KB', 'ctx Ktk', 'read/KB', 'turns/ed', '1st-ok%', 'build s', 'cmpl%', 'mdl s/KB', 'tool s/KB'))
+for L in ROWS:
+    d, s, h, t, kb = merged(L)
+    if not kb: continue
+    bs = sorted(build_s[L]) or [0]
+    print('%-7s %9.1f %8.0f %8.1f %9.1f %9.1f %5.0f/%-5.0f %8.1f %8.0f %8.0f' % (
+        L, t['out'] / kb, statistics.median(ctx_tok[L]) / 1000 if ctx_tok[L] else 0, t['read_b'] / kb,
+        t['turns'] / max(d['applied'] + s['applied'], 1), 100 * h['fb_ok'] / max(h['fb_n'], 1),
+        statistics.median(bs), bs[int(len(bs) * 0.9)] if len(bs) > 1 else bs[0], 100 * h['compile_err'] / max(h['build_fail'], 1),
+        t['model_s'] / kb * 1024, t['tool_s'] / kb * 1024))
+
+print('''
+outK/KB   thousand output tokens (visible + thinking) generated per KB of source landed; the raw
+          writing effort, before input and cache costs
+ctx Ktk   median context size, in thousand tokens, of the turns that landed this language's code
+          (input + cache read + cache write): how much the model had loaded when it wrote
+read/KB   bytes of tool output the model pulled into context per byte of source landed: Read, Grep
+          and Glob results plus shell commands that only looked (cat, sed, tgrep, git, ls)
+turns/ed  assistant replies per edit application: reading, thinking and testing turns between edits
+1st-ok%   edit applications whose first following build/test command passed
+build s   wall-clock seconds of a build/test command, median/90th percentile, from the tool call's
+          timestamp to its result's (foreground commands only, capped at 1800 s)
+cmpl%     share of the failed build/test commands whose output carries this language's compiler
+          diagnostics (Neper E-XXXX-nnnn, Rust error[E], Dart Error:, TS error TS, JS/Python
+          exception names): a compile failure rather than a test or runtime failure
+mdl s/KB  seconds the model spent generating (user record to last assistant block, capped at 600 s)
+          per KB of source landed
+tool s/KB seconds tools ran (call to result) per KB of source landed''')
+
+print('\nDELIVERY  ($/KB of source landed, and visible output tokens per byte in single-edit replies)')
+for L in ROWS:
+    d, s, h, t, kb = merged(L)
+    if not d['bytes']: continue
+    print('%-7s direct %5.3f $/KB %5.2f tok/B   via python scripts %5.3f $/KB %5.2f tok/B   helper python (oracles, analysis, docs) $%.0f' % (
+        L, d['cost'] / max(d['bytes'], 1) * USD * 1024, d['d_vis'] / max(d['d_bytes'], 1),
+        s['cost'] / max(s['bytes'], 1) * USD * 1024, s['d_vis'] / max(s['d_bytes'], 1), h['cost'] * USD))
