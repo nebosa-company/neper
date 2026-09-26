@@ -867,6 +867,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, has_side_extents) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 1u64 + 2097152u64).element)
     let (side_content, side_shown, has_side) = widget.scroll_extents(&runtime, testing.by_key(&harness, 1u64 + 2097152u64).element)
     if !has_side_extents || !has_side || !near(side_content, 300.0) || !near(side_shown, 200.0) { os.exit(82i32) }
+    // (D1545) At rest no column is pinned; scrolled 60 sideways, a copy of the
+    // first column stands at the viewport's start, as wide as the column.
+    let pinned_key = 1u64 ^ hash.fnv1a64("pinned-column")
+    if testing.by_key(&harness, pinned_key).count != 0usize { os.exit(157i32) }
+    if widget.scroll_to(&runtime, testing.by_key(&harness, 1u64 + 2097152u64).element, 60.0) != ok { os.exit(158i32) }
+    f = mem.arena_from(frame_storage)
+    let (pinned_table, pinned_error) = collection.table_with(&f, 1u64, &theme, "Files", columns[0usize..3usize], narrow_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, narrow_options)
+    let (pinned_page, pinned_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if pinned_error != ok || pinned_page_error != ok { os.exit(158i32) }
+    pinned_page[0usize] = pinned_table
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), pinned_page[0usize..1usize]), time.Instant { nanos: 5300000000i64 }) != ok { os.exit(158i32) }
+    let (pinned_box, has_pinned_box) = bounds(&harness, &runtime, pinned_key)
+    if !has_pinned_box || !near(pinned_box.x, side_view.x) || !near(pinned_box.y, side_view.y) || !(pinned_box.width > columns[0usize].width - 0.5) { os.exit(159i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui collections2 v2 ok\n")
     ret ok
