@@ -26383,3 +26383,19 @@ leading edge.
 `ui_collections4_v2`, after a frame to settle in, pulls the strip 60 (its first
 item follows 60) and then past half an item (it steps to the second). The full
 UI sweep passes on Windows and Linux.
+
+## D1381 — Progress indicators keep their show timing
+
+The ProgressBar and ProgressRing specs show an indicator only after 300 ms of
+waiting and keep it at least 500 ms once shown. With
+`ProgressOptions.delayed`, the bar and ring keep that timing themselves from
+`waiting`. `busy_visible` keeps a `BusyHold` (when the wait began, when the
+indicator appeared) on a holder box keyed `key + 16384`, which is built whether
+the indicator shows or not, and asks for frames while either clock runs.
+`busy_held` puts the indicator in that holder. Skeletons can use
+`busy_visible` the same way; the note that left their timing to the caller now
+points there.
+
+`ui_progress` waits with a delayed bar: hidden at 0 and 100 ms, shown at 400,
+still shown 100 ms after the wait ends, gone 600 ms after. `ui_status_v2`
+still passes, on Windows and Linux.
