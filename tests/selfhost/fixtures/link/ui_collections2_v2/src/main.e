@@ -623,6 +623,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if held_chose.count != 1usize || held_chose.kind != .Toggle || held_chose.index != 0usize { os.exit(125i32) }
     if testing.send(&harness, input.Event { PointerUp: hold_touch }) != ok || held_chose.count != 1usize { os.exit(126i32) }
+    // (D1436) Turned to descending, the sort arrow flips by turning over
+    // `duration-short-3`: on the turn's first frame the upper half of the header
+    // cell differs from how it settles a second on.
+    var flip_sums: [2]u32 = zero
+    var flip_step = 0usize
+    while flip_step < 4usize {
+        var flip_at = 5800000000i64
+        if flip_step == 1usize { flip_at = 5800000001i64 }
+        if flip_step == 2usize { flip_at = 5900000000i64 }
+        if flip_step == 3usize { flip_at = 6900000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: flip_at }) != ok { os.exit(131i32) }
+        f = mem.arena_from(frame_storage)
+        let flip_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: row_cell }
+        var flip_options: collection.TableOptions = zero
+        let (flip_table, flip_table_error) = collection.table_with(&f, 41u64, &theme, "Builds", columns[0usize..3usize], flip_source, picked_keys[0usize..0usize], 0usize, flip_step >= 2usize, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, flip_options)
+        let (flip_page, flip_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if flip_table_error != ok || flip_page_error != ok { os.exit(131i32) }
+        flip_page[0usize] = flip_table
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), flip_page[0usize..1usize]), time.Instant { nanos: flip_at }) != ok { os.exit(131i32) }
+        if flip_step >= 2usize {
+            let (flip_header, has_flip_header) = bounds(&harness, &runtime, 42u64)
+            let (flip_shot, flip_shot_error) = testing.snapshot(&harness, a)
+            if !has_flip_header || flip_shot_error != ok { os.exit(131i32) }
+            var sum = 0u32
+            var y = 0usize
+            while y < usize(flip_header.height * 0.5) {
+                var x = 0usize
+                while x < usize(flip_header.width) {
+                    sum += u32(flip_shot.pixels[at(flip_header.x + f32(x), flip_header.y + f32(y)) + 1usize])
+                    x += 1usize
+                }
+                y += 1usize
+            }
+            flip_sums[flip_step - 2usize] = sum
+        }
+        flip_step += 1usize
+    }
+    if flip_sums[0usize] == flip_sums[1usize] { os.exit(132i32) }
     // (D1413) A failed load puts an error banner with Retry in the body, whatever
     // the rows; the header stays, and Retry retries.
     var retries = 0u32

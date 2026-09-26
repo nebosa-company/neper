@@ -1831,12 +1831,20 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         body[0usize] = title_node
         var b = 1usize
         if sorted || state.hovered {
-            var kind: control.GlyphKind = .ArrowUp
-            if sorted && descending { kind = .ArrowDown }
             if !sorted { ink = control.with_alpha(muted, 0.5) }
-            let (arrow, arrow_error) = control.icon_square(a, ink, kind, t.tokens.sizes.icon_sm)
+            let (arrow, arrow_error) = control.icon_square(a, ink, .ArrowUp, t.tokens.sizes.icon_sm)
             if arrow_error != ok { ret (zero, arrow_error) }
-            body[1usize] = arrow
+            // (D1436, docs/ux/components/HeaderRow, motion) The arrow flips by
+            // turning half a turn over `duration-short-3` on `ease-standard` (kept
+            // on the header, slot `header_key + 1048595`); reduced motion flips
+            // at once.
+            var down_goal: f32 = 0.0
+            if sorted && descending { down_goal = 1.0 }
+            let flipped = control.eased_on(t, header_key, header_key + 1048595u64, down_goal, false, t.tokens.durations.short3)
+            let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
+            if turning_error != ok { ret (zero, TooLarge) }
+            turning[0usize] = arrow
+            body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * flipped, offset: zero }, control.sized_style(t.tokens.sizes.icon_sm, t.tokens.sizes.icon_sm), turning[0usize..1usize])
             b = 2usize
         }
         var line_style = style.defaults()

@@ -26990,3 +26990,9 @@ The Choice spec fills the box and draws the tick over `duration-short-2` (`ease-
 The Link spec says that "the wash fades in `duration-short-2` with `ease-standard`". A link now eases its wash opacity to its state's (hover 8%, pressed) on itself, under slot `key + 1048594`, and always draws the wash, at 0 at rest. Reduced motion changes at once.
 
 `ui_actions_v2` checks this on Windows and Linux: on the hover's own frame the wash is not yet at the hover opacity, and 500 ms later it is. The fixture builds once more before hovering so the cell exists, and its state limits rise from 8 / 256 to 32 / 1024. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1436 — Sort arrows flip by turning
+
+The HeaderRow spec rotates the sort arrow when it flips, over `duration-short-3` with `ease-standard`. The header now always draws the up arrow and turns it by half a turn times a share. That share eases toward descending on the header cell (slot `header_key + 1048595`). The arrow always stands in its turning wrapper, so the header keeps its shape. Reduced motion flips at once. Reordered columns still do not slide.
+
+`ui_collections2_v2` turns a table from ascending to descending, on Windows and Linux. On the turn's first frame, the upper half of the header cell differs from how it settles a second later. Without the turn the two would match. All 103 `ui_*` fixtures pass on both hosts.
