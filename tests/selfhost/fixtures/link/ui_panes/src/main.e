@@ -315,6 +315,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if point_step == 2usize && widget.cursor_of(&runtime) != 2u8 { os.exit(76i32) }
         point_step += 1usize
     }
+    // (D1356) A collapsible pane at 120 set to 0 eases shut: part way after 100 ms,
+    // gone after a second (the cell is there from the second frame, and a build
+    // sees the last pump's time).
+    var fold_step = 0usize
+    while fold_step < 6usize {
+        var fold_size: f32 = 0.0
+        if fold_step < 2usize { fold_size = 120.0 }
+        var fold_at = 20000000000i64
+        if fold_step == 3usize { fold_at = 20100000000i64 }
+        if fold_step == 4usize { fold_at = 21000000000i64 }
+        if fold_step == 5usize { fold_at = 22000000000i64 }
+        frame = mem.arena_from(frame_storage)
+        let (fold_body, fold_body_error) = control.text(&frame, 0u64, "Side", &theme, control.text_options())
+        let (fold_pane, fold_pane_error) = control.resizable_pane_with(&frame, 960u64, &theme, "Side", .Horizontal, fold_size, 80.0, 300.0, widget.Change[f32] { ctx: ctx, invoke: on_size }, fold_body, true)
+        let (fold_page, fold_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if fold_body_error != ok || fold_pane_error != ok || fold_page_error != ok { os.exit(77i32) }
+        fold_page[0usize] = fold_pane
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 200.0), fold_page[0usize..1usize]), time.Instant { nanos: fold_at }) != ok { os.exit(78i32) }
+        let fold_box = testing.by_key(&harness, 961u64)
+        let (fold_area, has_fold_area) = widget.bounds_of(&runtime, fold_box.element)
+        if !has_fold_area { os.exit(79i32) }
+        if fold_step == 4usize && (fold_area.width < 1.0 || fold_area.width > 119.0) { os.exit(80i32) }
+        if fold_step == 5usize && fold_area.width > 0.5 { os.exit(81i32) }
+        fold_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui panes ok\n")
     ret ok
