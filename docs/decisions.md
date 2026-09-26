@@ -26926,3 +26926,14 @@ The DurationPicker spec's modal picker holds "a box per unit... presets as chips
 The Tooltip spec brings a tooltip in "over `duration-short-4`... fading and scaling from 80%" and takes it out over `duration-short-2`. Plain and rich tooltips now stand in a box keyed `key + 8192`, there whether shown or not. The box keeps two shares: `opening_share_over` (slot `key + 8193`, emphasized-decelerate, at once when shut) and `closing_share_over` (slot `key + 8194`, emphasized-accelerate). `scaled_in` draws a surface faded to its share and scaled from 80%, and `transient_placed` places it. Shown, the overlay keeps its semantics and key. While leaving, it drops out of the tree and its overlay is keyed `key + 8195`. Reduced motion changes at once. These helpers are for the other transient surfaces too.
 
 `ui_overlays_v2` shows a tooltip, on Windows and Linux. 50 ms in, its plate's start is not yet `inverse-surface`; a second in, it is. Once hidden, the tooltip leaves under `key + 8195`, with `key` gone, and a second later it is gone. The seven other fixtures that use tooltips still pass on both hosts.
+
+## D1428 — Menus scale and fade in
+
+The Menu spec opens a menu "over `duration-medium-1` with `ease-emphasized-decelerate`... (scale Y from 80% and fade)". The ContextMenu spec opens a pointer menu scaling from 0.95 over `duration-short-4`.
+
+`menu_at` now stands every menu in a box keyed `key + 8192`, whether open or shut. Through `menu_at_moving`, the panel is drawn at the D1427 opening share, faded and uniformly scaled from 80% over `duration-medium-1`. Submenus and the touch context menu open the same way; `context_menu_of` uses `duration-short-4` from 95%. Closing is at once: a leaving menu would still take presses, since an overlay cannot pass them through, so no exit is drawn. The scale is uniform rather than Y only. Reduced motion opens at once.
+
+Checks on Windows and Linux:
+
+- `ui_overlays_v2` opens a menu. 50 ms later its panel's start is not yet `surface-container`; a second later it is.
+- All 103 `ui_*` fixtures pass.

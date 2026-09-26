@@ -296,14 +296,27 @@ fn menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
     ret (made, made_error)
 }
 
+// (D1428, docs/ux/components/Menu, motion) A menu opens fading and scaling up
+// from 80% over `duration-medium-1` on the emphasized-decelerate curve, in a box
+// keyed `key + 8192` that is there open or shut (`menu_at_moving` takes another
+// duration and starting scale); closing is at once.
 fn menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, rim, allow_submenus, t.tokens.durations.medium1, 0.8)
+    ret (made, made_error)
+}
+
+fn menu_at_moving(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool, in_millis: u32, from: f32) -> (widget.Node, err) {
+    let entering = opening_share_over(t, key, open, in_millis)
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus, "", 0u64, dismiss)
     if panel_error != ok { ret (zero, panel_error) }
-    let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+    let (scaled, scaled_error) = scaled_in(a, panel, entering, from)
+    if scaled_error != ok { ret (zero, scaled_error) }
+    let (lifted, lifted_error) = mem.alloc[widget.Node](a, 2usize)
     if lifted_error != ok { ret (zero, TooLarge) }
-    lifted[0usize] = panel
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
+    lifted[0usize] = scaled
+    lifted[1usize] = widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize])
+    ret (widget.box(key + 8192u64, style.defaults(), lifted[1usize..2usize]), ok)
 }
 
 // v2 (D975, docs/ux/components/ContextMenu): the menu for `owner` with its
@@ -322,7 +335,9 @@ fn context_menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owne
         placement = .At
         offset = geometry.Point { x: at.x + 2.0, y: at.y + 2.0 }
     }
-    let (made, made_error) = menu_at(a, key, t, anchor, label, commands, open, dismiss, placement, offset, 8.0, true)
+    // (D1428, docs/ux/components/ContextMenu, motion) Pointer menus fade and
+    // scale from 95% over `duration-short-4`.
+    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, 8.0, true, t.tokens.durations.short4, 0.95)
     ret (made, made_error)
 }
 
