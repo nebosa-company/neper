@@ -26296,3 +26296,21 @@ which a build does not know. Touch bars have no chevrons and no fade.
 `ui_tabs_rtl` scrolls a strip to its end: the back fade stands 24 wide beside
 the back chevron and there is no forward fade. `ui_navigation2_v2` still
 passes, on Windows and Linux.
+
+## D1376 — Entries decelerate and exits accelerate
+
+Several specs call for the emphasized pair where the eases used the standard
+in-out: the pane collapse (D1356), the picker sheet (D1332 and D1360), the
+destination pill's fill (D1317) and the popup entry (D1364).
+`e.ui.animation.Curve` gains `EmphasizedDecelerate` and
+`EmphasizedAccelerate`, the CSS cubic Beziers (0.05, 0.7, 0.1, 1) and
+(0.3, 0, 0.8, 0.15). `animation.bezier` solves the curve's x by halving the
+parameter 24 times. `control.eased_emphasized` is `eased_on` that decelerates
+toward a higher goal and accelerates toward a lower one, and those four sites
+use it. `eased_on` keeps the standard curve for everything else.
+
+`ui_testing` finds the pair half way at 0.950 and 0.154 with their ends held.
+The pane, picker, popup and navigation fixtures (`ui_panes`, `ui_pickers_v2`,
+`ui_pickers`, `ui_entry`, `ui_overlays2_v2`, `ui_overlays3_v2`,
+`ui_presentation`, `ui_navigation`, `ui_navigation3_v2`, `ui_desktop`) pass
+on Windows, and the first six on Linux.

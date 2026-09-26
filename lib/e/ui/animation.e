@@ -9,7 +9,9 @@
 use e.time
 use e.ui.widget
 
-type Curve = enum u8 { Linear, EaseIn, EaseOut, EaseInOut }
+// (D1376) The emphasized pair: `ease-emphasized-decelerate` is the cubic
+// Bezier (0.05, 0.7, 0.1, 1), `ease-emphasized-accelerate` (0.3, 0, 0.8, 0.15).
+type Curve = enum u8 { Linear, EaseIn, EaseOut, EaseInOut, EmphasizedDecelerate, EmphasizedAccelerate }
 type Controller = struct { start: time.Instant, duration: time.Duration, curve: Curve, repeating: bool, reverse: bool }
 
 fn controller(now: time.Instant, duration: time.Duration, curve: Curve) -> Controller {
@@ -41,6 +43,8 @@ fn fraction(c: *const Controller, now: time.Instant) -> f32 {
 }
 
 fn ease(curve: Curve, t: f32) -> f32 {
+    if curve == .EmphasizedDecelerate { ret bezier(0.05, 0.7, 0.1, 1.0, t) }
+    if curve == .EmphasizedAccelerate { ret bezier(0.3, 0.0, 0.8, 0.15, t) }
     if curve == .EaseIn { ret t * t }
     if curve == .EaseOut { ret 1.0 - (1.0 - t) * (1.0 - t) }
     if curve == .EaseInOut {
@@ -49,6 +53,26 @@ fn ease(curve: Curve, t: f32) -> f32 {
         ret 1.0 - 2.0 * u * u
     }
     ret t
+}
+
+// (D1376) A CSS cubic Bezier from (0, 0) to (1, 1) through (x1, y1) and
+// (x2, y2): the y where the curve's x is `t`, found by halving the parameter.
+fn bezier(x1: f32, y1: f32, x2: f32, y2: f32, t: f32) -> f32 {
+    if !(t > 0.0) { ret 0.0 }
+    if !(t < 1.0) { ret 1.0 }
+    var lo: f32 = 0.0
+    var hi: f32 = 1.0
+    var s: f32 = t
+    var step = 0usize
+    while step < 24usize {
+        s = (lo + hi) * 0.5
+        let u = 1.0 - s
+        let x = 3.0 * u * u * s * x1 + 3.0 * u * s * s * x2 + s * s * s
+        if x < t { lo = s } else { hi = s }
+        step += 1usize
+    }
+    let u = 1.0 - s
+    ret 3.0 * u * u * s * y1 + 3.0 * u * s * s * y2 + s * s * s
 }
 
 fn value(c: *const Controller, now: time.Instant) -> f32 {

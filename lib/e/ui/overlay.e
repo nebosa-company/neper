@@ -1591,7 +1591,7 @@ fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
 fn opening_share(t: *const control.Theme, key: widget.Key, open: bool) -> f32 {
     var open_goal: f32 = 0.0
     if open { open_goal = 1.0 }
-    ret control.eased_on(t, key + 8192u64, key + 8193u64, open_goal, true, t.tokens.durations.short4)
+    ret control.eased_emphasized(t, key + 8192u64, key + 8193u64, open_goal, true, t.tokens.durations.short4)
 }
 
 // (D1364, docs/ux/components/Popup, motion) A surface part way open: faded to
