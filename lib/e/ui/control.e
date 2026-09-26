@@ -32,7 +32,9 @@ type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Fon
 // A button's look: its fill, whether it takes presses, and whether it is busy with
 // what it started (the label hidden in place under a progress ring, D942).
 type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool }
-type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str }
+// (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
+// theme's fonts that match best lead the fallback chain (`text_style_faced`).
+type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str, weight: u32, italic: bool, mono: bool }
 // A span of rich text; a linked span fires `link` when tapped, so the spans must
 // outlive the element the way an action's context does.
 type Span = struct { value: str, role: style.TextRole, color: style.ColorRole, link: widget.Submit }
@@ -43,7 +45,7 @@ const ROLE_LINK: u8 = 9u8
 const ROLE_TEXT: u8 = 6u8
 
 fn text_options() -> TextOptions {
-    ret TextOptions { role: .Body, color: .Text, align: .Start, wrap: .Word, max_lines: 0u32, ellipsis: "" }
+    ret TextOptions { role: .Body, color: .Text, align: .Start, wrap: .Word, max_lines: 0u32, ellipsis: "", weight: 0u32, italic: false, mono: false }
 }
 
 // The layout style of a text role: the theme's fonts at the role's size, its line
@@ -60,13 +62,46 @@ fn text_style(a: *mem.Arena, t: *const Theme, role: style.TextRole) -> (layout.S
     ret (layout.Style { fonts: choices, language: t.language, line_height: sized.line_height }, ok)
 }
 
+// (D1453) `text_style` with the theme's fonts ordered so the face nearest the
+// options' weight, italic and fixed pitch comes first (a missing italic or mono
+// face costs more than any weight gap); ties keep the theme's order.
+fn text_style_faced(a: *mem.Arena, t: *const Theme, options: TextOptions) -> (layout.Style, err) {
+    let (made, made_error) = text_style(a, t, options.role)
+    if made_error != ok { ret (zero, made_error) }
+    if (options.weight == 0u32 && !options.italic && !options.mono) || made.fonts.len < 2usize { ret (made, ok) }
+    let (ordered, ordered_error) = mem.alloc[layout.FontChoice](a, made.fonts.len)
+    let (costs, costs_error) = mem.alloc[u32](a, made.fonts.len)
+    if ordered_error != ok || costs_error != ok { ret (zero, TooLarge) }
+    var want = options.weight
+    if want == 0u32 { want = 400u32 }
+    var i = 0usize
+    while i < made.fonts.len {
+        let traits = shape.face_traits(made.fonts[i].font)
+        var cost = 0u32
+        if traits.weight > want { cost = traits.weight - want } else { cost = want - traits.weight }
+        if traits.italic != options.italic { cost += 2000u32 }
+        if traits.mono != options.mono { cost += 4000u32 }
+        // Insertion keeps the theme's order among equal costs.
+        var at = i
+        while at > 0usize && costs[at - 1usize] > cost {
+            costs[at] = costs[at - 1usize]
+            ordered[at] = ordered[at - 1usize]
+            at -= 1usize
+        }
+        costs[at] = cost
+        ordered[at] = made.fonts[i]
+        i += 1usize
+    }
+    ret (layout.Style { fonts: ordered, language: made.language, line_height: made.line_height }, ok)
+}
+
 fn text_node(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions) -> (widget.Node, err) {
     let (node, node_error) = colored_text(a, key, value, t, options, style.color(t.tokens, options.color))
     ret (node, node_error)
 }
 
 fn colored_text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions, color: paint.Color) -> (widget.Node, err) {
-    let (text_look, style_error) = text_style(a, t, options.role)
+    let (text_look, style_error) = text_style_faced(a, t, options)
     if style_error != ok { ret (zero, style_error) }
     ret (widget.text(key, widget.Text { value: value, style: text_look, color: color, wrap: options.wrap, align: options.align, max_lines: options.max_lines, ellipsis: options.ellipsis }, style.defaults()), ok)
 }
@@ -221,6 +256,17 @@ fn span_role(kind: SpanKind, base: style.TextRole) -> style.TextRole {
     ret base
 }
 
+// (D1453) A span kind's text options under a base role: emphasis asks for an
+// italic face, code and keys a fixed-pitch one.
+fn span_options(kind: SpanKind, base: style.TextRole) -> TextOptions {
+    var out = text_options()
+    out.role = span_role(kind, base)
+    out.wrap = .None
+    out.italic = kind == .Emphasis
+    out.mono = kind == .Code || kind == .Key
+    ret out
+}
+
 // Whether a span is laid as one piece that never breaks inside.
 fn span_whole(kind: SpanKind) -> bool {
     ret kind == .Code || kind == .Key || kind == .Mention || kind == .Link
@@ -229,8 +275,16 @@ fn span_whole(kind: SpanKind) -> bool {
 // The advance of a run of text in a role (its trailing spaces included), the width
 // that must fit (without them) and its first baseline; nothing without fonts.
 fn run_metrics(a: *mem.Arena, t: *const Theme, role: style.TextRole, words: str) -> (f32, f32, f32, err) {
+    var plain = text_options()
+    plain.role = role
+    let (width, fit, baseline, metrics_error) = run_metrics_faced(a, t, plain, words)
+    ret (width, fit, baseline, metrics_error)
+}
+
+// (D1453) `run_metrics` in the face the options ask for.
+fn run_metrics_faced(a: *mem.Arena, t: *const Theme, options: TextOptions, words: str) -> (f32, f32, f32, err) {
     if t.fonts.len == 0usize || words.len == 0usize { ret (0.0, 0.0, 0.0, ok) }
-    let (look, look_error) = text_style(a, t, role)
+    let (look, look_error) = text_style_faced(a, t, options)
     if look_error != ok { ret (0.0, 0.0, 0.0, look_error) }
     let (laid, laid_error) = layout.layout(a, words, look, layout.Options { width: 0.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "" })
     if laid_error != ok { ret (0.0, 0.0, 0.0, laid_error) }
@@ -258,7 +312,9 @@ fn run_metrics(a: *mem.Arena, t: *const Theme, role: style.TextRole, words: str)
 // ellipsis after the last whole piece that fits, so a link is never cut. Links
 // and mentions are Link nodes keyed `key + 1 + span index`; the paragraph is a
 // Text named by all its words.
-// ponytail: emphasis is upright (no italic face), a key is the code line's
+// (D1453) Emphasis takes the theme's italic face and code and keys its
+// fixed-pitch one, where the theme has them.
+// ponytail: a key is the code line's
 // height with a 1px edge (not 24 with a 2px foot), and the word pieces are also
 // Text nodes of their own; a Custom paragraph node would fold them into one.
 fn paragraph(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const RichSpan, options: RichOptions) -> (widget.Node, err) {
@@ -296,7 +352,7 @@ fn paragraph(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ric
                 while end < span.value.len && span.value[end] != 32u8 { end += 1usize }
                 while end < span.value.len && span.value[end] == 32u8 { end += 1usize }
             }
-            let (width, fit, baseline, width_error) = run_metrics(a, t, role, span.value[k..end])
+            let (width, fit, baseline, width_error) = run_metrics_faced(a, t, span_options(span.kind, options.role), span.value[k..end])
             if width_error != ok { ret (zero, width_error) }
             var sides: f32 = 0.0
             if span.kind == .Code || span.kind == .Key { sides = 2.0 * t.tokens.spacing.xs }
@@ -424,9 +480,7 @@ fn rich_piece(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ri
     var ink = style.color(t.tokens, span.color)
     if span.kind == .Mention || span.kind == .Link { ink = style.color(t.tokens, .Primary) }
     if span.kind == .Link && span.visited { ink = style.color(t.tokens, .LinkVisited) }
-    var said = text_options()
-    said.role = role
-    said.wrap = .None
+    let said = span_options(span.kind, options.role)
     let (words, words_error) = colored_text(a, 0u64, span.value[piece.start..piece.end], t, said, ink)
     if words_error != ok { ret (zero, words_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
@@ -3901,10 +3955,11 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // v2 (D951): filled or outlined, and the fixed text before and after the value;
 // (D956) room kept clear at the end for a control standing inside it; (D960) a
 // height other than the density's (0 keeps it), `body-medium` at 40 or less.
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32 }
+// (D1453) `mono` sets the typed text in the theme's fixed-pitch face.
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0 }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -3960,7 +4015,10 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     var value_role: style.TextRole = .BodyLarge
     if dense || h <= t.tokens.sizes.control_md { value_role = .BodyMedium }
     let line = style.text_style(t.tokens, value_role).line_height
-    let (text_look, style_error) = text_style(a, t, value_role)
+    var value_options = text_options()
+    value_options.role = value_role
+    value_options.mono = options.mono
+    let (text_look, style_error) = text_style_faced(a, t, value_options)
     if style_error != ok { ret (zero, style_error) }
     let multiline = options.rows > 1u32
     let floated = label.len != 0usize && !dense && (focused || len != 0usize)

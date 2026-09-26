@@ -6,6 +6,8 @@ use e.io
 use e.mem
 use e.os
 use e.text.shape
+use e.ui.control
+use e.ui.style
 
 type Builder = struct { bytes: []u8, at: usize }
 
@@ -263,6 +265,32 @@ fn build(bytes: []u8, legacy: bool) -> usize {
     ret b.at
 }
 
+// (D1453) A face of nothing but `OS/2` and `post`: its weight class, italic bit
+// and fixed pitch.
+fn traits_face(bytes: []u8, weight: u32, italic: bool, mono: bool) -> usize {
+    var b = Builder { bytes: bytes, at: 0usize }
+    w32(&b, 65536u32)
+    w16(&b, 2u32)
+    zeros(&b, 6usize + 16usize * 2usize)
+    let os2 = b.at
+    zeros(&b, 4usize)
+    w16(&b, weight)
+    zeros(&b, 56usize)
+    var selection = 0u32
+    if italic { selection = 1u32 }
+    w16(&b, selection)
+    zeros(&b, 32usize)
+    table(&b, 0usize, 1330851634u32, os2)
+    let post = b.at
+    zeros(&b, 12usize)
+    var pitch = 0u32
+    if mono { pitch = 1u32 }
+    w32(&b, pitch)
+    zeros(&b, 16usize)
+    table(&b, 1usize, 1886352244u32, post)
+    ret b.at
+}
+
 fn near(x: f32, y: f32) -> bool {
     let d = x - y
     ret d < 0.0001 && d > -0.0001
@@ -342,6 +370,49 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let odd = shape.Font { id: 9u32, data: odd_bytes[0..odd_len], face_index: 0u32 }
     let (_, odd_error) = shape.shape(a, odd, "a", plain)
     if odd_error != shape.Unsupported { os.exit(18i32) }
+
+    // (D1453) Face traits: a 700 face, an italic one, a fixed-pitch one, and a face
+    // with neither table reads 400, upright and proportional.
+    var regular_bytes: [256]u8 = zero
+    var bold_bytes: [256]u8 = zero
+    var italic_bytes: [256]u8 = zero
+    var mono_bytes: [256]u8 = zero
+    let regular_len = traits_face(regular_bytes[0..], 400u32, false, false)
+    let bold_len = traits_face(bold_bytes[0..], 700u32, false, false)
+    let italic_len = traits_face(italic_bytes[0..], 400u32, true, false)
+    let mono_len = traits_face(mono_bytes[0..], 400u32, false, true)
+    var faces: [4]shape.Font = zero
+    faces[0usize] = shape.Font { id: 21u32, data: regular_bytes[0..regular_len], face_index: 0u32 }
+    faces[1usize] = shape.Font { id: 22u32, data: bold_bytes[0..bold_len], face_index: 0u32 }
+    faces[2usize] = shape.Font { id: 23u32, data: italic_bytes[0..italic_len], face_index: 0u32 }
+    faces[3usize] = shape.Font { id: 24u32, data: mono_bytes[0..mono_len], face_index: 0u32 }
+    let bold_traits = shape.face_traits(faces[1usize])
+    let italic_traits = shape.face_traits(faces[2usize])
+    let mono_traits = shape.face_traits(faces[3usize])
+    let bare_traits = shape.face_traits(font)
+    if bold_traits.weight != 700u32 || bold_traits.italic || bold_traits.mono { os.exit(19i32) }
+    if italic_traits.weight != 400u32 || !italic_traits.italic || italic_traits.mono { os.exit(20i32) }
+    if !mono_traits.mono || mono_traits.italic { os.exit(21i32) }
+    if bare_traits.weight != 400u32 || bare_traits.italic || bare_traits.mono { os.exit(22i32) }
+    // (D1453) A text asking for 600 leads with the 700 face, for italic with the
+    // italic one, for fixed pitch with the mono one; plain text keeps the theme's
+    // order.
+    let tokens = style.reference(.Light)
+    let theme = control.Theme { tokens: &tokens, fonts: faces[0usize..4usize], language: "", runtime: zero }
+    var asked = control.text_options()
+    let (plain_look, plain_error) = control.text_style_faced(a, &theme, asked)
+    if plain_error != ok || plain_look.fonts[0usize].font.id != 21u32 { os.exit(23i32) }
+    asked.weight = 600u32
+    let (heavy_look, heavy_error) = control.text_style_faced(a, &theme, asked)
+    if heavy_error != ok || heavy_look.fonts[0usize].font.id != 22u32 || heavy_look.fonts.len != 4usize { os.exit(24i32) }
+    asked.weight = 0u32
+    asked.italic = true
+    let (slanted_look, slanted_error) = control.text_style_faced(a, &theme, asked)
+    if slanted_error != ok || slanted_look.fonts[0usize].font.id != 23u32 { os.exit(25i32) }
+    asked.italic = false
+    asked.mono = true
+    let (fixed_look, fixed_error) = control.text_style_faced(a, &theme, asked)
+    if fixed_error != ok || fixed_look.fonts[0usize].font.id != 24u32 { os.exit(26i32) }
 
     try io.print("text shape ok\n")
     ret ok

@@ -4439,7 +4439,8 @@ fn contains_folded(hay: str, needle: []const u8) -> bool {
 // (keyed `key + 400 + index`, named "Reset NAME") reporting the index through
 // `reset`; a message stands under the editor in `body-small` `error` after a
 // 16 `error` icon, and the row grows.
-// ponytail: the modified name is not 600 weight (no weighted role); read-only
+// (D1453) A modified name asks for a 600 face.
+// ponytail: read-only
 // and Mixed values are the caller's
 // editors; no draggable column divider, selected row or touch list form.
 fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32, options: PropertyGridOptions) -> (widget.Node, err) {
@@ -4529,6 +4530,9 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     caption.wrap = .None
                     caption.ellipsis = "…"
                     caption.max_lines = 1u32
+                    // (D1453) A modified property's name takes a 600 face where
+                    // the theme has one.
+                    if standing.modified { caption.weight = 600u32 }
                     let (name_node, name_error) = control.colored_text(a, 0u64, p.name, t, caption, name_ink)
                     if name_error != ok { ret (zero, name_error) }
                     let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
@@ -4918,12 +4922,13 @@ fn key_value_mode(a: *mem.Arena, key: widget.Key, t: *const control.Theme, text_
 // and one more line (at least four), "One NAME=value per line" in `body-small`
 // `on-surface-variant` under it (or `text_error` as its error), then the mode
 // switch.
-// ponytail: the area is the theme's face, not a mono `code` face.
+// (D1453) The area asks for the theme's fixed-pitch face.
 fn key_value_text(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, width: f32, options: KeyValueOptions) -> (widget.Node, err) {
     let area_key = key ^ hash.fnv1a64("kv-text")
     var lines = u32(pairs.len + 1usize)
     if lines < 4u32 { lines = 4u32 }
     var field = control.field_options()
+    field.mono = true
     field.width = width
     field.rows = lines
     field.invalid = options.text_error.len != 0usize
