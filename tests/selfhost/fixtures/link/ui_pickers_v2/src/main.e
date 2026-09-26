@@ -559,6 +559,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), tall_page[0usize..1usize]), time.Instant { nanos: 3600000000i64 }) != ok { os.exit(123i32) }
     let (tall_view, has_tall_view) = bounds(&harness, &runtime, 1300u64 + 1048576u64)
     if !has_tall_view || !near(tall_view.height, 352.0) { os.exit(124i32) }
+    // (D1405) Its handle drawn up 60 grows it to 90%: the rows' viewport is 568.
+    f = mem.arena_from(frame_storage)
+    let (warm_sheet, warm_sheet_error) = control.picker(&f, 1300u64, &theme, "Many", many_words[..], 0usize, true, &stores[0usize].press, many_picks[..], .Sheet)
+    let (warm_page, warm_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if warm_sheet_error != ok || warm_page_error != ok { os.exit(160i32) }
+    warm_page[0usize] = warm_sheet
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), warm_page[0usize..1usize]), time.Instant { nanos: 3605000000i64 }) != ok { os.exit(161i32) }
+    let (tall_handle, has_tall_handle) = bounds(&harness, &runtime, 1300u64 + 1048580u64)
+    if !has_tall_handle || testing.drag(&harness, geometry.Point { x: tall_handle.x + tall_handle.width * 0.5, y: tall_handle.y + tall_handle.height * 0.5 }, geometry.Point { x: tall_handle.x + tall_handle.width * 0.5, y: tall_handle.y + tall_handle.height * 0.5 - 60.0 }, 4usize) != ok { os.exit(156i32) }
+    f = mem.arena_from(frame_storage)
+    let (grown_sheet, grown_sheet_error) = control.picker(&f, 1300u64, &theme, "Many", many_words[..], 0usize, true, &stores[0usize].press, many_picks[..], .Sheet)
+    let (grown_page, grown_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if grown_sheet_error != ok || grown_page_error != ok { os.exit(157i32) }
+    grown_page[0usize] = grown_sheet
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), grown_page[0usize..1usize]), time.Instant { nanos: 3610000000i64 }) != ok { os.exit(158i32) }
+    let (grown_view, has_grown_view) = bounds(&harness, &runtime, 1300u64 + 1048576u64)
+    if !has_grown_view || !near(grown_view.height, 568.0) { os.exit(159i32) }
     // (D1307) The month button toggles the year view; there, 2026 is chosen and
     // a press on 2030 shows March 2030 and leaves the view.
     var year_step = 0usize
