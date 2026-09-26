@@ -4610,9 +4610,27 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     var project_src = ""
     var has_root = false
     var json = false
-    var at = 3usize
+    var recover = false
+    var fault_kind = 0usize
+    var fault_after = 0usize
+    var at = 2usize
     while at < args.len {
         if same(args[at], "--json") { json = true }
+        if same(args[at], "--recover") { recover = true }
+        // `--fault-apply N` (D1519): the apply dies after N files are replaced, as a
+        // crash would, the journal and the lock left for `--recover`.
+        if same(args[at], "--fault-apply") && at + 1usize < args.len {
+            fault_kind = 1usize
+            fault_after = decimal_value(args[at + 1usize])
+            at += 1usize
+        }
+        // `--fault-edit N`: a writer that does not take the lock edits the file the
+        // apply is about to replace after N, which the check before it must catch.
+        if same(args[at], "--fault-edit") && at + 1usize < args.len {
+            fault_kind = 2usize
+            fault_after = decimal_value(args[at + 1usize])
+            at += 1usize
+        }
         if same(args[at], "--root") && at + 1usize < args.len {
             root = args[at + 1usize]
             has_root = true
@@ -4633,6 +4651,9 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
         sink = &out
         try write_all(&out, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"apply-plan\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
     }
+    let (dot_dir, dot_dir_error) = transaction_dir(a, root)
+    if dot_dir_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "`.neper` cannot be made under the root") }
+    if recover { ret recover_transaction(a, &out, sink, dot_dir, json) }
     let (plan, plan_error) = graph.load_file(a, args[2usize])
     if plan_error != ok { ret apply_plan_refused(sink, "E-CLI-9999", "the plan cannot be read") }
     // Size the edit tables from the plan (D562, H29): compiler-wide structured
@@ -4650,6 +4671,15 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     if file_paths_error != ok { ret file_paths_error }
     let (file_texts, file_texts_error) = mem.alloc[str](a, PLAN_FILES)
     if file_texts_error != ok { ret file_texts_error }
+    // (D1519) Each file's precondition digest and spelling, and its new bytes.
+    let (file_digests, file_digests_error) = mem.alloc[str](a, PLAN_FILES)
+    if file_digests_error != ok { ret file_digests_error }
+    let (file_names, file_names_error) = mem.alloc[str](a, PLAN_FILES)
+    if file_names_error != ok { ret file_names_error }
+    let (file_results, file_results_error) = mem.alloc[[]u8](a, PLAN_FILES)
+    if file_results_error != ok { ret file_results_error }
+    let (file_edits, file_edits_error) = mem.alloc[usize](a, PLAN_FILES)
+    if file_edits_error != ok { ret file_edits_error }
     let (edit_file, edit_file_error) = mem.alloc[usize](a, edit_capacity)
     if edit_file_error != ok { ret edit_file_error }
     let (edit_start, edit_start_error) = mem.alloc[usize](a, edit_capacity)
@@ -4685,6 +4715,8 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
             if !same(digest, json_str_after(line, "\"sha256\":\"")) { ret apply_plan_refused_file(sink, "E-TOOL-0003", json_str_after(line, "\"path\":\""), " changed since the plan was made; nothing applied") }
             file_paths[file_count] = path
             file_texts[file_count] = text
+            file_digests[file_count] = digest
+            file_names[file_count] = json_str_after(line, "\"path\":\"")
             file_count += 1usize
         }
         if same(kind, "edit") {
@@ -4755,14 +4787,20 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
                 order_at += 1usize
             }
             n = nptest_append(bytes, n, original[cursor..original.len])
-            try save_bytes(a, file_paths[file_at], bytes[0usize..n])
-            if !json {
-                try write_all(&out, "applied ")
-                try write_usize(&out, ordered)
-                try write_all(&out, " edits to ")
-                try write_all(&out, file_paths[file_at])
-                try write_all(&out, "\n")
-            }
+            file_results[file_at] = bytes[0usize..n]
+        }
+        file_edits[file_at] = ordered
+        file_at += 1usize
+    }
+    try apply_transaction(a, sink, dot_dir, file_paths[0usize..file_count], file_names[0usize..file_count], file_texts[0usize..file_count], file_digests[0usize..file_count], file_results[0usize..file_count], file_edits[0usize..file_count], fault_kind, fault_after)
+    file_at = 0usize
+    while file_at < file_count && !json {
+        if file_edits[file_at] != 0usize {
+            try write_all(&out, "applied ")
+            try write_usize(&out, file_edits[file_at])
+            try write_all(&out, " edits to ")
+            try write_all(&out, file_paths[file_at])
+            try write_all(&out, "\n")
         }
         file_at += 1usize
     }
@@ -4796,6 +4834,262 @@ fn apply_plan_refused_file(report: *Sink, code: str, path: str, tail: str) -> er
     let refused = apply_plan_refused(report, code, message_storage[..message.count])
     report.symbol_text = ""
     ret refused
+}
+
+// (D1519, H15) The transaction boundary of `apply-plan`. A project's source
+// transactions coordinate through `<root>/.neper/transaction.lock`, a file made by
+// one exclusive create -- atomic on both hosts -- which is the lock: an apply that
+// finds it takes nothing and writes nothing. Under the lock every precondition is
+// hashed again, each changed file's original is kept beside the lock as
+// `transaction.N.orig` with a journal, `transaction.journal`, naming it and both
+// digests, and only then are the files replaced, each by one atomic replace, each
+// re-hashed just before; when one no longer holds its precondition, the files
+// already replaced are put back and the apply refused. A completed apply retires the
+// journal and the lock, each by one rename; the originals stay until the next apply
+// writes its own. A crash leaves the journal and the lock: the next apply refuses,
+// and `apply-plan --recover --root DIR` puts back every file that holds its new
+// digest, leaves one that holds its original, and keeps the original of any other
+// -- an edit made since -- refusing to overwrite it. Visibility: each file changes
+// at once; the set is consistent to a reader that takes the lock. A writer that does
+// not take it is detected, never prevented.
+fn transaction_dir(a: *mem.Arena, root: str) -> (str, err) {
+    let (dot_dir, dot_error) = tool.manifest_join(a, root, ".neper")
+    if dot_error != ok { ret ("", dot_error) }
+    let made = ensure_dir(a, dot_dir)
+    if made != ok { ret ("", made) }
+    ret (dot_dir, ok)
+}
+
+// `<.neper>/transaction<suffix>`.
+fn transaction_file(a: *mem.Arena, dot_dir: str, suffix: str) -> (str, err) {
+    let (name, name_error) = mem.alloc[u8](a, 11usize + suffix.len)
+    if name_error != ok { ret ("", name_error) }
+    var n = nptest_append(name, 0usize, "transaction")
+    n = nptest_append(name, n, suffix)
+    let (path, path_error) = tool.manifest_join(a, dot_dir, name[0usize..n])
+    ret (path, path_error)
+}
+
+fn transaction_backup(a: *mem.Arena, dot_dir: str, index: usize) -> (str, err) {
+    var digits: [32]u8 = zero
+    var n = nptest_append(digits[..], 0usize, ".")
+    n = nptest_append_decimal(digits[..], n, index)
+    n = nptest_append(digits[..], n, ".orig")
+    let (path, path_error) = transaction_file(a, dot_dir, digits[0usize..n])
+    ret (path, path_error)
+}
+
+fn apply_transaction(a: *mem.Arena, sink: *Sink, dot_dir: str, paths: []str, names: []str, originals: []str, digests: []str, results: [][]u8, edits: []usize, fault_kind: usize, fault_after: usize) -> err {
+    let (lock_path, lock_path_error) = transaction_file(a, dot_dir, ".lock")
+    if lock_path_error != ok { ret lock_path_error }
+    let (lock_file, locked) = os.create_new(a, lock_path)
+    if locked == os.Exists { ret apply_plan_refused(sink, "E-TOOL-0003", "`.neper/transaction.lock` is held: another apply is writing these sources, or one was interrupted and `apply-plan --recover` restores its files; nothing applied") }
+    if locked != ok { ret locked }
+    try os.close(lock_file)
+    // Every precondition again, under the lock.
+    var at = 0usize
+    while at < paths.len {
+        if !file_holds(a, paths[at], digests[at]) {
+            release_transaction(a, dot_dir)
+            ret apply_plan_refused_file(sink, "E-TOOL-0003", names[at], " changed since the plan was made; nothing applied")
+        }
+        at += 1usize
+    }
+    // The originals and the journal, before any file is replaced.
+    let (new_digests, new_digests_error) = mem.alloc[str](a, paths.len + 1usize)
+    if new_digests_error != ok { ret new_digests_error }
+    var journal_size = 64usize
+    at = 0usize
+    while at < paths.len {
+        journal_size += paths[at].len * 2usize + 256usize
+        at += 1usize
+    }
+    let (journal_storage, journal_storage_error) = mem.alloc[u8](a, journal_size)
+    if journal_storage_error != ok { ret journal_storage_error }
+    var journal = capture_sink(journal_storage)
+    at = 0usize
+    while at < paths.len {
+        if edits[at] != 0usize {
+            let (digest, digest_error) = artifact_hash.sha256_hex(a, results[at])
+            if digest_error != ok { ret digest_error }
+            new_digests[at] = digest
+            let (backup, backup_error) = transaction_backup(a, dot_dir, at)
+            if backup_error != ok { ret backup_error }
+            let (original, original_error) = mem.alloc[u8](a, originals[at].len)
+            if original_error != ok { ret original_error }
+            let copied = nptest_append(original, 0usize, originals[at])
+            try save_bytes(a, backup, original[0usize..copied])
+            try write_all(&journal, "{\"path\":")
+            try write_json_string(&journal, paths[at])
+            try write_all(&journal, ",\"original_sha256\":\"")
+            try write_all(&journal, digests[at])
+            try write_all(&journal, "\",\"new_sha256\":\"")
+            try write_all(&journal, digest)
+            try write_all(&journal, "\",\"backup\":")
+            try write_json_string(&journal, backup)
+            try write_all(&journal, "}\n")
+        }
+        at += 1usize
+    }
+    let (journal_path, journal_path_error) = transaction_file(a, dot_dir, ".journal")
+    if journal_path_error != ok { ret journal_path_error }
+    try save_bytes(a, journal_path, journal_storage[0usize..journal.count])
+    // The files, each checked once more just before its replace.
+    var replaced = 0usize
+    at = 0usize
+    while at < paths.len {
+        if edits[at] != 0usize {
+            if fault_kind == 1usize && replaced == fault_after { os.exit(3i32) }
+            if fault_kind == 2usize && replaced == fault_after { try append_fault(a, paths[at]) }
+            if !file_holds(a, paths[at], digests[at]) {
+                // An edit made since the lock was taken, by a writer that does not take
+                // it: the files replaced so far go back, and nothing is applied.
+                roll_back(a, dot_dir, paths[0usize..at], digests, new_digests, edits)
+                release_transaction(a, dot_dir)
+                ret apply_plan_refused_file(sink, "E-TOOL-0003", names[at], " changed during the apply; the files already written were restored; nothing applied")
+            }
+            try save_bytes(a, paths[at], results[at])
+            replaced += 1usize
+        }
+        at += 1usize
+    }
+    release_transaction(a, dot_dir)
+    ret ok
+}
+
+// `--fault-edit` (D1519): one byte appended to the file, as another writer would.
+fn append_fault(a: *mem.Arena, path: str) -> err {
+    let (text, read_error) = graph.load_file(a, path)
+    if read_error != ok { ret read_error }
+    let (bytes, bytes_error) = mem.alloc[u8](a, text.len + 1usize)
+    if bytes_error != ok { ret bytes_error }
+    var n = nptest_append(bytes, 0usize, text)
+    n = nptest_append(bytes, n, "\n")
+    ret write_file(a, path, bytes[0usize..n])
+}
+
+// Whether the file holds the digest now.
+fn file_holds(a: *mem.Arena, path: str, digest: str) -> bool {
+    let mark = mem.mark(a)
+    let (text, read_error) = graph.load_file(a, path)
+    var holds = false
+    if read_error == ok {
+        let (now, now_error) = artifact_hash.sha256_hex(a, text)
+        holds = now_error == ok && same(now, digest)
+    }
+    mem.reset(a, mark)
+    ret holds
+}
+
+// The replaced files among `paths` put back from their originals, each only while
+// it still holds the digest the apply wrote.
+fn roll_back(a: *mem.Arena, dot_dir: str, paths: []str, digests: []str, new_digests: []str, edits: []usize) {
+    var at = 0usize
+    while at < paths.len {
+        if edits[at] != 0usize && file_holds(a, paths[at], new_digests[at]) {
+            let (backup, backup_error) = transaction_backup(a, dot_dir, at)
+            if backup_error == ok {
+                let (original, read_error) = graph.load_file(a, backup)
+                if read_error == ok {
+                    let (bytes, bytes_error) = mem.alloc[u8](a, original.len)
+                    if bytes_error == ok {
+                        let copied = nptest_append(bytes, 0usize, original)
+                        let restored = save_bytes(a, paths[at], bytes[0usize..copied])
+                    }
+                }
+            }
+        }
+        at += 1usize
+    }
+}
+
+// The journal retired, then the lock, each by one rename (the journal first: a lock
+// without a journal is an apply that replaced nothing).
+fn release_transaction(a: *mem.Arena, dot_dir: str) {
+    let (journal_path, journal_path_error) = transaction_file(a, dot_dir, ".journal")
+    let (journal_done, journal_done_error) = transaction_file(a, dot_dir, ".journal.done")
+    if journal_path_error == ok && journal_done_error == ok { let journal_retired = os.replace(a, journal_path, journal_done, true, false) }
+    let (lock_path, lock_path_error) = transaction_file(a, dot_dir, ".lock")
+    let (lock_done, lock_done_error) = transaction_file(a, dot_dir, ".lock.released")
+    if lock_path_error == ok && lock_done_error == ok { let lock_retired = os.replace(a, lock_path, lock_done, true, false) }
+}
+
+// `apply-plan --recover --root DIR` (D1519): an interrupted apply undone from its
+// journal. A file holding its new digest gets its original back; one holding its
+// original is left; any other was edited since, and its original is kept in the
+// lock directory, the lock with it, and the recovery refused (E-TOOL-0003).
+fn recover_transaction(a: *mem.Arena, out: *Sink, sink: *Sink, dot_dir: str, json: bool) -> err {
+    let (journal_path, journal_path_error) = transaction_file(a, dot_dir, ".journal")
+    if journal_path_error != ok { ret journal_path_error }
+    var restored = 0usize
+    var untouched = 0usize
+    var conflict = ""
+    var conflict_backup = ""
+    var entries = 0usize
+    let (journal, journal_error) = graph.load_file(a, journal_path)
+    if journal_error == ok {
+        var line_start = 0usize
+        while line_start < journal.len {
+            var line_end = line_start
+            while line_end < journal.len && journal[line_end] != 10u8 { line_end += 1usize }
+            let line = journal[line_start..line_end]
+            line_start = line_end + 1usize
+            if line.len == 0usize { continue }
+            let (path, path_error) = json_unescaped_after(a, line, "\"path\":\"")
+            let (backup, backup_error) = json_unescaped_after(a, line, "\"backup\":\"")
+            if path_error != ok || backup_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "the transaction journal cannot be read") }
+            entries += 1usize
+            if file_holds(a, path, json_str_after(line, "\"new_sha256\":\"")) {
+                let (original, read_error) = graph.load_file(a, backup)
+                if read_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "an original the journal names cannot be read") }
+                let (bytes, bytes_error) = mem.alloc[u8](a, original.len)
+                if bytes_error != ok { ret bytes_error }
+                let copied = nptest_append(bytes, 0usize, original)
+                try save_bytes(a, path, bytes[0usize..copied])
+                restored += 1usize
+                if !json {
+                    try write_all(out, "restored ")
+                    try write_all(out, path)
+                    try write_all(out, "\n")
+                }
+            } else {
+                if file_holds(a, path, json_str_after(line, "\"original_sha256\":\"")) {
+                    untouched += 1usize
+                } else {
+                    if conflict.len == 0usize {
+                        conflict = path
+                        conflict_backup = backup
+                    }
+                }
+            }
+        }
+    }
+    if conflict.len != 0usize {
+        var message_storage: [2048]u8 = zero
+        var message = capture_sink(message_storage[..])
+        try write_all(&message, "`")
+        try write_all(&message, conflict)
+        try write_all(&message, "` changed since the interrupted apply and was left as it is; its original is kept at `")
+        try write_all(&message, conflict_backup)
+        try write_all(&message, "` and the lock stays")
+        ret apply_plan_refused(sink, "E-TOOL-0003", message_storage[..message.count])
+    }
+    // Every file is its original again: the journal and the lock are retired.
+    // An apply that died before its journal was written replaced nothing.
+    release_transaction(a, dot_dir)
+    if !json {
+        try write_all(out, "recovered: ")
+        try write_usize(out, restored)
+        try write_all(out, " restored, ")
+        try write_usize(out, untouched)
+        try write_all(out, " untouched\n")
+        ret ok
+    }
+    try write_all(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"restored\":")
+    try write_usize(out, restored)
+    try write_all(out, ",\"untouched\":")
+    try write_usize(out, untouched)
+    ret write_all(out, "}}\n")
 }
 
 fn apply_plan_refused(report: *Sink, code: str, message: str) -> err {
