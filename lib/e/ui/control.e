@@ -2888,37 +2888,51 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
 // of its state layer, 60 x 40, for a control that stands it beside other
 // content (a control row).
 fn switch_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, on: bool, enabled: bool) -> (widget.Node, err) {
+    var share: f32 = 0.0
+    if on { share = 1.0 }
+    let (made, made_error) = switch_mark_at(a, t, state, share, enabled)
+    ret (made, made_error)
+}
+
+// (D1433, docs/ux/components/Switch, motion) `switch_mark` for the switch keyed
+// `key`: the thumb slides and resizes and the track, edge, thumb and halo
+// colours cross-fade over `duration-short-3` on `ease-standard` (kept on the
+// switch, slot `key + 1048592`); reduced motion changes at once.
+fn switch_mark_keyed(a: *mem.Arena, key: widget.Key, t: *const Theme, state: style.ControlState, on: bool, enabled: bool) -> (widget.Node, err) {
+    var goal: f32 = 0.0
+    if on { goal = 1.0 }
+    let share = eased_on(t, key, key + 1048592u64, goal, false, t.tokens.durations.short3)
+    let (made, made_error) = switch_mark_at(a, t, state, share, enabled)
+    ret (made, made_error)
+}
+
+// The switch's part `share` of the way from off (0) to on (1).
+fn switch_mark_at(a: *mem.Arena, t: *const Theme, state: style.ControlState, share: f32, enabled: bool) -> (widget.Node, err) {
     let ink = style.color(t.tokens, .OnSurface)
     let highest = style.color(t.tokens, .SurfaceContainerHighest)
-    var track_fill = highest
-    var edge = style.color(t.tokens, .Outline)
-    var edge_width: f32 = 2.0
-    var thumb = edge
-    var halo = ink
-    var d: f32 = 16.0
-    var cx: f32 = 16.0
     let active = state.hovered || state.pressed
-    if active { thumb = style.color(t.tokens, .OnSurfaceVariant) }
-    if on {
-        track_fill = style.color(t.tokens, .Primary)
-        edge_width = 0.0
-        thumb = style.color(t.tokens, .OnPrimary)
-        if active { thumb = style.color(t.tokens, .PrimaryContainer) }
-        halo = track_fill
-        d = 24.0
-        cx = 36.0
-    }
-    if state.pressed && enabled { d = 28.0 }
+    var off_thumb = style.color(t.tokens, .Outline)
+    if active { off_thumb = style.color(t.tokens, .OnSurfaceVariant) }
+    var on_thumb = style.color(t.tokens, .OnPrimary)
+    if active { on_thumb = style.color(t.tokens, .PrimaryContainer) }
+    var off_fill = highest
+    var on_fill = style.color(t.tokens, .Primary)
+    var edge = style.color(t.tokens, .Outline)
     if !enabled {
         let faint = with_alpha(ink, t.tokens.states.disabled_container)
-        track_fill = with_alpha(highest, t.tokens.states.disabled_container)
+        off_fill = with_alpha(highest, t.tokens.states.disabled_container)
         edge = faint
-        thumb = with_alpha(ink, t.tokens.states.disabled_content)
-        if on {
-            track_fill = faint
-            thumb = style.color(t.tokens, .Background)
-        }
+        off_thumb = with_alpha(ink, t.tokens.states.disabled_content)
+        on_fill = faint
+        on_thumb = style.color(t.tokens, .Background)
     }
+    let track_fill = style.mix(off_fill, on_fill, share)
+    let thumb = style.mix(off_thumb, on_thumb, share)
+    let halo = style.mix(ink, style.color(t.tokens, .Primary), share)
+    let edge_width = 2.0 * (1.0 - share)
+    var d: f32 = 16.0 + 8.0 * share
+    let cx: f32 = 16.0 + 20.0 * share
+    if state.pressed && enabled { d = 28.0 }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var track = sized_style(52.0, 32.0)
@@ -2948,7 +2962,7 @@ fn switch_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, on: bo
 fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, on: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
     let ink = style.color(t.tokens, .OnSurface)
-    let (mark, mark_error) = switch_mark(a, t, state, on, enabled)
+    let (mark, mark_error) = switch_mark_keyed(a, key, t, state, on, enabled)
     if mark_error != ok { ret (zero, mark_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }

@@ -26972,3 +26972,9 @@ Checks on Windows and Linux:
 **Shape.** Moving focus into the palette showed that a motion wrapper added only while animating changes the tree's shape when the motion ends. The reconciler then remakes everything under it, and a focused field loses its focus. `scaled_in`, `grown_in`, `slid_in` and `entered_overlay` now always wrap. So do the D1431 sheet slide, the D1423 month slide, the D1424 year-view fade, this palette and switcher, and the D1412 split push (whenever the detail shows); at the end of a motion the wrappers are identity.
 
 **Checks.** `ui_overlays4_v2` finds the palette's scrim not yet dimmed on its first frame, looks at the palette and switcher once they have arrived, and types into the palette. `ui_navigation2_v2` looks at its menu once it has arrived. `ui_transient`'s depth limit rises from 12 to 16 for the wrappers. All 103 `ui_*` fixtures pass on Windows and Linux.
+
+## D1433 — Switches slide and cross-fade
+
+The Switch spec slides and resizes the thumb over `duration-short-3` with `ease-standard`, and cross-fades the track colour at the same time. `switch_mark_at` now draws the switch a `share` of the way from off to on. The thumb's size and place, the edge width and the track, thumb and halo colours (`style.mix`) all follow that share, and pressing still makes the thumb 28. `switch_mark` passes 0 or 1. The new `switch_mark_keyed` eases the share on the switch (slot `key + 1048592`), and `switch_control` uses it. Reduced motion changes at once. Collection rows' switches keep the static mark.
+
+`ui_selection` taps a switch on, on Windows and Linux: 50 ms later its track is not yet `primary`, and 400 ms later it is. All 103 `ui_*` fixtures pass on both hosts.
