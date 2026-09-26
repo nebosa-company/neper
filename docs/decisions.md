@@ -27790,3 +27790,13 @@ The catalogue now states what is delivered, `WindowMode` included, and the gate 
 **The deferred-library fixture manifest.** `docs/library-fixtures.json` lists every partial module (121) with its milestone and schedule, its catalogue and delivered counts, the declarations still pending (93 in all), and the link fixtures whose sources `use` it. `scripts/library_fixtures.py --write` produces the file. Without the flag the script checks that the committed file is exactly what the repository produces, that each named fixture exists, and that no module with a delivered declaration lacks an executable fixture. Today every partial module has one. Both suites run the check.
 
 `tests/test_module_plan.py` fails at HEAD, before this row, on `e.algo.uuid` and other catalogue items (duplicate import qualifiers). Nothing here touches that, and it is left for its own work. C050 closes at 1.
+
+## D1530 — The filled "on" form of an icon
+
+The Icon spec draws every icon at rest as outline strokes and the selected or "on" form filled: a selected navigation destination, a favourited item. `icon_of` drew outlines only. Its `ponytail:` marker waited on a full icon set, but the fill needs a body, not more glyphs.
+
+`IconOptions` gains `filled` and a `ground` role (`surface` by default), and `icon_square_of` takes the same two. A glyph with a body -- person, alert, info, check-circle, warning, picture, visibility and its struck form, clock, calendar, settings, edit, filter, and the two window glyphs -- has its filled form drawn by `filled_glyph_paint`. The body is filled and edged with the tint, at the outline's stroke, so the two forms keep one size. The marks that lie on it are stroked in the ground they sit on: an exclamation, the i, the check, the hands, the hills, the pupil, the rule, the gear's hub, the pencil's line and the dock strip. The marks that stand off it stay in the tint: the calendar's rings, the gear's teeth and the struck eye's bar. A glyph without a body (a check, a chevron, an arrow, the menu's rules) is the same in both forms.
+
+The navigation drawer and the destination bar (bar, rail and sidebar) draw the selected destination's icon in its filled form, cut in `secondary-container`. The spec's cross-fade between the forms is not drawn: the form swaps, as reduced motion asks.
+
+`ui_content_v2` checks this on Windows and Linux. A filled person's head centre is `on-surface-variant` and an outline one's is not, and a check is pixel for pixel the same in both forms. `ui_navigation3_v2` finds the rail's selected People glyph from its ink and requires its head to be filled. Against the old library that check fails (exit 97). All 103 ui_* fixtures pass on both hosts.

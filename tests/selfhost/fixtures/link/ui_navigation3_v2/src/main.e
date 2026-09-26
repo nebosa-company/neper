@@ -197,6 +197,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (people, has_people) = bounds(&harness, &runtime, 3002u64)
     if !has_bar || !has_search || !has_people || !near(bar.height, 80.0) || !near(search.x, bar.x + 8.0) || !near(search.y, bar.y + 12.0) || !near(search.width, 128.0) || !near(people.x, search.x + 128.0) { os.exit(13i32) }
     if !is_color(shot, at(bar.x + 3.0, bar.y + 40.0), style.color(&tokens, .SurfaceContainer)) || !is_color(shot, at(search.x + 38.0, search.y + 16.0), style.color(&tokens, .SecondaryContainer)) || !is_color(shot, at(people.x + 38.0, people.y + 16.0), style.color(&tokens, .SurfaceContainer)) { os.exit(14i32) }
+    // (D1530) The rail's selected People shows its filled "on" form: the head is
+    // filled with the selected content colour, found from the glyph's own extent.
+    let (rail_people, has_rail_people) = bounds(&harness, &runtime, 3102u64)
+    if !has_rail_people { os.exit(96i32) }
+    let selected_ink = style.color(&tokens, .OnSecondaryContainer)
+    var ink_left: f32 = 10000.0
+    var ink_right: f32 = 0.0
+    var ink_top: f32 = 10000.0
+    var scan_y: f32 = rail_people.y
+    while scan_y < rail_people.y + 40.0 {
+        var scan_x: f32 = rail_people.x
+        while scan_x < rail_people.x + rail_people.width {
+            if is_color(shot, at(scan_x, scan_y), selected_ink) {
+                if scan_x < ink_left { ink_left = scan_x }
+                if scan_x > ink_right { ink_right = scan_x }
+                if scan_y < ink_top { ink_top = scan_y }
+            }
+            scan_x += 1.0
+        }
+        scan_y += 1.0
+    }
+    if ink_right <= ink_left || !is_color(shot, at((ink_left + ink_right) * 0.5, ink_top + 4.0), selected_ink) { os.exit(97i32) }
     // Names carry the badges; the active tab is Selected and Current.
     let (search_node, has_search_node) = find(tree, .Tab, "Search")
     let (people_node, has_people_node) = find(tree, .Tab, "People, 3")
