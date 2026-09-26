@@ -193,6 +193,13 @@ fn is_color(shot: image.Image, i: usize, c: paint.Color) -> bool {
     ret close_to(shot.pixels[i], c.red) && close_to(shot.pixels[i + 1usize], c.green) && close_to(shot.pixels[i + 2usize], c.blue)
 }
 
+// (D1384) A grid move, kept.
+fn on_tile_move(ctx: *void, value: collection.GridMove) -> err {
+    let kept = mem.cast[*collection.GridMove](ctx)
+    *kept = value
+    ret ok
+}
+
 fn bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
     let (b, found) = widget.bounds_of(runtime, testing.by_key(h, key).element)
     ret (b, found)
@@ -795,6 +802,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if !has_pin_box || !near(pin_box.y, expected_y) { os.exit(199i32) }
         }
         pin_step += 1usize
+    }
+    // (D1384) With Gamma a folder, Alpha dragged over it: Gamma's top edge, over its media, turns
+    // `primary`, and the drop reports Alpha into Gamma.
+    var tile_move = collection.GridMove { from: 9usize, into: 9usize }
+    var folder_flags: [3]bool = zero
+    folder_flags[2usize] = true
+    var drag_keys: [3]widget.Key = zero
+    drag_keys[0usize] = 7201u64
+    drag_keys[1usize] = 7202u64
+    drag_keys[2usize] = 7203u64
+    var tile_step = 0usize
+    while tile_step < 3usize {
+        var moving_grid = collection.grid_options()
+        moving_grid.width = 600.0
+        moving_grid.move = widget.Change[collection.GridMove] { ctx: mem.cast[*void](&tile_move), invoke: on_tile_move }
+        moving_grid.folders = folder_flags[..]
+        f = mem.arena_from(frame_storage)
+        let (moving_tiles, moving_tiles_error) = collection.grid_view_of(&f, 7200u64, &theme, "Move tiles", s.tiles[0usize..3usize], drag_keys[..], moving_grid)
+        let (moving_page, moving_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if moving_tiles_error != ok || moving_page_error != ok { os.exit(200i32) }
+        var moving_ground = control.sized_style(600.0, 400.0)
+        moving_ground.background = paint.Brush { Solid: style.color(&tokens, .Surface) }
+        moving_page[0usize] = moving_tiles
+        if testing.pump(&harness, widget.box(0u64, moving_ground, moving_page[0usize..1usize]), time.Instant { nanos: 72000000000i64 + i64(tile_step) }) != ok { os.exit(201i32) }
+        let (dragged_tile, has_dragged_tile) = bounds(&harness, &runtime, 7201u64)
+        let (folder_tile, has_folder_tile) = bounds(&harness, &runtime, 7203u64)
+        if !has_dragged_tile || !has_folder_tile { os.exit(202i32) }
+        let over_gamma = geometry.Point { x: folder_tile.x + folder_tile.width * 0.5, y: folder_tile.y + folder_tile.height * 0.5 }
+        if tile_step == 1usize {
+            if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(dragged_tile.x + 30.0, dragged_tile.y + 30.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(dragged_tile.x + 40.0, dragged_tile.y + 30.0) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(over_gamma.x, over_gamma.y) }) != ok { os.exit(203i32) }
+        }
+        if tile_step == 2usize {
+            let (tile_shot, tile_shot_error) = testing.snapshot(&harness, a)
+            if tile_shot_error != ok || !is_color(tile_shot, at(folder_tile.x + folder_tile.width * 0.5, folder_tile.y + 1.0), style.color(&tokens, .Primary)) { os.exit(204i32) }
+            if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(over_gamma.x, over_gamma.y) }) != ok || tile_move.from != 0usize || tile_move.into != 2usize { os.exit(205i32) }
+        }
+        tile_step += 1usize
     }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")

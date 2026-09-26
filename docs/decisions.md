@@ -26426,3 +26426,21 @@ so the row's tap does not also pick. Pointer presses are unchanged.
 `ui_collections2_v2` holds a touch 600 ms on the first row of a selectable table
 with nothing selected: the table reports a toggle of row 0, and the release
 reports nothing more, on Windows and Linux.
+
+## D1384 — Grid tiles drag onto folders
+
+The GridView spec's drag and drop: tiles drop on a folder tile, which takes a
+2px `primary` inset outline. With `GridOptions.move` set, `grid_view_of` gives
+each tile a `TileDrag`; `tile_node` takes it as a new argument, and the
+virtual grid passes none. A tile then takes drags as well as taps
+(`tile_drag_gesture` passes taps to the tile's action). A drag carries
+`grid_payload_tag()` (2^44) plus the tile plus one, and the dragged tile
+lifts (`surface-container-high` under the dragged layer, elevation 4). Tiles
+`GridOptions.folders` marks take drops. A folder under the drag draws the
+outline as a layer over its content, media included (a border on the tile
+itself hid under the media), and a drop reports a `GridMove`. Reordering by
+hand and the reflow motion are still missing.
+
+`ui_collections_v2` drags Alpha onto Gamma, a folder: Gamma's top edge over its
+media turns `primary`, and the drop reports tile 0 into tile 2. `ui_ripple_v2`
+still passes, on Windows and Linux.

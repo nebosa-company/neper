@@ -6379,9 +6379,10 @@ fn tile_of_name(name: str) -> Tile {
 // on the tile. Disabled, content at 38% and media at 38% opacity, out of the Tab
 // order. A cell in the tree named by the name, described by the meta.
 // (D1316) The state layer lies over the media, and the check's tick strokes 2.5.
-// ponytail: no drag or drop look. (D1237) An icon tile (`has_icon`)
+// (D1384) With a `TileDrag` it drags, lifts, and takes drops as a folder.
+// (D1237) An icon tile (`has_icon`)
 // is a 64 icon area and a centred name with no container until hovered.
-fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const Tile, row_index: usize, column_index: usize, side: f32, photo: bool, selecting: bool) -> (widget.Node, err) {
+fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const Tile, row_index: usize, column_index: usize, side: f32, photo: bool, selecting: bool, drag: *const TileDrag) -> (widget.Node, err) {
     let enabled = !item.disabled
     let state = control.control_state(t, key, enabled, item.selected)
     let surface_ink = style.color(t.tokens, .OnSurface)
@@ -6520,6 +6521,17 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
         stacked[1usize] = widget.positioned(0u64, corner, corner, style.defaults(), centred[0usize..1usize])
         s_count = 2usize
     }
+    // (D1384) A folder under a drag: the 2px `primary` inset outline over the
+    // tile's content, media included.
+    if mem.address_of(drag) != 0usize && drag.over && s_count < 3usize {
+        var drop_ring = style.defaults()
+        drop_ring.width = style.Length { Percent: 100.0 }
+        drop_ring.height = style.Length { Percent: 100.0 }
+        drop_ring.radius = tile_radius
+        drop_ring.border = style.Border { width: 2.0, color: style.color(t.tokens, .Primary) }
+        stacked[s_count] = widget.box(0u64, drop_ring, zero)
+        s_count += 1usize
+    }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = widget.stack(0u64, style.defaults(), stacked[0usize..s_count])
@@ -6532,7 +6544,21 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
     control.focus_look(t)
-    region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&item.action), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, tile_style, held[0usize..1usize])
+    var tile_gesture = widget.GestureAction { ctx: ctx_of(&item.action), invoke: control.press_tap }
+    var tile_gestures = 1u8 | 4u8
+    if mem.address_of(drag) != 0usize && enabled {
+        // (D1384, docs/ux/components/GridView, drag and drop) Lifted while dragged
+        // (elevation 4 under the dragged layer); a folder under a drag takes the
+        // drop look, a 2px `primary` inset outline.
+        tile_gesture = widget.GestureAction { ctx: mem.cast[*void](drag), invoke: tile_drag_gesture }
+        tile_gestures = tile_gestures | widget.GESTURE_DRAG
+        if drag.folder { tile_gestures = tile_gestures | widget.GESTURE_DROP }
+        if drag.lifted {
+            tile_style.background = paint.Brush { Solid: style.layer(style.color(t.tokens, .SurfaceContainerHigh), ink, t.tokens.states.dragged) }
+            tile_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 4.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[4usize]) }
+        }
+    }
+    region[0usize] = widget.region(key, widget.Region { gesture: tile_gesture, gestures: tile_gestures, enabled: enabled, focusable: enabled }, tile_style, held[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 14u8
     sem.label = item.name
@@ -6552,7 +6578,38 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
 // touch), whether it is selecting (every tile shows its check), and the width.
 // (D1245) `select`, when set, makes the grid multi-select as a list is (D1240).
 // (D1247) With no tiles, `loading` skeleton tiles or the empty state (`empty_title`).
-type GridOptions = struct { min_width: f32, selecting: bool, width: f32, select: widget.Change[ListSelect], loading: usize, empty_title: str, empty_message: str }
+// (D1384) `move`, when set, lets tiles be dragged onto the tiles `folders`
+// marks (one flag a tile).
+type GridOptions = struct { min_width: f32, selecting: bool, width: f32, select: widget.Change[ListSelect], loading: usize, empty_title: str, empty_message: str, move: widget.Change[GridMove], folders: []const bool }
+
+// (D1384) A tile dropped on a folder tile: the dragged tile's index and the folder's.
+type GridMove = struct { from: usize, into: usize }
+
+// (D1384) A grid drag's payload: this tag plus the tile's index plus one.
+fn grid_payload_tag() -> u64 {
+    ret 17592186044416u64
+}
+
+// (D1384) A tile's part in a drag: its index, whether it is a folder, whether it
+// is the dragged one or the folder under the pointer, and whom a drop tells.
+type TileDrag = struct { runtime: *widget.Runtime, index: usize, count: usize, folder: bool, lifted: bool, over: bool, action: widget.Submit, move: widget.Change[GridMove] }
+
+fn tile_drag_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*TileDrag](ctx)
+    switch g {
+    case .Tap as at:
+        ret widget.fire_submit(d.action)
+    case .DragStart as began:
+        ret widget.begin_drag(d.runtime, grid_payload_tag() + u64(d.index) + 1u64)
+    case .Drop as dropped:
+        if dropped.payload <= grid_payload_tag() || dropped.payload > grid_payload_tag() + u64(d.count) { ret ok }
+        let from = usize(dropped.payload - grid_payload_tag() - 1u64)
+        if from == d.index { ret ok }
+        ret widget.fire_change[GridMove](d.move, GridMove { from: from, into: d.index })
+    default:
+        ret ok
+    }
+}
 
 fn grid_options() -> GridOptions {
     var out: GridOptions = zero
@@ -6634,6 +6691,15 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     if holds_error != ok { ret (zero, TooLarge) }
     let (hold_fires, hold_fires_error) = mem.alloc[widget.Submit](a, tiles.len)
     if hold_fires_error != ok { ret (zero, TooLarge) }
+    // (D1384) Moving: which tile a drag carries.
+    let moving = widget.change_set[GridMove](options.move.invoke) && mem.address_of(t.runtime) != 0usize
+    let (drags, drags_error) = mem.alloc[TileDrag](a, tiles.len)
+    if drags_error != ok { ret (zero, TooLarge) }
+    var lifted_tile = tiles.len
+    if moving {
+        let (payload, has_payload) = widget.dragging(t.runtime)
+        if has_payload && payload > grid_payload_tag() && payload <= grid_payload_tag() + u64(tiles.len) { lifted_tile = usize(payload - grid_payload_tag() - 1u64) }
+    }
     var i = 0usize
     while i < tiles.len {
         shown[i] = tiles[i]
@@ -6641,7 +6707,19 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
             clicks[i] = ListClick { runtime: t.runtime, select: options.select, index: i, action: tiles[i].action, toggles: in_mode && touch }
             shown[i].action = widget.Submit { ctx: ctx_of(&clicks[i]), invoke: list_click_fire }
         }
-        let (made, made_error) = tile_node(a, keys[i], t, &shown[i], i / columns, i % columns, side, false, options.selecting || in_mode)
+        var tile_drag: *const TileDrag = zero
+        if moving {
+            let folder = i < options.folders.len && options.folders[i]
+            var over = false
+            if folder && lifted_tile < tiles.len && lifted_tile != i {
+                let (tile_box, has_tile_box) = widget.bounds_for_key(t.runtime, keys[i])
+                let at = widget.pointer_position(t.runtime)
+                over = has_tile_box && at.x >= tile_box.x && at.x < tile_box.x + tile_box.width && at.y >= tile_box.y && at.y < tile_box.y + tile_box.height
+            }
+            drags[i] = TileDrag { runtime: t.runtime, index: i, count: tiles.len, folder: folder, lifted: lifted_tile == i, over: over, action: shown[i].action, move: options.move }
+            tile_drag = &drags[i]
+        }
+        let (made, made_error) = tile_node(a, keys[i], t, &shown[i], i / columns, i % columns, side, false, options.selecting || in_mode, tile_drag)
         if made_error != ok { ret (zero, made_error) }
         cells[i] = made
         if multi && touch && !tiles[i].disabled {
@@ -6726,7 +6804,7 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         let index = built_first + i
         tiles[i] = source.tile(source.ctx, index)
         let tile_key = source.key(source.ctx, index)
-        let (made, made_error) = tile_node(a, tile_key, t, &tiles[i], index / columns, index % columns, side, true, options.selecting)
+        let (made, made_error) = tile_node(a, tile_key, t, &tiles[i], index / columns, index % columns, side, true, options.selecting, zero)
         if made_error != ok { ret (zero, made_error) }
         cells[i] = made
         i += 1usize
