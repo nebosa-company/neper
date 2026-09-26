@@ -618,6 +618,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
         view_step += 1usize
     }
     if view_early == view_settled { os.exit(141i32) }
+    // (D1417) Loading, the view shows no bar for 300 ms, then a 2px bar over its
+    // suggestions.
+    var load_step = 0usize
+    while load_step < 3usize {
+        var load_at = 62000000000i64
+        if load_step == 1usize { load_at = 62100000000i64 }
+        if load_step == 2usize { load_at = 62400000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: load_at }) != ok { os.exit(142i32) }
+        f = mem.arena_from(frame_storage)
+        let (load_node, load_node_error) = overlay.search_view_loading(&f, 980u64, &theme, 960u64, "Search files", "", groups[..], "Search all files", &s.subs[1usize], true, &s.subs[2usize], 400.0, true)
+        let (load_parts, load_parts_error) = mem.alloc[widget.Node](&f, 2usize)
+        if load_node_error != ok || load_parts_error != ok { os.exit(142i32) }
+        load_parts[0usize] = widget.box(960u64, control.sized_style(400.0, 40.0), zero)
+        load_parts[1usize] = load_node
+        if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(640.0, 480.0), load_parts[0usize..2usize]), time.Instant { nanos: load_at }) != ok { os.exit(143i32) }
+        let barred = testing.by_key(&harness, 980u64 + 8196u64).count > 0usize
+        if load_step < 2usize && barred { os.exit(144i32) }
+        if load_step == 2usize && (!barred || testing.by_text(&harness, "Search all files").count == 0usize) { os.exit(145i32) }
+        load_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok
