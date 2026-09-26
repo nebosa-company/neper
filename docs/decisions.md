@@ -26171,3 +26171,14 @@ timeout.
 
 `ui_pickers_v2` types "25 sep" in en-US, focuses the field and then a
 neighbour: the text becomes "9/25/2026", on Windows and Linux.
+
+## D1367 — Typed times are rewritten on blur
+
+The TimePicker spec's field accepts any common form and reformats on blur to
+the locale's clock. `time_field` now uses D1366's `focus_memo`. The build after
+the field loses the focus, a time `parse_clock` reads is written with
+`write_clock_in` for the theme's language and passed through `typed` when it
+differs. The comment no longer leaves the reformat to the caller.
+
+`ui_pickers2_v2` types "230 pm" with a 24-hour theme, focuses the field and
+then a neighbour: the text becomes "14:30", on Windows and Linux.

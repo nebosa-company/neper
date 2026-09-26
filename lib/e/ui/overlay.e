@@ -4999,8 +4999,9 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
 // overlay keyed `key + 3`, its viewport `key + 4`, rows `key + 5 + index`), each
 // row a time the caller wrote (`write_clock`) with its offset ("30 min", or empty),
 // firing its own pick. Alt+Down opens a closed list; Escape is `toggle`, Enter
-// the selected pick. The caller keeps the text, parses it and reformats it on
-// blur.
+// the selected pick. The caller keeps the text and parses it. (D1367) The build
+// after the field loses the focus, a time `parse_clock` reads is rewritten in
+// the locale's clock (`write_clock_in`) through `typed`.
 // v2 (D960, docs/ux/components/TimePicker, field with time list): the list is a
 // menu at pointer density on `surface-container`, 8 corners, elevation 2, 8 above
 // and below the rows, 4 below the field and as wide; 6 rows show and it scrolls
@@ -5021,6 +5022,23 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     // is not the selected time, only the times it starts (ignoring case) stay;
     // none left, no list.
     let text = buffer[0usize..len]
+    // (D1367, docs/ux/components/TimePicker, field) Reformatted on blur.
+    let (memo, has_memo) = focus_memo(t, key)
+    if has_memo {
+        let holding = widget.focus_within(t.runtime, key)
+        let (clock, clock_read) = parse_clock(text)
+        if memo.held && !holding && clock_read {
+            let (formed, formed_error) = mem.alloc[u8](a, 16usize)
+            if formed_error != ok { ret (zero, TooLarge) }
+            let formed_len = write_clock_in(formed, clock, t.language)
+            let rewritten = formed[0usize..formed_len]
+            if formed_len > 0usize && !control.same_text(rewritten, text) {
+                let told = widget.fire_change[str](typed, rewritten)
+                if told != ok { ret (zero, told) }
+            }
+        }
+        memo.held = holding
+    }
     var filtering = len > 0usize && mem.address_of(t.runtime) != 0usize && widget.focus_within(t.runtime, key)
     if selected < times.len && same_text_folded(times[selected], text) { filtering = false }
     let (kept, kept_error) = mem.alloc[bool](a, times.len)
