@@ -203,7 +203,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     fonts[0usize] = shape.Font { id: 7u32, data: font_bytes, face_index: 0u32 }
     if scene.register_font(&renderer, fonts[0usize]) != ok { os.exit(6i32) }
     let tokens = style.reference(.Light)
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 64usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 8u16, max_commands: 256usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 256usize, max_states: 32usize, state_bytes: 1024usize, state_classes: 8u16, max_depth: 32u16, max_commands: 4096usize })
     if runtime_error != ok { os.exit(7i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts[0usize..1usize], language: "", runtime: &runtime }
@@ -301,6 +301,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let cx = usize(canvas_bounds.x + 5.0)
     let cy = usize(canvas_bounds.y + 5.0)
     if shot.pixels[(cy * 64usize + cx) * 4usize + 1usize] != 255u8 { os.exit(34i32) }
+    // (D1456) A two-row text area holding five lines scrolls its overflow: with the
+    // caret moved down to the last line, its viewport's offset is past the first.
+    // (The synthetic font maps only `a`.)
+    let (area_bytes, area_bytes_error) = mem.alloc[u8](a, 64usize)
+    if area_bytes_error != ok { os.exit(36i32) }
+    let area_len = control.copy_text(area_bytes, "a\naa\naaa\naa\na")
+    var area_step = 0usize
+    while area_step < 3usize {
+        let area_at = time.Instant { nanos: 5000000000i64 + i64(area_step) * 100000000i64 }
+        if testing.begin(&harness, area_at) != ok { os.exit(36i32) }
+        frame = mem.arena_from(frame_storage)
+        var area_options = control.field_options()
+        area_options.rows = 2u32
+        area_options.width = 200.0
+        let (area, area_error) = control.text_area(&frame, 700u64, &theme, "", area_bytes, area_len, zero, area_options)
+        let (area_page, area_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if area_error != ok || area_page_error != ok { os.exit(36i32) }
+        area_page[0usize] = area
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(300.0, 300.0), area_page[0usize..1usize]), area_at) != ok { os.exit(37i32) }
+        if area_step == 0usize {
+            if widget.focus(&runtime, testing.by_key(&harness, 700u64).element) != ok { os.exit(38i32) }
+            var down = 0usize
+            while down < 4usize {
+                if testing.press_key(&harness, 40u32, zero) != ok { os.exit(38i32) }
+                down += 1usize
+            }
+        }
+        area_step += 1usize
+    }
+    let (area_offset, has_area_offset) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 700u64 + 1048612u64).element)
+    if !has_area_offset || !(area_offset > 0.0) { os.exit(39i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui content ok\n")
     ret ok
