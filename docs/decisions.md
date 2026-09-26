@@ -27252,3 +27252,9 @@ The TimePicker spec cross-fades the numbers when the dial switches between hours
 The SplitView spec asks the view to "keep a ratio across window resizes". Until now a split view took its divider's place in pixels, so a resized window kept the first pane's width and gave all the change to the second. `SplitOptions.ratio` makes `position` a share of the view's length (0.5 is half), and `change` then reports the dragged size as a share too. The caller keeps one number, and the divider holds its share at any width. A thin adapter over the pane's change divides by the length. With `snaps`, the snap is applied first, in pixels, then the share is taken. The empty-detail slot is still not done.
 
 `ui_panes` checks this on Windows and Linux: a quarter of 400 is 100 (108 with the sash), a 100 drag reports 0.5, and 0.5 of a 200 wide window is 100 again. `ui_navigation4_v2` still passes.
+
+## D1473 — The year grid is one Tab stop
+
+The Calendar spec makes each grid a single Tab stop and moves through it with the arrows. The day grid has done this since its roving stop. The year view still made every built pill a Tab stop, so Tab walked through up to thirty years before it left the view. The year grid now reuses `calendar_tab_stop`: the focused pill keeps its place in the tab order, else the shown year's, else the first built. Every other pill stays pressable and reachable with the arrows, whose `FocusTo` hops focus by key. Arrows past the built rows still find nothing to focus.
+
+`ui_pickers_v2` checks this on Windows and Linux: Tab from 2026 does not land on 2027. Against the old overlay the check fails (exit 181).

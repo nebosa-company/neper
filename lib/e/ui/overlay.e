@@ -3342,8 +3342,9 @@ fn year_pick_fire(ctx: *void) -> err {
 // `earliest` and `latest`) in a viewport (keyed `key + 4094`) that opens with the
 // shown year's row in the middle; the index counts from the first year listed.
 // Only the rows in view (and one either side) are built.
-// ponytail: each pill is still its own Tab stop, and arrows past the built rows
-// find nothing to focus.
+// (D1473) The grid is one Tab stop: the focused pill, else the shown year's,
+// else the first built.
+// ponytail: arrows past the built rows find nothing to focus.
 fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: time.Date, marks: *const CalendarMarks, show: widget.Change[time.Date], width: f32, height: f32) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var pill_w: f32 = 64.0
@@ -3390,6 +3391,16 @@ fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: tim
     let (hops, hops_error) = mem.alloc[control.FocusTo](a, 4usize * count)
     let (hop_keys, hop_keys_error) = mem.alloc[widget.Shortcut](a, 4usize * count)
     if picks_error != ok || presses_error != ok || pills_error != ok || rows_error != ok || hops_error != ok || hop_keys_error != ok { ret (zero, TooLarge) }
+    var tab_index = start
+    if shown.year >= first && usize(shown.year - first) >= start && usize(shown.year - first) < stop { tab_index = usize(shown.year - first) }
+    var seek = start
+    while seek < stop && mem.address_of(t.runtime) != 0usize {
+        if widget.focus_within(t.runtime, key + 4096u64 + u64(seek)) {
+            tab_index = seek
+            break
+        }
+        seek += 1usize
+    }
     var i = start
     while i < stop {
         let year = first + i32(i)
@@ -3427,8 +3438,10 @@ fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: tim
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = said
         let content = widget.aligned(0u64, .Center, .Center, control.sized_style(pill_w, pill_h), held[0usize..1usize])
-        let (pill, pill_error) = control.pressable(a, pill_key, t, 3u8, digits[0usize..digit_count], look, true, chosen, &presses[i], content)
+        let (pressed_pill, pill_error) = control.pressable(a, pill_key, t, 3u8, digits[0usize..digit_count], look, true, chosen, &presses[i], content)
         if pill_error != ok { ret (zero, pill_error) }
+        let (pill, tab_error) = calendar_tab_stop(a, pressed_pill, i == tab_index)
+        if tab_error != ok { ret (zero, tab_error) }
         // (D1363, docs/ux/components/Calendar, year view) The arrows: Left 37, Up
         // 38, Right 39, Down 40, each to the year that far off, held at the ends.
         var hop = 0usize
