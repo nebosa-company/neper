@@ -12,6 +12,7 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.ui.accessibility
+use e.ui.animation
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
@@ -2555,6 +2556,30 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         body[4usize] = placed
         placed = widget.aligned(0u64, .Center, .End, centre, body[4usize..5usize])
     }
+    // (D1431, docs/ux/components/Sheet, motion) It slides in from its edge over
+    // `duration-medium-4` on the emphasized-decelerate curve from when it is
+    // first built (`appeared_share`), the scrim fading in with it.
+    let arrived = appeared_share(t, key, t.tokens.durations.medium4)
+    if arrived < 1.0 {
+        var away: geometry.Point = zero
+        if bottom {
+            var travel: f32 = 480.0
+            if mem.address_of(t.runtime) != 0usize {
+                let window = widget.surface_size(t.runtime)
+                if window.height > 0.0 { travel = window.height }
+            }
+            away.y = travel * (1.0 - arrived)
+        } else {
+            var travel: f32 = 360.0
+            if width > 0.0 { travel = width }
+            away.x = travel * (1.0 - arrived)
+            if placement == .Left { away.x = 0.0 - away.x }
+        }
+        let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
+        if sliding_error != ok { ret (zero, TooLarge) }
+        sliding[0usize] = placed
+        placed = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: away }, style.defaults(), sliding[0usize..1usize])
+    }
     // Its own slot: body[4] is the aligned node's child, and a node listed among
     // its own children would nest without end (TooDeep at any depth).
     body[5usize] = placed
@@ -2570,8 +2595,43 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]))
+    let (made, made_error) = with_scrim_share(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]), arrived)
     ret (made, made_error)
+}
+
+// (D1431) A surface keyed `key` kept on it from its first build: how far it has
+// come in over `millis` on the emphasized-decelerate curve (0 before it exists,
+// 1 under reduced motion or once there, and from then on whatever the clock).
+type AppearSince = struct { set: bool, since: i64, arrived: bool }
+
+fn appeared_share(t: *const control.Theme, key: widget.Key, millis: u32) -> f32 {
+    if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret 1.0 }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret 1.0 }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize {
+        widget.request_animation_frame(t.runtime)
+        ret 0.0
+    }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: AppearSince = zero
+    let (kept, _, kept_error) = widget.state[AppearSince](&build, key + 8196u64, fresh)
+    if kept_error != ok { ret 1.0 }
+    let now = widget.frame_time(t.runtime).nanos
+    if kept.arrived { ret 1.0 }
+    if !kept.set {
+        kept.set = true
+        kept.since = now
+    }
+    let span = i64(millis) * 1000000i64
+    if span <= 0i64 || now < kept.since { ret 1.0 }
+    let progress = f32(now - kept.since) / f32(span)
+    if progress >= 1.0 {
+        kept.arrived = true
+        ret 1.0
+    }
+    widget.request_animation_frame(t.runtime)
+    ret animation.ease(.EmphasizedDecelerate, progress)
 }
 
 fn standard_sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {

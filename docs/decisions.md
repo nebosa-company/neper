@@ -26952,3 +26952,15 @@ Checks on Windows and Linux:
 
 - `ui_overlays_v2` opens a dialog. 50 ms later its card's start is not yet `surface-container-high`; a second later it is.
 - All 103 `ui_*` fixtures pass.
+
+## D1431 — Modal sheets slide in from their edge
+
+The Sheet spec enters "over `duration-medium-4` with `ease-emphasized-decelerate` sliding from the edge (the scrim fades in with it)".
+
+`sheet_frame` is behind every modal side, bottom and action sheet. It now draws its panel off its edge by the share still to come: the window's height along the bottom, and its width (360 when unset) along a side, mirrored for the left. The scrim is drawn at the arrived share. That share is `appeared_share`, counted from the sheet overlay's first build, since the sheet functions build nothing while closed. It is 0 before the overlay exists, reaches 1 on `animation.ease(.EmphasizedDecelerate)`, and then latches (`AppearSince.arrived`), so a clock that jumps back does not replay the entry. Standard (non-modal) sheets, the exit and reduced motion change at once.
+
+Checks on Windows and Linux:
+
+- `ui_overlays3_v2` finds a side sheet's panel not yet in place on its first frame.
+- The fixture's sheet pixel checks now look once each sheet has arrived (`arrive`, two more frames).
+- All 103 `ui_*` fixtures pass.
