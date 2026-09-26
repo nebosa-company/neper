@@ -27523,3 +27523,9 @@ Verified on Windows and Linux. On a copy of the compiler's sources, a body edit 
 The GridView spec: "Rubber-band selection with a pointer drag on the empty area (desktop)". D1385's band took a drag from anywhere in a multi-select grid, so a drag that began on a tile drew a band and replaced the selection. Now `grid_band_gesture` checks where the drag began: on a tile's bounds, the band stays inactive, and its moves and release are ignored, leaving the drag to the tile. From the empty area, including the gaps between tiles, it draws and selects as before.
 
 `ui_collections_v2` checks this on Windows and Linux. A drag that starts on Alpha selects nothing. A drag from the gap between Alpha and Beta into Beta clears the selection and toggles Beta alone. Against the old collection the tile drag selects (exit 112).
+
+## D1513 — The year grid's arrows reach years past the built rows
+
+D1422 built only the year view's rows in view, one either side, of the two centuries it lists, and D1363's arrows moved the focus through `control.FocusTo`. A hop to a pill that was not built found nothing, so Up held at the edge of the rows first built. Each arrow is now a `YearHop`. It focuses the target pill when that pill stands. Otherwise it scrolls the year viewport (`key + 4094`) through `widget.scroll_to`, putting the target's row in the middle as the view opens, and asks for the focus by key, which the runtime gives once the next build makes the pill.
+
+`ui_pickers_v2` checks this on Windows and Linux: from 2026, eight presses of Up, a frame after each, leave 2002 focused, twenty-four years past the rows first built. Against the old overlay the focus stops short (exit 186).
