@@ -62,6 +62,20 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
+// (D1431) Two more frames of `which`, 100 ms and 600 ms after `at`, so a sheet
+// that slides in over `duration-medium-4` has arrived.
+fn arrive(h: *testing.Harness, a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which, from: i64) -> bool {
+    var step = 0i64
+    while step < 2i64 {
+        let moment = time.Instant { nanos: from + 100000000i64 + step * 500000000i64 }
+        if testing.begin(h, moment) != ok { ret false }
+        let (root, root_error) = build(a, t, s, which)
+        if root_error != ok || testing.pump(h, root, moment) != ok { ret false }
+        step += 1i64
+    }
+    ret true
+}
+
 fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (widget.Node, err) {
     let (items, items_error) = mem.alloc[widget.Node](a, 5usize)
     if items_error != ok { ret (zero, items_error) }
@@ -407,6 +421,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // with a 32 Close 8 from the end that dismisses.
     let (root_2, build_2_error) = build(&f, &theme, s, .Side)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(21i32) }
+    // (D1431) On its first frame the sheet is still off its edge; it slides in
+    // over `duration-medium-4`, so look once it has arrived.
+    let (early_side_shot, early_side_shot_error) = testing.snapshot(&harness, a)
+    let (early_side, has_early_side) = lifted(&harness, 200u64)
+    if early_side_shot_error != ok || !has_early_side || is_color(early_side_shot, at(early_side.x + 150.0, early_side.y + 100.0), style.color(&tokens, .SurfaceContainerLow)) { os.exit(21i32) }
+    var side_step = 0usize
+    while side_step < 2usize {
+        let side_at = time.Instant { nanos: 1200000000i64 + i64(side_step) * 500000000i64 }
+        if testing.begin(&harness, side_at) != ok { os.exit(21i32) }
+        let (root_2_in, build_2_in_error) = build(&f, &theme, s, .Side)
+        if build_2_in_error != ok || testing.pump(&harness, root_2_in, side_at) != ok { os.exit(21i32) }
+        side_step += 1usize
+    }
     let (shot_2, shot_2_error) = testing.snapshot(&harness, a)
     if shot_2_error != ok { os.exit(22i32) }
     let (side, has_side) = lifted(&harness, 200u64)
@@ -437,15 +464,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Side-sheet requests stay within the specified 256-400 width range.
     let (root_narrow, build_narrow_error) = build(&f, &theme, s, .SideNarrow)
     if build_narrow_error != ok || testing.pump(&harness, root_narrow, time.Instant { nanos: 1150000000i64 }) != ok { os.exit(64i32) }
+    if !arrive(&harness, &f, &theme, s, .SideNarrow, 1150000000i64) { os.exit(64i32) }
     let (narrow, has_narrow) = lifted(&harness, 200u64)
     if !has_narrow || !near(narrow.width, 256.0) || !near(narrow.x + narrow.width, 640.0) { os.exit(65i32) }
     let (root_wide, build_wide_error) = build(&f, &theme, s, .SideWide)
     if build_wide_error != ok || testing.pump(&harness, root_wide, time.Instant { nanos: 1175000000i64 }) != ok { os.exit(66i32) }
+    if !arrive(&harness, &f, &theme, s, .SideWide, 1175000000i64) { os.exit(66i32) }
     let (wide, has_wide) = lifted(&harness, 200u64)
     if !has_wide || !near(wide.width, 400.0) || !near(wide.x + wide.width, 640.0) { os.exit(67i32) }
     // An optional Back button precedes the title while Close remains at the end.
     let (root_back, build_back_error) = build(&f, &theme, s, .SideBack)
     if build_back_error != ok || testing.pump(&harness, root_back, time.Instant { nanos: 1185000000i64 }) != ok { os.exit(68i32) }
+    if !arrive(&harness, &f, &theme, s, .SideBack, 1185000000i64) { os.exit(68i32) }
     let (back_button, has_back_button) = bounds(&harness, &runtime, 203u64)
     let (back_close, has_back_close) = bounds(&harness, &runtime, 202u64)
     let (back_tree, back_tree_error) = testing.semantics(&harness)
@@ -457,6 +487,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let dirty_dismiss_before = s.counters[3usize].count
     let (root_dirty, build_dirty_error) = build(&f, &theme, s, .SideDirty)
     if build_dirty_error != ok || testing.pump(&harness, root_dirty, time.Instant { nanos: 1190000000i64 }) != ok { os.exit(71i32) }
+    if !arrive(&harness, &f, &theme, s, .SideDirty, 1190000000i64) { os.exit(71i32) }
     if testing.tap(&harness, 5.0, 5.0) != ok || s.counters[3usize].count != dirty_dismiss_before { os.exit(72i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || s.counters[3usize].count != dirty_dismiss_before + 1usize { os.exit(73i32) }
     // Optional sheet actions stay after a full-width divider at the bottom,
@@ -465,6 +496,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let sheet_cancel_before = s.counters[0usize].count
     let (root_sheet_actions, build_sheet_actions_error) = build(&f, &theme, s, .SideActions)
     if build_sheet_actions_error != ok || testing.pump(&harness, root_sheet_actions, time.Instant { nanos: 1195000000i64 }) != ok { os.exit(74i32) }
+    if !arrive(&harness, &f, &theme, s, .SideActions, 1195000000i64) { os.exit(74i32) }
     let (sheet_actions_shot, sheet_actions_shot_error) = testing.snapshot(&harness, a)
     if sheet_actions_shot_error != ok { os.exit(75i32) }
     let (sheet_keep, has_sheet_keep) = bounds(&harness, &runtime, 204u64)
@@ -478,6 +510,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // handle 16 down in `on-surface-variant` at 40%; no Close.
     let (root_3, build_3_error) = build(&f, &theme, s, .Bottom)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(29i32) }
+    if !arrive(&harness, &f, &theme, s, .Bottom, 1200000000i64) { os.exit(29i32) }
     let (shot_3, shot_3_error) = testing.snapshot(&harness, a)
     if shot_3_error != ok { os.exit(30i32) }
     let (bottom, has_bottom) = lifted(&harness, 300u64)
@@ -490,11 +523,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // keyboard-operable button whose value names the current stop.
     let (root_peek, build_peek_error) = build(&f, &theme, s, .BottomPeek)
     if build_peek_error != ok || testing.pump(&harness, root_peek, time.Instant { nanos: 1210000000i64 }) != ok { os.exit(124i32) }
+    if !arrive(&harness, &f, &theme, s, .BottomPeek, 1210000000i64) { os.exit(124i32) }
     let (peek_sheet, has_peek_sheet) = lifted(&harness, 300u64)
     if !has_peek_sheet || !near(peek_sheet.height, 96.0) || !near(peek_sheet.y, 384.0) { os.exit(125i32) }
     let resize_before = s.counters[6usize].count
     let (root_half, build_half_error) = build(&f, &theme, s, .BottomHalf)
     if build_half_error != ok || testing.pump(&harness, root_half, time.Instant { nanos: 1220000000i64 }) != ok { os.exit(126i32) }
+    if !arrive(&harness, &f, &theme, s, .BottomHalf, 1220000000i64) { os.exit(126i32) }
     let (half_sheet, has_half_sheet) = lifted(&harness, 300u64)
     let (half_title, has_half_title) = bounds(&harness, &runtime, 301u64)
     let (resize_handle, has_resize_handle) = bounds(&harness, &runtime, 302u64)
@@ -517,16 +552,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(drag_short.x, drag_short.y) }) != ok || s.counters[6usize].count != drag_cycle_before { os.exit(135i32) }
     let (root_half_settled, build_half_settled_error) = build(&f, &theme, s, .BottomHalf)
     if build_half_settled_error != ok || testing.pump(&harness, root_half_settled, time.Instant { nanos: 1227500000i64 }) != ok { os.exit(136i32) }
+    if !arrive(&harness, &f, &theme, s, .BottomHalf, 1227500000i64) { os.exit(136i32) }
     let (settled_handle, has_settled_handle) = bounds(&harness, &runtime, 302u64)
     if !has_settled_handle || testing.drag(&harness, geometry.Point { x: settled_handle.x + settled_handle.width * 0.5, y: settled_handle.y + settled_handle.height * 0.5 }, geometry.Point { x: settled_handle.x + settled_handle.width * 0.5, y: settled_handle.y + settled_handle.height * 0.5 + 80.0 }, 2usize) != ok || s.counters[6usize].count != drag_cycle_before + 1usize { os.exit(137i32) }
     let (root_full, build_full_error) = build(&f, &theme, s, .BottomFull)
     if build_full_error != ok || testing.pump(&harness, root_full, time.Instant { nanos: 1230000000i64 }) != ok { os.exit(130i32) }
+    if !arrive(&harness, &f, &theme, s, .BottomFull, 1230000000i64) { os.exit(130i32) }
     let (full_sheet, has_full_sheet) = lifted(&harness, 300u64)
     if !has_full_sheet || !near(full_sheet.height, 408.0) || !near(full_sheet.y, 72.0) { os.exit(131i32) }
     // The same downward release at peek dismisses the modal sheet.
     let dismiss_before_drag = s.counters[3usize].count
     let (root_peek_drag, build_peek_drag_error) = build(&f, &theme, s, .BottomPeek)
     if build_peek_drag_error != ok || testing.pump(&harness, root_peek_drag, time.Instant { nanos: 1235000000i64 }) != ok { os.exit(138i32) }
+    if !arrive(&harness, &f, &theme, s, .BottomPeek, 1235000000i64) { os.exit(138i32) }
     let (peek_handle, has_peek_handle) = bounds(&harness, &runtime, 302u64)
     if !has_peek_handle || testing.drag(&harness, geometry.Point { x: peek_handle.x + peek_handle.width * 0.5, y: peek_handle.y + peek_handle.height * 0.5 }, geometry.Point { x: peek_handle.x + peek_handle.width * 0.5, y: peek_handle.y + peek_handle.height * 0.5 + 80.0 }, 2usize) != ok || s.counters[3usize].count != dismiss_before_drag + 1usize { os.exit(139i32) }
     // A standard bottom sheet participates in the page column at its peek
@@ -548,6 +586,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Cancel dismisses.
     let (root_4, build_4_error) = build(&f, &theme, s, .Actions)
     if build_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok { os.exit(35i32) }
+    if !arrive(&harness, &f, &theme, s, .Actions, 1300000000i64) { os.exit(35i32) }
     let (shot_4, shot_4_error) = testing.snapshot(&harness, a)
     if shot_4_error != ok { os.exit(36i32) }
     let (acts, has_acts) = lifted(&harness, 400u64)
@@ -563,6 +602,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let localized_dismiss_before = s.counters[3usize].count
     let (root_localized, build_localized_error) = build(&f, &theme, s, .ActionsLocalized)
     if build_localized_error != ok || testing.pump(&harness, root_localized, time.Instant { nanos: 1350000000i64 }) != ok { os.exit(81i32) }
+    if !arrive(&harness, &f, &theme, s, .ActionsLocalized, 1350000000i64) { os.exit(81i32) }
     let (localized_tree, localized_tree_error) = testing.semantics(&harness)
     if localized_tree_error != ok { os.exit(82i32) }
     let (_, has_dismiss_label) = find(localized_tree, .Button, "Dismiss")
@@ -572,6 +612,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let android_dismiss_before = s.counters[3usize].count
     let (root_android, build_android_error) = build(&f, &theme, s, .ActionsAndroid)
     if build_android_error != ok || testing.pump(&harness, root_android, time.Instant { nanos: 1380000000i64 }) != ok { os.exit(84i32) }
+    if !arrive(&harness, &f, &theme, s, .ActionsAndroid, 1380000000i64) { os.exit(84i32) }
     let (android_sheet, has_android_sheet) = lifted(&harness, 400u64)
     let (android_tree, android_tree_error) = testing.semantics(&harness)
     if android_tree_error != ok { os.exit(85i32) }
@@ -582,6 +623,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let icon_share_before = s.counters[4usize].count
     let (root_android_icons, build_android_icons_error) = build(&f, &theme, s, .ActionsAndroidIcons)
     if build_android_icons_error != ok || testing.pump(&harness, root_android_icons, time.Instant { nanos: 1400000000i64 }) != ok { os.exit(87i32) }
+    if !arrive(&harness, &f, &theme, s, .ActionsAndroidIcons, 1400000000i64) { os.exit(87i32) }
     let (android_icons_sheet, has_android_icons_sheet) = lifted(&harness, 400u64)
     let (android_icons_tree, android_icons_tree_error) = testing.semantics(&harness)
     if android_icons_tree_error != ok { os.exit(88i32) }
@@ -606,6 +648,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let ios_dismiss_before = s.counters[3usize].count
     let (root_ios, build_ios_error) = build(&f, &theme, s, .ActionsIos)
     if build_ios_error != ok || testing.pump(&harness, root_ios, time.Instant { nanos: 1440000000i64 }) != ok { os.exit(95i32) }
+    if !arrive(&harness, &f, &theme, s, .ActionsIos, 1440000000i64) { os.exit(95i32) }
     let (ios_shot, ios_shot_error) = testing.snapshot(&harness, a)
     if ios_shot_error != ok { os.exit(96i32) }
     let (ios_share, has_ios_share) = bounds(&harness, &runtime, 403u64)
