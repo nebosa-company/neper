@@ -26978,3 +26978,9 @@ Checks on Windows and Linux:
 The Switch spec slides and resizes the thumb over `duration-short-3` with `ease-standard`, and cross-fades the track colour at the same time. `switch_mark_at` now draws the switch a `share` of the way from off to on. The thumb's size and place, the edge width and the track, thumb and halo colours (`style.mix`) all follow that share, and pressing still makes the thumb 28. `switch_mark` passes 0 or 1. The new `switch_mark_keyed` eases the share on the switch (slot `key + 1048592`), and `switch_control` uses it. Reduced motion changes at once. Collection rows' switches keep the static mark.
 
 `ui_selection` taps a switch on, on Windows and Linux: 50 ms later its track is not yet `primary`, and 400 ms later it is. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1434 — Checkboxes fill and radios grow their dot
+
+The Choice spec fills the box and draws the tick over `duration-short-2` (`ease-standard`), and scales the radio dot up from nothing over `duration-short-3`. `choice_mark_at` draws a mark a `share` of the way to chosen: a box's edge cross-fades to `primary`, its fill fades in and its tick fades in, and a radio's dot grows from nothing. The fill, tick and dot are always drawn (at nothing when unchosen), so the mark keeps its shape. `choice_mark` passes 0 or 1. `choosable` eases the share on its row (slot `key + 1048593`), over `short-2` for a box and `short-3` for a radio. Reduced motion changes at once. The tick fades rather than drawing along its stroke.
+
+`ui_selection` checks a box on Windows and Linux: 20 ms later its corner is not yet `primary`, and 400 ms later it is. The fixture rebuilds once before the tap so the cell exists, and its state limits rise from 8 states / 256 bytes to 32 / 1024. All 103 `ui_*` fixtures pass on both hosts.

@@ -149,7 +149,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 96usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 10u16, max_commands: 256usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 96usize, max_states: 32usize, state_bytes: 1024usize, state_classes: 2u16, max_depth: 10u16, max_commands: 256usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -186,11 +186,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (some_state, has_some) = state_of(&harness, .Checkbox, "Some")
     if !has_some || !some_state.mixed || !some_state.disabled { os.exit(14i32) }
     // A tap checks the checkbox; the next frame says so.
+    // (D1434) A second frame, so the box's eased fill has its cell before the
+    // tap (cells exist from an element's second frame).
+    let (root_warm, root_warm_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
+    if root_warm_error != ok || testing.pump(&harness, root_warm, now) != ok { os.exit(11i32) }
     tap_key(&runtime, &harness, 1u64, 15i32)
     if logs[0usize].checks != 1usize || !logs[0usize].checked { os.exit(16i32) }
     let (root_2, build_2_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
     if build_2_error != ok { os.exit(17i32) }
     if testing.pump(&harness, root_2, now) != ok { os.exit(18i32) }
+    // (D1434) The box fills over `duration-short-2`: 20 ms on its corner is not
+    // yet `primary`, 400 ms on it is.
+    let (agree_row, has_agree_row) = widget.bounds_of(&runtime, testing.by_key(&harness, 1u64).element)
+    if !has_agree_row { os.exit(82i32) }
+    let box_px = ((usize(agree_row.y + agree_row.height * 0.5) - 6usize) * 140usize + usize(agree_row.x + 20.0) - 6usize) * 4usize
+    var fill_step = 0usize
+    while fill_step < 2usize {
+        let fill_at = time.Instant { nanos: now.nanos + 20000000i64 + i64(fill_step) * 380000000i64 }
+        if testing.begin(&harness, fill_at) != ok { os.exit(18i32) }
+        let (root_fill, root_fill_error) = build(&frame, &theme, &actions[0usize], &logs[0usize])
+        if root_fill_error != ok || testing.pump(&harness, root_fill, fill_at) != ok { os.exit(18i32) }
+        let (fill_shot, fill_shot_error) = testing.snapshot(&harness, a)
+        if fill_shot_error != ok { os.exit(18i32) }
+        let fill_blue = f32(fill_shot.pixels[box_px + 2usize])
+        let fill_goal = style.color(&tokens, .Primary).blue * 255.0
+        let filled_now = fill_blue < fill_goal + 3.0 && fill_blue > fill_goal - 3.0
+        if fill_step == 0usize && filled_now { os.exit(80i32) }
+        if fill_step == 1usize && !filled_now { os.exit(81i32) }
+        fill_step += 1usize
+    }
     let (agree_2, _) = state_of(&harness, .Checkbox, "Agree")
     if !agree_2.checked { os.exit(19i32) }
     // The radio group: Red is selected; a tap on Green fires its action and the

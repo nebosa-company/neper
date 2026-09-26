@@ -2740,6 +2740,17 @@ fn beak_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // A choice's mark in its state circle (D956): the box or ring, filled or dotted
 // once chosen, under the circle's state layer.
 fn choice_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, enabled: bool) -> (widget.Node, err) {
+    var share: f32 = 0.0
+    if chosen || mixed { share = 1.0 }
+    let (made, made_error) = choice_mark_at(a, t, state, chosen, mixed, round, enabled, share)
+    ret (made, made_error)
+}
+
+// (D1434, docs/ux/components/Choice, motion) `choice_mark` `share` of the way
+// to chosen: a box's edge and fill cross-fade to `primary` and its tick fades
+// in; a radio's dot scales up from nothing. Both are always drawn, so the mark
+// keeps its shape.
+fn choice_mark_at(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, enabled: bool, share: f32) -> (widget.Node, err) {
     let h = t.tokens.metrics.control_height
     var circle = t.tokens.sizes.control_md
     var mark: f32 = 18.0
@@ -2751,8 +2762,7 @@ fn choice_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen
     let filled = chosen || mixed
     let primary = style.color(t.tokens, .Primary)
     let quiet = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content)
-    var edge = style.color(t.tokens, .OnSurfaceVariant)
-    if filled { edge = primary }
+    var edge = style.mix(style.color(t.tokens, .OnSurfaceVariant), primary, share)
     if !enabled { edge = quiet }
     var mark_style = sized_style(mark, mark)
     mark_style.border = style.Border { width: 2.0, color: edge }
@@ -2762,25 +2772,22 @@ fn choice_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen
     var inside_count = 0usize
     if round {
         mark_style.radius = mark * 0.5
-        if chosen {
-            var dot = sized_style(mark * 0.5, mark * 0.5)
-            dot.radius = mark * 0.25
-            dot.background = paint.Brush { Solid: edge }
-            inside[0usize] = widget.box(0u64, dot, zero)
-            inside_count = 1usize
-        }
+        let across = mark * 0.5 * share
+        var dot = sized_style(across, across)
+        dot.radius = across * 0.5
+        dot.background = paint.Brush { Solid: edge }
+        inside[0usize] = widget.box(0u64, dot, zero)
+        inside_count = 1usize
     } else {
-        if filled {
-            mark_style.background = paint.Brush { Solid: edge }
-            var tick = style.color(t.tokens, .OnPrimary)
-            if !enabled { tick = style.color(t.tokens, .Background) }
-            var kind: GlyphKind = .Check
-            if mixed { kind = .Dash }
-            let (drawn, drawn_error) = mark_glyph(a, tick, kind, mark - 4.0)
-            if drawn_error != ok { ret (zero, drawn_error) }
-            inside[0usize] = drawn
-            inside_count = 1usize
-        }
+        mark_style.background = paint.Brush { Solid: with_alpha(edge, edge.alpha * share) }
+        var tick = style.color(t.tokens, .OnPrimary)
+        if !enabled { tick = style.color(t.tokens, .Background) }
+        var kind: GlyphKind = .Check
+        if mixed { kind = .Dash }
+        let (drawn, drawn_error) = mark_glyph(a, with_alpha(tick, tick.alpha * share), kind, mark - 4.0)
+        if drawn_error != ok { ret (zero, drawn_error) }
+        inside[0usize] = drawn
+        inside_count = 1usize
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -2813,7 +2820,15 @@ fn choosable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: s
     let quiet = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content)
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let (mark_node, mark_error) = choice_mark(a, t, state, chosen, mixed, round, enabled)
+    // (D1434, docs/ux/components/Choice, motion) The box fills over
+    // `duration-short-2`, the dot over `duration-short-3`, on `ease-standard`
+    // (kept on the row, slot `key + 1048593`).
+    var chosen_goal: f32 = 0.0
+    if chosen || mixed { chosen_goal = 1.0 }
+    var choice_millis = t.tokens.durations.short2
+    if round { choice_millis = t.tokens.durations.short3 }
+    let chosen_share = eased_on(t, key, key + 1048593u64, chosen_goal, false, choice_millis)
+    let (mark_node, mark_error) = choice_mark_at(a, t, state, chosen, mixed, round, enabled, chosen_share)
     if mark_error != ok { ret (zero, mark_error) }
     parts[0usize] = mark_node
     var caption = text_options()
