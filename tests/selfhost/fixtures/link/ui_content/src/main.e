@@ -332,6 +332,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let (area_offset, has_area_offset) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 700u64 + 1048612u64).element)
     if !has_area_offset || !(area_offset > 0.0) { os.exit(39i32) }
+    // (D1467) A snackbar whose message and action do not fit on one line stands
+    // two: the action under the message, below Dismiss; a short one stays one.
+    // An 800 wide window of its own, so the snackbar is not in its compact form.
+    let (wide_rt, wide_rt_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 256usize, max_states: 32usize, state_bytes: 1024usize, state_classes: 8u16, max_depth: 32u16, max_commands: 4096usize })
+    if wide_rt_error != ok { os.exit(40i32) }
+    var wide_runtime = wide_rt
+    let wide_theme = control.Theme { tokens: &tokens, fonts: fonts[0usize..1usize], language: "", runtime: &wide_runtime }
+    let (wide_h, wide_h_error) = testing.harness(a, &wide_runtime, 800u32, 400u32, 1.0)
+    if wide_h_error != ok { os.exit(40i32) }
+    var wide_harness = wide_h
+    var notice_step = 0usize
+    while notice_step < 4usize {
+        frame = mem.arena_from(frame_storage)
+        var notices: [1]control.Notice = zero
+        notices[0usize] = control.Notice { text: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", action_label: "aa", action: zero, dismiss: zero }
+        if notice_step >= 2usize { notices[0usize].text = "aa" }
+        let (snack, snack_error) = control.snackbar(&frame, 900u64, &wide_theme, notices[0usize..1usize], 360.0)
+        let (snack_page, snack_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+        if snack_error != ok || snack_page_error != ok { os.exit(40i32) }
+        snack_page[0usize] = snack
+        if testing.pump(&wide_harness, widget.box(0u64, control.sized_style(800.0, 400.0), snack_page[0usize..1usize]), time.Instant { nanos: 6000000000i64 + i64(notice_step) }) != ok { os.exit(41i32) }
+        if notice_step == 1usize || notice_step == 3usize {
+            let (act_box, has_act_box) = widget.bounds_of(&wide_runtime, testing.by_key(&wide_harness, 901u64).element)
+            let (dismiss_box, has_dismiss_box) = widget.bounds_of(&wide_runtime, testing.by_key(&wide_harness, 902u64).element)
+            if !has_act_box || !has_dismiss_box { os.exit(42i32) }
+            let under = act_box.y >= dismiss_box.y + dismiss_box.height - 1.0
+            if notice_step == 1usize && !under { os.exit(43i32) }
+            if notice_step == 3usize && under { os.exit(44i32) }
+        }
+        notice_step += 1usize
+    }
+    if testing.close(&wide_harness) != ok || widget.close(&wide_runtime) != ok { os.exit(45i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui content ok\n")
     ret ok

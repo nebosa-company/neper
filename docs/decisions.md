@@ -27216,3 +27216,9 @@ Two more places used a heavier role as a stand-in for weight 600.
 Themes without a 600 face draw these in the regular face at the same size.
 
 `text_shape` checks on Windows and Linux that a strong span is `body-medium` at 600, an emphasis span `body-medium` italic, and a code span mono in the `code` role. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1467 — Snackbars take two lines when the action does not fit
+
+The Snackbar spec has a two-line form: "a result that needs a sentence of reason; the action moves under the text", at least 68 tall. When the message and the action do not fit on one line beside Dismiss, a snackbar now stands in that form. The message and the action are measured with the theme's fonts. The message stands beside Dismiss, then the action at the end under them. A short message stays on one line. The entry's fade and rise now always wrap the snackbar (identity once in), per D1432, so a focused action is not remade when the entry ends. Exit motion and the toast's richer forms are still not done.
+
+`ui_content` gives the check its own 800 wide window, since in the fixture's 64 wide one every snackbar is compact. On Windows and Linux, a long message puts the action under Dismiss, and a short one keeps it on Dismiss's line. All 103 `ui_*` fixtures pass on both hosts.

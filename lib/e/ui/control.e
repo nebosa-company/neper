@@ -8539,8 +8539,8 @@ fn glyph_action(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // (D1278) The head notice times out (`notice_timeout`), paused by hover and focus.
 // (D1287) It enters fading in and rising 8.
 // (D1394) In a compact window it spans the width less 16 a side.
-// ponytail: exit motion, the
-// two-line layout and the toast's title and severity well wait on a richer
+// (D1467) A message and action that do not fit on one line stand two.
+// ponytail: exit motion, the toast's title and severity well wait on a richer
 // Notice; the toast's stack of three shows the head alone.
 // (D1278) A notice's countdown, kept on its surface across frames: which notice
 // it counts for, how long it has shown unpaused, the last frame's time, and
@@ -8674,9 +8674,33 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
     sheet.width = style.Length { Px: wide }
     sheet.min_height = style.Length { Px: 48.0 }
     sheet.padding = style.EdgeLengths { left: start, top: pad_y, right: end, bottom: pad_y }
-    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    let (row, row_error) = mem.alloc[widget.Node](a, 4usize)
     if row_error != ok { ret (zero, TooLarge) }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, sheet, parts[0usize..at])
+    // (D1467, docs/ux/components/Snackbar, two lines) A snackbar whose message
+    // and action do not fit on one line stands two: the message beside Dismiss,
+    // then the action at the end under it, at least 68 tall.
+    if bottom && head.action_label.len != 0usize {
+        let (message_width, _, _, message_error) = run_metrics(a, t, .BodyMedium, head.text)
+        let (action_width, _, _, action_error) = run_metrics(a, t, .Label, head.action_label)
+        if message_error != ok || action_error != ok { ret (zero, TooLarge) }
+        let room = wide - 16.0 - 8.0 - t.tokens.sizes.control_md - 3.0 * 8.0
+        if message_width + action_width + 24.0 > room {
+            let (lines, lines_error) = mem.alloc[widget.Node](a, 4usize)
+            if lines_error != ok { ret (zero, TooLarge) }
+            lines[0usize] = parts[0usize]
+            lines[1usize] = parts[2usize]
+            lines[2usize] = widget.spacer(0u64, 1.0)
+            lines[3usize] = parts[1usize]
+            var top_line = style.defaults()
+            top_line.width = style.Length { Percent: 100.0 }
+            row[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, top_line, lines[0usize..2usize])
+            row[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 0.0 }, top_line, lines[2usize..4usize])
+            var tall = sheet
+            tall.min_height = style.Length { Px: 68.0 }
+            row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, tall, row[1usize..3usize])
+        }
+    }
     var sem: widget.Semantics = zero
     sem.role = 26u8
     sem.label = head.text
@@ -8697,17 +8721,17 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
     }
     var placement: widget.Placement = .Right
     if bottom { placement = .Below }
-    if entered < 1.0 {
-        var rise: f32 = 8.0 * (1.0 - entered)
-        if !bottom { rise = 0.0 - rise }
-        let (entering, entering_error) = mem.alloc[widget.Node](a, 2usize)
-        if entering_error != ok { ret (zero, TooLarge) }
-        entering[0usize] = kept[0usize]
-        entering[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: rise } }, style.defaults(), entering[0usize..1usize])
-        var faded = style.defaults()
-        faded.opacity = entered
-        kept[0usize] = widget.box(0u64, faded, entering[1usize..2usize])
-    }
+    // (D1467) The entry always stands in its wrappers (identity once in), so a
+    // focused action is not remade when the entry ends.
+    var rise: f32 = 8.0 * (1.0 - entered)
+    if !bottom { rise = 0.0 - rise }
+    let (entering, entering_error) = mem.alloc[widget.Node](a, 2usize)
+    if entering_error != ok { ret (zero, TooLarge) }
+    entering[0usize] = kept[0usize]
+    entering[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: rise } }, style.defaults(), entering[0usize..1usize])
+    var faded = style.defaults()
+    faded.opacity = entered
+    kept[0usize] = widget.box(0u64, faded, entering[1usize..2usize])
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: geometry.Point { x: 0.0, y: 0.0 }, modal: false, dismiss: zero }, style.defaults(), kept[0usize..1usize])
