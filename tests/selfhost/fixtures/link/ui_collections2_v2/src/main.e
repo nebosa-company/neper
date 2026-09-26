@@ -513,6 +513,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var filtered_only: [3]bool = zero
     filtered_only[1usize] = true
     numeric_options.filtered = filtered_only[..]
+    // (D1341) ...and Size and Kind grouped under "Detail".
+    var detail_group: [1]collection.HeaderGroup = zero
+    detail_group[0usize] = collection.HeaderGroup { title: "Detail", first: 1usize, span: 2usize }
+    numeric_options.groups = detail_group[..]
     f = mem.arena_from(frame_storage)
     let numeric_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: numeric_row_cell }
     let (numeric_table, numeric_table_error) = collection.table_with(&f, 9u64, &theme, "Files", columns[0usize..3usize], numeric_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, numeric_options)
@@ -527,6 +531,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (size_head, has_size_head) = find(filter_tree, .ColumnHeader, "Size")
     let (name_head, has_name_head) = find(filter_tree, .ColumnHeader, "Name")
     if filter_tree_error != ok || !has_size_head || !has_name_head || !same(size_head.hint, "filtered") || name_head.hint.len != 0usize { os.exit(101i32) }
+    let (detail_head, has_detail_head) = find(filter_tree, .ColumnHeader, "Detail")
+    if !has_detail_head || !near(detail_head.bounds.width, 180.0) || !near(detail_head.bounds.x, size_head.bounds.x) || !(detail_head.bounds.y + detail_head.bounds.height <= size_head.bounds.y + 0.5) { os.exit(102i32) }
     // (D1248) With no rows the header stays over the loading state (a busy
     // "Loading" group under an indeterminate progress bar) or the empty state.
     var state_step = 0usize

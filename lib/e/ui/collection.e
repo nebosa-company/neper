@@ -1663,7 +1663,8 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // (D1246) A selectable table's select-all checkbox stands before these cells.
 // (D1328) A numeric column's title stands at the end, its sort arrow before it.
 // (D1340) A filtered column's header carries the filter mark.
-// ponytail: no grouped tier or reorder lift.
+// (D1341) `TableOptions.groups` adds the grouped tier (`header_groups`).
+// ponytail: no reorder lift.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     var plain: []const bool = zero
     let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain, plain)
@@ -2030,7 +2031,86 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // (D1328) `numeric` marks the columns (by index) that hold numbers: their headers
 // and cells stand at the end.
 // (D1340) `filtered` marks the columns (by index) a filter applies to.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool }
+// (D1341) `groups` spans titles over runs of columns: the header's upper tier.
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, filtered: []const bool, groups: []const HeaderGroup }
+
+// (D1341) A header group: its title over `span` columns from `first`.
+type HeaderGroup = struct { title: str, first: usize, span: usize }
+
+// (D1341, docs/ux/components/HeaderRow, grouped) The upper tier: a 40 row on
+// `surface-container` over a 1px `outline-variant` line, `before` blank first
+// (row numbers, the check column), then each group's `title-small`
+// `on-surface-variant` title across its columns, `pad` in, columns in no group
+// blank; a group of column headers in the tree named by each title.
+fn header_groups(a: *mem.Arena, t: *const control.Theme, columns: []const Column, groups: []const HeaderGroup, before: f32, pad: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    let inner = 40.0 - t.tokens.sizes.divider
+    if before > 0.0 {
+        cells[n] = widget.box(0u64, control.sized_style(before, inner), zero)
+        n += 1usize
+    }
+    var c = 0usize
+    while c < columns.len {
+        var spanned = 0usize
+        var title = ""
+        var g = 0usize
+        while g < groups.len {
+            if groups[g].first == c && groups[g].span > 0usize {
+                spanned = groups[g].span
+                title = groups[g].title
+            }
+            g += 1usize
+        }
+        if c + spanned > columns.len { spanned = columns.len - c }
+        if spanned == 0usize {
+            cells[n] = widget.box(0u64, control.sized_style(columns[c].width, inner), zero)
+            n += 1usize
+            c += 1usize
+            continue
+        }
+        var across: f32 = 0.0
+        var k = 0usize
+        while k < spanned {
+            across += columns[c + k].width
+            k += 1usize
+        }
+        var caption = control.text_options()
+        caption.role = .TitleSmall
+        caption.wrap = .None
+        caption.ellipsis = "…"
+        caption.max_lines = 1u32
+        let (said, said_error) = control.colored_text(a, 0u64, title, t, caption, style.color(t.tokens, .OnSurfaceVariant))
+        if said_error != ok { ret (zero, said_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = said
+        var cell_style = control.sized_style(across, inner)
+        let sides = style.Length { Px: pad }
+        let flat = style.Length { Px: 0.0 }
+        cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+        cell_style.overflow = .Clip
+        held[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, cell_style, held[0usize..1usize])
+        var sem: widget.Semantics = zero
+        sem.role = 32u8
+        sem.label = title
+        cells[n] = widget.semantics(0u64, sem, style.defaults(), held[1usize..2usize])
+        n += 1usize
+        c += spanned
+    }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var tier = style.defaults()
+    tier.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+    rows[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, tier, cells[0usize..n])
+    var rule = style.defaults()
+    rule.height = style.Length { Px: t.tokens.sizes.divider }
+    rule.width = style.Length { Percent: 100.0 }
+    rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+    rows[1usize] = widget.box(0u64, rule, zero)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..2usize]), ok)
+}
 
 // (D1328) Whether column `c` is numeric.
 fn numeric_column(numeric: []const bool, c: usize) -> bool {
@@ -3120,7 +3200,9 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         head_parts[1usize] = header
         head = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), head_parts[0usize..2usize])
     }
-    let body_height = height - head_height
+    // (D1341) A grouped tier takes its 40 from the body too.
+    var body_height = height - head_height
+    if selection.groups.len > 0usize { body_height -= 40.0 }
     let (first, count) = virtual_range(offset, body_height, total, row_extent)
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (zero, TooLarge) }
@@ -3261,6 +3343,18 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         if bar_error != ok { ret (zero, bar_error) }
         parts[p] = bar
         p += 1usize
+    }
+    // (D1341) The grouped tier over the header.
+    if selection.groups.len > 0usize {
+        var before = lead
+        if selecting { before += check_side }
+        let (tier, tier_error) = header_groups(a, t, columns, selection.groups, before, pad)
+        if tier_error != ok { ret (zero, tier_error) }
+        let (tiers, tiers_error) = mem.alloc[widget.Node](a, 2usize)
+        if tiers_error != ok { ret (zero, TooLarge) }
+        tiers[0usize] = tier
+        tiers[1usize] = head
+        head = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), tiers[0usize..2usize])
     }
     parts[p] = head
     parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent }, view_style, rows[0usize..count])

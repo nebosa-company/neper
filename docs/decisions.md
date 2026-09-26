@@ -25793,3 +25793,18 @@ only an icon. The grouped tier and the reorder lift are still to come.
 `ui_collections2_v2` filters the Size column: its header's hint is
 "filtered" and Name's is empty, on Windows and Linux; `ui_tabular` and
 `ui_collections3_v2` still pass on both.
+
+## D1341 — Table headers have a grouped tier
+
+The HeaderRow spec's grouped form: `TableOptions.groups` (`HeaderGroup`: a
+title over `span` columns from `first`) adds an upper tier over the header
+(`header_groups`). It is a 40 row on `surface-container` over a 1px
+`outline-variant` line: a blank for the row numbers and the check column
+first, then each group's `title-small` `on-surface-variant` title across its
+columns' widths, `pad` in, and columns in no group left blank. Each group is
+a column header in the tree named by its title. The body gives the tier its
+40. The reorder lift is still to come.
+
+`ui_collections2_v2` groups Size and Kind under Detail: the Detail header is
+180 wide, starts over Size, and stands above the header row, on Windows and
+Linux; `ui_tabular` still passes on both.
