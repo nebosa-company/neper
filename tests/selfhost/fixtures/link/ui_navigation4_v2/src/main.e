@@ -310,6 +310,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_snap_sash { os.exit(138i32) }
     let snap_from = geometry.Point { x: snap_sash.x + snap_sash.width * 0.5, y: snap_sash.y + snap_sash.height * 0.5 }
     if testing.drag(&harness, snap_from, geometry.Point { x: snap_from.x + 50.0, y: snap_from.y }, 3usize) != ok || split_size != 360.0 { os.exit(139i32) }
+    // (D1410) Side by side, F6 moves the focus from the list to the detail and back.
+    var cycle_step = 0usize
+    while cycle_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let cycle_list = widget.region(4611u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, control.sized_style(60.0, 20.0), zero)
+        let cycle_detail = widget.region(4612u64, widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, control.sized_style(60.0, 20.0), zero)
+        var cycle_options = navigation.navigation_split_options()
+        cycle_options.list_label = "Builds"
+        cycle_options.detail_label = "Build 4127"
+        cycle_options.list_focus = 4611u64
+        cycle_options.detail_focus = 4612u64
+        let (cycle_split, cycle_split_error) = navigation.navigation_split_of(&f, 4600u64, &theme, cycle_list, cycle_detail, true, 300.0, zero, 880.0, 300.0, cycle_options)
+        let (cycle_page, cycle_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if cycle_split_error != ok || cycle_page_error != ok { os.exit(140i32) }
+        cycle_page[0usize] = cycle_split
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(900.0, 560.0), cycle_page[0usize..1usize]), time.Instant { nanos: 41000000000i64 + i64(cycle_step) }) != ok { os.exit(141i32) }
+        cycle_step += 1usize
+    }
+    if widget.focus(&runtime, testing.by_key(&harness, 4611u64).element) != ok || testing.press_key(&harness, 65475u32, zero) != ok { os.exit(142i32) }
+    let (cycled_key, _) = widget.focused_key(&runtime)
+    if cycled_key != 4612u64 { os.exit(143i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation4 v2 ok\n")
     ret ok

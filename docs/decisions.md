@@ -26777,3 +26777,14 @@ list's minimum.
 
 `ui_navigation4_v2` drags a touch split's divider from 300 toward 350, and it
 reports 360. `ui_adaptive` and `ui_panes` still pass, on Windows and Linux.
+
+## D1410 — F6 cycles a navigation split's panes
+
+The NavigationSplit spec cycles the panes with F6. `NavigationSplitOptions`
+gains `list_focus` and `detail_focus`, keys of a focusable element in each
+pane. Side by side, the split passes them to D1406's `SplitOptions`, so F6
+focuses the detail's element while the list holds the focus and the list's
+otherwise. Escape returning the focus to the list is still missing.
+
+`ui_navigation4_v2` presses F6 in a side-by-side split's list and the focus
+moves to the detail; `ui_adaptive` still passes, on Windows and Linux.
