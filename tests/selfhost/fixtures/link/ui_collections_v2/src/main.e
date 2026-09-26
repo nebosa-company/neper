@@ -1109,6 +1109,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         grow_step += 1usize
     }
+    // (D1542) The middle row removed, its place stands on the first frame and has
+    // closed a second on: the last row rises by a row.
+    var kept_keys: [2]widget.Key = zero
+    kept_keys[0usize] = 7300u64
+    kept_keys[1usize] = 7302u64
+    var leave_step = 0usize
+    var last_before: f32 = 0.0
+    var last_after: f32 = 0.0
+    while leave_step < 2usize {
+        var leave_at = 107000000000i64
+        if leave_step == 1usize { leave_at = 108000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: leave_at }) != ok { os.exit(164i32) }
+        f = mem.arena_from(frame_storage)
+        var leave_options = collection.list_options()
+        leave_options.width = 300.0
+        let (leave_list, leave_list_error) = collection.list_of(&f, 7250u64, &theme, "Growing", grow_items[0usize..2usize], kept_keys[..], leave_options)
+        let (leave_page, leave_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if leave_list_error != ok || leave_page_error != ok { os.exit(164i32) }
+        leave_page[0usize] = leave_list
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 600.0), leave_page[0usize..1usize]), time.Instant { nanos: leave_at }) != ok { os.exit(164i32) }
+        let (last_row, has_last_row) = bounds(&harness, &runtime, 7302u64)
+        if !has_last_row { os.exit(164i32) }
+        if leave_step == 0usize { last_before = last_row.y } else { last_after = last_row.y }
+        leave_step += 1usize
+    }
+    if !(last_before - last_after > 30.0) { os.exit(165i32) }
     // (D1490) Under reduced motion the fill cross-fades over 100 ms: 50 ms in
     // it is not yet `secondary-container`, a second on it is.
     var calm_tokens = tokens
