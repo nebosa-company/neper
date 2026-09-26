@@ -378,6 +378,7 @@ type Local = struct {
     mutable: bool,
 }
 
+
 // A local's resource state (D345-D351), beside the locals rather than in them so
 // the name walk stays short: where the value is, the token it was acquired or
 // moved at, whether it must be consumed, the `err` local it was bound beside while
@@ -710,6 +711,10 @@ type Checker = struct {
     // and the answer to "is any local affine" with the local count it was given for,
     // so a statement asks in O(1) and only a change of the locals asks again.
     pins_live: usize,
+    // (D1563) How many thread handles this body bound, so a name read asks about
+    // module-scope variables only once a thread is running.
+    threads_started: usize,
+
     affine_answer_count: usize,
     affine_answer: bool,
     affine_answer_valid: bool,
@@ -937,6 +942,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.tokens = tokens
     c.locals = locals
     c.resources = resources
+
     var no_resource_aliases: []ResourceAlias = zero
     c.resource_aliases = no_resource_aliases
     c.resource_alias_count = 0usize
@@ -6612,8 +6618,14 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     var no_elements_acquired: []usize = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
     c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, thread_entry: 0usize, points_to: 0usize, points_to_field: "", slice_offset: 0usize, slice_offset_known: false }
+    // (D1563) A cached answer for the locals so far extends by the one added.
+    if c.affine_answer_valid && c.affine_answer_count == c.local_count {
+        c.affine_answer = c.affine_answer || state != resource_plain
+        c.affine_answer_count = c.local_count + 1usize
+    } else {
+        c.affine_answer_valid = false
+    }
     c.local_count += 1usize
-    c.affine_answer_valid = false
     ret ok
 }
 
@@ -11652,7 +11664,8 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if c.resources_on {
             var opaque_subject = base
             while opaque_subject.kind == .Pointer && opaque_subject.has_element && opaque_subject.element < c.type_count { opaque_subject = c.types[opaque_subject.element] }
-            if resource_type(c, opaque_subject) && !seeded_arena(c, opaque_subject) && opaque_subject.module_index != module_index {
+            // (D1563) The module first: a read in the declaring module needs no lookup.
+            if opaque_subject.module_index != module_index && resource_type(c, opaque_subject) && !seeded_arena(c, opaque_subject) {
                 record_failure(c, module_index, node, .ResourceOpaque, opaque_subject.name, "")
                 ret (invalid_type(), ResourceViolation)
             }
@@ -14054,6 +14067,8 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     c.resource_alias_count = 0usize
     c.block_depth = 0usize
     c.pins_live = 0usize
+    c.threads_started = 0usize
+
     c.affine_answer_valid = false
     c.active_noescape = function.import_symbol
     c.body_returns_err = function.return_count == 1usize && c.return_types[function.first_return].kind == .Err
@@ -15100,7 +15115,9 @@ fn region_tag(c: *Checker, local_index: usize, token: usize) {
     c.resources[local_index].view = true
     c.resources[local_index].obligated = false
     c.resources[local_index].acquired = token
-    c.affine_answer_valid = false
+    // (D1563) A local made affine: "is any local affine" is yes, for whatever count
+    // the cache holds (a stale yes only asks more).
+    c.affine_answer = true
 }
 
 fn invalidate_views_of(c: *Checker, module_index: usize, node: syntax.Node, container: usize) {
@@ -16571,7 +16588,7 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
             c.resources[viewer].state = resource_moved
             c.resources[viewer].dangling = 2u8
             c.resources[viewer].acquired = usize(node.token_start)
-            c.affine_answer_valid = false
+            c.affine_answer = true
             record_explain_view_end(c, module_index, node, c.locals[viewer].name, 2u8)
         }
         viewer += 1usize
@@ -16675,6 +16692,7 @@ fn lend_thread_storage(c: *Checker, module_index: usize, thread_local: usize, po
 // module's functions and `mod.var` spellings are not followed), and a guard held
 // here is trusted to be the lock the thread takes.
 fn thread_global_use(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node) -> err {
+    if c.threads_started == 0usize { ret ok }
     var thread_at = c.local_count
     var at = 0usize
     while at < c.local_count {
@@ -16773,7 +16791,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         c.resources[local_index].view = true
         c.resources[local_index].acquired = usize(statement.token_start)
         c.resources[local_index].mark_arena = call_argument_storage_text(c, g, tree, module_index, tree.nodes[initializer_index], 0usize)
-        c.affine_answer_valid = false
+        c.affine_answer = true
         ret ok
     }
     // `let p = &x` (D393): `p` points at `x` until it is bound again. A slice bound
@@ -16792,7 +16810,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             c.resources[local_index].state = resource_owned
             c.resources[local_index].view = true
             c.resources[local_index].obligated = false
-            c.affine_answer_valid = false
+            c.affine_answer = true
             ret ok
         }
     }
@@ -16824,7 +16842,10 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             if has_entry && tree.nodes[entry_index].kind == .NameExpr {
                 let entry_token = c.tokens[usize(tree.nodes[entry_index].token_start)]
                 let (entry_function, found_entry) = find_function(c, module_index, g.modules[module_index].text[entry_token.start..entry_token.end])
-                if found_entry { c.resources[local_index].thread_entry = entry_function + 1usize }
+                if found_entry {
+                    c.resources[local_index].thread_entry = entry_function + 1usize
+                    c.threads_started += 1usize
+                }
             }
             var argument_at = 0usize
             while true {
@@ -17409,33 +17430,38 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     // `s.p = &x` or `items[i] = &x`: the carrier aliases `x` through that
     // complete comptime field/element path from here (D413, D704, D709).
     if place.kind == .FieldExpr || place.kind == .BracketPostfix {
-        var fields: [128]str = zero
-        let (struct_local, field_count, found_struct) = local_field_path(c, g, tree, module_index, place_index, fields[0usize..fields.len])
-        if found_struct && field_count != 0usize && (c.locals[struct_local].ty.kind == .Named || c.locals[struct_local].ty.kind == .Array) {
-            // `local_field_path` reads the syntax from leaf to base; stored paths run
-            // from the carrier outward.
-            var left = 0usize
-            while left < field_count / 2usize {
-                let right = field_count - left - 1usize
-                let held = fields[left]
-                fields[left] = fields[right]
-                fields[right] = held
-                left += 1usize
+        // (D1563) What is stored first: only an address or a literal records a path,
+        // and the place's path costs a cleared 2 KB buffer and a walk to find.
+        var (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
+        if !is_address { (pointed, is_address) = alias_target(c, g, tree, module_index, initializer_index) }
+        if !is_address {
+            let (source, is_place) = place_base_local(c, g, tree, module_index, initializer_index)
+            if is_place && holds_pointer(c, c.locals[source].ty, 0usize) {
+                pointed = source
+                is_address = true
             }
-            var (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
-            if !is_address { (pointed, is_address) = alias_target(c, g, tree, module_index, initializer_index) }
-            if !is_address {
-                let (source, is_place) = place_base_local(c, g, tree, module_index, initializer_index)
-                if is_place && holds_pointer(c, c.locals[source].ty, 0usize) {
-                    pointed = source
-                    is_address = true
+        }
+        let literal = !is_address && tree.nodes[initializer_index].kind == .AggregateLiteral
+        if is_address || literal {
+            var fields: [128]str = zero
+            let (struct_local, field_count, found_struct) = local_field_path(c, g, tree, module_index, place_index, fields[0usize..fields.len])
+            if found_struct && field_count != 0usize && (c.locals[struct_local].ty.kind == .Named || c.locals[struct_local].ty.kind == .Array) {
+                // `local_field_path` reads the syntax from leaf to base; stored paths
+                // run from the carrier outward.
+                var left = 0usize
+                while left < field_count / 2usize {
+                    let right = field_count - left - 1usize
+                    let held = fields[left]
+                    fields[left] = fields[right]
+                    fields[right] = held
+                    left += 1usize
                 }
-            }
-            if is_address && pointed != struct_local {
-                try set_resource_path_alias(c, struct_local, fields[0usize..field_count], pointed)
-            }
-            if !is_address && tree.nodes[initializer_index].kind == .AggregateLiteral {
-                try record_literal_alias_paths(c, g, tree, module_index, struct_local, initializer_index, fields[0usize..fields.len], field_count)
+                if is_address && pointed != struct_local {
+                    try set_resource_path_alias(c, struct_local, fields[0usize..field_count], pointed)
+                }
+                if literal {
+                    try record_literal_alias_paths(c, g, tree, module_index, struct_local, initializer_index, fields[0usize..fields.len], field_count)
+                }
             }
         }
     }
