@@ -7271,14 +7271,24 @@ fn grid_band_gesture(ctx: *void, g: widget.Gesture) -> err {
     if !b.has_cell { ret ok }
     switch g {
     case .DragStart as began:
-        b.cell.active = true
+        // (D1512, docs/ux/components/GridView, selection) The band starts on the
+        // empty area only: a drag from a tile is the tile's.
+        var on_tile = false
+        var k = 0usize
+        while k < b.keys.len && !on_tile {
+            let (start_box, has_start_box) = widget.bounds_for_key(b.runtime, b.keys[k])
+            if has_start_box && geometry.contains(start_box, began) { on_tile = true }
+            k += 1usize
+        }
+        b.cell.active = !on_tile
         b.cell.from = began
         b.cell.to = began
         ret ok
     case .DragMove as moved:
-        b.cell.to = moved.position
+        if b.cell.active { b.cell.to = moved.position }
         ret ok
     case .DragEnd as ended:
+        if !b.cell.active { ret ok }
         b.cell.active = false
         let left = widget.min_f(b.cell.from.x, b.cell.to.x)
         let right = widget.max_f(b.cell.from.x, b.cell.to.x)
@@ -7343,7 +7353,8 @@ fn grid_options() -> GridOptions {
 // (D1247) With no tiles, `loading` skeleton tiles or the empty state.
 // (D1385) A pointer drag rubber-bands a selection.
 // (D1401) A change of column count moves the tiles to their new places.
-// ponytail: the band starts on tiles too (a drag from a tile reaches it); the
+// (D1512) The band starts on the empty area only.
+// ponytail: the
 // caller keeps the page margins.
 fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, tiles: []const Tile, keys: []const widget.Key, options: GridOptions) -> (widget.Node, err) {
     if keys.len != tiles.len { ret (zero, TooLarge) }
