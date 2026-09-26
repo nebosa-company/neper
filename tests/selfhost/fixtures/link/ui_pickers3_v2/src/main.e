@@ -399,7 +399,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (thumb_page, thumb_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if thumbed_error != ok || thumb_page_error != ok { os.exit(77i32) }
         thumb_page[0usize] = thumbed
-        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), thumb_page[0usize..1usize]), time.Instant { nanos: 6300000000i64 + i64(thumb_step) }) != ok { os.exit(78i32) }
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), thumb_page[0usize..1usize]), time.Instant { nanos: 6300000000i64 + i64(thumb_step) * 1000000000i64 }) != ok { os.exit(78i32) }
         if thumb_step == 2usize {
             let (spectrum_tab, has_spectrum_tab) = bounds(&harness, &runtime, 1200u64 + 4200u64 + 2u64)
             if !has_spectrum_tab || testing.tap(&harness, spectrum_tab.x + spectrum_tab.width * 0.5, spectrum_tab.y + spectrum_tab.height * 0.5) != ok { os.exit(92i32) }
@@ -432,7 +432,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (alpha_page, alpha_page_error) = mem.alloc[widget.Node](&f, 1usize)
     if alpha_field_error != ok || alpha_page_error != ok { os.exit(84i32) }
     alpha_page[0usize] = alpha_field
-    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), alpha_page[0usize..1usize]), time.Instant { nanos: 6400000000i64 }) != ok { os.exit(85i32) }
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), alpha_page[0usize..1usize]), time.Instant { nanos: 10400000000i64 }) != ok { os.exit(85i32) }
     let (_, _, has_alpha_edit) = widget.edit_selection(&runtime, testing.by_key(&harness, 1306u64).element)
     if !has_alpha_edit { os.exit(86i32) }
     // (D1343) On touch the panel shows the swatches first, the spectrum hidden;
@@ -444,7 +444,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (moded_page, moded_page_error) = mem.alloc[widget.Node](&f, 1usize)
         if moded_field_error != ok || moded_page_error != ok { os.exit(87i32) }
         moded_page[0usize] = moded_field
-        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), moded_page[0usize..1usize]), time.Instant { nanos: 6500000000i64 + i64(mode_step) }) != ok { os.exit(88i32) }
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), moded_page[0usize..1usize]), time.Instant { nanos: 10500000000i64 + i64(mode_step) * 1000000000i64 }) != ok { os.exit(88i32) }
         let spectrum_there = testing.by_key(&harness, 1402u64).count
         let swatch_there = testing.by_key(&harness, 1408u64).count
         if mode_step < 2usize && (spectrum_there != 0usize || swatch_there != 1usize) { os.exit(89i32) }
@@ -453,6 +453,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if !has_spectrum_segment || testing.tap(&harness, spectrum_segment.x + spectrum_segment.width * 0.5, spectrum_segment.y + spectrum_segment.height * 0.5) != ok { os.exit(90i32) }
         }
         if mode_step == 2usize && (spectrum_there != 1usize || swatch_there != 0usize) { os.exit(91i32) }
+        // (D1355) On touch the panel sits in a bottom sheet, not 4 under the trigger.
+        let (sheet_trigger, has_sheet_trigger) = bounds(&harness, &runtime, 1400u64)
+        let (sheet_panel, has_sheet_panel) = bounds(&harness, &runtime, 1407u64)
+        if !has_sheet_trigger || !has_sheet_panel || sheet_panel.y < sheet_trigger.y + sheet_trigger.height + 20.0 { os.exit(92i32) }
         mode_step += 1usize
     }
     try io.print("ui pickers3 v2 ok\n")
