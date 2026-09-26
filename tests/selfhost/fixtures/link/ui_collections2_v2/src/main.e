@@ -509,6 +509,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     numbers_only[2usize] = true
     var numeric_options: collection.TableOptions = zero
     numeric_options.numeric = numbers_only[..]
+    // (D1340) ...and the second column filtered: its header says so.
+    var filtered_only: [3]bool = zero
+    filtered_only[1usize] = true
+    numeric_options.filtered = filtered_only[..]
     f = mem.arena_from(frame_storage)
     let numeric_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: numeric_row_cell }
     let (numeric_table, numeric_table_error) = collection.table_with(&f, 9u64, &theme, "Files", columns[0usize..3usize], numeric_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, numeric_options)
@@ -519,6 +523,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (numeric_row, has_numeric_row) = bounds(&harness, &runtime, 1001u64)
     let (numeric_cell, has_numeric_cell) = bounds(&harness, &runtime, numeric_cell_key(1usize))
     if !has_numeric_row || !has_numeric_cell || !near(numeric_cell.x + numeric_cell.width, numeric_row.x + numeric_row.width - 16.0) { os.exit(100i32) }
+    let (filter_tree, filter_tree_error) = testing.semantics(&harness)
+    let (size_head, has_size_head) = find(filter_tree, .ColumnHeader, "Size")
+    let (name_head, has_name_head) = find(filter_tree, .ColumnHeader, "Name")
+    if filter_tree_error != ok || !has_size_head || !has_name_head || !same(size_head.hint, "filtered") || name_head.hint.len != 0usize { os.exit(101i32) }
     // (D1248) With no rows the header stays over the loading state (a busy
     // "Loading" group under an indeterminate progress bar) or the empty state.
     var state_step = 0usize
