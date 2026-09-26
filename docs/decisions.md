@@ -26029,3 +26029,18 @@ D1333 and D1334 did those).
 
 `ui_panes` sets a 120 pane to 0: a frame 100 ms later it is part way, and a
 second later it is shut, on Windows and Linux.
+
+## D1357 — Dragged headers show where they land
+
+The HeaderRow spec's reorder shows a landing line. While a header is dragged,
+`landing_column` finds the header under the pointer. The resize handle on the
+side the dragged header would land draws a full-height 2px `primary` line:
+after that column when moving right, before it when moving left. Using the
+handle keeps the header's children as they are. An overlay line was tried
+first and dropped: `widget.positioned` sets `Absolute`, which layout ignores,
+so the line flowed under the title. A header dragged onto the first column
+shows no line, since no handle stands before it, and the lifted header still
+keeps its place.
+
+`ui_collections2_v2` drags Name over Kind: the handle after Kind turns
+`primary`, and on release it goes back, on Windows and Linux.

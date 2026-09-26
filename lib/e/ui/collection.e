@@ -1587,6 +1587,26 @@ fn lifted_column(t: *const control.Theme) -> (usize, bool) {
     ret (usize(payload - header_payload_tag() - 1u64), true)
 }
 
+// (D1357) While a header is dragged, the column whose header (keyed
+// `key + 1 + 2 * index`) the pointer stands over, when it is not the dragged one.
+fn landing_column(t: *const control.Theme, key: widget.Key, count: usize) -> (usize, bool) {
+    let (lifted, has_lifted) = lifted_column(t)
+    if !has_lifted { ret (0usize, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (0usize, false) }
+    let at = widget.pointer_position(t.runtime)
+    var look = 0usize
+    while look < count {
+        let (look_id, look_count) = widget.find_by_key(s, key + 1u64 + 2u64 * u64(look))
+        if look_count == 1usize && look != lifted {
+            let (look_box, has_look_box) = widget.bounds_of(t.runtime, look_id)
+            if has_look_box && at.x >= look_box.x && at.x < look_box.x + look_box.width { ret (look, true) }
+        }
+        look += 1usize
+    }
+    ret (0usize, false)
+}
+
 fn header_sort(ctx: *void) -> err {
     let h = mem.cast[*HeaderDrag](ctx)
     ret widget.fire_change[usize](h.sort, h.column)
@@ -1682,8 +1702,10 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // (D1340) A filtered column's header carries the filter mark.
 // (D1341) `TableOptions.groups` adds the grouped tier (`header_groups`).
 // (D1345) A dragged header lifts.
-// ponytail: the lifted header keeps its place rather than following the pointer,
-// and there is no landing line.
+// (D1357) A landing line stands where the dragged header would land.
+// ponytail: the lifted header keeps its place rather than following the pointer;
+// a header dragged onto the first column shows no line (no handle stands before
+// it).
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     var plain: []const bool = zero
     let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain, plain)
@@ -1719,6 +1741,9 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         cells[n] = widget.box(0u64, corner, zero)
         n += 1usize
     }
+    // (D1357) Which header is dragged and where it would land.
+    let (lifted_at, has_lifted_column) = lifted_column(t)
+    let (landing, has_landing) = landing_column(t, key, columns.len)
     var i = 0usize
     while i < columns.len {
         let header_key = key + 1u64 + 2u64 * u64(i)
@@ -1850,6 +1875,14 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let grip_key = key + 2u64 + 2u64 * u64(i)
         let grip_state = control.control_state(t, grip_key, true, false)
         let active = grip_state.hovered || grip_state.pressed
+        // (D1357, docs/ux/components/HeaderRow, reorder) The landing line: the
+        // handle on the side the dragged header would land, a full-height 2px
+        // `primary` line -- after the column under the pointer when moving right,
+        // before it when moving left.
+        var lands_here = false
+        if has_landing && has_lifted_column {
+            lands_here = (landing > lifted_at && i == landing) || (landing < lifted_at && landing > 0usize && i + 1usize == landing)
+        }
         var mark = control.sized_style(1.0, control.max_zero(inner - 2.0 * inset))
         mark.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
         mark.margin = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: style.Length { Px: inset }, right: flat, bottom: flat }
@@ -1857,6 +1890,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             mark = control.sized_style(3.0, inner)
             mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
             mark.margin = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: flat, right: flat, bottom: flat }
+        }
+        if lands_here {
+            mark = control.sized_style(2.0, inner)
+            mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+            mark.margin = style.EdgeLengths { left: style.Length { Px: 3.0 }, top: flat, right: flat, bottom: flat }
         }
         let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)
         if drawn_error != ok { ret (zero, TooLarge) }
