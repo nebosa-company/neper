@@ -550,6 +550,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let backs_before = s.counters[2usize].count
     if testing.tap(&harness, full_back.x + full_back.width * 0.5, full_back.y + full_back.height * 0.5) != ok || s.counters[2usize].count != backs_before + 1usize { os.exit(130i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 850u64).element) != ok || testing.press_key(&harness, 27u32, zero) != ok || s.counters[2usize].count != backs_before + 2usize { os.exit(131i32) }
+    // (D1364) A popup opening fades in: part way its middle is not yet the colour
+    // it settles on.
+    var grow_step = 0usize
+    var settled_pixel: [3]u8 = zero
+    var early_pixel: [3]u8 = zero
+    while grow_step < 5usize {
+        var grow_at = 50000000000i64
+        if grow_step == 1usize { grow_at = 50016000000i64 }
+        if grow_step == 2usize { grow_at = 50100000000i64 }
+        if grow_step == 3usize { grow_at = 50150000000i64 }
+        if grow_step == 4usize { grow_at = 51000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: grow_at }) != ok { os.exit(132i32) }
+        f = mem.arena_from(frame_storage)
+        let (grow_words, grow_words_error) = control.text(&f, 0u64, "Build logs", &theme, control.text_options())
+        let (grow_popup, grow_popup_error) = overlay.popup_of(&f, 970u64, &theme, 960u64, .Below, "Suggestions", grow_words, grow_step >= 2usize)
+        let (grow_parts, grow_parts_error) = mem.alloc[widget.Node](&f, 2usize)
+        if grow_words_error != ok || grow_popup_error != ok || grow_parts_error != ok { os.exit(133i32) }
+        grow_parts[0usize] = widget.box(960u64, control.sized_style(240.0, 40.0), zero)
+        grow_parts[1usize] = grow_popup
+        var grow_ground = control.sized_style(640.0, 480.0)
+        grow_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, grow_ground, grow_parts[0usize..2usize]), time.Instant { nanos: grow_at }) != ok { os.exit(134i32) }
+        if grow_step == 3usize || grow_step == 4usize {
+            let (grow_box, has_grow_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 970u64).element)
+            let (grow_shot, grow_shot_error) = testing.snapshot(&harness, a)
+            if !has_grow_box || grow_shot_error != ok { os.exit(135i32) }
+            let spot = at(grow_box.x + 6.0, grow_box.y + grow_box.height * 0.5)
+            var c = 0usize
+            while c < 3usize {
+                if grow_step == 3usize { early_pixel[c] = grow_shot.pixels[spot + c] }
+                if grow_step == 4usize { settled_pixel[c] = grow_shot.pixels[spot + c] }
+                c += 1usize
+            }
+        }
+        grow_step += 1usize
+    }
+    if early_pixel[0usize] == settled_pixel[0usize] && early_pixel[1usize] == settled_pixel[1usize] && early_pixel[2usize] == settled_pixel[2usize] { os.exit(136i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok

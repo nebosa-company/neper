@@ -26131,3 +26131,17 @@ one, not a scrolled century, and each pill is still its own Tab stop.
 
 `ui_pickers_v2` focuses 2026: Right moves to 2027 and Down to 2030, and a
 press on 2030 still picks it, on Windows and Linux.
+
+## D1364 — Popups fade and grow in
+
+The Popup spec opens with a fade and a grow of 8 from the anchor's edge over
+`duration-short-4`. `popup_of` now stands in a box keyed `key + 8192` that is
+there open or shut, so the opening is remembered (`eased_on`, slot
+`key + 8193`, forward only). Part way open, the surface is faded to that share
+and offset toward the anchor by 8 times the share still to come (up for
+`.Below`, down for `.Above`). Under reduced motion it shows at once. Closing is
+still immediate. A popup first built open does not animate, since the box did
+not exist yet.
+
+`ui_overlays2_v2` opens a popup: 50 ms in, its surface is not yet the colour it
+settles on; `ui_presentation` still passes, on Windows and Linux.
