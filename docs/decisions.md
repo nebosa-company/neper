@@ -27199,3 +27199,9 @@ D1405 made the picker sheet's handle drag the sheet, but the drag region was onl
 The SplitView spec folds into a stack on compact windows: "the view stacks when both minimums do not fit", with the second pane pushed over the first under a top bar and Back. `SplitOptions` gains `stack`, `showing_second`, `back` and `second_title`. With `stack` set and the two minimums wider than the view along its axis, `split_view_with` shows the first pane alone. While `showing_second`, it shows the second under a 56 bar with an `arrow-back` Back (`key + 4`, firing `back`) and the title in `title-large`. There is no sash either way, and the view stays a group named by its label. Split views without `stack` are unchanged.
 
 `ui_panes` checks this on Windows and Linux with a 300 wide split whose minimums are 240 and 320. First only the first pane stands and no sash; then the second stands under a Back that fires. All 103 `ui_*` fixtures pass on both hosts.
+
+## D1465 — Popup matches stand at weight 600
+
+The Popup spec emphasizes a suggestion's matching text at weight 600. `popup_row_match` already split the label round the match, but it stood the match in a heavier role, `title-small` or `title-medium`, with the ramp's size and line height, because there was no way to ask for a weight. With D1453's faces the match now keeps the row's own role and asks for weight 600. A theme with a 600 face draws it there; one without draws the row's face. `popup_of`'s "no match highlighting" marker was stale, and now points at `popup_row_match`.
+
+`ui_overlays2_v2` (popups and the search view) passes on Windows and Linux. D1453's `text_shape` checks cover the face choice itself.
