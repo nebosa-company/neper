@@ -5866,6 +5866,12 @@ $listFreezeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $listFreezeWritten -ne 'executable written') { throw 'list freeze executable emission failed' }
 & $listFreezePath
 if ($LASTEXITCODE -ne 0) { throw 'a frozen list did not hold what was built' }
+# Generation-tagged handles with their owner (D1560, H02).
+$slotMapOwnerPath = Join-Path $testBuild 'slot-map-owner-selfhost.exe'
+$slotMapOwnerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\slot_map_owner\src\main.e') $repo 'x64' 'windows' $slotMapOwnerPath
+if ($LASTEXITCODE -ne 0 -or $slotMapOwnerWritten -ne 'executable written') { throw 'slot map owner executable emission failed' }
+& $slotMapOwnerPath
+if ($LASTEXITCODE -ne 0) { throw "a slot map key answered outside its map or generation (exit $LASTEXITCODE)" }
 # A group of threads as one resource (D434, H04): joined on every exit, by `defer` too.
 $threadGroupPath = Join-Path $testBuild 'thread-group-selfhost.exe'
 $threadGroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\thread_group\src\main.e') $repo 'x64' 'windows' $threadGroupPath

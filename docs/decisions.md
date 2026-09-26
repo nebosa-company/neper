@@ -28108,3 +28108,19 @@ Fixtures, both hosts:
 - `reject/regions_freeze_forgotten`: the builder only read, never frozen or dropped, E-SAFETY-0002.
 
 The 20 link fixtures and accept cases that import `e.data.list`, `e.data.graph` or `e.data.linked` still check. The module surface check passes with the new entries.
+
+## D1560 — Slot map keys name their owner
+
+H02 names generation-tagged checked handles as an alternative for dynamic containers. It requires an owner identity, a generation-wrap policy, and a check on every protected access. `e.data.slot_map` already had two of the three: a key is a slot and the generation it held, removal and `clear` move the generation on, and a slot whose next generation would wrap retires for good. So a stale key answers nothing, and no two keys ever issued collide. It had no owner. A key from one map found a value in another whenever slot and generation matched, including a map made after an arena reset in the storage an old map's keys still named.
+
+`Key` gains `owner`. Each map takes a nonzero owner number at `init` from a module counter, `insert` and `iter_next` stamp it on the keys they make, and `holds` checks it first. A protected access is now three compares: owner, liveness, generation. The counter is not atomic, so two maps made at once on two threads may share an owner, and 2^32 maps wrap it; both are marked in the module.
+
+`link/slot_map_owner` checks, on both hosts:
+
+- two maps issue keys equal in slot and generation, and each key answers only in its own map;
+- `remove` and `clear` leave their keys answering nothing;
+- a map made after `mem.reset`, in the storage a key's map had, does not answer that key.
+
+Without the owner compare the fixture fails (exit 4). `link/stat_slots`, which builds a key by hand to test retirement, now gives it the owner its map issued.
+
+`docs/library-fixtures.json` is regenerated here. It had gone stale since D1547 (`ui_content_v2` now imports `e.ui.overlay`) and D1555-D1557 (`e.sync` and `e.thread` gained entries and fixtures). The suites' manifest check would otherwise have failed.

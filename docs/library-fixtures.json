@@ -311,6 +311,7 @@
    "delivered": 15,
    "pending": [],
    "fixtures": [
+    "slot_map_owner",
     "stat_slots"
    ]
   },
@@ -1485,18 +1486,20 @@
    "module": "e.sync",
    "milestone": "M2",
    "schedule": "scheduled",
-   "catalogue": 76,
-   "delivered": 76,
+   "catalogue": 79,
+   "delivered": 79,
    "pending": [],
    "fixtures": [
     "channel_semantics",
     "channel_threads",
     "runtime_gaps",
+    "sync_dataguard",
     "sync_guard",
     "sync_rwguard",
     "sync_semantics",
     "sync_threads",
-    "task_pool"
+    "task_pool",
+    "thread_perturb"
    ]
   },
   {
@@ -2061,6 +2064,7 @@
     "ui_adaptive",
     "ui_collections2_v2",
     "ui_collections_v2",
+    "ui_content_v2",
     "ui_navigation2_v2",
     "ui_overlays2_v2",
     "ui_overlays3_v2",

@@ -1610,7 +1610,7 @@ Graphs own no resources beyond their caller arena.
 ### `e.data.slot_map`
 
 ```neper
-type Key = struct { slot: u32, generation: u32 }
+type Key = struct { slot: u32, generation: u32, owner: u32 }
 type SlotMap[T: type] = struct { state: *void }
 type Iter[T: type] = struct { state: *const void, slot: u32 }
 error Full
