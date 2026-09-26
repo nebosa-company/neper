@@ -4186,8 +4186,11 @@ fn two_digits(a: *mem.Arena, value: u8) -> str {
 // `change`; Cancel fires `cancel`, OK `confirm`. (D1306) The dial takes the
 // focus (`key + 7`): Up and Right move the knob on an hour or a minute, Down and
 // Left back, and Page Up and Page Down five minutes on the minute dial.
-// ponytail: no drag round the dial; a minute off the fives puts the knob on no
-// number.
+// (D1362) A press or drag on the dial turns it: the hour at the nearest of the
+// twelve places, or the whole minute at the nearest of sixty; releasing the
+// hour dial asks for the minutes (`EditMinute`).
+// ponytail: minutes do not snap to five on a fast drag; a minute off the fives
+// puts the knob on no number.
 // (D1349) A wheel's drag, kept on the wheel: the value it started from.
 type WheelCell = struct { base: usize, held: bool }
 type WheelPick = struct { index: usize, pick: widget.Change[usize] }
@@ -4717,6 +4720,43 @@ fn period_segment(a: *mem.Arena, key: widget.Key, t: *const control.Theme, word:
 }
 
 // (D1294) The dial: twelve numbers round a 224 circle, the knob on the chosen.
+// (D1362) The dial's drag: where the pointer stands round the centre of the
+// dial region (keyed `ring`) picks the hour or minute.
+type DialTurn = struct { runtime: *widget.Runtime, ring: widget.Key, hour: u8, editing_minute: bool, change: widget.Change[TimeChoice] }
+
+fn dial_turn_to(d: *DialTurn, at: geometry.Point) -> err {
+    let (area, has_area) = widget.bounds_for_key(d.runtime, d.ring)
+    if !has_area { ret ok }
+    let dx = at.x - (area.x + area.width * 0.5)
+    let dy = at.y - (area.y + area.height * 0.5)
+    if dx * dx + dy * dy < 16.0 { ret ok }
+    // 0 at the top, growing clockwise, in turns.
+    var turn = math.atan2[f32](dx, 0.0 - dy) / 6.2831853
+    if turn < 0.0 { turn += 1.0 }
+    if d.editing_minute {
+        let minute = u8(usize(math.round[f32](turn * 60.0)) % 60usize)
+        ret widget.fire_change[TimeChoice](d.change, TimeChoice { kind: .Minute, value: minute })
+    }
+    var value = u8(usize(math.round[f32](turn * 12.0)) % 12usize)
+    if d.hour >= 12u8 { value += 12u8 }
+    ret widget.fire_change[TimeChoice](d.change, TimeChoice { kind: .Hour, value: value })
+}
+
+fn dial_turn_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*DialTurn](ctx)
+    switch g {
+    case .DragStart as began:
+        ret dial_turn_to(d, began)
+    case .DragMove as moved:
+        ret dial_turn_to(d, moved.position)
+    case .DragEnd as ended:
+        if d.editing_minute { ret ok }
+        ret widget.fire_change[TimeChoice](d.change, TimeChoice { kind: .EditMinute, value: 0u8 })
+    default:
+        ret ok
+    }
+}
+
 fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, minute: u8, editing_minute: bool, twelve: bool, change: widget.Change[TimeChoice], choices: []TimeChoosing, presses: []widget.Submit) -> (widget.Node, err) {
     let (layers, layers_error) = mem.alloc[widget.Node](a, 40usize)
     if layers_error != ok { ret (zero, TooLarge) }
@@ -4852,11 +4892,13 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     dial_keys[4usize] = widget.Shortcut { key: 33u32, modifiers: zero, action: step_presses[2usize] }
     dial_keys[5usize] = widget.Shortcut { key: 34u32, modifiers: zero, action: step_presses[3usize] }
     focused[0usize] = widget.semantics(0u64, dial_sem, style.defaults(), dial[0usize..1usize])
-    var none_gesture: widget.GestureAction = zero
+    let (turns, turns_error) = mem.alloc[DialTurn](a, 1usize)
+    if turns_error != ok { ret (zero, TooLarge) }
+    turns[0usize] = DialTurn { runtime: t.runtime, ring: key + 7u64, hour: hour, editing_minute: editing_minute, change: change }
     var dial_ring = style.defaults()
     dial_ring.radius = 112.0
     control.focus_look(t)
-    focused[1usize] = widget.region(key + 7u64, widget.Region { gesture: none_gesture, gestures: 4u8, enabled: true, focusable: true }, dial_ring, focused[0usize..1usize])
+    focused[1usize] = widget.region(key + 7u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&turns[0usize]), invoke: dial_turn_gesture }, gestures: widget.GESTURE_DRAG | widget.GESTURE_HOVER, enabled: true, focusable: true }, dial_ring, focused[0usize..1usize])
     ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: dial_keys[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focused[1usize..2usize]), ok)
 }
 
