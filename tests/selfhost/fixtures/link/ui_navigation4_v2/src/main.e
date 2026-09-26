@@ -42,6 +42,13 @@ fn on_count(ctx: *void) -> err {
     ret ok
 }
 
+// (D1409) A split size, kept.
+fn on_split_size(ctx: *void, value: f32) -> err {
+    let kept = mem.cast[*f32](ctx)
+    *kept = value
+    ret ok
+}
+
 fn on_size(ctx: *void, value: f32) -> err {
     let c = mem.cast[*Counter](ctx)
     c.count += 1usize
@@ -280,6 +287,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
         footer_step += 1usize
     }
     if collection.page_first_after_resize(20usize, 50usize) != 0usize || collection.page_first_after_resize(45usize, 20usize) != 40usize { os.exit(65i32) }
+    // (D1409) On touch the list's divider dragged from 300 toward 350 snaps to 360.
+    let split_touch_tokens = style.adapt(&tokens, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
+    let split_touch = control.Theme { tokens: &split_touch_tokens, fonts: theme.fonts, language: "", runtime: &runtime }
+    var split_size: f32 = 0.0
+    var snap_step = 0usize
+    while snap_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (snap_list, snap_list_error) = control.text(&f, 0u64, "Build list", &split_touch, control.text_options())
+        let (snap_log, snap_log_error) = control.text(&f, 0u64, "Log", &split_touch, control.text_options())
+        var snap_options = navigation.navigation_split_options()
+        snap_options.list_label = "Builds"
+        snap_options.detail_label = "Build 4127"
+        let (snap_split, snap_split_error) = navigation.navigation_split_of(&f, 4500u64, &split_touch, snap_list, snap_log, false, 300.0, widget.Change[f32] { ctx: mem.cast[*void](&split_size), invoke: on_split_size }, 880.0, 300.0, snap_options)
+        let (snap_page, snap_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if snap_list_error != ok || snap_log_error != ok || snap_split_error != ok || snap_page_error != ok { os.exit(136i32) }
+        snap_page[0usize] = snap_split
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(900.0, 560.0), snap_page[0usize..1usize]), time.Instant { nanos: 40000000000i64 + i64(snap_step) }) != ok { os.exit(137i32) }
+        snap_step += 1usize
+    }
+    let (snap_sash, has_snap_sash) = bounds(&harness, &runtime, 4503u64)
+    if !has_snap_sash { os.exit(138i32) }
+    let snap_from = geometry.Point { x: snap_sash.x + snap_sash.width * 0.5, y: snap_sash.y + snap_sash.height * 0.5 }
+    if testing.drag(&harness, snap_from, geometry.Point { x: snap_from.x + 50.0, y: snap_from.y }, 3usize) != ok || split_size != 360.0 { os.exit(139i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation4 v2 ok\n")
     ret ok

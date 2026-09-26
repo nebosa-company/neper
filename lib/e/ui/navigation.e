@@ -1870,7 +1870,8 @@ fn navigation_split_options() -> NavigationSplitOptions {
 // under a v2 app bar (keyed `key + 4`) led by Back (`key + 5`) named "Back to
 // <the list>"; Escape and Alt+Left share its `pop` action.
 // ponytail: the touch divider is D966's sash, not the 24 gutter with its 4 x 48
-// handle; no supporting pane, snap points, push motion or focus moves.
+// handle; no supporting pane, push motion or focus moves. (D1409) On touch the
+// list snaps to 360 and half.
 fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, primary: widget.Node, detail: widget.Node, showing_detail: bool, position: f32, change: widget.Change[f32], width: f32, height: f32, options: NavigationSplitOptions) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     let size = style.size_class(width)
@@ -1952,7 +1953,18 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             least_detail = 360.0
             inset = 16.0
         }
-        let (split, split_error) = control.split_view_named(a, key, t, "Resize list", .Horizontal, list_pane, detail_pane, position, least_list, least_detail, change, control.max_zero(width - 2.0 * inset), control.max_zero(height - 2.0 * inset))
+        // (D1409, docs/ux/components/NavigationSplit, snap points) On touch the
+        // list snaps to 360 and to half the split within 16.
+        var split_options: control.SplitOptions = zero
+        let (points, points_error) = mem.alloc[f32](a, 2usize)
+        if points_error != ok { ret (zero, TooLarge) }
+        if touch {
+            points[0usize] = 360.0
+            points[1usize] = control.max_zero(width - 2.0 * inset) * 0.5
+            split_options.snaps = true
+            split_options.points = points[0usize..2usize]
+        }
+        let (split, split_error) = control.split_view_with(a, key, t, "Resize list", .Horizontal, list_pane, detail_pane, position, least_list, least_detail, change, control.max_zero(width - 2.0 * inset), control.max_zero(height - 2.0 * inset), split_options)
         if split_error != ok { ret (zero, split_error) }
         if !touch { ret (split, ok) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
