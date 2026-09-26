@@ -27101,3 +27101,9 @@ The DestinationBar spec gives the bottom bar an optional Hidden state: it "slide
 `ui_navigation3_v2` checks this on Windows and Linux. Part way through hiding, the slot's top still shows the bar. A second later it shows the page and no tabs are in the tree. Scrolled back up, the tabs return.
 
 Milestone record: the D1445 full suites ran in the suite worktree at 4f5ee28d. Windows stops at the known `tool.Capacity` at ui_navigation4_v2; with the uncommitted foreign `src/tool.e` applied there only, it reaches the stale `plan-rename-file` golden. Linux passes ui_navigation4_v2 and stops at the stale `context-file --json` conformance golden. The goldens and the `src/tool.e` commit are the user's decisions.
+
+## D1451 — The dock guide fades in
+
+The DockLayout spec fades the guide and preview in over `duration-short-3` with `ease-standard`. While a panel is dragged, the guide, its three targets and the drop preview now stand at the share `overlay.appeared_share` gives on the tear-off area (`key + 1048799`). That share counts from the drag's first frame, eases over `duration-short-3` and latches once arrived. Reduced motion shows them at once. The preview does not slide between targets.
+
+`ui_containers4_v2` checks this on Windows and Linux. At the drag's frozen start, the guide's edge beyond the right target is not yet `surface-container-high`; two frames later, 600 ms in, it is. `ui_containers2_v2` and `ui_workspace` still pass on both hosts.

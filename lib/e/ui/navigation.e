@@ -4632,7 +4632,13 @@ fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model
         }
         let gx = max_f(over_area.x + (over_area.width - side) * 0.5, 0.0)
         let gy = max_f(over_area.y + (over_area.height - side) * 0.5, 0.0)
+        // (D1451, docs/ux/components/DockLayout, motion) The guide, its targets
+        // and the preview fade in over `duration-short-3` from the drag's first
+        // frame (`overlay.appeared_share` on the tear-off area); reduced motion
+        // shows them at once.
+        let guide_in = overlay.appeared_share(t, key + 1048799u64, t.tokens.durations.short3)
         var guide = control.sized_style(side, side)
+        guide.opacity = guide_in
         guide.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
         guide.radius = t.tokens.radii.md
         guide.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[2usize]) }
@@ -4657,6 +4663,7 @@ fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model
             if over { hot = g }
             var target_look = control.sized_style(32.0, 32.0)
             target_look.radius = t.tokens.radii.sm
+            target_look.opacity = guide_in
             var ink = style.color(t.tokens, .OnSurfaceVariant)
             target_look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
             if over {
@@ -4691,6 +4698,7 @@ fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model
             preview.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .PrimaryContainer), 0.72) }
             preview.border = style.Border { width: 2.0, color: style.color(t.tokens, .Primary) }
             preview.radius = t.tokens.radii.xs
+            preview.opacity = guide_in
             moved[m] = widget.positioned(0u64, px, py, preview, zero)
             m += 1usize
         }
