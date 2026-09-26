@@ -400,9 +400,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (skip_focus, has_skip_focus) = testing.focused(&harness)
     if !has_skip_focus || skip_focus.slot != testing.by_key(&harness, 1128u64).element.slot { os.exit(106i32) }
     // (D1332) Opened, the sheet slides up: part way its surface is not yet at the
-    // window's foot, then it is.
+    // window's foot, then it is. (D1360) Shut, it is still there a frame on, and
+    // gone a second later.
     var rise_step = 0usize
-    while rise_step < 4usize {
+    while rise_step < 6usize {
         var rise_at = 3700000000i64
         var rise_open = false
         if rise_step == 1usize { rise_at = 3716000000i64 }
@@ -414,6 +415,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             rise_at = 4300000000i64
             rise_open = true
         }
+        if rise_step == 4usize { rise_at = 4316000000i64 }
+        if rise_step == 5usize { rise_at = 5400000000i64 }
         if testing.begin(&harness, time.Instant { nanos: rise_at }) != ok { os.exit(125i32) }
         f = mem.arena_from(frame_storage)
         let (rising, rising_error) = control.picker(&f, 1400u64, &theme, "Kind", stores[0usize].words[0usize..3usize], 0usize, rise_open, &stores[0usize].press, stores[0usize].picks[0usize..3usize], .Sheet)
@@ -428,6 +431,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if rise_step == 2usize && at_foot { os.exit(129i32) }
             if rise_step == 3usize && !at_foot { os.exit(130i32) }
         }
+        if rise_step == 4usize && testing.by_key(&harness, 1401u64).count != 1usize { os.exit(131i32) }
+        if rise_step == 5usize && testing.by_key(&harness, 1401u64).count != 0usize { os.exit(132i32) }
         rise_step += 1usize
     }
     // (D1311) A sheet of twelve options in a 720 window scrolls past 60%: its rows

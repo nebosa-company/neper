@@ -7204,7 +7204,9 @@ type PickerForm = enum u8 { Popup, Sheet }
 // scroll in a viewport (keyed `key + 1048576`) under the handle and title.
 // (D1332) Opening, the sheet slides up from the window's foot over
 // `duration-medium-2` (the ease kept on the field); reduced motion shows it at once.
-// ponytail: no drag to expand, and closing is at once.
+// (D1360) Closing, it slides back down the same way, built but inert (not
+// modal, no focus trap, no dismiss) and its scrim fading, until it is gone.
+// ponytail: no drag to expand; the curve is the standard one both ways.
 fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, presentation: PickerForm) -> (widget.Node, err) {
     if presentation == .Popup {
         let (popup, popup_error) = select(a, key, t, label, options, selected, open, toggle, picks)
@@ -7221,12 +7223,14 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
     let (head, head_error) = field_head(a, key, t, label, shown, chosen, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense)
     if head_error != ok { ret (zero, head_error) }
+    // (D1360) Shut but still sinking, the sheet is built until it is down.
+    let showing = open || risen > 0.0
     var count = 1usize
-    if open { count = 3usize }
+    if showing { count = 3usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
-    if open {
+    if showing {
         let (rows, rows_error) = mem.alloc[widget.Node](a, options.len + 2usize)
         if rows_error != ok { ret (zero, TooLarge) }
         var grip = sized_style(32.0, 4.0)
@@ -7340,11 +7344,13 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var none: []const widget.Shortcut = zero
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
         if scoped_error != ok { ret (zero, TooLarge) }
-        scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *toggle, keys: zero }, style.defaults(), centred[0usize..1usize])
+        var cancel = *toggle
+        if !open { cancel = widget.Submit { ctx: zero, invoke: zero } }
+        scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: open, shortcuts: none, default_action: zero, cancel_action: cancel, keys: zero }, style.defaults(), centred[0usize..1usize])
         var list_sem: widget.Semantics = zero
         list_sem.role = 23u8
         list_sem.label = label
-        list_sem.states = accessibility.STATE_MODAL
+        if open { list_sem.states = accessibility.STATE_MODAL }
         let (dialog, dialog_error) = mem.alloc[widget.Node](a, 1usize)
         if dialog_error != ok { ret (zero, TooLarge) }
         dialog[0usize] = widget.semantics(0u64, list_sem, style.defaults(), scoped[0usize..1usize])
@@ -7353,12 +7359,12 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var dim = style.defaults()
         dim.width = style.Length { Percent: 100.0 }
         dim.height = style.Length { Percent: 100.0 }
-        dim.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .Scrim), t.tokens.states.scrim) }
+        dim.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .Scrim), t.tokens.states.scrim * risen) }
         let (dims, dims_error) = mem.alloc[widget.Node](a, 1usize)
         if dims_error != ok { ret (zero, TooLarge) }
         dims[0usize] = widget.box(0u64, dim, zero)
         parts[1usize] = widget.overlay(0u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: false, dismiss: zero }, style.defaults(), dims[0usize..1usize])
-        parts[2usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: 0u64, placement: .Below, offset: zero, modal: true, dismiss: *toggle }, style.defaults(), dialog[0usize..1usize])
+        parts[2usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: 0u64, placement: .Below, offset: zero, modal: open, dismiss: cancel }, style.defaults(), dialog[0usize..1usize])
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
