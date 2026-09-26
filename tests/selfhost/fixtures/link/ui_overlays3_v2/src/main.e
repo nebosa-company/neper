@@ -663,6 +663,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, has_ios_dialog) = find(ios_tree, .Dialog, "build-4128.zip")
     let (_, has_ios_cancel_semantics) = find(ios_tree, .Button, "Cancel")
     if !has_ios_dialog || !has_ios_cancel_semantics || !tap_key(&harness, &runtime, 403u64) || !tap_key(&harness, &runtime, 406u64) || s.counters[4usize].count != ios_share_before + 1usize || s.counters[3usize].count != ios_dismiss_before + 1usize { os.exit(99i32) }
+    // (D1492) Under reduced motion a side sheet does not slide: it stands at its
+    // edge from its first frame, fading in; 50 ms on it is neither the ground nor
+    // its surface, a second on it is its surface.
+    var calm_tokens = tokens
+    calm_tokens.motion.reduced = true
+    let calm_theme = control.Theme { tokens: &calm_tokens, fonts: fonts, language: "", runtime: &runtime }
+    let (calm_away, calm_away_error) = build(&f, &calm_theme, s, .Dialog)
+    if calm_away_error != ok || testing.pump(&harness, calm_away, time.Instant { nanos: 70000000000i64 }) != ok { os.exit(140i32) }
+    var calm_step = 0usize
+    while calm_step < 4usize {
+        var calm_at = 71000000000i64 + i64(calm_step)
+        if calm_step == 2usize { calm_at = 71050000000i64 }
+        if calm_step == 3usize { calm_at = 72000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: calm_at }) != ok { os.exit(141i32) }
+        let (calm_root, calm_root_error) = build(&f, &calm_theme, s, .Side)
+        if calm_root_error != ok || testing.pump(&harness, calm_root, time.Instant { nanos: calm_at }) != ok { os.exit(142i32) }
+        if calm_step >= 2usize {
+            let (calm_side, has_calm_side) = lifted(&harness, 200u64)
+            let (calm_shot, calm_shot_error) = testing.snapshot(&harness, a)
+            if !has_calm_side || calm_shot_error != ok || !near(calm_side.x + calm_side.width, 640.0) { os.exit(143i32) }
+            let calm_spot = at(calm_side.x + 150.0, calm_side.y + 100.0)
+            let on_surface = is_color(calm_shot, calm_spot, style.color(&tokens, .SurfaceContainerLow))
+            if calm_step == 2usize && on_surface { os.exit(144i32) }
+            if calm_step == 3usize && !on_surface { os.exit(145i32) }
+        }
+        calm_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(42i32) }
     try io.print("ui overlays3 v2 ok\n")
     ret ok
