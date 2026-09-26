@@ -587,6 +587,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
         grow_step += 1usize
     }
     if early_pixel[0usize] == settled_pixel[0usize] && early_pixel[1usize] == settled_pixel[1usize] && early_pixel[2usize] == settled_pixel[2usize] { os.exit(136i32) }
+    // (D1365) The docked search view fades in the same way.
+    var view_step = 0usize
+    var view_early: u8 = 0u8
+    var view_settled: u8 = 0u8
+    while view_step < 5usize {
+        var view_at = 60000000000i64
+        if view_step == 1usize { view_at = 60016000000i64 }
+        if view_step == 2usize { view_at = 60100000000i64 }
+        if view_step == 3usize { view_at = 60150000000i64 }
+        if view_step == 4usize { view_at = 61000000000i64 }
+        if testing.begin(&harness, time.Instant { nanos: view_at }) != ok { os.exit(137i32) }
+        f = mem.arena_from(frame_storage)
+        let (view_node, view_node_error) = overlay.search_view(&f, 980u64, &theme, 960u64, "Search files", "", groups[..], "Search all files", &s.subs[1usize], view_step >= 2usize, &s.subs[2usize], 400.0)
+        let (view_parts, view_parts_error) = mem.alloc[widget.Node](&f, 2usize)
+        if view_node_error != ok || view_parts_error != ok { os.exit(138i32) }
+        view_parts[0usize] = widget.box(960u64, control.sized_style(400.0, 40.0), zero)
+        view_parts[1usize] = view_node
+        var view_ground = control.sized_style(640.0, 480.0)
+        view_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+        if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, view_ground, view_parts[0usize..2usize]), time.Instant { nanos: view_at }) != ok { os.exit(139i32) }
+        if view_step >= 3usize {
+            let (view_box, has_view_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 980u64).element)
+            let (view_shot, view_shot_error) = testing.snapshot(&harness, a)
+            if !has_view_box || view_shot_error != ok { os.exit(140i32) }
+            let view_spot = at(view_box.x + 14.0, view_box.y + view_box.height * 0.5)
+            if view_step == 3usize { view_early = view_shot.pixels[view_spot + 1usize] }
+            if view_step == 4usize { view_settled = view_shot.pixels[view_spot + 1usize] }
+        }
+        view_step += 1usize
+    }
+    if view_early == view_settled { os.exit(141i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok

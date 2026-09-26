@@ -1265,10 +1265,12 @@ fn search_view_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
 // click outside fires `dismiss`. A listbox named `label` (keyed `key`).
 // (D1262) `search_shortcuts` opens it with Ctrl+K or `/`.
 // (D1263) `search_view_full` is the compact form.
-// ponytail: no grow/fade motion; no loading bar under the header -- pass `popup_loading`
-// content round the view's owner instead.
+// (D1365) It fades and grows in as a popup does (`opening_share`, `grown_in`).
+// ponytail: no loading bar under the header -- pass `popup_loading` content round
+// the view's owner instead.
 fn search_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, query: str, groups: []const SearchGroup, fallback_label: str, fallback: *const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let opened = opening_share(t, key, open)
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (rows_node, rows_error) = search_rows(a, key, t, query, groups, fallback_label, fallback)
     if rows_error != ok { ret (zero, rows_error) }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
@@ -1293,7 +1295,9 @@ fn search_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     }
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
-    framed[0usize] = widget.box(0u64, plate, column[0usize..1usize])
+    let (grown, grown_error) = grown_in(a, widget.box(0u64, plate, column[0usize..1usize]), opened, false)
+    if grown_error != ok { ret (zero, grown_error) }
+    framed[0usize] = grown
     var sem: widget.Semantics = zero
     sem.role = 35u8
     sem.label = label
@@ -1302,7 +1306,10 @@ fn search_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     named[0usize] = widget.semantics(0u64, sem, style.defaults(), framed[0usize..1usize])
     var dismissing: widget.Submit = zero
     if mem.address_of(dismiss) != 0usize { dismissing = *dismiss }
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .BelowMatch, offset: gap_offset(.BelowMatch, 4.0), modal: false, dismiss: dismissing }, style.defaults(), named[0usize..1usize]), ok)
+    let (kept, kept_error) = mem.alloc[widget.Node](a, 1usize)
+    if kept_error != ok { ret (zero, TooLarge) }
+    kept[0usize] = widget.overlay(key, widget.Overlay { anchor: anchor, placement: .BelowMatch, offset: gap_offset(.BelowMatch, 4.0), modal: false, dismiss: dismissing }, style.defaults(), named[0usize..1usize])
+    ret (widget.box(key + 8192u64, style.defaults(), kept[0usize..1usize]), ok)
 }
 
 // (D1262) A search opening key: `open`, unless `typed` and a text editor has the
@@ -1539,28 +1546,15 @@ fn popup_loading(a: *mem.Arena, key: widget.Key, t: *const control.Theme, messag
 // ponytail: no match highlighting; the anchor keeps the focus
 // because the popup takes none; closing is at once.
 fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
-    var open_goal: f32 = 0.0
-    if open { open_goal = 1.0 }
-    let opened = control.eased_on(t, key + 8192u64, key + 8193u64, open_goal, true, t.tokens.durations.short4)
+    let opened = opening_share(t, key, open)
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (surface, surface_error) = popup_surface(a, t, content)
     if surface_error != ok { ret (zero, surface_error) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = surface
-    if opened < 1.0 {
-        // (D1364, docs/ux/components/Popup, motion) Part way open: faded, and 8
-        // nearer the anchor for the share still to come.
-        var toward: f32 = 0.0 - 8.0 * (1.0 - opened)
-        if placement == .Above { toward = 0.0 - toward }
-        let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
-        if growing_error != ok { ret (zero, TooLarge) }
-        growing[0usize] = surface
-        growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: toward } }, style.defaults(), growing[0usize..1usize])
-        var faded = style.defaults()
-        faded.opacity = opened
-        body[0usize] = widget.box(0u64, faded, growing[1usize..2usize])
-    }
+    let (grown, grown_error) = grown_in(a, surface, opened, placement == .Above)
+    if grown_error != ok { ret (zero, grown_error) }
+    body[0usize] = grown
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
@@ -1577,6 +1571,30 @@ fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
     if kept_error != ok { ret (zero, TooLarge) }
     kept[0usize] = widget.overlay(key, widget.Overlay { anchor: anchor, placement: placed, offset: gap_offset(placed, 4.0), modal: false, dismiss: zero }, overlay_style, framed[0usize..1usize])
     ret (widget.box(key + 8192u64, style.defaults(), kept[0usize..1usize]), ok)
+}
+
+// (D1364) How far a popup keyed `key` has opened, kept on its box `key + 8192`
+// (slot `key + 8193`) over `duration-short-4`; shutting is at once.
+fn opening_share(t: *const control.Theme, key: widget.Key, open: bool) -> f32 {
+    var open_goal: f32 = 0.0
+    if open { open_goal = 1.0 }
+    ret control.eased_on(t, key + 8192u64, key + 8193u64, open_goal, true, t.tokens.durations.short4)
+}
+
+// (D1364, docs/ux/components/Popup, motion) A surface part way open: faded to
+// the share, and 8 nearer the anchor (above it when `above`) for the share still
+// to come.
+fn grown_in(a: *mem.Arena, surface: widget.Node, opened: f32, above: bool) -> (widget.Node, err) {
+    if !(opened < 1.0) { ret (surface, ok) }
+    var toward: f32 = 0.0 - 8.0 * (1.0 - opened)
+    if above { toward = 0.0 - toward }
+    let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
+    if growing_error != ok { ret (zero, TooLarge) }
+    growing[0usize] = surface
+    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: toward } }, style.defaults(), growing[0usize..1usize])
+    var faded = style.defaults()
+    faded.opacity = opened
+    ret (widget.box(0u64, faded, growing[1usize..2usize]), ok)
 }
 
 // v2 (D976, docs/ux/components/Popup): a suggestion row, full width, 40 tall (48

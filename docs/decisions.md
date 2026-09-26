@@ -26145,3 +26145,15 @@ not exist yet.
 
 `ui_overlays2_v2` opens a popup: 50 ms in, its surface is not yet the colour it
 settles on; `ui_presentation` still passes, on Windows and Linux.
+
+## D1365 — The search view fades and grows in
+
+The docked search view opens with the popup motion. D1364's code is now two
+helpers, `opening_share` (the eased share kept on the box `key + 8192`) and
+`grown_in` (faded to the share, offset toward the anchor). `popup_of` and
+`search_view` both use them, and `search_view` now stands in its own
+`key + 8192` box open or shut. Closing is still immediate.
+
+`ui_overlays2_v2` opens a search view: 50 ms in, its surface is not yet the
+colour it settles on, and D1364's popup check still holds; `ui_presentation`
+passes, on Windows and Linux.
