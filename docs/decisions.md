@@ -28139,3 +28139,20 @@ Two reject cases were affected, found by a new sweep that compares every reject 
 `accept/pins_last_use` pins the new shape on both hosts: a data view used and its guard released, and a file's pointer used and the file closed, each in one block. D1558's compiler refuses it. The final sweeps against that compiler show all 157 reject answers unchanged and, of 607 accept sources, only the new case newly accepted. Stage 2 equals stage 3 on both hosts.
 
 Still lexical: a pin inside a loop, and a pointer whose holder the rules do not know (stored into an untracked place). The diagnostic still says the pointer "lives until this block ends", which is now the conservative case's wording.
+
+## D1562 — A container keeps what it is given to own
+
+H02's last open line was arbitrary retention through dynamic containers. A pointer into a region value, pushed into a list that outlives the region, came back out after `mem.reset` and was read, and the checker accepted it: the list was not in the region, and the element it gave back was a fresh value with no history.
+
+A container now keeps what it is handed to own. `region_retain`, run from `region_call` for every call that does not return a pointer, looks for an argument `&c` through a mutable pointer parameter together with a region value or a view (or the address of one) passed to an `own` parameter. That is the callee taking the value, as `list.push`'s element parameter is. `c` then takes the innermost such region, or, if it has none, the view, and is tagged as a view local. D354's reset and D501's container change then leave `c` dangling, and the next use of `c` is refused: E-SAFETY-0013 naming the container for a region, E-SAFETY-0014 for a view.
+
+The first version counted any argument, and the compiler's own source failed stage 2. `tool.e`'s `quoted_listing(&out, listing[..])` was refused after the listing's region was reset, though the writer only copies from the slice. Restricting retention to `own` parameters is the distinction the language already makes between a callee that borrows and one that takes. Whether a callee given a value to own really kept it is not asked. The whole container dangles, not the one element, and clearing it does not revive it; both are marked.
+
+Fixtures, both hosts:
+
+- `reject/regions_container_retain`: a pointer into a region value pushed, the region reset, the list popped; E-SAFETY-0013 naming the list.
+- `accept/regions_container_valid`: the same list read back before the reset, and a list given a region slice only to copy from, used after the reset.
+
+Sweeps against D1561's compiler: the 157 existing reject answers are unchanged, and none of 608 accept sources is newly refused or accepted. Stage 2 equals stage 3 on both hosts.
+
+With D1558-D1561, all of C058's lines have landed and the item closes. What H02 still leaves outside the guarantee is recorded in `m25-h02-regions.md`: `mem.address_of` and `usize` arithmetic, pins in loops, and holders the rules cannot see.

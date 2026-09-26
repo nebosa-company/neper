@@ -175,7 +175,13 @@ both hosts.
 **M2.5:** sections 2, 3, 4, 5 and 6 as written; the fixtures; the false-positive
 measurement over the compiler and the library; the closure record.
 
-**Later:** arbitrary retention through dynamic containers.
+Retention through containers (D1562): a call given `&c` through a mutable pointer
+and a region value or a view (or its address) for an `own` parameter -- the
+callee taking it, as `list.push` takes its element -- leaves `c` holding it: `c`
+is in that region, or views that container, so after the reset or change a use of
+`c` is refused. Only an `own` handing counts: a value a callee borrows to read or
+copy is not kept. The whole container dangles, not the one element, and clearing
+it does not revive it.
 
 Delivered since: casts keep provenance (D1558); `list.Builder` builds, then
 freezes (D1559); `slot_map` keys are generation-tagged handles with an owner
