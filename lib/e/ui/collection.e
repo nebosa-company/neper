@@ -6585,6 +6585,60 @@ type GridOptions = struct { min_width: f32, selecting: bool, width: f32, select:
 // (D1384) A tile dropped on a folder tile: the dragged tile's index and the folder's.
 type GridMove = struct { from: usize, into: usize }
 
+// (D1385) A rubber band in progress, kept on its region: whether it is drawn,
+// and its corners in window points.
+type BandCell = struct { active: bool, from: geometry.Point, to: geometry.Point }
+type GridBand = struct { cell: *BandCell, has_cell: bool, runtime: *widget.Runtime, keys: []const widget.Key, select: widget.Change[ListSelect] }
+
+fn band_state(t: *const control.Theme, key: widget.Key) -> (*BandCell, bool) {
+    var none: *BandCell = zero
+    if mem.address_of(t.runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: BandCell = zero
+    let (kept, _, kept_error) = widget.state[BandCell](&build, key, fresh)
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
+fn grid_band_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let b = mem.cast[*GridBand](ctx)
+    if !b.has_cell { ret ok }
+    switch g {
+    case .DragStart as began:
+        b.cell.active = true
+        b.cell.from = began
+        b.cell.to = began
+        ret ok
+    case .DragMove as moved:
+        b.cell.to = moved.position
+        ret ok
+    case .DragEnd as ended:
+        b.cell.active = false
+        let left = widget.min_f(b.cell.from.x, b.cell.to.x)
+        let right = widget.max_f(b.cell.from.x, b.cell.to.x)
+        let top = widget.min_f(b.cell.from.y, b.cell.to.y)
+        let bottom = widget.max_f(b.cell.from.y, b.cell.to.y)
+        let cleared = widget.fire_change[ListSelect](b.select, ListSelect { kind: .Clear, index: 0usize })
+        if cleared != ok { ret cleared }
+        var i = 0usize
+        while i < b.keys.len {
+            let (tile_box, has_tile_box) = widget.bounds_for_key(b.runtime, b.keys[i])
+            if has_tile_box && tile_box.x < right && tile_box.x + tile_box.width > left && tile_box.y < bottom && tile_box.y + tile_box.height > top {
+                let picked = widget.fire_change[ListSelect](b.select, ListSelect { kind: .Toggle, index: i })
+                if picked != ok { ret picked }
+            }
+            i += 1usize
+        }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 // (D1384) A grid drag's payload: this tag plus the tile's index plus one.
 fn grid_payload_tag() -> u64 {
     ret 17592186044416u64
@@ -6625,7 +6679,9 @@ fn grid_options() -> GridOptions {
 // (D1245) With `options.select` the grid is multi-select (`selection_scopes`, a
 // grid's column count across); the caller keeps the set and its app bar.
 // (D1247) With no tiles, `loading` skeleton tiles or the empty state.
-// ponytail: no rubber band or reflow motion; the caller keeps the page margins.
+// (D1385) A pointer drag rubber-bands a selection.
+// ponytail: no reflow motion; the band starts on tiles too (a drag from a tile
+// reaches it); the caller keeps the page margins.
 fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, tiles: []const Tile, keys: []const widget.Key, options: GridOptions) -> (widget.Node, err) {
     if keys.len != tiles.len { ret (zero, TooLarge) }
     var least = options.min_width
@@ -6750,6 +6806,37 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = widget.wrap(key, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: 8.0 }, flow_style, cells[0usize..tiles.len])
+    // (D1385, docs/ux/components/GridView, selection) With a pointer, a drag on a
+    // multi-select grid draws a band (`primary` at 12% inside a 1px `primary`
+    // edge) and on release selects the tiles it touches: `Clear`, then a
+    // `Toggle` for each. The band's region is keyed `key ^ fnv1a64("grid-band")`.
+    if multi && !touch {
+        let band_key = key ^ hash.fnv1a64("grid-band")
+        let (band_cell, has_band_cell) = band_state(t, band_key)
+        let (banding, banding_error) = mem.alloc[GridBand](a, 1usize)
+        let (band_layers, band_layers_error) = mem.alloc[widget.Node](a, 3usize)
+        if banding_error != ok || band_layers_error != ok { ret (zero, TooLarge) }
+        banding[0usize] = GridBand { cell: band_cell, has_cell: has_band_cell, runtime: t.runtime, keys: keys, select: options.select }
+        band_layers[0usize] = body[0usize]
+        var band_count = 1usize
+        if has_band_cell && band_cell.active {
+            let (region_box, has_region_box) = widget.bounds_for_key(t.runtime, band_key)
+            if has_region_box {
+                let x0 = widget.min_f(band_cell.from.x, band_cell.to.x) - region_box.x
+                let y0 = widget.min_f(band_cell.from.y, band_cell.to.y) - region_box.y
+                var band = control.sized_style(widget.max_f(band_cell.from.x, band_cell.to.x) - widget.min_f(band_cell.from.x, band_cell.to.x), widget.max_f(band_cell.from.y, band_cell.to.y) - widget.min_f(band_cell.from.y, band_cell.to.y))
+                band.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Primary), 0.12) }
+                band.border = style.Border { width: 1.0, color: style.color(t.tokens, .Primary) }
+                band_layers[2usize] = widget.box(0u64, band, zero)
+                band_layers[1usize] = widget.positioned(0u64, x0, y0, style.defaults(), band_layers[2usize..3usize])
+                band_count = 2usize
+            }
+        }
+        let (banded, banded_error) = mem.alloc[widget.Node](a, 1usize)
+        if banded_error != ok { ret (zero, TooLarge) }
+        banded[0usize] = widget.stack(0u64, style.defaults(), band_layers[0usize..band_count])
+        body[0usize] = widget.region(band_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&banding[0usize]), invoke: grid_band_gesture }, gestures: widget.GESTURE_DRAG, enabled: true, focusable: false }, style.defaults(), banded[0usize..1usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = 30u8
     sem.label = label

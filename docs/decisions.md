@@ -26444,3 +26444,19 @@ hand and the reflow motion are still missing.
 `ui_collections_v2` drags Alpha onto Gamma, a folder: Gamma's top edge over its
 media turns `primary`, and the drop reports tile 0 into tile 2. `ui_ripple_v2`
 still passes, on Windows and Linux.
+
+## D1385 — Pointer drags rubber-band a grid selection
+
+The GridView spec selects by rubber band with a pointer drag. A multi-select
+grid on a pointer host now stands in a drag region (keyed
+`key ^ fnv1a64("grid-band")`) whose `BandCell` keeps the band's corners. While
+dragged, the band is drawn over the tiles, `primary` at 12% inside a 1px
+`primary` edge. Let go, the grid reports `Clear`, then a `Toggle` for every tile
+whose bounds the band touches, so the caller's set becomes exactly those. A
+drag that starts on a tile reaches the band through D1380's hand-off, so
+unlike the spec it is not limited to the empty area. The reflow motion is
+still missing.
+
+`ui_collections_v2` drags from Alpha to Beta: the release reports three
+selections ending in a toggle of tile 1. `ui_ripple_v2` still passes, on
+Windows and Linux.
