@@ -846,7 +846,9 @@ fn navigation_stack_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme
 }
 
 // (D1271) A stack's memory: its depth last frame and who pushed each level.
-type StackCell = struct { depth: usize, pushers: [16]widget.Key, popped: bool }
+// (D1499) `left_from` is the depth a pop left, so its page can be built again
+// while it slides away.
+type StackCell = struct { depth: usize, pushers: [16]widget.Key, popped: bool, left_from: usize }
 
 fn stack_cell(t: *const control.Theme, key: widget.Key) -> (*StackCell, bool) {
     var none: *StackCell = zero
@@ -887,17 +889,34 @@ fn eased_on_depth(t: *const control.Theme, key: widget.Key, depth: usize, poppin
 // (D1319) A push slides the new page in from the end over `duration-medium-2`;
 // a pop slides the page beneath back from 30% towards the start; reduced motion
 // shows it at once.
-// ponytail: the page leaving is not drawn (the caller no longer passes it), so a
-// pop is the revealed page's parallax alone; no predictive back; the page
-// beneath is not kept in the tree, so its scroll is the caller's.
+// (D1499) `navigation_stack_leaving` draws the page a pop leaves.
+// ponytail: no predictive back; the page beneath is not kept in the tree, so its
+// scroll is the caller's.
 fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, jumps: []const widget.Submit, width: f32) -> (widget.Node, err) {
+    var no_leaving: PageBuilder = zero
+    let (made, made_error) = navigation_stack_core(a, key, t, titles, pages, pop, jumps, width, no_leaving)
+    ret (made, made_error)
+}
+
+// (D1499, docs/ux/components/NavigationStack, motion) The stack with the page a
+// pop leaves: built by `leaving` (its `ctx` not null) for its index (the level it stood at) while the
+// pop runs, it slides out to the end over the revealed page's parallax.
+fn navigation_stack_leaving(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, jumps: []const widget.Submit, width: f32, leaving: PageBuilder) -> (widget.Node, err) {
+    let (made, made_error) = navigation_stack_core(a, key, t, titles, pages, pop, jumps, width, leaving)
+    ret (made, made_error)
+}
+
+fn navigation_stack_core(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, jumps: []const widget.Submit, width: f32, leaving: PageBuilder) -> (widget.Node, err) {
     if titles.len != pages.len || titles.len == 0usize { ret (zero, TooLarge) }
     let top = titles.len - 1usize
     let (cell, has_cell) = stack_cell(t, key)
     var popping = false
+    var left_from = titles.len
     if has_cell {
         // (D1445) Which way the depth last moved, so the ease keeps its duration.
         if titles.len != cell.depth { cell.popped = titles.len < cell.depth }
+        if titles.len < cell.depth { cell.left_from = cell.depth }
+        if cell.popped && cell.left_from > titles.len { left_from = cell.left_from }
         popping = cell.popped
         if cell.depth > 0usize && titles.len > cell.depth {
             let (pusher, has_pusher) = widget.focused_key(t.runtime)
@@ -957,6 +976,22 @@ fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         if slid_error != ok { ret (zero, TooLarge) }
         slid[0usize] = parts[1usize]
         parts[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, grow, slid[0usize..1usize])
+        // (D1499) Popping, the page left slides from its place out to the end,
+        // over the revealed page (keyed `key + 5`).
+        if left < 0.0 && left_from > titles.len && mem.address_of(leaving.ctx) != 0usize {
+            let levels = f32(left_from - titles.len)
+            let (left_page, left_page_error) = leaving.build(leaving.ctx, a, left_from - 1usize)
+            if left_page_error != ok { ret (zero, left_page_error) }
+            var out_dx = (1.0 + left / levels) * width
+            if t.tokens.direction == .RightToLeft { out_dx = 0.0 - out_dx }
+            let (both, both_error) = mem.alloc[widget.Node](a, 4usize)
+            if both_error != ok { ret (zero, TooLarge) }
+            both[2usize] = left_page
+            both[3usize] = widget.box(key + 5u64, grow, both[2usize..3usize])
+            both[0usize] = parts[1usize]
+            both[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: out_dx, y: 0.0 } }, grow, both[3usize..4usize])
+            parts[1usize] = widget.stack(0u64, grow, both[0usize..2usize])
+        }
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
@@ -1345,8 +1380,7 @@ fn destination_bar_hiding(a: *mem.Arena, key: widget.Key, t: *const control.Them
 // `duration-medium-1` on `ease-emphasized-decelerate` (the chosen index eases on
 // the page, slot `key + 1048608`). It always stands in its fading box; reduced
 // motion changes at once.
-// ponytail: the page leaving is not drawn fading out first (the caller builds
-// only the new one), so the fade through is its second half.
+// (D1498) `destination_pages` builds the leaving page too and fades through.
 fn destination_page(a: *mem.Arena, key: widget.Key, t: *const control.Theme, selected: usize, content: widget.Node) -> (widget.Node, err) {
     let shown = control.eased_emphasized(t, key, key + 1048608u64, f32(selected), false, t.tokens.durations.medium1)
     var still = f32(selected) - shown
@@ -1358,6 +1392,94 @@ fn destination_page(a: *mem.Arena, key: widget.Key, t: *const control.Theme, sel
     var fading = style.defaults()
     fading.opacity = 1.0 - still
     ret (widget.box(key, fading, held[0usize..1usize]), ok)
+}
+
+// (D1498) A destination's page, built on demand for its index.
+type PageBuilder = struct { ctx: *void, build: fn(*void, *mem.Arena, usize) -> (widget.Node, err) }
+
+// (D1498) A destination page's change, kept on the page box: the destination
+// shown, the one before it, and when the change began.
+type PageFade = struct { last: usize, prior: usize, since: i64, set: bool, changing: bool }
+
+// (D1498, docs/ux/components/DestinationBar, motion) The page for `selected`,
+// built by `pages`, keyed `key`, fading through on a change: the page left fades
+// out over `duration-short-3` on `ease-emphasized-accelerate`, then the new one
+// fades in over `duration-medium-1` on `ease-emphasized-decelerate`; reduced
+// motion cross-fades over `duration-short-2`. Only the page on show is built
+// (both while they cross-fade). It always stands in its box.
+fn destination_pages(a: *mem.Arena, key: widget.Key, t: *const control.Theme, selected: usize, pages: PageBuilder) -> (widget.Node, err) {
+    var leaving = selected
+    var out_share: f32 = 1.0
+    var in_share: f32 = 1.0
+    if mem.address_of(t.runtime) != 0usize {
+        let (s, state_error) = widget.state_of(t.runtime)
+        if state_error == ok {
+            let (id, found) = widget.find_by_key(s, key)
+            if found == 1usize {
+                var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+                var fresh: PageFade = zero
+                let (fade, _, fade_error) = widget.state[PageFade](&build, key + 1048609u64, fresh)
+                if fade_error == ok {
+                    let now = widget.frame_time(t.runtime).nanos
+                    if !fade.set {
+                        fade.set = true
+                        fade.last = selected
+                    } else if fade.last != selected {
+                        fade.prior = fade.last
+                        fade.last = selected
+                        fade.since = now
+                        fade.changing = true
+                    }
+                    if fade.changing {
+                        let elapsed = now - fade.since
+                        let out_span = i64(t.tokens.durations.short3) * 1000000i64
+                        let in_span = i64(t.tokens.durations.medium1) * 1000000i64
+                        if t.tokens.motion.reduced {
+                            let cross_span = i64(t.tokens.durations.short2) * 1000000i64
+                            if elapsed >= cross_span {
+                                fade.changing = false
+                            } else {
+                                in_share = f32(elapsed) / f32(cross_span)
+                                out_share = 1.0 - in_share
+                                leaving = fade.prior
+                            }
+                        } else if elapsed < out_span {
+                            out_share = 1.0 - animation.ease(.EmphasizedAccelerate, f32(elapsed) / f32(out_span))
+                            in_share = 0.0
+                            leaving = fade.prior
+                        } else if elapsed < out_span + in_span {
+                            in_share = animation.ease(.EmphasizedDecelerate, f32(elapsed - out_span) / f32(in_span))
+                        } else {
+                            fade.changing = false
+                        }
+                        if fade.changing { widget.request_animation_frame(t.runtime) }
+                    }
+                }
+            }
+        }
+    }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if leaving != selected {
+        let (old_page, old_error) = pages.build(pages.ctx, a, leaving)
+        if old_error != ok { ret (zero, old_error) }
+        layers[2usize] = old_page
+        var old_look = style.defaults()
+        old_look.opacity = out_share
+        layers[n] = widget.box(key + 1u64, old_look, layers[2usize..3usize])
+        n += 1usize
+    }
+    if in_share > 0.0 || leaving == selected {
+        let (new_page, new_error) = pages.build(pages.ctx, a, selected)
+        if new_error != ok { ret (zero, new_error) }
+        layers[3usize] = new_page
+        var new_look = style.defaults()
+        new_look.opacity = in_share
+        layers[n] = widget.box(key + 2u64, new_look, layers[3usize..4usize])
+        n += 1usize
+    }
+    ret (widget.stack(key, style.defaults(), layers[0usize..n]), ok)
 }
 
 fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Destination, selected: usize, picks: []const widget.Submit, form: DestinationForm, extent: f32) -> (widget.Node, err) {

@@ -27414,3 +27414,17 @@ A count badge keeps its last two counts (`BadgeCounts`, up to four bytes each, s
 D1211's Page Up and Page Down moved a list's focus by the window's height over the first row's. That is right for a list that fills the window and wrong for one in a smaller viewport: in a 150 tall viewport Page Down leapt past everything shown. A new `widget.viewport_extent_around(runtime, key)` gives the extent of the nearest scroll viewport around a keyed element, as last laid out. `list_of` measures its page from the viewport around its first row, and from the window outside one.
 
 `ui_collections_v2` checks this on Windows and Linux: in a list of twenty in a 150 tall viewport, Page Down from the first row focuses the row a viewport's height of rows on. Against the old sources it leaps a window's worth (exit 255).
+
+## D1498 — A destination's page fades through
+
+The DestinationBar spec: a change of destination is "a fade through (out `duration-short-3` with `ease-emphasized-accelerate`, in `duration-medium-1` with `ease-emphasized-decelerate`) ... Reduced motion: cross-fade". D1448's `destination_page` got only the new page, so it drew the second half alone. The new `destination_pages` takes a `PageBuilder` (a context and a function from index to page), so it can build the page being left.
+
+A `PageFade` kept on the page box records the change. For the first `duration-short-3` the page left stands alone, fading out (keyed `key + 1`). For the next `duration-medium-1` the new page stands alone, fading in (`key + 2`). Under reduced motion both stand for `duration-short-2`, cross-fading. Only the pages on show are built. `destination_page` remains for callers with one page.
+
+`ui_navigation3_v2` checks this on Windows and Linux: 50 ms after a change only the page left stands, and 300 ms after only the new one.
+
+## D1499 — A navigation stack's pop draws the page it leaves
+
+The NavigationStack spec pops by sliding the top page away to the end while the page beneath returns. D1319 dropped the leaving page, because the caller's `pages` no longer hold it, so a pop was the revealed page's parallax alone. The new `navigation_stack_leaving` takes D1498's `PageBuilder` (its `ctx` not null) for the page a pop leaves. The stack records the depth a pop left (`StackCell.left_from`). While the depth eases down, it builds that page again for its level and slides it from its place out to the end, over the revealed page, in a layer keyed `key + 5`. A pop of several levels spreads the slide over them. `navigation_stack_of` passes no builder and is unchanged.
+
+`ui_navigation_v2` checks this on Windows and Linux: 100 ms after a pop from depth 2 to 1, the page left (level 1, built again) stands in its layer, and a second on both are gone.
