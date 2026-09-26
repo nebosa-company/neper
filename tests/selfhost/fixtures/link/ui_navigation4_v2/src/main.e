@@ -331,6 +331,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 4611u64).element) != ok || testing.press_key(&harness, 65475u32, zero) != ok { os.exit(142i32) }
     let (cycled_key, _) = widget.focused_key(&runtime)
     if cycled_key != 4612u64 { os.exit(143i32) }
+    // (D1411) Escape in the detail returns the focus to the list.
+    if testing.press_key(&harness, 27u32, zero) != ok { os.exit(144i32) }
+    let (escaped_key, _) = widget.focused_key(&runtime)
+    if escaped_key != 4611u64 { os.exit(145i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation4 v2 ok\n")
     ret ok
