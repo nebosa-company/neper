@@ -6899,8 +6899,10 @@ fn list_options() -> ListOptions {
 // `selection_bar` stands above the rows; on touch a hold or, once in the mode,
 // a tap toggles.
 // (D1247) `loading` skeleton rows stand in for no rows.
-// ponytail: the caller sets `selected` from the gestures; no
-// sticky subheader or removal motion. (D1507) Rows that arrive grow in. (D1497) A page is the enclosing viewport's
+// (D1542) A removed row collapses where it stood (`list_leaving`).
+// ponytail: the caller sets `selected` from the gestures; no sticky subheader;
+// reduced motion drops a removed row rather than cross-fading it; a removal
+// past the 12th row is not seen. (D1507) Rows that arrive grow in. (D1497) A page is the enclosing viewport's
 // height over the first row's (the window's outside one).
 // (D1507) A list's rows that arrived after it stood: up to eight keys and when
 // each first appeared.
@@ -6952,6 +6954,58 @@ fn list_arrival(t: *const control.Theme, key: widget.Key, row_key: widget.Key) -
     arrivals.since[slot] = now
     widget.request_animation_frame(t.runtime)
     ret 0.0
+}
+
+// (D1542) What a list saw last frame: its first 12 row keys and their count,
+// and the row leaving: where it stood, how tall, and since when.
+type ListSeen = struct { keys: [12]widget.Key, count: usize, gone: usize, height: f32, since: i64, leaving: bool }
+
+// (D1542, docs/ux/components/List, motion) A removed row collapses where it
+// stood: its index and the height still standing (0 when none leaves). One
+// row fewer than last frame is a removal, at the first key that differs; its
+// height is its row's last bounds, and it falls to nothing over
+// `duration-short-4` on `ease-emphasized-accelerate` (kept on the list, slot
+// `key + 1048615`). Reduced motion removes it at once.
+fn list_leaving(t: *const control.Theme, key: widget.Key, keys: []const widget.Key) -> (usize, f32) {
+    if mem.address_of(t.runtime) == 0usize { ret (0usize, 0.0) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (0usize, 0.0) }
+    let (list_id, list_found) = widget.find_by_key(s, key)
+    if list_found != 1usize { ret (0usize, 0.0) }
+    var build = widget.BuildContext { runtime: t.runtime, element: list_id, frame: 0u64 }
+    var fresh: ListSeen = zero
+    let (seen, _, seen_error) = widget.state[ListSeen](&build, key + 1048615u64, fresh)
+    if seen_error != ok { ret (0usize, 0.0) }
+    let now = widget.frame_time(t.runtime).nanos
+    if seen.count == keys.len + 1usize && !t.tokens.motion.reduced {
+        var at = 0usize
+        while at < keys.len && at < 12usize && keys[at] == seen.keys[at] { at += 1usize }
+        seen.gone = at
+        seen.height = 0.0
+        if at < 12usize {
+            let (row_id, row_found) = widget.find_by_key(s, seen.keys[at])
+            if row_found == 1usize {
+                let (was, had) = widget.bounds_of(t.runtime, row_id)
+                if had { seen.height = was.height }
+            }
+        }
+        seen.since = now
+        seen.leaving = seen.height > 0.0
+    }
+    seen.count = keys.len
+    var i = 0usize
+    while i < keys.len && i < 12usize {
+        seen.keys[i] = keys[i]
+        i += 1usize
+    }
+    if !seen.leaving { ret (0usize, 0.0) }
+    let p = f32(now - seen.since) / (f32(t.tokens.durations.short4) * 1000000.0)
+    if p >= 1.0 {
+        seen.leaving = false
+        ret (0usize, 0.0)
+    }
+    widget.request_animation_frame(t.runtime)
+    ret (seen.gone, seen.height * (1.0 - animation.bezier(0.3, 0.0, 0.8, 0.15, p)))
 }
 
 fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const RowItem, keys: []const widget.Key, options: ListOptions) -> (widget.Node, err) {
@@ -7031,9 +7085,11 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     }
     var inset = options.inset
     if options.grouped && !(inset > 0.0) { inset = 16.0 }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize * items.len + 2usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize * items.len + 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var p = 0usize
+    // (D1542) The removed row's place, closing.
+    let (gone_at, gone_height) = list_leaving(t, key, keys)
     if options.subheader.len > 0usize {
         var heading = control.text_options()
         heading.role = .TitleSmall
@@ -7048,6 +7104,10 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
     }
     i = 0usize
     while i < items.len {
+        if gone_height > 0.0 && gone_at == i {
+            parts[p] = widget.box(0u64, control.sized_style(width, gone_height), zero)
+            p += 1usize
+        }
         if options.dividers && i > 0usize {
             var line = control.divider_options()
             line.start = inset
@@ -7059,6 +7119,10 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
         parts[p] = rows[i]
         p += 1usize
         i += 1usize
+    }
+    if gone_height > 0.0 && gone_at >= items.len {
+        parts[p] = widget.box(0u64, control.sized_style(width, gone_height), zero)
+        p += 1usize
     }
     if items.len == 0usize && options.loading > 0usize {
         let (loading_node, loading_error) = loading_rows_sized(a, key + 1u64, t, options.loading, width, options.loading_height)
