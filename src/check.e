@@ -14519,6 +14519,96 @@ fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     ret check_bodies(c, r, g, no_skip[0usize..0usize])
 }
 
+// (D1554, C053, H08) The first failure a partial check keeps while it goes on: the
+// fields a diagnostic is written from, and how many diagnostics there were.
+type FailureState = struct { module: usize, name: str, kind: DiagnosticKind, token: lex.Token, has_token: bool, detail: str, detail2: str, candidate: usize, candidate_module: str, expected: Type, actual: Type, mismatch_end: usize, related: lex.Token, has_related: bool, related_note: str, fix_text: str, fix_at: usize, fix_kind: u8, diagnostics: usize }
+
+fn failure_state(c: *Checker) -> FailureState {
+    ret FailureState { module: c.failure_module, name: c.failure_name, kind: c.failure_kind, token: c.failure_token, has_token: c.failure_has_token, detail: c.failure_detail, detail2: c.failure_detail2, candidate: c.failure_candidate, candidate_module: c.failure_candidate_module, expected: c.failure_expected, actual: c.failure_actual, mismatch_end: c.failure_mismatch_end, related: c.failure_related, has_related: c.failure_has_related, related_note: c.failure_related_note, fix_text: c.failure_fix_text, fix_at: c.failure_fix_at, fix_kind: c.failure_fix_kind, diagnostics: c.diagnostic_count }
+}
+
+fn restore_failure(c: *Checker, f: FailureState) {
+    c.failure_module = f.module
+    c.failure_name = f.name
+    c.failure_kind = f.kind
+    c.failure_token = f.token
+    c.failure_has_token = f.has_token
+    c.failure_detail = f.detail
+    c.failure_detail2 = f.detail2
+    c.failure_candidate = f.candidate
+    c.failure_candidate_module = f.candidate_module
+    c.failure_expected = f.expected
+    c.failure_actual = f.actual
+    c.failure_mismatch_end = f.mismatch_end
+    c.failure_related = f.related
+    c.failure_has_related = f.has_related
+    c.failure_related_note = f.related_note
+    c.failure_fix_text = f.fix_text
+    c.failure_fix_at = f.fix_at
+    c.failure_fix_kind = f.fix_kind
+    c.diagnostic_count = f.diagnostics
+}
+
+// (D1554, C053, H08) `run` that goes on past a body that fails: every other body is
+// still checked, so what the checker decided about the functions that do check can
+// be offered; `failed` (by function index, sized to the function table) marks each
+// function and instance whose body failed. The first failure's diagnostic is the
+// one reported, and its error is the answer; a declaration that fails, or an arena
+// or table that runs out, stops at once as `run` does.
+fn run_partial(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, failed: []bool) -> err {
+    try run_declarations(c, r, g)
+    var first_error = ok
+    var first: FailureState = zero
+    var module_index = 0usize
+    while module_index < g.count {
+        var tree: parse.Tree = zero
+        try graph.parse_module(g, module_index, &tree)
+        try tokenize_module(c, g, module_index)
+        var node_index = 1usize
+        while node_index < tree.count {
+            let node = tree.nodes[node_index]
+            if node.top_level && node.kind == .FnDecl {
+                let checked = check_function(c, r, g, &tree, module_index, node, node_index)
+                if checked == mem.Exhausted || checked == Capacity { ret checked }
+                if checked != ok {
+                    if first_error == ok {
+                        first_error = checked
+                        first = failure_state(c)
+                    }
+                    let (name, name_error) = function_name(c, g.modules[module_index].text, node)
+                    if name_error == ok {
+                        let (function_index, found) = find_function(c, module_index, name)
+                        if found && function_index < failed.len { failed[function_index] = true }
+                    }
+                    c.loop_depth = 0usize
+                    c.break_depth = 0usize
+                    c.defer_depth = 0usize
+                }
+            }
+            node_index += 1usize
+        }
+        module_index += 1usize
+    }
+    var instance_index = c.signature_function_count
+    while instance_index < c.function_count {
+        if c.function_generics[instance_index].instance && !c.function_generics[instance_index].checked && !c.functions[instance_index].generic {
+            c.function_generics[instance_index].checked = true
+            let checked = check_instance(c, r, g, instance_index)
+            if checked == mem.Exhausted || checked == Capacity { ret checked }
+            if checked != ok {
+                if first_error == ok {
+                    first_error = checked
+                    first = failure_state(c)
+                }
+                if instance_index < failed.len { failed[instance_index] = true }
+            }
+        }
+        instance_index += 1usize
+    }
+    if first_error != ok { restore_failure(c, first) }
+    ret first_error
+}
+
 // Everything but the bodies (D224): what the edge rule needs to decide which
 // modules are kept, so their bodies need not be checked at all.
 fn run_declarations(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {

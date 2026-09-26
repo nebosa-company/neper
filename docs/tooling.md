@@ -556,7 +556,12 @@ the plans, `test-impact-file` -- answers as a stream (D520, H08, H18): its heade
 the diagnostic, and a result of exit 1, nothing on stderr; `explain-file` answers
 with what the checker decided before it stopped as well (D430); `query-batch`
 answers with one such stream under a `query-batch` header (D523), since no line
-of it can be answered. A program that
+of it can be answered. `context-file --symbol` over a function that does check, in
+a program that does not, answers with that function's page (D1554): the checker
+goes on past the body that fails, and the page carries the diagnostic after the
+subject record, then the facts, and a result of `ok: false`, exit 1, `complete:
+false` and `partial: true`; a subject whose own body fails, or that is not a
+function, gets the stream above. A program that
 does not load -- a module that does not parse, a `use` naming no module -- is a
 stream too (D521): the query's header, the loader's diagnostic, a result of exit
 1; and `index-file` over a file that does not parse begins with its header. So do
