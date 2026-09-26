@@ -27800,3 +27800,9 @@ The Icon spec draws every icon at rest as outline strokes and the selected or "o
 The navigation drawer and the destination bar (bar, rail and sidebar) draw the selected destination's icon in its filled form, cut in `secondary-container`. The spec's cross-fade between the forms is not drawn: the form swaps, as reduced motion asks.
 
 `ui_content_v2` checks this on Windows and Linux. A filled person's head centre is `on-surface-variant` and an outline one's is not, and a check is pixel for pixel the same in both forms. `ui_navigation3_v2` finds the rail's selected People glyph from its ink and requires its head to be filled. Against the old library that check fails (exit 97). All 103 ui_* fixtures pass on both hosts.
+
+## D1531 — A selected icon tab shows its filled icon
+
+D1226 put icons on tabs, drawn in outline whether or not the tab was selected. The Icon spec draws the selected or "on" form filled, as iOS tab bars do. `tab_face` now takes the tab's selection and draws the selected tab's icon in its filled form (D1530), cut in the bar's `surface`, in the active ink. Unselected tabs keep the outline, and a glyph without a body is unchanged.
+
+`ui_tabs_rtl` checks this on Windows and Linux. With the icon bar selected on Overview, the fixture finds the picture from its active ink and requires a pixel inside its frame, clear of the hills, to be that ink. With the selection not passed, that check fails (exit 60). All 103 ui_* fixtures pass on both hosts.

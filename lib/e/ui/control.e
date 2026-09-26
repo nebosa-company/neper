@@ -5864,7 +5864,8 @@ fn tab_dot(options: *const TabsOptions, i: usize) -> bool {
 // icon, 4 after the label.
 // (D1242) A dot badge stands where the count would: 3 in from the icon's top end
 // corner, or 4 after the label.
-fn tab_face(a: *mem.Arena, t: *const Theme, options: *const TabsOptions, i: usize, label_node: widget.Node, ink: paint.Color) -> (widget.Node, err) {
+// (D1531) The selected tab's icon is its filled "on" form over the bar's `surface`.
+fn tab_face(a: *mem.Arena, t: *const Theme, options: *const TabsOptions, i: usize, label_node: widget.Node, ink: paint.Color, selected: bool) -> (widget.Node, err) {
     let value = tab_badge(options, i)
     let dotted = tab_dot(options, i)
     var kind: BadgeKind = .Urgent
@@ -5875,7 +5876,7 @@ fn tab_face(a: *mem.Arena, t: *const Theme, options: *const TabsOptions, i: usiz
     if parts_error != ok { ret (zero, TooLarge) }
     if has_icon {
         let side = t.tokens.sizes.icon_md
-        let (glyph, glyph_error) = icon_square(a, ink, options.icons[i], side)
+        let (glyph, glyph_error) = icon_square_of(a, ink, options.icons[i], side, selected, style.color(t.tokens, .Surface))
         if glyph_error != ok { ret (zero, glyph_error) }
         parts[0usize] = glyph
         if value.len != 0usize || dotted {
@@ -6107,7 +6108,7 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         caption.align = .Center
         let (label_text, label_error) = colored_text(a, 0u64, labels[i], t, caption, ink)
         if label_error != ok { ret (zero, label_error) }
-        let (label_node, face_error) = tab_face(a, t, &options, i, label_text, ink)
+        let (label_node, face_error) = tab_face(a, t, &options, i, label_text, ink, i == selected)
         if face_error != ok { ret (zero, face_error) }
         var named = labels[i]
         if tab_badge(&options, i).len != 0usize || tab_dot(&options, i) {

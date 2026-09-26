@@ -18,6 +18,13 @@ use e.ui.widget
 type Counter = struct { count: usize }
 type Store = struct { counters: [3]Counter, actions: [3]widget.Submit }
 
+// A byte within two of a channel's 0..1 value.
+fn near_byte(byte: u8, channel: f32) -> bool {
+    let want = channel * 255.0
+    let got = f32(byte)
+    ret got > want - 2.5 && got < want + 2.5
+}
+
 fn on_count(ctx: *void) -> err {
     let counter = mem.cast[*Counter](ctx)
     counter.count += 1usize
@@ -202,6 +209,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !tab_named(&harness, "Settings, new") { os.exit(34i32) }
     let (iconic_node, iconic_node_error) = build_badged(&frame, &theme, &stores[0usize], true)
     if iconic_node_error != ok || testing.pump(&harness, iconic_node, time.Instant { nanos: 4200000000i64 }) != ok || !tab_named(&harness, "Settings, update ready") || !tab_named(&harness, "Builds, 3 failed") { os.exit(35i32) }
+    // (D1531) The selected tab's picture is its filled form: inside the frame,
+    // clear of the hills, the pixel is the active ink, found from the ink's extent.
+    let (tab_shot, tab_shot_error) = testing.snapshot(&harness, a)
+    if tab_shot_error != ok { os.exit(58i32) }
+    let (picture_tab, has_picture_tab) = widget.bounds_of(&runtime, testing.by_key(&harness, 101u64).element)
+    if !has_picture_tab { os.exit(59i32) }
+    let active = style.color(&tokens, .Primary)
+    var ink_left: usize = 100000usize
+    var ink_top: usize = 100000usize
+    var scan_y = usize(picture_tab.y)
+    while scan_y < usize(picture_tab.y) + 30usize {
+        var scan_x = usize(picture_tab.x)
+        while scan_x < usize(picture_tab.x + picture_tab.width) {
+            let spot = (scan_y * 320usize + scan_x) * 4usize
+            if near_byte(tab_shot.pixels[spot], active.red) && near_byte(tab_shot.pixels[spot + 1usize], active.green) && near_byte(tab_shot.pixels[spot + 2usize], active.blue) {
+                if ink_top == 100000usize || scan_y < ink_top + 18usize { if scan_x < ink_left { ink_left = scan_x } }
+                if scan_y < ink_top { ink_top = scan_y }
+            }
+            scan_x += 1usize
+        }
+        scan_y += 1usize
+    }
+    let inside = ((ink_top + 2usize) * 320usize + ink_left + 8usize) * 4usize
+    if ink_left == 100000usize || !near_byte(tab_shot.pixels[inside], active.red) || !near_byte(tab_shot.pixels[inside + 1usize], active.green) || !near_byte(tab_shot.pixels[inside + 2usize], active.blue) { os.exit(60i32) }
     // (D1254) Eight scrollable tabs in 200 overflow; once the last (selected) tab
     // has the focus the strip scrolls to show all of it (clear of the chevrons).
     var many_labels: [8]str = zero
