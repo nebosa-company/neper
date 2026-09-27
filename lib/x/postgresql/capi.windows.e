@@ -101,3 +101,6 @@ extern fn getisnull(result: usize, row: i32, column: i32) -> i32
 
 @import("libpq.dll", "PQclear")
 extern fn clear(result: usize)
+
+// The library this file binds, for a symbol looked up at run time because not every libpq has it.
+fn library() -> str { ret "libpq.dll" }

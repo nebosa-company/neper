@@ -119,6 +119,12 @@ both-host fixtures.
 
 ### 3. Fewer calls per row (drivers)
 
+**libpq done as D1606; SQLite not done.** libpq readers take 256 rows per result where
+libpq has chunked mode (looked up at run time, since WSL's libpq 16 lacks it). The Windows
+PostgreSQL scan went from 7.9 ms to 4.2 ms, against C's 4.5 ms. The SQLite `STRICT`-table
+shortcut is left out: nothing in the tree or benchmark uses a strict table, and knowing one
+is strict costs a schema query per statement. The original proposal is kept below.
+
 - SQLite: `column_type` is needed because a column can hold any storage class. Ask it
   only when the declared kind is `Null` (unknown) or the table is not `STRICT`; a
   `STRICT` table (SQLite ≥ 3.37) guarantees the declared type, so the driver can trust

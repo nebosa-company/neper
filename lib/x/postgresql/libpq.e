@@ -5,9 +5,15 @@
 // Memory: the arena handed to `open` is retained and borrowed for the connection's life.
 // Contexts, column names and row buffers come from it; a reader's values are copied into a
 // buffer of its own that is valid until its next row. Read with `db.reader_next_borrowed`,
-// text and `bytea` values are libpq's own bytes instead: the row's result is kept until the
-// next row or the reader's end rather than cleared once the row is filled. Error text is kept in fixed buffers the
-// connection allocates once, so failures do not grow the arena.
+// text and `bytea` values are libpq's own bytes instead, valid until the next row or the
+// reader's end. Error text is kept in fixed buffers the connection allocates once, so failures
+// do not grow the arena.
+//
+// Streaming: a reader asks for 256 rows per result where libpq has chunked mode (17 and
+// later, looked up at run time) and one row per result where it does not. A result is cleared
+// by the call after its last row. A query that fails partway drops the unfinished chunk, so in
+// chunked mode the rows before a failure arrive in whole chunks, and a failure within the
+// first chunk fails the query itself.
 //
 // Wire format: results are asked for in binary, so integers, floats, booleans, `bytea` and
 // timestamps arrive exact rather than as text to be re-parsed. `numeric` is rendered as its
@@ -23,6 +29,7 @@ use e.mem
 use e.str
 use e.time
 use e.db
+use e.os
 use e.bytes as octets
 use x.postgresql.capi
 
@@ -31,12 +38,13 @@ error CannotConnect
 error Aborted
 error Failed
 
-// PQsetSingleRowMode is the newest call bound here (9.2).
+// PQsetSingleRowMode is the newest call bound here (9.2); PQsetChunkedRowsMode (17) is looked
+// up, not bound.
 const MIN_VERSION: i32 = 90200i32
 
-type Conn = struct { handle: usize, arena: *mem.Arena, driver: *const db.Driver, active: *Reader, statements: u64, state: []u8, state_len: usize, message: []u8, message_len: usize, constraint: []u8, constraint_len: usize }
+type Conn = struct { handle: usize, arena: *mem.Arena, driver: *const db.Driver, chunked: fn(handle: usize, rows: i32) -> i32, active: *Reader, statements: u64, state: []u8, state_len: usize, message: []u8, message_len: usize, constraint: []u8, constraint_len: usize }
 type Stmt = struct { conn: *Conn, name: []u8, oids: []u32, closed: bool }
-type Reader = struct { conn: *Conn, statement: *Stmt, result: usize, done: bool, closed: bool, oids: []u32, columns: []db.Column, buffer: []u8, used: usize, borrow: bool, held: usize }
+type Reader = struct { conn: *Conn, statement: *Stmt, result: usize, done: bool, closed: bool, oids: []u32, columns: []db.Column, buffer: []u8, used: usize, borrow: bool, row: i32, count: i32 }
 type Tx = struct { conn: *Conn }
 // `address` is where the value starts; an empty non-null value keeps a byte behind it, since a
 // null address is SQL NULL.
@@ -51,6 +59,9 @@ const PGRES_COPY_OUT: i32 = 3i32
 const PGRES_COPY_IN: i32 = 4i32
 const PGRES_COPY_BOTH: i32 = 8i32
 const PGRES_SINGLE_TUPLE: i32 = 9i32
+const PGRES_TUPLES_CHUNK: i32 = 12i32
+// Rows per result in chunked mode: enough that the three calls a result costs are noise.
+const CHUNK_ROWS: i32 = 256i32
 const PQTRANS_IDLE: i32 = 0i32
 const PQTRANS_INERROR: i32 = 3i32
 const DIAG_SQLSTATE: i32 = 67i32
@@ -118,7 +129,7 @@ fn open(a: *mem.Arena, conninfo: str) -> (db.Connection, err) {
     // Arena memory is not cleared, so every field is written.
     let state_end = STATE_CAP
     let message_end = STATE_CAP + MESSAGE_CAP
-    conns[0usize] = Conn { handle: handle, arena: a, driver: &drivers[0usize], active: nil, statements: 0u64, state: text_buffers[0usize..state_end], state_len: 0usize, message: text_buffers[state_end..message_end], message_len: 0usize, constraint: text_buffers[message_end..], constraint_len: 0usize }
+    conns[0usize] = Conn { handle: handle, arena: a, driver: &drivers[0usize], chunked: chunked_mode(a), active: nil, statements: 0u64, state: text_buffers[0usize..state_end], state_len: 0usize, message: text_buffers[state_end..message_end], message_len: 0usize, constraint: text_buffers[message_end..], constraint_len: 0usize }
     let c = &conns[0usize]
     // Text columns are handed back as they arrive, so they must arrive as UTF-8.
     let (ignored, encoding_error) = execute_text(c, "SET client_encoding = 'UTF8'", zero)
@@ -150,6 +161,25 @@ fn detail(a: *mem.Arena, connection: *const db.Connection) -> (Detail, err) {
     out.constraint = constraint
     ret (out, ok)
 }
+
+// PQsetChunkedRowsMode (libpq 17) is looked up rather than bound, so an older libpq still
+// loads the program; without it `no_chunks` answers that the mode was not set. The library
+// is closed again at once: the program's own imports keep libpq loaded, and with it the
+// address.
+fn chunked_mode(a: *mem.Arena) -> fn(handle: usize, rows: i32) -> i32 {
+    let mark = mem.mark(a)
+    var found = no_chunks
+    let (library, library_error) = os.dlopen(a, capi.library())
+    if library_error == ok {
+        let (symbol, symbol_error) = os.dlsym[fn(handle: usize, rows: i32) -> i32](a, library, "PQsetChunkedRowsMode")
+        if symbol_error == ok { found = symbol }
+        let closed = os.dlclose(library)
+    }
+    mem.reset(a, mark)
+    ret found
+}
+
+fn no_chunks(handle: usize, rows: i32) -> i32 { ret 0i32 }
 
 fn conn_of(ctx: *void) -> *Conn { ret mem.cast[*Conn](ctx) }
 fn stmt_of(ctx: *void) -> *Stmt { ret mem.cast[*Stmt](ctx) }
@@ -567,7 +597,7 @@ fn collect(c: *Conn) -> (u64, err) {
         let result = capi.get_result(c.handle)
         if result == 0usize { break }
         let status = capi.result_status(result)
-        if status == PGRES_COMMAND_OK || status == PGRES_TUPLES_OK || status == PGRES_SINGLE_TUPLE || status == PGRES_EMPTY_QUERY {
+        if status == PGRES_COMMAND_OK || status == PGRES_TUPLES_OK || status == PGRES_SINGLE_TUPLE || status == PGRES_TUPLES_CHUNK || status == PGRES_EMPTY_QUERY {
             affected += changed(result)
         } else if status == PGRES_COPY_IN {
             var refusal: [48]u8 = zero
@@ -634,7 +664,8 @@ fn is_text_oid(oid: u32) -> bool {
 // Waits for the first result so a failing query fails here, and takes the columns from it.
 fn start_reader(c: *Conn, statement: *Stmt) -> (db.Rows, err) {
     var rows: db.Rows = zero
-    if capi.set_single_row_mode(c.handle) == 0i32 {
+    // Chunks of rows where libpq has them (17 and later), one row per result where it does not.
+    if c.chunked(c.handle, CHUNK_ROWS) == 0i32 && capi.set_single_row_mode(c.handle) == 0i32 {
         let (ignored, drained_error) = collect(c)
         ret (rows, refuse(c, "libpq would not stream this query", Failed))
     }
@@ -642,13 +673,15 @@ fn start_reader(c: *Conn, statement: *Stmt) -> (db.Rows, err) {
     var result = 0usize
     var done = true
     var count = 0usize
+    var first_rows = 0i32
     if first != 0usize {
         let status = capi.result_status(first)
-        if status == PGRES_SINGLE_TUPLE || status == PGRES_TUPLES_OK || status == PGRES_COMMAND_OK {
+        if status == PGRES_SINGLE_TUPLE || status == PGRES_TUPLES_CHUNK || status == PGRES_TUPLES_OK || status == PGRES_COMMAND_OK {
             count = usize(capi.nfields(first))
-            if status == PGRES_SINGLE_TUPLE {
+            if status == PGRES_SINGLE_TUPLE || status == PGRES_TUPLES_CHUNK {
                 result = first
                 done = false
+                first_rows = capi.ntuples(first)
             }
         } else {
             let failed = fail_result(c, first)
@@ -679,7 +712,7 @@ fn start_reader(c: *Conn, statement: *Stmt) -> (db.Rows, err) {
         if after_error != ok { ret (rows, after_error) }
     }
     var no_buffer: []u8 = zero
-    readers[0usize] = Reader { conn: c, statement: statement, result: result, done: done, closed: false, oids: oids, columns: cols, buffer: no_buffer, used: 0usize, borrow: false, held: 0usize }
+    readers[0usize] = Reader { conn: c, statement: statement, result: result, done: done, closed: false, oids: oids, columns: cols, buffer: no_buffer, used: 0usize, borrow: false, row: 0i32, count: first_rows }
     let r = &readers[0usize]
     if !done { c.active = r }
     clear_detail(c)
@@ -708,7 +741,6 @@ fn start_query(c: *Conn, sql: str, params: []const db.Parameter) -> (db.Rows, er
 
 // Ends a reader that has not reached its end, reading and discarding what is left.
 fn finish_reader(r: *Reader) {
-    release_held(r)
     if r.done { ret }
     if r.result != 0usize { capi.clear(r.result) }
     r.result = 0usize
@@ -933,17 +965,18 @@ fn decode(r: *Reader, oid: u32, v: []const u8) -> (db.Value, err) {
 fn fill(r: *Reader, dst: []db.Value) -> err {
     r.used = 0usize
     let result = r.result
+    let row = r.row
     // Each value is read in place: libpq's bytes live until the result is cleared, which is
     // after this row is filled, and `decode` copies what it keeps into the reader's buffer.
     var region: mem.Arena = zero
     var i = 0usize
     while i < r.columns.len {
         let column = i32(i)
-        if capi.getisnull(result, 0i32, column) != 0i32 {
+        if capi.getisnull(result, row, column) != 0i32 {
             dst[i] = .Null
         } else {
-            let n = usize(capi.getlength(result, 0i32, column))
-            region.base = capi.getvalue(result, 0i32, column)
+            let n = usize(capi.getlength(result, row, column))
+            region.base = capi.getvalue(result, row, column)
             region.cap = n
             region.off = 0usize
             let (value, decode_error) = decode(r, r.oids[i], mem.view(&region, 0usize, n))
@@ -1119,16 +1152,17 @@ fn d_rows_next_borrowed(ctx: *void, dst: []db.Value) -> (bool, err) {
     ret (more, next_error)
 }
 
-fn release_held(r: *Reader) {
-    if r.held != 0usize { capi.clear(r.held) }
-    r.held = 0usize
-}
-
+// A result holds one row (single-row mode) or up to CHUNK_ROWS (chunked mode), and is cleared
+// by the call after its last row is handed out -- so a borrowed row's values, which point into
+// it, last until the next row.
 fn next_row(r: *Reader, dst: []db.Value) -> (bool, err) {
-    release_held(r)
     if r.closed { ret (false, db.Closed) }
     if r.done { ret (false, ok) }
     if dst.len < r.columns.len { ret (false, refuse(r.conn, "the row buffer is shorter than the row", db.InvalidQuery)) }
+    if r.result != 0usize && r.row >= r.count {
+        capi.clear(r.result)
+        r.result = 0usize
+    }
     if r.result == 0usize {
         let next = capi.get_result(r.conn.handle)
         if next == 0usize {
@@ -1137,8 +1171,10 @@ fn next_row(r: *Reader, dst: []db.Value) -> (bool, err) {
             ret (false, ok)
         }
         let status = capi.result_status(next)
-        if status == PGRES_SINGLE_TUPLE {
+        if status == PGRES_SINGLE_TUPLE || status == PGRES_TUPLES_CHUNK {
             r.result = next
+            r.row = 0i32
+            r.count = capi.ntuples(next)
         } else if status == PGRES_TUPLES_OK {
             capi.clear(next)
             finish_reader(r)
@@ -1151,13 +1187,7 @@ fn next_row(r: *Reader, dst: []db.Value) -> (bool, err) {
         }
     }
     let fill_error = fill(r, dst)
-    // A borrowed row's values point into its result, so it is kept until the next row.
-    if r.borrow && fill_error == ok {
-        r.held = r.result
-    } else {
-        capi.clear(r.result)
-    }
-    r.result = 0usize
+    r.row += 1i32
     if fill_error != ok { ret (false, fill_error) }
     ret (true, ok)
 }

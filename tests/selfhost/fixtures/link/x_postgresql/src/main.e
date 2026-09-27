@@ -366,16 +366,39 @@ fn streaming(a: *mem.Arena, c: *db.Connection) -> i32 {
     let (after, after_error) = scalar_i64(c, "SELECT 5::int8")
     if after_error != ok || after != 5i64 { ret 100i32 }
     // A failure mid-stream is the reader's error, and the connection is usable after it.
-    let (fails0, fails_error) = db.query(c, "SELECT 10 / (3 - g) FROM generate_series(1, 5) AS g", zero)
+    // Rows arrive 256 to a result where libpq has chunked mode (17+) and one at a time where it
+    // does not, and a failure inside a chunk drops that chunk: dividing by zero at row 600, the
+    // reader hands out 512 rows or 599 before the error.
+    let (fails0, fails_error) = db.query(c, "SELECT 10 / (600 - g) FROM generate_series(1, 1000) AS g", zero)
     if fails_error != ok { ret 101i32 }
     var fails = fails0
-    let (fail_a, fail_a_error) = db.reader_next_err(&fails, row[0..])
-    let (fail_b, fail_b_error) = db.reader_next_err(&fails, row[0..])
-    let (fail_c, fail_c_error) = db.reader_next_err(&fails, row[0..])
-    if fail_a_error != ok || fail_b_error != ok || fail_c_error != db.InvalidQuery { ret 102i32 }
+    var before = 0i64
+    var fail_error: err = ok
+    while true {
+        let (fail_more, fail_next_error) = db.reader_next_err(&fails, row[0..])
+        if fail_next_error != ok {
+            fail_error = fail_next_error
+            break
+        }
+        if !fail_more { break }
+        before += 1i64
+    }
+    if fail_error != db.InvalidQuery || (before != 512i64 && before != 599i64) { ret 102i32 }
     let (why, why_error) = libpq.detail(a, c)
     if why_error != ok || !str.eq(why.sqlstate, "22012") { ret 103i32 }
     if db.close_rows(&fails) != ok { ret 104i32 }
+    // A failure inside the first result fails the query itself in chunked mode, and the third
+    // row one row at a time; either way it is `InvalidQuery`, and the connection is usable after.
+    let (early0, early_error) = db.query(c, "SELECT 10 / (3 - g) FROM generate_series(1, 5) AS g", zero)
+    if early_error != ok && early_error != db.InvalidQuery { ret 186i32 }
+    if early_error == ok {
+        var early = early0
+        let (early_a, early_a_error) = db.reader_next_err(&early, row[0..])
+        let (early_b, early_b_error) = db.reader_next_err(&early, row[0..])
+        let (early_c, early_c_error) = db.reader_next_err(&early, row[0..])
+        if early_a_error != ok || early_b_error != ok || early_c_error != db.InvalidQuery { ret 187i32 }
+        if db.close_rows(&early) != ok { ret 188i32 }
+    }
     let (again, again_error) = scalar_i64(c, "SELECT 6::int8")
     if again_error != ok || again != 6i64 { ret 105i32 }
 
