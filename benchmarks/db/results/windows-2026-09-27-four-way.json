@@ -1,0 +1,727 @@
+{
+ "host": "windows",
+ "runs": 9,
+ "work": {
+  "sqlite": {
+   "rows": 100000,
+   "lookups": 20000
+  },
+  "postgresql": {
+   "rows": 20000,
+   "lookups": 5000
+  },
+  "mysql": {
+   "rows": 20000,
+   "lookups": 5000
+  }
+ },
+ "drivers": {
+  "sqlite": {
+   "neper": {
+    "insert_rows_per_s": 570220.355954355,
+    "scan_rows_per_s": 3069631.5214321674,
+    "lookup_us": 34.465525,
+    "median_ns": {
+     "insert_ns": 175370800,
+     "scan_ns": 32577200,
+     "lookup_ns": 689310500
+    },
+    "samples": [
+     {
+      "insert_ns": 264250200,
+      "scan_ns": 26281000,
+      "lookup_ns": 704313700
+     },
+     {
+      "insert_ns": 88085800,
+      "scan_ns": 23569200,
+      "lookup_ns": 586483400
+     },
+     {
+      "insert_ns": 230159400,
+      "scan_ns": 26512000,
+      "lookup_ns": 850402700
+     },
+     {
+      "insert_ns": 111016600,
+      "scan_ns": 32577200,
+      "lookup_ns": 689310500
+     },
+     {
+      "insert_ns": 126639100,
+      "scan_ns": 35830700,
+      "lookup_ns": 838694500
+     },
+     {
+      "insert_ns": 240718300,
+      "scan_ns": 24110300,
+      "lookup_ns": 514557500
+     },
+     {
+      "insert_ns": 108868900,
+      "scan_ns": 41429500,
+      "lookup_ns": 636721000
+     },
+     {
+      "insert_ns": 175370800,
+      "scan_ns": 40471700,
+      "lookup_ns": 513889000
+     },
+     {
+      "insert_ns": 181582400,
+      "scan_ns": 37147500,
+      "lookup_ns": 944310700
+     }
+    ]
+   },
+   "c": {
+    "insert_rows_per_s": 930719.9956814592,
+    "scan_rows_per_s": 5193321.38869414,
+    "lookup_us": 34.495324999999994,
+    "median_ns": {
+     "insert_ns": 107443700,
+     "scan_ns": 19255500,
+     "lookup_ns": 689906500
+    },
+    "samples": [
+     {
+      "insert_ns": 95648100,
+      "scan_ns": 22509100,
+      "lookup_ns": 608123200
+     },
+     {
+      "insert_ns": 150298200,
+      "scan_ns": 13418200,
+      "lookup_ns": 630528300
+     },
+     {
+      "insert_ns": 90414800,
+      "scan_ns": 21070500,
+      "lookup_ns": 759875300
+     },
+     {
+      "insert_ns": 104837300,
+      "scan_ns": 24942400,
+      "lookup_ns": 689906500
+     },
+     {
+      "insert_ns": 107702000,
+      "scan_ns": 19255500,
+      "lookup_ns": 802231900
+     },
+     {
+      "insert_ns": 92965200,
+      "scan_ns": 19721600,
+      "lookup_ns": 685158200
+     },
+     {
+      "insert_ns": 894864800,
+      "scan_ns": 13670400,
+      "lookup_ns": 410678200
+     },
+     {
+      "insert_ns": 402839100,
+      "scan_ns": 15795300,
+      "lookup_ns": 710411600
+     },
+     {
+      "insert_ns": 107443700,
+      "scan_ns": 17905400,
+      "lookup_ns": 754970700
+     }
+    ]
+   },
+   "go": {
+    "insert_rows_per_s": 264384.0103723135,
+    "scan_rows_per_s": 1249784.4121888974,
+    "lookup_us": 50.62124,
+    "median_ns": {
+     "insert_ns": 378237700,
+     "scan_ns": 80013800,
+     "lookup_ns": 1012424800
+    },
+    "samples": [
+     {
+      "insert_ns": 362582700,
+      "scan_ns": 80013800,
+      "lookup_ns": 1012424800
+     },
+     {
+      "insert_ns": 1163294700,
+      "scan_ns": 42601400,
+      "lookup_ns": 491973300
+     },
+     {
+      "insert_ns": 322189800,
+      "scan_ns": 72154900,
+      "lookup_ns": 983058000
+     },
+     {
+      "insert_ns": 378237700,
+      "scan_ns": 85640300,
+      "lookup_ns": 1049472600
+     },
+     {
+      "insert_ns": 414546700,
+      "scan_ns": 79082000,
+      "lookup_ns": 588756200
+     },
+     {
+      "insert_ns": 368908100,
+      "scan_ns": 89889300,
+      "lookup_ns": 1106057700
+     },
+     {
+      "insert_ns": 336155200,
+      "scan_ns": 77774100,
+      "lookup_ns": 637948200
+     },
+     {
+      "insert_ns": 748763300,
+      "scan_ns": 130791100,
+      "lookup_ns": 1391702800
+     },
+     {
+      "insert_ns": 386109300,
+      "scan_ns": 86074400,
+      "lookup_ns": 1369662900
+     }
+    ]
+   },
+   "rust": {
+    "insert_rows_per_s": 340911.10538380453,
+    "scan_rows_per_s": 5950999.470361047,
+    "lookup_us": 29.307165,
+    "median_ns": {
+     "insert_ns": 293331600,
+     "scan_ns": 16803900,
+     "lookup_ns": 586143300
+    },
+    "samples": [
+     {
+      "insert_ns": 814831100,
+      "scan_ns": 16071700,
+      "lookup_ns": 379522400
+     },
+     {
+      "insert_ns": 293331600,
+      "scan_ns": 14093200,
+      "lookup_ns": 451957500
+     },
+     {
+      "insert_ns": 95432100,
+      "scan_ns": 21081700,
+      "lookup_ns": 716114200
+     },
+     {
+      "insert_ns": 85471100,
+      "scan_ns": 27035900,
+      "lookup_ns": 802603400
+     },
+     {
+      "insert_ns": 534883800,
+      "scan_ns": 14360300,
+      "lookup_ns": 353903600
+     },
+     {
+      "insert_ns": 130922900,
+      "scan_ns": 19485100,
+      "lookup_ns": 715616500
+     },
+     {
+      "insert_ns": 84905200,
+      "scan_ns": 16803900,
+      "lookup_ns": 586143300
+     },
+     {
+      "insert_ns": 333762100,
+      "scan_ns": 17197900,
+      "lookup_ns": 733885000
+     },
+     {
+      "insert_ns": 621065800,
+      "scan_ns": 13715300,
+      "lookup_ns": 355381700
+     }
+    ]
+   }
+  },
+  "postgresql": {
+   "neper": {
+    "insert_rows_per_s": 16343.391655816016,
+    "scan_rows_per_s": 2105950.36274995,
+    "lookup_us": 63.471940000000004,
+    "median_ns": {
+     "insert_ns": 1223736200,
+     "scan_ns": 9496900,
+     "lookup_ns": 317359700
+    },
+    "samples": [
+     {
+      "insert_ns": 1171895600,
+      "scan_ns": 8014700,
+      "lookup_ns": 190703000
+     },
+     {
+      "insert_ns": 826253100,
+      "scan_ns": 8570300,
+      "lookup_ns": 222882200
+     },
+     {
+      "insert_ns": 802220800,
+      "scan_ns": 8784400,
+      "lookup_ns": 317359700
+     },
+     {
+      "insert_ns": 2496457600,
+      "scan_ns": 11784700,
+      "lookup_ns": 691101400
+     },
+     {
+      "insert_ns": 2339767900,
+      "scan_ns": 17769700,
+      "lookup_ns": 720449400
+     },
+     {
+      "insert_ns": 1223736200,
+      "scan_ns": 10475100,
+      "lookup_ns": 654021200
+     },
+     {
+      "insert_ns": 1347578100,
+      "scan_ns": 9496900,
+      "lookup_ns": 249786400
+     },
+     {
+      "insert_ns": 1042517600,
+      "scan_ns": 8107500,
+      "lookup_ns": 184758400
+     },
+     {
+      "insert_ns": 1987790300,
+      "scan_ns": 13880100,
+      "lookup_ns": 786674900
+     }
+    ]
+   },
+   "c": {
+    "insert_rows_per_s": 18562.00172626616,
+    "scan_rows_per_s": 3959141.6580885267,
+    "lookup_us": 94.90204,
+    "median_ns": {
+     "insert_ns": 1077470000,
+     "scan_ns": 5051600,
+     "lookup_ns": 474510200
+    },
+    "samples": [
+     {
+      "insert_ns": 878256500,
+      "scan_ns": 4519400,
+      "lookup_ns": 234192900
+     },
+     {
+      "insert_ns": 1566365400,
+      "scan_ns": 7362400,
+      "lookup_ns": 736415400
+     },
+     {
+      "insert_ns": 2252355100,
+      "scan_ns": 6797300,
+      "lookup_ns": 636267800
+     },
+     {
+      "insert_ns": 965941300,
+      "scan_ns": 4450800,
+      "lookup_ns": 191065300
+     },
+     {
+      "insert_ns": 1561781600,
+      "scan_ns": 5051600,
+      "lookup_ns": 474510200
+     },
+     {
+      "insert_ns": 1027303600,
+      "scan_ns": 4509400,
+      "lookup_ns": 184068300
+     },
+     {
+      "insert_ns": 675726900,
+      "scan_ns": 4409500,
+      "lookup_ns": 170028200
+     },
+     {
+      "insert_ns": 1077470000,
+      "scan_ns": 10709800,
+      "lookup_ns": 736853000
+     },
+     {
+      "insert_ns": 2792019200,
+      "scan_ns": 8339300,
+      "lookup_ns": 713187700
+     }
+    ]
+   },
+   "go": {
+    "insert_rows_per_s": 9962.963678820353,
+    "scan_rows_per_s": 4141901.547000228,
+    "lookup_us": 95.78884,
+    "median_ns": {
+     "insert_ns": 2007434800,
+     "scan_ns": 4828700,
+     "lookup_ns": 478944200
+    },
+    "samples": [
+     {
+      "insert_ns": 1712962800,
+      "scan_ns": 4427700,
+      "lookup_ns": 218388200
+     },
+     {
+      "insert_ns": 2552910100,
+      "scan_ns": 4814400,
+      "lookup_ns": 253627300
+     },
+     {
+      "insert_ns": 2942033500,
+      "scan_ns": 7289500,
+      "lookup_ns": 788020800
+     },
+     {
+      "insert_ns": 1111864600,
+      "scan_ns": 4415700,
+      "lookup_ns": 311296400
+     },
+     {
+      "insert_ns": 2980864600,
+      "scan_ns": 6042000,
+      "lookup_ns": 790267400
+     },
+     {
+      "insert_ns": 886175000,
+      "scan_ns": 6210200,
+      "lookup_ns": 680810800
+     },
+     {
+      "insert_ns": 1838200800,
+      "scan_ns": 7610900,
+      "lookup_ns": 621242200
+     },
+     {
+      "insert_ns": 2007434800,
+      "scan_ns": 4828700,
+      "lookup_ns": 478944200
+     },
+     {
+      "insert_ns": 2894632700,
+      "scan_ns": 4096800,
+      "lookup_ns": 422392200
+     }
+    ]
+   },
+   "rust": {
+    "insert_rows_per_s": 10466.817441171906,
+    "scan_rows_per_s": 1987222.161501545,
+    "lookup_us": 63.78404,
+    "median_ns": {
+     "insert_ns": 1910800500,
+     "scan_ns": 10064300,
+     "lookup_ns": 318920200
+    },
+    "samples": [
+     {
+      "insert_ns": 811218600,
+      "scan_ns": 7814300,
+      "lookup_ns": 265480100
+     },
+     {
+      "insert_ns": 1276629600,
+      "scan_ns": 10064300,
+      "lookup_ns": 318920200
+     },
+     {
+      "insert_ns": 2416798500,
+      "scan_ns": 10945900,
+      "lookup_ns": 393469800
+     },
+     {
+      "insert_ns": 1910800500,
+      "scan_ns": 30130400,
+      "lookup_ns": 642372600
+     },
+     {
+      "insert_ns": 2722511700,
+      "scan_ns": 10699800,
+      "lookup_ns": 292263900
+     },
+     {
+      "insert_ns": 1154590900,
+      "scan_ns": 8253800,
+      "lookup_ns": 243325000
+     },
+     {
+      "insert_ns": 3458149500,
+      "scan_ns": 14360100,
+      "lookup_ns": 929591000
+     },
+     {
+      "insert_ns": 2455155700,
+      "scan_ns": 10033100,
+      "lookup_ns": 912549800
+     },
+     {
+      "insert_ns": 814815100,
+      "scan_ns": 7914300,
+      "lookup_ns": 233152000
+     }
+    ]
+   }
+  },
+  "mysql": {
+   "neper": {
+    "insert_rows_per_s": 5821.842592804173,
+    "scan_rows_per_s": 1148323.1611039978,
+    "lookup_us": 144.93066000000002,
+    "median_ns": {
+     "insert_ns": 3435338500,
+     "scan_ns": 17416700,
+     "lookup_ns": 724653300
+    },
+    "samples": [
+     {
+      "insert_ns": 4190539500,
+      "scan_ns": 17783400,
+      "lookup_ns": 1204580600
+     },
+     {
+      "insert_ns": 4998904100,
+      "scan_ns": 18174900,
+      "lookup_ns": 724653300
+     },
+     {
+      "insert_ns": 3747405900,
+      "scan_ns": 17561600,
+      "lookup_ns": 571348700
+     },
+     {
+      "insert_ns": 3381968200,
+      "scan_ns": 16437500,
+      "lookup_ns": 654353400
+     },
+     {
+      "insert_ns": 5532948900,
+      "scan_ns": 17919500,
+      "lookup_ns": 1471696600
+     },
+     {
+      "insert_ns": 3350235600,
+      "scan_ns": 17416700,
+      "lookup_ns": 859629900
+     },
+     {
+      "insert_ns": 2950610100,
+      "scan_ns": 13305000,
+      "lookup_ns": 682288000
+     },
+     {
+      "insert_ns": 2661723700,
+      "scan_ns": 16352500,
+      "lookup_ns": 784720500
+     },
+     {
+      "insert_ns": 3435338500,
+      "scan_ns": 14627000,
+      "lookup_ns": 520306800
+     }
+    ]
+   },
+   "c": {
+    "insert_rows_per_s": 6688.881109720158,
+    "scan_rows_per_s": 2056407.2508919665,
+    "lookup_us": 164.30252,
+    "median_ns": {
+     "insert_ns": 2990036700,
+     "scan_ns": 9725700,
+     "lookup_ns": 821512600
+    },
+    "samples": [
+     {
+      "insert_ns": 5613625100,
+      "scan_ns": 14331600,
+      "lookup_ns": 758459400
+     },
+     {
+      "insert_ns": 4691088600,
+      "scan_ns": 8257400,
+      "lookup_ns": 393793400
+     },
+     {
+      "insert_ns": 3328412300,
+      "scan_ns": 8720300,
+      "lookup_ns": 1152893100
+     },
+     {
+      "insert_ns": 2990036700,
+      "scan_ns": 10086400,
+      "lookup_ns": 1276836700
+     },
+     {
+      "insert_ns": 4141475100,
+      "scan_ns": 10601200,
+      "lookup_ns": 1238012900
+     },
+     {
+      "insert_ns": 2531393000,
+      "scan_ns": 9443000,
+      "lookup_ns": 821512600
+     },
+     {
+      "insert_ns": 1843653300,
+      "scan_ns": 8238000,
+      "lookup_ns": 700630000
+     },
+     {
+      "insert_ns": 1678239200,
+      "scan_ns": 9725700,
+      "lookup_ns": 544189700
+     },
+     {
+      "insert_ns": 2153955900,
+      "scan_ns": 9884200,
+      "lookup_ns": 888132900
+     }
+    ]
+   },
+   "go": {
+    "insert_rows_per_s": 8321.099929586853,
+    "scan_rows_per_s": 1859323.5780822937,
+    "lookup_us": 128.48028,
+    "median_ns": {
+     "insert_ns": 2403528400,
+     "scan_ns": 10756600,
+     "lookup_ns": 642401400
+    },
+    "samples": [
+     {
+      "insert_ns": 3578363900,
+      "scan_ns": 14445900,
+      "lookup_ns": 1058294900
+     },
+     {
+      "insert_ns": 3904900700,
+      "scan_ns": 17063900,
+      "lookup_ns": 1085494900
+     },
+     {
+      "insert_ns": 2699826400,
+      "scan_ns": 11252000,
+      "lookup_ns": 830450800
+     },
+     {
+      "insert_ns": 3401296500,
+      "scan_ns": 12341100,
+      "lookup_ns": 1157121600
+     },
+     {
+      "insert_ns": 2024281800,
+      "scan_ns": 8180400,
+      "lookup_ns": 488495400
+     },
+     {
+      "insert_ns": 1955184200,
+      "scan_ns": 9742300,
+      "lookup_ns": 607229200
+     },
+     {
+      "insert_ns": 2371151200,
+      "scan_ns": 7808300,
+      "lookup_ns": 406524300
+     },
+     {
+      "insert_ns": 1885119800,
+      "scan_ns": 8265200,
+      "lookup_ns": 525538400
+     },
+     {
+      "insert_ns": 2403528400,
+      "scan_ns": 10756600,
+      "lookup_ns": 642401400
+     }
+    ]
+   },
+   "rust": {
+    "insert_rows_per_s": 5060.606327438031,
+    "scan_rows_per_s": 2216041.927513269,
+    "lookup_us": 134.23022,
+    "median_ns": {
+     "insert_ns": 3952095600,
+     "scan_ns": 9025100,
+     "lookup_ns": 671151100
+    },
+    "samples": [
+     {
+      "insert_ns": 3831561700,
+      "scan_ns": 8317800,
+      "lookup_ns": 505232700
+     },
+     {
+      "insert_ns": 6644151800,
+      "scan_ns": 19543100,
+      "lookup_ns": 1109735600
+     },
+     {
+      "insert_ns": 4878969900,
+      "scan_ns": 12415000,
+      "lookup_ns": 671151100
+     },
+     {
+      "insert_ns": 4503659400,
+      "scan_ns": 10301100,
+      "lookup_ns": 1128860200
+     },
+     {
+      "insert_ns": 3340493800,
+      "scan_ns": 7541400,
+      "lookup_ns": 426935900
+     },
+     {
+      "insert_ns": 3952095600,
+      "scan_ns": 9025100,
+      "lookup_ns": 1191349000
+     },
+     {
+      "insert_ns": 2737378400,
+      "scan_ns": 7309800,
+      "lookup_ns": 402107300
+     },
+     {
+      "insert_ns": 3831126600,
+      "scan_ns": 8703300,
+      "lookup_ns": 582474900
+     },
+     {
+      "insert_ns": 3991940200,
+      "scan_ns": 9625000,
+      "lookup_ns": 944965800
+     }
+    ]
+   }
+  }
+ },
+ "winners": {
+  "sqlite": {
+   "insert": "c",
+   "scan": "rust",
+   "lookup": "rust"
+  },
+  "postgresql": {
+   "insert": "c",
+   "scan": "go",
+   "lookup": "neper"
+  },
+  "mysql": {
+   "insert": "go",
+   "scan": "rust",
+   "lookup": "go"
+  }
+ }
+}

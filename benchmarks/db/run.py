@@ -1,9 +1,13 @@
-"""Run the e.db driver benchmark: the Neper programs and the C baseline, alternated, medians.
+"""Run the e.db driver benchmark: Neper, the C baseline and optionally Go and Rust, alternated
+within each round so drift hits every implementation equally; medians, and the winner of each
+workload.
 
-    python benchmarks/db/run.py --neper PREFIX --c BENCH_C --runs 9 --out results.json
+    python benchmarks/db/run.py --neper PREFIX --c BENCH_C [--go BENCH_GO] [--rust BENCH_RUST]
+                                --runs 9 --out results.json
 
 The Neper side is one executable per driver, built from benchmarks/db/src/<driver>.e and named
-PREFIX-<driver> (plus `.exe` on Windows); the C side is one executable taking the driver name.
+PREFIX-<driver> (plus `.exe` on Windows); C (c/bench.c), Go (go/) and Rust (rust/) are each one
+executable taking the driver name first.
 
 Servers must be running (tests/selfhost/db_servers.{ps1,sh} start <dir>); the client libraries
 must be on PATH (Windows) or installed (Linux). SQLite writes a file in --scratch.
@@ -41,6 +45,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--neper", required=True)
     ap.add_argument("--c", required=True)
+    ap.add_argument("--go")
+    ap.add_argument("--rust")
     ap.add_argument("--runs", type=int, default=7)
     ap.add_argument("--scratch", default=".")
     ap.add_argument("--out", required=True)
@@ -52,15 +58,18 @@ def main():
     results = {"host": platform.system().lower(), "runs": args.runs, "work": WORK, "drivers": {}}
     suffix = ".exe" if os.name == "nt" else ""
     for driver in args.drivers.split(","):
-        neper = [f"{args.neper}-{driver}{suffix}"]
-        c = [args.c, driver]
-        samples = {"neper": [], "c": []}
-        # One warm-up each, then alternate so drift hits both equally.
-        once(neper, driver, args.scratch, "neper")
-        once(c, driver, args.scratch, "c")
+        commands = {"neper": [f"{args.neper}-{driver}{suffix}"], "c": [args.c, driver]}
+        if args.go:
+            commands["go"] = [args.go, driver]
+        if args.rust:
+            commands["rust"] = [args.rust, driver]
+        samples = {impl: [] for impl in commands}
+        # One warm-up each, then every implementation once per round.
+        for impl, command in commands.items():
+            once(command, driver, args.scratch, impl)
         for _ in range(args.runs):
-            samples["neper"].append(once(neper, driver, args.scratch, "neper"))
-            samples["c"].append(once(c, driver, args.scratch, "c"))
+            for impl, command in commands.items():
+                samples[impl].append(once(command, driver, args.scratch, impl))
         work = WORK[driver]
         summary = {}
         for impl, runs in samples.items():
@@ -73,10 +82,17 @@ def main():
                 "samples": runs,
             }
         results["drivers"][driver] = summary
-        n, c = summary["neper"], summary["c"]
-        print(f"{driver:10} insert {n['insert_rows_per_s']:>11,.0f} vs {c['insert_rows_per_s']:>11,.0f} rows/s | "
-              f"scan {n['scan_rows_per_s']:>12,.0f} vs {c['scan_rows_per_s']:>12,.0f} rows/s | "
-              f"lookup {n['lookup_us']:7.2f} vs {c['lookup_us']:7.2f} us", flush=True)
+        winners = {
+            "insert": max(summary, key=lambda i: summary[i]["insert_rows_per_s"]),
+            "scan": max(summary, key=lambda i: summary[i]["scan_rows_per_s"]),
+            "lookup": min(summary, key=lambda i: summary[i]["lookup_us"]),
+        }
+        results.setdefault("winners", {})[driver] = winners
+        print(f"{driver}:", flush=True)
+        for impl, s in summary.items():
+            print(f"  {impl:6} insert {s['insert_rows_per_s']:>11,.0f} rows/s | scan {s['scan_rows_per_s']:>12,.0f} rows/s | "
+                  f"lookup {s['lookup_us']:7.2f} us", flush=True)
+        print(f"  winners: insert {winners['insert']}, scan {winners['scan']}, lookup {winners['lookup']}", flush=True)
     with open(args.out, "w") as f:
         json.dump(results, f, indent=1)
 
