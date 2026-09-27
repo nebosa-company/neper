@@ -266,7 +266,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // writes "0042" back and reports the four.
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(16i32) }
-    let (code_group, has_code) = find(tree, .Group, "Code")
+    let (code_group, has_code) = find(tree, .TextField, "Code")
     if !has_code || !code_group.state.invalid { os.exit(17i32) }
     buffers[0usize].code[0usize] = 52u8
     buffers[0usize].code[1usize] = 50u8
@@ -275,7 +275,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, root_2, now) != ok { os.exit(19i32) }
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if tree_2_error != ok { os.exit(20i32) }
-    let (code_group_2, has_code_2) = find(tree_2, .Group, "Code")
+    let (code_group_2, has_code_2) = find(tree_2, .TextField, "Code")
     if !has_code_2 || code_group_2.state.invalid { os.exit(21i32) }
     let (code_at, has_code_at) = centre_of(&harness, &runtime, 1u64)
     if !has_code_at || testing.tap(&harness, code_at.x, code_at.y) != ok || testing.press_key(&harness, 13u32, zero) != ok { os.exit(22i32) }

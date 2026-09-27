@@ -126,7 +126,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 128usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 12u16, max_commands: 256usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 128usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 14u16, max_commands: 256usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -165,7 +165,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].counts != 3usize || logs[0usize].count != 2i64 { os.exit(17i32) }
     // The spin box: a field valued "42" named Qty; plus reports 43; typed, the
     // text reaches the caller; Up in the field reports 43 too.
-    let (spun, has_spun) = find(tree, .Group, "Qty")
+    let (spun, has_spun) = find(tree, .SpinButton, "Qty")
     if !has_spun || !same(spun.value, "42") { os.exit(18i32) }
     let field = testing.by_key(&harness, 10u64).element
     let (shown, has_shown) = widget.edit_value(&runtime, field)

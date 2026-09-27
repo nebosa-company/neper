@@ -220,7 +220,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_grip { os.exit(38i32) }
     if testing.drag(&harness, grip_at, geometry.Point { x: grip_at.x + 50.0, y: grip_at.y }, 5usize) != ok { os.exit(39i32) }
     if logs[0usize].sizes == 0usize || !near(logs[0usize].last_size, 150.0) { os.exit(40i32) }
-    if testing.press_key(&harness, 39u32, zero) != ok || !near(logs[0usize].last_size, 108.0) { os.exit(41i32) }
+    // (D1598) Right nudges 8 from the dragged 150, which the sash keeps as it goes.
+    if testing.press_key(&harness, 39u32, zero) != ok || !near(logs[0usize].last_size, 158.0) { os.exit(41i32) }
     if testing.drag(&harness, grip_at, geometry.Point { x: grip_at.x - 200.0, y: grip_at.y }, 2usize) != ok || !near(logs[0usize].last_size, 40.0) { os.exit(42i32) }
     if testing.drag(&harness, grip_at, geometry.Point { x: grip_at.x + 400.0, y: grip_at.y }, 2usize) != ok || !near(logs[0usize].last_size, 260.0) { os.exit(43i32) }
     let (root_4, build_4_error) = build(&frame, &theme, ctx, &toggles[0usize], picks[0usize..3usize], true, 1usize, 150.0)
@@ -246,7 +247,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (fold_grip, has_fold_grip) = centre_of(&harness, &runtime, 902u64)
     if !has_fold_grip { os.exit(53i32) }
     if testing.drag(&harness, fold_grip, geometry.Point { x: fold_grip.x - 100.0, y: fold_grip.y }, 2usize) != ok || !near(logs[0usize].last_size, 0.0) { os.exit(54i32) }
-    if testing.drag(&harness, fold_grip, geometry.Point { x: fold_grip.x - 60.0, y: fold_grip.y }, 2usize) != ok || !near(logs[0usize].last_size, 80.0) { os.exit(55i32) }
+    // (D1598) The sash moves by the pointer's travel from the collapsed 0: dragged
+    // 60 right it passes half the least and opens at the least, 80.
+    if testing.drag(&harness, fold_grip, geometry.Point { x: fold_grip.x + 60.0, y: fold_grip.y }, 2usize) != ok || !near(logs[0usize].last_size, 80.0) { os.exit(55i32) }
     // (D1333) Held mid-drag, the pane shows its size in a tooltip; released, not.
     var held_step = 0usize
     var held_size: f32 = 120.0

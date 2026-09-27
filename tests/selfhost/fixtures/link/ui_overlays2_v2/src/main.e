@@ -316,7 +316,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (search_combo, has_search_combo) = find(tree, .Combobox, "Search files")
     let (closed_filter, has_closed_filter) = find(tree, .Button, "Filter")
     let (plain_math, has_plain_math) = find(tree, .ListItem, "math.e")
-    if !has_group || testing.by_role(&harness, .ListItem).count != 2usize || testing.by_text(&harness, "main").count != 1usize || testing.by_text(&harness, ".e").count != 1usize || !has_plain_math || !has_search_combo || !search_combo.state.expanded || !same_element(search_combo.relations.controls, testing.by_key(&harness, 10u64).element) || !same_element(search_combo.relations.active, testing.by_key(&harness, 11u64).element) || !has_closed_filter || closed_filter.state.selected || closed_filter.state.expanded || !has_action(closed_filter, .ShowMenu) { os.exit(15i32) }
+    // (D1598) Relations name the tree's node, `accessibility.related`'s: an element
+    // folded into its wrapper is named by the wrapper.
+    if !has_group || testing.by_role(&harness, .ListItem).count != 2usize || testing.by_text(&harness, "main").count != 1usize || testing.by_text(&harness, ".e").count != 1usize || !has_plain_math || !has_search_combo || !search_combo.state.expanded || !same_element(search_combo.relations.controls, accessibility.related(&runtime, 10u64)) || !same_element(search_combo.relations.active, accessibility.related(&runtime, 11u64)) || !has_closed_filter || closed_filter.state.selected || closed_filter.state.expanded || !has_action(closed_filter, .ShowMenu) { os.exit(15i32) }
     if !tap_key(&harness, &runtime, 2u64) || s.counters[1usize].count != 1usize { os.exit(16i32) }
     if !tap_key(&harness, &runtime, 12u64) || s.counters[0usize].count != 1usize { os.exit(17i32) }
     // Empty results are a padded polite status row, never a blank popup.

@@ -4246,6 +4246,50 @@ fn move_focus(s: *State, backward: bool) {
     s.focus_visible = true
 }
 
+// (D1598) The focus a key moved, brought into view: every scrolling viewport round
+// it, innermost first, scrolls by the least that shows the element and its ring
+// (WCAG 2.4.11, focus not obscured). A viewport the caller owns hears of the move
+// through its change, as it does of a wheel's.
+fn reveal_focus(s: *State) -> err {
+    if !s.has_focus { ret ok }
+    let reach = s.ring_offset + s.ring_width
+    let focused_bounds = s.elements[usize(s.focus)].bounds
+    var shown = geometry.Rect { x: focused_bounds.x - reach, y: focused_bounds.y - reach, width: focused_bounds.width + 2.0 * reach, height: focused_bounds.height + 2.0 * reach }
+    var at = usize(s.focus)
+    while s.elements[at].has_parent {
+        at = usize(s.elements[at].parent)
+        let v = &s.elements[at]
+        if v.kind == SCROLL_TAG && v.viewport_extent > 0.0 {
+            var view = v.bounds
+            if v.viewport_rect.width > 0.0 && v.viewport_rect.height > 0.0 { view = v.viewport_rect }
+            let vertical = v.scroll_axis == .Vertical
+            var start = shown.x
+            var extent = shown.width
+            var low = view.x
+            var high = view.x + view.width
+            if vertical {
+                start = shown.y
+                extent = shown.height
+                low = view.y
+                high = view.y + view.height
+            }
+            var delta: f32 = 0.0
+            if start < low {
+                delta = start - low
+            } else if start + extent > high {
+                delta = min_f(start + extent - high, start - low)
+            }
+            if delta != 0.0 {
+                let before = v.scroll_offset
+                try scroll_by(s, at, delta, false)
+                let moved = s.elements[at].scroll_offset - before
+                if vertical { shown.y -= moved } else { shown.x -= moved }
+            }
+        }
+    }
+    ret ok
+}
+
 fn semantic_target(e: *const Element, roles: []const u8) -> bool {
     if !e.live || !e.has_semantics { ret false }
     var i = 0usize
@@ -4773,7 +4817,7 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
     }
     if code == 9u32 && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta {
         move_focus(s, k.modifiers.shift)
-        ret (true, ok)
+        ret (true, reveal_focus(s))
     }
     ret (false, ok)
 }

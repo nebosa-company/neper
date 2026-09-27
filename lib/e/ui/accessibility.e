@@ -18,7 +18,7 @@ use e.ui.widget
 use e.ui.window
 
 type Id = widget.ElementId
-type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader, Separator, AlertDialog, Listbox, Option, MenuItemCheckbox, Combobox, Region, Main, MenuBar, MenuItemRadio, TreeGrid }
+type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader, Separator, AlertDialog, Listbox, Option, MenuItemCheckbox, Combobox, Region, Main, MenuBar, MenuItemRadio, TreeGrid, SpinButton }
 type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool, mixed: bool, busy: bool, invalid: bool, required: bool, read_only: bool, modal: bool, current: bool }
 type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll, Dismiss, Expand, Collapse, Select, ShowMenu, SetSelection, Copy }
 type Sort = enum u8 { None, Ascending, Descending, Other }
@@ -71,6 +71,8 @@ const ROLE_MAIN: u8 = 40u8
 const ROLE_MENU_BAR: u8 = 41u8
 const ROLE_MENU_ITEM_RADIO: u8 = 42u8
 const ROLE_TREE_GRID: u8 = 43u8
+// (D1598) A value stepped up and down, with or without an editor: a spin box.
+const ROLE_SPIN_BUTTON: u8 = 44u8
 
 // The widget kinds by tag, as `e.ui.widget` numbers them.
 const KIND_TEXT: u8 = 4u8
@@ -78,6 +80,9 @@ const KIND_BUTTON: u8 = 5u8
 const KIND_IMAGE: u8 = 6u8
 const KIND_SCROLL: u8 = 7u8
 const KIND_EDIT: u8 = 11u8
+const KIND_REGION: u8 = 9u8
+const KIND_SCOPE: u8 = 10u8
+const KIND_SLIDER: u8 = 18u8
 
 fn role_of(kind: u8) -> Role {
     if kind == KIND_TEXT { ret .Text }
@@ -91,7 +96,7 @@ fn role_of(kind: u8) -> Role {
 // The role a semantics code names: the inverse of `role_code`.
 fn role_of_code(code: u8) -> Role {
     var i = 1u8
-    while i <= ROLE_TREE_GRID {
+    while i <= ROLE_SPIN_BUTTON {
         let candidate = role_at(i)
         if role_code(candidate) == code { ret candidate }
         i += 1u8
@@ -143,6 +148,7 @@ fn role_at(i: u8) -> Role {
     if i == ROLE_MENU_BAR { ret .MenuBar }
     if i == ROLE_MENU_ITEM_RADIO { ret .MenuItemRadio }
     if i == ROLE_TREE_GRID { ret .TreeGrid }
+    if i == ROLE_SPIN_BUTTON { ret .SpinButton }
     ret .Application
 }
 
@@ -204,11 +210,81 @@ fn actions_of_bits(a: *mem.Arena, bits: u32) -> ([]const Action, err) {
     ret (actions, ok)
 }
 
-// The element a semantics relationship names by key, or the none Id.
+// (D1598) A control is a semantics element round the one element that takes its
+// focus: a region, an editor, a button or a slider with no semantics of its own.
+// The two are one node -- the wrapper's role and name, the child's focus, value
+// and selection -- so what has the focus is what has the name. The child's slot,
+// when `slot` is such a wrapper.
+fn focus_target(runtime: *const widget.Runtime, slot: usize) -> (usize, bool) {
+    let (summary, live) = widget.summary_at(runtime, slot)
+    if !live || !summary.has_semantics || !summary.has_child { ret (0usize, false) }
+    var child_slot = usize(summary.first_child.slot)
+    // A scope between them only carries the control's keys, and folds too.
+    var depth = 0usize
+    while depth < 4usize {
+        let (child, child_live) = widget.summary_at(runtime, child_slot)
+        if !child_live || child.has_sibling || child.has_semantics { ret (0usize, false) }
+        if child.kind == KIND_BUTTON || child.kind == KIND_REGION || child.kind == KIND_EDIT || child.kind == KIND_SLIDER { ret (child_slot, true) }
+        if child.kind != KIND_SCOPE || !child.has_child { ret (0usize, false) }
+        child_slot = usize(child.first_child.slot)
+        depth += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The wrapper a folded element stands in -- its focus target, or a scope on the
+// way to it -- when it is one.
+fn folded_into(runtime: *const widget.Runtime, slot: usize) -> (usize, bool) {
+    var at = slot
+    var depth = 0usize
+    while depth < 5usize {
+        let (summary, live) = widget.summary_at(runtime, at)
+        if !live || !summary.has_parent { ret (0usize, false) }
+        let parent = usize(summary.parent.slot)
+        let (focus_slot, has_target) = focus_target(runtime, parent)
+        if has_target {
+            // `slot` is the target or lies on the chain from `parent` down to it.
+            var probe = focus_slot
+            var steps = 0usize
+            while steps < 5usize {
+                if probe == slot { ret (parent, true) }
+                if probe == parent { break }
+                let (up, up_live) = widget.summary_at(runtime, probe)
+                if !up_live || !up.has_parent { break }
+                probe = usize(up.parent.slot)
+                steps += 1usize
+            }
+            ret (0usize, false)
+        }
+        let (parent_summary, _) = widget.summary_at(runtime, parent)
+        if parent_summary.kind != KIND_SCOPE { ret (0usize, false) }
+        at = parent
+        depth += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The element an action on node `id` reaches: the focus target of a wrapper.
+fn acting(runtime: *const widget.Runtime, id: Id) -> Id {
+    let (summary, live) = widget.summary_at(runtime, usize(id.slot))
+    if !live || summary.id.generation != id.generation { ret id }
+    let (focus_slot, has_target) = focus_target(runtime, usize(id.slot))
+    if !has_target { ret id }
+    let (child, _) = widget.summary_at(runtime, focus_slot)
+    ret child.id
+}
+
+// The element a semantics relationship names by key, or the none Id; a folded
+// element is named by its wrapper.
 fn related(runtime: *const widget.Runtime, key: widget.Key) -> Id {
     if key == 0u64 { ret zero }
     let (found, count) = widget.find_by_key(mem.cast[*widget.State](runtime.state), key)
     if count == 0usize { ret zero }
+    let (wrapper, folded) = folded_into(runtime, usize(found.slot))
+    if folded {
+        let (outer, _) = widget.summary_at(runtime, wrapper)
+        ret outer.id
+    }
     ret found
 }
 
@@ -411,7 +487,8 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
     while slot < count {
         let (summary, live) = widget.summary_at(runtime, slot)
         index_of[slot] = count
-        if live && !hidden_at(runtime, slot) {
+        let (_, folded) = folded_into(runtime, slot)
+        if live && !folded && !hidden_at(runtime, slot) {
             var node: Node = zero
             node.id = summary.id
             node.role = role_of(summary.kind)
@@ -430,6 +507,26 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 node.selection_end = summary.selection_end
             }
             var value = summary.value
+            // A wrapper takes its focus target's focus, state, actions and text.
+            var kids = summary
+            let (focus_slot, has_target) = focus_target(runtime, slot)
+            if has_target {
+                let (child, _) = widget.summary_at(runtime, focus_slot)
+                kids = child
+                // Where it takes input: a handle's reach can pass its wrapper's box.
+                node.bounds = child.bounds
+                if child.focused { bits = bits | STATE_FOCUSED }
+                if !child.enabled { bits = bits | STATE_DISABLED }
+                if child.read_only { bits = bits | STATE_READ_ONLY }
+                if child.has_action && child.enabled { action_mask = action_mask | ACTION_PRESS }
+                if child.kind == KIND_EDIT {
+                    action_mask = action_mask | ACTION_SET_SELECTION
+                    if !child.read_only { action_mask = action_mask | ACTION_SET_VALUE }
+                    node.selection_start = child.selection_start
+                    node.selection_end = child.selection_end
+                    value = child.value
+                }
+            }
             var hint: str = ""
             var label = summary.text
             if summary.has_semantics {
@@ -464,7 +561,9 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 let (child, has_child) = widget.summary_at(runtime, usize(summary.first_child.slot))
                 if has_child && child.kind == KIND_TEXT { label = child.text }
             }
-            if label.len == 0usize && (node.role == .TreeItem || (node.role == .Row && node.position.row > 0u32)) {
+            // (D1598) A list item or an option is named by what it shows, as a tree
+            // item is: a reorderable row is the caller's node, not a label.
+            if label.len == 0usize && (node.role == .TreeItem || node.role == .ListItem || node.role == .Option || (node.role == .Row && node.position.row > 0u32)) {
                 let (nested, has_nested) = descendant_label(runtime, slot, true)
                 if has_nested { label = nested }
             }
@@ -472,6 +571,8 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 let (nested, has_nested) = descendant_label(runtime, slot, false)
                 if has_nested { value = nested }
             }
+            // (D1598) A field with no label is named by its hint, its placeholder.
+            if label.len == 0usize && node.role == .TextField { label = hint }
             let (copied, copy_error) = copy_text(a, label)
             if copy_error != ok { ret (zero, copy_error) }
             node.label = copied
@@ -488,8 +589,8 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
             node.actions = actions
             // Children in order, through the sibling links; hidden ones left out.
             var child_count = 0usize
-            var child_slot = summary.first_child
-            var has_more = summary.has_child
+            var child_slot = kids.first_child
+            var has_more = kids.has_child
             while has_more {
                 let (child, live_child) = widget.summary_at(runtime, usize(child_slot.slot))
                 if !live_child { break }
@@ -499,8 +600,8 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
             }
             let (children, children_error) = mem.alloc[Id](a, child_count)
             if children_error != ok { ret (zero, children_error) }
-            child_slot = summary.first_child
-            has_more = summary.has_child
+            child_slot = kids.first_child
+            has_more = kids.has_child
             var filled = 0usize
             while has_more && filled < child_count {
                 let (child, live_child) = widget.summary_at(runtime, usize(child_slot.slot))
@@ -520,11 +621,53 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
         }
         slot += 1usize
     }
+    name_fields(nodes[0usize..produced], index_of, count)
     if has_promotions {
         let promotion_error = promote_actions(a, nodes[0usize..produced], promote[0usize..produced])
         if promotion_error != ok { ret (zero, promotion_error) }
     }
     ret (Tree { root: root, nodes: nodes[0usize..produced] }, ok)
+}
+
+// A role that takes a value from the person, and so needs a name to be asked by.
+fn is_field(role: Role) -> bool {
+    ret role == .TextField || role == .Combobox || role == .SpinButton || role == .Slider || role == .Checkbox || role == .Switch || role == .Listbox
+}
+
+// (D1598) An unnamed field is named by the text that says it controls it (a field
+// label beside it, D825), or else by the nearest named cell round it (a property
+// grid's value, named by its property); `labelled_by` says which text named it.
+fn name_fields(nodes: []Node, index_of: []const usize, count: usize) {
+    var n = 0usize
+    while n < nodes.len {
+        let controlled = nodes[n].relations.controls
+        if nodes[n].role == .Text && nodes[n].label.len > 0usize && controlled.generation != 0u32 && usize(controlled.slot) < count {
+            let at = index_of[usize(controlled.slot)]
+            if at < nodes.len && same_id(nodes[at].id, controlled) && nodes[at].label.len == 0usize && is_field(nodes[at].role) {
+                nodes[at].label = nodes[n].label
+                nodes[at].relations.labelled_by = nodes[n].id
+            }
+        }
+        n += 1usize
+    }
+    n = 0usize
+    while n < nodes.len {
+        if nodes[n].label.len == 0usize && is_field(nodes[n].role) {
+            var child = nodes[n].id
+            var steps = 0usize
+            while steps < 6usize {
+                let (parent, has_parent) = tree_parent(nodes, child)
+                if !has_parent || nodes[parent].role == .Row { break }
+                if nodes[parent].role == .Cell && nodes[parent].label.len > 0usize {
+                    nodes[n].label = nodes[parent].label
+                    break
+                }
+                child = nodes[parent].id
+                steps += 1usize
+            }
+        }
+        n += 1usize
+    }
 }
 
 // The role's declared value, for the bridge's record.
@@ -572,6 +715,7 @@ fn role_code(role: Role) -> u8 {
     if role == .MenuBar { ret ROLE_MENU_BAR }
     if role == .MenuItemRadio { ret ROLE_MENU_ITEM_RADIO }
     if role == .TreeGrid { ret ROLE_TREE_GRID }
+    if role == .SpinButton { ret ROLE_SPIN_BUTTON }
     ret 0u8
 }
 
@@ -681,8 +825,10 @@ fn publish(window_value: window.Id, t: *const Tree) -> err {
 fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err {
     let (bounds, has_bounds) = widget.bounds_of(runtime, id)
     if !has_bounds { ret Invalid }
+    // Focus and the editor's actions reach a wrapper's focus target (D1598).
+    let acted = acting(runtime, id)
     if action == .Focus {
-        if widget.focus(runtime, id) != ok { ret Invalid }
+        if widget.focus(runtime, acted) != ok { ret Invalid }
         ret ok
     }
     if action == .Press {
@@ -695,7 +841,7 @@ fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err 
         ret ok
     }
     if action == .SetValue {
-        if widget.edit_set(runtime, id, value) == ok { ret ok }
+        if widget.edit_set(runtime, acted, value) == ok { ret ok }
     }
     if action == .SetSelection {
         var colon = value.len
@@ -708,9 +854,9 @@ fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err 
         let (start, start_error) = str.parse_u64(value[0usize..colon])
         let (end, end_error) = str.parse_u64(value[colon + 1usize..value.len])
         if start_error != ok || end_error != ok { ret Invalid }
-        if widget.edit_select(runtime, id, usize(start), usize(end)) == ok { ret ok }
+        if widget.edit_select(runtime, acted, usize(start), usize(end)) == ok { ret ok }
     }
-    if action == .Copy && widget.edit_copy_child(runtime, id) == ok { ret ok }
+    if action == .Copy && widget.edit_copy_child(runtime, acted) == ok { ret ok }
     if widget.semantic_action(runtime, id, action_bit(action)) == ok { ret ok }
     ret Unsupported
 }

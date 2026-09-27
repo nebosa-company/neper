@@ -3484,6 +3484,13 @@ $uiFieldFocusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $uiFieldFocusWritten -ne 'executable written') { throw 'ui_field_focus emission failed' }
 $uiFieldFocusOutput = & $uiFieldFocusPath
 if ($LASTEXITCODE -ne 0 -or $uiFieldFocusOutput -ne 'ui field focus ok') { throw "a labelled field lost its focus: exit $LASTEXITCODE" }
+# The controls the accessibility audit found wanting: names, roles, 24 targets, and a
+# Tab walk that keeps every focus and brings it into view (D1598).
+$uiA11yPath = Join-Path $testBuild 'ui-a11y-controls-selfhost.exe'
+$uiA11yWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_a11y_controls\src\main.e') $repo 'x64' 'windows' $uiA11yPath
+if ($LASTEXITCODE -ne 0 -or $uiA11yWritten -ne 'executable written') { throw 'ui_a11y_controls emission failed' }
+$uiA11yOutput = & $uiA11yPath
+if ($LASTEXITCODE -ne 0 -or $uiA11yOutput -ne 'ui a11y controls ok') { throw "the controls' accessibility answered wrongly: exit $LASTEXITCODE" }
 # Basic choice (D824, widget plan P1-11): a select with its menu, a list box.
 $uiChoicePath = Join-Path $testBuild 'ui-choice-selfhost.exe'
 $uiChoiceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_choice\src\main.e') $repo 'x64' 'windows' $uiChoicePath

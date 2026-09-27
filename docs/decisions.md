@@ -29057,3 +29057,57 @@ Section 10's address spaces are now distinct types, and C089 closes.
 - the two address spaces.
 
 The walk reads syntax, as D1565's does. A local's slice-ness is judged from its declaration, and a capability from the type names a declaration spells and its parameters' types. The gaps that leaves are in what is caught, not refusals of valid code.
+
+## D1598 — The controls the accessibility audit found wanting
+
+The 2026-09-27 VPAT audit of the gallery's 111 controls listed per-control gaps. The audit ran as a headless harness over every tab: the semantic tree, a Tab walk, rendered pixels. The gaps were:
+
+- text-entry controls whose editor had no name;
+- a spin box exposed as a group, with 24 x 18 arrows;
+- page dots with no names and 16 targets;
+- reorderable rows with no role or name;
+- rows and notification items that showed no focus;
+- column resize handles and splitters 8 across, the splitters drawn at 1.3-2:1.
+
+Most gaps traced to four roots. The screen-reader bridge (UIA, AT-SPI) is still unwritten, so all of this is the tree a bridge will publish.
+
+**A control is one node.** A control is a `Semantics` wrapper round the one element that takes its focus: a region, an editor, a button or a slider, possibly behind a scope. The focus sat on the unnamed child and the name on the wrapper, and 464 of 535 Tab stops were nameless groups. `accessibility.build` now folds the pair (`focus_target`, `folded_into`) into one node:
+
+- the node takes the wrapper's role and name;
+- it takes the child's focus, state, press, editor value, selection and bounds (bounds are where the pointer takes it);
+- the child's children become the node's.
+
+`perform` sends Focus and the editor's actions to the child. A relation naming a folded element names its wrapper (`related`).
+
+**Every field has a name.**
+
+- `control.named_editor` wraps each editor in a keyed TextField semantics carrying the field's label. It is used by `field`, `search_field`, `token_field`, the data grid's cell editor, and the palette and switcher filters. The wrapper takes only the editor's size, so its look is not applied twice.
+- The field's outer group keeps its place but gives its name and invalid state to the editor.
+- An unlabelled field is named by its hint, the placeholder. A field with none is named by a `field_label` that controls it, or by the nearest named cell round it; a property grid's value cell now carries its property's name.
+- A list item and an option are named by what they show, as a tree item is.
+- A tree table's inner row, role 2 under the named tree row, no longer offers a second press.
+
+**The focus is brought into view.** A Tab now scrolls every viewport round the new focus, innermost first, by the least that shows the element and its ring (`reveal_focus`, WCAG 2.4.11). A caller-owned viewport hears it through its change.
+
+- Revealing the focus found that a virtual table lost it as the window scrolled. Each row sat in unkeyed wrappers that matched by position: the roving scope, the divider pair, the detail pair, and the tree's loading pair. They are now keyed by their row (`row_derived`). A grid whose rows are all key 0 keeps them unkeyed, or they would collide.
+- The "no visible focus" findings on notification items and table rows were rows scrolled out of their viewport, clipped. None was a missing ring, and `collection.list` rows are not focusable at all.
+
+**Targets are 24.**
+
+- A spin box has its own role, SpinButton (44). `stepped` treats it as the field it is, not a pill.
+- Its arrows are 24 x 24, stacked in a field 48 or taller and side by side in a denser one. The default box is 96 wide, not 64, so the digits are not 16.
+- Page dots are "Page N" in 24 hit squares.
+- A column resize handle keeps its 8 in the header but reaches 16 back over its own column's header. The sash of a pane, a split view or a dock keeps its 8 but reaches 8 over each side.
+- The reach is on the handle's outermost node, since the hit test only looks inside a node's own bounds, and the element placed before yields. Both handles now move by the pointer's travel from the press, so a grab anywhere in the reach does not jump the edge. The first step, which arrives with the drag's start, counts too. A sash takes the size at the press plus the whole travel, from its cell or, before the cell is made, from `Handle.from`, so a limit or a fold on the way does not eat the travel. A column handle adds each move's travel to the width it keeps, since it has no cell. `handle_report` keeps the size it reports.
+- The sash's line is `outline`, 3:1 or better, not `outline-variant`, since the line is all that marks the sash.
+
+Fixture changes that follow the contract, not the behaviour:
+
+- `ui_entry` and `ui_numeric` find the name on the TextField and the SpinButton.
+- `ui_form` and `ui_numeric` take depth 14 for the editor's wrapper.
+- `ui_collections_v2` scrolls its list and grid back to the top after the Tab walk revealed rows.
+- `ui_navigation2_v2` takes a fresh tree once the menu is open: `tree_3`'s storage was the harness's and smaller trees moved the menu past its old length.
+- `ui_overlays2_v2` compares relations with `accessibility.related`.
+- The geometry fixtures expect the new reaches and arrows. `ui_containers2_v2` and `ui_panes` expect a sash that keeps its dragged size between rebuilds, and `ui_panes` reopens a folded pane by dragging right from 0, where the old absolute drag measured from the pointer.
+
+New fixture, both hosts: `link/ui_a11y_controls`. It checks the names, the SpinButton, the page dots, the reorderable rows and the 24 targets. It walks Tab 40 stops through a page that scrolls and a virtual data grid, and every focus must survive its rebuild and stand in the page's viewport. At HEAD it does not compile, since there is no SpinButton role. Without the reveal it fails at 23. The audit afterwards found no name, role, target or focus-visibility failures.
