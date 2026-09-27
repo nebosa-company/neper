@@ -28795,3 +28795,42 @@ The payload is anonymous so that gdb reads it the way the language does: `n.Squa
 Still open: CodeView through the M4 PDB writer, `.nepsym` on PE (the D206 table lies inside `.text`), and `.nepersym` in section 13's `NEPS` layout.
 
 **Windows run sweep.** Every non-UI link fixture was built by this compiler and by the pre-D1582 one, and the 460 of them run with the same exit codes and output. An earlier sweep over all 590, run while other builds were going, showed builds exiting 139 under both compilers on different UI fixtures. The fixtures in question (`ui_collections_v2` and `ui_pickers`) built and passed when rebuilt alone. That sweep also showed one unnamed fixture exiting 228 under the old compiler's image and 0 under the new one, which the named rerun did not reproduce.
+
+## D1594 — Past 48 imports on Linux, and past 58 externs anywhere
+
+A Linux program that used all three database drivers (about 80 imports) failed to link, and
+the report named the wrong limit. There were two.
+
+**The ELF linker.** `link_elf.write_dynamic` put the loader's metadata in the 4096 bytes before
+the code, at a fixed offset of 4096. That metadata is the ELF header, five program headers,
+PT_INTERP, .dynstr, .dynsym and .rela.dyn at 24 bytes a symbol, and DT_HASH. Past about 48
+imports it did not fit, and the link failed with `link_elf.InvalidExecutable`. The code now
+starts at the first page boundary past the metadata, and never before 4096. Every address in
+the image was already derived from that one offset: the entry point, the padding, the startup
+blob's arena immediates, the patch of `main`'s call, and the debug sections, which D1581's
+DWARF places from `machine_start`. The first PT_LOAD runs from offset 0 to the end of the
+code, so it covers the metadata however many pages it takes. Nothing else needed to change,
+and a program with up to about 48 imports lays out byte for byte as before.
+
+**The unsafe inventory.** Fixing the linker exposed an earlier failure. Every module's unsafe
+inventory (D457) is rendered while its artifact is written, into a buffer of
+`4096 + text / 4` bytes. An `extern` is an unsafe boundary, and its record is several times
+the length of its own line. So a module of about 59 externs filled the buffer, and
+`tool.Capacity` came out as "cannot lower `main`: lowering failed", on either target, with no
+cause named. The buffer now doubles until the records fit, in the same way as the artifact
+scratch buffer that D541 made grow. The records are unchanged, so the inventory, the manifest
+and the artifact bytes are unchanged too.
+
+**Finding it.** The report came from a generic fallthrough in `print_lower_diagnostic`. A
+temporary edit that returned the error from `main` let the runtime name it (`tool.Capacity`),
+and dropping the program to its externs alone showed the threshold was a count (58 lowers, 59
+does not), not a particular declaration.
+
+**Verification.**
+- `link/extern_many` imports 138 symbols (90 from libc.so.6, 48 from libm.so.6). It calls every
+  one of them, since an uncalled import is not in the image (D128), and checks each answer.
+  Then it reads its own ELF header: the entry point is past the first page (it lands at
+  0x403000) and the first PT_LOAD covers it. It passes on Linux in debug and release.
+  `run.sh` runs it, and `run.ps1` cross-emits it for Linux.
+- A HEAD-built compiler and the changed one emitted every link fixture for both targets, and
+  the images are byte-identical, except `extern_many`, which HEAD cannot build.

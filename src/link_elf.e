@@ -309,7 +309,6 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
     let base = 4194304usize
-    let code_offset = 4096usize
     let startup_size = 267usize
     let symbols = nir.import_symbol_total(builder)
 
@@ -326,7 +325,13 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     let hash_size = dynamic_hash_size(builder)
     let rela_offset = align_up_to(hash_offset + hash_size, 8usize)
     let rela_size = symbols * 24usize
-    if rela_offset + rela_size > code_offset { ret InvalidExecutable }
+    // The code starts on the first page past the loader's metadata (D1594). Up to about 48
+    // imports that is the page at 4096, where it always was, so a small program lays out
+    // byte for byte as before; past that the metadata takes more pages. Every address below
+    // is derived from this offset, and the first loaded segment starts at 0 and runs to the
+    // end of the code, so it covers the metadata however many pages it takes.
+    var code_offset = align_up_to(rela_offset + rela_size, 4096usize)
+    if code_offset < 4096usize { code_offset = 4096usize }
 
     try emit_x64.byte(output, 127usize)
     try emit_x64.byte(output, 69usize)

@@ -3795,6 +3795,12 @@ $externWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $externWritten -ne 'executable written') { throw 'imported extern executable emission failed' }
 & $externPath
 if ($LASTEXITCODE -ne 0) { throw 'an imported extern call reached the wrong symbol' }
+# 138 libc and libm imports (D1594): Linux-only to run, so here it is cross-emitted. Past about
+# 58 externs a module's unsafe inventory overflowed its buffer ("cannot lower `main`") on
+# either target, and the ELF linker refused anything past its one page of loader metadata.
+$manyPath = Join-Path $testBuild 'extern-many-linux'
+$manyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\extern_many\src\main.e') $repo 'x64' 'linux' $manyPath
+if ($LASTEXITCODE -ne 0 -or $manyWritten -ne 'executable written') { throw "a program with 138 imports did not link for Linux: $manyWritten" }
 # A C variadic through the same import table: `_snprintf` with an `f64` in a `...`
 # position, which Win64 wants in the integer register of its slot as well.
 $variadicPath = Join-Path $testBuild 'extern-variadic-selfhost.exe'
