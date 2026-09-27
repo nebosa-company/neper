@@ -614,7 +614,37 @@ fn assemble_vars(a: *mem.Arena, artifacts: []Artifact, table: *FunctionTable, co
         }
         artifact_at += 1usize
     }
+    // (D1605) The definitions in text order, so the image does not depend on the order
+    // the artifacts were named in: every artifact's are written, reached or not, and
+    // `link-em` takes its operands in the caller's order. Each stands alone -- a
+    // structure names another by its declaration -- so the order carries no meaning.
+    sort_definitions(definitions[0usize..program.builder.debug.definition_count])
     ret ok
+}
+
+fn text_before(left: str, right: str) -> bool {
+    var at = 0usize
+    while at < left.len && at < right.len {
+        if left[at] != right[at] { ret left[at] < right[at] }
+        at += 1usize
+    }
+    ret left.len < right.len
+}
+
+// ponytail: insertion sort, quadratic in the definitions of one program (hundreds);
+// a merge sort when a program links thousands.
+fn sort_definitions(definitions: []str) {
+    var at = 1usize
+    while at < definitions.len {
+        let moving = definitions[at]
+        var hole = at
+        while hole > 0usize && text_before(moving, definitions[hole - 1usize]) {
+            definitions[hole] = definitions[hole - 1usize]
+            hole = hole - 1usize
+        }
+        definitions[hole] = moving
+        at += 1usize
+    }
 }
 
 fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.Index, table: *FunctionTable, kept: []bool, edge_base: []usize, edge_target: []usize) -> (bool, err) {
