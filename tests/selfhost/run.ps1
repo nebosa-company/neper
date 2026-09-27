@@ -1931,6 +1931,12 @@ $callMovesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $callMovesWritten -ne 'executable written') { throw 'call_moves emission failed' }
 $callMovesOut = & $callMovesPath
 if ($LASTEXITCODE -ne 0 -or $callMovesOut -ne 'call moves ok') { throw "a call_moves check failed: exit $LASTEXITCODE" }
+# A literal's padding and a tagged union's unused payload are zero (D1609).
+$literalPaddingPath = Join-Path $testBuild 'literal-padding-selfhost.exe'
+$literalPaddingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\literal_padding\src\main.e') $repo 'x64' 'windows' $literalPaddingPath
+if ($LASTEXITCODE -ne 0 -or $literalPaddingWritten -ne 'executable written') { throw 'literal_padding emission failed' }
+$literalPaddingOut = & $literalPaddingPath
+if ($LASTEXITCODE -ne 0 -or $literalPaddingOut -ne 'literal padding ok') { throw "a literal_padding check failed: exit $LASTEXITCODE" }
 # `e.game.nav`: region coverage and portals, funnel corners on three corridors, flow distances against Dijkstra, HPA* within 5% of BFS on 20 maps (D865).
 $gameNavPath = Join-Path $testBuild 'game-nav-selfhost.exe'
 $gameNavWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\game_nav\src\main.e') $repo 'x64' 'windows' $gameNavPath

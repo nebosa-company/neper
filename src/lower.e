@@ -3426,6 +3426,24 @@ fn store_tag(c: *check.Checker, aggregate: check.Aggregate, field_index: usize, 
     ret nir.add_operand(builder, store_instruction, tag_value)
 }
 
+// Whether a struct's fields leave bytes between or after them. A literal names every
+// field, so those bytes are the only ones it would not write (D1609).
+fn struct_has_padding(c: *check.Checker, ty: check.Type, aggregate: check.Aggregate, size: usize) -> (bool, err) {
+    var covered = 0usize
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let field_index = aggregate.first_field + field_at
+        if field_index >= c.aggregate_field_count { ret (false, check.InvalidType) }
+        let (field, field_error) = layout.field(c, ty, c.aggregate_fields[field_index].name)
+        if field_error != ok { ret (false, field_error) }
+        let (field_info, field_info_error) = layout.type_info(c, field.ty)
+        if field_info_error != ok { ret (false, field_info_error) }
+        covered += field_info.size
+        field_at += 1usize
+    }
+    ret (covered < size, ok)
+}
+
 fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
     let node = tree.nodes[node_index]
     let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
@@ -3440,12 +3458,19 @@ fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree
     if stack_error != ok { ret (0usize, result_type, stack_error) }
     let (aggregate_index, has_aggregate) = layout.aggregate_index(c, result_type)
     var tagged = false
+    var padded = false
     var aggregate: check.Aggregate = zero
     if has_aggregate {
         aggregate = c.aggregates[aggregate_index]
         tagged = aggregate.kind == .TaggedUnion
+        if aggregate.kind == .Struct && result_type.kind == .Named {
+            let (has_padding, padding_error) = struct_has_padding(c, result_type, aggregate, info.size)
+            if padding_error != ok { ret (0usize, result_type, padding_error) }
+            padded = has_padding
+        }
     }
-    if tagged {
+    // A tagged union's unused payload and a struct's padding are zero, as `zero`'s are.
+    if tagged || padded {
         let (zero_instruction, ignored, zero_error) = nir.emit(builder, .Zero, result_type, false, info.size, c.tokens[usize(node.token_start)])
         if zero_error != ok { ret (0usize, result_type, zero_error) }
         let zero_operand_error = nir.add_operand(builder, zero_instruction, stack)

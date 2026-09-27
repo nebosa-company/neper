@@ -1744,6 +1744,15 @@ call_moves_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$call_moves_written" = 'executable written' ]
 chmod +x "$test_build/call-moves-selfhost"
 [ "$("$test_build/call-moves-selfhost")" = 'call moves ok' ]
+# A literal's padding and a tagged union's unused payload are zero (D1609); valgrind, where
+# installed, holds every byte the fixture branches on to be written.
+literal_padding_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/literal_padding/src/main.e" "$repo" x64 linux "$test_build/literal-padding-selfhost")
+[ "$literal_padding_written" = 'executable written' ]
+chmod +x "$test_build/literal-padding-selfhost"
+[ "$("$test_build/literal-padding-selfhost")" = 'literal padding ok' ]
+if command -v valgrind >/dev/null 2>&1; then
+    valgrind -q --error-exitcode=99 "$test_build/literal-padding-selfhost" > /dev/null
+fi
 # `e.game.nav`: region coverage and portals, funnel corners on three corridors, flow distances against Dijkstra, HPA* within 5% of BFS on 20 maps (D865).
 game_nav_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_nav/src/main.e" "$repo" x64 linux "$test_build/game-nav-selfhost")
 [ "$game_nav_written" = 'executable written' ]
