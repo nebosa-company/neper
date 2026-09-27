@@ -2994,9 +2994,70 @@ fn spell_name(info: *nir.DebugInfo, name: str) -> bool {
 
 // `module.name`, its length first: two modules may each have a `Node`.
 fn spell_qualified(g: *graph.Graph, info: *nir.DebugInfo, ty: check.Type) -> bool {
-    if ty.module_index >= g.count { ret spell_name(info, ty.name) }
+    ret spell_qualified_as(g, info, ty, "")
+}
+
+// `module.name` with `suffix` after it: a tagged union's `.Tag` and `.Payload`.
+fn spell_qualified_as(g: *graph.Graph, info: *nir.DebugInfo, ty: check.Type, suffix: str) -> bool {
+    if ty.module_index >= g.count { ret spell_number(info, ty.name.len + suffix.len) && spell_text(info, ":") && spell_text(info, ty.name) && spell_text(info, suffix) }
     let module_name = g.modules[ty.module_index].name
-    ret spell_number(info, module_name.len + 1usize + ty.name.len) && spell_text(info, ":") && spell_text(info, module_name) && spell_text(info, ".") && spell_text(info, ty.name)
+    ret spell_number(info, module_name.len + 1usize + ty.name.len + suffix.len) && spell_text(info, ":") && spell_text(info, module_name) && spell_text(info, ".") && spell_text(info, ty.name) && spell_text(info, suffix)
+}
+
+// (D1585) A union's definition, `|size:n:name` and its member count, then per member
+// its name, `0:`, its type and `;`; and a tagged union's, a struct of its `tag` -- an
+// enum of every member -- and its `payload`, a union of the members that carry one.
+fn spell_union(c: *check.Checker, g: *graph.Graph, ty: check.Type, info: *nir.DebugInfo, aggregate: check.Aggregate, size: usize) -> bool {
+    var carried = 0usize
+    var member_at = 0usize
+    while member_at < aggregate.field_count {
+        if c.aggregate_fields[aggregate.first_field + member_at].ty.kind != .Void { carried += 1usize }
+        member_at += 1usize
+    }
+    var payload_offset = 0usize
+    var payload_size = size
+    if aggregate.kind == .TaggedUnion {
+        let (tag, tag_error) = check.layout_type_info(c, aggregate.backing_type)
+        if tag_error != ok { ret false }
+        payload_offset = tag.size
+        member_at = 0usize
+        while member_at < aggregate.field_count {
+            let member = c.aggregate_fields[aggregate.first_field + member_at]
+            if member.ty.kind != .Void {
+                let (placed, placed_error) = check.layout_field(c, ty, member.name)
+                if placed_error != ok { ret false }
+                payload_offset = placed.offset
+            }
+            member_at += 1usize
+        }
+        if payload_offset > size { ret false }
+        payload_size = size - payload_offset
+        var fields = 1usize
+        if carried != 0usize { fields = 2usize }
+        if !(spell_text(info, "{") && spell_number(info, size) && spell_text(info, ":") && spell_qualified(g, info, ty) && spell_number(info, fields) && spell_text(info, ":3:tag0:=") && spell_number(info, tag.size) && spell_text(info, ":") && spell_qualified_as(g, info, ty, ".Tag") && spell_number(info, aggregate.field_count) && spell_text(info, ":")) { ret false }
+        member_at = 0usize
+        while member_at < aggregate.field_count {
+            let member = c.aggregate_fields[aggregate.first_field + member_at]
+            if !(spell_name(info, member.name) && (!member.enum_negative || spell_text(info, "-")) && spell_number(info, member.enum_value) && spell_text(info, ":")) { ret false }
+            member_at += 1usize
+        }
+        if !spell_text(info, ";") { ret false }
+        if carried == 0usize { ret true }
+        if !(spell_text(info, "0:") && spell_number(info, payload_offset) && spell_text(info, ":|") && spell_number(info, payload_size) && spell_text(info, ":") && spell_qualified_as(g, info, ty, ".Payload")) { ret false }
+    } else {
+        if !(spell_text(info, "|") && spell_number(info, size) && spell_text(info, ":") && spell_qualified(g, info, ty)) { ret false }
+    }
+    if !(spell_number(info, carried) && spell_text(info, ":")) { ret false }
+    member_at = 0usize
+    while member_at < aggregate.field_count {
+        let member = c.aggregate_fields[aggregate.first_field + member_at]
+        if member.ty.kind != .Void {
+            if !(spell_name(info, member.name) && spell_text(info, "0:") && spell_type_at(c, g, member.ty, info, false) && spell_text(info, ";")) { ret false }
+        }
+        member_at += 1usize
+    }
+    if aggregate.kind == .TaggedUnion { ret spell_text(info, ";") }
+    ret true
 }
 
 // A struct a descriptor names, to be defined: each once.
@@ -3051,7 +3112,14 @@ fn spell_type_at(c: *check.Checker, g: *graph.Graph, ty: check.Type, info: *nir.
                 info.text_count = mark
                 ret false
             }
-            if aggregate.kind == .Struct { want_definition(info, ty) }
+            if (aggregate.kind == .Union || aggregate.kind == .TaggedUnion) && definition {
+                if spell_union(c, g, ty, info, aggregate, layout.size) { ret true }
+                info.text_count = mark
+                ret false
+            }
+            if aggregate.kind == .Struct || aggregate.kind == .Union || aggregate.kind == .TaggedUnion { want_definition(info, ty) }
+            // A union is named as one: a debugger finds a union's definition by a union's name.
+            if aggregate.kind == .Union { ret spell_text(info, "%") && spell_number(info, layout.size) && spell_text(info, ":") && spell_qualified(g, info, ty) }
             if aggregate.kind == .Enum {
                 if spell_text(info, "=") && spell_number(info, layout.size) && spell_text(info, ":") && spell_qualified(g, info, ty) && spell_number(info, aggregate.field_count) && spell_text(info, ":") {
                     var member_at = 0usize

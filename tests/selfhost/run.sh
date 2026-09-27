@@ -4118,6 +4118,19 @@ if command -v gdb >/dev/null 2>&1; then
         *) printf '%s\n' "gdb did not show the local and the argument: $debug_gdb" >&2; exit 1 ;;
     esac
 fi
+# (D1585) Debug types: a struct, an enum, a bare union and a tagged union, shown by gdb
+# with their fields, members and tag.
+debug_types_path="$test_build/debug-types-selfhost"
+[ "$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/debug_types/src/main.e" "$repo" x64 linux "$debug_types_path")" = 'executable written' ]
+chmod +x "$debug_types_path"
+[ "$("$debug_types_path")" = 'debug types ok' ]
+if command -v gdb >/dev/null 2>&1; then
+    debug_types_gdb=$(gdb -q -batch -ex 'set debuginfod enabled off' -ex 'break main.area' -ex run -ex 'print shape' -ex 'print shape.Square' -ex 'print corner' -ex up -ex 'print bits' -ex 'print tint' "$debug_types_path" 2>&1 || true)
+    case "$debug_types_gdb" in
+        *'{tag = Square, {'*'Square = 7}}'*'$2 = 7'*'{x = 3, y = 4}'*'{whole = 4294967297, halves = {1, 1}}'*'$5 = Blue'*) ;;
+        *) printf '%s\n' "gdb did not show the debug types: $debug_types_gdb" >&2; exit 1 ;;
+    esac
+fi
 # Section 12's incremental rebuild: unchanged sources keep every artifact, a body edit
 # behind a signature edge rebuilds only its module and links equal to a clean build,
 # and a signature edit rebuilds the dependent too.

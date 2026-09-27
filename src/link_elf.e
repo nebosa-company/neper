@@ -891,7 +891,10 @@ fn member_die(output: *emit_x64.Buffer, name: str, type_offset: usize, offset: u
 // are written one after another -- by the grammar `em.spell_type` writes.
 fn descriptor_end(text: str, at: usize) -> (usize, bool) {
     if at >= text.len { ret (0usize, false) }
-    let head = text[at]
+    // A union (`|`, `%`) reads as a struct (`{`, `#`) does (D1585).
+    var head = text[at]
+    if head == 124u8 { head = 123u8 }
+    if head == 37u8 { head = 35u8 }
     // A pointer's or a slice's or an array's element follows its prefix.
     var element_at = 0usize
     if head == 42u8 {
@@ -946,7 +949,9 @@ fn descriptor_end(text: str, at: usize) -> (usize, bool) {
 // A struct's entry (`{`) and its members, or an enum's (`=`) and its enumerators: the
 // field types written first, so the members refer back to them.
 fn aggregate_die(output: *emit_x64.Buffer, memo: *TypeMemo, descriptor: str) -> (usize, bool) {
-    let head = descriptor[0usize]
+    let is_union = descriptor[0usize] == 124u8
+    var head = descriptor[0usize]
+    if is_union { head = 123u8 }
     let (size, after_size, sized) = digits_until(descriptor, 1usize, 58u8)
     let (length, after_length, measured) = digits_until(descriptor, after_size, 58u8)
     if !sized || !measured || after_length + length > descriptor.len { ret (0usize, false) }
@@ -971,7 +976,9 @@ fn aggregate_die(output: *emit_x64.Buffer, memo: *TypeMemo, descriptor: str) -> 
     }
     let offset = output.count - memo.info_offset
     if head == 123u8 {
-        if uleb(output, 7usize) != ok || append_text(output, name) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.little_u32(output, size) != ok { ret (0usize, false) }
+        var entry = 7usize
+        if is_union { entry = 22usize }
+        if uleb(output, entry) != ok || append_text(output, name) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.little_u32(output, size) != ok { ret (0usize, false) }
     } else {
         if uleb(output, 18usize) != ok || append_text(output, name) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.byte(output, size) != ok { ret (0usize, false) }
     }
@@ -1042,17 +1049,19 @@ fn type_die(output: *emit_x64.Buffer, memo: *TypeMemo, descriptor: str) -> (usiz
         offset = output.count - memo.info_offset
         if uleb(output, 9usize) != ok || emit_x64.little_u32(output, element) != ok || uleb(output, 10usize) != ok || emit_x64.little_u32(output, count) != ok || emit_x64.byte(output, 0usize) != ok { ret (0usize, false) }
     } else {
-    if descriptor[0usize] == 123u8 || descriptor[0usize] == 61u8 {
+    if descriptor[0usize] == 123u8 || descriptor[0usize] == 61u8 || descriptor[0usize] == 124u8 {
         let (aggregate, has_aggregate) = aggregate_die(output, memo, descriptor)
         if !has_aggregate { ret (0usize, false) }
         offset = aggregate
     } else {
-    if descriptor[0usize] == 35u8 {
+    if descriptor[0usize] == 35u8 || descriptor[0usize] == 37u8 {
         let (size, after_size, sized) = digits_until(descriptor, 1usize, 58u8)
         let (length, after_length, measured) = digits_until(descriptor, after_size, 58u8)
         if !sized || !measured || after_length + length != descriptor.len { ret (0usize, false) }
         offset = output.count - memo.info_offset
-        if uleb(output, 11usize) != ok || append_text(output, descriptor[after_length..descriptor.len]) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.little_u32(output, size) != ok { ret (0usize, false) }
+        var declaration = 11usize
+        if descriptor[0usize] == 37u8 { declaration = 21usize }
+        if uleb(output, declaration) != ok || append_text(output, descriptor[after_length..descriptor.len]) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.little_u32(output, size) != ok { ret (0usize, false) }
     } else {
         var name = descriptor
         var encoding = 0usize
@@ -1240,7 +1249,10 @@ fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets
     try append_blob(output, "\x12\x04\x01\x03\x08\x0b\x0b\x00\x00")
     try append_blob(output, "\x13\x28\x00\x03\x08\x1c\x0d\x00\x00")
     // (D1584) 20 a lexical block: its range, and the locals its block declares.
-    try append_blob(output, "\x14\x0b\x01\x11\x01\x12\x07\x00\x00\x00")
+    try append_blob(output, "\x14\x0b\x01\x11\x01\x12\x07\x00\x00")
+    // (D1585) 21 a union known by its name and size, 22 a union and its members.
+    try append_blob(output, "\x15\x17\x00\x03\x08\x0b\x06\x3c\x19\x00\x00")
+    try append_blob(output, "\x16\x17\x01\x03\x08\x0b\x06\x00\x00\x00")
     // The location lists, before the entries that name them: a var placed for part of its
     // function has one, in the order the entries are written below.
     sections.abbrev_end = output.count

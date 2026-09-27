@@ -28772,3 +28772,26 @@ So the DWARF nesting follows the source's blocks, and a block's lexical entry st
 **Suite expectations.** Both runners expect format 19.
 
 Still open: CodeView through the M4 PDB writer, `.nepsym` on PE, `.nepersym` in section 13's layout, and unions and tagged unions beyond their size.
+
+## D1585 — Unions and tagged unions in debug info
+
+A debugger now shows unions and tagged unions by their members. Until now a union was only a structure of its size.
+
+**Bare unions.** A bare `union` is defined in the artifact's type table as `|size:n:module.name`, with its members spelled like a struct's fields at offset 0. The linker writes it as a `DW_TAG_union_type`. Where a variable or field refers to it, it is named with `%`, and the linker writes a union declaration there: a structure declaration would not resolve to a union.
+
+**Tagged unions.** A tagged union is defined as the struct section 4 gives its layout:
+
+- a `tag` at offset 0, an enum named `module.Name.Tag` (the language's own spelling) with every member's name and value;
+- and, at the payload's offset, an anonymous union `module.Name.Payload` of the members that carry a payload.
+
+The payload is anonymous so that gdb reads it the way the language does: `n.Square` is the payload, as in the source, and `n.tag` is the tag. A tagged union with no payload member is its tag alone.
+
+**Evidence.**
+
+- **gdb.** On the new `debug_types` fixture, gdb shows `shape = {tag = Square, {Circle = ..., Square = 7}}`, `shape.Square = 7`, `bits = {whole = 4294967297, halves = {1, 1}}`, `corner = {x = 3, y = 4}` and `tint = Blue`. `ptype` gives `struct main.Shape { enum main.Shape.Tag tag; union main.Shape.Payload; }`.
+- **Suite.** `run.sh` checks those gdb answers. Both runners build the fixture and run it (`debug types ok`).
+- **Fixed point.** Stage 2 equals stage 3 on both hosts.
+
+Still open: CodeView through the M4 PDB writer, `.nepsym` on PE (the D206 table lies inside `.text`), and `.nepersym` in section 13's `NEPS` layout.
+
+**Windows run sweep.** Every non-UI link fixture was built by this compiler and by the pre-D1582 one, and the 460 of them run with the same exit codes and output. An earlier sweep over all 590, run while other builds were going, showed builds exiting 139 under both compilers on different UI fixtures. The fixtures in question (`ui_collections_v2` and `ui_pickers`) built and passed when rebuilt alone. That sweep also showed one unnamed fixture exiting 228 under the old compiler's image and 0 under the new one, which the named rerun did not reproduce.
