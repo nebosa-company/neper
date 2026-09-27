@@ -2698,8 +2698,9 @@ if ($LASTEXITCODE -ne 0 -or $dbUnitsWritten -ne 'executable written') { throw 'd
 & $dbUnitsPath
 if ($LASTEXITCODE -ne 0) { throw "a database driver unit check failed: exit $LASTEXITCODE" }
 # `x.postgresql.libpq` and `x.oracle.mysql` against live servers: db_servers.ps1 starts a fresh
-# PostgreSQL (55432) and MySQL (53306) from $env:NEPER_DB_TOOLS (default D:\tools) and they are
-# stopped whatever the fixtures answer. Each client library is found on PATH, as a user's would be.
+# PostgreSQL and MySQL from $env:NEPER_DB_TOOLS (default D:\tools) on free ports, 55432 and 53306
+# when nothing holds them (D1596), and they are stopped whatever the fixtures answer. Each client
+# library is found on PATH, as a user's would be.
 $dbTools = if ($env:NEPER_DB_TOOLS) { $env:NEPER_DB_TOOLS } else { 'D:\tools' }
 $dbServers = Join-Path $testBuild 'db-servers'
 $postgresqlPath = Join-Path $testBuild 'x-postgresql-selfhost.exe'
@@ -2711,11 +2712,16 @@ if ($LASTEXITCODE -ne 0 -or $mysqlWritten -ne 'executable written') { throw 'x.o
 $savedPath = $env:PATH
 try {
     & (Join-Path $PSScriptRoot 'db_servers.ps1') start $dbServers
+    $dbPorts = @{}
+    foreach ($line in Get-Content (Join-Path $dbServers 'ports')) {
+        $key, $value = $line -split '=', 2
+        $dbPorts[$key] = $value
+    }
     $env:PATH = (Join-Path $dbTools 'postgresql\bin') + ';' + $savedPath
-    & $postgresqlPath "host=127.0.0.1 port=55432 user=neper dbname=postgres options='-c client_min_messages=warning'"
+    & $postgresqlPath "host=127.0.0.1 port=$($dbPorts['pg_port']) user=neper dbname=postgres options='-c client_min_messages=warning'"
     if ($LASTEXITCODE -ne 0) { throw "the PostgreSQL driver answered wrongly: exit $LASTEXITCODE" }
     $env:PATH = (Join-Path $dbTools 'mysql\lib') + ';' + (Join-Path $dbTools 'mysql\bin') + ';' + $savedPath
-    & $mysqlPath 53306
+    & $mysqlPath $dbPorts['mysql_port']
     if ($LASTEXITCODE -ne 0) { throw "the MySQL driver answered wrongly: exit $LASTEXITCODE" }
 } finally {
     $env:PATH = $savedPath

@@ -151,6 +151,8 @@ verified.
   - transactions and a 100 KB value;
   - a `NOWAIT` row lock refused as `Busy` across two connections.
 - `tests/selfhost/db_servers.{ps1,sh}` starts a throwaway server for each suite run on
-  127.0.0.1:53306 (`root`, no password, database `neper`). On Windows the binaries come from
+  127.0.0.1 (`root`, no password, database `neper`). The port is `$NEPER_MYSQL_PORT` if that
+  is set; otherwise it is 53306, or the next free port above it when another server holds that
+  one. The port chosen is written to `<dir>/ports` for the runners (D1596). On Windows the binaries come from
   `$NEPER_DB_TOOLS` (default `D:\tools`, the archive unpacked to `mysql\`); on Linux they come
   from the `mysql-server` package.

@@ -16,7 +16,10 @@ for driver in sqlite postgresql mysql; do cp "$1-$driver" "$work/bench-$driver";
 gcc -O2 -o "$work/bench-c" "$here/c/bench.c" -I/usr/include/postgresql $(mysql_config --cflags) \
     -lsqlite3 -lpq $(mysql_config --libs)
 bash "$repo/tests/selfhost/db_servers.sh" start "$work/servers"
+# The ports the servers settled on (D1596): the defaults unless something else holds them.
+. "$work/servers/ports"
 status=0
-python3 "$here/run.py" --neper "$work/bench" --c "$work/bench-c" --runs "${3:-9}" --scratch "$work" --out "$2" || status=$?
+python3 "$here/run.py" --neper "$work/bench" --c "$work/bench-c" --runs "${3:-9}" --scratch "$work" \
+    --pg-port "$pg_port" --mysql-port "$mysql_port" --out "$2" || status=$?
 bash "$repo/tests/selfhost/db_servers.sh" stop "$work/servers"
 exit $status
