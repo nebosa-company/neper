@@ -53,6 +53,11 @@ and correct; items 1–3 are the cost.
 
 ### 1. Call-aware register allocation and direct argument passing (compiler)
 
+**Done as D1607 (with D1608), short of its acceptance.** The Windows SQLite scan is
+3.3% faster against the D1606 compiler in the same rounds, not the 28% estimated, and
+reaches 56–59% of C rather than 70%. Images are 7–16% smaller. The proposal is kept
+below for the record.
+
 The one change that helps everything: every call in every Neper program, the three
 drivers, inserts and lookups as well as scans, and the compiler's own build time.
 

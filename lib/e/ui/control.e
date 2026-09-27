@@ -1931,7 +1931,16 @@ fn badge_bare(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str, kind:
         var arrived = flip
         if !change.flipped { arrived = 1.0 - flip }
         if arrived < 1.0 && change.prior_len > 0usize {
-            let (prior_node, prior_error) = colored_text(a, 0u64, change.prior[0usize..change.prior_len], t, caption, style.color(t.tokens, ink))
+            // The old count goes to the arena: `change` is this frame's, and the node
+            // outlives it -- a view of `change.prior` read whatever the stack held next.
+            let (prior_text, prior_text_error) = mem.alloc[u8](a, change.prior_len)
+            if prior_text_error != ok { ret (zero, TooLarge) }
+            var copied = 0usize
+            while copied < change.prior_len {
+                prior_text[copied] = change.prior[copied]
+                copied += 1usize
+            }
+            let (prior_node, prior_error) = colored_text(a, 0u64, prior_text, t, caption, style.color(t.tokens, ink))
             if prior_error != ok { ret (zero, prior_error) }
             var fresh_look = style.defaults()
             fresh_look.opacity = arrived

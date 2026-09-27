@@ -29325,3 +29325,78 @@ Two more, from the suite's own records:
 A third stale thing held both suites: b7475462 had changed `comptime_call_runtime`'s refusal to name "a call to a generic, extern or intrinsic function", and the suites still expected the old words. They are pinned to the new words in 8192326d.
 
 ---
+
+## D1607 — A value live across a call prefers a register the call keeps, and arguments move straight to their registers
+
+**Why.** `docs/db-perf-plan.md` item 1 found two costs in the x64 call sequence.
+
+- **Registers.** The allocator took the lowest free register for every value, and rax, rcx, rdx, r8 and r9 come first. A value living across a call therefore almost always sat in a register the call clobbers, and was stored and reloaded around every call it crossed. rbx and r12–r15, which a call keeps, were reached only once the first five were busy.
+- **Arguments.** Every argument was stored to an outgoing slot and loaded back into its parameter register. An indirect callee made the same round trip.
+
+**Decision.**
+
+- **Marking.** `regalloc.build_ranges` marks each range that a call lies strictly inside, `LiveRange.crosses_call`, with the test `live_register_mask` makes. The calls' positions go in the scratch and each value's next call is a binary search; a function with more calls than the scratch holds marks nothing.
+- **Allocation.** `allocate_with` searches from the first callee-saved register (`CALLER_SAVED`, 5) for a marked value, and from 0 for any other. The spill rule is unchanged, and the mark is only a preference.
+- **Arguments.** `codegen_x64.load_call_arguments` writes stack arguments first, then moves each register argument from where its value lives. The one exception is a value sitting in a general register another argument is about to be written to, including the Win64 variadic shadow of a float. That argument is parked in its own outgoing slot first and loaded from it, so no parameter register is overwritten before every value in it has been read.
+- **Indirect callee.** It is read into r11 before any argument register is written.
+
+**What it exposed.** Both runtimes kept the command line in callee-saved registers for the program's life:
+
+- Windows `neper_os_args` read r12 (the table) and r15 (the count);
+- Linux read r13.
+
+Any function that held a value in one of them when it called `os.args` read that value back as the argument table, and a thread never held the table at all. Rarely-used callee-saved registers had hidden it; once values living across calls sit there routinely, `proc_output`'s child crashed before its first write. D1608 removes the dependency.
+
+It also exposed a view of a dead frame in `e.ui.control.badge_bare`. The badge's cross-fade built the old count's text node over `change.prior[0..prior_len]`, a slice of a local struct, so the node pointed into a frame that was gone by the time the tree was reconciled. It read whatever the stack held next. `ui_status3_v2` passed on Linux until `badge_of` kept three values in callee-saved registers, which grew its frame by 16 bytes. Then the old "3" read as garbage, and the check that both counts stand mid-fade failed (exit 61). The old count now goes to the arena.
+
+- **How it was found.** A bisect by function index narrowed it to `badge_of` alone. gdb showed every callee-saved register intact across its calls, and valgrind named `find_by_text` reading bytes from a dead stack allocation.
+- **Also reported.** valgrind finds seven more uninitialised reads in `e.ui`, the same before and after this change; they are left to their own task.
+
+**Evidence.**
+
+- Stage 2 equals stage 3 on Windows.
+- At D1606, the compiler built by itself is 8.47 MB instead of 10.05 MB for the same source (−16%) and compiles itself about 5% faster. The static gate's sc500k images go from 29.8% to 35.4% under the pinned baseline (debug) and from 26.9% to 30.5% (release).
+- The `call_moves` fixture covers swapped, rotated and repeated arguments, integers and floats interleaved, seven arguments, an indirect call with reversed arguments, eight values live across calls in a loop, and `os.args` with six values live across it. It passes on both hosts. It crashes when parking is disabled, and its `os.args` check crashes on both hosts with the old runtimes.
+- The `e.db` and `e.bytes` fixtures pass on both hosts under the new compiler.
+- The four `dis` goldens change by the register moves that replace slot round trips, and are regenerated.
+- Suites: Windows fails 6 checks, the same 6 D1606 fails without this change. Linux fails 24, the same 24 c9b12410 fails without it, and every conformance output a failing check compares is byte-identical with and without it. The failures predate it:
+  - the `e.data.list` surface against `module-apis.md`;
+  - the static gate's arena high-water (+2.4%, budget +0%);
+  - the four rename, reorder and warm-build fixed-point checks;
+  - on Linux, 18 goldens left behind by D1602 (snapshots, the `e.os` interface hash, `explain_inline`'s new records), which D1605 regenerated for Windows only.
+
+**Benchmark.** The `e.db` benchmark drivers built by the D1606 and D1607 compilers, alternated in the same 9 rounds on Windows; time, new against old:
+
+| | insert | scan | lookup |
+|---|---|---|---|
+| SQLite | −0.4% | −3.3% (faster in 7 of 9 rounds) | −3.1% |
+| PostgreSQL | +0.2% | −7.2% (spread 12–20%) | −1.6% |
+| MySQL | −0.9% | −0.5% | +1.2% |
+
+Only the SQLite scan is clear of the round-to-round spread. The drivers' images are 7–11% smaller (SQLite 114 → 101 KB). In the four-way run, Neper's scans are 56% (SQLite), 100% (PostgreSQL) and 58% (MySQL) of the fastest on Windows, and 59%, 56% and 88% on Linux.
+
+**What it did not do.** Item 1's acceptance asked for the SQLite scan at 70% of C or more; it is at 56–59%. The plan's estimate measured whole loop iterations, not calls. The remaining gap is in the loop body:
+
+- address arithmetic not folded into operands;
+- jumps to the next instruction;
+- a loop counter spilled when six values live across calls and five registers keep them;
+- the driver's three `column_type` calls per row.
+
+---
+
+## D1608 — `os.args` reads the command line again rather than a register the entry set
+
+**Why.** D1607: the runtimes found the entry's argument table through callee-saved registers, which only a program that never allocates them keeps intact, and a thread never has.
+
+**Decision.**
+
+- **Windows.** The entry's command-line parser becomes `np_parse_args(arena, table)`, placed eighth so the always-carried floor ends after it (`embed-pe-runtime.ps1`, `floor()` = the 9th procedure's start). The entry calls it into the root arena's first page as before. `neper_os_args` allocates a 256-entry table in the caller's arena and calls it again: the same parse, the same strings, from `GetCommandLineW`.
+- **Linux.** `neper_os_args` reads `/proc/self/cmdline`, the kernel's copy of the arguments, each followed by a NUL. It reads the file twice: once to measure it into a buffer that is given back, since a /proc file reports no size, then once more into exactly that much of the arena. The table holds views into that buffer. The startup code is unchanged; `main`'s `args` still come from the initial stack.
+- **Failures.** Both roll the arena back on any failure, as before. The Linux version answers an `open`, `read` or `lseek` failure through `np_error`, and exhaustion as `Exhausted`.
+
+**Evidence.**
+
+- The `call_moves` `os.args` check (code 14) and `proc_output` pass on both hosts, and quoted arguments with spaces survive on Windows.
+- `main_args` and the rest of the suites: as D1607.
+
+---

@@ -1739,6 +1739,11 @@ pointer_float_args_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$pointer_float_args_written" = 'executable written' ]
 chmod +x "$test_build/pointer-float-args-selfhost"
 "$test_build/pointer-float-args-selfhost"
+# Arguments moved straight into the argument registers: swapped, rotated, repeated, interleaved with floats, past the registers, indirect; eight values live across calls (D1607).
+call_moves_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/call_moves/src/main.e" "$repo" x64 linux "$test_build/call-moves-selfhost")
+[ "$call_moves_written" = 'executable written' ]
+chmod +x "$test_build/call-moves-selfhost"
+[ "$("$test_build/call-moves-selfhost")" = 'call moves ok' ]
 # `e.game.nav`: region coverage and portals, funnel corners on three corridors, flow distances against Dijkstra, HPA* within 5% of BFS on 20 maps (D865).
 game_nav_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_nav/src/main.e" "$repo" x64 linux "$test_build/game-nav-selfhost")
 [ "$game_nav_written" = 'executable written' ]

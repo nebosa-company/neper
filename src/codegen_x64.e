@@ -1349,20 +1349,35 @@ fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, abi: 
     ret ok
 }
 
-// The arguments are already parked in the outgoing slots as raw bits; this moves each
-// into the place the convention names for it.
+// Each argument goes where the convention names, straight from where its value lives
+// (D1607); until then each was stored to an outgoing slot and loaded back. Stack
+// arguments are written first, through r10 at most, before any register is. A register
+// argument whose value sits in a general register another argument is about to be
+// written to is parked in its own outgoing slot first and loaded from there -- a
+// parameter register is overwritten only once every value that lives in it has been read.
+// Only rcx, rdx, r8 and r9 are both allocator and parameter registers, so parking is the
+// rare case: it is what a call that passes its arguments in a different order needs.
 // A foreign callee may be a C variadic, and nothing at this level says whether it is,
 // so every imported call is made the way a variadic one has to be: Win64 wants a float
 // argument in its integer register as well as its xmm, and System V wants `al` to
 // carry the count of xmm registers used. Both are harmless to a fixed-arity callee --
 // the registers are caller-saved and unused in those positions.
-fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, abi: Abi, foreign: bool, first_argument: usize, argument_total: usize, outgoing_base: usize, output: *emit_x64.Buffer) -> err {
+fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, abi: Abi, foreign: bool, first_argument: usize, argument_total: usize, outgoing_base: usize, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
     var integer_used = 0usize
     var float_used = 0usize
     var stack_used = 0usize
     var in_register = false
     var register = 0usize
     var stack_index = 0usize
+    // Per register argument: its position, its float width (0 for an integer), the
+    // register it goes to (an xmm for a float), the general register it writes (16 for
+    // none) and whether it is parked. System V passes at most six and eight.
+    var positions: [16]usize = zero
+    var widths: [16]usize = zero
+    var targets: [16]usize = zero
+    var writes: [16]usize = zero
+    var parked: [16]bool = zero
+    var placed = 0usize
     var at = 0usize
     while at < argument_total {
         let value = builder.operands[instruction.first_operand + first_argument + at]
@@ -1372,22 +1387,61 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
         if argument_type.kind == .Float && width == 0usize { ret Unsupported }
         try classify_argument(abi, width != 0usize, at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
         if in_register {
-            if width == 0usize {
-                try emit_x64.load_stack(output, register, outgoing_base + at)
-            } else {
-                try emit_x64.load_stack(output, 10usize, outgoing_base + at)
-                try emit_x64.move_to_float(output, register, 10usize, width == 64usize)
-                if foreign && abi == .Windows {
-                    let (shadow_register, shadow_error) = parameter_register(abi, at)
-                    if shadow_error != ok { ret shadow_error }
-                    try emit_x64.mov_register(output, shadow_register, 10usize)
-                }
+            if placed >= 16usize { ret Unsupported }
+            positions[placed] = at
+            widths[placed] = width
+            targets[placed] = register
+            writes[placed] = 16usize
+            if width == 0usize { writes[placed] = register }
+            if width != 0usize && foreign && abi == .Windows {
+                let (shadow_register, shadow_error) = parameter_register(abi, at)
+                if shadow_error != ok { ret shadow_error }
+                writes[placed] = shadow_register
             }
+            placed += 1usize
         } else {
-            try emit_x64.load_stack(output, 10usize, outgoing_base + at)
-            try emit_x64.store_call_argument(output, outgoing_stack_displacement(abi, stack_index), 10usize)
+            let (source, source_error) = read_value(allocations, value, 10usize, output)
+            if source_error != ok { ret source_error }
+            try emit_x64.store_call_argument(output, outgoing_stack_displacement(abi, stack_index), source)
         }
         at += 1usize
+    }
+    var slot = 0usize
+    while slot < placed {
+        let value = builder.operands[instruction.first_operand + first_argument + positions[slot]]
+        if value < allocations.len && allocations[value].kind == .Register {
+            let (physical, physical_error) = hardware_register(allocations[value].index)
+            if physical_error != ok { ret physical_error }
+            var other = 0usize
+            while other < placed {
+                if other != slot && writes[other] == physical { parked[slot] = true }
+                other += 1usize
+            }
+            if parked[slot] { try emit_x64.store_stack(output, outgoing_base + positions[slot], physical) }
+        }
+        slot += 1usize
+    }
+    slot = 0usize
+    while slot < placed {
+        let value = builder.operands[instruction.first_operand + first_argument + positions[slot]]
+        // An integer is read straight into its register; a float through r10.
+        var scratch = 10usize
+        if widths[slot] == 0usize { scratch = targets[slot] }
+        var source = scratch
+        if parked[slot] {
+            try emit_x64.load_stack(output, scratch, outgoing_base + positions[slot])
+        } else {
+            let (read, read_error) = read_value(allocations, value, scratch, output)
+            if read_error != ok { ret read_error }
+            source = read
+        }
+        if widths[slot] == 0usize {
+            if source != targets[slot] { try emit_x64.mov_register(output, targets[slot], source) }
+        } else {
+            try emit_x64.move_to_float(output, targets[slot], source, widths[slot] == 64usize)
+            if writes[slot] != 16usize && writes[slot] != source { try emit_x64.mov_register(output, writes[slot], source) }
+        }
+        slot += 1usize
     }
     if foreign && abi != .Windows { try emit_x64.mov_immediate(output, 0usize, float_used) }
     ret ok
@@ -3308,24 +3362,17 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     let argument_total = instruction.operand_count - first_argument
                     let live_mask = live_register_mask(context, current.value_count, at, preserve_count)
                     try save_live_registers(output, live_mask, preserve_base, preserve_count, context)
+                    // The callee of an indirect call is in r11 before any argument register
+                    // is written; neither the arguments nor their moves touch r11.
                     if indirect {
                         let callee_value = builder.operands[instruction.first_operand]
-                        let (callee_source, callee_error) = read_value(allocations, callee_value, 10usize, output)
+                        let (callee_source, callee_error) = read_value(allocations, callee_value, 11usize, output)
                         if callee_error != ok { ret callee_error }
-                        try emit_x64.store_stack(output, outgoing_base + argument_total, callee_source)
-                    }
-                    var argument_at = 0usize
-                    while argument_at < argument_total {
-                        let value = builder.operands[instruction.first_operand + first_argument + argument_at]
-                        let (source, source_error) = read_value(allocations, value, 10usize, output)
-                        if source_error != ok { ret source_error }
-                        try emit_x64.store_stack(output, outgoing_base + argument_at, source)
-                        argument_at += 1usize
+                        if callee_source != 11usize { try emit_x64.mov_register(output, 11usize, callee_source) }
                     }
                     let foreign = !indirect && builder.function_refs[instruction.immediate].library.len != 0usize
-                    try load_call_arguments(builder, current, instruction, abi, foreign, first_argument, argument_total, outgoing_base, output)
+                    try load_call_arguments(builder, current, instruction, abi, foreign, first_argument, argument_total, outgoing_base, allocations, output)
                     if indirect {
-                        try emit_x64.load_stack(output, 11usize, outgoing_base + argument_total)
                         try emit_x64.call_register(output, 11usize)
                     } else {
                         // An imported callee is reached through the slot the loader
