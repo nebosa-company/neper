@@ -332,7 +332,9 @@ because toolchain-owned facilities use the domain namespaces above:
   `x.nvidia.cuda.{cublas,cudnn}`, `x.apple.metal`.
 - `x.sqlite.sqlite`, `x.oracle.mysql`, `x.postgresql.libpq`: concrete database
   drivers implementing `e.db`, named for the SQLite project, Oracle-owned MySQL,
-  and PostgreSQL's official `libpq` client library respectively.
+  and PostgreSQL's official `libpq` client library respectively. `x.sqlite.sqlite`
+  is specified in [`packages/x.sqlite.sqlite.md`](packages/x.sqlite.sqlite.md) and
+  delivered under `lib/x/sqlite/` (D1571).
 
 A package has no promised declarations until its own versioned specification pins its
 upstream ABI/data version and enumerates the complete surface. Compiler backends such
