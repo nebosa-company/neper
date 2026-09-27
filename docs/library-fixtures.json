@@ -1915,8 +1915,8 @@
    "module": "e.ui.accessibility",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 41,
-   "delivered": 41,
+   "catalogue": 46,
+   "delivered": 46,
    "pending": [],
    "fixtures": [
     "ui_a11y_controls",

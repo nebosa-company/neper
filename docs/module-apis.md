@@ -5712,6 +5712,7 @@ type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i3
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
 type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
 type AccessibleNode = struct { id: u32, generation: u32, parent: u32, parent_generation: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u16, actions: u32, sort: u8, live: u8, row: u32, column: u32, row_count: u32, column_count: u32, level: u8, selection_start: usize, selection_end: usize, labelled_by: u32, labelled_by_generation: u32, described_by: u32, described_by_generation: u32, error_by: u32, error_by_generation: u32, controls: u32, controls_generation: u32, active: u32, active_generation: u32, relation_flags: u8, x: f32, y: f32, width: f32, height: f32 }
+type AccessibleRequest = struct { id: u32, generation: u32, action: u8, value: str }
 error NotFound
 error Denied
 error Exists
@@ -5827,6 +5828,8 @@ fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err)
 fn clipboard_text(a: *mem.Arena) -> (str, err)
 fn set_clipboard_text(value: str) -> err
 fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err
+fn accessibility_listening(w: Window) -> bool
+fn accessibility_take(w: Window) -> (AccessibleRequest, bool)
 fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err)
 fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err)
 fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail) -> (File, err)
@@ -9822,7 +9825,7 @@ Animation state is explicit. Sampling never reads a clock; the application suppl
 ```neper
 type Id = widget.ElementId
 type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader }
-type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool, mixed: bool, busy: bool, invalid: bool, required: bool, read_only: bool, modal: bool, current: bool }
+type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool, mixed: bool, busy: bool, invalid: bool, required: bool, read_only: bool, modal: bool, current: bool, secret: bool }
 type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll, Dismiss, Expand, Collapse, Select, ShowMenu, SetSelection }
 type Relations = struct { labelled_by: Id, described_by: Id, error_by: Id, controls: Id, active: Id }
 type Live = enum u8 { Off, Polite, Assertive }
@@ -9844,6 +9847,7 @@ const STATE_REQUIRED: u32 = 512u32
 const STATE_READ_ONLY: u32 = 1024u32
 const STATE_MODAL: u32 = 2048u32
 const STATE_CURRENT: u32 = 4096u32
+const STATE_SECRET: u32 = 8192u32
 const ACTION_FOCUS: u32 = 1u32
 const ACTION_PRESS: u32 = 2u32
 const ACTION_INCREMENT: u32 = 4u32
@@ -9858,7 +9862,11 @@ const ACTION_SHOW_MENU: u32 = 1024u32
 const ACTION_SET_SELECTION: u32 = 2048u32
 
 fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err)
+fn flatten_into(t: *const Tree, storage: []os.AccessibleNode) -> err
 fn publish(window_value: window.Id, t: *const Tree) -> err
+fn listening(window_value: window.Id) -> bool
+fn present(a: *mem.Arena, runtime: *const widget.Runtime, window_value: window.Id) -> err
+fn serve(runtime: *widget.Runtime, window_value: window.Id) -> bool
 fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err
 fn tree(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err)
 fn focus_order(a: *mem.Arena, runtime: *const widget.Runtime) -> ([]Id, err)
@@ -9869,8 +9877,15 @@ identities. Publication crosses a reviewed `e.os` accessibility bridge and retai
 no caller strings after returning.
 
 Delivered (D802) as the tree and the actions; `publish` flattens the tree into
-`os.AccessibleNode` records and answers `Unsupported` until a host bridge is written,
-so the framework does not claim accessibility yet.
+`os.AccessibleNode` records, in tree order since D1604, and the host bridges carry
+them to the screen reader: UI Automation on Windows (D1602) and AT-SPI over D-Bus on
+Linux (D1603); macOS answers `Unsupported`. `listening` says whether an assistive
+technology has asked for the window, `present` builds and publishes the tree when
+one has, and `serve` performs what it asked -- `os.accessibility_take` hands each
+request over and `perform` runs it -- which `e.ui.app` does every step. A secret
+field's value reaches the tree as its mask and the node carries `secret`
+(`STATE_SECRET`, 8192; D1604). The whole bridge -- flow, identity, role and state
+tables, what it does not do yet -- is in `docs/ux/accessibility-bridge.md`.
 
 The semantics node (D809, widget plan P0-06): a `widget.Semantics` on an element
 sets its role from the role code, its label, value and hint, adds its state and

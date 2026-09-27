@@ -2762,6 +2762,15 @@ os_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/os-window-selfhost"
 os_window_output=$("$test_build/os-window-selfhost")
 [ "$os_window_output" = 'os window ok' ]
+# The AT-SPI objects (D1603), with the bridge off so nothing reaches the bus:
+# method calls through the dispatcher, the application's window, children in
+# order, roles, states, text, actions, requests with their values, and paths gone
+# once their node or window is.
+os_atspi_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_atspi/src/main.e" "$repo" x64 linux "$test_build/os-atspi-selfhost")
+[ "$os_atspi_written" = 'executable written' ]
+chmod +x "$test_build/os-atspi-selfhost"
+os_atspi_output=$(NO_AT_BRIDGE=1 "$test_build/os-atspi-selfhost")
+[ "$os_atspi_output" = 'os atspi ok' ]
 # X button codes (D1572): the wheel's horizontal steps (6, 7) and unnamed buttons
 # (10 on) are no event, where each was a primary click.
 os_window_buttons_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_window_buttons/src/main.e" "$repo" x64 linux "$test_build/os-window-buttons-selfhost")

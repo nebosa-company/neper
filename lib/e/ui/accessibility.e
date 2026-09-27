@@ -19,7 +19,7 @@ use e.ui.window
 
 type Id = widget.ElementId
 type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader, Separator, AlertDialog, Listbox, Option, MenuItemCheckbox, Combobox, Region, Main, MenuBar, MenuItemRadio, TreeGrid, SpinButton }
-type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool, mixed: bool, busy: bool, invalid: bool, required: bool, read_only: bool, modal: bool, current: bool }
+type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool, mixed: bool, busy: bool, invalid: bool, required: bool, read_only: bool, modal: bool, current: bool, secret: bool }
 type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll, Dismiss, Expand, Collapse, Select, ShowMenu, SetSelection, Copy }
 type Sort = enum u8 { None, Ascending, Descending, Other }
 // Relationships to other nodes; an `Id` of generation 0 is none.
@@ -46,6 +46,8 @@ const STATE_REQUIRED: u32 = 512u32
 const STATE_READ_ONLY: u32 = 1024u32
 const STATE_MODAL: u32 = 2048u32
 const STATE_CURRENT: u32 = 4096u32
+// (D1602) A field that masks its value: the tree carries the mask, never the value.
+const STATE_SECRET: u32 = 8192u32
 const ACTION_FOCUS: u32 = 1u32
 const ACTION_PRESS: u32 = 2u32
 const ACTION_INCREMENT: u32 = 4u32
@@ -153,7 +155,7 @@ fn role_at(i: u8) -> Role {
 }
 
 fn state_of_bits(bits: u32) -> State {
-    ret State { disabled: (bits & STATE_DISABLED) != 0u32, focused: (bits & STATE_FOCUSED) != 0u32, selected: (bits & STATE_SELECTED) != 0u32, checked: (bits & STATE_CHECKED) != 0u32, expanded: (bits & STATE_EXPANDED) != 0u32, hidden: (bits & STATE_HIDDEN) != 0u32, mixed: (bits & STATE_MIXED) != 0u32, busy: (bits & STATE_BUSY) != 0u32, invalid: (bits & STATE_INVALID) != 0u32, required: (bits & STATE_REQUIRED) != 0u32, read_only: (bits & STATE_READ_ONLY) != 0u32, modal: (bits & STATE_MODAL) != 0u32, current: (bits & STATE_CURRENT) != 0u32 }
+    ret State { disabled: (bits & STATE_DISABLED) != 0u32, focused: (bits & STATE_FOCUSED) != 0u32, selected: (bits & STATE_SELECTED) != 0u32, checked: (bits & STATE_CHECKED) != 0u32, expanded: (bits & STATE_EXPANDED) != 0u32, hidden: (bits & STATE_HIDDEN) != 0u32, mixed: (bits & STATE_MIXED) != 0u32, busy: (bits & STATE_BUSY) != 0u32, invalid: (bits & STATE_INVALID) != 0u32, required: (bits & STATE_REQUIRED) != 0u32, read_only: (bits & STATE_READ_ONLY) != 0u32, modal: (bits & STATE_MODAL) != 0u32, current: (bits & STATE_CURRENT) != 0u32, secret: (bits & STATE_SECRET) != 0u32 }
 }
 
 fn action_bit(action: Action) -> u32 {
@@ -507,6 +509,7 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 node.selection_end = summary.selection_end
             }
             var value = summary.value
+            var secret = summary.secret
             // A wrapper takes its focus target's focus, state, actions and text.
             var kids = summary
             let (focus_slot, has_target) = focus_target(runtime, slot)
@@ -525,6 +528,7 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                     node.selection_start = child.selection_start
                     node.selection_end = child.selection_end
                     value = child.value
+                    secret = child.secret
                 }
             }
             var hint: str = ""
@@ -554,6 +558,19 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
             if node.relations.described_by.slot == 0u32 && node.relations.described_by.generation == 0u32 {
                 let (description, described) = widget.tooltip_description(runtime, slot)
                 if described { node.relations.described_by = description }
+            }
+            // (D1602) A secret field's value reaches the tree as its mask, one
+            // asterisk per byte as the field shows it, and the node says so.
+            if secret {
+                bits = bits | STATE_SECRET
+                let (masked, masked_error) = mem.alloc[u8](a, value.len)
+                if masked_error != ok { ret (zero, masked_error) }
+                var m = 0usize
+                while m < value.len {
+                    masked[m] = 42u8
+                    m += 1usize
+                }
+                value = masked[0usize..value.len]
             }
             node.state = state_of_bits(bits)
             // A button's label is the text it holds.
@@ -734,6 +751,7 @@ fn flags_of(state: State) -> u16 {
     if state.read_only { bits = bits | 1024u16 }
     if state.modal { bits = bits | 2048u16 }
     if state.current { bits = bits | 4096u16 }
+    if state.secret { bits = bits | 8192u16 }
     ret bits
 }
 
@@ -774,31 +792,64 @@ fn flat_node(n: *const Node) -> os.AccessibleNode {
     ret os.AccessibleNode { id: n.id.slot, generation: n.id.generation, parent: 0u32, parent_generation: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), sort: sort_code(n.sort), live: live_code(n.live), row: n.position.row, column: n.position.column, row_count: n.position.row_count, column_count: n.position.column_count, level: n.level, selection_start: n.selection_start, selection_end: n.selection_end, labelled_by: n.relations.labelled_by.slot, labelled_by_generation: n.relations.labelled_by.generation, described_by: n.relations.described_by.slot, described_by_generation: n.relations.described_by.generation, error_by: n.relations.error_by.slot, error_by_generation: n.relations.error_by.generation, controls: n.relations.controls.slot, controls_generation: n.relations.controls.generation, active: n.relations.active.slot, active_generation: n.relations.active.generation, relation_flags: relation_bits(n.relations), x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
 }
 
-// Flatten every node into caller-owned bridge storage, finding each parent from
-// the tree's child lists.
-fn flatten_into(t: *const Tree, storage: []os.AccessibleNode) -> err {
-    if t.nodes.len > storage.len { ret Invalid }
+// The node an id names: `build` makes the nodes in slot order, so a search by slot.
+fn node_index(t: *const Tree, id: Id) -> (usize, bool) {
+    var low = 0usize
+    var high = t.nodes.len
+    while low < high {
+        let middle = (low + high) / 2usize
+        if t.nodes[middle].id.slot < id.slot { low = middle + 1usize } else { high = middle }
+    }
+    if low < t.nodes.len && same_id(t.nodes[low].id, id) { ret (low, true) }
+    ret (0usize, false)
+}
+
+// A node and its subtree from `written` on, in tree order; the next free record.
+fn flatten_from(t: *const Tree, index: usize, storage: []os.AccessibleNode, written: usize) -> usize {
+    if written >= storage.len { ret written }
+    let n = &t.nodes[index]
+    storage[written] = flat_node(n)
+    var free = written + 1usize
+    var c = 0usize
+    while c < n.children.len {
+        let (child, found) = node_index(t, n.children[c])
+        if found {
+            let placed = free
+            free = flatten_from(t, child, storage, free)
+            if free > placed {
+                storage[placed].parent = n.id.slot
+                storage[placed].parent_generation = n.id.generation
+                storage[placed].has_parent = true
+            }
+        }
+        c += 1usize
+    }
+    ret free
+}
+
+fn flattened(records: []const os.AccessibleNode, id: Id) -> bool {
     var i = 0usize
-    while i < t.nodes.len {
-        let n = &t.nodes[i]
-        storage[i] = flat_node(n)
+    while i < records.len {
+        if records[i].id == id.slot && records[i].generation == id.generation { ret true }
         i += 1usize
     }
-    i = 0usize
-    while i < t.nodes.len {
-        let n = &t.nodes[i]
-        var c = 0usize
-        while c < n.children.len {
-            var k = 0usize
-            while k < t.nodes.len {
-                if t.nodes[k].id.slot == n.children[c].slot && t.nodes[k].id.generation == n.children[c].generation {
-                    storage[k].parent = n.id.slot
-                    storage[k].parent_generation = n.id.generation
-                    storage[k].has_parent = true
-                }
-                k += 1usize
-            }
-            c += 1usize
+    ret false
+}
+
+// Flatten every node into caller-owned bridge storage in tree order (D1602) --
+// each parent before its children, siblings in their order -- which is the
+// order a host's navigation and child indexes follow. A node the root does not
+// reach, which `build` never makes, follows without a parent.
+fn flatten_into(t: *const Tree, storage: []os.AccessibleNode) -> err {
+    if t.nodes.len > storage.len { ret Invalid }
+    var written = 0usize
+    let (top, has_top) = node_index(t, t.root)
+    if has_top { written = flatten_from(t, top, storage, 0usize) }
+    var i = 0usize
+    while written < t.nodes.len && i < t.nodes.len {
+        if !flattened(storage[0usize..written], t.nodes[i].id) {
+            storage[written] = flat_node(&t.nodes[i])
+            written += 1usize
         }
         i += 1usize
     }
@@ -816,6 +867,37 @@ fn publish(window_value: window.Id, t: *const Tree) -> err {
     if published == os.Unsupported { ret Unsupported }
     if published != ok { ret Invalid }
     ret ok
+}
+
+// (D1602) Whether the host's assistive technology has asked for the window's
+// elements; until it has, there is nothing to publish to.
+fn listening(window_value: window.Id) -> bool {
+    let (state, window_error) = window.state_by_id(window_value)
+    if window_error != ok { ret false }
+    ret os.accessibility_listening(state.handle)
+}
+
+// The runtime's tree, built in `a` and published, when something is listening.
+fn present(a: *mem.Arena, runtime: *const widget.Runtime, window_value: window.Id) -> err {
+    if !listening(window_value) { ret ok }
+    let (t, tree_error) = build(a, runtime)
+    if tree_error != ok { ret tree_error }
+    ret publish(window_value, &t)
+}
+
+// What the assistive technology asked since the last step, performed in order;
+// true when anything was, so the caller builds the frame that shows it.
+fn serve(runtime: *widget.Runtime, window_value: window.Id) -> bool {
+    let (state, window_error) = window.state_by_id(window_value)
+    if window_error != ok { ret false }
+    var served = false
+    while true {
+        let (request, any) = os.accessibility_take(state.handle)
+        if !any { break }
+        let performed = perform(runtime, Id { slot: request.id, generation: request.generation }, action_at(usize(request.action)), request.value)
+        served = true
+    }
+    ret served
 }
 
 // A platform request routed through the widgets: focus is the runtime's, a press is a
