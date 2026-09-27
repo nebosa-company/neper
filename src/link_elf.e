@@ -1,5 +1,7 @@
 // Minimal deterministic x86-64 ELF executable linker for closed modules.
 
+use e.mem
+use e.os
 use check
 use codegen_x64
 use emit_x64
@@ -880,6 +882,52 @@ type TypeMemo = struct {
     info_offset: usize,
 }
 
+// The DWARF writer's tables in a region reserved for this link, cleared here: what
+// `reserve` hands back is not promised to be zero.
+// ponytail: the region (about 300 KB) is not released -- `e.os` has no release the
+// bootstrap knows -- which a process that links once does not feel; a cached region
+// when something links many times in one process.
+type DwarfScratch = struct { memo: *TypeMemo, paths: []str, path_heads: []usize, path_next: []usize }
+
+fn dwarf_scratch() -> (DwarfScratch, err) {
+    var none: DwarfScratch = zero
+    let capacity = 524288usize
+    let (base, reserve_error) = os.reserve(capacity)
+    if reserve_error != ok { ret (none, reserve_error) }
+    let commit_error = os.commit(base, capacity)
+    if commit_error != ok { ret (none, commit_error) }
+    var region: mem.Arena = zero
+    region.base = base
+    region.cap = capacity
+    let (memos, memos_error) = mem.alloc[TypeMemo](&region, 1usize)
+    if memos_error != ok { ret (none, memos_error) }
+    let (paths, paths_error) = mem.alloc[str](&region, 8192usize)
+    if paths_error != ok { ret (none, paths_error) }
+    let (heads, heads_error) = mem.alloc[usize](&region, 4096usize)
+    if heads_error != ok { ret (none, heads_error) }
+    let (links, links_error) = mem.alloc[usize](&region, 8192usize)
+    if links_error != ok { ret (none, links_error) }
+    let memo = &memos[0usize]
+    memo.info_offset = 0usize
+    var at = 0usize
+    while at < 8192usize {
+        if at < 2048usize {
+            memo.names[at] = ""
+            memo.offsets[at] = 0usize
+        }
+        if at < 4096usize { heads[at] = 0usize }
+        paths[at] = ""
+        links[at] = 0usize
+        at += 1usize
+    }
+    var tables: DwarfScratch = zero
+    tables.memo = memo
+    tables.paths = paths
+    tables.path_heads = heads
+    tables.path_next = links
+    ret (tables, ok)
+}
+
 fn memo_slot(memo: *TypeMemo, descriptor: str) -> (usize, bool) {
     var slot = codegen_x64.path_bucket(descriptor) % 2048usize
     var probes = 0usize
@@ -1339,17 +1387,22 @@ fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets
     try emit_x64.little_u32(output, 0usize)
     // Every type a var names, written before the subprograms so each entry refers back
     // to its type's.
-    var memo: TypeMemo = zero
+    // (D1605) The memo and the path tables live in a region of their own: as locals
+    // they were 270 KB of a main-thread stack the `build` spelling, which nests
+    // `dispatch`, had already half used, and Windows overflowed it.
+    let (scratch, scratch_error) = dwarf_scratch()
+    if scratch_error != ok { ret scratch_error }
+    let memo = scratch.memo
     memo.info_offset = info_offset
     // The struct definitions first: the vars and fields name them.
     var definition_at = 0usize
     while definition_at < builder.debug.definition_count {
-        let (definition_offset, has_definition) = type_die(output, &memo, builder.debug.definitions[definition_at])
+        let (definition_offset, has_definition) = type_die(output, memo, builder.debug.definitions[definition_at])
         definition_at += 1usize
     }
     var type_at = 0usize
     while type_at < builder.debug.var_count {
-        let (type_offset, has_type) = type_die(output, &memo, builder.debug.vars[type_at].descriptor)
+        let (type_offset, has_type) = type_die(output, memo, builder.debug.vars[type_at].descriptor)
         builder.debug.vars[type_at].type_entry = 0usize
         if has_type { builder.debug.vars[type_at].type_entry = type_offset + 1usize }
         type_at += 1usize
@@ -1455,9 +1508,9 @@ fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets
     let header_length_at = output.count
     try emit_x64.little_u32(output, 0usize)
     try append_blob(output, "\x01\x01\x01\xfb\x0e\x0d\x00\x01\x01\x01\x01\x00\x00\x00\x01\x00\x00\x01\x00")
-    var paths: [8192]str = zero
-    var path_heads: [4096]usize = zero
-    var path_next: [8192]usize = zero
+    let paths = scratch.paths
+    let path_heads = scratch.path_heads
+    let path_next = scratch.path_next
     var path_count = 0usize
     var last_path = 0usize
     var row = 0usize
