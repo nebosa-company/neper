@@ -144,6 +144,13 @@ entry point, a result that outlives several `next` calls, and end-of-chunk handl
 
 ### 4. Word-wide `mem.copy` (library)
 
+**Done as D1600, in `e.bytes` rather than `e.mem`.** `e.mem` cannot call its own
+intrinsics (`size_of`, `cast`, `address_of` resolve only through an import alias of
+`e.mem`, and a module cannot import itself), so a generic `mem.copy[T]` cannot choose a
+word loop for one-byte `T`. `bytes.copy(dst, src)` is the word-wide copy: 1 KB copied
+200,000 times took 46 ms instead of 336 ms. The three drivers' copying readers use it.
+The original proposal is kept below for the record.
+
 `lib/e/mem.e` `copy[T]` and the drivers' `copy_foreign` are bounds-checked byte loops.
 Not the cost for this benchmark's 4–8-byte names, and item 2 removes the copies from
 the scan path, but any caller copying real text or blob columns pays it. Copy `u8`

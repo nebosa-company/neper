@@ -20,6 +20,7 @@
 use e.mem
 use e.time
 use e.db
+use e.bytes as octets
 use x.sqlite.capi
 
 type Detail = struct { code: i32, extended: i32, message: str }
@@ -150,12 +151,7 @@ fn copy_foreign(dst: []u8, p: *u8, n: usize) {
     region.base = p
     region.cap = n
     region.off = 0usize
-    let bytes = mem.view(&region, 0usize, n)
-    var i = 0usize
-    while i < n {
-        dst[i] = bytes[i]
-        i += 1usize
-    }
+    let copied = octets.copy(dst[0usize..n], mem.view(&region, 0usize, n))
 }
 
 // A C string's length; the walk stops at the terminator, which SQLite always writes.

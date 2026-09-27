@@ -416,6 +416,7 @@ fn remaining_writer(w: *const Writer) -> usize
 fn skip(r: *Reader, n: usize) -> err
 fn read_bytes(r: *Reader, n: usize) -> ([]const u8, err)
 fn write_bytes(w: *Writer, src: []const u8) -> err
+fn copy(dst: []u8, src: []const u8) -> usize
 fn load[T: type](src: []const u8, off: usize, endian: Endian) -> (T, err)
 fn store[T: type](dst: []u8, off: usize, v: T, endian: Endian) -> err
 fn read[T: type](r: *Reader, endian: Endian) -> (T, err)
@@ -9664,6 +9665,7 @@ fn state[T: type](ctx: *BuildContext, key: Key, initial: T) -> (*T, StateId, err
 fn invalidate(widget_runtime: *Runtime, element: ElementId)
 fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, constraints: ui_layout.Constraints) -> (scene.SceneId, err)
 fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err
+fn clear_focus(widget_runtime: *Runtime) -> err
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err
 fn focused(widget_runtime: *const Runtime) -> (ElementId, bool)
 fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction

@@ -233,6 +233,41 @@ fn main(a: *mem.Arena) -> err {
     let (_, bad_finish) = bytes.base64_decoder_finish(&bad, back[..])
     if bad_finish != bytes.Invalid { os.exit(85i32) }
 
+    // --- copy: every source and destination offset from 0 to 19 and every length up to 40,
+    // within one buffer so the ranges overlap at every distance, against a forward byte loop
+    // on a second buffer. The word loop is taken from 16 bytes on, and must leave the same
+    // bytes the byte loop does, overlap included.
+    var word_side: [64]u8 = zero
+    var byte_side: [64]u8 = zero
+    var from = 0usize
+    while from < 20usize {
+        var to = 0usize
+        while to < 20usize {
+            var length = 0usize
+            while length <= 40usize {
+                var k = 0usize
+                while k < 64usize {
+                    word_side[k] = u8((k * 7usize + 1usize) % 256usize)
+                    byte_side[k] = u8((k * 7usize + 1usize) % 256usize)
+                    k += 1usize
+                }
+                let copied = bytes.copy(word_side[to..to + length], word_side[from..from + length])
+                if copied != length { os.exit(86i32) }
+                k = 0usize
+                while k < length {
+                    byte_side[to + k] = byte_side[from + k]
+                    k += 1usize
+                }
+                if !mem.eq[u8](word_side[..], byte_side[..]) { os.exit(87i32) }
+                length += 1usize
+            }
+            to += 1usize
+        }
+        from += 1usize
+    }
+    let short_copied = bytes.copy(word_side[0usize..3usize], byte_side[..])
+    if short_copied != 3usize { os.exit(88i32) }
+
     try io.print("bytes plan ok\n")
     ret ok
 }
