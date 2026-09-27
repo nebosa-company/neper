@@ -29184,3 +29184,22 @@ Fixture, both hosts: `link/ui_audit`. A clean page gives no finding. A faulty pa
 - two unnamed 16 buttons touching;
 - a pressable group with nothing to focus;
 - a button placed past the surface.
+
+## D1606 — libpq readers take 256 rows per result where libpq has chunked mode
+
+**Why.** In single-row mode every row costs three extra libpq calls: `PQgetResult`, `PQresultStatus` and `PQclear`. libpq also builds and frees a whole `PGresult` for each one. That was item 3 of `docs/db-perf-plan.md`.
+
+**Decision.**
+
+- **Chunked mode where available.** A reader asks for `PQsetChunkedRowsMode(conn, 256)` and falls back to `PQsetSingleRowMode` when that answers 0.
+- **Looked up, not bound.** The function exists only in libpq 17 and later. The Windows client in `D:\tools\postgresql` is 18.6; WSL's Ubuntu 24.04 `libpq5` is 16.15. An `@import` of a missing symbol would stop the program loading, so `chunked_mode` finds it once per connection with `os.dlopen(capi.library())` and `os.dlsym`, then `dlclose`s at once. The program's own imports keep libpq loaded, so the address stays valid. Without the symbol, the stand-in `no_chunks` answers 0.
+- **Reader loop.** A reader walks rows `0..PQntuples` within a result and clears it on the call after its last row. That also keeps a borrowed row's bytes (D1599) valid until the next row in both modes, so D1599's separate `held` result is gone. `collect` accepts `PGRES_TUPLES_CHUNK` (12) when it drains a reader closed early.
+
+**Behaviour that changes.** A query that fails partway drops its unfinished chunk. In chunked mode the rows before a failure therefore arrive in whole chunks, and a failure within the first 256 rows fails `query` itself. In single-row mode, rows arrived one at a time up to the failure. The `x_postgresql` fixture pinned the single-row behaviour, so it now asserts what both modes promise. A division by zero at row 600 of 1000 hands out 512 rows (chunked) or 599 (single-row), then `InvalidQuery` with SQLSTATE 22012. The old five-row query fails at `query` or at the third row, and is `InvalidQuery` either way (codes 102, 186–188).
+
+**Not done: SQLite's declared kinds.** Item 3 also proposed skipping `sqlite3_column_type` on `STRICT` tables. That helps only tables declared `STRICT`, and none in the tree or benchmark is. Knowing a table is strict needs a schema query per statement, which falls on every lookup reader. D1597's measurement puts the cost of those calls in the call sequence, which `docs/db-perf-plan.md` item 1 cuts for every table. It is left until a strict-table user exists.
+
+**Evidence.**
+
+- **Fixtures.** `db`, `x_sqlite`, `x_postgresql`, `x_mysql`, `bytes_plan`, `bytes_codec` and the memory-driver example pass on Windows (libpq 18, chunked). The six fixtures pass cross-emitted in WSL (libpq 16, single-row fallback). The first Windows run failed with 101, which is how the chunked path showed itself.
+- **Speed.** Windows PostgreSQL scan of 20,000 rows, medians of five interleaved rounds: D1597's binary 7.9 ms, this one 4.2 ms, `bench.c` 4.5 ms. C still uses single-row mode.

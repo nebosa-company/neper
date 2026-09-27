@@ -57,9 +57,14 @@ so they are reachable, and the unit fixture calls them, but they are not the sur
   Contexts, column names, prepared-statement names and row buffers come from it. Parameter
   encodings are allocated and reset around each call.
 - A reader copies each value it keeps into its own buffer. The copy stays valid until the
-  reader's next row. libpq's result for the row is cleared as soon as the row is filled.
-- `db.reader_next_borrowed` skips the copy for text and `bytea`. It keeps the row's result
-  until the next row or the reader's end, and its values point into that result (D1599).
+  reader's next row.
+- `db.reader_next_borrowed` skips the copy for text and `bytea`. Its values point into
+  libpq's result and are valid until the next row or the reader's end (D1599).
+- A reader streams 256 rows per result where libpq has `PQsetChunkedRowsMode` (17 and
+  later), looked up at run time so an older libpq still loads the program, and one row per
+  result otherwise (D1606). A result is cleared by the call after its last row. A query that
+  fails partway drops its unfinished chunk: rows before the failure arrive in whole chunks,
+  and a failure within the first 256 rows fails `query` itself.
 - Error text lives in fixed buffers the connection allocates once, so failures do not grow
   the arena.
 - One connection belongs to one thread.
