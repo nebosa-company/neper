@@ -5954,6 +5954,11 @@ type InterpFrame = struct {
     site_addresses: [64]usize,
     site_count: usize,
     module_index: usize,
+    // (D1571) The function's results: its index, where its results start in
+    // `return_types`, and how many there are.
+    function_index: usize,
+    return_first: usize,
+    return_count: usize,
     return_type: Type,
     result: IntegerValue,
     result_type: Type,
@@ -5966,6 +5971,11 @@ const INTERP_BASE: usize = 16usize
 const INTERP_STATIC: usize = 4611686018427387904usize
 // The allocation site of a parameter: its position past this.
 const INTERP_PARAMETER_SITE: usize = 1099511627776usize
+// (D1571) The site of the n-th name a binding of several values binds is its node's
+// past n times this; a failed `try` answers its results from its node's past
+// `INTERP_TRY_SITE`.
+const INTERP_RESULT_SITE: usize = 17592186044416usize
+const INTERP_TRY_SITE: usize = 4503599627370496usize
 
 // An integer or bool type by its name, or an invalid type.
 fn primitive_type(name: str, module_index: usize) -> Type {
@@ -6086,7 +6096,8 @@ fn interp_bind(frame: *InterpFrame, name: str, ty: Type, address: usize) -> err 
 fn interp_holds(c: *Checker, ty: Type, depth: usize) -> bool {
     if depth > 16usize { ret false }
     // (D1570) A pointer is an address; what it points at is asked when it is read.
-    if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .String || ty.kind == .Pointer { ret true }
+    // (D1571) An `err` is four bytes.
+    if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .String || ty.kind == .Pointer || ty.kind == .Err { ret true }
     if ty.kind == .Array || ty.kind == .Slice {
         if !ty.has_element || ty.element >= c.type_count { ret false }
         ret interp_holds(c, c.types[ty.element], depth + 1usize)
@@ -6105,7 +6116,60 @@ fn interp_holds(c: *Checker, ty: Type, depth: usize) -> bool {
 
 // A value held as its bits (an integer or a bool), not at an address.
 fn interp_scalar(ty: Type) -> bool {
-    ret ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Pointer
+    ret ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Pointer || ty.kind == .Err
+}
+
+// (D1571) A call's several results, as one area laid out as a struct of them in
+// order; the pseudo-type names the function whose results they are.
+fn interp_results_type(module_index: usize, function_index: usize) -> Type {
+    var results = make_type(.Other, "(results)", module_index)
+    results.has_element = true
+    results.element = function_index
+    ret results
+}
+
+fn interp_is_results(ty: Type) -> bool {
+    ret ty.kind == .Other && ty.has_element && same(ty.name, "(results)")
+}
+
+// Result `index` of `function`: its type and its offset in the results area; and the
+// area's size and alignment.
+fn interp_result_slot(c: *Checker, module_index: usize, node: syntax.Node, function: Function, index: usize) -> (Type, usize, usize, usize, err) {
+    var wanted = invalid_type()
+    var wanted_offset = 0usize
+    var offset = 0usize
+    var alignment = 1usize
+    var at = 0usize
+    while at < function.return_count {
+        let result_type = c.return_types[function.first_return + at]
+        let (info, info_error) = interp_layout(c, module_index, node, result_type)
+        if info_error != ok { ret (wanted, 0usize, 0usize, 0usize, info_error) }
+        let (start, start_error) = layout_align_up(offset, info.alignment)
+        if start_error != ok { ret (wanted, 0usize, 0usize, 0usize, start_error) }
+        if at == index {
+            wanted = result_type
+            wanted_offset = start
+        }
+        offset = start + info.size
+        if info.alignment > alignment { alignment = info.alignment }
+        at += 1usize
+    }
+    let (size, size_error) = layout_align_up(offset, alignment)
+    ret (wanted, wanted_offset, size, alignment, size_error)
+}
+
+// The error an `err` names (D1571): its symbol plus one, `ok` zero. An `err` never
+// leaves an evaluation, so the number need only be one per error within it.
+fn interp_error_value(c: *Checker, module_index: usize, name: str) -> (IntegerValue, bool) {
+    let (symbol_index, found_symbol) = resolve.find(c.resolver, module_index, name, .Value)
+    if !found_symbol { ret (normalized_integer(0usize, false), false) }
+    let kind = c.resolver.symbols[symbol_index].kind
+    if kind != .Error && kind != .Intrinsic { ret (normalized_integer(0usize, false), false) }
+    if kind == .Intrinsic {
+        let (function_index, is_function) = find_function(c, module_index, name)
+        if is_function { ret (normalized_integer(0usize, false), false) }
+    }
+    ret (normalized_integer(symbol_index + 1usize, false), true)
 }
 
 // The bytes a scalar takes: a pointer is a word.
@@ -6270,7 +6334,7 @@ fn interp_load(c: *Checker, module_index: usize, node: syntax.Node, address: usi
         bits = bits * 256usize + usize(interp_byte_at(c, address + at))
     }
     if ty.kind == .Bool { ret (normalized_integer(bits & 1usize, false), ok) }
-    if ty.kind == .Pointer { ret (normalized_integer(bits, false), ok) }
+    if ty.kind == .Pointer || ty.kind == .Err { ret (normalized_integer(bits, false), ok) }
     ret (integer_from_bits(bits, ty), ok)
 }
 
@@ -6520,6 +6584,10 @@ fn interp_bool_type(module_index: usize) -> Type { ret make_type(.Bool, "bool", 
 // to agree, an untyped one has to fit.
 fn interp_convert(c: *Checker, module_index: usize, node: syntax.Node, value: IntegerValue, from: Type, into: Type) -> (IntegerValue, Type, err) {
     if into.kind == .Invalid { ret (value, from, ok) }
+    if into.kind == .Err {
+        if from.kind != .Err { ret (value, from, interp_fail(c, module_index, node, "an `err` from something that is not one")) }
+        ret (value, into, ok)
+    }
     if into.kind == .Bool {
         if from.kind != .Bool { ret (value, from, interp_fail(c, module_index, node, "a bool from a number")) }
         ret (value, into, ok)
@@ -6568,6 +6636,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
     if node.kind == .LiteralExpr {
         let token = c.tokens[usize(node.token_start)]
         if token.kind == .KwTrue { ret (normalized_integer(1usize, false), interp_bool_type(module_index), ok) }
+        if token.kind == .KwOk { ret (none, make_type(.Err, "err", module_index), ok) }
         // (D1569) A string: its bytes read-only, its header at the site.
         if token.kind == .String || token.kind == .RawString {
             let (bytes, length, bytes_error) = interp_static_bytes(c, module_index, node, text[token.start..token.end])
@@ -6596,7 +6665,12 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
             ret (local_value, frame.types[slot], local_error)
         }
         let (constant_index, found_constant) = find_constant(c, module_index, name)
-        if !found_constant { ret (none, invalid_type(), interp_fail(c, module_index, node, "a name that is no local or constant")) }
+        if !found_constant {
+            // (D1571) An error's name is an `err`.
+            let (error_value, is_error) = interp_error_value(c, module_index, name)
+            if is_error { ret (error_value, make_type(.Err, "err", module_index), ok) }
+            ret (none, invalid_type(), interp_fail(c, module_index, node, "a name that is no local or constant"))
+        }
         let dependency_error = evaluate_constant(c, constant_index)
         if dependency_error != ok { ret (none, invalid_type(), dependency_error) }
         ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
@@ -6647,7 +6721,11 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
         if !found_member { ret (none, invalid_type(), interp_fail(c, module_index, node, "a field, which no value here has")) }
         let (constant_index, found_constant) = find_constant(c, target_module, member)
-        if !found_constant { ret (none, invalid_type(), interp_fail(c, module_index, node, "a qualified name that is no constant")) }
+        if !found_constant {
+            let (qualified_error, is_qualified_error) = interp_error_value(c, target_module, member)
+            if is_qualified_error { ret (qualified_error, make_type(.Err, "err", target_module), ok) }
+            ret (none, invalid_type(), interp_fail(c, module_index, node, "a qualified name that is no constant"))
+        }
         let dependency_error = evaluate_constant(c, constant_index)
         if dependency_error != ok { ret (none, invalid_type(), dependency_error) }
         ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
@@ -6730,7 +6808,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         if right_error != ok { ret (none, invalid_type(), right_error) }
         if is_comparison(op) {
             // (D1570) Two addresses compare as addresses, and only for equality.
-            if left_type.kind == .Pointer || raw_right_type.kind == .Pointer {
+            if left_type.kind == .Pointer || raw_right_type.kind == .Pointer || left_type.kind == .Err || raw_right_type.kind == .Err {
                 if left_type.kind != raw_right_type.kind || (op != .PunctEqEq && op != .PunctBangEq) { ret (none, invalid_type(), interp_fail(c, module_index, node, "an ordering of pointers")) }
                 if interp_compare(op, left, right) { ret (normalized_integer(1usize, false), interp_bool_type(module_index), ok) }
                 ret (none, interp_bool_type(module_index), ok)
@@ -6771,6 +6849,49 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         ret (value, value_type, call_error)
     }
     ret (none, invalid_type(), interp_fail(c, module_index, node, "an expression it does not evaluate"))
+}
+
+// (D1571) `try f(..)`: the call, and its last result -- its `err` -- tested. A failure
+// returns that error from this frame beside the zero value of every other result, and
+// answers `true`.
+fn interp_try(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, site_index: usize, call_index: usize) -> (IntegerValue, Type, bool, err) {
+    let module_index = frame.module_index
+    let node = tree.nodes[site_index]
+    let none = normalized_integer(0usize, false)
+    let (value, value_type, call_error) = interp_call_node(c, g, tree, frame, call_index)
+    if call_error != ok { ret (none, invalid_type(), false, call_error) }
+    var failure = none
+    if value_type.kind == .Err {
+        failure = value
+    } else {
+        if !interp_is_results(value_type) { ret (none, invalid_type(), false, interp_fail(c, module_index, node, "a `try` of a call that answers no `err`")) }
+        let called = c.functions[value_type.element]
+        let (last_type, last_offset, ignored_size, ignored_alignment, slot_error) = interp_result_slot(c, module_index, node, called, called.return_count - 1usize)
+        if slot_error != ok { ret (none, invalid_type(), false, slot_error) }
+        if last_type.kind != .Err { ret (none, invalid_type(), false, interp_fail(c, module_index, node, "a `try` of a call that answers no `err`")) }
+        let (loaded, load_error) = interp_load(c, module_index, node, value.magnitude + last_offset, last_type)
+        if load_error != ok { ret (none, invalid_type(), false, load_error) }
+        failure = loaded
+    }
+    if failure.magnitude == 0usize { ret (value, value_type, false, ok) }
+    if frame.return_count == 0usize || c.return_types[frame.return_first + frame.return_count - 1usize].kind != .Err { ret (none, invalid_type(), false, interp_fail(c, module_index, node, "a `try` in a function that answers no `err`")) }
+    let error_type = make_type(.Err, "err", module_index)
+    if frame.return_count == 1usize {
+        frame.result = failure
+        frame.result_type = error_type
+        ret (value, value_type, true, ok)
+    }
+    let function = c.functions[frame.function_index]
+    let (ignored_type, error_offset, area_size, area_alignment, area_error) = interp_result_slot(c, module_index, node, function, function.return_count - 1usize)
+    if area_error != ok { ret (none, invalid_type(), false, area_error) }
+    let (area, area_slot_error) = interp_allocate(c, module_index, node, frame, INTERP_TRY_SITE + site_index + 1usize, area_size, area_alignment)
+    if area_slot_error != ok { ret (none, invalid_type(), false, area_slot_error) }
+    interp_clear(c, area, area_size)
+    let store_error = interp_store(c, module_index, node, area + error_offset, error_type, failure)
+    if store_error != ok { ret (none, invalid_type(), false, store_error) }
+    frame.result = normalized_integer(area, false)
+    frame.result_type = interp_results_type(module_index, frame.function_index)
+    ret (value, value_type, true, ok)
 }
 
 // `f(a, b)` or `m.f(a, b)` inside an evaluated body; a primitive type name in the
@@ -6858,9 +6979,16 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         argument_at += 1usize
     }
     // (D1569) An aggregate result has its slot here, in the caller's frame, before the
-    // callee's frame is taken above it.
+    // callee's frame is taken above it; so do several results (D1571).
     var into = 0usize
     let (called_index, called_found) = find_function(c, target_module, name)
+    if called_found && c.functions[called_index].return_count > 1usize {
+        let (ignored_type, ignored_offset, area_size, area_alignment, area_error) = interp_result_slot(c, module_index, node, c.functions[called_index], 0usize)
+        if area_error != ok { ret (none, invalid_type(), area_error) }
+        let (area, area_slot_error) = interp_allocate(c, module_index, node, frame, node_index + 1usize, area_size, area_alignment)
+        if area_slot_error != ok { ret (none, invalid_type(), area_slot_error) }
+        into = area
+    }
     if called_found && c.functions[called_index].return_count == 1usize {
         let called_return = c.return_types[c.functions[called_index].first_return]
         if !interp_scalar(called_return) && interp_holds(c, called_return, 0usize) {
@@ -6897,9 +7025,19 @@ fn interp_call(c: *Checker, g: *graph.Graph, module_index: usize, name: str, arg
     let function = c.functions[function_index]
     if function.generic || function.external || function.intrinsic { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a generic, extern or intrinsic function")) }
     if function.parameter_count != arguments.len { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call with the wrong number of arguments")) }
-    if function.return_count > 1usize { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning more than one value")) }
+    // (D1571) Several results need their caller's area; an evaluation's own result is
+    // one value.
+    if function.return_count > 1usize {
+        if into == 0usize { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning more than one value")) }
+        var result_at = 0usize
+        while result_at < function.return_count {
+            if !interp_holds(c, c.return_types[function.first_return + result_at], 0usize) { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning a type it does not hold")) }
+            result_at += 1usize
+        }
+    }
     // (D1570) A function with no result is called for what it does to memory.
     var return_type = make_type(.Void, "", module_index)
+    if function.return_count > 1usize { return_type = interp_results_type(module_index, function_index) }
     if function.return_count == 1usize {
         return_type = c.return_types[function.first_return]
         // (D1569) An aggregate result needs its caller's slot; an evaluation's own
@@ -6923,9 +7061,17 @@ fn interp_call(c: *Checker, g: *graph.Graph, module_index: usize, name: str, arg
     var answer = result
     var answer_error = body_error
     if body_error == ok && !interp_scalar(result_type) && result_type.kind != .Void {
-        let (info, info_error) = layout_type_info(c, result_type)
-        answer_error = info_error
-        if info_error == ok { answer_error = interp_copy(c, site_module, site, into, result.magnitude, info.size) }
+        var copied_size = 0usize
+        if interp_is_results(result_type) {
+            let (ignored_type, ignored_offset, area_size, area_alignment, area_error) = interp_result_slot(c, site_module, site, function, 0usize)
+            answer_error = area_error
+            copied_size = area_size
+        } else {
+            let (info, info_error) = layout_type_info(c, result_type)
+            answer_error = info_error
+            copied_size = info.size
+        }
+        if answer_error == ok { answer_error = interp_copy(c, site_module, site, into, result.magnitude, copied_size) }
         answer = normalized_integer(into, false)
     }
     c.interp_space.top = saved_top
@@ -6956,6 +7102,9 @@ fn interp_function(c: *Checker, g: *graph.Graph, module_index: usize, function_i
     if !found_declaration { ret (none, invalid_type(), interp_fail(c, module_index, tree.nodes[0usize], "a function whose declaration it cannot find")) }
     var frame: InterpFrame = zero
     frame.module_index = module_index
+    frame.function_index = function_index
+    frame.return_first = function.first_return
+    frame.return_count = function.return_count
     frame.return_type = return_type
     var parameter_at = 0usize
     while parameter_at < function.parameter_count {
@@ -7062,6 +7211,67 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         if !has_binding || (!has_initializer && !zeroed) { ret (0usize, interp_fail(c, module_index, node, "a binding without a value")) }
         let binding = tree.nodes[binding_index]
         let binding_token = c.tokens[usize(binding.token_start)]
+        // (D1571) `let (a, b) = f()`, `let x = try f()`, `let (a, b) = try f()`: each
+        // result a binding of its own; with `try`, the `err` is tested and not bound.
+        let tried = has_initializer && contains_token(c, usize(node.token_start), usize(tree.nodes[initializer_index].token_start), .KwTry)
+        if tried || binding_token.kind == .PunctLParen {
+            if !has_initializer || tree.nodes[initializer_index].kind != .CallExpr { ret (0usize, interp_fail(c, module_index, node, "a binding of several values from something that is not a call")) }
+            var results = normalized_integer(0usize, false)
+            var results_type = invalid_type()
+            if tried {
+                let (tried_value, tried_type, failed, try_error) = interp_try(c, g, tree, frame, node_index, initializer_index)
+                if try_error != ok { ret (0usize, try_error) }
+                if failed { ret (interp_control_return(), ok) }
+                results = tried_value
+                results_type = tried_type
+            } else {
+                let (called_value, called_type, call_error) = interp_call_node(c, g, tree, frame, initializer_index)
+                if call_error != ok { ret (0usize, call_error) }
+                results = called_value
+                results_type = called_type
+            }
+            // The values bound: every result, but the `err` a `try` tested.
+            var called: Function = zero
+            var count = 1usize
+            let several = interp_is_results(results_type)
+            if several {
+                called = c.functions[results_type.element]
+                count = called.return_count
+            }
+            if tried { count = count - 1usize }
+            var bound_at = 0usize
+            var token_at = usize(binding.token_start)
+            while token_at < usize(binding.token_end) {
+                let token_kind = c.tokens[token_at].kind
+                if token_kind == .Identifier || token_kind == .PunctUnderscore {
+                    if bound_at >= count { ret (0usize, interp_fail(c, module_index, node, "a binding of more names than the call answers")) }
+                    if token_kind == .Identifier {
+                        var result_type = results_type
+                        var result_value = results
+                        if several {
+                            let (slot_type, slot_offset, ignored_size, ignored_alignment, slot_error) = interp_result_slot(c, module_index, node, called, bound_at)
+                            if slot_error != ok { ret (0usize, slot_error) }
+                            let (loaded, load_error) = interp_get(c, module_index, node, results.magnitude + slot_offset, slot_type)
+                            if load_error != ok { ret (0usize, load_error) }
+                            result_type = slot_type
+                            result_value = loaded
+                        }
+                        let (result_info, result_info_error) = interp_layout(c, module_index, node, result_type)
+                        if result_info_error != ok { ret (0usize, result_info_error) }
+                        let (result_slot, result_slot_error) = interp_allocate(c, module_index, node, frame, (bound_at + 1usize) * INTERP_RESULT_SITE + node_index + 1usize, result_info.size, result_info.alignment)
+                        if result_slot_error != ok { ret (0usize, result_slot_error) }
+                        let result_put_error = interp_put(c, module_index, node, result_slot, result_type, result_value)
+                        if result_put_error != ok { ret (0usize, result_put_error) }
+                        let result_bind_error = interp_bind(frame, text[c.tokens[token_at].start..c.tokens[token_at].end], result_type, result_slot)
+                        if result_bind_error != ok { ret (0usize, result_bind_error) }
+                    }
+                    bound_at += 1usize
+                }
+                token_at += 1usize
+            }
+            if bound_at != count { ret (0usize, interp_fail(c, module_index, node, "a binding of fewer names than the call answers")) }
+            ret (interp_control_next(), ok)
+        }
         if binding_token.kind != .Identifier { ret (0usize, interp_fail(c, module_index, node, "a binding that is not one name")) }
         var bound = normalized_integer(0usize, false)
         var bound_type = declared_type
@@ -7150,6 +7360,36 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
             frame.result_type = frame.return_type
             ret (interp_control_return(), ok)
         }
+        // (D1571) `ret (a, b)`: each value into the results area, in order.
+        if frame.return_count > 1usize {
+            let function = c.functions[frame.function_index]
+            let (ignored_type, ignored_offset, area_size, area_alignment, area_error) = interp_result_slot(c, module_index, node, function, 0usize)
+            if area_error != ok { ret (0usize, area_error) }
+            let (area, area_slot_error) = interp_allocate(c, module_index, node, frame, node_index + 1usize, area_size, area_alignment)
+            if area_slot_error != ok { ret (0usize, area_slot_error) }
+            var result_at = 0usize
+            let returned_end = usize(node.first_child) + usize(node.child_count)
+            var returned_at = usize(node.first_child)
+            while returned_at < returned_end {
+                if parse.child_is_node_at(tree, returned_at) {
+                    if result_at == frame.return_count { ret (0usize, interp_fail(c, module_index, node, "a `ret` of more values than the function answers")) }
+                    let (slot_type, slot_offset, ignored_size, ignored_alignment, slot_error) = interp_result_slot(c, module_index, node, function, result_at)
+                    if slot_error != ok { ret (0usize, slot_error) }
+                    let (returned, returned_type, returned_error) = interp_expr(c, g, tree, frame, parse.child_index_at(tree, returned_at), slot_type)
+                    if returned_error != ok { ret (0usize, returned_error) }
+                    let (converted, converted_type, convert_error) = interp_convert(c, module_index, node, returned, returned_type, slot_type)
+                    if convert_error != ok { ret (0usize, convert_error) }
+                    let put_error = interp_put(c, module_index, node, area + slot_offset, slot_type, converted)
+                    if put_error != ok { ret (0usize, put_error) }
+                    result_at += 1usize
+                }
+                returned_at += 1usize
+            }
+            if result_at != frame.return_count { ret (0usize, interp_fail(c, module_index, node, "a `ret` of fewer values than the function answers")) }
+            frame.result = normalized_integer(area, false)
+            frame.result_type = interp_results_type(module_index, frame.function_index)
+            ret (interp_control_return(), ok)
+        }
         let (value, value_type, value_error) = interp_expr(c, g, tree, frame, value_index, frame.return_type)
         if value_error != ok { ret (0usize, value_error) }
         let (converted, converted_type, convert_error) = interp_convert(c, module_index, node, value, value_type, frame.return_type)
@@ -7157,6 +7397,15 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         frame.result = converted
         frame.result_type = converted_type
         ret (interp_control_return(), ok)
+    }
+    // (D1571) `try f(..)` alone: a failure returns from this frame.
+    if node.kind == .TryStmt {
+        let (tried_call, has_tried_call) = first_node_child(tree, node)
+        if !has_tried_call || tree.nodes[tried_call].kind != .CallExpr { ret (0usize, interp_fail(c, module_index, node, "a `try` of something that is not a call")) }
+        let (ignored_value, ignored_type, failed, try_error) = interp_try(c, g, tree, frame, node_index, tried_call)
+        if try_error != ok { ret (0usize, try_error) }
+        if failed { ret (interp_control_return(), ok) }
+        ret (interp_control_next(), ok)
     }
     // (D1570) A call for what it does.
     if node.kind == .CallStmt {

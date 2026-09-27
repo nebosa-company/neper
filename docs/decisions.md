@@ -28397,3 +28397,21 @@ Fixtures, both hosts:
 - `check/comptime_pointer_result`: a constant that would be a pointer, refused.
 
 Accept, reject and emit sweeps against D1569's compiler: only the new fixtures changed, and every other link fixture's executable is byte-identical. Stage 2 equals stage 3 on both hosts.
+
+## D1571 — Errors, several results and try in the comptime interpreter
+
+Section 9 allows "`try` inside a function the interpreter executes", and the arena's `mem.alloc` answers `([]T, err)`. The interpreter took one result per call and knew no `err`.
+
+- **`err` values.** An `err` is four bytes. `ok` is zero, and a named error, plain or qualified (`Nope`, `mem.Exhausted`), is its resolver symbol plus one, the same symbol `check_expr` resolves. An `err` never leaves an evaluation, since a constant's result is an integer or a bool, so the number need only be one per error within it. Errors compare for equality only.
+- **Several results.** They sit in one area laid out as a struct of them in order (`interp_result_slot`). The caller takes the area in its own frame before the call, as it does for an aggregate result (D1569). `ret (a, b)` fills it, and the call copies it down before the callee's frame goes.
+- **Bindings.** `let (a, b) = f()` binds each result to a slot of its own, and `_` discards one.
+- **`try`.** A statement, or the whole initializer of a binding (`let x = try f()`, `let (a, b) = try f()`). It tests the call's last result. A failure returns that error from the current frame beside the zero value of every other result, as section 5 has it, and answers nothing further in that frame. A `try` in a function that answers no `err`, or of a call that answers none, is refused.
+
+Fixture, both hosts: `link/comptime_errors`:
+
+- a function answering `(u32, err)`, and one that passes its failure on with `try` (zero beside the error);
+- a pair of results, and `_`;
+- a statement `try` in a function answering only `err`;
+- errors compared by name, with one result used as an array length.
+
+Accept, reject and emit sweeps against D1570's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.
