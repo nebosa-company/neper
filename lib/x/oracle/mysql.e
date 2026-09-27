@@ -32,6 +32,7 @@ use e.mem
 use e.str
 use e.time
 use e.db
+use e.bytes as octets
 use x.oracle.mysqlclient
 
 type Options = struct { host: str, port: u16, user: str, password: str, database: str }
@@ -252,12 +253,7 @@ fn copy_foreign(dst: []u8, p: *u8, n: usize) {
     region.base = p
     region.cap = n
     region.off = 0usize
-    let bytes = mem.view(&region, 0usize, n)
-    var i = 0usize
-    while i < n {
-        dst[i] = bytes[i]
-        i += 1usize
-    }
+    let copied = octets.copy(dst[0usize..n], mem.view(&region, 0usize, n))
 }
 
 fn c_length(p: *u8) -> usize {
@@ -707,7 +703,7 @@ fn take(r: *Reader, v: []const u8) -> ([]u8, err) {
     let start = r.used
     r.used = start + v.len
     let out = r.buffer[start..start + v.len]
-    mem.copy[u8](out, v)
+    let moved = octets.copy(out, v)
     ret (out, ok)
 }
 

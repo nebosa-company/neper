@@ -29129,3 +29129,22 @@ New fixture, both hosts: `link/ui_a11y_controls`. It checks the names, the SpinB
 - **Fixtures.** `x_sqlite`, `x_postgresql` and `x_mysql` each gain `borrowed()` (codes 190–198). It checks two rows of text and binary, a copying read interleaved on the same stream, a 60 KB value, an empty value, the end of the rows and `Closed` after the close. The `db` fixture checks `Closed` through the new entry.
 - **Hosts.** All four fixtures and `examples/db/memory_driver` pass on Windows. The four fixtures, cross-emitted, pass in WSL against fresh servers.
 - **Benchmark.** `benchmarks/db/src/workload.e` now reads its scan and lookups borrowed, as `bench.c` and the Rust program do. The Windows SQLite scan median went from 24.2 to 21.8 ms (−10%) over five interleaved rounds on a loaded machine.
+
+## D1600 — A word-wide byte copy lives in `e.bytes`, because `e.mem` cannot ask its own intrinsics
+
+**Why.** `mem.copy[T]` is an element loop. For `u8` that is about 1.6 ns a byte on the Windows host: 1 KB copied 200,000 times took 336 ms. `docs/db-perf-plan.md` item 4 proposed a word loop inside `mem.copy` for one-byte `T`.
+
+**Why not in `e.mem`.** The loop needs `size_of`, `cast` and `address_of`. Those are seeded as `e.mem` intrinsics (`resolve.e`, `seed_intrinsics`), but the checker recognises them only as a qualified member of a module that resolves to `e.mem` (`check.e`, around the `MetaQuery` routing). A bare `size_of` inside `lib/e/mem.e` is `check.UnknownCallable`, a bare `mem.size_of` is an unknown value name, and `use e.mem` inside `e.mem` is refused as an import cycle (E-MODULE-0002). Teaching every intrinsic path to accept an unqualified callee inside `e.mem` would touch the checker and lowering for one function.
+
+**Decision.** `bytes.copy(dst: []u8, src: []const u8) -> usize` copies the shorter of the two lengths eight bytes at a time through `mem.cast[*u64]`, and answers the count. It stays a byte loop in two cases:
+
+- under 16 bytes;
+- a destination one to seven bytes past its source. There the forward smear of an overlapping copy differs between the two loops.
+
+At every other distance the two loops leave the same bytes: a destination at or before the source, or eight or more past it. `bytes.write_bytes` uses it, and so do the three drivers' copying readers (`copy_foreign`, and libpq's and MySQL's `take`), imported as `e.bytes as octets` because each driver has locals named `bytes`. `mem.copy` is unchanged: its 166 `u8` call sites keep the element loop until `e.mem` can reach its intrinsics.
+
+**Evidence.**
+
+- **Speed.** The same 200 MB takes 46 ms instead of 336 ms (7×).
+- **Fixture.** `bytes_plan` gains codes 86–88. They cover every source and destination offset from 0 to 19 and every length up to 40, inside one buffer so every overlap distance occurs, checked against a forward byte loop. The check fails with 87 when the overlap guard is removed.
+- **Hosts.** `bytes_plan`, `bytes_codec`, `db`, `x_sqlite`, `x_postgresql`, `x_mysql` and the memory-driver example pass on Windows. The six fixtures pass cross-emitted in WSL.

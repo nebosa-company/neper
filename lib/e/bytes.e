@@ -62,9 +62,37 @@ fn read_bytes(r: *Reader, n: usize) -> ([]const u8, err) {
 
 fn write_bytes(w: *Writer, src: []const u8) -> err {
     if src.len > w.data.len - w.off { ret TooLarge }
-    mem.copy[u8](w.data[w.off..w.off + src.len], src)
+    let copied = copy(w.data[w.off..w.off + src.len], src)
     w.off += src.len
     ret ok
+}
+
+// `mem.copy[u8]` eight bytes at a time, answering how many it copied: the shorter of the two.
+// `mem.copy` itself stays an element loop because `e.mem` cannot ask its own intrinsics for
+// an element's size. A destination one to seven bytes past its source is copied a byte at a
+// time, keeping the forward smear such an overlapping copy has always produced; at every
+// other distance the word loop leaves the same bytes the byte loop would.
+fn copy(dst: []u8, src: []const u8) -> usize {
+    var count = src.len
+    if dst.len < count { count = dst.len }
+    var at = 0usize
+    if count >= 16usize {
+        let to = mem.address_of(&dst[0usize])
+        let from = mem.address_of(&src[0usize])
+        if to <= from || to >= from + 8usize {
+            while at + 8usize <= count {
+                let word_to = mem.cast[*u64](&dst[at])
+                let word_from = mem.cast[*const u64](&src[at])
+                *word_to = *word_from
+                at += 8usize
+            }
+        }
+    }
+    while at < count {
+        dst[at] = src[at]
+        at += 1usize
+    }
+    ret count
 }
 
 // The bytes at `off` as the bits of a `T`, in the order `endian` names. `T` is an integer or a

@@ -23,6 +23,7 @@ use e.mem
 use e.str
 use e.time
 use e.db
+use e.bytes as octets
 use x.postgresql.capi
 
 type Detail = struct { sqlstate: str, message: str, constraint: str }
@@ -256,12 +257,7 @@ fn copy_foreign(dst: []u8, p: *u8, n: usize) {
     region.base = p
     region.cap = n
     region.off = 0usize
-    let bytes = mem.view(&region, 0usize, n)
-    var i = 0usize
-    while i < n {
-        dst[i] = bytes[i]
-        i += 1usize
-    }
+    let copied = octets.copy(dst[0usize..n], mem.view(&region, 0usize, n))
 }
 
 // A C string's length; the walk stops at the terminator, which libpq always writes.
@@ -746,7 +742,7 @@ fn take(r: *Reader, n: usize) -> ([]u8, err) {
 fn put_text(r: *Reader, s: str) -> ([]u8, err) {
     let (out, take_error) = take(r, s.len)
     if take_error != ok { ret (out, take_error) }
-    mem.copy[u8](out, s)
+    let moved = octets.copy(out, s)
     ret (out, ok)
 }
 
@@ -924,7 +920,7 @@ fn decode(r: *Reader, oid: u32, v: []const u8) -> (db.Value, err) {
     }
     let (copied, copy_error) = take(r, body.len)
     if copy_error != ok { ret (value, copy_error) }
-    mem.copy[u8](copied, body)
+    let moved = octets.copy(copied, body)
     if is_text_oid(oid) {
         let copied_text: str = copied
         value = db.Value{ Text: copied_text }
