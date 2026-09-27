@@ -95,6 +95,7 @@ same version.
 | `e.ui` | native windows, layout, controls, accessibility |
 | `e.ml` | linear algebra, classifiers, clustering, neural nets |
 | `e.gpu` | CPU, Vulkan, CUDA, tensors, images, presentation |
+| `e.db` | one SQL contract — connections, prepared statements, streaming row readers, transactions — with drivers for [SQLite](docs/packages/x.sqlite.sqlite.md), [PostgreSQL](docs/packages/x.postgresql.libpq.md) and [MySQL](docs/packages/x.oracle.mysql.md) |
 
 Every public signature is listed in [`docs/module-apis.md`](docs/module-apis.md).
 

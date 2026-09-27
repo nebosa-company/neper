@@ -157,7 +157,7 @@
     .library-item code { color: var(--primary); font: 600 13px/20px var(--font-mono); }
     .library-item p { margin: var(--space-2) 0 0; color: var(--muted); font-size: 13px; }
     .library-item.wide { grid-column: 1 / -1; }
-    .library-item.wide code + code { margin-left: var(--space-3); }
+    .library-item.wide code { display: inline-block; margin-right: var(--space-3); }
     .catalog-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); margin-bottom: var(--space-8); padding: var(--space-8); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
     .catalog-stat strong { display: block; font: 400 clamp(32px, 4vw, 45px)/52px var(--font-display); }
     .catalog-stat span { font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
@@ -376,7 +376,7 @@ Hello, Neper</code></pre>
           <div class="library-item"><code>e.ui</code><p>native windows, layout, controls, accessibility</p></div>
           <div class="library-item"><code>e.ml</code><p>linear algebra, classifiers, clustering, neural nets</p></div>
           <div class="library-item"><code>e.gpu</code><p>CPU, Vulkan, CUDA, tensors, images, presentation</p></div>
-          <div class="library-item wide"><code>e.db</code><code>x.sqlite.sqlite</code><code>x.postgresql.libpq</code><code>x.oracle.mysql</code><p>one SQL contract (connections, prepared statements, streaming row readers, transactions) with drivers for SQLite, PostgreSQL and MySQL, tested against live servers on Windows and Linux</p></div>
+          <div class="library-item wide"><code>e.db</code> <code>x.sqlite.sqlite</code> <code>x.postgresql.libpq</code> <code>x.oracle.mysql</code><p>one SQL contract (connections, prepared statements, streaming row readers, transactions) with drivers for SQLite, PostgreSQL and MySQL, tested against live servers on Windows and Linux</p></div>
         </div>
         <div class="more-features"><button class="more-toggle nu-btn tonal" type="button" data-catalog="module-catalog">Explore all e.* modules</button></div>
         <figure class="ui-showcase">
