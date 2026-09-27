@@ -28834,3 +28834,30 @@ does not), not a particular declaration.
   `run.sh` runs it, and `run.ps1` cross-emits it for Linux.
 - A HEAD-built compiler and the changed one emitted every link fixture for both targets, and
   the images are byte-identical, except `extern_many`, which HEAD cannot build.
+
+## D1595 — A labelled field keeps its shape when its label floats
+
+A labelled text field took no typing in a running app: a click or a Tab gave it the focus, and the next frame took the focus away. The UI gallery's "Name" field showed it, and so did every control built on `control.field` (password, text area, formatted field, autocomplete, combo box, token field). Found by the accessibility audit, whose Tab walk never reached a labelled field.
+
+Focus floats the label (D951), and the float changed the shape of the unkeyed nodes around the editor:
+
+- **Outlined.** `notched()` wrapped the frame in a new `stack`, so the column's first child turned from a flex into a stack.
+- **Filled.** The small label was inserted ahead of the value row, which moved the row down one place.
+- **A prefix** appeared beside the value only once floated, which moved the value's stack.
+
+`match_element` matches an unkeyed node by kind and position, and a keyed one only among the old children of its matched parent. So each change remade the ancestors, the keyed editor came back as a fresh element, and the focus a tap or Tab had just set was on an element that no longer existed. The select's head (`led_head`) did the same when its first choice moved the label into the notch: a keyboard choice lost the focus.
+
+The fix keeps the shape and leaves the reconciler alone. A field that can float its label (labelled, not dense) always has the same nodes:
+
+- the outlined frame always stands in `notched()`'s stack, with the notch added after it only when floated;
+- a filled field keeps an empty box in the label's place;
+- a prefixed field keeps an empty box where the prefix goes.
+
+`led_head` always notches a labelled head, with the notch shown once chosen. The empty boxes have no size and the one-child stack sizes to its child, so nothing moves on screen.
+
+`ui_field` did not catch it, because it taps and types with no rebuild in between. Fixture, both hosts: `link/ui_field_focus`:
+
+- an outlined labelled field focused by a tap, a filled one by Tab, a prefixed one by Tab, and the filled one again by Shift+Tab, each rebuilt and pumped, then typed into;
+- a labelled select, focused by Tab, that keeps the focus across the rebuild after its first choice.
+
+Against the unfixed library it stops at exit 13, the tapped field. With the field fix but not the select's it stops at 18. In the rebuilt gallery a click on "Name" and 16 Tabs both reach it, and it takes the typing.
