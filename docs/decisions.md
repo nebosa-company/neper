@@ -28586,3 +28586,9 @@ What it measured:
 - **`sc500k`** (500 modules of one shape, three alternating runs each). The bodies were no faster (525-700 ms against 455-676), and the lowering was slower (1734-1881 ms against 1259-1504). The claims follow the bodies' timing, and the lowering, which keeps them, loses the static schedule's balance by size.
 
 A change that does not move a number is not the feature (the item's own rule), so the queue, the claims and `os.fetch_add`, which nothing else used, were reverted. So was the rebuilt bootstrap. The lever that remains is the function, not the module: stealing a module's functions across workers in the body phase. That needs the instances a body check makes to reach the worker that lowers the module, which is the D326/D327 coupling this measurement ran into.
+
+## D1579 — C082 moves behind the rest of the queue
+
+C082's head position asked for parallel declaration collection, reachability and layout, or work stolen per function, next. Measured on a quiet run of sc500k (2.16 s wall), what stays sequential is the declarations (152 ms), resolve (74 ms), the link from artifacts (130 ms) and the link, write and manifest (39 ms). The declaration passes write the checker's shared tables, whose type, function and field indices point into one another. Running them per module means worker-local tables merged in module order with every index relocated: a redesign of the checker's data model for at most about 150 ms. D1578 already showed that stealing per module does not pay.
+
+Asked, the user moved C082 to the end of the queue. It keeps its score (0.75), its evidence and these numbers. The next head is C083, then C084, and the tooling items follow the compiler's.
