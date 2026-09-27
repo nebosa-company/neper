@@ -28953,3 +28953,33 @@ What C084 delivered (D1581-D1586), on both hosts:
 - **The trap table:** now section 13's `NEPS` layout, in `.nepersym` and `.nepsym`, which both runtimes binary-search.
 
 Until M4, WinDbg and Visual Studio see a Neper image's code but not its variables.
+
+## D1588 — Section 10's restrictions through a kernel's reach
+
+Section 10's Restrictions table is now enforced from each kernel through every function it reaches. Before this, a kernel's reach was not checked at all: C089's evidence said "the call-chain profile check" was open, and none of the table's rows were checked in a helper or, apart from `gpu.barrier()` and `shared var`, in the kernel itself.
+
+**How it walks.** After a kernel's body check, `check_kernel_profile` walks the kernel and each function it calls, as D1565's `callee_keeps` walks a callee: over each module's own tree (`interp_module`), resolving calls with `kept_callee` and `qualified_member`. The first construct device code cannot run is reported at the kernel, with the chain that reaches it, for example "`fill` reaches recursion `depth` through fill -> helper -> depth -> depth". The walk belongs to the kernel alone, so a program without kernels pays nothing.
+
+**What it refuses:**
+
+- **Recursion:** a function already on the chain.
+- **Function pointers:** a parameter of function type, a call through a local or parameter, or a function named as a value.
+- **Module-scope `var`s:** the module's own or another module's, except `e.gpu`'s own globals, which are `gpu.gid` and its kin on the CPU build.
+- **`try` in the kernel itself:** a helper may `try`.
+- **`mem.cast`.**
+- **Calls to an `extern fn`.**
+- **`e.thread` and `e.atomic`.**
+- **`= undef`.**
+- **A bare `union`,** as a parameter or a written local type.
+- **Private addresses:** `&x` on a local or parameter, and `x[..]` or `&x[k]` on one that is not a slice. A slice local is one written as a slice or pointer, or bound to a sub-slice, a call's result or another slice. A `shared var` is workgroup storage and may be addressed.
+
+**Kernel parameters.** Each must be a device storage type by value, or a slice of one (`device_storage`): fixed-width integers, floats, enums, `err`, and structs and arrays of them. Not `usize`, `isize`, `bool`, a pointer or either union.
+
+**Evidence.**
+
+- **Fixtures.** Four check fixtures (`gpu_profile_recursion`, `_private`, `_global`, `_param`) are refused with their chains on both hosts, and `gpu_profile_valid` is accepted. That kernel uses helpers, a sub-slice of a device slice, a private array indexed in place, a `shared var` and a slice of it.
+- **Other rules.** `try` in a helper passes. `try` in a kernel, `undef`, an `@import`ed extern behind a helper, a function-pointer parameter, a bare union and `mem.cast` are refused. So is `other.counter`, where `other` is another module.
+- **No regressions.** Every GPU link fixture, `lib/e/gpu/tensor.e` and `examples/saxpy.e` still build.
+- **Fixed point.** Stage 2 equals stage 3 on both hosts.
+
+**What the walk does not see.** It reads syntax, as D1565's does, so a generic helper's instance is not followed. A local's slice-ness is judged from its declaration, and a call's result counts as a slice. Neither is a new refusal of valid code; each is a gap in what is caught.

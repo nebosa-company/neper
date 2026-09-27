@@ -15491,6 +15491,8 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
                 let body_error = check_block(c, r, g, tree, module_index, child, function)
                 if body_error != ok { ret body_error }
                 if function.return_count != 0usize && !statement_returns(c, tree, module_index, child) { ret MissingReturn }
+                // (D1588) A kernel's reach is device code.
+                if function.gpu && !function.generic { ret check_kernel_profile(c, g, module_index, node, function) }
                 ret ok
             }
         }
@@ -17095,6 +17097,425 @@ fn kept_callee(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         ret (function_index, found)
     }
     ret (0usize, false)
+}
+
+// (D1588) Section 10's restrictions on device code, checked from a kernel through every
+// function it reaches: a kernel's body and its helpers' are walked as `callee_keeps`
+// walks a callee's (D1565), over each module's own tree, and the first construct the
+// device cannot run is reported at the kernel with the chain of calls that reaches it.
+// The walk is the kernel's alone, so it costs a program without kernels nothing.
+type DeviceWalk = struct {
+    // The functions on the current chain, the kernel first.
+    stack: [32]usize,
+    depth: usize,
+    visited: [256]usize,
+    visited_count: usize,
+    found: bool,
+    reason: str,
+    subject: str,
+    chain: [32]usize,
+    chain_count: usize,
+}
+
+// The names a body binds, as far as the device rules need them: whether each holds a
+// slice (device or shared storage, which may be sliced and addressed) or is a `shared
+// var` (workgroup storage), or else is private to the invocation.
+type DeviceNames = struct {
+    names: [64]str,
+    slice: [64]bool,
+    workgroup: [64]bool,
+    count: usize,
+}
+
+fn device_found(walk: *DeviceWalk, reason: str, subject: str) {
+    if walk.found { ret }
+    walk.found = true
+    walk.reason = reason
+    walk.subject = subject
+    var at = 0usize
+    while at < walk.depth {
+        walk.chain[at] = walk.stack[at]
+        at += 1usize
+    }
+    walk.chain_count = walk.depth
+}
+
+fn device_name_at(names: *DeviceNames, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < names.count {
+        if same(names.names[at], name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn device_add_name(names: *DeviceNames, name: str, slice: bool, workgroup: bool) {
+    if names.count == names.names.len { ret }
+    names.names[names.count] = name
+    names.slice[names.count] = slice
+    names.workgroup[names.count] = workgroup
+    names.count += 1usize
+}
+
+fn device_contains(c: *Checker, node: syntax.Node, kind: lex.Kind) -> bool {
+    var at = usize(node.token_start)
+    while at < usize(node.token_end) && at < c.token_count {
+        if c.tokens[at].kind == kind { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// A range, `a..b`, within the node.
+fn device_range(c: *Checker, node: syntax.Node) -> bool {
+    ret device_contains(c, node, .PunctRange)
+}
+
+// A bare `union`, which the device cannot reinterpret (section 10's Restrictions).
+fn device_bare_union(c: *Checker, ty: Type) -> bool {
+    let (aggregate_index, is_aggregate) = layout_aggregate_index(c, ty)
+    ret is_aggregate && aggregate_index < c.aggregate_count && c.aggregates[aggregate_index].kind == .Union
+}
+
+// Section 10's device storage type: a fixed-width integer, a float, an enum, `err`, or a
+// struct or array of them; `usize` and `isize` (their width differs on the device),
+// `bool`, pointers, slices, strings and either union are not. `Atomic[T]` and `Vec[T, N]`
+// are structs of such fields. A `union enum` is one in a local but not in a buffer or an
+// argument block, where its device layout is not its CPU layout -- the only places this
+// is asked.
+fn device_storage(c: *Checker, ty: Type, depth: usize) -> bool {
+    if depth > 8usize { ret true }
+    if ty.kind == .Integer { ret !same(ty.name, "usize") && !same(ty.name, "isize") }
+    if ty.kind == .Float || ty.kind == .Err { ret true }
+    if ty.kind == .Array {
+        if !ty.has_element || ty.element >= c.type_count { ret false }
+        ret device_storage(c, c.types[ty.element], depth + 1usize)
+    }
+    if ty.kind == .Named || ty.kind == .Tag {
+        let (aggregate_index, is_aggregate) = layout_aggregate_index(c, ty)
+        if !is_aggregate || aggregate_index >= c.aggregate_count { ret false }
+        let aggregate = c.aggregates[aggregate_index]
+        if aggregate.kind == .Enum { ret true }
+        if aggregate.kind != .Struct { ret false }
+        var field_at = 0usize
+        while field_at < aggregate.field_count {
+            let (placed, placed_error) = layout_field(c, ty, c.aggregate_fields[aggregate.first_field + field_at].name)
+            if placed_error != ok || !device_storage(c, placed.ty, depth + 1usize) { ret false }
+            field_at += 1usize
+        }
+        ret true
+    }
+    ret false
+}
+
+// The base name of `x`, `x[k]`, `x.f` and `x[a..b]`, or none.
+fn device_base_name(c: *Checker, tree: *parse.Tree, text: str, node_index: usize) -> (str, bool) {
+    var at = node_index
+    var steps = 0usize
+    while steps < 16usize {
+        let node = tree.nodes[at]
+        if node.kind == .NameExpr {
+            let token = c.tokens[usize(node.token_start)]
+            if token.kind != .Identifier { ret ("", false) }
+            ret (text[token.start..token.end], true)
+        }
+        if node.kind != .BracketPostfix && node.kind != .FieldExpr && node.kind != .GroupExpr { ret ("", false) }
+        let (inner, has_inner) = first_node_child(tree, node)
+        if !has_inner { ret ("", false) }
+        at = inner
+        steps += 1usize
+    }
+    ret ("", false)
+}
+
+// The private storage `x` names, when the expression addresses or slices it.
+fn device_private(c: *Checker, tree: *parse.Tree, text: str, names: *DeviceNames, node_index: usize, direct: bool) -> (str, bool) {
+    let (name, named) = device_base_name(c, tree, text, node_index)
+    if !named { ret ("", false) }
+    let (at, found) = device_name_at(names, name)
+    if !found || names.workgroup[at] { ret ("", false) }
+    // `&x` on a local or parameter is its own storage, whatever it holds; an element or
+    // a sub-slice of a slice is the memory the slice points at.
+    if direct && tree.nodes[node_index].kind == .NameExpr { ret (name, true) }
+    if names.slice[at] { ret ("", false) }
+    ret (name, true)
+}
+
+fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, text: str, node_index: usize, names: *DeviceNames, walk: *DeviceWalk) -> err {
+    if walk.found { ret ok }
+    let node = tree.nodes[node_index]
+    if node.kind == .BindingStmt {
+        // A local's name, and whether it holds a slice: its written type, or what it is
+        // bound to -- a sub-slice, a call's result or another slice. Anything else is
+        // the invocation's own storage.
+        var name = ""
+        var has_name = false
+        var slice = false
+        var decided = false
+        let end = usize(node.first_child) + usize(node.child_count)
+        var at = usize(node.first_child)
+        while at < end {
+            if parse.child_is_node_at(tree, at) {
+                let child_index = parse.child_index_at(tree, at)
+                let child = tree.nodes[child_index]
+                if child.kind == .Binding && !has_name {
+                    let token = c.tokens[usize(child.token_start)]
+                    if token.kind == .Identifier {
+                        name = text[token.start..token.end]
+                        has_name = true
+                    }
+                } else {
+                    if !decided {
+                        decided = true
+                        if child.kind == .SliceType || child.kind == .PointerType { slice = true }
+                        if child.kind == .NamedType {
+                            let (named_type, named_error) = type_from_node(c, c.resolver, g, tree, module_index, child)
+                            if named_error == ok && device_bare_union(c, named_type) { device_found(walk, "a bare `union`", "") }
+                            decided = false
+                        }
+                        if child.kind == .BracketPostfix && device_range(c, child) { slice = true }
+                        if child.kind == .CallExpr { slice = true }
+                        if child.kind == .NameExpr {
+                            let (bound, bound_named) = device_base_name(c, tree, text, child_index)
+                            let (bound_at, bound_found) = device_name_at(names, bound)
+                            if bound_named && bound_found { slice = names.slice[bound_at] }
+                        }
+                    }
+                }
+            }
+            at += 1usize
+        }
+        if has_name { device_add_name(names, name, slice, false) }
+    }
+    if node.kind == .SharedVarStmt {
+        let token_at = usize(node.token_start) + 2usize
+        if token_at < c.token_count && c.tokens[token_at].kind == .Identifier { device_add_name(names, text[c.tokens[token_at].start..c.tokens[token_at].end], true, true) }
+    }
+    if node.kind == .UnaryExpr && usize(node.token_start) < c.token_count && c.tokens[usize(node.token_start)].kind == .PunctAmp {
+        let (operand, has_operand) = first_node_child(tree, node)
+        if has_operand {
+            let (private_name, private) = device_private(c, tree, text, names, operand, true)
+            if private { device_found(walk, "an address of the private variable", private_name) }
+        }
+    }
+    if node.kind == .BracketPostfix && device_range(c, node) {
+        let (sliced, has_sliced) = first_node_child(tree, node)
+        if has_sliced {
+            let (private_name, private) = device_private(c, tree, text, names, sliced, false)
+            if private { device_found(walk, "a slice of the private variable", private_name) }
+        }
+    }
+    if node.kind == .NameExpr && usize(node.token_start) < c.token_count {
+        let token = c.tokens[usize(node.token_start)]
+        if token.kind == .Identifier {
+            let name = text[token.start..token.end]
+            let (local_at, is_local) = device_name_at(names, name)
+            if !is_local {
+                let (global_index, is_global) = find_global(c, module_index, name)
+                if is_global { device_found(walk, "the module-scope `var`", name) }
+                let (function_index, is_function) = find_function(c, module_index, name)
+                if is_function && !walk.found { device_found(walk, "the function used as a value", name) }
+            }
+        }
+    }
+    if node.kind == .CallExpr {
+        let (callee_node, has_callee_node) = first_node_child(tree, node)
+        let (callee_index, callee_found) = kept_callee(c, g, tree, module_index, text, node)
+        if callee_found && callee_index < c.function_count {
+            let callee = c.functions[callee_index]
+            var callee_module = ""
+            if callee.module_index < g.count { callee_module = g.modules[callee.module_index].name }
+            if callee.external { device_found(walk, "a call to the extern fn", callee.name) }
+            if same(callee_module, "e.thread") || same(callee_module, "e.atomic") { device_found(walk, "a host call to", callee_module) }
+            if same(callee_module, "e.mem") && same(callee.name, "cast") { device_found(walk, "a pointer cast,", "mem.cast") }
+            if !walk.found && !callee.intrinsic && !callee.external && !callee.gpu && !callee.generic { try device_walk(c, g, callee_index, walk) }
+        } else {
+            // A qualified intrinsic with no function of its own -- `mem.cast[T](p)` --
+            // named by its module and member.
+            if has_callee_node {
+                var qualified = tree.nodes[callee_node]
+                if qualified.kind == .BracketPostfix {
+                    let (inner, has_inner) = first_node_child(tree, qualified)
+                    if has_inner { qualified = tree.nodes[inner] }
+                }
+                if qualified.kind == .FieldExpr {
+                    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, qualified)
+                    if found_member && target_module < g.count {
+                        let target_name = g.modules[target_module].name
+                        if same(target_name, "e.mem") && same(member, "cast") { device_found(walk, "a pointer cast,", "mem.cast") }
+                        if same(target_name, "e.thread") || same(target_name, "e.atomic") { device_found(walk, "a host call to", target_name) }
+                    }
+                }
+            }
+            // A call through a value -- a parameter or local of function type.
+            if has_callee_node && tree.nodes[callee_node].kind == .NameExpr {
+                let (called, called_named) = device_base_name(c, tree, text, callee_node)
+                let (called_at, called_local) = device_name_at(names, called)
+                if called_named && called_local { device_found(walk, "a call through the function pointer", called) }
+            }
+        }
+        // The callee's own name is a call, not a function used as a value.
+        let end = usize(node.first_child) + usize(node.child_count)
+        var at = usize(node.first_child)
+        var first = true
+        while at < end {
+            if parse.child_is_node_at(tree, at) {
+                let child_index = parse.child_index_at(tree, at)
+                if !(first && tree.nodes[child_index].kind == .NameExpr) { try device_nodes(c, g, tree, module_index, text, child_index, names, walk) }
+                first = false
+            }
+            at += 1usize
+        }
+        ret ok
+    }
+    // A type, a field's name or a member is not a use of a function or a global.
+    if node.kind == .FieldExpr || node.kind == .MemberExpr || node.kind == .NamedType || node.kind == .PointerType || node.kind == .SliceType || node.kind == .ArrayType || node.kind == .FunctionType {
+        if node.kind == .FieldExpr {
+            let (base, has_base) = first_node_child(tree, node)
+            if has_base && tree.nodes[base].kind != .NameExpr { try device_nodes(c, g, tree, module_index, text, base, names, walk) }
+            if has_base && tree.nodes[base].kind == .NameExpr {
+                let (base_name, base_named) = device_base_name(c, tree, text, base)
+                let (base_at, base_local) = device_name_at(names, base_name)
+                if base_named && !base_local {
+                    let (global_index, is_global) = find_global(c, module_index, base_name)
+                    if is_global { device_found(walk, "the module-scope `var`", base_name) }
+                    // Another module's: `other.counter` -- not `gpu.gid` and its kin, which
+                    // `e.gpu` keeps as its CPU build's globals and the device reads as ids.
+                    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
+                    if found_member && target_module < g.count && !same(g.modules[target_module].name, "e.gpu") {
+                        let (other_index, is_other) = find_global(c, target_module, member)
+                        if is_other { device_found(walk, "the module-scope `var`", member) }
+                    }
+                }
+            }
+        }
+        ret ok
+    }
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) { try device_nodes(c, g, tree, module_index, text, parse.child_index_at(tree, at), names, walk) }
+        at += 1usize
+    }
+    ret ok
+}
+
+// One function of the walk: the kernel (depth zero), or a helper it reaches.
+fn device_walk(c: *Checker, g: *graph.Graph, function_index: usize, walk: *DeviceWalk) -> err {
+    if walk.found || function_index >= c.function_count { ret ok }
+    var on_stack = 0usize
+    while on_stack < walk.depth {
+        if walk.stack[on_stack] == function_index {
+            walk.stack[walk.depth] = function_index
+            walk.depth += 1usize
+            device_found(walk, "recursion", c.functions[function_index].name)
+            walk.depth = walk.depth - 1usize
+            ret ok
+        }
+        on_stack += 1usize
+    }
+    var seen = 0usize
+    while seen < walk.visited_count {
+        if walk.visited[seen] == function_index { ret ok }
+        seen += 1usize
+    }
+    // ponytail: a chain past 31 calls or a reach past 256 functions goes unchecked
+    // beyond it; a kernel that deep is not written by hand.
+    if walk.depth == walk.stack.len - 1usize || walk.visited_count == walk.visited.len { ret ok }
+    walk.visited[walk.visited_count] = function_index
+    walk.visited_count += 1usize
+    walk.stack[walk.depth] = function_index
+    walk.depth += 1usize
+    let function = c.functions[function_index]
+    let (_, parse_error) = interp_module(c, g, function.module_index)
+    if parse_error != ok {
+        walk.depth = walk.depth - 1usize
+        ret ok
+    }
+    let saved_tokens = c.tokens
+    let saved_token_count = c.token_count
+    c.tokens = c.interp_tokens[function.module_index]
+    c.token_count = c.interp_token_counts[function.module_index]
+    let walk_error = device_body(c, g, function, walk)
+    c.tokens = saved_tokens
+    c.token_count = saved_token_count
+    walk.depth = walk.depth - 1usize
+    ret walk_error
+}
+
+fn device_body(c: *Checker, g: *graph.Graph, function: Function, walk: *DeviceWalk) -> err {
+    let tree = &c.interp_trees[function.module_index]
+    let text = g.modules[function.module_index].text
+    let (declaration, declared) = declaration_at(c, tree, function.source_start)
+    if !declared { ret ok }
+    var names: DeviceNames = zero
+    var parameter_at = 0usize
+    while parameter_at < function.parameter_count {
+        let parameter = c.parameters[function.first_parameter + parameter_at]
+        if parameter.ty.kind == .Function { device_found(walk, "the function pointer parameter", parameter.name) }
+        if device_bare_union(c, parameter.ty) { device_found(walk, "a bare `union`, the parameter", parameter.name) }
+        device_add_name(&names, parameter.name, parameter.ty.kind == .Slice || parameter.ty.kind == .String, false)
+        parameter_at += 1usize
+    }
+    let node = tree.nodes[declaration]
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) && tree.nodes[parse.child_index_at(tree, at)].kind == .Block {
+            let body = tree.nodes[parse.child_index_at(tree, at)]
+            if device_contains(c, body, .KwUndef) { device_found(walk, "`= undef`", "") }
+            if walk.depth == 1usize && device_contains(c, body, .KwTry) { device_found(walk, "`try` in the kernel itself, which returns nothing to propagate to", "") }
+            try device_nodes(c, g, tree, function.module_index, text, parse.child_index_at(tree, at), &names, walk)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// The kernel's check (D1588): its parameters are device storage types by value or
+// slices of them, and nothing it reaches is outside section 10's device profile.
+fn check_kernel_profile(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node, function: Function) -> err {
+    var parameter_at = 0usize
+    while parameter_at < function.parameter_count {
+        let parameter = c.parameters[function.first_parameter + parameter_at]
+        var storable = false
+        if parameter.ty.kind == .String { storable = true }
+        if parameter.ty.kind == .Slice && parameter.ty.has_element && parameter.ty.element < c.type_count { storable = device_storage(c, c.types[parameter.ty.element], 0usize) }
+        if parameter.ty.kind != .Slice && parameter.ty.kind != .String { storable = device_storage(c, parameter.ty, 0usize) }
+        if !storable {
+            record_failure(c, module_index, node, .GpuLaunch, function.name, device_text(c, "takes `", parameter.name, "`, which is neither a device storage type (fixed-width integers, floats, enums, `err` and structs and arrays of them -- not `usize`, `isize`, `bool`, a pointer or a union) nor a slice of one (spec section 10)", ""))
+            ret InvalidType
+        }
+        parameter_at += 1usize
+    }
+    let (function_index, found) = find_function(c, module_index, function.name)
+    if !found { ret ok }
+    var walk: DeviceWalk = zero
+    try device_walk(c, g, function_index, &walk)
+    if !walk.found { ret ok }
+    // The chain from the kernel to where the construct is, as `a -> b -> c`.
+    var chain = ""
+    var link = 0usize
+    while link < walk.chain_count {
+        if link == 0usize { chain = c.functions[walk.chain[link]].name } else { chain = device_text(c, chain, " -> ", c.functions[walk.chain[link]].name, "") }
+        link += 1usize
+    }
+    var subject = ""
+    if walk.subject.len != 0usize { subject = device_text(c, " `", walk.subject, "`", "") }
+    record_failure(c, module_index, node, .GpuLaunch, function.name, device_text(c, "reaches ", walk.reason, subject, device_text(c, " through ", chain, ", which device code cannot run (spec section 10's restrictions)", "")))
+    ret InvalidType
+}
+
+// Four texts joined in the checker's arena, for a message.
+fn device_text(c: *Checker, a: str, b: str, d: str, e: str) -> str {
+    let total = a.len + b.len + d.len + e.len
+    let (bytes, bytes_error) = mem.alloc[u8](c.arena, total + 1usize)
+    if bytes_error != ok { ret a }
+    os.copy_bytes(bytes[0usize..a.len], a)
+    os.copy_bytes(bytes[a.len..a.len + b.len], b)
+    os.copy_bytes(bytes[a.len + b.len..a.len + b.len + d.len], d)
+    os.copy_bytes(bytes[a.len + b.len + d.len..total], e)
+    ret bytes[0usize..total]
 }
 
 // Whether a pointer, slice or string slot can be given a `leaf` or an address inside
