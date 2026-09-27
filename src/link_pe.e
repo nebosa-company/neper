@@ -3,6 +3,7 @@
 use check
 use codegen_x64
 use emit_x64
+use link_elf
 use nir
 use runtime_pe_x64
 
@@ -274,12 +275,17 @@ fn runtime_prefix(builder: *nir.Builder, relocations: []codegen_x64.Relocation, 
     ret (limit, ok)
 }
 
-fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
+// `lines` and `table_at`, where the D206 table starts in `machine`, are what the image's
+// DWARF is built from (D1583); an image with no line rows has none.
+fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, table_at: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len { ret InvalidExecutable }
     codegen_x64.mark_live_globals(builder, relocations, relocation_count)
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
-    let headers_size = 512usize
+    // Seven section entries do not fit before 512 with the two the image always has.
+    let debug = lines.len != 0usize
+    var headers_size = 512usize
+    if debug { headers_size = 1024usize }
     let text_address = 4096usize
     let (runtime_size, runtime_error) = runtime_prefix(builder, relocations, relocation_count)
     if runtime_error != ok { ret runtime_error }
@@ -452,7 +458,118 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try append_globals(builder, output, idata_raw_offset + globals_address - idata_address)
     try pad_to(output, idata_raw_offset + idata_size)
     if output.count != idata_raw_offset + idata_size { ret InvalidExecutable }
-    ret pad_to(output, idata_raw_offset + idata_raw_size)
+    try pad_to(output, idata_raw_offset + idata_raw_size)
+    if !debug { ret ok }
+    ret append_debug(builder, output, function_offsets, lines, table_at, main_index, machine_file, headers_size, image_size)
+}
+
+// (D1583) What a foreign debugger reads from a PE image, as MinGW's linker writes it:
+// the DWARF of D1581 and D1582 in five sections after `.idata`, readable and
+// discardable, whose names are longer than a section name's eight bytes and so are
+// `/offset` into the COFF string table; and the COFF symbol table, a symbol per placed
+// function, which that string table follows at the end of the file, mapped by nothing.
+// Section 13 asks for CodeView here; that comes with the PDB writer (M4), and until
+// then lldb and gdb read these.
+fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, main_index: usize, machine_file: usize, headers_size: usize, image_size: usize) -> err {
+    let text_address = 4096usize
+    let code_address = 5368709120usize + text_address + machine_file - headers_size
+    var dwarf: link_elf.DwarfSections = zero
+    try link_elf.write_dwarf(builder, output, function_offsets, lines, table_at, code_address, main_index, 512usize, &dwarf)
+    let (raw_end, raw_end_error) = align_up(output.count, 512usize)
+    if raw_end_error != ok { ret raw_end_error }
+    try pad_to(output, raw_end)
+    var starts: [5]usize = zero
+    var ends: [5]usize = zero
+    var names: [5]usize = zero
+    starts[0usize] = dwarf.abbrev
+    ends[0usize] = dwarf.abbrev_end
+    names[0usize] = 4usize
+    starts[1usize] = dwarf.loc
+    ends[1usize] = dwarf.loc_end
+    names[1usize] = 18usize
+    starts[2usize] = dwarf.info
+    ends[2usize] = dwarf.info_end
+    names[2usize] = 29usize
+    starts[3usize] = dwarf.line
+    ends[3usize] = dwarf.line_end
+    names[3usize] = 41usize
+    starts[4usize] = dwarf.frame
+    ends[4usize] = dwarf.frame_end
+    names[4usize] = 53usize
+    // An empty section (no var placed over part of its function leaves `.debug_loc`
+    // empty) is left out: the loader refuses one that shares its address with the next.
+    var address = image_size
+    var section = 0usize
+    var written = 0usize
+    while section < 5usize {
+        let entry = 472usize + written * 40usize
+        let size = ends[section] - starts[section]
+        if size == 0usize {
+            section += 1usize
+            continue
+        }
+        let (raw_size, raw_size_error) = align_up(size, 512usize)
+        if raw_size_error != ok { ret raw_size_error }
+        let (virtual_size, virtual_size_error) = align_up(size, 4096usize)
+        if virtual_size_error != ok { ret virtual_size_error }
+        output.bytes[entry] = 47u8
+        var digits: [4]u8 = zero
+        var digit_count = 0usize
+        var rest = names[section]
+        while digit_count == 0usize || rest != 0usize {
+            digits[digit_count] = u8(48usize + rest % 10usize)
+            rest = rest / 10usize
+            digit_count += 1usize
+        }
+        var digit_at = 0usize
+        while digit_at < digit_count {
+            output.bytes[entry + 1usize + digit_at] = digits[digit_count - 1usize - digit_at]
+            digit_at += 1usize
+        }
+        try emit_x64.patch_little_u32(output, entry + 8usize, size)
+        try emit_x64.patch_little_u32(output, entry + 12usize, address)
+        try emit_x64.patch_little_u32(output, entry + 16usize, raw_size)
+        try emit_x64.patch_little_u32(output, entry + 20usize, starts[section])
+        // Initialised data, discardable, readable.
+        try emit_x64.patch_little_u32(output, entry + 36usize, 1107296320usize)
+        address += virtual_size
+        section += 1usize
+        written += 1usize
+    }
+    output.bytes[134usize] = u8(2usize + written)
+    try emit_x64.patch_little_u32(output, 208usize, address)
+    // The symbols, then the string table: its size, the five section names, and a
+    // `module.function` name per symbol.
+    let symbols_offset = output.count
+    var symbols = 0usize
+    var name_at = 66usize
+    var at = 0usize
+    var placed_max = 0usize
+    while at < builder.function_count {
+        if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) {
+            try emit_x64.little_u32(output, 0usize)
+            try emit_x64.little_u32(output, name_at)
+            try emit_x64.little_u32(output, machine_file + function_offsets[at] - headers_size)
+            try little_u16(output, 1usize)
+            try little_u16(output, 32usize)
+            try emit_x64.byte(output, 2usize)
+            try emit_x64.byte(output, 0usize)
+            name_at += builder.functions[at].module_name.len + builder.functions[at].name.len + 2usize
+            symbols += 1usize
+        }
+        at += 1usize
+    }
+    try emit_x64.little_u32(output, name_at)
+    try link_elf.append_blob(output, ".debug_abbrev\x00.debug_loc\x00.debug_info\x00.debug_line\x00.debug_frame\x00")
+    at = 0usize
+    placed_max = 0usize
+    while at < builder.function_count {
+        if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) { try link_elf.function_name(output, builder.functions[at]) }
+        at += 1usize
+    }
+    try emit_x64.patch_little_u32(output, 140usize, symbols_offset)
+    try emit_x64.patch_little_u32(output, 144usize, symbols)
+    ret ok
 }
 
 fn self_test() -> err {
@@ -477,7 +594,8 @@ fn self_test() -> err {
     var executable_storage: [8192]u8 = zero
     var executable: emit_x64.Buffer = zero
     try emit_x64.init(&executable, executable_storage[..])
-    try write(&builder, &machine, offsets[..], relocations[..], 0usize, &executable)
+    var lines: [1]codegen_x64.LineEntry = zero
+    try write(&builder, &machine, offsets[..], relocations[..], 0usize, lines[0usize..0usize], machine.count, &executable)
     // The embedded runtime grows whenever a host intrinsic is added, which moves
     // every section that follows it. Only the header fields that sit ahead of the
     // runtime are checked at a literal offset; everything after is checked where

@@ -6220,7 +6220,7 @@ fn link_artifact_image(a: *mem.Arena, program: *em_link.Program, is_windows: boo
     if init_error != ok { ret (empty, init_error) }
     var write_error: err = ok
     if is_windows {
-        write_error = link_pe.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, &executable)
+        write_error = link_pe.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines[..program.line_count], table_at, &executable)
     } else {
         write_error = link_elf.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines[..program.line_count], table_at, &executable)
     }
@@ -12578,7 +12578,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
                 if machine_abi_of(args) == .Windows {
-                    try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, &executable)
+                    try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                 } else {
                     try link_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                 }

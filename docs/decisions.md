@@ -28653,3 +28653,24 @@ A struct is written as a DWARF declaration wherever it is referred to by name, a
 **Suite expectations.** Both runners now expect format 18 and an 11-section module artifact. The section count had not been updated when D1515 added the Emission section: artifacts already had 10 sections while the check said 9.
 
 Still open: CodeView and `.nepsym` on PE; `.nepersym` in section 13's layout; unions and tagged unions as more than their size; and lexical scopes, since a local is listed for its whole function even before its binding.
+
+## D1583 — DWARF and COFF symbols in Windows images
+
+A Windows image now carries what D1581 and D1582 gave an ELF image: the DWARF line program, the parameters, locals and their types, and the frame description. It also gets a symbol per function. The layout is the one MinGW's linker writes, so lldb and gdb read it on Windows.
+
+- **Where the DWARF goes.** Five sections follow `.idata`: `.debug_abbrev`, `.debug_loc`, `.debug_info`, `.debug_line` and `.debug_frame`. Each starts on the 512-byte file alignment and has its own 4096-aligned address. They are readable, discardable, initialised data. An empty one is left out, because the loader refuses a section that shares its address with the next: a program whose locals are all placed for their whole function has an empty `.debug_loc`, and the basic fixture's image would not start.
+- **Names and symbols.** A section name is eight bytes, so each debug section is named `/offset` into the COFF string table. That table follows the COFF symbol table at the end of the file, which no section maps. The symbol table holds a function symbol (type `0x20`) per placed function, named `module.function`.
+- **Headers.** They grow from 512 to 1024 bytes for the seven section entries. An image without line rows keeps the old layout; only the self-tests' images have none.
+- **Shared writer.** `link_elf.write_dwarf` now writes the DWARF for both linkers into a `DwarfSections` record of starts and ends, padding each section to the caller's alignment. Splitting it out fixed D1582's `.debug_line` header, whose size ran on over the frame description after it.
+- **Placement on Windows.** Selection places locals for the Windows ABI too, so the D1582 gate is gone. A Windows parameter larger than a word arrives by pointer, which the placement already handles.
+
+**Why DWARF and not CodeView.** Section 13 asks for CodeView on PE. In an image, CodeView lives in a PDB, and the PDB writer is M4's, in the roadmap's own-linker hard case. Until then, this is what a debugger on Windows gets, and WinDbg and Visual Studio see only the image's code.
+
+**Evidence.**
+
+- **Loader and behaviour.** Every one of the 590 link fixtures, built by this compiler and by the previous one, runs on Windows with the same exit code and standard output. The one exception is `ui_navigation4_v2`, which the previous compiler cannot build without another session's uncommitted `tool.e` fix.
+- **Self-host.** The self-hosted compiler, now itself such an image, reproduces itself byte for byte.
+- **Reading the DWARF.** No Windows debugger is installed here, so it was read from WSL. `objdump -h` lists the seven sections, `objdump -t` the function symbols, and `--dwarf=decodedline` the line table. gdb, reading the image statically, resolves `vars.length` to its line and reports its parameters' locations (`p` through the pointer at `rbp-8`) and a local's range in a register (`total` in `r8`).
+- **Suite.** `run.ps1` now expects the basic image's seven sections, the first debug section named `/4`, a symbol table, and `.debug_info`, `.debug_line` and `main.main` among its strings.
+
+Still open: CodeView through the M4 PDB writer, a `.nepsym` section on PE (the table lies inside `.text`, which a PE section cannot cover), `.nepersym` in section 13's layout, unions and tagged unions beyond their size, and lexical scopes.

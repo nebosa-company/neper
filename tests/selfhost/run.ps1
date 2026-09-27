@@ -248,7 +248,11 @@ if ($LASTEXITCODE -ne 0 -or $executableWritten -ne 'executable written' -or -not
 if ($LASTEXITCODE -ne 0) { throw 'self-hosted PE executable did not run successfully' }
 $executableBytes = [IO.File]::ReadAllBytes($executablePath)
 $executableText = [Text.Encoding]::ASCII.GetString($executableBytes)
-if ([BitConverter]::ToUInt16($executableBytes, 134) -ne 2 -or [BitConverter]::ToUInt32($executableBytes, 272) -eq 0 -or [BitConverter]::ToUInt32($executableBytes, 360) -eq 0) { throw 'PE executable omitted its import directory or IAT' }
+if ([BitConverter]::ToUInt16($executableBytes, 134) -ne 7 -or [BitConverter]::ToUInt32($executableBytes, 272) -eq 0 -or [BitConverter]::ToUInt32($executableBytes, 360) -eq 0) { throw 'PE executable omitted its import directory or IAT' }
+# (D1583) .text, .idata and five DWARF sections named through the COFF string table, which
+# follows a symbol per function at the end of the file.
+if ([Text.Encoding]::ASCII.GetString($executableBytes[472..473]) -ne '/4' -or [BitConverter]::ToUInt32($executableBytes, 140) -eq 0 -or [BitConverter]::ToUInt32($executableBytes, 144) -eq 0) { throw 'PE executable omitted its debug sections or symbols' }
+if ($executableText -notmatch '\.debug_info' -or $executableText -notmatch '\.debug_line' -or $executableText -notmatch 'main\.main') { throw 'PE executable string table omitted a debug section or function name' }
 if ($executableText -notmatch 'KERNEL32\.dll' -or $executableText -notmatch 'ExitProcess') { throw 'PE executable omitted its fixed kernel32 import' }
 $scalarExecutablePath = Join-Path $testBuild 'scalar-selfhost.exe'
 $scalarExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\scalar\src\main.e') $repo 'x64' 'windows' $scalarExecutablePath
@@ -604,6 +608,14 @@ $parseFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $parseFloatWritten -ne 'executable written') { throw 'float parse executable emission failed' }
 & $parseFloatPath
 if ($LASTEXITCODE -ne 0) { throw 'a float parse rounded, rejected or accepted the wrong way' }
+# The float fast paths (D1593) against 16,000 vectors from exact rational arithmetic (its
+# vectors.py): Ryu's digits and the exact search where they differ, Clinger and
+# Eisel-Lemire and the exact parse, and 200,000 random round trips per width.
+$floatVectorsPath = Join-Path $testBuild 'str-float-vectors-selfhost.exe'
+$floatVectorsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\str_float_vectors\src\main.e') $repo 'x64' 'windows' $floatVectorsPath
+if ($LASTEXITCODE -ne 0 -or $floatVectorsWritten -ne 'executable written') { throw 'float vector fixture emission failed' }
+& $floatVectorsPath
+if ($LASTEXITCODE -ne 0) { throw "a float was pushed or parsed differently from its exact vector: exit $LASTEXITCODE" }
 # `mem.bitcast` reads a value's bytes as another type of the same size, which is what
 # lets a pun avoid a `union`. A scalar lives in a register and an aggregate is an
 # address, so the fixture covers all four shapes as well as the bit patterns.
