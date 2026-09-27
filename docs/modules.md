@@ -318,7 +318,9 @@ widgets are immutable frame-arena descriptions, not runtime objects. Reconciliat
 stores persistent elements and state behind generation-checked identifiers;
 layout produces retained render nodes, and `e.gfx.scene` compiles them into explicit
 GPU work. Native windows, input, clipboard, IME and accessibility enter only through
-reviewed `e.os` primitives. There is no garbage collector, global widget registry,
+reviewed `e.os` primitives; how the semantic tree reaches a screen reader (UI
+Automation on Windows, AT-SPI on Linux) and how its actions come back is
+[`ux/accessibility-bridge.md`](ux/accessibility-bridge.md). There is no garbage collector, global widget registry,
 reflection-based property system or hidden allocation.
 
 ---

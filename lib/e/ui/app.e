@@ -20,6 +20,7 @@ use e.os.shell
 use e.time
 use e.gfx.geometry
 use e.gfx.scene
+use e.ui.accessibility
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.widget
@@ -52,6 +53,8 @@ type State = struct {
     frames: u64,
     idle: widget.Submit,
     idle_pending: bool,
+    // (D1602) The host's assistive technology has had a tree published to it.
+    assisted: bool,
 }
 
 // The per-context trampoline: the erased context and the build function's bits
@@ -138,6 +141,10 @@ fn step(app: *App, timeout: time.Duration) -> (bool, err) {
         if dispatch_error != ok { ret (false, dispatch_error) }
         s.frame_due = true
     }
+    // (D1602) What an assistive technology asked is performed, and its first look
+    // at the window is answered with a frame that publishes the tree.
+    if accessibility.serve(&s.runtime, s.win.id) { s.frame_due = true }
+    if !s.assisted && accessibility.listening(s.win.id) { s.frame_due = true }
     if s.frame_due {
         let frame_error = present_frame(s)
         if frame_error != ok { ret (false, frame_error) }
@@ -166,6 +173,12 @@ fn present_frame(s: *State) -> err {
     let limits = ui_layout.Constraints { min_width: 0.0, max_width: metrics.logical_size.width, min_height: 0.0, max_height: metrics.logical_size.height }
     let (compiled, reconcile_error) = widget.reconcile(&s.runtime, &frame, tree, limits)
     if reconcile_error != ok { ret reconcile_error }
+    // (D1602) The tree for the host's assistive technology, once it has asked; a
+    // tree that does not fit the frame is not published, and the frame goes on.
+    if accessibility.listening(s.win.id) {
+        s.assisted = true
+        let presented = accessibility.present(&frame, &s.runtime, s.win.id)
+    }
     // (D1334) The pointer cursor the frame asked for, set when it changes.
     let wanted = widget.cursor_of(&s.runtime)
     if wanted != s.cursor_shown {

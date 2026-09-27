@@ -3373,6 +3373,12 @@ fn window_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) -
         }
         ret raw_default_procedure(handle, message, wparam, lparam)
     }
+    // WM_GETOBJECT: UI Automation asking for the window's root element (D1602).
+    if message == 61u32 {
+        let (answer, answered) = uia_answer(handle, wparam, lparam)
+        if answered { ret answer }
+        ret raw_default_procedure(handle, message, wparam, lparam)
+    }
     ret raw_default_procedure(handle, message, wparam, lparam)
 }
 
@@ -3441,6 +3447,7 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
 fn window_close(w: Window) -> err {
     let slot = window_slot(w.raw)
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    uia_release(slot, w.raw)
     window_handles[slot] = 0usize
     // Its events are dropped with it: a Close for a window that is gone is noise.
     var kept = 0usize
@@ -3655,14 +3662,958 @@ fn set_clipboard_text(value: str) -> err {
     ret ok
 }
 
-// The accessibility bridge (D802): the semantic tree a window publishes to the
-// host's assistive technology, one flat record per node with its parent. No host
-// bridge is written yet -- UI Automation, AT-SPI -- so publication answers
-// `Unsupported` and a program learns so at the first publish.
+// The accessibility bridge (D802, D1602): the semantic tree a window publishes to
+// the host's assistive technology, one flat record per node with its parent, in
+// tree order. Here it answers UI Automation as a server-side provider. The first
+// WM_GETOBJECT for the window's root makes the window's store -- a region of its
+// own, reserved once and never freed, since UI Automation may hold an element past
+// the window -- and from then on every publish copies the records and their text
+// into it, links parents, children and siblings, and raises the focus change. An
+// element is one object per widget slot with an interface pointer for each
+// interface it answers (the fragment root only at the root), each the address of
+// its own field, so a method finds the element from the table its pointer names.
+// The objects are never freed, so their reference counts are a formality.
+// What the person does through an element -- invoke, toggle, select, expand, set a
+// value, focus -- is queued as a request `accessibility_take` hands the program,
+// and a Paint wakes its wait; the program performs it through its widgets.
+// ponytail: an element is its slot and the generation last handed out, so a
+// client holding an element whose slot was reused reaches the new node; slots past
+// UIA_SLOTS and nodes past UIA_NODES are not published; value, name and live-region
+// changes raise no event -- the focus change and the structure do.
 type AccessibleNode = struct { id: u32, generation: u32, parent: u32, parent_generation: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u16, actions: u32, sort: u8, live: u8, row: u32, column: u32, row_count: u32, column_count: u32, level: u8, selection_start: usize, selection_end: usize, labelled_by: u32, labelled_by_generation: u32, described_by: u32, described_by_generation: u32, error_by: u32, error_by_generation: u32, controls: u32, controls_generation: u32, active: u32, active_generation: u32, relation_flags: u8, x: f32, y: f32, width: f32, height: f32 }
+// What an assistive technology asked of a node: `action` is `e.ui.accessibility`'s
+// Action in declaration order, `value` the text a SetValue carries.
+type AccessibleRequest = struct { id: u32, generation: u32, action: u8, value: str }
+
+type UiaTable = struct { slots: [12]usize }
+type UiaElement = struct { simple: *UiaTable, fragment: *UiaTable, root: *UiaTable, invoke: *UiaTable, value: *UiaTable, toggle: *UiaTable, expand: *UiaTable, select: *UiaTable, store: usize, slot: u32, generation: u32 }
+type UiaStore = struct { handle: usize, asked: bool, ready: bool, count: usize, focus: u32, root_first: u32, root_last: u32, nodes: []AccessibleNode, text: []u8, index_of: []u32, parent: []u32, first: []u32, last: []u32, next: []u32, previous: []u32, elements: []UiaElement }
+type UiaRequest = struct { handle: usize, id: u32, generation: u32, action: u8, length: usize, text: [512]u8 }
+type UiaVariant = struct { kind: u16, reserved1: u16, reserved2: u16, reserved3: u16, value: usize, padding: usize }
+type UiaRect = struct { left: f64, top: f64, width: f64, height: f64 }
+type UiaPoint = struct { x: i32, y: i32 }
+type UiaGuid = struct { bytes: [16]u8 }
+type UiaWord = struct { value: usize }
+type UiaInt = struct { value: i32 }
+
+type UiaElementPun = union { element: *UiaElement, bits: usize }
+type UiaWordPun = union { word: *UiaWord, bits: usize }
+type UiaUnitsPun = union { units: *u16, bits: usize }
+type UiaThisFn = union { function: fn(usize) -> i32, bits: usize }
+type UiaQueryFn = union { function: fn(usize, *const UiaGuid, *UiaWord) -> i32, bits: usize }
+type UiaIntFn = union { function: fn(usize, *UiaInt) -> i32, bits: usize }
+type UiaIdFn = union { function: fn(usize, i32, *UiaWord) -> i32, bits: usize }
+type UiaPropertyFn = union { function: fn(usize, i32, *UiaVariant) -> i32, bits: usize }
+type UiaWordFn = union { function: fn(usize, *UiaWord) -> i32, bits: usize }
+type UiaRectFn = union { function: fn(usize, *UiaRect) -> i32, bits: usize }
+type UiaPointFn = union { function: fn(usize, f64, f64, *UiaWord) -> i32, bits: usize }
+type UiaTextFn = union { function: fn(usize, *const u16) -> i32, bits: usize }
+
+const UIA_NODES: usize = 8192usize
+const UIA_SLOTS: usize = 16384usize
+const UIA_TEXT: usize = 1048576usize
+const UIA_REGION: usize = 8388608usize
+const UIA_ROOT: u32 = 4294967295u32
+const UIA_REQUESTS: usize = 8usize
+const UIA_ROOT_OBJECT: usize = 4294967271usize
+const UIA_E_ELEMENT_NOT_AVAILABLE: u32 = 2147746305u32
+const UIA_E_ELEMENT_NOT_ENABLED: u32 = 2147746304u32
+const UIA_E_NO_INTERFACE: u32 = 2147500034u32
+const UIA_E_OUT_OF_MEMORY: u32 = 2147942414u32
+// The bits of `e.ui.accessibility`'s flags and actions the bridge reads.
+const UIA_DISABLED: u16 = 1u16
+const UIA_FOCUSED: u16 = 2u16
+const UIA_SELECTED: u16 = 4u16
+const UIA_CHECKED: u16 = 8u16
+const UIA_EXPANDED: u16 = 16u16
+const UIA_HIDDEN: u16 = 32u16
+const UIA_MIXED: u16 = 64u16
+const UIA_REQUIRED: u16 = 512u16
+const UIA_READ_ONLY: u16 = 1024u16
+const UIA_SECRET: u16 = 8192u16
+const UIA_ACTION_FOCUS: u32 = 1u32
+const UIA_ACTION_PRESS: u32 = 2u32
+const UIA_ACTION_SET_VALUE: u32 = 16u32
+const UIA_ACTION_EXPAND: u32 = 128u32
+const UIA_ACTION_COLLAPSE: u32 = 256u32
+const UIA_ACTION_SELECT: u32 = 512u32
+// Action codes a request carries, in `e.ui.accessibility.Action` order.
+const UIA_DO_FOCUS: u8 = 0u8
+const UIA_DO_PRESS: u8 = 1u8
+const UIA_DO_SET_VALUE: u8 = 4u8
+const UIA_DO_EXPAND: u8 = 7u8
+const UIA_DO_COLLAPSE: u8 = 8u8
+const UIA_DO_SELECT: u8 = 9u8
+
+var uia_stores: [16]UiaStore = zero
+var uia_tables: [8]UiaTable = zero
+var uia_iids: [9]UiaGuid = zero
+var uia_tables_filled: bool = zero
+var uia_requests: [8]UiaRequest = zero
+var uia_request_head: usize = 0usize
+var uia_request_count: usize = 0usize
+var uia_taken: [512]u8 = zero
+
+@import("uiautomationcore.dll", "UiaReturnRawElementProvider")
+extern fn raw_uia_return(window: usize, wparam: usize, lparam: isize, provider: usize) -> isize
+
+@import("uiautomationcore.dll", "UiaHostProviderFromHwnd")
+extern fn raw_uia_host(window: usize, provider: *UiaWord) -> i32
+
+@import("uiautomationcore.dll", "UiaRaiseAutomationEvent")
+extern fn raw_uia_raise(provider: usize, event: i32) -> i32
+
+@import("uiautomationcore.dll", "UiaRaiseStructureChangedEvent")
+extern fn raw_uia_raise_structure(provider: usize, change: i32, runtime_id: usize, length: i32) -> i32
+
+@import("uiautomationcore.dll", "UiaClientsAreListening")
+extern fn raw_uia_listening() -> i32
+
+@import("oleaut32.dll", "SysAllocStringLen")
+extern fn raw_bstr(units: usize, length: u32) -> usize
+
+@import("oleaut32.dll", "SafeArrayCreateVector")
+extern fn raw_safe_array(kind: u16, lower: i32, count: u32) -> usize
+
+@import("oleaut32.dll", "SafeArrayPutElement")
+extern fn raw_safe_array_put(array: usize, index: *const i32, value: *const i32) -> i32
+
+@import("user32.dll", "ClientToScreen")
+extern fn raw_client_to_screen(window: usize, point: *UiaPoint) -> i32
+
+
+// A GUID's bytes: the first three parts little-endian, the last eight as written.
+fn uia_guid(k: usize, d1: u32, d2: u16, d3: u16, d4_high: u32, d4_low: u32) {
+    let g = &uia_iids[k]
+    g.bytes[0usize] = u8(d1 & 255u32)
+    g.bytes[1usize] = u8((d1 >> 8u32) & 255u32)
+    g.bytes[2usize] = u8((d1 >> 16u32) & 255u32)
+    g.bytes[3usize] = u8(d1 >> 24u32)
+    g.bytes[4usize] = u8(d2 & 255u16)
+    g.bytes[5usize] = u8(d2 >> 8u16)
+    g.bytes[6usize] = u8(d3 & 255u16)
+    g.bytes[7usize] = u8(d3 >> 8u16)
+    g.bytes[8usize] = u8(d4_high >> 24u32)
+    g.bytes[9usize] = u8((d4_high >> 16u32) & 255u32)
+    g.bytes[10usize] = u8((d4_high >> 8u32) & 255u32)
+    g.bytes[11usize] = u8(d4_high & 255u32)
+    g.bytes[12usize] = u8(d4_low >> 24u32)
+    g.bytes[13usize] = u8((d4_low >> 16u32) & 255u32)
+    g.bytes[14usize] = u8((d4_low >> 8u32) & 255u32)
+    g.bytes[15usize] = u8(d4_low & 255u32)
+}
+
+fn uia_same_guid(riid: *const UiaGuid, k: usize) -> bool {
+    var at = 0usize
+    while at < 16usize {
+        if riid.bytes[at] != uia_iids[k].bytes[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn uia_this(f: fn(usize) -> i32) -> usize {
+    var pun: UiaThisFn = zero
+    pun.function = f
+    ret pun.bits
+}
+
+fn uia_int_slot(f: fn(usize, *UiaInt) -> i32) -> usize {
+    var pun: UiaIntFn = zero
+    pun.function = f
+    ret pun.bits
+}
+
+fn uia_word_slot(f: fn(usize, *UiaWord) -> i32) -> usize {
+    var pun: UiaWordFn = zero
+    pun.function = f
+    ret pun.bits
+}
+
+fn uia_id_slot(f: fn(usize, i32, *UiaWord) -> i32) -> usize {
+    var pun: UiaIdFn = zero
+    pun.function = f
+    ret pun.bits
+}
+
+// Every table starts with IUnknown; the interfaces follow in the order the SDK's
+// IDL declares their methods.
+fn uia_fill_tables() {
+    if uia_tables_filled { ret }
+    uia_guid(0usize, 0u32, 0u16, 0u16, 3221225472u32, 70u32)
+    uia_guid(1usize, 3604834513u32, 34557u16, 17202u16, 2254871230u32, 3735212620u32)
+    uia_guid(2usize, 4144381352u32, 33625u16, 17308u16, 2459417541u32, 697990535u32)
+    uia_guid(3usize, 1645011621u32, 43919u16, 16553u16, 2261507644u32, 1968806744u32)
+    uia_guid(4usize, 1425846859u32, 57742u16, 18338u16, 3033787595u32, 3883243938u32)
+    uia_guid(5usize, 3348320640u32, 28595u16, 16897u16, 2977201655u32, 987493962u32)
+    uia_guid(6usize, 1456475088u32, 50420u16, 17212u16, 2822117970u32, 2776500370u32)
+    uia_guid(7usize, 3628585893u32, 51888u16, 19096u16, 2352147636u32, 1549380900u32)
+    uia_guid(8usize, 717936648u32, 45780u16, 17709u16, 2751959551u32, 449931186u32)
+    var query: UiaQueryFn = zero
+    query.function = uia_query
+    var k = 0usize
+    while k < 8usize {
+        uia_tables[k].slots[0usize] = query.bits
+        uia_tables[k].slots[1usize] = uia_this(uia_count)
+        uia_tables[k].slots[2usize] = uia_this(uia_count)
+        k += 1usize
+    }
+    // IRawElementProviderSimple
+    uia_tables[0usize].slots[3usize] = uia_int_slot(uia_options)
+    var pattern: UiaIdFn = zero
+    pattern.function = uia_pattern
+    uia_tables[0usize].slots[4usize] = pattern.bits
+    var property: UiaPropertyFn = zero
+    property.function = uia_property
+    uia_tables[0usize].slots[5usize] = property.bits
+    uia_tables[0usize].slots[6usize] = uia_word_slot(uia_host)
+    // IRawElementProviderFragment
+    uia_tables[1usize].slots[3usize] = uia_id_slot(uia_navigate)
+    uia_tables[1usize].slots[4usize] = uia_word_slot(uia_runtime_id)
+    var bounds: UiaRectFn = zero
+    bounds.function = uia_bounds
+    uia_tables[1usize].slots[5usize] = bounds.bits
+    uia_tables[1usize].slots[6usize] = uia_word_slot(uia_nothing)
+    uia_tables[1usize].slots[7usize] = uia_this(uia_set_focus)
+    uia_tables[1usize].slots[8usize] = uia_word_slot(uia_fragment_root)
+    // IRawElementProviderFragmentRoot
+    var point: UiaPointFn = zero
+    point.function = uia_from_point
+    uia_tables[2usize].slots[3usize] = point.bits
+    uia_tables[2usize].slots[4usize] = uia_word_slot(uia_focus)
+    // IInvokeProvider
+    uia_tables[3usize].slots[3usize] = uia_this(uia_invoke)
+    // IValueProvider
+    var set_value: UiaTextFn = zero
+    set_value.function = uia_set_value
+    uia_tables[4usize].slots[3usize] = set_value.bits
+    uia_tables[4usize].slots[4usize] = uia_word_slot(uia_value)
+    uia_tables[4usize].slots[5usize] = uia_int_slot(uia_read_only)
+    // IToggleProvider
+    uia_tables[5usize].slots[3usize] = uia_this(uia_toggle)
+    uia_tables[5usize].slots[4usize] = uia_int_slot(uia_toggle_state)
+    // IExpandCollapseProvider
+    uia_tables[6usize].slots[3usize] = uia_this(uia_expand)
+    uia_tables[6usize].slots[4usize] = uia_this(uia_collapse)
+    uia_tables[6usize].slots[5usize] = uia_int_slot(uia_expand_state)
+    // ISelectionItemProvider
+    uia_tables[7usize].slots[3usize] = uia_this(uia_select)
+    uia_tables[7usize].slots[4usize] = uia_this(uia_select)
+    uia_tables[7usize].slots[5usize] = uia_this(uia_select)
+    uia_tables[7usize].slots[6usize] = uia_int_slot(uia_is_selected)
+    uia_tables[7usize].slots[7usize] = uia_word_slot(uia_container)
+    uia_tables_filled = true
+}
+
+// The window's store, made at its first request: a region carved into the records,
+// their text, the links and one element per slot and the root.
+fn uia_prepare(slot: usize, handle: usize) -> bool {
+    uia_fill_tables()
+    let s = &uia_stores[slot]
+    s.handle = handle
+    if s.elements.len != 0usize { ret true }
+    let (base, reserve_error) = reserve(UIA_REGION)
+    if reserve_error != ok || commit(base, UIA_REGION) != ok { ret false }
+    var region: mem.Arena = zero
+    region.base = base
+    region.cap = UIA_REGION
+    region.off = 0usize
+    let (nodes, nodes_error) = mem.alloc[AccessibleNode](&region, UIA_NODES)
+    let (text, text_error) = mem.alloc[u8](&region, UIA_TEXT)
+    let (index_of, index_error) = mem.alloc[u32](&region, UIA_SLOTS)
+    let (parents, parents_error) = mem.alloc[u32](&region, UIA_NODES)
+    let (firsts, firsts_error) = mem.alloc[u32](&region, UIA_NODES)
+    let (lasts, lasts_error) = mem.alloc[u32](&region, UIA_NODES)
+    let (nexts, nexts_error) = mem.alloc[u32](&region, UIA_NODES)
+    let (previouses, previouses_error) = mem.alloc[u32](&region, UIA_NODES)
+    let (elements, elements_error) = mem.alloc[UiaElement](&region, UIA_SLOTS + 1usize)
+    if nodes_error != ok || text_error != ok || index_error != ok || parents_error != ok || firsts_error != ok || lasts_error != ok || nexts_error != ok || previouses_error != ok || elements_error != ok { ret false }
+    var at = 0usize
+    while at <= UIA_SLOTS {
+        let e = &elements[at]
+        e.simple = &uia_tables[0usize]
+        e.fragment = &uia_tables[1usize]
+        e.root = &uia_tables[2usize]
+        e.invoke = &uia_tables[3usize]
+        e.value = &uia_tables[4usize]
+        e.toggle = &uia_tables[5usize]
+        e.expand = &uia_tables[6usize]
+        e.select = &uia_tables[7usize]
+        e.store = slot
+        e.slot = u32(at)
+        e.generation = 0u32
+        at += 1usize
+    }
+    elements[UIA_SLOTS].slot = UIA_ROOT
+    s.nodes = nodes
+    s.text = text
+    s.index_of = index_of
+    s.parent = parents
+    s.first = firsts
+    s.last = lasts
+    s.next = nexts
+    s.previous = previouses
+    s.elements = elements
+    ret true
+}
+
+// WM_GETOBJECT for the root: the window's root element, and a first frame asked
+// for so the tree is there by the time the client looks.
+fn uia_answer(handle: usize, wparam: usize, lparam: isize) -> (isize, bool) {
+    if (mem.bitcast[usize](lparam) & 4294967295usize) != UIA_ROOT_OBJECT { ret (0isize, false) }
+    let slot = window_slot(handle)
+    if slot >= WINDOW_TABLE || !uia_prepare(slot, handle) { ret (0isize, false) }
+    if !uia_stores[slot].asked {
+        uia_stores[slot].asked = true
+        var wake: WindowEvent = zero
+        wake.kind = .Paint
+        wake.window = Window { raw: handle }
+        window_push(wake)
+    }
+    ret (raw_uia_return(handle, wparam, lparam, uia_root_element(slot, 0usize)), true)
+}
+
+// A closing window hands UI Automation nothing more; its elements stay valid
+// memory and answer that they are gone.
+fn uia_release(slot: usize, handle: usize) {
+    let s = &uia_stores[slot]
+    if !s.asked { ret }
+    let released = raw_uia_return(handle, 0usize, 0isize, 0usize)
+    var i = 0usize
+    while i < s.count {
+        s.index_of[usize(s.nodes[i].id)] = 0u32
+        i += 1usize
+    }
+    s.count = 0usize
+    s.focus = 0u32
+    s.root_first = 0u32
+    s.root_last = 0u32
+    s.asked = false
+    s.ready = false
+}
+
+// The element a method was called on, from the table its interface pointer names.
+fn uia_base(this: usize) -> *UiaElement {
+    var word: UiaWordPun = zero
+    word.bits = this
+    let table = word.word.value
+    var k = 0usize
+    while k < 8usize {
+        if mem.address_of(&uia_tables[k]) == table { break }
+        k += 1usize
+    }
+    var pun: UiaElementPun = zero
+    pun.bits = this - k * 8usize
+    ret pun.element
+}
+
+fn uia_root_element(store: usize, k: usize) -> usize {
+    ret mem.address_of(&uia_stores[store].elements[UIA_SLOTS]) + k * 8usize
+}
+
+// A published node's element as interface `k`, bound to the node's generation;
+// `link` is an index plus one, and zero is no element.
+fn uia_link(store: usize, link: u32, k: usize) -> usize {
+    if link == 0u32 { ret 0usize }
+    let s = &uia_stores[store]
+    let index = usize(link - 1u32)
+    let e = &s.elements[usize(s.nodes[index].id)]
+    e.generation = s.nodes[index].generation
+    ret mem.address_of(e) + k * 8usize
+}
+
+// The published index an element stands for, while it is published.
+fn uia_index(e: *const UiaElement) -> (usize, bool) {
+    let s = &uia_stores[e.store]
+    if e.slot == UIA_ROOT || !s.ready { ret (0usize, false) }
+    let at = s.index_of[usize(e.slot)]
+    if at == 0u32 { ret (0usize, false) }
+    let index = usize(at - 1u32)
+    if s.nodes[index].generation != e.generation { ret (0usize, false) }
+    ret (index, true)
+}
+
+// A method on an element that is no longer published: the root has nothing to
+// say, any other element is gone.
+fn uia_gone(e: *const UiaElement) -> i32 {
+    if e.slot == UIA_ROOT { ret 0i32 }
+    ret mem.bitcast[i32](UIA_E_ELEMENT_NOT_AVAILABLE)
+}
+
+fn uia_bstr(text: str) -> usize {
+    if text.len == 0usize { ret raw_bstr(0usize, 0u32) }
+    var nothing: *u16 = zero
+    let units = raw_widen(CP_UTF8, 0u32, &text[0usize], i32(text.len), nothing, 0i32)
+    if units <= 0i32 { ret 0usize }
+    let block = raw_bstr(0usize, u32(units))
+    if block == 0usize { ret 0usize }
+    var pun: UiaUnitsPun = zero
+    pun.bits = block
+    let written = raw_widen(CP_UTF8, 0u32, &text[0usize], i32(text.len), pun.units, units)
+    ret block
+}
+
+fn uia_set_int(out: *UiaVariant, value: i32) {
+    out.kind = 3u16
+    out.value = usize(mem.bitcast[u32](value))
+}
+
+fn uia_set_bool(out: *UiaVariant, value: bool) {
+    out.kind = 11u16
+    out.value = 0usize
+    if value { out.value = 65535usize }
+}
+
+fn uia_set_text(out: *UiaVariant, text: str) {
+    let block = uia_bstr(text)
+    if block == 0usize { ret }
+    out.kind = 8u16
+    out.value = block
+}
+
+// The UI Automation control type of an `e.ui.accessibility` role code.
+fn uia_control_type(role: u8) -> i32 {
+    if role == 2u8 || role == 39u8 || role == 40u8 { ret 50026i32 }
+    if role == 3u8 || role == 18u8 { ret 50000i32 }
+    if role == 4u8 { ret 50002i32 }
+    if role == 5u8 { ret 50013i32 }
+    if role == 6u8 || role == 24u8 || role == 25u8 { ret 50020i32 }
+    if role == 7u8 { ret 50004i32 }
+    if role == 8u8 { ret 50006i32 }
+    if role == 9u8 { ret 50005i32 }
+    if role == 10u8 || role == 35u8 { ret 50008i32 }
+    if role == 11u8 || role == 36u8 { ret 50007i32 }
+    if role == 12u8 { ret 50036i32 }
+    if role == 13u8 || role == 14u8 { ret 50029i32 }
+    if role == 15u8 { ret 50015i32 }
+    if role == 16u8 { ret 50012i32 }
+    if role == 17u8 { ret 50014i32 }
+    if role == 19u8 { ret 50019i32 }
+    if role == 20u8 { ret 50018i32 }
+    if role == 21u8 { ret 50009i32 }
+    if role == 22u8 || role == 37u8 || role == 42u8 { ret 50011i32 }
+    if role == 26u8 { ret 50017i32 }
+    if role == 27u8 { ret 50022i32 }
+    if role == 28u8 { ret 50023i32 }
+    if role == 29u8 { ret 50024i32 }
+    if role == 30u8 || role == 43u8 { ret 50028i32 }
+    if role == 31u8 || role == 32u8 { ret 50035i32 }
+    if role == 33u8 { ret 50038i32 }
+    if role == 38u8 { ret 50003i32 }
+    if role == 41u8 { ret 50010i32 }
+    if role == 44u8 { ret 50016i32 }
+    ret 50033i32
+}
+
+fn uia_toggles(n: *const AccessibleNode) -> bool {
+    ret n.role == 4u8 || n.role == 18u8 || n.role == 37u8
+}
+
+fn uia_selects(n: *const AccessibleNode) -> bool {
+    if n.role == 5u8 || n.role == 19u8 || n.role == 36u8 || n.role == 42u8 { ret true }
+    ret n.actions & UIA_ACTION_SELECT != 0u32
+}
+
+fn uia_expands(n: *const AccessibleNode) -> bool {
+    ret n.actions & (UIA_ACTION_EXPAND | UIA_ACTION_COLLAPSE) != 0u32
+}
+
+fn uia_has_value(n: *const AccessibleNode) -> bool {
+    if n.role == 7u8 || n.role == 38u8 || n.role == 44u8 { ret true }
+    ret n.actions & UIA_ACTION_SET_VALUE != 0u32
+}
+
+// Inside a node whose children are presentational, through unnamed groups.
+fn uia_presentational(s: *const UiaStore, index: usize) -> bool {
+    var at = s.parent[index]
+    while at != 0u32 {
+        let role = s.nodes[usize(at - 1u32)].role
+        if role == 3u8 || role == 4u8 || role == 5u8 || role == 8u8 || role == 15u8 || role == 16u8 || role == 17u8 || role == 18u8 || role == 19u8 || role == 33u8 || role == 37u8 || role == 42u8 { ret true }
+        if role > 2u8 || s.nodes[usize(at - 1u32)].label.len != 0usize { ret false }
+        at = s.parent[usize(at - 1u32)]
+    }
+    ret false
+}
+
+// Keyboard focusable: every node offers Focus, so it is the node that does
+// something besides, or holds the focus now.
+fn uia_focusable(n: *const AccessibleNode) -> bool {
+    ret n.actions & (4294967295u32 ^ UIA_ACTION_FOCUS) != 0u32 || n.flags & UIA_FOCUSED != 0u16
+}
+
+@cc(c)
+fn uia_query(this: usize, riid: *const UiaGuid, out: *UiaWord) -> i32 {
+    let e = uia_base(this)
+    out.value = 0usize
+    var k = 0usize
+    while k < 9usize {
+        if uia_same_guid(riid, k) { break }
+        k += 1usize
+    }
+    if k == 9usize || (k == 3usize && e.slot != UIA_ROOT) { ret mem.bitcast[i32](UIA_E_NO_INTERFACE) }
+    var offset = 0usize
+    if k > 0usize { offset = (k - 1usize) * 8usize }
+    out.value = mem.address_of(e) + offset
+    ret 0i32
+}
+
+@cc(c)
+fn uia_count(this: usize) -> i32 {
+    ret 1i32
+}
+
+// ProviderOptions_ServerSideProvider: calls arrive on the window's thread.
+@cc(c)
+fn uia_options(this: usize, out: *UiaInt) -> i32 {
+    out.value = 2i32
+    ret 0i32
+}
+
+@cc(c)
+fn uia_pattern(this: usize, pattern: i32, out: *UiaWord) -> i32 {
+    let e = uia_base(this)
+    out.value = 0usize
+    let (index, published) = uia_index(e)
+    if !published { ret uia_gone(e) }
+    let n = &uia_stores[e.store].nodes[index]
+    var k = 0usize
+    if pattern == 10000i32 && n.actions & UIA_ACTION_PRESS != 0u32 && !uia_toggles(n) && !uia_selects(n) && !uia_expands(n) { k = 3usize }
+    if pattern == 10002i32 && uia_has_value(n) { k = 4usize }
+    if pattern == 10015i32 && uia_toggles(n) { k = 5usize }
+    if pattern == 10005i32 && uia_expands(n) { k = 6usize }
+    if pattern == 10010i32 && uia_selects(n) { k = 7usize }
+    if k != 0usize { out.value = mem.address_of(e) + k * 8usize }
+    ret 0i32
+}
+
+@cc(c)
+fn uia_property(this: usize, property: i32, out: *UiaVariant) -> i32 {
+    let e = uia_base(this)
+    out.kind = 0u16
+    out.value = 0usize
+    out.padding = 0usize
+    let (index, published) = uia_index(e)
+    if !published { ret uia_gone(e) }
+    let s = &uia_stores[e.store]
+    let n = &s.nodes[index]
+    if property == 30003i32 { uia_set_int(out, uia_control_type(n.role)) }
+    if property == 30005i32 {
+        // A node with no name and a value no pattern reads is named by the value.
+        if n.label.len == 0usize && !uia_has_value(n) { uia_set_text(out, n.value) } else { uia_set_text(out, n.label) }
+    }
+    if property == 30013i32 && n.hint.len != 0usize { uia_set_text(out, n.hint) }
+    if property == 30008i32 { uia_set_bool(out, n.flags & UIA_FOCUSED != 0u16) }
+    if property == 30009i32 { uia_set_bool(out, uia_focusable(n)) }
+    if property == 30010i32 { uia_set_bool(out, n.flags & UIA_DISABLED == 0u16) }
+    if property == 30022i32 { uia_set_bool(out, n.flags & UIA_HIDDEN != 0u16) }
+    if property == 30025i32 { uia_set_bool(out, n.flags & UIA_REQUIRED != 0u16) }
+    if property == 30019i32 { uia_set_bool(out, n.flags & UIA_SECRET != 0u16) }
+    // An unnamed group is layout, not a control or content, and so is what a button,
+    // a tab, a box or a range shows inside it (their children are presentational, as
+    // ARIA has it): the views pass over both.
+    if (property == 30016i32 || property == 30017i32) && ((n.role <= 2u8 && n.label.len == 0usize) || uia_presentational(s, index)) { uia_set_bool(out, false) }
+    if property == 30135i32 && n.live != 0u8 { uia_set_int(out, i32(n.live)) }
+    // HeadingLevel1 is 80051 and HeadingLevel_None 80050.
+    if property == 30173i32 && n.role == 25u8 && n.level > 0u8 && n.level < 10u8 { uia_set_int(out, 80050i32 + i32(n.level)) }
+    if property == 30018i32 && n.relation_flags & 1u8 != 0u8 && usize(n.labelled_by) < UIA_SLOTS {
+        let at = s.index_of[usize(n.labelled_by)]
+        if at != 0u32 && s.nodes[usize(at - 1u32)].generation == n.labelled_by_generation {
+            out.kind = 13u16
+            out.value = uia_link(e.store, at, 0usize)
+        }
+    }
+    ret 0i32
+}
+
+// The root stands on the window's own provider, which names and places it.
+@cc(c)
+fn uia_host(this: usize, out: *UiaWord) -> i32 {
+    let e = uia_base(this)
+    out.value = 0usize
+    if e.slot != UIA_ROOT { ret 0i32 }
+    ret raw_uia_host(uia_stores[e.store].handle, out)
+}
+
+@cc(c)
+fn uia_navigate(this: usize, direction: i32, out: *UiaWord) -> i32 {
+    let e = uia_base(this)
+    out.value = 0usize
+    let s = &uia_stores[e.store]
+    if e.slot == UIA_ROOT {
+        if !s.ready { ret 0i32 }
+        if direction == 3i32 { out.value = uia_link(e.store, s.root_first, 1usize) }
+        if direction == 4i32 { out.value = uia_link(e.store, s.root_last, 1usize) }
+        ret 0i32
+    }
+    let (index, published) = uia_index(e)
+    if !published { ret uia_gone(e) }
+    if direction == 0i32 {
+        if s.parent[index] == 0u32 { out.value = uia_root_element(e.store, 1usize) } else { out.value = uia_link(e.store, s.parent[index], 1usize) }
+    }
+    if direction == 1i32 { out.value = uia_link(e.store, s.next[index], 1usize) }
+    if direction == 2i32 { out.value = uia_link(e.store, s.previous[index], 1usize) }
+    if direction == 3i32 { out.value = uia_link(e.store, s.first[index], 1usize) }
+    if direction == 4i32 { out.value = uia_link(e.store, s.last[index], 1usize) }
+    ret 0i32
+}
+
+fn uia_put(array: usize, at: i32, value: i32) {
+    var index = at
+    var element = value
+    let put = raw_safe_array_put(array, &index, &element)
+}
+
+// UiaAppendRuntimeId, then the slot and its generation; the root has none, and
+// UI Automation gives it the window's.
+@cc(c)
+fn uia_runtime_id(this: usize, out: *UiaWord) -> i32 {
+    let e = uia_base(this)
+    out.value = 0usize
+    if e.slot == UIA_ROOT { ret 0i32 }
+    let (index, published) = uia_index(e)
+    if !published { ret uia_gone(e) }
+    let array = raw_safe_array(3u16, 0i32, 3u32)
+    if array == 0usize { ret mem.bitcast[i32](UIA_E_OUT_OF_MEMORY) }
+    uia_put(array, 0i32, 3i32)
+    uia_put(array, 1i32, mem.bitcast[i32](e.slot))
+    uia_put(array, 2i32, mem.bitcast[i32](e.generation))
+    out.value = array
+    ret 0i32
+}
+
+// Screen pixels: the client origin on the screen, and the logical bounds at the
+// window's scale.
+@cc(c)
+fn uia_bounds(this: usize, out: *UiaRect) -> i32 {
+    let e = uia_base(this)
+    out.left = 0.0
+    out.top = 0.0
+    out.width = 0.0
+    out.height = 0.0
+    if e.slot == UIA_ROOT { ret 0i32 }
+    let (index, published) = uia_index(e)
+    if !published { ret uia_gone(e) }
+    let s = &uia_stores[e.store]
+    var origin = UiaPoint { x: 0i32, y: 0i32 }
+    let placed = raw_client_to_screen(s.handle, &origin)
+    let scale = f64(raw_dpi_for_window(s.handle)) / 96.0
+    let n = &s.nodes[index]
+    out.left = f64(origin.x) + f64(n.x) * scale
+    out.top = f64(origin.y) + f64(n.y) * scale
+    out.width = f64(n.width) * scale
+    out.height = f64(n.height) * scale
+    ret 0i32
+}
+
+@cc(c)
+fn uia_nothing(this: usize, out: *UiaWord) -> i32 {
+    out.value = 0usize
+    ret 0i32
+}
+
+@cc(c)
+fn uia_fragment_root(this: usize, out: *UiaWord) -> i32 {
+    let e = uia_base(this)
+    out.value = uia_root_element(e.store, 2usize)
+    ret 0i32
+}
+
+// The deepest published node under a screen point: the last in tree order.
+@cc(c)
+fn uia_from_point(this: usize, x: f64, y: f64, out: *UiaWord) -> i32 {
+    let e = uia_base(this)
+    out.value = 0usize
+    let s = &uia_stores[e.store]
+    if !s.ready { ret 0i32 }
+    var origin = UiaPoint { x: 0i32, y: 0i32 }
+    let placed = raw_client_to_screen(s.handle, &origin)
+    let scale = f64(raw_dpi_for_window(s.handle)) / 96.0
+    let px = f32((x - f64(origin.x)) / scale)
+    let py = f32((y - f64(origin.y)) / scale)
+    var found = 0u32
+    var i = 0usize
+    while i < s.count {
+        let n = &s.nodes[i]
+        if n.flags & UIA_HIDDEN == 0u16 && px >= n.x && py >= n.y && px < n.x + n.width && py < n.y + n.height { found = u32(i) + 1u32 }
+        i += 1usize
+    }
+    out.value = uia_link(e.store, found, 1usize)
+    ret 0i32
+}
+
+@cc(c)
+fn uia_focus(this: usize, out: *UiaWord) -> i32 {
+    let e = uia_base(this)
+    out.value = 0usize
+    let s = &uia_stores[e.store]
+    if !s.ready { ret 0i32 }
+    out.value = uia_link(e.store, s.focus, 1usize)
+    ret 0i32
+}
+
+// A request for the program, and a Paint to wake its wait.
+fn uia_request(this: usize, action: u8, text: *const u16) -> i32 {
+    let e = uia_base(this)
+    let (index, published) = uia_index(e)
+    if !published { ret uia_gone(e) }
+    let s = &uia_stores[e.store]
+    let n = &s.nodes[index]
+    if n.flags & UIA_DISABLED != 0u16 && action != UIA_DO_FOCUS { ret mem.bitcast[i32](UIA_E_ELEMENT_NOT_ENABLED) }
+    if uia_request_count >= UIA_REQUESTS { ret 0i32 }
+    let r = &uia_requests[(uia_request_head + uia_request_count) % UIA_REQUESTS]
+    r.handle = s.handle
+    r.id = n.id
+    r.generation = n.generation
+    r.action = action
+    r.length = 0usize
+    if mem.address_of(text) != 0usize {
+        let written = raw_narrow(CP_UTF8, 0u32, text, -1i32, &r.text[0usize], 512i32, 0usize, 0usize)
+        if written > 0i32 { r.length = usize(written) - 1usize }
+    }
+    uia_request_count += 1usize
+    var wake: WindowEvent = zero
+    wake.kind = .Paint
+    wake.window = Window { raw: s.handle }
+    window_push(wake)
+    ret 0i32
+}
+
+fn uia_node_of(this: usize) -> (*const AccessibleNode, bool) {
+    let e = uia_base(this)
+    let (index, published) = uia_index(e)
+    ret (&uia_stores[e.store].nodes[index], published)
+}
+
+@cc(c)
+fn uia_set_focus(this: usize) -> i32 {
+    var none: *const u16 = zero
+    ret uia_request(this, UIA_DO_FOCUS, none)
+}
+
+@cc(c)
+fn uia_invoke(this: usize) -> i32 {
+    var none: *const u16 = zero
+    ret uia_request(this, UIA_DO_PRESS, none)
+}
+
+@cc(c)
+fn uia_set_value(this: usize, text: *const u16) -> i32 {
+    ret uia_request(this, UIA_DO_SET_VALUE, text)
+}
+
+@cc(c)
+fn uia_value(this: usize, out: *UiaWord) -> i32 {
+    out.value = 0usize
+    let (n, published) = uia_node_of(this)
+    if !published { ret mem.bitcast[i32](UIA_E_ELEMENT_NOT_AVAILABLE) }
+    out.value = uia_bstr(n.value)
+    ret 0i32
+}
+
+@cc(c)
+fn uia_read_only(this: usize, out: *UiaInt) -> i32 {
+    out.value = 1i32
+    let (n, published) = uia_node_of(this)
+    if !published { ret mem.bitcast[i32](UIA_E_ELEMENT_NOT_AVAILABLE) }
+    if n.flags & UIA_READ_ONLY == 0u16 && n.actions & UIA_ACTION_SET_VALUE != 0u32 { out.value = 0i32 }
+    ret 0i32
+}
+
+@cc(c)
+fn uia_toggle(this: usize) -> i32 {
+    var none: *const u16 = zero
+    ret uia_request(this, UIA_DO_PRESS, none)
+}
+
+// ToggleState_Off, _On, _Indeterminate.
+@cc(c)
+fn uia_toggle_state(this: usize, out: *UiaInt) -> i32 {
+    out.value = 0i32
+    let (n, published) = uia_node_of(this)
+    if !published { ret mem.bitcast[i32](UIA_E_ELEMENT_NOT_AVAILABLE) }
+    if n.flags & UIA_CHECKED != 0u16 { out.value = 1i32 }
+    if n.flags & UIA_MIXED != 0u16 { out.value = 2i32 }
+    ret 0i32
+}
+
+// Expand and collapse are their own actions where the node has them, and a
+// press where it only toggles.
+@cc(c)
+fn uia_expand(this: usize) -> i32 {
+    var none: *const u16 = zero
+    let (n, published) = uia_node_of(this)
+    if published && n.actions & UIA_ACTION_EXPAND == 0u32 { ret uia_request(this, UIA_DO_PRESS, none) }
+    ret uia_request(this, UIA_DO_EXPAND, none)
+}
+
+@cc(c)
+fn uia_collapse(this: usize) -> i32 {
+    var none: *const u16 = zero
+    let (n, published) = uia_node_of(this)
+    if published && n.actions & UIA_ACTION_COLLAPSE == 0u32 { ret uia_request(this, UIA_DO_PRESS, none) }
+    ret uia_request(this, UIA_DO_COLLAPSE, none)
+}
+
+// ExpandCollapseState_Collapsed, _Expanded.
+@cc(c)
+fn uia_expand_state(this: usize, out: *UiaInt) -> i32 {
+    out.value = 0i32
+    let (n, published) = uia_node_of(this)
+    if !published { ret mem.bitcast[i32](UIA_E_ELEMENT_NOT_AVAILABLE) }
+    if n.flags & UIA_EXPANDED != 0u16 { out.value = 1i32 }
+    ret 0i32
+}
+
+// Select, add and remove are all the one choice the widget makes.
+@cc(c)
+fn uia_select(this: usize) -> i32 {
+    var none: *const u16 = zero
+    let (n, published) = uia_node_of(this)
+    if published && n.actions & UIA_ACTION_SELECT == 0u32 { ret uia_request(this, UIA_DO_PRESS, none) }
+    ret uia_request(this, UIA_DO_SELECT, none)
+}
+
+@cc(c)
+fn uia_is_selected(this: usize, out: *UiaInt) -> i32 {
+    out.value = 0i32
+    let (n, published) = uia_node_of(this)
+    if !published { ret mem.bitcast[i32](UIA_E_ELEMENT_NOT_AVAILABLE) }
+    if n.flags & UIA_SELECTED != 0u16 { out.value = 1i32 }
+    ret 0i32
+}
+
+@cc(c)
+fn uia_container(this: usize, out: *UiaWord) -> i32 {
+    let e = uia_base(this)
+    out.value = 0usize
+    let (index, published) = uia_index(e)
+    if !published { ret uia_gone(e) }
+    out.value = uia_link(e.store, uia_stores[e.store].parent[index], 0usize)
+    ret 0i32
+}
+
+// Copied into the store's text; what does not fit is published empty.
+fn uia_keep(s: *UiaStore, used: *UiaWord, text: str) -> str {
+    if text.len == 0usize || used.value + text.len > s.text.len { ret "" }
+    let start = used.value
+    var at = 0usize
+    while at < text.len {
+        s.text[start + at] = text[at]
+        at += 1usize
+    }
+    used.value = start + text.len
+    ret s.text[start..start + text.len]
+}
+
+// Whether an assistive technology has asked for the window's elements; until one
+// has, a publish keeps nothing.
+fn accessibility_listening(w: Window) -> bool {
+    let slot = window_slot(w.raw)
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret false }
+    ret uia_stores[slot].asked
+}
 
 fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
-    ret Unsupported
+    let slot = window_slot(w.raw)
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    let s = &uia_stores[slot]
+    if !s.asked { ret ok }
+    var i = 0usize
+    while i < s.count {
+        s.index_of[usize(s.nodes[i].id)] = 0u32
+        i += 1usize
+    }
+    let before = s.count
+    var used = UiaWord { value: 0usize }
+    var count = 0usize
+    var focused = 0u32
+    i = 0usize
+    while i < nodes.len && count < UIA_NODES {
+        if usize(nodes[i].id) < UIA_SLOTS {
+            var copied = nodes[i]
+            copied.label = uia_keep(s, &used, nodes[i].label)
+            copied.value = uia_keep(s, &used, nodes[i].value)
+            copied.hint = uia_keep(s, &used, nodes[i].hint)
+            s.nodes[count] = copied
+            s.index_of[usize(copied.id)] = u32(count) + 1u32
+            if copied.flags & UIA_FOCUSED != 0u16 { focused = u32(count) + 1u32 }
+            count += 1usize
+        }
+        i += 1usize
+    }
+    s.count = count
+    s.root_first = 0u32
+    s.root_last = 0u32
+    i = 0usize
+    while i < count {
+        s.first[i] = 0u32
+        s.last[i] = 0u32
+        s.next[i] = 0u32
+        s.previous[i] = 0u32
+        i += 1usize
+    }
+    // Children in the order the records come, which is the tree's.
+    i = 0usize
+    while i < count {
+        let n = &s.nodes[i]
+        var owner = 0u32
+        if n.has_parent && usize(n.parent) < UIA_SLOTS {
+            let at = s.index_of[usize(n.parent)]
+            if at != 0u32 && s.nodes[usize(at - 1u32)].generation == n.parent_generation { owner = at }
+        }
+        s.parent[i] = owner
+        let own = u32(i) + 1u32
+        if owner == 0u32 {
+            if s.root_last == 0u32 { s.root_first = own } else {
+                s.next[usize(s.root_last - 1u32)] = own
+                s.previous[i] = s.root_last
+            }
+            s.root_last = own
+        } else {
+            let p = usize(owner - 1u32)
+            if s.last[p] == 0u32 { s.first[p] = own } else {
+                s.next[usize(s.last[p] - 1u32)] = own
+                s.previous[i] = s.last[p]
+            }
+            s.last[p] = own
+        }
+        i += 1usize
+    }
+    let first_publish = !s.ready
+    let moved = focused != s.focus
+    s.focus = focused
+    s.ready = true
+    if raw_uia_listening() != 0i32 {
+        // StructureChangeType_ChildrenInvalidated, and UIA_AutomationFocusChangedEventId.
+        if first_publish || count != before { let restructured = raw_uia_raise_structure(uia_root_element(slot, 0usize), 2i32, 0usize, 0i32) }
+        if moved && focused != 0u32 { let raised = raw_uia_raise(uia_link(slot, focused, 0usize), 20005i32) }
+    }
+    ret ok
+}
+
+// The oldest request for this window, its value copied out; a request for a
+// window that has closed is dropped on the way.
+fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
+    var request: AccessibleRequest = zero
+    while uia_request_count > 0usize {
+        let r = &uia_requests[uia_request_head]
+        if r.handle != w.raw && window_slot(r.handle) < WINDOW_TABLE { ret (request, false) }
+        uia_request_head = (uia_request_head + 1usize) % UIA_REQUESTS
+        uia_request_count -= 1usize
+        if r.handle == w.raw {
+            var at = 0usize
+            while at < r.length {
+                uia_taken[at] = r.text[at]
+                at += 1usize
+            }
+            request.id = r.id
+            request.generation = r.generation
+            request.action = r.action
+            request.value = uia_taken[0usize..r.length]
+            ret (request, true)
+        }
+    }
+    ret (request, false)
 }
 
 // `TransmitFile` is the zero-copy transfer this host has (#1290): the file's pages go to

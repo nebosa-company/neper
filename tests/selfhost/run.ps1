@@ -3077,6 +3077,14 @@ $osWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $osWindowWritten -ne 'executable written') { throw 'os_window emission failed' }
 $osWindowOutput = & $osWindowPath
 if ($LASTEXITCODE -ne 0 -or $osWindowOutput -ne 'os window ok') { throw "the window primitives answered wrongly: exit $LASTEXITCODE" }
+# The UI Automation provider (D1602): WM_GETOBJECT's answer, a publish linked into
+# elements, navigation, names, control types, patterns, a password's mask, requests
+# with their values, the focus, and elements gone when their node or window is.
+$osUiaPath = Join-Path $testBuild 'os-uia-selfhost.exe'
+$osUiaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_uia\src\main.e') $repo 'x64' 'windows' $osUiaPath
+if ($LASTEXITCODE -ne 0 -or $osUiaWritten -ne 'executable written') { throw 'os_uia emission failed' }
+$osUiaOutput = & $osUiaPath
+if ($LASTEXITCODE -ne 0 -or $osUiaOutput -ne 'os uia ok') { throw "the UI Automation provider answered wrongly: exit $LASTEXITCODE" }
 # `e.gfx.scene` (D796): the CPU reference renderer over an offscreen target -- fills,
 # an anti-aliased edge, clips, a gradient, a stroke, an image, a glyph, a layer, a
 # rotation -- checked pixel by pixel, and the refusals.

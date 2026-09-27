@@ -3044,12 +3044,22 @@ fn x_event(unit: []const u8) {
 // Whatever the socket holds, parsed: events into the ring, a reply kept aside for
 // the request waiting on it, an error unit dropped.
 fn x_drain(wait_ms: u32) -> err {
-    var descriptor: [2]u32 = zero
+    // The display, and (D1603) the accessibility bus beside it: a pollfd is the
+    // descriptor, then the events asked and the events returned as two halves.
+    var descriptor: [4]u32 = zero
     descriptor[0usize] = u32(x_socket)
     descriptor[1usize] = 1u32
-    let ready = syscall(SYS_POLL, mem.address_of(&descriptor[0usize]), 1usize, usize(wait_ms), 0usize, 0usize, 0usize)
+    var watched = 1usize
+    if atspi_state == ATSPI_CONNECTED {
+        descriptor[2usize] = u32(atspi_socket)
+        descriptor[3usize] = 1u32
+        watched = 2usize
+    }
+    let ready = syscall(SYS_POLL, mem.address_of(&descriptor[0usize]), watched, usize(wait_ms), 0usize, 0usize, 0usize)
     if ready < 0isize { ret from_errno(ready) }
     if ready == 0isize { ret ok }
+    if watched == 2usize && (descriptor[3usize] >> 16u32) != 0u32 { atspi_service() }
+    if (descriptor[1usize] >> 16u32) == 0u32 { ret ok }
     let taken = syscall(SYS_READ, x_socket, mem.address_of(&x_incoming[x_incoming_len]), x_incoming.len - x_incoming_len, 0usize, 0usize, 0usize)
     if taken < 0isize {
         x_failed = true
@@ -3515,6 +3525,9 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     window_heights[slot] = options.height
     window_mapped[slot] = false
     window_focused[slot] = false
+    // (D1603) The accessibility bus, once, and the frame's name for it.
+    atspi_set_title(slot, options.title)
+    atspi_connect(a)
     if options.visible {
         let shown = window_visible(Window { raw: usize(id) }, true)
         if shown != ok { ret (none, Failed) }
@@ -3533,6 +3546,7 @@ fn x_simple(opcode: u8, window: u32) -> err {
 fn window_close(w: Window) -> err {
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    atspi_release(slot)
     window_ids[slot] = 0u32
     var kept = 0usize
     var at = 0usize
@@ -3587,6 +3601,7 @@ fn window_metrics(w: Window) -> (WindowMetrics, err) {
 fn window_title(w: Window, value: str) -> err {
     if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
     if x_change_property(u32(w.raw), 39u32, 31u32, 8u32, value, value.len) != ok { ret Failed }
+    atspi_set_title(window_slot(u32(w.raw)), value)
     ret ok
 }
 
@@ -3707,14 +3722,1803 @@ fn set_clipboard_text(value: str) -> err {
     ret Unsupported
 }
 
-// The accessibility bridge (D802): the semantic tree a window publishes to the
-// host's assistive technology, one flat record per node with its parent. No host
-// bridge is written yet -- UI Automation, AT-SPI -- so publication answers
-// `Unsupported` and a program learns so at the first publish.
+// The accessibility bridge (D802, D1603): the semantic tree a window publishes to
+// the host's assistive technology, one flat record per node with its parent, in
+// tree order. Here it answers AT-SPI over D-Bus, spoken on a raw AF_UNIX socket as
+// the X client above speaks X: when a window opens, the session bus names the
+// accessibility bus (`org.a11y.Bus.GetAddress`), and the process connects to it,
+// authenticates as its user, and embeds its application object under the
+// registry's desktop (`org.a11y.atspi.Socket.Embed`). From then on `x_drain` polls
+// that socket beside the display's and answers each method call as it comes:
+// the application at `.../accessible/root`, a frame per window at
+// `.../accessible/<window>`, and a node at `.../accessible/<window>_<slot>_<generation>`,
+// through Accessible, Component, Action, Text, EditableText, Application and
+// Properties. The first call makes the program publish -- until one arrives,
+// `accessibility_listening` is false and a publish keeps nothing -- and each
+// publish copies the records and their text into the window's store and signals
+// the focus change. What the person does through a node is queued as a request
+// `accessibility_take` hands the program, as on Windows.
+// ponytail: extents are window-relative in every coordinate space (the window's
+// place on the screen is not asked of X); text answers every granularity with the
+// whole text; slots past ATSPI_SLOTS and nodes past ATSPI_NODES are not
+// published; no Value or Selection interface, and no name or value change events.
 type AccessibleNode = struct { id: u32, generation: u32, parent: u32, parent_generation: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u16, actions: u32, sort: u8, live: u8, row: u32, column: u32, row_count: u32, column_count: u32, level: u8, selection_start: usize, selection_end: usize, labelled_by: u32, labelled_by_generation: u32, described_by: u32, described_by_generation: u32, error_by: u32, error_by_generation: u32, controls: u32, controls_generation: u32, active: u32, active_generation: u32, relation_flags: u8, x: f32, y: f32, width: f32, height: f32 }
+// What an assistive technology asked of a node: `action` is `e.ui.accessibility`'s
+// Action in declaration order, `value` the text a SetValue or SetSelection carries.
+type AccessibleRequest = struct { id: u32, generation: u32, action: u8, value: str }
+
+type AtspiStore = struct { ready: bool, count: usize, focus: u32, root_first: u32, root_last: u32, nodes: []AccessibleNode, text: []u8, index_of: []u32, parent: []u32, first: []u32, last: []u32, next: []u32, previous: []u32 }
+// A message as it arrived: its header fields, and where its body starts and ends.
+type DMessage = struct { kind: u8, flags: u8, serial: u32, reply_serial: u32, path: str, called: str, member: str, sender: str, signature: str, error_name: str, body: usize, end: usize }
+// A reading position in a message; alignment counts from the message's start.
+type DCursor = struct { base: usize, at: usize, end: usize }
+// What a path names: 0 the application, 1 a window's frame, 2 a node, 3 nothing.
+type AtspiTarget = struct { kind: u8, window: usize, index: usize }
+type AtspiRequest = struct { window: u32, id: u32, generation: u32, action: u8, length: usize, text: [512]u8 }
+type AtspiCount = struct { value: usize }
+
+const ATSPI_NODES: usize = 8192usize
+const ATSPI_SLOTS: usize = 16384usize
+const ATSPI_TEXT: usize = 1048576usize
+const ATSPI_STORE_BYTES: usize = 4194304usize
+const ATSPI_BUFFER: usize = 262144usize
+const ATSPI_REQUESTS: usize = 8usize
+const SYS_GETUID: usize = 102usize
+const ATSPI_UNTRIED: u8 = 0u8
+const ATSPI_CONNECTED: u8 = 1u8
+const ATSPI_ABSENT: u8 = 2u8
+// The bits of `e.ui.accessibility`'s flags and actions the bridge reads.
+const ATSPI_DISABLED: u16 = 1u16
+const ATSPI_FOCUSED: u16 = 2u16
+const ATSPI_SELECTED: u16 = 4u16
+const ATSPI_CHECKED: u16 = 8u16
+const ATSPI_EXPANDED: u16 = 16u16
+const ATSPI_HIDDEN: u16 = 32u16
+const ATSPI_MIXED: u16 = 64u16
+const ATSPI_BUSY: u16 = 128u16
+const ATSPI_INVALID: u16 = 256u16
+const ATSPI_REQUIRED: u16 = 512u16
+const ATSPI_READ_ONLY: u16 = 1024u16
+const ATSPI_MODAL: u16 = 2048u16
+const ATSPI_SECRET: u16 = 8192u16
+const ATSPI_ACTION_FOCUS: u32 = 1u32
+const ATSPI_ACTION_SET_VALUE: u32 = 16u32
+const ATSPI_ACTION_EXPAND: u32 = 128u32
+const ATSPI_ACTION_COLLAPSE: u32 = 256u32
+const ATSPI_ACTION_SELECT: u32 = 512u32
+
+var atspi_state: u8 = 0u8
+var atspi_socket: usize = 0usize
+var atspi_serial: u32 = 0u32
+var atspi_asked: bool = zero
+var atspi_out: []u8 = zero
+var atspi_out_len: usize = 0usize
+var atspi_body: usize = 0usize
+var atspi_overflow: bool = zero
+var atspi_in: []u8 = zero
+var atspi_in_len: usize = 0usize
+var atspi_name: [64]u8 = zero
+var atspi_name_len: usize = 0usize
+var atspi_parent_name: [64]u8 = zero
+var atspi_parent_name_len: usize = 0usize
+var atspi_parent_path: [128]u8 = zero
+var atspi_parent_path_len: usize = 0usize
+var atspi_path_bytes: [128]u8 = zero
+var atspi_stores: [16]AtspiStore = zero
+var atspi_titles: [2048]u8 = zero
+var atspi_title_lengths: [16]usize = zero
+var atspi_app_id: u32 = 0u32
+var atspi_requests: [8]AtspiRequest = zero
+var atspi_request_head: usize = 0usize
+var atspi_request_count: usize = 0usize
+var atspi_taken: [512]u8 = zero
+
+// ---------------------------------------------------------------- writing
+
+fn d_put(value: u8) {
+    if atspi_out_len >= atspi_out.len {
+        atspi_overflow = true
+        ret
+    }
+    atspi_out[atspi_out_len] = value
+    atspi_out_len += 1usize
+}
+
+fn d_pad(align: usize) {
+    while atspi_out_len % align != 0usize && !atspi_overflow { d_put(0u8) }
+}
+
+fn d_u32(value: u32) {
+    d_pad(4usize)
+    d_put(u8(value & 255u32))
+    d_put(u8((value >> 8u32) & 255u32))
+    d_put(u8((value >> 16u32) & 255u32))
+    d_put(u8(value >> 24u32))
+}
+
+fn d_i32(value: i32) {
+    d_u32(mem.bitcast[u32](value))
+}
+
+fn d_u64(value: u64) {
+    d_pad(8usize)
+    var at = 0u64
+    while at < 64u64 {
+        d_put(u8((value >> at) & 255u64))
+        at += 8u64
+    }
+}
+
+// `s` and `o`: a length, the bytes and a terminating zero.
+fn d_text(value: str) {
+    d_u32(u32(value.len))
+    var at = 0usize
+    while at < value.len {
+        d_put(value[at])
+        at += 1usize
+    }
+    d_put(0u8)
+}
+
+fn d_signature(value: str) {
+    d_put(u8(value.len))
+    var at = 0usize
+    while at < value.len {
+        d_put(value[at])
+        at += 1usize
+    }
+    d_put(0u8)
+}
+
+fn d_bool(value: bool) {
+    if value { d_u32(1u32) } else { d_u32(0u32) }
+}
+
+fn d_patch(at: usize, value: u32) {
+    if at + 4usize > atspi_out_len { ret }
+    atspi_out[at] = u8(value & 255u32)
+    atspi_out[at + 1usize] = u8((value >> 8u32) & 255u32)
+    atspi_out[at + 2usize] = u8((value >> 16u32) & 255u32)
+    atspi_out[at + 3usize] = u8(value >> 24u32)
+}
+
+// An array: its length word, patched at the end, then padding to its elements'
+// alignment, which is there even when the array is empty.
+fn d_array_begin(element_align: usize) -> usize {
+    d_pad(4usize)
+    let at = atspi_out_len
+    d_u32(0u32)
+    d_pad(element_align)
+    ret at
+}
+
+fn d_array_end(at: usize, element_align: usize) {
+    var start = at + 4usize
+    while start % element_align != 0usize { start += 1usize }
+    d_patch(at, u32(atspi_out_len - start))
+}
+
+// A message's fixed header -- little-endian, its kind, version 1 -- and the start
+// of its field array; the body length is patched by `d_finish`.
+fn d_begin(kind: u8) -> usize {
+    atspi_out_len = 0usize
+    atspi_overflow = false
+    atspi_serial += 1u32
+    d_put(108u8)
+    d_put(kind)
+    d_put(0u8)
+    d_put(1u8)
+    d_u32(0u32)
+    d_u32(atspi_serial)
+    ret d_array_begin(8usize)
+}
+
+fn d_field_text(code: u8, kind: str, value: str) {
+    d_pad(8usize)
+    d_put(code)
+    d_signature(kind)
+    d_text(value)
+}
+
+fn d_field_u32(code: u8, value: u32) {
+    d_pad(8usize)
+    d_put(code)
+    d_signature("u")
+    d_u32(value)
+}
+
+fn d_field_signature(value: str) {
+    d_pad(8usize)
+    d_put(8u8)
+    d_signature("g")
+    d_signature(value)
+}
+
+fn d_body(fields: usize) {
+    d_array_end(fields, 8usize)
+    d_pad(8usize)
+    atspi_body = atspi_out_len
+}
+
+fn d_finish() {
+    d_patch(4usize, u32(atspi_out_len - atspi_body))
+}
+
+fn d_call(destination: str, object: str, called: str, member: str, signature: str) {
+    let fields = d_begin(1u8)
+    d_field_text(1u8, "o", object)
+    d_field_text(2u8, "s", called)
+    d_field_text(3u8, "s", member)
+    d_field_text(6u8, "s", destination)
+    if signature.len != 0usize { d_field_signature(signature) }
+    d_body(fields)
+}
+
+fn d_reply(m: *const DMessage, signature: str) {
+    let fields = d_begin(2u8)
+    d_field_u32(5u8, m.serial)
+    if m.sender.len != 0usize { d_field_text(6u8, "s", m.sender) }
+    if signature.len != 0usize { d_field_signature(signature) }
+    d_body(fields)
+}
+
+fn d_signal(object: str, called: str, member: str, signature: str) {
+    let fields = d_begin(4u8)
+    d_field_text(1u8, "o", object)
+    d_field_text(2u8, "s", called)
+    d_field_text(3u8, "s", member)
+    d_field_signature(signature)
+    d_body(fields)
+}
+
+fn d_write(fd: usize, bytes: []const u8) -> err {
+    var sent = 0usize
+    while sent < bytes.len {
+        let written = syscall(SYS_WRITE, fd, mem.address_of(&bytes[sent]), bytes.len - sent, 0usize, 0usize, 0usize)
+        if written < 0isize { ret from_errno(written) }
+        sent += usize(written)
+    }
+    ret ok
+}
+
+// The finished message to `fd`; one that overflowed the buffer is not sent.
+fn d_send(fd: usize) -> err {
+    d_finish()
+    if atspi_overflow { ret OutOfMemory }
+    ret d_write(fd, atspi_out[0usize..atspi_out_len])
+}
+
+// A reply, error or signal to the bus; without a bus it stays in the buffer.
+fn d_answer() {
+    d_finish()
+    if atspi_state != ATSPI_CONNECTED || atspi_overflow { ret }
+    if d_write(atspi_socket, atspi_out[0usize..atspi_out_len]) != ok { atspi_drop() }
+}
+
+fn d_error(m: *const DMessage, name: str) {
+    let fields = d_begin(3u8)
+    d_field_text(4u8, "s", name)
+    d_field_u32(5u8, m.serial)
+    if m.sender.len != 0usize { d_field_text(6u8, "s", m.sender) }
+    d_body(fields)
+    d_answer()
+}
+
+// ---------------------------------------------------------------- reading
+
+fn r_u32_at(buffer: []const u8, at: usize) -> u32 {
+    ret u32(buffer[at]) | (u32(buffer[at + 1usize]) << 8u32) | (u32(buffer[at + 2usize]) << 16u32) | (u32(buffer[at + 3usize]) << 24u32)
+}
+
+fn r_pad(c: *DCursor, align: usize) {
+    while (c.at - c.base) % align != 0usize { c.at += 1usize }
+}
+
+fn r_u32(buffer: []const u8, c: *DCursor) -> u32 {
+    r_pad(c, 4usize)
+    if c.at + 4usize > c.end {
+        c.at = c.end
+        ret 0u32
+    }
+    let value = r_u32_at(buffer, c.at)
+    c.at += 4usize
+    ret value
+}
+
+fn r_i32(buffer: []const u8, c: *DCursor) -> i32 {
+    ret mem.bitcast[i32](r_u32(buffer, c))
+}
+
+fn r_text(buffer: []const u8, c: *DCursor) -> str {
+    let length = usize(r_u32(buffer, c))
+    if c.at + length + 1usize > c.end {
+        c.at = c.end
+        ret ""
+    }
+    let value = buffer[c.at..c.at + length]
+    c.at += length + 1usize
+    ret value
+}
+
+fn r_signature(buffer: []const u8, c: *DCursor) -> str {
+    if c.at >= c.end { ret "" }
+    let length = usize(buffer[c.at])
+    if c.at + length + 2usize > c.end {
+        c.at = c.end
+        ret ""
+    }
+    let value = buffer[c.at + 1usize..c.at + 1usize + length]
+    c.at += length + 2usize
+    ret value
+}
+
+// The body of a message, to read its arguments from.
+fn r_body(m: *const DMessage) -> DCursor {
+    ret DCursor { base: m.body, at: m.body, end: m.end }
+}
+
+// The message starting at `start`, if all of it is here; `kind` 255 is a message
+// this client cannot read -- big-endian, or longer than its buffer.
+fn d_parse(buffer: []const u8, start: usize, length: usize) -> (DMessage, usize, bool) {
+    var m: DMessage = zero
+    if length < start + 16usize { ret (m, 0usize, false) }
+    let fields_length = usize(r_u32_at(buffer, start + 12usize))
+    var header = 16usize + fields_length
+    while header % 8usize != 0usize { header += 1usize }
+    let total = header + usize(r_u32_at(buffer, start + 4usize))
+    if buffer[start] != 108u8 || total > buffer.len {
+        m.kind = 255u8
+        ret (m, length - start, true)
+    }
+    if length < start + total { ret (m, 0usize, false) }
+    m.kind = buffer[start + 1usize]
+    m.flags = buffer[start + 2usize]
+    m.serial = r_u32_at(buffer, start + 8usize)
+    var c = DCursor { base: start, at: start + 16usize, end: start + 16usize + fields_length }
+    while c.at < c.end {
+        r_pad(&c, 8usize)
+        if c.at >= c.end { break }
+        let code = buffer[c.at]
+        c.at += 1usize
+        let kind = r_signature(buffer, &c)
+        if kind.len != 1usize {
+            m.kind = 255u8
+            ret (m, total, true)
+        }
+        if kind[0usize] == 115u8 || kind[0usize] == 111u8 {
+            let value = r_text(buffer, &c)
+            if code == 1u8 { m.path = value }
+            if code == 2u8 { m.called = value }
+            if code == 3u8 { m.member = value }
+            if code == 4u8 { m.error_name = value }
+            if code == 7u8 { m.sender = value }
+        } else if kind[0usize] == 117u8 {
+            let value = r_u32(buffer, &c)
+            if code == 5u8 { m.reply_serial = value }
+        } else if kind[0usize] == 103u8 {
+            let value = r_signature(buffer, &c)
+            if code == 8u8 { m.signature = value }
+        } else {
+            m.kind = 255u8
+            ret (m, total, true)
+        }
+    }
+    m.body = start + header
+    m.end = start + total
+    ret (m, total, true)
+}
+
+fn atspi_consume(count: usize) {
+    var at = 0usize
+    while count + at < atspi_in_len {
+        atspi_in[at] = atspi_in[count + at]
+        at += 1usize
+    }
+    atspi_in_len = at
+}
+
+// Whatever `fd` holds, into the input, waiting up to `wait_ms` for it.
+fn atspi_fill(fd: usize, wait_ms: u32) -> bool {
+    var descriptor: [2]u32 = zero
+    descriptor[0usize] = u32(fd)
+    descriptor[1usize] = 1u32
+    let ready = syscall(SYS_POLL, mem.address_of(&descriptor[0usize]), 1usize, usize(wait_ms), 0usize, 0usize, 0usize)
+    if ready <= 0isize || atspi_in_len >= atspi_in.len { ret false }
+    let taken = syscall(SYS_READ, fd, mem.address_of(&atspi_in[atspi_in_len]), atspi_in.len - atspi_in_len, 0usize, 0usize, 0usize)
+    if taken <= 0isize { ret false }
+    atspi_in_len += usize(taken)
+    ret true
+}
+
+// The reply to `serial`, left at the start of the input for the caller to read and
+// consume; a call that arrives meanwhile on the accessibility bus is answered.
+fn atspi_await(fd: usize, serial: u32) -> (DMessage, usize, bool) {
+    var none: DMessage = zero
+    var rounds = 0usize
+    while rounds < 8usize {
+        let (m, total, complete) = d_parse(atspi_in, 0usize, atspi_in_len)
+        if complete {
+            if m.kind == 255u8 { ret (none, 0usize, false) }
+            if (m.kind == 2u8 || m.kind == 3u8) && m.reply_serial == serial { ret (m, total, true) }
+            if m.kind == 1u8 && atspi_state == ATSPI_CONNECTED && fd == atspi_socket { atspi_dispatch(&m) }
+            atspi_consume(total)
+            continue
+        }
+        if !atspi_fill(fd, 2000u32) { ret (none, 0usize, false) }
+        rounds += 1usize
+    }
+    ret (none, 0usize, false)
+}
+
+// ---------------------------------------------------------------- connecting
+
+fn atspi_copy(into: []u8, value: str) -> usize {
+    var at = 0usize
+    while at < value.len && at < into.len {
+        into[at] = value[at]
+        at += 1usize
+    }
+    ret at
+}
+
+fn atspi_digits(into: []u8, from: usize, value: u64) -> usize {
+    var digits: [20]u8 = zero
+    var count = 0usize
+    var rest = value
+    while true {
+        digits[count] = u8(48u64 + rest % 10u64)
+        count += 1usize
+        rest = rest / 10u64
+        if rest == 0u64 { break }
+    }
+    var at = from
+    while count > 0usize && at < into.len {
+        count -= 1usize
+        into[at] = digits[count]
+        at += 1usize
+    }
+    ret at
+}
+
+// A bus address's first unix socket: `unix:path=...` or `unix:abstract=...`, then
+// SASL EXTERNAL as this user, whose id goes as the hex of its decimal digits.
+fn atspi_dial(address: str) -> (usize, bool) {
+    var socket_address: [110]u8 = zero
+    socket_address[0usize] = 1u8
+    var address_length = 0usize
+    var at = 0usize
+    while at < address.len && address[at] != 59u8 {
+        var key_end = at
+        while key_end < address.len && address[key_end] != 61u8 && address[key_end] != 44u8 && address[key_end] != 59u8 { key_end += 1usize }
+        var value_end = key_end
+        if value_end < address.len && address[value_end] == 61u8 { value_end += 1usize }
+        let value_start = value_end
+        while value_end < address.len && address[value_end] != 44u8 && address[value_end] != 59u8 { value_end += 1usize }
+        let key = address[at..key_end]
+        let value = address[value_start..value_end]
+        if value.len < 100usize && (same_bytes(key, "unix:path") || same_bytes(key, "path")) {
+            address_length = 2usize + atspi_copy(socket_address[2usize..106usize], value) + 1usize
+        }
+        if value.len < 100usize && (same_bytes(key, "unix:abstract") || same_bytes(key, "abstract")) {
+            address_length = 3usize + atspi_copy(socket_address[3usize..106usize], value)
+        }
+        at = value_end
+        if at < address.len && address[at] == 44u8 { at += 1usize }
+    }
+    if address_length == 0usize { ret (0usize, false) }
+    let descriptor = syscall(SYS_SOCKET, 1usize, SOCK_STREAM | SOCK_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret (0usize, false) }
+    let fd = usize(descriptor)
+    let connected = syscall(SYS_CONNECT, fd, mem.address_of(&socket_address[0usize]), address_length, 0usize, 0usize, 0usize)
+    var line: [96]u8 = zero
+    var uid: [20]u8 = zero
+    let uid_length = atspi_digits(uid[0usize..], 0usize, u64(syscall(SYS_GETUID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)))
+    var length = atspi_copy(line[1usize..], "AUTH EXTERNAL ") + 1usize
+    var d = 0usize
+    while d < uid_length {
+        line[length] = u8(51u8)
+        line[length + 1usize] = uid[d]
+        length += 2usize
+        d += 1usize
+    }
+    line[length] = 13u8
+    line[length + 1usize] = 10u8
+    length += 2usize
+    if connected < 0isize || d_write(fd, line[0usize..length]) != ok {
+        atspi_hang_up(fd)
+        ret (0usize, false)
+    }
+    atspi_in_len = 0usize
+    var seen_line = false
+    var rounds = 0usize
+    while !seen_line && rounds < 8usize {
+        if !atspi_fill(fd, 2000u32) {
+            atspi_hang_up(fd)
+            ret (0usize, false)
+        }
+        var i = 0usize
+        while i + 1usize < atspi_in_len {
+            if atspi_in[i] == 13u8 && atspi_in[i + 1usize] == 10u8 { seen_line = true }
+            i += 1usize
+        }
+        rounds += 1usize
+    }
+    if !seen_line || atspi_in_len < 2usize || atspi_in[0usize] != 79u8 || atspi_in[1usize] != 75u8 {
+        atspi_hang_up(fd)
+        ret (0usize, false)
+    }
+    atspi_in_len = 0usize
+    if d_write(fd, "BEGIN\r\n") != ok {
+        atspi_hang_up(fd)
+        ret (0usize, false)
+    }
+    ret (fd, true)
+}
+
+fn atspi_hang_up(fd: usize) {
+    let closed = syscall(SYS_CLOSE, fd, 0usize, 0usize, 0usize, 0usize, 0usize)
+}
+
+// A method call whose reply is one string, copied into `into`; its length.
+fn atspi_ask_text(fd: usize, destination: str, object: str, called: str, member: str, into: []u8) -> (usize, bool) {
+    d_call(destination, object, called, member, "")
+    if d_send(fd) != ok { ret (0usize, false) }
+    let (m, total, found) = atspi_await(fd, atspi_serial)
+    if !found { ret (0usize, false) }
+    if m.kind != 2u8 {
+        atspi_consume(total)
+        ret (0usize, false)
+    }
+    var c = r_body(&m)
+    let length = atspi_copy(into, r_text(atspi_in, &c))
+    atspi_consume(total)
+    ret (length, true)
+}
+
+fn atspi_hello(fd: usize) -> bool {
+    let (length, found) = atspi_ask_text(fd, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "Hello", atspi_name[0usize..])
+    atspi_name_len = length
+    ret found && length != 0usize
+}
+
+fn atspi_buffers() -> bool {
+    if atspi_in.len != 0usize { ret true }
+    let (base, reserve_error) = reserve(2usize * ATSPI_BUFFER)
+    if reserve_error != ok { ret false }
+    if commit(base, 2usize * ATSPI_BUFFER) != ok { ret false }
+    var region: mem.Arena = zero
+    region.base = base
+    region.cap = 2usize * ATSPI_BUFFER
+    region.off = 0usize
+    let (output, output_error) = mem.alloc[u8](&region, ATSPI_BUFFER)
+    let (input, input_error) = mem.alloc[u8](&region, ATSPI_BUFFER)
+    if output_error != ok || input_error != ok { ret false }
+    atspi_out = output
+    atspi_in = input
+    ret true
+}
+
+// Once, when the first window opens: the accessibility bus, and the application
+// embedded in the registry's desktop. Any failure leaves the bridge absent.
+fn atspi_connect(a: *mem.Arena) {
+    if atspi_state != ATSPI_UNTRIED { ret }
+    atspi_state = ATSPI_ABSENT
+    if !atspi_buffers() { ret }
+    let checkpoint = mem.mark(a)
+    // NO_AT_BRIDGE=1 keeps the bridge off, as it does for GTK and Qt.
+    let (bridge_switch, switch_error) = env(a, "NO_AT_BRIDGE")
+    if switch_error == ok && same_bytes(bridge_switch, "1") {
+        mem.reset(a, checkpoint)
+        ret
+    }
+    let (session, session_error) = env(a, "DBUS_SESSION_BUS_ADDRESS")
+    var address: [512]u8 = zero
+    var address_length = 0usize
+    if session_error == ok { address_length = atspi_copy(address[0usize..], session) }
+    mem.reset(a, checkpoint)
+    if address_length == 0usize { ret }
+    let (session_fd, dialled) = atspi_dial(address[0usize..address_length])
+    if !dialled { ret }
+    var a11y_length = 0usize
+    var a11y_found = false
+    if atspi_hello(session_fd) {
+        let (length, found) = atspi_ask_text(session_fd, "org.a11y.Bus", "/org/a11y/bus", "org.a11y.Bus", "GetAddress", address[0usize..])
+        a11y_length = length
+        a11y_found = found
+    }
+    atspi_hang_up(session_fd)
+    if !a11y_found || a11y_length == 0usize { ret }
+    let (fd, a11y_dialled) = atspi_dial(address[0usize..a11y_length])
+    if !a11y_dialled { ret }
+    if !atspi_hello(fd) {
+        atspi_hang_up(fd)
+        ret
+    }
+    // Embed((so)) under the registry's root; the reply is the desktop, our parent.
+    d_call("org.a11y.atspi.Registry", "/org/a11y/atspi/accessible/root", "org.a11y.atspi.Socket", "Embed", "(so)")
+    d_pad(8usize)
+    d_text(atspi_own_name())
+    d_text("/org/a11y/atspi/accessible/root")
+    if d_send(fd) != ok {
+        atspi_hang_up(fd)
+        ret
+    }
+    atspi_socket = fd
+    atspi_state = ATSPI_CONNECTED
+    let (m, total, found) = atspi_await(fd, atspi_serial)
+    if !found || m.kind != 2u8 {
+        atspi_drop()
+        ret
+    }
+    var c = r_body(&m)
+    r_pad(&c, 8usize)
+    atspi_parent_name_len = atspi_copy(atspi_parent_name[0usize..], r_text(atspi_in, &c))
+    atspi_parent_path_len = atspi_copy(atspi_parent_path[0usize..], r_text(atspi_in, &c))
+    atspi_consume(total)
+}
+
+fn atspi_drop() {
+    if atspi_state == ATSPI_CONNECTED { atspi_hang_up(atspi_socket) }
+    atspi_state = ATSPI_ABSENT
+    atspi_asked = false
+}
+
+fn atspi_own_name() -> str {
+    ret atspi_name[0usize..atspi_name_len]
+}
+
+// Every call the socket holds, answered; a socket that closes or garbles ends
+// the bridge. A client walking the tree sends its next call as soon as the last
+// is answered, so the burst is served here while it keeps coming -- a millisecond
+// apart, up to 64 more reads -- rather than one call per frame.
+fn atspi_service() {
+    if !atspi_fill(atspi_socket, 0u32) {
+        atspi_drop()
+        ret
+    }
+    atspi_answer_all(true)
+}
+
+// Bytes as if the socket had delivered them, answered as they would be; what a
+// test drives the objects with while the bridge is off.
+fn atspi_receive(bytes: []const u8) {
+    var at = 0usize
+    while at < bytes.len && atspi_in_len < atspi_in.len {
+        atspi_in[atspi_in_len] = bytes[at]
+        atspi_in_len += 1usize
+        at += 1usize
+    }
+    atspi_answer_all(false)
+}
+
+fn atspi_answer_all(connected: bool) {
+    var reads = 0usize
+    while !connected || atspi_state == ATSPI_CONNECTED {
+        let (m, total, complete) = d_parse(atspi_in, 0usize, atspi_in_len)
+        if complete {
+            if m.kind == 255u8 {
+                atspi_drop()
+                ret
+            }
+            if m.kind == 1u8 { atspi_dispatch(&m) }
+            atspi_consume(total)
+            continue
+        }
+        if !connected || reads >= 64usize || !atspi_fill(atspi_socket, 1u32) { break }
+        reads += 1usize
+    }
+}
+
+// ---------------------------------------------------------------- the objects
+
+fn atspi_prefix() -> str {
+    ret "/org/a11y/atspi/accessible/"
+}
+
+// A window's frame, or a node of it, as its object path, in a buffer the next
+// call reuses.
+fn atspi_path(window: usize, node: bool, slot: u32, generation: u32) -> str {
+    var at = atspi_copy(atspi_path_bytes[0usize..], atspi_prefix())
+    at = atspi_digits(atspi_path_bytes[0usize..], at, u64(window))
+    if node {
+        atspi_path_bytes[at] = 95u8
+        at = atspi_digits(atspi_path_bytes[0usize..], at + 1usize, u64(slot))
+        atspi_path_bytes[at] = 95u8
+        at = atspi_digits(atspi_path_bytes[0usize..], at + 1usize, u64(generation))
+    }
+    ret atspi_path_bytes[0usize..at]
+}
+
+fn atspi_number(text: str, from: usize) -> (u64, usize) {
+    var value = 0u64
+    var at = from
+    while at < text.len && text[at] >= 48u8 && text[at] <= 57u8 && at - from < 12usize {
+        value = value * 10u64 + u64(text[at] - 48u8)
+        at += 1usize
+    }
+    ret (value, at)
+}
+
+fn atspi_target(object: str) -> AtspiTarget {
+    var t: AtspiTarget = zero
+    t.kind = 3u8
+    let prefix = atspi_prefix()
+    if object.len <= prefix.len || !same_bytes(object[0usize..prefix.len], prefix) { ret t }
+    let rest = object[prefix.len..object.len]
+    if same_bytes(rest, "root") {
+        t.kind = 0u8
+        ret t
+    }
+    let (window, after_window) = atspi_number(object, prefix.len)
+    if after_window == prefix.len || window >= u64(WINDOW_TABLE) || window_ids[usize(window)] == 0u32 { ret t }
+    t.window = usize(window)
+    if after_window == object.len {
+        t.kind = 1u8
+        ret t
+    }
+    if object[after_window] != 95u8 { ret t }
+    let (slot, after_slot) = atspi_number(object, after_window + 1usize)
+    if after_slot >= object.len || object[after_slot] != 95u8 { ret t }
+    let (generation, after_generation) = atspi_number(object, after_slot + 1usize)
+    if after_generation != object.len || slot >= u64(ATSPI_SLOTS) { ret t }
+    let s = &atspi_stores[t.window]
+    if !s.ready { ret t }
+    let at = s.index_of[usize(slot)]
+    if at == 0u32 || u64(s.nodes[usize(at - 1u32)].generation) != generation { ret t }
+    t.kind = 2u8
+    t.index = usize(at - 1u32)
+    ret t
+}
+
+// References, `(so)`: this connection's name and a path.
+fn d_reference(object: str) {
+    d_pad(8usize)
+    d_text(atspi_own_name())
+    d_text(object)
+}
+
+fn d_reference_node(window: usize, link: u32) {
+    if link == 0u32 {
+        d_reference("/org/a11y/atspi/null")
+        ret
+    }
+    let n = &atspi_stores[window].nodes[usize(link - 1u32)]
+    d_reference(atspi_path(window, true, n.id, n.generation))
+}
+
+fn d_reference_parent(t: AtspiTarget) {
+    if t.kind == 0u8 {
+        d_pad(8usize)
+        d_text(atspi_parent_name[0usize..atspi_parent_name_len])
+        if atspi_parent_path_len == 0usize { d_text("/org/a11y/atspi/null") } else { d_text(atspi_parent_path[0usize..atspi_parent_path_len]) }
+        ret
+    }
+    if t.kind == 1u8 {
+        d_reference("/org/a11y/atspi/accessible/root")
+        ret
+    }
+    let s = &atspi_stores[t.window]
+    if s.parent[t.index] == 0u32 {
+        d_reference(atspi_path(t.window, false, 0u32, 0u32))
+        ret
+    }
+    d_reference_node(t.window, s.parent[t.index])
+}
+
+// The first child of a target as a link (an index plus one, or a window plus one
+// for the application's), and the next after a link.
+fn atspi_first(t: AtspiTarget) -> u32 {
+    if t.kind == 0u8 { ret atspi_next_window(0usize) }
+    let s = &atspi_stores[t.window]
+    if t.kind == 1u8 {
+        if !s.ready { ret 0u32 }
+        ret s.root_first
+    }
+    ret s.first[t.index]
+}
+
+fn atspi_next_window(from: usize) -> u32 {
+    var w = from
+    while w < WINDOW_TABLE {
+        if window_ids[w] != 0u32 { ret u32(w) + 1u32 }
+        w += 1usize
+    }
+    ret 0u32
+}
+
+fn atspi_after(t: AtspiTarget, link: u32) -> u32 {
+    if t.kind == 0u8 { ret atspi_next_window(usize(link)) }
+    ret atspi_stores[t.window].next[usize(link - 1u32)]
+}
+
+fn d_reference_child(t: AtspiTarget, link: u32) {
+    if t.kind == 0u8 {
+        d_reference(atspi_path(usize(link - 1u32), false, 0u32, 0u32))
+        ret
+    }
+    d_reference_node(t.window, link)
+}
+
+fn atspi_child_count(t: AtspiTarget) -> i32 {
+    var count = 0i32
+    var link = atspi_first(t)
+    while link != 0u32 && count < 100000i32 {
+        count += 1i32
+        link = atspi_after(t, link)
+    }
+    ret count
+}
+
+fn atspi_index_in_parent(t: AtspiTarget) -> i32 {
+    if t.kind == 0u8 { ret -1i32 }
+    if t.kind == 1u8 {
+        var count = 0i32
+        var w = 0usize
+        while w < t.window {
+            if window_ids[w] != 0u32 { count += 1i32 }
+            w += 1usize
+        }
+        ret count
+    }
+    let s = &atspi_stores[t.window]
+    var count = 0i32
+    var link = s.previous[t.index]
+    while link != 0u32 && count < 100000i32 {
+        count += 1i32
+        link = s.previous[usize(link - 1u32)]
+    }
+    ret count
+}
+
+fn atspi_title(window: usize) -> str {
+    ret atspi_titles[window * 128usize..window * 128usize + atspi_title_lengths[window]]
+}
+
+fn atspi_is_text(n: *const AccessibleNode) -> bool {
+    ret n.role == 7u8 || n.role == 38u8 || n.role == 44u8
+}
+
+fn atspi_name_of(t: AtspiTarget) -> str {
+    if t.kind == 0u8 {
+        let first = atspi_next_window(0usize)
+        if first != 0u32 && atspi_title_lengths[usize(first - 1u32)] != 0usize { ret atspi_title(usize(first - 1u32)) }
+        ret "neper"
+    }
+    if t.kind == 1u8 { ret atspi_title(t.window) }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    // A node with no name and a value no text interface reads is named by the value.
+    if n.label.len == 0usize && !atspi_is_text(n) { ret n.value }
+    ret n.label
+}
+
+// The AT-SPI role of an `e.ui.accessibility` role code.
+fn atspi_role_of(n: *const AccessibleNode) -> u32 {
+    let role = n.role
+    if role == 3u8 { ret 43u32 }
+    if role == 4u8 { ret 7u32 }
+    if role == 5u8 { ret 44u32 }
+    if role == 6u8 { ret 29u32 }
+    if role == 7u8 {
+        if n.flags & ATSPI_SECRET != 0u16 { ret 40u32 }
+        ret 79u32
+    }
+    if role == 8u8 { ret 27u32 }
+    if role == 9u8 { ret 88u32 }
+    if role == 10u8 { ret 31u32 }
+    if role == 11u8 || role == 36u8 { ret 32u32 }
+    if role == 12u8 || role == 30u8 { ret 55u32 }
+    if role == 13u8 { ret 90u32 }
+    if role == 14u8 { ret 56u32 }
+    if role == 15u8 { ret 51u32 }
+    if role == 16u8 { ret 42u32 }
+    if role == 17u8 { ret 48u32 }
+    if role == 18u8 { ret 62u32 }
+    if role == 19u8 { ret 37u32 }
+    if role == 20u8 { ret 38u32 }
+    if role == 21u8 { ret 33u32 }
+    if role == 22u8 { ret 35u32 }
+    if role == 23u8 || role == 34u8 { ret 16u32 }
+    if role == 24u8 { ret 2u32 }
+    if role == 25u8 { ret 83u32 }
+    if role == 26u8 { ret 54u32 }
+    if role == 27u8 { ret 64u32 }
+    if role == 28u8 { ret 65u32 }
+    if role == 29u8 { ret 91u32 }
+    if role == 31u8 { ret 58u32 }
+    if role == 32u8 { ret 57u32 }
+    if role == 33u8 { ret 50u32 }
+    if role == 35u8 { ret 98u32 }
+    if role == 37u8 { ret 8u32 }
+    if role == 38u8 { ret 11u32 }
+    if role == 39u8 || role == 40u8 { ret 110u32 }
+    if role == 41u8 { ret 34u32 }
+    if role == 42u8 { ret 45u32 }
+    if role == 43u8 { ret 66u32 }
+    if role == 44u8 { ret 52u32 }
+    ret 39u32
+}
+
+fn atspi_role(t: AtspiTarget) -> u32 {
+    if t.kind == 0u8 { ret 75u32 }
+    if t.kind == 1u8 { ret 23u32 }
+    ret atspi_role_of(&atspi_stores[t.window].nodes[t.index])
+}
+
+fn atspi_bit(bits: u64, state: u64) -> u64 {
+    ret bits | (1u64 << state)
+}
+
+// The state set as its 64 bits, AtspiStateType numbering.
+fn atspi_states(t: AtspiTarget) -> u64 {
+    var bits = 0u64
+    if t.kind == 0u8 { ret bits }
+    // Enabled, sensitive, visible, showing.
+    bits = atspi_bit(atspi_bit(atspi_bit(atspi_bit(bits, 8u64), 24u64), 30u64), 25u64)
+    if t.kind == 1u8 {
+        if window_focused[t.window] { bits = atspi_bit(bits, 1u64) }
+        ret bits
+    }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    if n.flags & ATSPI_DISABLED != 0u16 { bits = bits & (18446744073709551615u64 ^ ((1u64 << 8u64) | (1u64 << 24u64))) }
+    if n.flags & ATSPI_HIDDEN != 0u16 { bits = bits & (18446744073709551615u64 ^ ((1u64 << 30u64) | (1u64 << 25u64))) }
+    if n.actions & (4294967295u32 ^ ATSPI_ACTION_FOCUS) != 0u32 || n.flags & ATSPI_FOCUSED != 0u16 { bits = atspi_bit(bits, 11u64) }
+    if n.flags & ATSPI_FOCUSED != 0u16 { bits = atspi_bit(bits, 12u64) }
+    if n.flags & ATSPI_SELECTED != 0u16 { bits = atspi_bit(bits, 23u64) }
+    if n.actions & ATSPI_ACTION_SELECT != 0u32 || n.role == 19u8 || n.role == 36u8 { bits = atspi_bit(bits, 22u64) }
+    if n.role == 4u8 || n.role == 18u8 || n.role == 37u8 || n.role == 42u8 { bits = atspi_bit(bits, 41u64) }
+    if n.flags & ATSPI_CHECKED != 0u16 { bits = atspi_bit(bits, 4u64) }
+    if n.flags & ATSPI_MIXED != 0u16 { bits = atspi_bit(bits, 32u64) }
+    if n.actions & (ATSPI_ACTION_EXPAND | ATSPI_ACTION_COLLAPSE) != 0u32 { bits = atspi_bit(bits, 9u64) }
+    if n.flags & ATSPI_EXPANDED != 0u16 { bits = atspi_bit(bits, 10u64) }
+    if n.flags & ATSPI_BUSY != 0u16 { bits = atspi_bit(bits, 3u64) }
+    if n.flags & ATSPI_INVALID != 0u16 { bits = atspi_bit(bits, 36u64) }
+    if n.flags & ATSPI_REQUIRED != 0u16 { bits = atspi_bit(bits, 33u64) }
+    if n.flags & ATSPI_MODAL != 0u16 { bits = atspi_bit(bits, 16u64) }
+    if n.flags & ATSPI_READ_ONLY != 0u16 { bits = atspi_bit(bits, 43u64) }
+    if atspi_is_text(n) {
+        bits = atspi_bit(bits, 26u64)
+        if n.actions & ATSPI_ACTION_SET_VALUE != 0u32 && n.flags & ATSPI_READ_ONLY == 0u16 { bits = atspi_bit(bits, 7u64) }
+    }
+    ret bits
+}
+
+// The actions DoAction numbers, in this order: press, increment, decrement,
+// scroll, dismiss, expand, collapse, select, show menu, copy.
+fn atspi_action(n: *const AccessibleNode, wanted: i32) -> (u8, str, bool) {
+    var index = 0i32
+    var code = 1u8
+    while code <= 12u8 {
+        if code != 4u8 && code != 11u8 && n.actions & (1u32 << u32(code)) != 0u32 {
+            if index == wanted { ret (code, atspi_action_name(code), true) }
+            index += 1i32
+        }
+        code += 1u8
+    }
+    ret (0u8, "", false)
+}
+
+fn atspi_action_count(t: AtspiTarget) -> i32 {
+    if t.kind != 2u8 { ret 0i32 }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    var count = 0i32
+    while count < 16i32 {
+        let (_, _, found) = atspi_action(n, count)
+        if !found { break }
+        count += 1i32
+    }
+    ret count
+}
+
+fn atspi_action_name(code: u8) -> str {
+    if code == 1u8 { ret "click" }
+    if code == 2u8 { ret "increment" }
+    if code == 3u8 { ret "decrement" }
+    if code == 5u8 { ret "scroll" }
+    if code == 6u8 { ret "dismiss" }
+    if code == 7u8 { ret "expand" }
+    if code == 8u8 { ret "collapse" }
+    if code == 9u8 { ret "select" }
+    if code == 10u8 { ret "showmenu" }
+    ret "copy"
+}
+
+// UTF-8 text by characters, which is how AT-SPI counts.
+fn atspi_characters(text: str) -> i32 {
+    var count = 0i32
+    var at = 0usize
+    while at < text.len {
+        if text[at] & 192u8 != 128u8 { count += 1i32 }
+        at += 1usize
+    }
+    ret count
+}
+
+fn atspi_byte_at(text: str, characters: i32) -> usize {
+    var seen = 0i32
+    var at = 0usize
+    while at < text.len {
+        if text[at] & 192u8 != 128u8 {
+            if seen == characters { ret at }
+            seen += 1i32
+        }
+        at += 1usize
+    }
+    ret text.len
+}
+
+fn atspi_node_text(t: AtspiTarget) -> str {
+    if t.kind != 2u8 { ret "" }
+    ret atspi_stores[t.window].nodes[t.index].value
+}
+
+fn atspi_interfaces(t: AtspiTarget) {
+    let array = d_array_begin(4usize)
+    d_text("org.a11y.atspi.Accessible")
+    if t.kind == 0u8 { d_text("org.a11y.atspi.Application") } else { d_text("org.a11y.atspi.Component") }
+    if atspi_action_count(t) > 0i32 { d_text("org.a11y.atspi.Action") }
+    if t.kind == 2u8 && atspi_is_text(&atspi_stores[t.window].nodes[t.index]) {
+        d_text("org.a11y.atspi.Text")
+        d_text("org.a11y.atspi.EditableText")
+    }
+    d_array_end(array, 4usize)
+}
+
+// A property as a variant, when the interface has it.
+fn atspi_property(t: AtspiTarget, called: str, property: str) -> bool {
+    if same_bytes(called, "org.a11y.atspi.Accessible") {
+        if same_bytes(property, "Name") {
+            d_signature("s")
+            d_text(atspi_name_of(t))
+            ret true
+        }
+        if same_bytes(property, "Description") || same_bytes(property, "HelpText") {
+            d_signature("s")
+            if t.kind == 2u8 { d_text(atspi_stores[t.window].nodes[t.index].hint) } else { d_text("") }
+            ret true
+        }
+        if same_bytes(property, "Parent") {
+            d_signature("(so)")
+            d_reference_parent(t)
+            ret true
+        }
+        if same_bytes(property, "ChildCount") {
+            d_signature("i")
+            d_i32(atspi_child_count(t))
+            ret true
+        }
+        if same_bytes(property, "Locale") || same_bytes(property, "AccessibleId") {
+            d_signature("s")
+            d_text("")
+            ret true
+        }
+        ret false
+    }
+    if same_bytes(called, "org.a11y.atspi.Application") && t.kind == 0u8 {
+        if same_bytes(property, "ToolkitName") {
+            d_signature("s")
+            d_text("neper")
+            ret true
+        }
+        if same_bytes(property, "Version") {
+            d_signature("s")
+            d_text("1")
+            ret true
+        }
+        if same_bytes(property, "AtspiVersion") {
+            d_signature("s")
+            d_text("2.1")
+            ret true
+        }
+        if same_bytes(property, "Id") {
+            d_signature("i")
+            d_u32(atspi_app_id)
+            ret true
+        }
+        ret false
+    }
+    if same_bytes(called, "org.a11y.atspi.Action") && same_bytes(property, "NActions") {
+        d_signature("i")
+        d_i32(atspi_action_count(t))
+        ret true
+    }
+    if same_bytes(called, "org.a11y.atspi.Text") && t.kind == 2u8 {
+        let n = &atspi_stores[t.window].nodes[t.index]
+        if same_bytes(property, "CharacterCount") {
+            d_signature("i")
+            d_i32(atspi_characters(n.value))
+            ret true
+        }
+        if same_bytes(property, "CaretOffset") {
+            d_signature("i")
+            var caret = n.selection_end
+            if caret > n.value.len { caret = n.value.len }
+            d_i32(atspi_characters(n.value[0usize..caret]))
+            ret true
+        }
+    }
+    ret false
+}
+
+fn atspi_all_properties(t: AtspiTarget, called: str) {
+    let array = d_array_begin(8usize)
+    atspi_entry(t, called, "Name")
+    atspi_entry(t, called, "Description")
+    atspi_entry(t, called, "Parent")
+    atspi_entry(t, called, "ChildCount")
+    atspi_entry(t, called, "Locale")
+    atspi_entry(t, called, "AccessibleId")
+    atspi_entry(t, called, "ToolkitName")
+    atspi_entry(t, called, "Version")
+    atspi_entry(t, called, "AtspiVersion")
+    atspi_entry(t, called, "Id")
+    atspi_entry(t, called, "NActions")
+    atspi_entry(t, called, "CharacterCount")
+    atspi_entry(t, called, "CaretOffset")
+    d_array_end(array, 8usize)
+}
+
+// A dictionary entry, taken back when the interface has no such property.
+fn atspi_entry(t: AtspiTarget, called: str, property: str) {
+    d_pad(8usize)
+    let mark = atspi_out_len
+    d_text(property)
+    if !atspi_property(t, called, property) { atspi_out_len = mark }
+}
+
+// The deepest published node under a window-relative point: the last in tree order.
+fn atspi_at_point(window: usize, x: i32, y: i32) -> u32 {
+    let s = &atspi_stores[window]
+    if !s.ready { ret 0u32 }
+    let px = f32(x)
+    let py = f32(y)
+    var found = 0u32
+    var i = 0usize
+    while i < s.count {
+        let n = &s.nodes[i]
+        if n.flags & ATSPI_HIDDEN == 0u16 && px >= n.x && py >= n.y && px < n.x + n.width && py < n.y + n.height { found = u32(i) + 1u32 }
+        i += 1usize
+    }
+    ret found
+}
+
+fn atspi_extents(t: AtspiTarget) -> (i32, i32, i32, i32) {
+    if t.kind == 1u8 { ret (0i32, 0i32, i32(window_widths[t.window]), i32(window_heights[t.window])) }
+    if t.kind != 2u8 { ret (0i32, 0i32, 0i32, 0i32) }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    ret (i32(n.x), i32(n.y), i32(n.width), i32(n.height))
+}
+
+// A request for the program, and a Paint to wake its wait.
+fn atspi_request(t: AtspiTarget, action: u8, text: str) -> bool {
+    if t.kind != 2u8 || atspi_request_count >= ATSPI_REQUESTS { ret false }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    if n.flags & ATSPI_DISABLED != 0u16 && action != 0u8 { ret false }
+    let r = &atspi_requests[(atspi_request_head + atspi_request_count) % ATSPI_REQUESTS]
+    r.window = window_ids[t.window]
+    r.id = n.id
+    r.generation = n.generation
+    r.action = action
+    r.length = atspi_copy(r.text[0usize..], text)
+    atspi_request_count += 1usize
+    var wake: WindowEvent = zero
+    wake.kind = .Paint
+    wake.window = Window { raw: usize(window_ids[t.window]) }
+    window_push(wake)
+    ret true
+}
+
+// The first call from an assistive technology: every window publishes from now on.
+fn atspi_first_ask() {
+    if atspi_asked { ret }
+    atspi_asked = true
+    var w = 0usize
+    while w < WINDOW_TABLE {
+        if window_ids[w] != 0u32 {
+            var wake: WindowEvent = zero
+            wake.kind = .Paint
+            wake.window = Window { raw: usize(window_ids[w]) }
+            window_push(wake)
+        }
+        w += 1usize
+    }
+}
+
+fn atspi_dispatch(m: *const DMessage) {
+    let t = atspi_target(m.path)
+    let called = m.called
+    let member = m.member
+    if same_bytes(called, "org.freedesktop.DBus.Peer") {
+        d_reply(m, "")
+        d_answer()
+        ret
+    }
+    if t.kind == 3u8 {
+        d_error(m, "org.freedesktop.DBus.Error.UnknownObject")
+        ret
+    }
+    atspi_first_ask()
+    var c = r_body(m)
+    if same_bytes(called, "org.freedesktop.DBus.Properties") {
+        let wanted_interface = r_text(atspi_in, &c)
+        if same_bytes(member, "Get") {
+            let property = r_text(atspi_in, &c)
+            d_reply(m, "v")
+            if atspi_property(t, wanted_interface, property) {
+                d_answer()
+                ret
+            }
+            d_error(m, "org.freedesktop.DBus.Error.UnknownProperty")
+            ret
+        }
+        if same_bytes(member, "GetAll") {
+            d_reply(m, "a{sv}")
+            atspi_all_properties(t, wanted_interface)
+            d_answer()
+            ret
+        }
+        if same_bytes(member, "Set") {
+            let property = r_text(atspi_in, &c)
+            let kind = r_signature(atspi_in, &c)
+            if t.kind == 0u8 && same_bytes(property, "Id") && same_bytes(kind, "i") { atspi_app_id = r_u32(atspi_in, &c) }
+            d_reply(m, "")
+            d_answer()
+            ret
+        }
+    }
+    if same_bytes(called, "org.a11y.atspi.Accessible") {
+        if atspi_accessible(m, t, member, &c) { ret }
+    }
+    if same_bytes(called, "org.a11y.atspi.Component") && t.kind != 0u8 {
+        if atspi_component(m, t, member, &c) { ret }
+    }
+    if same_bytes(called, "org.a11y.atspi.Action") && t.kind == 2u8 {
+        if atspi_actions(m, t, member, &c) { ret }
+    }
+    if (same_bytes(called, "org.a11y.atspi.Text") || same_bytes(called, "org.a11y.atspi.EditableText")) && t.kind == 2u8 {
+        if atspi_text(m, t, member, &c) { ret }
+    }
+    if same_bytes(called, "org.a11y.atspi.Application") && same_bytes(member, "GetLocale") {
+        d_reply(m, "s")
+        d_text("")
+        d_answer()
+        ret
+    }
+    d_error(m, "org.freedesktop.DBus.Error.UnknownMethod")
+}
+
+fn atspi_accessible(m: *const DMessage, t: AtspiTarget, member: str, c: *DCursor) -> bool {
+    if same_bytes(member, "GetChildren") {
+        d_reply(m, "a(so)")
+        let array = d_array_begin(8usize)
+        var link = atspi_first(t)
+        var count = 0usize
+        while link != 0u32 && count < 100000usize {
+            d_reference_child(t, link)
+            link = atspi_after(t, link)
+            count += 1usize
+        }
+        d_array_end(array, 8usize)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetChildAtIndex") {
+        let wanted = r_i32(atspi_in, c)
+        var link = atspi_first(t)
+        var index = 0i32
+        while link != 0u32 && index < wanted {
+            link = atspi_after(t, link)
+            index += 1i32
+        }
+        d_reply(m, "(so)")
+        if link == 0u32 || wanted < 0i32 { d_reference("/org/a11y/atspi/null") } else { d_reference_child(t, link) }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetIndexInParent") {
+        d_reply(m, "i")
+        d_i32(atspi_index_in_parent(t))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetRole") {
+        d_reply(m, "u")
+        d_u32(atspi_role(t))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetRoleName") || same_bytes(member, "GetLocalizedRoleName") {
+        d_reply(m, "s")
+        d_text("")
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetState") {
+        let bits = atspi_states(t)
+        d_reply(m, "au")
+        let array = d_array_begin(4usize)
+        d_u32(u32(bits & 4294967295u64))
+        d_u32(u32(bits >> 32u64))
+        d_array_end(array, 4usize)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetAttributes") {
+        d_reply(m, "a{ss}")
+        let array = d_array_begin(8usize)
+        if t.kind == 2u8 {
+            let n = &atspi_stores[t.window].nodes[t.index]
+            if n.role == 25u8 && n.level > 0u8 {
+                var digits: [4]u8 = zero
+                let length = atspi_digits(digits[0usize..], 0usize, u64(n.level))
+                d_pad(8usize)
+                d_text("level")
+                d_text(digits[0usize..length])
+            }
+        }
+        d_array_end(array, 8usize)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetApplication") {
+        d_reply(m, "(so)")
+        d_reference("/org/a11y/atspi/accessible/root")
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetInterfaces") {
+        d_reply(m, "as")
+        atspi_interfaces(t)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetRelationSet") {
+        d_reply(m, "a(ua(so))")
+        let array = d_array_begin(8usize)
+        if t.kind == 2u8 {
+            let s = &atspi_stores[t.window]
+            let n = &s.nodes[t.index]
+            // LABELLED_BY 2, DESCRIBED_BY 18, CONTROLLER_FOR 3, ERROR_MESSAGE 21.
+            if n.relation_flags & 1u8 != 0u8 { atspi_relation(t.window, 2u32, n.labelled_by, n.labelled_by_generation) }
+            if n.relation_flags & 2u8 != 0u8 { atspi_relation(t.window, 18u32, n.described_by, n.described_by_generation) }
+            if n.relation_flags & 8u8 != 0u8 { atspi_relation(t.window, 3u32, n.controls, n.controls_generation) }
+            if n.relation_flags & 4u8 != 0u8 { atspi_relation(t.window, 21u32, n.error_by, n.error_by_generation) }
+        }
+        d_array_end(array, 8usize)
+        d_answer()
+        ret true
+    }
+    ret false
+}
+
+// One relation to a published node, when it is published.
+fn atspi_relation(window: usize, kind: u32, slot: u32, generation: u32) {
+    let s = &atspi_stores[window]
+    if usize(slot) >= ATSPI_SLOTS { ret }
+    let at = s.index_of[usize(slot)]
+    if at == 0u32 || s.nodes[usize(at - 1u32)].generation != generation { ret }
+    d_pad(8usize)
+    d_u32(kind)
+    let targets = d_array_begin(8usize)
+    d_reference_node(window, at)
+    d_array_end(targets, 8usize)
+}
+
+fn atspi_component(m: *const DMessage, t: AtspiTarget, member: str, c: *DCursor) -> bool {
+    let (x, y, width, height) = atspi_extents(t)
+    if same_bytes(member, "GetExtents") {
+        d_reply(m, "(iiii)")
+        d_pad(8usize)
+        d_i32(x)
+        d_i32(y)
+        d_i32(width)
+        d_i32(height)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetPosition") || same_bytes(member, "GetSize") {
+        d_reply(m, "ii")
+        if same_bytes(member, "GetSize") {
+            d_i32(width)
+            d_i32(height)
+        } else {
+            d_i32(x)
+            d_i32(y)
+        }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "Contains") {
+        let px = r_i32(atspi_in, c)
+        let py = r_i32(atspi_in, c)
+        d_reply(m, "b")
+        d_bool(px >= x && py >= y && px < x + width && py < y + height)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetAccessibleAtPoint") {
+        let px = r_i32(atspi_in, c)
+        let py = r_i32(atspi_in, c)
+        d_reply(m, "(so)")
+        d_reference_node(t.window, atspi_at_point(t.window, px, py))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetLayer") {
+        d_reply(m, "u")
+        if t.kind == 1u8 { d_u32(7u32) } else { d_u32(3u32) }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetMDIZOrder") {
+        d_reply(m, "n")
+        d_put(255u8)
+        d_put(255u8)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetAlpha") {
+        d_reply(m, "d")
+        d_u64(4607182418800017408u64)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GrabFocus") {
+        d_reply(m, "b")
+        d_bool(atspi_request(t, 0u8, ""))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "ScrollTo") || same_bytes(member, "ScrollToPoint") || same_bytes(member, "SetExtents") || same_bytes(member, "SetPosition") || same_bytes(member, "SetSize") {
+        d_reply(m, "b")
+        d_bool(false)
+        d_answer()
+        ret true
+    }
+    ret false
+}
+
+fn atspi_actions(m: *const DMessage, t: AtspiTarget, member: str, c: *DCursor) -> bool {
+    let n = &atspi_stores[t.window].nodes[t.index]
+    if same_bytes(member, "GetActions") {
+        d_reply(m, "a(sss)")
+        let array = d_array_begin(8usize)
+        var index = 0i32
+        while index < 16i32 {
+            let (_, action_name, found) = atspi_action(n, index)
+            if !found { break }
+            d_pad(8usize)
+            d_text(action_name)
+            d_text("")
+            d_text("")
+            index += 1i32
+        }
+        d_array_end(array, 8usize)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetName") || same_bytes(member, "GetLocalizedName") || same_bytes(member, "GetDescription") || same_bytes(member, "GetKeyBinding") {
+        let wanted = r_i32(atspi_in, c)
+        let (_, action_name, found) = atspi_action(n, wanted)
+        d_reply(m, "s")
+        if found && (same_bytes(member, "GetName") || same_bytes(member, "GetLocalizedName")) { d_text(action_name) } else { d_text("") }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "DoAction") {
+        let wanted = r_i32(atspi_in, c)
+        let (code, _, found) = atspi_action(n, wanted)
+        d_reply(m, "b")
+        d_bool(found && atspi_request(t, code, ""))
+        d_answer()
+        ret true
+    }
+    ret false
+}
+
+fn atspi_text(m: *const DMessage, t: AtspiTarget, member: str, c: *DCursor) -> bool {
+    let text = atspi_node_text(t)
+    let count = atspi_characters(text)
+    if same_bytes(member, "GetText") {
+        var start = r_i32(atspi_in, c)
+        var end = r_i32(atspi_in, c)
+        if end < 0i32 || end > count { end = count }
+        if start < 0i32 { start = 0i32 }
+        if start > end { start = end }
+        d_reply(m, "s")
+        d_text(text[atspi_byte_at(text, start)..atspi_byte_at(text, end)])
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetCharacterAtOffset") {
+        let offset = r_i32(atspi_in, c)
+        var character = 0i32
+        if offset >= 0i32 && offset < count {
+            let at = atspi_byte_at(text, offset)
+            character = i32(text[at])
+            if text[at] >= 128u8 {
+                // The code point of a multi-byte sequence.
+                var length = 1usize
+                var value = u32(text[at])
+                if value >= 240u32 {
+                    value = value & 7u32
+                    length = 4usize
+                } else if value >= 224u32 {
+                    value = value & 15u32
+                    length = 3usize
+                } else {
+                    value = value & 31u32
+                    length = 2usize
+                }
+                var k = 1usize
+                while k < length && at + k < text.len {
+                    value = (value << 6u32) | (u32(text[at + k]) & 63u32)
+                    k += 1usize
+                }
+                character = i32(value)
+            }
+        }
+        d_reply(m, "i")
+        d_i32(character)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetStringAtOffset") || same_bytes(member, "GetTextAtOffset") {
+        d_reply(m, "sii")
+        d_text(text)
+        d_i32(0i32)
+        d_i32(count)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetTextBeforeOffset") || same_bytes(member, "GetTextAfterOffset") {
+        d_reply(m, "sii")
+        d_text("")
+        d_i32(0i32)
+        d_i32(0i32)
+        d_answer()
+        ret true
+    }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    var low = n.selection_start
+    var high = n.selection_end
+    if low > high {
+        low = n.selection_end
+        high = n.selection_start
+    }
+    if high > text.len { high = text.len }
+    if low > high { low = high }
+    if same_bytes(member, "GetNSelections") {
+        d_reply(m, "i")
+        if low != high { d_i32(1i32) } else { d_i32(0i32) }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetSelection") {
+        d_reply(m, "ii")
+        d_i32(atspi_characters(text[0usize..low]))
+        d_i32(atspi_characters(text[0usize..high]))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "SetCaretOffset") || same_bytes(member, "SetSelection") || same_bytes(member, "AddSelection") {
+        if same_bytes(member, "SetSelection") { let which = r_i32(atspi_in, c) }
+        let first = r_i32(atspi_in, c)
+        var second = first
+        if !same_bytes(member, "SetCaretOffset") { second = r_i32(atspi_in, c) }
+        // SetSelection's value is "start:end" in bytes.
+        var range: [48]u8 = zero
+        var at = atspi_digits(range[0usize..], 0usize, u64(atspi_byte_at(text, first)))
+        range[at] = 58u8
+        at = atspi_digits(range[0usize..], at + 1usize, u64(atspi_byte_at(text, second)))
+        d_reply(m, "b")
+        d_bool(first >= 0i32 && second >= 0i32 && atspi_request(t, 11u8, range[0usize..at]))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "SetTextContents") {
+        let wanted = r_text(atspi_in, c)
+        d_reply(m, "b")
+        d_bool(n.actions & ATSPI_ACTION_SET_VALUE != 0u32 && atspi_request(t, 4u8, wanted))
+        d_answer()
+        ret true
+    }
+    ret false
+}
+
+// ---------------------------------------------------------------- publishing
+
+fn atspi_prepare(slot: usize) -> bool {
+    let s = &atspi_stores[slot]
+    if s.nodes.len != 0usize { ret true }
+    let (base, reserve_error) = reserve(ATSPI_STORE_BYTES)
+    if reserve_error != ok { ret false }
+    if commit(base, ATSPI_STORE_BYTES) != ok { ret false }
+    var region: mem.Arena = zero
+    region.base = base
+    region.cap = ATSPI_STORE_BYTES
+    region.off = 0usize
+    let (nodes, nodes_error) = mem.alloc[AccessibleNode](&region, ATSPI_NODES)
+    let (text, text_error) = mem.alloc[u8](&region, ATSPI_TEXT)
+    let (index_of, index_error) = mem.alloc[u32](&region, ATSPI_SLOTS)
+    let (parents, parents_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    let (firsts, firsts_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    let (lasts, lasts_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    let (nexts, nexts_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    let (previouses, previouses_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    if nodes_error != ok || text_error != ok || index_error != ok || parents_error != ok || firsts_error != ok || lasts_error != ok || nexts_error != ok || previouses_error != ok { ret false }
+    s.nodes = nodes
+    s.text = text
+    s.index_of = index_of
+    s.parent = parents
+    s.first = firsts
+    s.last = lasts
+    s.next = nexts
+    s.previous = previouses
+    ret true
+}
+
+// Copied into the store's text; what does not fit is published empty.
+fn atspi_keep(s: *AtspiStore, used: *AtspiCount, text: str) -> str {
+    if text.len == 0usize || used.value + text.len > s.text.len { ret "" }
+    let start = used.value
+    var at = 0usize
+    while at < text.len {
+        s.text[start + at] = text[at]
+        at += 1usize
+    }
+    used.value = start + text.len
+    ret s.text[start..start + text.len]
+}
+
+// A closing window's store forgets its nodes, so their paths answer that they are gone.
+fn atspi_release(slot: usize) {
+    let s = &atspi_stores[slot]
+    var i = 0usize
+    while i < s.count {
+        s.index_of[usize(s.nodes[i].id)] = 0u32
+        i += 1usize
+    }
+    s.count = 0usize
+    s.focus = 0u32
+    s.root_first = 0u32
+    s.root_last = 0u32
+    s.ready = false
+    atspi_title_lengths[slot] = 0usize
+}
+
+fn atspi_set_title(slot: usize, value: str) {
+    atspi_title_lengths[slot] = atspi_copy(atspi_titles[slot * 128usize..slot * 128usize + 128usize], value)
+}
+
+// Whether an assistive technology has called on the application; until one has,
+// a publish keeps nothing.
+fn accessibility_listening(w: Window) -> bool {
+    ret atspi_asked && w.raw != 0usize && window_slot(u32(w.raw)) < WINDOW_TABLE
+}
 
 fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
-    ret Unsupported
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    if !atspi_asked { ret ok }
+    if !atspi_prepare(slot) { ret OutOfMemory }
+    let s = &atspi_stores[slot]
+    var i = 0usize
+    while i < s.count {
+        s.index_of[usize(s.nodes[i].id)] = 0u32
+        i += 1usize
+    }
+    var used = AtspiCount { value: 0usize }
+    var count = 0usize
+    var focused = 0u32
+    i = 0usize
+    while i < nodes.len && count < ATSPI_NODES {
+        if usize(nodes[i].id) < ATSPI_SLOTS {
+            var copied = nodes[i]
+            copied.label = atspi_keep(s, &used, nodes[i].label)
+            copied.value = atspi_keep(s, &used, nodes[i].value)
+            copied.hint = atspi_keep(s, &used, nodes[i].hint)
+            s.nodes[count] = copied
+            s.index_of[usize(copied.id)] = u32(count) + 1u32
+            if copied.flags & ATSPI_FOCUSED != 0u16 { focused = u32(count) + 1u32 }
+            count += 1usize
+        }
+        i += 1usize
+    }
+    s.count = count
+    s.root_first = 0u32
+    s.root_last = 0u32
+    i = 0usize
+    while i < count {
+        s.first[i] = 0u32
+        s.last[i] = 0u32
+        s.next[i] = 0u32
+        s.previous[i] = 0u32
+        i += 1usize
+    }
+    // Children in the order the records come, which is the tree's.
+    i = 0usize
+    while i < count {
+        let n = &s.nodes[i]
+        var owner = 0u32
+        if n.has_parent && usize(n.parent) < ATSPI_SLOTS {
+            let at = s.index_of[usize(n.parent)]
+            if at != 0u32 && s.nodes[usize(at - 1u32)].generation == n.parent_generation { owner = at }
+        }
+        s.parent[i] = owner
+        let own = u32(i) + 1u32
+        if owner == 0u32 {
+            if s.root_last == 0u32 { s.root_first = own } else {
+                s.next[usize(s.root_last - 1u32)] = own
+                s.previous[i] = s.root_last
+            }
+            s.root_last = own
+        } else {
+            let p = usize(owner - 1u32)
+            if s.last[p] == 0u32 { s.first[p] = own } else {
+                s.next[usize(s.last[p] - 1u32)] = own
+                s.previous[i] = s.last[p]
+            }
+            s.last[p] = own
+        }
+        i += 1usize
+    }
+    let first_publish = !s.ready
+    let moved = focused != s.focus
+    s.focus = focused
+    s.ready = true
+    if atspi_state == ATSPI_CONNECTED {
+        // The frame's children came into being: ChildrenChanged, "add", the first.
+        if first_publish && s.root_first != 0u32 {
+            d_signal(atspi_path(slot, false, 0u32, 0u32), "org.a11y.atspi.Event.Object", "ChildrenChanged", "siiva{sv}")
+            d_text("add")
+            d_i32(0i32)
+            d_i32(0i32)
+            d_signature("(so)")
+            d_reference_node(slot, s.root_first)
+            let properties = d_array_begin(8usize)
+            d_array_end(properties, 8usize)
+            d_answer()
+        }
+        // The focus moved: StateChanged, "focused", 1, on the node that has it.
+        if moved && focused != 0u32 {
+            let n = &s.nodes[usize(focused - 1u32)]
+            d_signal(atspi_path(slot, true, n.id, n.generation), "org.a11y.atspi.Event.Object", "StateChanged", "siiva{sv}")
+            d_text("focused")
+            d_i32(1i32)
+            d_i32(0i32)
+            d_signature("i")
+            d_i32(0i32)
+            let properties = d_array_begin(8usize)
+            d_array_end(properties, 8usize)
+            d_answer()
+        }
+    }
+    ret ok
+}
+
+// The oldest request for this window, its value copied out; a request for a
+// window that has closed is dropped on the way.
+fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
+    var request: AccessibleRequest = zero
+    while atspi_request_count > 0usize {
+        let r = &atspi_requests[atspi_request_head]
+        if usize(r.window) != w.raw && window_slot(r.window) < WINDOW_TABLE { ret (request, false) }
+        atspi_request_head = (atspi_request_head + 1usize) % ATSPI_REQUESTS
+        atspi_request_count -= 1usize
+        if usize(r.window) == w.raw {
+            var at = 0usize
+            while at < r.length {
+                atspi_taken[at] = r.text[at]
+                at += 1usize
+            }
+            request.id = r.id
+            request.generation = r.generation
+            request.action = r.action
+            request.value = atspi_taken[0usize..r.length]
+            ret (request, true)
+        }
+    }
+    ret (request, false)
 }
 
 // A file's bytes handed to a socket without passing through this process (#1290): the

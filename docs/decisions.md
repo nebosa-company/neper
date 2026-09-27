@@ -29247,3 +29247,51 @@ This is a library package, so no work-queue item moves.
 - `os_window` and six `ui_*` fixtures, which reach its `CW_USEDEFAULT`.
 
 Those two constants are the only negative narrow constants in `lib/` and `src/`. Both are values handed to Windows, which reads their low 32 bits, so no behaviour changed until something compared one. All 11 pass under the fixed compiler. Stage 2 equals stage 3 on Windows.
+
+## D1602 — The screen-reader bridge on Windows: a UI Automation provider
+
+`os.accessibility_publish` (D802) answered `Unsupported` everywhere, so no screen reader could read a Neper window. On Windows it now feeds a server-side UI Automation provider written in `os.windows.e`. It needs no helper DLL and no COM registration.
+
+- **Entry.** `WM_GETOBJECT` for `UiaRootObjectId` hands UIA the window's root element through `UiaReturnRawElementProvider`. The root stands on the window's own provider (`UiaHostProviderFromHwnd`) for its name and frame. The first such message creates the window's store and queues a Paint, so a frame publishes the tree before the client looks.
+- **Nothing until asked.** Until a client asks, `accessibility_listening` is false and `e.ui.app` builds no tree. A program nobody reads pays nothing.
+- **Store.** Each publish copies the records and their text into the window's store: 8 MB reserved once, never freed, since UIA may hold an element past the window. It then links parents, children and siblings from the tree order (D1604).
+- **Elements.** One object per widget slot, carrying an interface pointer per interface, each the address of its own field. A method finds its element from the vtable its `this` names, so every interface shares one QueryInterface. The IIDs are compared in full (16 bytes); `shell.windows.e`'s `guid_is` only knows the OLE family. They were computed from the SDK's strings, not typed by hand.
+- **What it answers.** Simple, Fragment and FragmentRoot, plus Invoke, Value, Toggle, ExpandCollapse and SelectionItem. Properties: ControlType, Name, HelpText, focus, enabled, offscreen, IsPassword, required, LabeledBy, LiveSetting and HeadingLevel. Unnamed groups and presentational children (inside a button, tab, box or range) are neither control nor content elements, so Narrator's control view reads as a native app's does.
+- **Actions come back as requests.** `os.accessibility_take` hands them over, and `accessibility.serve` performs them through `accessibility.perform` on the next step. A Paint wakes the wait.
+- **Focus event.** The focus change raises `UIA_AutomationFocusChangedEventId`. The first publish, or a change in node count, raises ChildrenInvalidated.
+
+Checked against the gallery with the .NET UIA client. Invoke moved the press counter from 0 to 1. SetFocus raised the focus event (seen by a compiled handler). Toggle went Off to On. SetValue round-tripped UTF-8. The Password field read `*******` with IsPassword. `link/os_uia` (Windows) drives the provider in process. A mutation (expecting "Sane" for "Save") stops it at 6.
+
+The heap cost is 8 MB reserved per window a client reads, since the store is committed at the first ask. Value, name and live-region change events are not raised: a screen reader reads a new value when it next asks.
+
+---
+
+## D1603 — The screen-reader bridge on Linux: AT-SPI over a hand-written D-Bus client
+
+AT-SPI is D-Bus, and `e.os` has no D-Bus. It now has a small one in `os.linux.e`, written like the X client there: a raw `AF_UNIX` socket, the wire format by hand, no libdbus and no libatspi.
+
+- **Connect.** At the first `window_open`: the session bus from `DBUS_SESSION_BUS_ADDRESS`, `AUTH EXTERNAL` as the process's uid, `Hello`, then `org.a11y.Bus.GetAddress`. The accessibility bus is connected the same way, and `org.a11y.atspi.Socket.Embed` on the registry places the application under the desktop.
+- **Failure is silent.** Any step that fails leaves the bridge off. Each wait is bounded at 2 s. `NO_AT_BRIDGE=1` keeps it off, as it does for GTK and Qt. The connect cost was unmeasurable against a window fixture's own run (about 950 ms either way).
+- **Polling.** `x_drain` polls the bus socket beside the display's. A client walking a tree sends its next call when the last is answered, so calls are served while they keep coming: 1 ms apart, up to 64 reads per step. When the loop served one call per step, a 450-call walk of the gallery with a blinking caret needed minutes, because every step drew a 100 ms CPU frame in WSLg. It now takes under 10 s.
+- **Objects.** The application is `.../accessible/root`. A window's frame is `.../accessible/<window>`. A node is `.../accessible/<window>_<slot>_<generation>`, so a stale path answers `UnknownObject`.
+- **Interfaces.** Accessible, Component, Action, Text and EditableText for entries, Application, and Properties Get, GetAll and Set. Events: `StateChanged("focused")` when the focus moves, and `ChildrenChanged("add")` at a frame's first publish.
+- **Constants.** Role, state and relation numbers came from a C program compiled against `atspi-constants.h`. A first pass read them off the header's doc comments and was wrong for half of them: ENTRY is 79, not 62.
+
+Checked against the gallery in WSLg with `python3-dbus`. The application was found by its toolkit name. DoAction moved the press counter from 0 to 1. GrabFocus brought the focus signal and the FOCUSED bit. SetTextContents of "héllo" read back with CharacterCount 5. The password entry has role PASSWORD_TEXT and text `*******`. 141 paths were unchanged across repeated walks at rest.
+
+`link/os_atspi` (Linux, run with `NO_AT_BRIDGE=1`) builds calls with the bridge's own writer, feeds them through `atspi_receive`, and parses the replies. A mutation (children out of order) stops it at 9. Without the switch it stops at 1, because a bus is there.
+
+Not done: extents are window-relative in every coordinate space, since X is not asked where the window is. Text answers every granularity with the whole text. There is no Value or Selection interface, and no value or name change events.
+
+---
+
+## D1604 — The accessibility tree in tree order, and a secret field's value masked
+
+Two changes in `e.ui.accessibility` that the bridges needed:
+
+- **Tree order.** `flatten_into` wrote records in slot order and found each parent by scanning every child list, which is O(n²) per frame. Slot order is not sibling order, so a host that numbers children (AT-SPI's `GetChildAtIndex`, UIA's Navigate) would have read them shuffled. It now writes preorder from the root: each parent first, siblings in order. A child is found by binary search on slot, because `build` makes nodes in slot order. A node the root does not reach (none should) follows without a parent. `ui_algorithms`, which flattens a 300-node tree, passes unchanged.
+- **Secret fields.** `build` copied an editor's raw buffer into the node's value, so a password field published its password. A field that masks its value (D823) now publishes its mask, one asterisk per byte as it draws. The node carries `State.secret` (`STATE_SECRET`, 8192), which UIA reports as IsPassword and AT-SPI as PASSWORD_TEXT. `ui_accessibility`'s all-flags check is now 16383.
+
+The whole bridge is described in `docs/ux/accessibility-bridge.md`.
+
+---
