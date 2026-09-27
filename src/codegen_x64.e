@@ -1392,12 +1392,18 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
     ret ok
 }
 
-// Section 11's symbol table, appended after the last function once the code is final:
-// a count, then per emitted function its start relative to the table (negative, the
-// code precedes it), its length and its `module.function` name, then the names. Every
-// reference to `neper_symbols` -- one per trap site -- is resolved here, so the
-// linkers see only a longer code blob. The functions the fold dropped are skipped:
-// their offsets are the survivor's, which is the name the walk should print.
+// Section 13's `.nepersym` (D1586), appended after the last function once the code is
+// final: `NEPS`, a `u16` version (1), a `u16` zero and the entry count; per emitted
+// function in code order -- so sorted by start -- a `u64` start and end (offsets in the
+// machine buffer, which the linker turns into addresses) and `u32` indexes of its
+// `module.function` name, its file and its line program, and a `u32` zero; the strings,
+// each a `u32` length and its bytes; and per function its line program, a `u32` row
+// count and then each row as a ULEB128 offset delta, a ULEB128 of the zigzag line delta
+// times two plus whether the file changes, and then the new file's index. Every index
+// is an offset from the table's start. Every reference to `neper_symbols` -- one per
+// trap site -- is resolved here to the table's start; a linker that moves the table
+// moves them with it. The functions the fold dropped are skipped: their offsets are
+// the survivor's, which is the name the walk should print.
 fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []Relocation, relocation_count: usize, lines: []LineEntry, line_count: usize) -> err {
     let table_start = machine.count
     var emitted = 0usize
@@ -1408,17 +1414,22 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
         if is_placed_after(builder, function_offsets, at, &placed_max_1) { emitted += 1usize }
         at += 1usize
     }
+    try emit_text(machine, "NEPS")
+    try emit_x64.byte(machine, 1usize)
+    try emit_x64.byte(machine, 0usize)
+    try emit_x64.byte(machine, 0usize)
+    try emit_x64.byte(machine, 0usize)
     try emit_x64.little_u32(machine, emitted)
-    // Names first, then the paths the line rows share, then the rows themselves;
+    // Names first, then the paths the line rows share, then the line programs;
     // every offset below is from the table's start.
-    var names_at = 4usize + emitted * 24usize
+    var names_at = 12usize + emitted * 32usize
     var names_total = 0usize
     at = 0usize
     var line_cursor_2 = 0usize
     var placed_max_2 = 0usize
     while at < builder.function_count {
         if is_placed_after(builder, function_offsets, at, &placed_max_2) {
-            names_total += builder.functions[at].module_name.len + 1usize + builder.functions[at].name.len
+            names_total += 4usize + builder.functions[at].module_name.len + 1usize + builder.functions[at].name.len
         }
         at += 1usize
     }
@@ -1442,13 +1453,11 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
             path_next[path_count] = path_heads[bucket]
             path_heads[bucket] = path_count + 1usize
             path_offsets[path_count] = names_at + names_total + paths_total
-            paths_total += lines[row].path.len
+            paths_total += 4usize + lines[row].path.len
             path_count += 1usize
         }
         row += 1usize
     }
-    let rows_at = names_at + names_total + paths_total
-    var rows_written = 0usize
     at = 0usize
     var line_cursor_3 = 0usize
     var placed_max_3 = 0usize
@@ -1458,19 +1467,23 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
             let start = function_offsets[at]
             let (end, end_error) = placed_end_after(builder, function_offsets, at, table_start)
             if end_error != ok { ret end_error }
-            var relative = 0usize
-            if start <= table_start { relative = 4294967296usize - (table_start - start) }
             if start > table_start { ret Unsupported }
-            try emit_x64.little_u32(machine, relative % 4294967296usize)
-            try emit_x64.little_u32(machine, end - start)
+            try emit_x64.little_u64(machine, start)
+            try emit_x64.little_u64(machine, end)
             try emit_x64.little_u32(machine, names_at)
-            let name_length = placed.module_name.len + 1usize + placed.name.len
-            try emit_x64.little_u32(machine, name_length)
-            names_at += name_length
+            names_at += 4usize + placed.module_name.len + 1usize + placed.name.len
+            // The function's file: its first row's, which the line program starts from.
             let (first_row, row_total) = line_rows_from(lines, line_count, start, end, &line_cursor_3)
-            try emit_x64.little_u32(machine, rows_at + rows_written * 16usize)
-            try emit_x64.little_u32(machine, row_total)
-            rows_written += row_total
+            var file = 0usize
+            if row_total != 0usize {
+                let (file_index, file_found) = path_position(paths[..path_count], lines[first_row].path, &last_path, path_heads[..], path_next[..])
+                if !file_found { ret Unsupported }
+                file = path_offsets[file_index]
+            }
+            try emit_x64.little_u32(machine, file)
+            // The line program's index, patched once the programs are laid out.
+            try emit_x64.little_u32(machine, 0usize)
+            try emit_x64.little_u32(machine, 0usize)
         }
         at += 1usize
     }
@@ -1480,6 +1493,7 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
     while at < builder.function_count {
         if is_placed_after(builder, function_offsets, at, &placed_max_4) {
             let placed = builder.functions[at]
+            try emit_x64.little_u32(machine, placed.module_name.len + 1usize + placed.name.len)
             try emit_text(machine, placed.module_name)
             try emit_x64.byte(machine, 46usize)
             try emit_text(machine, placed.name)
@@ -1488,10 +1502,12 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
     }
     var path_at = 0usize
     while path_at < path_count {
+        try emit_x64.little_u32(machine, paths[path_at].len)
         try emit_text(machine, paths[path_at])
         path_at += 1usize
     }
     at = 0usize
+    var entry_at = 0usize
     var line_cursor_5 = 0usize
     var placed_max_5 = 0usize
     while at < builder.function_count {
@@ -1499,18 +1515,34 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
             let start = function_offsets[at]
             let (end, end_error) = placed_end_after(builder, function_offsets, at, table_start)
             if end_error != ok { ret end_error }
+            let entry_field = table_start + 12usize + entry_at * 32usize
+            try emit_x64.patch_little_u32(machine, entry_field + 24usize, machine.count - table_start)
             let (first_row, row_total) = line_rows_from(lines, line_count, start, end, &line_cursor_5)
+            try emit_x64.little_u32(machine, row_total)
+            var previous_offset = 0usize
+            var previous_line = 0usize
+            var previous_file = 0usize
             var row_at = first_row
             while row_at < first_row + row_total {
                 let entry = lines[row_at]
                 let (path_index, found) = path_position(paths[..path_count], entry.path, &last_path, path_heads[..], path_next[..])
                 if !found { ret Unsupported }
-                try emit_x64.little_u32(machine, entry.offset - start)
-                try emit_x64.little_u32(machine, usize(entry.line))
-                try emit_x64.little_u32(machine, path_offsets[path_index])
-                try emit_x64.little_u32(machine, entry.path.len)
+                let file = path_offsets[path_index]
+                let offset = entry.offset - start
+                let line = usize(entry.line)
+                var zigzag = 0usize
+                if line >= previous_line { zigzag = (line - previous_line) * 2usize } else { zigzag = (previous_line - line) * 2usize - 1usize }
+                var changed = 0usize
+                if row_at != first_row && file != previous_file { changed = 1usize }
+                try uleb(machine, offset - previous_offset)
+                try uleb(machine, zigzag * 2usize + changed)
+                if changed != 0usize { try uleb(machine, file) }
+                previous_offset = offset
+                previous_line = line
+                previous_file = file
                 row_at += 1usize
             }
+            entry_at += 1usize
         }
         at += 1usize
     }
@@ -1522,6 +1554,56 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
             relocations[relocation_at].resolved = true
         }
         relocation_at += 1usize
+    }
+    ret ok
+}
+
+// (D1586) The table where a linker put it: each entry's start and end, offsets in the
+// machine buffer, become addresses once the buffer's first byte has one. An empty
+// table (a test's, with no header) has nothing to rebase.
+fn rebase_symbol_table(output: *emit_x64.Buffer, table: usize, code_address: usize) -> err {
+    if table + 12usize > output.count { ret ok }
+    let count = usize(output.bytes[table + 8usize]) + usize(output.bytes[table + 9usize]) * 256usize + usize(output.bytes[table + 10usize]) * 65536usize + usize(output.bytes[table + 11usize]) * 16777216usize
+    var entry = 0usize
+    while entry < count {
+        var field = 0usize
+        while field < 2usize {
+            let at = table + 12usize + entry * 32usize + field * 8usize
+            if at + 8usize > output.count { ret Unsupported }
+            var value = 0usize
+            var byte_at = 8usize
+            while byte_at != 0usize {
+                byte_at = byte_at - 1usize
+                value = value * 256usize + usize(output.bytes[at + byte_at])
+            }
+            value = value + code_address
+            byte_at = 0usize
+            while byte_at < 8usize {
+                output.bytes[at + byte_at] = u8(value % 256usize)
+                value = value / 256usize
+                byte_at += 1usize
+            }
+            field += 1usize
+        }
+        entry += 1usize
+    }
+    ret ok
+}
+
+// A reference to the table, which `append_symbol_table` resolved and a linker that moves
+// the table resolves again.
+fn is_symbols_reference(builder: *nir.Builder, relocation: Relocation) -> bool {
+    ret !relocation.global && relocation.function_ref < builder.function_ref_count && check.same(builder.function_refs[relocation.function_ref].name, "neper_symbols")
+}
+
+fn uleb(output: *emit_x64.Buffer, value: usize) -> err {
+    var rest = value
+    while true {
+        var part = rest % 128usize
+        rest = rest / 128usize
+        if rest != 0usize { part += 128usize }
+        try emit_x64.byte(output, part)
+        if rest == 0usize { break }
     }
     ret ok
 }

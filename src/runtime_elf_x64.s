@@ -576,6 +576,26 @@ np_trap_number:
     add rsp,32
     ret
 
+# A ULEB128 at rbp into rax, rbp past it; rcx and rdx are used. A subroutine of
+# neper_trap alone (D1586).
+np_trap_uleb:
+    xor eax,eax
+    xor ecx,ecx
+.Lnp_uleb_byte:
+    movzx edx,BYTE PTR [rbp]
+    inc rbp
+    test dl,dl
+    js .Lnp_uleb_more
+    shl rdx,cl
+    or rax,rdx
+    ret
+.Lnp_uleb_more:
+    and edx,127
+    shl rdx,cl
+    or rax,rdx
+    add ecx,7
+    jmp .Lnp_uleb_byte
+
 .global neper_trap
 neper_trap:
     mov r11,QWORD PTR [rsp]
@@ -680,9 +700,9 @@ neper_trap:
     syscall
 # The backtrace: every frame is rbp-chained, so from the trapping function's frame and
 # the return address into it the walk is [rbp+8] and [rbp], each address looked up in
-# the symbol table the linker appended after the code -- entries of a start relative
-# to the table, a length, and a name -- until one is not in it, which is the runtime's
-# own entry, or thirty-two frames have been printed.
+# the `.nepersym` table r10 points at (D1586) -- a binary search over its entries, which
+# are sorted by start, for the one whose [start, end) holds it -- until none does,
+# which is the runtime's own entry, or thirty-two frames have been printed.
 # Each return address is looked up one byte back, at its call: a trap that ends a
 # function returns to the function's end, which no range holds (D212).
     mov r14d,32
@@ -694,29 +714,33 @@ neper_trap:
     jz .Ltrap_exit
     dec r14d
     mov rbx,QWORD PTR [rsp+40]
-    mov r15d,DWORD PTR [rbx]
-    add rbx,4
-.Ltrap_lookup:
-    test r15d,r15d
-    jz .Ltrap_exit
-    dec r15d
-    movsxd rax,DWORD PTR [rbx]
-    add rax,QWORD PTR [rsp+40]
-    cmp r12,rax
-    jb .Ltrap_next_entry
-    mov ecx,DWORD PTR [rbx+4]
-    add rax,rcx
-    cmp r12,rax
-    jb .Ltrap_found
-.Ltrap_next_entry:
-    add rbx,24
-    jmp .Ltrap_lookup
+    xor r8d,r8d
+    mov r9d,DWORD PTR [rbx+8]
+.Ltrap_search:
+    cmp r8,r9
+    jae .Ltrap_exit
+    lea rax,[r8+r9]
+    shr rax,1
+    mov r10,rax
+    shl r10,5
+    lea r10,[rbx+r10+12]
+    cmp r12,QWORD PTR [r10]
+    jb .Ltrap_lower
+    cmp r12,QWORD PTR [r10+8]
+    jae .Ltrap_upper
+    jmp .Ltrap_found
+.Ltrap_lower:
+    mov r9,rax
+    jmp .Ltrap_search
+.Ltrap_upper:
+    lea r8,[rax+1]
+    jmp .Ltrap_search
 .Ltrap_found:
-# The call's offset within the function, for the line rows: the row with the greatest
-# offset at or below it is the frame's line. rax is the end, rcx the length.
+# The call's offset within the function, for its line program: the last row at or
+# below it is the frame's line. The entry is kept at [rsp+8].
     mov r15,r12
-    sub r15,rax
-    add r15,rcx
+    sub r15,QWORD PTR [r10]
+    mov QWORD PTR [rsp+8],r10
     mov BYTE PTR [rsp],32
     mov BYTE PTR [rsp+1],32
     mov BYTE PTR [rsp+2],97
@@ -727,30 +751,57 @@ neper_trap:
     mov edi,2
     mov eax,1
     syscall
-    mov esi,DWORD PTR [rbx+8]
-    add rsi,QWORD PTR [rsp+40]
-    mov edx,DWORD PTR [rbx+12]
+# The name: a string index, the string a 32-bit length and its bytes.
+    mov r10,QWORD PTR [rsp+8]
+    mov esi,DWORD PTR [r10+16]
+    add rsi,rbx
+    mov edx,DWORD PTR [rsi]
+    add rsi,4
     mov edi,2
     mov eax,1
     syscall
-    mov ebp,DWORD PTR [rbx+16]
-    add rbp,QWORD PTR [rsp+40]
-    mov r12d,DWORD PTR [rbx+20]
-    xor r9d,r9d
+# The line program: a row count, then per row a ULEB128 offset delta, a ULEB128 of the
+# zigzag line delta times two plus a file-change bit, and then the new file. rbp walks
+# it, r10 and r11 are the row's offset and line, rsi its file; [rsp+16] and [rsp+56]
+# keep the last row at or below the call, [rsp+24] whether there is one.
+    mov r10,QWORD PTR [rsp+8]
+    mov esi,DWORD PTR [r10+20]
+    mov ebp,DWORD PTR [r10+24]
+    add rbp,rbx
+    mov r8d,DWORD PTR [rbp]
+    add rbp,4
+    xor r10d,r10d
+    xor r11d,r11d
+    mov QWORD PTR [rsp+24],0
 .Ltrap_row:
-    test r12d,r12d
+    test r8d,r8d
     jz .Ltrap_rows_done
-    dec r12d
-    mov eax,DWORD PTR [rbp]
-    cmp rax,r15
-    ja .Ltrap_row_next
-    mov r9,rbp
-.Ltrap_row_next:
-    add rbp,16
+    dec r8d
+    call np_trap_uleb
+    add r10,rax
+    call np_trap_uleb
+    mov r9,rax
+    shr rax,1
+    mov rcx,rax
+    shr rcx,1
+    and eax,1
+    neg rax
+    xor rax,rcx
+    add r11,rax
+    test r9d,1
+    jz .Ltrap_row_file
+    call np_trap_uleb
+    mov rsi,rax
+.Ltrap_row_file:
+    cmp r10,r15
+    ja .Ltrap_rows_done
+    mov QWORD PTR [rsp+16],rsi
+    mov QWORD PTR [rsp+56],r11
+    mov QWORD PTR [rsp+24],1
     jmp .Ltrap_row
 .Ltrap_rows_done:
-    test r9,r9
-    jz .Ltrap_line_done
+    cmp QWORD PTR [rsp+24],0
+    je .Ltrap_line_done
     mov BYTE PTR [rsp],32
     mov BYTE PTR [rsp+1],40
     mov rsi,rsp
@@ -758,9 +809,10 @@ neper_trap:
     mov edi,2
     mov eax,1
     syscall
-    mov esi,DWORD PTR [r9+8]
-    add rsi,QWORD PTR [rsp+40]
-    mov edx,DWORD PTR [r9+12]
+    mov rsi,QWORD PTR [rsp+16]
+    add rsi,rbx
+    mov edx,DWORD PTR [rsi]
+    add rsi,4
     mov edi,2
     mov eax,1
     syscall
@@ -770,7 +822,7 @@ neper_trap:
     mov edi,2
     mov eax,1
     syscall
-    mov eax,DWORD PTR [r9+4]
+    mov rax,QWORD PTR [rsp+56]
     push r9
     push r9
     call np_trap_number

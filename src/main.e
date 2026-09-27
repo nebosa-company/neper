@@ -9254,7 +9254,7 @@ fn emit_whole_program(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
         // Forty-eight a NIR instruction, not twenty-four (D319): a debug build's trap site
         // carries its path and message in the code, and a program of short arithmetic
         // functions -- the scale benchmark -- filled the buffer at twenty-four.
-        machine_capacity = builder.instruction_count * 48usize + builder.function_count * 24usize + names_total + 65536usize
+        machine_capacity = builder.instruction_count * 48usize + builder.function_count * 48usize + names_total + 65536usize
     }
     let (machine_storage, machine_storage_error) = mem.alloc[u8](a, machine_capacity)
     if machine_storage_error != ok { ret machine_storage_error }

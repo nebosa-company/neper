@@ -28861,3 +28861,41 @@ The fix keeps the shape and leaves the reconciler alone. A field that can float 
 - a labelled select, focused by Tab, that keeps the focus across the rebuild after its first choice.
 
 Against the unfixed library it stops at exit 13, the tapped field. With the field fix but not the select's it stops at 18. In the rebuilt gallery a click on "Name" and 16 Tabs both reach it, and it takes the typing.
+
+## D1586 — The trap table in NEPS layout and its own section
+
+The trap walk's symbol and line table is now section 13's `NEPS` layout, in a section of its own: `.nepersym` on ELF and `.nepsym` on PE. Until now it was D206's table, placed between the code and the runtime.
+
+**Layout** (`codegen_x64.append_symbol_table`):
+
+- **Header:** `NEPS`, a `u16` version 1, a `u16` zero and a `u32` entry count.
+- **Entries:** one per placed function, 32 bytes each, in code order and so sorted by start. Each holds a `u64` start and end, and `u32` indexes of the `module.function` name, the file and the line program, then a `u32` zero.
+- **Strings:** each a `u32` length and its bytes.
+- **Line programs:** per function, a `u32` row count, then per row a ULEB128 offset delta, a ULEB128 of the zigzag line delta times two plus a file-change bit, and then the new file's index.
+- **Indexes:** every index is an offset from the table's start.
+
+The rows took 16 bytes each and now take about three.
+
+**Placement.** Selection writes each entry's start and end as offsets in the machine buffer. The linker places the table and turns them into addresses (`rebase_symbol_table`).
+
+- **ELF:** both writers place the table after the runtime, aligned to eight, still inside the loaded segment, and the `.nepersym` section header names exactly it. Every trap site's `neper_symbols` reference is pointed at it again (`place_symbol_table`).
+- **PE:** the table is a readable data section `.nepsym` after `.idata`, and each site's reference is patched from `.text` to that section. The DWARF sections follow it.
+
+The runtime still finds the table through the address the trap site loads, not through the section table: the ELF section headers are not loaded, and the address is one instruction.
+
+**Walkers.** Both runtimes' walkers (`runtime_elf_x64.s`, `runtime_pe_x64.asm`) now binary-search the entries for the return address and decode the line program to the last row at or below the call. A shared `np_trap_uleb` decodes the ULEB128s. Both runtimes were re-embedded with their scripts, ml64 and GNU `as`.
+
+The printed backtrace is unchanged. Section 13's "`?` fields" for an address no entry covers are not printed: as before, the walk stops there, since that is the runtime's own entry.
+
+**Evidence.**
+
+- **Old against new.** Every non-UI link fixture was built by this compiler and by the pre-D1582 one, run, and compared on exit code, standard output and standard error, which is where a trap's backtrace goes. All 460 agree on Windows and all 425 on Linux.
+- **Transient failures.** In those runs, builds exited 139 on both sides and `os_gaps` differed once. The fixtures in question agreed when built again with retries and run again, and `os_gaps` gives the same output three times over.
+- **Multi-frame traps.** `trap_backtrace` walks `helper.pick`, `main.deeper` and `main.main`, with their files and lines, the same on both hosts.
+- **Section.** `readelf` shows `.nepersym` at its own 8-aligned address after the runtime.
+- **Fixed point.** Stage 2 equals stage 3 on both hosts.
+- **Suite.** `run.ps1`'s basic-image check now expects `.nepsym` as the third section.
+
+**Capacity.** The machine buffer's allowance for the table grows from 24 to 48 bytes per function: an entry, a name's length and a row count.
+
+Still open: CodeView, through the M4 PDB writer (roadmap).
