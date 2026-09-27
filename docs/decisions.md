@@ -29315,6 +29315,8 @@ That was not enough for the stage-1 compiler, which the suite runs: the C bootst
 
 The stage-1 short build then matches its golden, `--language-version` still routes, stage 2 equals stage 3, and images are unchanged.
 
+**Next, the stage-1 compiler faulted (0xC0000005) under `--memory-budget`** (D1527). The bootstrap runtime commits a worker's reservation a chunk at a time only when its capacity is the root's less a page. A budget share is `budget / workers`, so its pages were never committed on Windows. The Neper runtime was unaffected. `bootstrap/runtime.c` now remembers every region `os.reserve` hands out (up to 256), and an arena over any of them grows by commits. The 1g budget now builds the default image under stage 1, and 1m is refused by name.
+
 A third stale thing held both suites: b7475462 had changed `comptime_call_runtime`'s refusal to name "a call to a generic, extern or intrinsic function", and the suites still expected the old words. They are pinned to the new words in 8192326d.
 
 ---

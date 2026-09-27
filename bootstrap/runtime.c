@@ -142,8 +142,10 @@ void neper_mem_root(unsigned char *base, size_t size, size_t committed) {
 
 #ifdef _WIN32
 static int np_reserved_grow(NpArena *a, size_t need);
+static int np_is_reserved(const unsigned char *base);
 #else
 #define np_reserved_grow(a, need) 1
+#define np_is_reserved(base) 0
 #endif
 
 static void *np_arena_alloc(NpArena *a, size_t n, size_t alignment) {
@@ -157,7 +159,10 @@ static void *np_arena_alloc(NpArena *a, size_t n, size_t alignment) {
     /* A worker's reservation, one page short of the root's capacity (D339): this runtime
        has no commit-on-touch, so it commits as the root does, a chunk at a time, with no
        watermark -- what was committed is the old offset rounded up. */
-    if (np_root_base && a->base != np_root_base && a->cap == np_root_size - 4096 &&
+    /* (D1605) Or any arena over a region `os.reserve` handed out: D1527's budget shares
+       are not the root's size, and were never committed here. */
+    if (np_root_base && a->base != np_root_base &&
+        (a->cap == np_root_size - 4096 || np_is_reserved(a->base)) &&
         !np_reserved_grow(a, at + n)) return 0;
     a->off = at + n;
     return a->base ? a->base + at : 0;
@@ -605,9 +610,20 @@ void neper_os_peak_memory(void *result) {
 
 void neper_os_exit(int32_t code) { ExitProcess((UINT)code); }
 
+/* The regions `os.reserve` handed out, so an arena over one grows by commits (D1605). */
+static unsigned char *np_reserved_bases[256];
+static size_t np_reserved_count;
+
+static int np_is_reserved(const unsigned char *base) {
+    size_t i;
+    for (i = 0; i < np_reserved_count; i++) if (np_reserved_bases[i] == base) return 1;
+    return 0;
+}
+
 void neper_os_reserve(void *result, size_t n) {
     unsigned char *out = (unsigned char *)result;
     void *p = VirtualAlloc(0, n, MEM_RESERVE, PAGE_NOACCESS);
+    if (p && np_reserved_count < 256) np_reserved_bases[np_reserved_count++] = (unsigned char *)p;
     *(void **)out = p; *(uint32_t *)(out + 8) = p ? NP_OK : np_error(GetLastError());
 }
 
