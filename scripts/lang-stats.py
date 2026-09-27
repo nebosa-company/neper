@@ -2,7 +2,8 @@
 
 Reads every Claude Code transcript under ~/.claude/projects, every Codex rollout under
 ~/.codex, and the DeepSeek steps in opencode's database. A row is a language, all agents
-pooled; with --harness it is a language as one agent wrote it. Codex's apply_patch counts as Write/Edit and its shell commands as Bash. Every
+pooled; with --harness it is a language as one agent wrote it, and with --harness claude (codex, dsh) only that
+agent is read. Codex's apply_patch counts as Write/Edit and its shell commands as Bash. Every
 agent is costed with Claude's token weights and priced at the Opus list rate, so $ compares
 effort, not bills.
 
@@ -35,8 +36,12 @@ ap = argparse.ArgumentParser(description=__doc__, epilog=AXES_HELP, formatter_cl
 ap.add_argument('-h', '--help', action='store_true', help='run as usual and explain every column beneath its table')
 ap.add_argument('-c', '--color', action='store_true', help='mark best, second best and worst per column even when not on a terminal')
 ap.add_argument('-d', '--days', type=float, help='only data from the last DAYS days')
-ap.add_argument('-a', '--harness', action='store_true', help='split every row by agent (claude, codex, deepseek) and score each harness apart')
+ap.add_argument('-a', '--harness', nargs='?', const='split', choices=['claude', 'codex', 'dsh', 'split'], metavar='AGENT',
+                help='alone: split every row by agent (claude, codex, deepseek) and score each harness apart; '
+                     'with claude, codex or dsh (DeepSeek): read that agent only')
 ARGS = ap.parse_args()
+ONLY = {'claude': 'claude', 'codex': 'codex', 'dsh': 'deepseek'}.get(ARGS.harness)  # the one agent read, or None for all
+ARGS.harness = ARGS.harness == 'split'  # every later test of it asks whether rows are split by agent
 if ARGS.help: print(ap.format_help())
 
 
@@ -301,7 +306,7 @@ cache = C.defaultdict(lambda: [0, 0])  # lang -> [cache-read tokens, context tok
 
 AGENTS = ['claude', 'codex', 'deepseek']
 span = []  # times of every reply counted, for the period line
-for agent, msgs, order, results in itertools.chain(claude(), codex(), deepseek()):
+for agent, msgs, order, results in itertools.chain(*(read() for name, read in zip(AGENTS, (claude, codex, deepseek)) if ONLY in (None, name))):
     tag = lambda L: '%s %s' % (L, agent) if ARGS.harness else L  # with --harness a row is a language as one agent wrote it
     order = [mid for mid in order if (msgs[mid]['ts'] or 0) >= CUTOFF]
     span += [msgs[mid]['ts'] for mid in order if msgs[mid]['ts']]
@@ -403,7 +408,8 @@ def merged(L):
 
 first, last = (CUTOFF, NOW) if ARGS.days else (min(span, default=NOW), max(span, default=NOW))
 print('period: %s -> %s (%s days)%s\n' % (datetime.fromtimestamp(first).strftime('%Y-%m-%d %H:%M'), datetime.fromtimestamp(last).strftime('%Y-%m-%d %H:%M'),
-                                          '%g' % ARGS.days if ARGS.days else '%.0f' % ((last - first) / 86400), '' if ARGS.days else ', all data'))
+                                          '%g' % ARGS.days if ARGS.days else '%.0f' % ((last - first) / 86400),
+                                          ('' if ARGS.days else ', all data') + (', %s only' % ONLY if ONLY else '')))
 
 FLOOR = 100 * KB  # a language with less landed source than this is too thin to compare
 if ARGS.harness: ROWS = ['%s %s' % (L, a) for L in ROWS for a in AGENTS]
@@ -583,5 +589,5 @@ claude..  the same mean within one harness, where each agent's languages only me
           languages, Codex and DeepSeek two each, where winning a column takes only beating one
           rival. Read overall with contests beside it.''' if SPLIT else '''
 Without --harness every agent's work in a language is pooled into one row; run with -a to
-split it by agent.'''))
+split it by agent, or with --harness claude (codex, dsh) to read one agent only.'''))
 print('\n' + TABLES, end='')
