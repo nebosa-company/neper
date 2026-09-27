@@ -1186,7 +1186,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
             program_args_at = at
             at = args.len
         } else {
-            if same(args[at], "--triple") && at + 1usize < args.len {
+            if (same(args[at], "--target") || same(args[at], "--triple")) && at + 1usize < args.len {
                 triple = args[at + 1usize]
                 at += 1usize
             } else {

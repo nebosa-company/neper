@@ -29476,3 +29476,17 @@ Each of these is built by a struct literal. A literal wrote its fields and nothi
 - **Suites.** Windows and Linux each fail one check, down from 2 and 20: the static gate's arena high-water, +2.4% to +2.7% over a +0% budget, still to be explained and re-pinned.
 
 ---
+
+## D1654 — `--target` is the spelling `build` and `run` document; `--triple` stays as an alias
+
+The usage comment in `src/main.e` gives `build FILE [--target ARCH-OS]`, but the flag loop only read `--triple`. The loop ignores flags it does not know, so `build hello.e --target x64-linux` on Windows wrote a Windows PE with no message. Both names now set the target. `--triple` stays because the suites and scripts already pass it.
+
+**Evidence.** `examples/hello.e` was built on Windows by a compiler built from this change:
+
+- `--target x64-linux` and `--triple x64-linux` each write an ELF, and the two files are byte-identical;
+- the ELF prints `hello, neper` and exits 0 on Linux;
+- with no flag, the output is still a PE that runs on the host.
+
+Cross-building a Linux executable on Windows needs no WSL. WSL is needed only to run the result.
+
+---
