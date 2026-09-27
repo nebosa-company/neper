@@ -29423,3 +29423,31 @@ Each of these is built by a struct literal. A literal wrote its fields and nothi
 - Suites: Windows fails the same 6 checks as D1607 and Linux the same 24, and every conformance output a failing check compares is unchanged. The static gate's sc500k images are the same size to the byte. The `dis` goldens do not move.
 
 ---
+
+## D1640 — The compiler's rename checks compare outside the debug sections, and `e.data.list`'s surface is current
+
+**Why.** Four suite checks had failed on both hosts since before D1606, and each failure hid whatever else the check would have caught.
+
+- **Renames.** Three checks rename locals and require the rebuilt compiler to be the stable stage byte for byte:
+  - the compiler with its locals renamed (D528);
+  - the compiler built against `lib/` with its locals renamed (D550);
+  - the warm build after renaming one module's locals (D534).
+
+  Since D1582 and D1583 the debug information names every local, in DWARF on ELF and in `.debug_*` sections on PE, so a rename changes those bytes. Measured on both hosts, the renamed compiler differs from the stable one in 191,190 bytes, and the warm build from the cold one in 46,314. With `.debug_*` zeroed, those pairs and the library-renamed compiler are each identical to their stable counterpart, headers and PE checksum included. D1605 made the same call for the metamorphic `renamed` check.
+- **`e.data.list`.** The suites' list of its public declarations still had 14 names. `a776dabd` (build-then-freeze lists) and `e8c65054` (a list that owns what it holds) added 12, and `module-apis.md` already had them.
+
+**Decision.**
+
+- **Debug-free comparison.** `without_debug_sections` moves from `metamorphic.py` into `benchmarks/metamorphic/images.py`. That script compares two images with their debug sections zeroed and exits 1 with the first differing offset. The three rename checks call it on both hosts. The blanked, hoisted and every other turn still compare every byte, the library's blanked and hoisted turns included, because nothing else a turn does reaches the debug information.
+- **List surface.** Both suites' expected lists for `e.data.list` now hold all 26 names, in `list.e`'s order.
+
+**Evidence.**
+
+- `images.py` passes the renamed, library-renamed and warm pairs from both hosts' suite runs, and fails when one code byte of the stable compiler is changed.
+- Suites: Windows fails 2 checks and Linux 20, down from 6 and 24. The rest predate this change:
+  - the static gate's arena high-water, +2.4% to +2.7% over a +0% budget, not yet re-pinned;
+  - `reorder_parameters.py`, refused by the tool with E-TOOL-0003 (edits overlap);
+  - on Linux, the 18 goldens D1605 regenerated for Windows only.
+- The Windows run predates the library-rename change, so that check was confirmed on the run's images with `images.py`, and `run.ps1` parses cleanly.
+
+---

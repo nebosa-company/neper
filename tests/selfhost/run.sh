@@ -6293,7 +6293,19 @@ insert
 remove
 clear
 iter
-iter_next'
+iter_next
+Builder
+builder
+build_push
+built
+freeze
+builder_drop
+Owning
+owning
+own_put
+own_take
+owned_count
+owning_finish'
 [ "$list_surface" = "$expected_list_surface" ]
 list_parsed=$($test_build/neper-self parse-file "$repo/lib/e/data/list.e")
 [ "$list_parsed" = 'parse file ok' ]
@@ -6476,11 +6488,11 @@ python3 "$repo/benchmarks/metamorphic/hoist_constants.py" "$test_build/neper-sel
 hoisted_written=$("$own_compiler_path" emit-executable "$test_build/hoisted-src/src/main.e" "$repo" x64 linux "$test_build/neper-hoisted")
 [ "$hoisted_written" = 'executable written' ]
 cmp "$test_build/neper-hoisted" "$stable_compiler_path"
-# The compiler with its locals renamed (D528, H10, H17): built from `src/` with every local renamed through the index, it is the stable stage.
+# The compiler with its locals renamed (D528, H10, H17): built from `src/` with every local renamed through the index, it is the stable stage outside its DWARF, which names every local (D1640).
 python3 "$repo/benchmarks/metamorphic/rename_locals.py" "$test_build/neper-self" "$repo" "$repo/src" "$test_build/renamed-src/src" linux
 renamed_written=$("$own_compiler_path" emit-executable "$test_build/renamed-src/src/main.e" "$repo" x64 linux "$test_build/neper-renamed")
 [ "$renamed_written" = 'executable written' ]
-cmp "$test_build/neper-renamed" "$stable_compiler_path"
+python3 "$repo/benchmarks/metamorphic/images.py" "$test_build/neper-renamed" "$stable_compiler_path"
 # The compiler with its functions and types renamed (D529, D560, H10, H17): built
 # from `src/` and `lib/` renamed through one cross-root index, it builds the stable stage.
 python3 "$repo/benchmarks/metamorphic/rename_symbols.py" "$test_build/neper-self" "$repo" "$repo/src" "$test_build/resymbolled-src/src" linux "$repo/lib" "$test_build/resymbolled-src/lib"
@@ -6530,7 +6542,12 @@ for lib_turn in "strip_comments.py lib-blanked" "hoist_constants.py lib-hoisted"
     fi
     lib_written=$("$own_compiler_path" emit-executable "$lib_project/src/main.e" "$lib_project" x64 linux "$test_build/neper-$2")
     [ "$lib_written" = 'executable written' ]
-    cmp "$test_build/neper-$2" "$stable_compiler_path"
+    # A rename reaches the DWARF, which names every local (D1640); the other turns reach nothing.
+    if [ "$1" = rename_locals.py ]; then
+        python3 "$repo/benchmarks/metamorphic/images.py" "$test_build/neper-$2" "$stable_compiler_path"
+    else
+        cmp "$test_build/neper-$2" "$stable_compiler_path"
+    fi
 done
 # The formatted library (D549, H10): the compiler built against `lib/` formatted builds the stable stage from the original tree.
 rm -rf "$test_build/lib-formatted"
@@ -6591,7 +6608,7 @@ cmp "$test_build/neper-warm-turns" "$test_build/neper-warm-turns-cold"
 cp "$test_build/renamed-src/src/check.e" "$warm_project/src/check.e"
 [ "$("$own_compiler_path" emit-executable "$warm_project/src/main.e" "$repo" x64 linux "$test_build/neper-warm-turns" --incremental)" = 'executable written' ]
 python3 "$repo/scripts/check_incremental.py" "$warm_manifest" check=rebuilt:source-changed lex=kept:stable main=kept:edges-hold
-cmp "$test_build/neper-warm-turns" "$test_build/neper-warm-turns-cold"
+python3 "$repo/benchmarks/metamorphic/images.py" "$test_build/neper-warm-turns" "$test_build/neper-warm-turns-cold"
 # The warm path under the turns in release (D536, H14): the same three edits over a cold release build with artifacts.
 warm_release="$test_build/warm-turns-release"
 rm -rf "$warm_release"
