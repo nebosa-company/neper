@@ -3477,6 +3477,15 @@ variadic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$variadic_written" = 'executable written' ]
 chmod +x "$variadic_path"
 "$variadic_path"
+# 138 imports from libc and libm, every one called (D1594). The loader's metadata no longer
+# fits the page before 4096, so the code starts on a later page; the fixture checks its
+# own entry point and first segment. Past about 58 externs a module's unsafe inventory also
+# used to overflow its buffer, which the build reported as "cannot lower `main`".
+many_path="$test_build/extern-many-selfhost"
+many_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/extern_many/src/main.e" "$repo" x64 linux "$many_path")
+[ "$many_written" = 'executable written' ]
+chmod +x "$many_path"
+"$many_path"
 # Section 11's trap protocol: a failed bounds check writes `file:line:col: trap[bounds]:
 # <values>` to stderr and exits 134; the same program with no check tripped exits 0.
 trap_path="$test_build/trap-bounds-selfhost"

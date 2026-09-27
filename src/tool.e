@@ -6245,19 +6245,34 @@ fn manifest_nocheck_derefs(out: *Out, written: *usize, module_name: str, functio
 // what it parsed.
 fn module_inventory(a: *mem.Arena, module_name: str, text_bytes: str, lines: []usize) -> ([]u8, usize, err) {
     var none: []u8 = zero
-    let (storage, storage_error) = mem.alloc[u8](a, 4096usize + text_bytes.len / 4usize)
-    if storage_error != ok { ret (none, 0usize, storage_error) }
-    var out: Out = zero
-    out.bytes = storage
     var openers: [256]u8 = zero
     openers[64usize] = 1u8
     openers[101usize] = 2u8
     openers[109usize] = 2u8
     openers[117usize] = 2u8
-    var written = 0usize
-    let sites_error = manifest_module_sites(&out, &written, module_name, text_bytes, lines, openers[..])
-    if sites_error != ok { ret (none, 0usize, sites_error) }
-    ret (storage[0usize..out.count], written, ok)
+    // A quarter of the text is room for the inventory of most modules, but not of one that is
+    // mostly `extern` declarations: each one's record is several times its own line, and at
+    // about sixty of them the buffer filled and the build said "cannot lower `main`" (D1594).
+    // The buffer doubles until the records fit; an attempt that did not fit stays in the
+    // arena, which bounds the waste by the final size.
+    var size = 4096usize + text_bytes.len / 4usize
+    var attempts = 0usize
+    while true {
+        let (storage, storage_error) = mem.alloc[u8](a, size)
+        if storage_error != ok { ret (none, 0usize, storage_error) }
+        var out: Out = zero
+        out.bytes = storage
+        var written = 0usize
+        let sites_error = manifest_module_sites(&out, &written, module_name, text_bytes, lines, openers[..])
+        if sites_error == Capacity && attempts < 12usize {
+            size = size * 2usize
+            attempts += 1usize
+            continue
+        }
+        if sites_error != ok { ret (none, 0usize, sites_error) }
+        ret (storage[0usize..out.count], written, ok)
+    }
+    ret (none, 0usize, Capacity)
 }
 
 // (D1551, C051) The tokenizer profiles that describe this grammar's token cost:
