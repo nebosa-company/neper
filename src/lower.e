@@ -3881,7 +3881,15 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
 }
 
 fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
-    if function.return_count != 1usize { ret check.Unsupported }
+    // (D1567) A caller with results beside its `err` returns their zero values.
+    if function.return_count != 1usize {
+        let (statement_call, has_call) = first_node_child_index(tree, node)
+        if !has_call || tree.nodes[statement_call].kind != .CallExpr { ret parse.InvalidSyntax }
+        var results: CallResults = zero
+        try lower_try_call(c, g, tree, module_index, function, tree.nodes[statement_call], c.tokens[usize(node.token_start)], builder, bindings, binding_count, defers, &results)
+        if results.count != 0usize { ret check.InvalidTry }
+        ret ok
+    }
     let end = usize(node.first_child) + usize(node.child_count)
     var call_index = 0usize
     var found_call = false
@@ -3934,6 +3942,86 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     ret ok
 }
 
+fn first_node_child_index(tree: *parse.Tree, node: syntax.Node) -> (usize, bool) {
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) { ret (parse.child_index_at(tree, at), true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// A type's zero value (D1567): an aggregate's in a cleared stack slot, its address
+// the value; a scalar's as a constant.
+fn emit_zero_value(c: *check.Checker, ty: check.Type, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
+    if aggregate_value(c, ty) {
+        let (info, info_error) = layout.type_info(c, ty)
+        if info_error != ok { ret (0usize, info_error) }
+        let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
+        if slots_error != ok { ret (0usize, slots_error) }
+        var slots = slots_aligned / 8usize
+        if slots == 0usize { slots = 1usize }
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, ty, true, slots, token)
+        if stack_error != ok { ret (0usize, stack_error) }
+        let (zero_instruction, zero_ignored, zero_error) = nir.emit(builder, .Zero, ty, false, info.size, token)
+        if zero_error != ok { ret (0usize, zero_error) }
+        let operand_error = nir.add_operand(builder, zero_instruction, stack)
+        if operand_error != ok { ret (0usize, operand_error) }
+        ret (stack, ok)
+    }
+    let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .Zero, ty, true, 0usize, token)
+    ret (zero_value, zero_error)
+}
+
+// (D1567) `try` before a call whose results are bound, assigned or dropped (spec,
+// "Where `try` may appear"): the call, then its last result -- the `err` -- tested.
+// A failure runs the deferred calls and returns the error beside the zero value of
+// every other return slot; otherwise the results but the `err` are left in
+// `results` for the binding or the assignment.
+fn lower_try_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, call_node: syntax.Node, token: lex.Token, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState, results: *CallResults) -> err {
+    try lower_call_results(c, g, tree, module_index, call_node, builder, bindings, binding_count, results)
+    if results.count == 0usize || !check.call_is_fallible(c, results.call) { ret check.InvalidTry }
+    if function.return_count == 0usize || function.return_count > 16usize { ret check.InvalidTry }
+    let (caller_error_type, caller_type_error) = check.function_return(c, function, function.return_count - 1usize)
+    if caller_type_error != ok { ret caller_type_error }
+    if caller_error_type.kind != .Err { ret check.InvalidTry }
+    let error_value = results.values[results.count - 1usize]
+    let (ok_instruction, ok_value, ok_error) = nir.emit(builder, .ConstError, caller_error_type, true, 0usize, token)
+    if ok_error != ok { ret ok_error }
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (compare_instruction, failed, compare_error) = nir.emit(builder, .NotEqual, boolean, true, 0usize, token)
+    if compare_error != ok { ret compare_error }
+    try nir.add_operand(builder, compare_instruction, error_value)
+    try nir.add_operand(builder, compare_instruction, ok_value)
+    let error_block = builder.block_count
+    let (branch_instruction, ignored, branch_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if branch_error != ok { ret branch_error }
+    try nir.add_operand(builder, branch_instruction, failed)
+    let (error_block_index, error_block_error) = nir.begin_block(builder)
+    if error_block_error != ok || error_block_index != error_block { ret nir.InvalidControlFlow }
+    var values: [16]usize = zero
+    var slot = 0usize
+    while slot + 1usize < function.return_count {
+        let (slot_type, slot_type_error) = check.function_return(c, function, slot)
+        if slot_type_error != ok { ret slot_type_error }
+        let (zero_value, zero_error) = emit_zero_value(c, slot_type, token, builder)
+        if zero_error != ok { ret zero_error }
+        values[slot] = zero_value
+        slot += 1usize
+    }
+    values[slot] = error_value
+    try emit_return_values(c, g, tree, module_index, function, token, values[0usize..function.return_count], false, builder, bindings, binding_count, defers)
+    // The deferred calls may have been inlined, and with them blocks, so the
+    // continuation's index is read only now (D207).
+    let continue_block = builder.block_count
+    try nir.set_branch_targets(builder, branch_instruction, error_block, continue_block)
+    let (continue_block_index, continue_block_error) = nir.begin_block(builder)
+    if continue_block_error != ok || continue_block_index != continue_block { ret nir.InvalidControlFlow }
+    results.count = results.count - 1usize
+    ret ok
+}
+
 fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
     var values: [16]usize = zero
     var count = 0usize
@@ -3955,6 +4043,14 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         at += 1usize
     }
     if count != function.return_count { ret check.InvalidReturn }
+    ret emit_return_values(c, g, tree, module_index, function, c.tokens[usize(node.token_start)], values[0usize..count], literal_ok, builder, bindings, binding_count, defers)
+}
+
+// A function's return of `values`, one per return slot (D1567): through the return
+// slot when the layout has one, the deferred calls first, and `main`'s failure line on
+// the failing path. `ret` and a failed `try` both end here.
+fn emit_return_values(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, token: lex.Token, values: []usize, literal_ok: bool, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
+    let count = values.len
     let (return_slot, has_return_slot) = find_binding(bindings, binding_count, "$return")
     if has_return_slot {
         var call: check.CallInfo = zero
@@ -3967,16 +4063,16 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
             let result_type = c.return_types[function.first_return + result_at]
             let (info, info_error) = layout.type_info(c, result_type)
             if info_error != ok { ret info_error }
-            let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, result_type, true, return_layout.offsets[result_at], c.tokens[usize(node.token_start)])
+            let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, result_type, true, return_layout.offsets[result_at], token)
             if address_error != ok { ret address_error }
             try nir.add_operand(builder, address_instruction, return_slot.value)
             if aggregate_value(c, result_type) {
-                let (copy_instruction, copy_ignored, copy_error) = nir.emit(builder, .Copy, result_type, false, info.size, c.tokens[usize(node.token_start)])
+                let (copy_instruction, copy_ignored, copy_error) = nir.emit(builder, .Copy, result_type, false, info.size, token)
                 if copy_error != ok { ret copy_error }
                 try nir.add_operand(builder, copy_instruction, address)
                 try nir.add_operand(builder, copy_instruction, values[result_at])
             } else {
-                let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, result_type, false, info.size, c.tokens[usize(node.token_start)])
+                let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, result_type, false, info.size, token)
                 if store_error != ok { ret store_error }
                 try nir.add_operand(builder, store_instruction, address)
                 try nir.add_operand(builder, store_instruction, values[result_at])
@@ -3984,18 +4080,17 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
             result_at += 1usize
         }
         try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
-        let (instruction, ignored, emit_error) = nir.emit(builder, .Return, zero, false, 0usize, c.tokens[usize(node.token_start)])
+        let (instruction, ignored, emit_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
         ret emit_error
     }
     try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
-    if builder.frame_mode { try emit_kernel_done(builder, c.tokens[usize(node.token_start)]) }
+    if builder.frame_mode { try emit_kernel_done(builder, token) }
     var return_type: check.Type = zero
     if function.return_count == 1usize { return_type = c.return_types[function.first_return] }
     // Section 13: `main` returning anything but `ok` writes `error: <qualified name>`
     // to stderr before the exit. The line is written by a function synthesized after
     // the module, `neper_report_failure`, reached only on the failing path.
     if module_index == 0usize && count == 1usize && return_type.kind == .Err && !literal_ok && check.same(function.name, "main") {
-        let token = c.tokens[usize(node.token_start)]
         let (ok_instruction, ok_value, ok_error) = nir.emit(builder, .ConstError, return_type, true, 0usize, token)
         if ok_error != ok { ret ok_error }
         let boolean = check.make_type(.Bool, "bool", module_index)
@@ -4016,9 +4111,9 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         let (return_index, return_block_error) = nir.begin_block(builder)
         if return_block_error != ok || return_index != return_block { ret nir.InvalidControlFlow }
     }
-    let (instruction, ignored, emit_error) = nir.emit(builder, .Return, return_type, false, 0usize, c.tokens[usize(node.token_start)])
+    let (instruction, ignored, emit_error) = nir.emit(builder, .Return, return_type, false, 0usize, token)
     if emit_error != ok { ret emit_error }
-    at = 0usize
+    var at = 0usize
     while at < count {
         try nir.add_operand(builder, instruction, values[at])
         at += 1usize
@@ -4038,7 +4133,7 @@ fn emit_failure_report_call(c: *check.Checker, builder: *nir.Builder, module_ind
     ret ok
 }
 
-fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
     var binding_node: syntax.Node = zero
     var found_binding = false
     var initializer_index = 0usize
@@ -4067,7 +4162,17 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         at += 1usize
     }
     if !found_binding { ret check.Unsupported }
-    if found_initializer && check.contains_token(c, usize(node.token_start), usize(tree.nodes[initializer_index].token_start), .KwTry) { ret check.Unsupported }
+    // (D1567) `let x = try f()`, `let (a, b) = try f()`: the results but the `err`.
+    var tried: CallResults = zero
+    let is_tried = found_initializer && check.contains_token(c, usize(node.token_start), usize(tree.nodes[initializer_index].token_start), .KwTry)
+    if is_tried {
+        if tree.nodes[initializer_index].kind != .CallExpr { ret check.InvalidTry }
+        try lower_try_call(c, g, tree, module_index, function, tree.nodes[initializer_index], c.tokens[usize(node.token_start)], builder, bindings, *binding_count, defers, &tried)
+        if c.tokens[usize(binding_node.token_start)].kind == .PunctLParen {
+            ret bind_call_results(c, g, module_index, binding_node, &tried, c.tokens[usize(node.token_start)].kind == .KwVar, builder, bindings, binding_count)
+        }
+        if tried.count != 1usize { ret check.ArgumentCount }
+    }
     if c.tokens[usize(binding_node.token_start)].kind == .PunctLParen {
         if !found_initializer || tree.nodes[initializer_index].kind != .CallExpr || declared.kind != .Invalid { ret check.ArgumentCount }
         var results: CallResults = zero
@@ -4081,6 +4186,7 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     // value dropped. The deferred form had its own path; the plain one was refused.
     if !has_name {
         if !found_initializer { ret parse.InvalidSyntax }
+        if is_tried { ret ok }
         let (dropped, dropped_type, drop_error) = lower_expression(c, g, tree, module_index, initializer_index, declared, builder, bindings, *binding_count)
         ret drop_error
     }
@@ -4089,6 +4195,14 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     var value_type = declared
     var stored_value = 0usize
     var address = false
+    if is_tried {
+        let (result_type, result_type_error) = check.call_return(c, tried.call, 0usize)
+        if result_type_error != ok { ret result_type_error }
+        value = tried.values[0usize]
+        value_type = result_type
+        stored_value = value
+        address = tried.addresses[0usize]
+    } else {
     if found_initializer {
         let (lowered_value, lowered_type, value_error) = lower_expression(c, g, tree, module_index, initializer_index, declared, builder, bindings, *binding_count)
         if value_error != ok { ret value_error }
@@ -4132,6 +4246,7 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             }
         }
     }
+    }
     if aggregate_value(c, value_type) {
         address = true
     } else {
@@ -4168,7 +4283,7 @@ fn store_assignment_value(c: *check.Checker, ty: check.Type, address: usize, val
     ret ok
 }
 
-fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
+fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
     var children: [17]usize = zero
     var count = 0usize
     let end = usize(node.first_child) + usize(node.child_count)
@@ -4182,6 +4297,36 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         at += 1usize
     }
     if count < 2usize { ret parse.InvalidSyntax }
+    // (D1567) `x = try f()`, `(a, b) = try f()`: the places first, as below, then the
+    // call and its test, then the results but the `err` stored.
+    let initializer_at = children[count - 1usize]
+    if check.contains_token(c, usize(tree.nodes[children[count - 2usize]].token_end), usize(tree.nodes[initializer_at].token_start), .KwTry) {
+        if tree.nodes[initializer_at].kind != .CallExpr { ret check.InvalidTry }
+        let tried_places = count - 1usize
+        if tried_places > 16usize { ret check.ArgumentCount }
+        var tried_addresses: [16]usize = zero
+        var tried_types: [16]check.Type = zero
+        var tried_at = 0usize
+        while tried_at < tried_places {
+            let (tried_address, tried_type, tried_error) = lower_place(c, g, tree, module_index, children[tried_at], builder, bindings, binding_count)
+            if tried_error != ok { ret tried_error }
+            tried_addresses[tried_at] = tried_address
+            tried_types[tried_at] = tried_type
+            tried_at += 1usize
+        }
+        var tried: CallResults = zero
+        try lower_try_call(c, g, tree, module_index, function, tree.nodes[initializer_at], c.tokens[usize(node.token_start)], builder, bindings, binding_count, defers, &tried)
+        if tried.count != tried_places { ret check.ArgumentCount }
+        tried_at = 0usize
+        while tried_at < tried_places {
+            let (tried_result, tried_result_error) = check.call_return(c, tried.call, tried_at)
+            if tried_result_error != ok { ret tried_result_error }
+            if !check.type_assignable(c, tried_result, tried_types[tried_at]) { ret check.InvalidType }
+            try store_assignment_value(c, tried_types[tried_at], tried_addresses[tried_at], tried.values[tried_at], c.tokens[usize(node.token_start)], builder)
+            tried_at += 1usize
+        }
+        ret ok
+    }
     if count > 2usize {
         let place_count = count - 1usize
         if place_count > 16usize { ret check.ArgumentCount }
@@ -6220,9 +6365,9 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     c.failure_has_token = true
     if node.kind == .ReturnStmt { ret lower_return(c, g, tree, module_index, function, node, builder, bindings, *binding_count, defers) }
     if node.kind == .TryStmt { ret lower_try(c, g, tree, module_index, function, node, builder, bindings, *binding_count, defers) }
-    if node.kind == .BindingStmt { ret lower_binding(c, g, tree, module_index, node, builder, bindings, binding_count) }
+    if node.kind == .BindingStmt { ret lower_binding(c, g, tree, module_index, function, node, builder, bindings, binding_count, defers) }
     if node.kind == .SharedVarStmt { ret lower_shared_var_statement(c, g, tree, module_index, node, builder, bindings, *binding_count) }
-    if node.kind == .AssignmentStmt { ret lower_assignment(c, g, tree, module_index, node, builder, bindings, *binding_count) }
+    if node.kind == .AssignmentStmt { ret lower_assignment(c, g, tree, module_index, function, node, builder, bindings, *binding_count, defers) }
     if node.kind == .CallStmt { ret lower_call_statement(c, g, tree, module_index, node, builder, bindings, *binding_count) }
     if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }
     if node.kind == .WhenStmt { ret lower_when(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }
