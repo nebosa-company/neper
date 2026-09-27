@@ -156,6 +156,8 @@
     .library-item { padding: var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); }
     .library-item code { color: var(--primary); font: 600 13px/20px var(--font-mono); }
     .library-item p { margin: var(--space-2) 0 0; color: var(--muted); font-size: 13px; }
+    .library-item.wide { grid-column: 1 / -1; }
+    .library-item.wide code + code { margin-left: var(--space-3); }
     .catalog-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); margin-bottom: var(--space-8); padding: var(--space-8); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
     .catalog-stat strong { display: block; font: 400 clamp(32px, 4vw, 45px)/52px var(--font-display); }
     .catalog-stat span { font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
@@ -224,6 +226,15 @@
     .more-features[open] .more-closed { display: none; }
     .more-features[open] .more-open { display: inline; }
 
+    .blog-card { display: grid; grid-template-columns: 1.1fr 1fr; overflow: hidden; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface-container-low); box-shadow: var(--elevation-1); color: inherit; text-decoration: none; }
+    .blog-card:hover, .blog-card:focus-visible { border-color: var(--primary); }
+    .blog-card img { display: block; width: 100%; height: 100%; object-fit: cover; border-right: 1px solid var(--outline-variant); }
+    .blog-card-body { display: flex; flex-direction: column; justify-content: center; gap: var(--space-3); padding: var(--space-8); }
+    .blog-card-meta { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .blog-card-title { font: 400 24px/32px var(--font-display); }
+    .blog-card-excerpt { color: var(--muted); }
+    .blog-card-more { color: var(--primary); font: 600 13px/20px var(--font-sans); }
+
     .demo-video { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface-container-low); object-fit: contain; }
 
     .final { display: flex; align-items: end; justify-content: space-between; gap: var(--space-8); margin-top: var(--space-16); padding: var(--space-10); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
@@ -242,6 +253,9 @@
       .metrics { margin-top: var(--space-12); }
       .catalog-stats { gap: var(--space-4); padding: var(--space-6); }
       .benefit { min-height: auto; }
+      .blog-card { grid-template-columns: 1fr; }
+      .blog-card img { border-right: 0; border-bottom: 1px solid var(--outline-variant); }
+      .blog-card-body { padding: var(--space-6); }
       .ui-showcase figcaption { align-items: flex-start; flex-direction: column; }
       .proof-callout { padding: var(--space-6); }
       .final, footer { align-items: flex-start; flex-direction: column; }
@@ -259,6 +273,7 @@
         <a href="#speed">speed</a>
         <a href="#gpu">cpu + gpu</a>
         <a href="#llm">llm stack</a>
+        <a href="#blog">blog</a>
         <a href="https://discord.gg/AdRneEsbCu">discord ↗</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
       </div>
@@ -361,6 +376,7 @@ Hello, Neper</code></pre>
           <div class="library-item"><code>e.ui</code><p>native windows, layout, controls, accessibility</p></div>
           <div class="library-item"><code>e.ml</code><p>linear algebra, classifiers, clustering, neural nets</p></div>
           <div class="library-item"><code>e.gpu</code><p>CPU, Vulkan, CUDA, tensors, images, presentation</p></div>
+          <div class="library-item wide"><code>e.db</code><code>x.sqlite.sqlite</code><code>x.postgresql.libpq</code><code>x.oracle.mysql</code><p>one SQL contract (connections, prepared statements, streaming row readers, transactions) with drivers for SQLite, PostgreSQL and MySQL, tested against live servers on Windows and Linux</p></div>
         </div>
         <div class="more-features"><button class="more-toggle nu-btn tonal" type="button" data-catalog="module-catalog">Explore all e.* modules</button></div>
         <figure class="ui-showcase">
@@ -458,6 +474,21 @@ Hello, Neper</code></pre>
             <article class="llm-feature"><h3>Measured token economics</h3><p>Language changes are evaluated against tokenizer cost and verified repair success, making model efficiency an engineering constraint.</p><small class="why">Why: Language evolution must justify model cost.</small></article>
           </div>
         </details>
+      </section>
+
+      <section id="blog">
+        <div class="eyebrow">05 // blog</div>
+        <h2>Notes from measuring Neper.</h2>
+        <p class="section-intro">We hold the language to the claim on this page with numbers from real sessions, including the columns where it loses.</p>
+        <a class="blog-card" href="blog/neper-vs-dart-llm-cost.html">
+          <img src="blog/img/neper-vs-dart-llm-cost.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">September 27, 2026 · measurement</span>
+            <span class="blog-card-title">Neper vs Dart: what it costs an LLM to write each one</span>
+            <span class="blog-card-excerpt">Seven days of Claude transcripts, measured byte by byte. The same cost per KB, 43% cheaper direct edits and more first-try builds for Neper — and 2.2× the context, which is what we fix next.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
       </section>
 
       <section class="final">

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neper vs Dart: what it costs an LLM to write each one — Neper blog</title>
+  <meta name="description" content="Seven days of Claude transcripts, measured byte by byte: Neper and Dart cost the same per KB, Neper wins on direct edits and first-try builds, and loses on context and repair.">
+  <link rel="canonical" href="https://neper.dev/blog/neper-vs-dart-llm-cost.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Neper vs Dart: what it costs an LLM to write each one">
+  <meta property="og:description" content="Seven days of Claude transcripts: $0.407 vs $0.397 per KB, and where each language wins.">
+  <meta property="og:url" content="https://neper.dev/blog/neper-vs-dart-llm-cost.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/lang-stats-claude-7d.png">
+  <meta property="article:published_time" content="2026-09-27">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 7 5, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; blog // measurement</div>
+      <h1>Neper vs Dart: what it costs an LLM to write each one</h1>
+      <p class="meta">September 27, 2026 · measured with <code>scripts/lang-stats.py</code></p>
+      <img class="banner" src="img/neper-vs-dart-llm-cost.svg" width="1200" height="630" alt="Neper vs Dart. Code written directly cost $0.155 per KB in Neper and $0.272 in Dart; all-in, $0.407 and $0.397.">
+
+      <p class="lede">Neper claims to be optimized for LLM-generated software, so we measure it the way we would measure a compiler: on real work. For the last seven days Claude wrote 12.7 MB of Neper and 9.3 MB of Dart in our repositories. Neper came out first on our scorecard, 62 to 59, at the same cost per kilobyte. It was not a clean sweep, and the losses are more useful than the win.</p>
+
+      <h2>How we measure</h2>
+      <p><code>scripts/lang-stats.py</code> reads every Claude Code transcript on the machine and follows each byte of source to the file it landed in, whether it arrived through the Write and Edit tools, a shell heredoc, a <code>patch.exe</code> spec or a Python patch script. A KB is 1,000 bytes of landed source, never tokens. Every token is priced at the Opus list rate, so dollars compare effort, not bills.</p>
+      <p>The script judges 28 columns across cost, rework, correctness, time, context load and style, and ranks each language in each column. The scorecard is the mean of those ranks, from 0 (worst in every column) to 100 (best in every column).</p>
+      <p>Two caveats before any numbers:</p>
+      <ul>
+        <li><strong>Claude only.</strong> Codex also writes Neper for us, about 10% of it, and none of our Dart. Pooling it put Codex's 15.5% build-failure rate on Neper's row against a Dart row that Codex never touched. The run below uses <code>--harness claude</code>, which reads one agent's transcripts and nothing else.</li>
+        <li><strong>Different projects.</strong> The Neper work is its compiler, its standard library, its UI library and their tests: 271,597 lines added in git this week. The Dart work is an application, Celvyx: 207,691 lines. This is one team's week, not a controlled experiment.</li>
+      </ul>
+
+      <figure>
+        <img src="img/lang-stats-claude-7d.png" width="745" height="580" alt="Terminal output of lang-stats.py for September 20 to 27, Claude only: scorecard, cost, process, repair and delivery tables for Neper, Dart and Python.">
+        <figcaption><code>python scripts/lang-stats.py -d 7 -a claude</code>, September 20–27, 2026. Green marks the best value in a column, cyan the second best, red the worst.</figcaption>
+      </figure>
+
+      <h2>Where Neper wins</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Column</th><th>Neper</th><th>Dart</th></tr></thead>
+          <tbody>
+            <tr><td>$ per KB of code written directly</td><td class="win">0.155</td><td>0.272</td></tr>
+            <tr><td>Output tokens per KB</td><td class="win">1.6K</td><td>2.1K</td></tr>
+            <tr><td>Bytes read per byte written</td><td class="win">1.8</td><td>4.6</td></tr>
+            <tr><td>Edits that built on the first try</td><td class="win">95.1%</td><td>92.8%</td></tr>
+            <tr><td>Model seconds per KB</td><td class="win">18</td><td>22</td></tr>
+            <tr><td>Tool seconds per KB</td><td class="win">13</td><td>16</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>When the model writes Neper directly it spends 43% less per kilobyte than it does on Dart, and emits a quarter fewer tokens for the same bytes. That is the small, single-meaning vocabulary doing its job: there is less to say and less to reconsider. The model also reads far less to write the same amount, and more of its edits build the first time.</p>
+
+      <h2>Where Neper loses</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Column</th><th>Neper</th><th>Dart</th></tr></thead>
+          <tbody>
+            <tr><td>Context at a turn that lands code</td><td>422K tokens</td><td class="win">190K tokens</td></tr>
+            <tr><td>Share of code delivered by script</td><td>22%</td><td class="win">6%</td></tr>
+            <tr><td>Turns from a compile failure to a passing build</td><td>4</td><td class="win">1</td></tr>
+            <tr><td>Failed build commands</td><td>8.1%</td><td class="win">7.2%</td></tr>
+            <tr><td>Median build command</td><td>2,174 ms</td><td class="win">891 ms</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li><strong>Context is the real gap.</strong> Neper sessions are long-running and work on large files (the compiler's <code>src/main.e</code> alone is 12,570 lines, and <code>src/</code> holds 73,000), so each turn carries 2.2× the context of a Dart turn and an edit takes 5.7 turns against 3.0. The compiler can already answer with the few kilobytes one edit needs; the sessions do not ask it yet.</li>
+        <li><strong>Scripts erase the direct-edit advantage.</strong> Code that arrives inside a Python patch script costs $0.784 per KB, five times a direct edit. At 22% of Neper's code that is exactly why the all-in cost ($0.407) lands next to Dart's ($0.397) instead of well below it.</li>
+        <li><strong>Repairs take too long.</strong> 52 compile failures took four turns each to fix, and half of them repeated the previous error code. The messages are the reason: <code>type checking failed: check.UnknownCallable</code> names no callee, and <code>invalid token</code> does not say that <code>\u000F</code> is not an escape. A model cannot act on what a message does not name. The Dart side of this column is thin (three fixes in a week), and we suspect our detector misses the analyzer's format, so read “4 vs 1” as a problem to fix, not a settled ratio.</li>
+        <li><strong>Two columns overstate the problem.</strong> Nearly half of the week's failed build commands (116 of 266) were shell and harness failures, not the compiler. The build time is the wall time of a whole command, tests included. A Neper compile of the compiler itself takes about 1.7 seconds on this machine.</li>
+      </ul>
+
+      <h2>The trend is the good news</h2>
+      <p>The same measurement over 30 days, Claude only:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Neper</th><th>30 days</th><th>7 days</th></tr></thead>
+          <tbody>
+            <tr><td>$ per KB, all-in</td><td>0.691</td><td class="win">0.407</td></tr>
+            <tr><td>Share of code delivered by script</td><td>38%</td><td class="win">22%</td></tr>
+            <tr><td>$ per KB, written directly</td><td>0.198</td><td class="win">0.155</td></tr>
+            <tr><td>Context at a turn that lands code</td><td>513K</td><td class="win">422K</td></tr>
+            <tr><td>Thinking tokens per byte</td><td>0.069</td><td class="win">0.061</td></tr>
+            <tr><td>Failed build commands</td><td class="win">4.9%</td><td>8.1%</td></tr>
+            <tr><td>Turns to fix a compile failure</td><td class="win">2</td><td>4</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Most of the cost drop has one cause. On September 26 a small Neper program, <code>tools/patch</code>, replaced the Python scripts sessions had been using to patch the compiler: those went from 254 and 326 a day to one. Over 30 days, with scripts carrying 38% of the code, Neper cost 35% more than Dart per KB. Over the last seven it costs the same.</p>
+
+      <div class="callout">
+        <strong>Fixing our own ruler.</strong>
+        <p>Measuring this found three bugs in the measurement. <code>patch.exe</code> edits were invisible, 326 KB of them. Any command that mentioned the repository's path counted as a build, which made 30–58% of the weekly “builds” a <code>cd</code> or a <code>git log</code>. And pooling agents compared Codex's Neper with Claude's Dart. All three are fixed. Three more distortions are queued: build failures after a patch script counted as failed edits, probe programs in scratch folders counted as landed code, and the Dart compile detector.</p>
+      </div>
+
+      <h2>What we are doing about it</h2>
+      <ol>
+        <li><strong>Diagnostics that name their subject</strong>: the callee, the missing name, the two counts, the legal escapes. One fixture per recurring code, tracked by how often the next build repeats it.</li>
+        <li><strong>A machine-applicable rename.</strong> The most frequent compile error is a local that reuses a module-scope name. Neper forbids that shadowing on purpose, one meaning per name at every position, so the fix is a repair the tools apply without a model turn, not a looser rule.</li>
+        <li><strong>Route agents to the compiler's context</strong> instead of whole files, and to a “traps” section in the language card: reserved names, the no-shadowing rule, the escape set. The targets are context near 200K and a script share near Dart's.</li>
+        <li><strong>A warm rebuild that is actually warm.</strong> A repeated build of an unchanged program should take the incremental path we have measured at 80 ms for the compiler.</li>
+      </ol>
+      <p>Every number above comes from one command, and the script is in the repository:</p>
+      <pre><code>python scripts/lang-stats.py --harness claude -d 7</code></pre>
+      <p>Run it on your own transcripts. If your numbers disagree with ours, we want to know.</p>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>
