@@ -120,7 +120,8 @@ type CodeRelocation = struct {
 // (D1515) Format 17: the Emission section.
 // (D1582) Format 18: the Vars section.
 // (D1584) Format 19: a Vars record carries its scope.
-fn format_version() -> usize { ret 19usize }
+// (D1589) Format 20: a kernel's Interface entry carries its capabilities and shared total.
+fn format_version() -> usize { ret 20usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -1507,8 +1508,16 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     if function.variadic { attributes += 2usize }
     if function.gpu { attributes += 4usize }
     try binary.byte(output, attributes)
-    try binary.zeroes(output, 3usize)
+    // (D1589) A kernel's inferred capabilities (`gpu.Cap`'s members as bits) and the
+    // bytes of its `shared var`s, which `gpu.launch` checks against a device (spec
+    // section 10); zero for any other function.
+    var facts = 0usize
+    if function.gpu { facts = check.kernel_fact(c, function_index) }
+    try binary.byte(output, facts % 256usize)
+    try binary.byte(output, (facts / 256usize) % 256usize)
+    try binary.byte(output, 0usize)
     try binary.little_u32(output, usize(function.gpu_size))
+    try binary.little_u32(output, (facts / 65536usize) % 4294967296usize)
     try write_optional_string(table, function.import_library, output)
     try write_optional_string(table, function.import_symbol, output)
     at = 0usize
@@ -4566,9 +4575,9 @@ fn interface_payload_end(bytes: []const u8, kind: usize, payload: usize, end: us
             next = after
             at += 1usize
         }
-        // (D1510) The attribute tail: 16 bytes and one `own` byte a parameter.
-        if next > end || end - next < 16usize || usize(bytes[next]) > 7usize { ret (0usize, InvalidArtifact) }
-        next += 16usize
+        // (D1510) The attribute tail: 20 bytes (D1589) and one `own` byte a parameter.
+        if next > end || end - next < 20usize || usize(bytes[next]) > 7usize { ret (0usize, InvalidArtifact) }
+        next += 20usize
         if parameters > end - next { ret (0usize, InvalidArtifact) }
         at = 0usize
         while at < parameters {
@@ -5185,14 +5194,14 @@ fn decode_function(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payloa
         at += 1usize
     }
     // The attribute tail (D1510).
-    if next > end || end - next < 16usize + parameters { ret InvalidArtifact }
+    if next > end || end - next < 20usize + parameters { ret InvalidArtifact }
     let attributes = usize(bytes[next])
     item.intrinsic = (attributes & 1usize) != 0usize
     item.variadic = (attributes & 2usize) != 0usize
     item.gpu = (attributes & 4usize) != 0usize
     let (gpu_size, gpu_error) = binary.read_u32(bytes, next + 4usize)
-    let (library, library_error) = binary.read_u32(bytes, next + 8usize)
-    let (symbol, symbol_error) = binary.read_u32(bytes, next + 12usize)
+    let (library, library_error) = binary.read_u32(bytes, next + 12usize)
+    let (symbol, symbol_error) = binary.read_u32(bytes, next + 16usize)
     if gpu_error != ok || library_error != ok || symbol_error != ok { ret InvalidArtifact }
     item.gpu_size = u32(gpu_size)
     if library != 0usize {
@@ -5205,7 +5214,7 @@ fn decode_function(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payloa
         if symbol_text_error != ok { ret symbol_text_error }
         item.import_symbol = symbol_text
     }
-    next += 16usize
+    next += 20usize
     at = 0usize
     while at < parameters {
         c.parameters[item.first_parameter + at].own = usize(bytes[next + at]) == 1usize

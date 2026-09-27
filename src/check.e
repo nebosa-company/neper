@@ -37,6 +37,8 @@ error MissingReturn
 error UnknownCallable
 error ArgumentCount
 error InvalidType
+// (D1589) A `gpu.Buf[T]` whose element is not a device storage type.
+error DeviceElement
 error ImmutableAssignment
 error AliasCycle
 error ConstantCycle
@@ -799,6 +801,17 @@ type Checker = struct {
     active_owner_set: bool,
     // The body being checked carries `@gpu` (D780): where `gpu.barrier()` is legal.
     body_is_kernel: bool,
+    // (D1589) The body being checked is a device-only helper's; whether the program has
+    // `e.gpu` at all (0 unasked, 1 no, 2 yes); and device-only answers by function,
+    // each slot the function's index plus one times two plus the answer.
+    body_device_only: bool,
+    device_program: u8,
+    device_memo: [256]usize,
+    // (D1589) The `@gpu` options of the kernel being checked (`declaration_gpu_options`),
+    // and this worker's kernels: pairs of the function index plus one and its inferred
+    // capabilities with its `shared var` total from bit 16, for its Interface entry.
+    kernel_options: usize,
+    kernel_facts: [128]usize,
     // The instance whose body is being checked (D543), for the request chain.
     active_instance: usize,
     // The quoted `@noescape` parameter list of the body currently being checked.
@@ -961,6 +974,18 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     var memo_at = 0usize
     while KEEPS_MEMO > memo_at {
         c.keeps_memo[memo_at].key = 0usize
+        memo_at += 1usize
+    }
+    c.device_program = 0u8
+    memo_at = 0usize
+    while memo_at < c.device_memo.len {
+        c.device_memo[memo_at] = 0usize
+        memo_at += 1usize
+    }
+    c.kernel_options = 0usize
+    memo_at = 0usize
+    while memo_at < c.kernel_facts.len {
+        c.kernel_facts[memo_at] = 0usize
         memo_at += 1usize
     }
 
@@ -3676,6 +3701,13 @@ fn instantiate_aggregate(c: *Checker, template_index: usize, first_argument: usi
     let template = c.aggregates[template_index]
     if !template.generic || template.instance { ret (0usize, InvalidType) }
     let concrete = aggregate_arguments_concrete(c, template, first_argument)
+    // (D1589) `gpu.Buf[T]` holds device memory, so `T` is a device storage type: no
+    // `usize` or `isize`, whose width differs on the device, no `bool` or pointer, and
+    // no union -- a `union enum` is laid out differently on the device (section 10).
+    if concrete && c.has_graph && same(template.name, "Buf") && template.module_index < c.graph.count && same(c.graph.modules[template.module_index].name, "e.gpu") && first_argument < c.generic_argument_count {
+        let element = c.generic_arguments[first_argument]
+        if element.kind == .Type && !device_storage(c, element.ty, 0usize) { ret (0usize, DeviceElement) }
+    }
     if concrete {
         let (cached, found) = find_aggregate_instance(c, template_index, first_argument)
         if found {
@@ -4139,6 +4171,82 @@ fn declaration_align(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     ret (align, count, valid)
 }
 
+// (D1589) `gpu.Cap`'s members as bits, in its order: Int8 Int16 Int64 Float16 Float64
+// Atomic64 Subgroup Ftz DenormPreserve.
+fn gpu_cap_bit(name: str) -> usize {
+    if same(name, "Int8") { ret 1usize }
+    if same(name, "Int16") { ret 2usize }
+    if same(name, "Int64") { ret 4usize }
+    if same(name, "Float16") { ret 8usize }
+    if same(name, "Float64") { ret 16usize }
+    if same(name, "Atomic64") { ret 32usize }
+    if same(name, "Subgroup") { ret 64usize }
+    if same(name, "Ftz") { ret 128usize }
+    if same(name, "DenormPreserve") { ret 256usize }
+    ret 0usize
+}
+
+fn gpu_cap_name(bit: usize) -> str {
+    if bit == 1usize { ret ".Int8" }
+    if bit == 2usize { ret ".Int16" }
+    if bit == 4usize { ret ".Int64" }
+    if bit == 8usize { ret ".Float16" }
+    if bit == 16usize { ret ".Float64" }
+    if bit == 32usize { ret ".Atomic64" }
+    if bit == 64usize { ret ".Subgroup" }
+    if bit == 128usize { ret ".Ftz" }
+    ret ".DenormPreserve"
+}
+
+// An option of `@gpu` after its workgroup size (spec section 10, Capabilities):
+// `caps(.A, .B)` -- kind 1, its members as bits -- or `ftz` -- kind 2. Kind 0 is not an
+// option; an option with an unknown or repeated member is invalid.
+fn gpu_option(c: *Checker, tree: *parse.Tree, text: str, argument: syntax.Node) -> (usize, usize, bool) {
+    let first = c.tokens[usize(argument.token_start)]
+    if first.kind != .Identifier { ret (0usize, 0usize, true) }
+    let word = text[first.start..first.end]
+    if argument.kind == .NameExpr && same(word, "ftz") { ret (2usize, 128usize, true) }
+    if argument.kind != .CallExpr || !same(word, "caps") { ret (0usize, 0usize, true) }
+    var bits = 0usize
+    var at = usize(argument.token_start) + 1usize
+    while at < usize(argument.token_end) && at < c.token_count {
+        let token = c.tokens[at]
+        if token.kind == .Identifier {
+            let bit = gpu_cap_bit(text[token.start..token.end])
+            if bit == 0usize || (bits & bit) != 0usize { ret (1usize, bits, false) }
+            bits = bits | bit
+        }
+        at += 1usize
+    }
+    ret (1usize, bits, true)
+}
+
+// The options of a kernel's `@gpu`: the declared bound's bits, whether there is one
+// (512) and whether `ftz` is set (1024), read where the kernel is checked.
+fn declaration_gpu_options(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> usize {
+    let text = g.modules[module_index].text
+    var at = node_index
+    while at > 1usize {
+        at = at - 1usize
+        let node = tree.nodes[at]
+        if !node.top_level { continue }
+        if node.kind != .Attribute { ret 0usize }
+        var options = 0usize
+        let child_end = usize(node.first_child) + usize(node.child_count)
+        var child_at = usize(node.first_child)
+        while child_at < child_end {
+            if parse.child_is_node_at(tree, child_at) {
+                let (kind, bits, option_valid) = gpu_option(c, tree, text, tree.nodes[parse.child_index_at(tree, child_at)])
+                if kind == 1usize { options = options | bits | 512usize }
+                if kind == 2usize { options = options | 1024usize }
+            }
+            child_at += 1usize
+        }
+        if options != 0usize { ret options }
+    }
+    ret 0usize
+}
+
 fn declaration_gpu(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, usize, bool, bool) {
     let text = g.modules[module_index].text
     var dims: [3]usize = zero
@@ -4164,11 +4272,23 @@ fn declaration_gpu(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         if !same(name, "gpu") { continue }
         var count = 0usize
         var valid = true
+        var seen_caps = false
+        var seen_ftz = false
         let child_end = usize(node.first_child) + usize(node.child_count)
         var child_at = usize(node.first_child)
         while child_at < child_end {
             if parse.child_is_node_at(tree, child_at) {
                 let argument = tree.nodes[parse.child_index_at(tree, child_at)]
+                // (D1589) `caps(...)` and `ftz` follow the size, each at most once.
+                let (option_kind, option_bits, option_valid) = gpu_option(c, tree, text, argument)
+                if option_kind != 0usize {
+                    if !option_valid || count == 0usize || (option_kind == 1usize && seen_caps) || (option_kind == 2usize && seen_ftz) { valid = false }
+                    if option_kind == 1usize { seen_caps = true }
+                    if option_kind == 2usize { seen_ftz = true }
+                    child_at += 1usize
+                    continue
+                }
+                if seen_caps || seen_ftz { valid = false }
                 var value = 0usize
                 var is_literal = false
                 if argument.kind == .LiteralExpr {
@@ -11518,6 +11638,16 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         record_failure(c, module_index, node, .GpuLaunch, function.name, "is a kernel and can only be run through `gpu.launch`")
         ret (info, InvalidType)
     }
+    // (D1589) A device-only helper -- one that reads `gpu.gid` and its kin, meets a
+    // barrier or a device atomic, or names a `shared` type -- has no meaning in plain CPU
+    // code: only a kernel or another device-only helper calls one.
+    if !c.body_is_kernel && !c.body_device_only && !c.generic_declaration && !function.intrinsic && !function.external {
+        let (callee_index, callee_named) = find_function(c, function.module_index, function.name)
+        if callee_named && device_only(c, g, callee_index) {
+            record_failure(c, module_index, node, .GpuLaunch, function.name, "is device-only -- it reads `gpu.*` or names a `shared` type -- so only a kernel or another device-only helper can call it (spec section 10)")
+            ret (info, InvalidType)
+        }
+    }
     if function.generic && !c.generic_declaration { ret (info, Unsupported) }
     // An `extern fn` reaches the loader through `@import`, and nothing else can bind
     // it: without one there is no library to look in and no name to look for. Said
@@ -15457,6 +15587,11 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     c.active_noescape = function.import_symbol
     c.body_returns_err = function.return_count == 1usize && c.return_types[function.first_return].kind == .Err
     c.body_is_kernel = function.gpu
+    c.body_device_only = false
+    if !function.gpu && !function.generic {
+        let (self_index, self_named) = find_function(c, function.module_index, function.name)
+        if self_named { c.body_device_only = device_only(c, g, self_index) }
+    }
     var parameter_index = 0usize
     while parameter_index < function.parameter_count {
         let parameter = c.parameters[function.first_parameter + parameter_index]
@@ -15506,9 +15641,85 @@ fn check_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     // An `@unsafe` function (D345) is the audited wrapper: it touches a resource's
     // bits and discharges obligations by raw means the checker cannot see.
     c.resources_on = !declaration_has_attribute(c, g, tree, module_index, node_index, "unsafe")
+    c.kernel_options = declaration_gpu_options(c, g, tree, module_index, node_index)
     let checked = check_function_swept(c, r, g, tree, module_index, node)
     c.resources_on = resources_before
     ret checked
+}
+
+// (D1589) A kernel's facts in this worker's table: its capabilities and shared total.
+fn kernel_fact(c: *Checker, function_index: usize) -> usize {
+    var at = 0usize
+    while at + 1usize < c.kernel_facts.len {
+        if c.kernel_facts[at] == function_index + 1usize { ret c.kernel_facts[at + 1usize] }
+        at += 2usize
+    }
+    ret 0usize
+}
+
+// Sets bits of a kernel's facts: `keep` masks what stays, `add` is or-ed in.
+fn set_kernel_fact(c: *Checker, function_index: usize, keep: usize, add: usize) {
+    var at = 0usize
+    var free = c.kernel_facts.len
+    while at + 1usize < c.kernel_facts.len {
+        if c.kernel_facts[at] == function_index + 1usize {
+            c.kernel_facts[at + 1usize] = (c.kernel_facts[at + 1usize] & keep) | add
+            ret
+        }
+        if c.kernel_facts[at] == 0usize && free == c.kernel_facts.len { free = at }
+        at += 2usize
+    }
+    // ponytail: a worker holding more than 64 kernels records the rest with none.
+    if free == c.kernel_facts.len { ret }
+    c.kernel_facts[free] = function_index + 1usize
+    c.kernel_facts[free + 1usize] = add
+}
+
+// (D1589) The capabilities a type needs on the device (section 10's table): 8-, 16-
+// and 64-bit integers, `f16` and `f64`, through structs, arrays, slices and pointers.
+// Bit 512 says a float is used, for `.DenormPreserve`.
+fn type_caps(c: *Checker, ty: Type, depth: usize) -> usize {
+    if depth > 8usize { ret 0usize }
+    if ty.kind == .Integer || ty.kind == .Float { ret name_caps(ty.name) }
+    if ty.kind == .Array || ty.kind == .Slice || ty.kind == .Pointer {
+        if !ty.has_element || ty.element >= c.type_count { ret 0usize }
+        ret type_caps(c, c.types[ty.element], depth + 1usize)
+    }
+    if ty.kind == .Named || ty.kind == .Tag {
+        let (aggregate_index, is_aggregate) = layout_aggregate_index(c, ty)
+        if !is_aggregate || aggregate_index >= c.aggregate_count { ret 0usize }
+        let aggregate = c.aggregates[aggregate_index]
+        var caps = 0usize
+        if aggregate.kind == .Enum || aggregate.kind == .TaggedUnion { caps = caps | type_caps(c, aggregate.backing_type, depth + 1usize) }
+        var field_at = 0usize
+        while field_at < aggregate.field_count {
+            caps = caps | type_caps(c, c.aggregate_fields[aggregate.first_field + field_at].ty, depth + 1usize)
+            field_at += 1usize
+        }
+        ret caps
+    }
+    ret 0usize
+}
+
+// A primitive's capabilities by name, or a literal's by its suffix.
+fn name_caps(name: str) -> usize {
+    if device_ends(name, "i8") || device_ends(name, "u8") { ret 1usize }
+    if device_ends(name, "bf16") { ret 2usize | 512usize }
+    if device_ends(name, "f16") { ret 2usize | 8usize | 512usize }
+    if device_ends(name, "i16") || device_ends(name, "u16") { ret 2usize }
+    if device_ends(name, "i64") || device_ends(name, "u64") { ret 4usize }
+    if device_ends(name, "f64") { ret 16usize | 512usize }
+    if device_ends(name, "f32") { ret 512usize }
+    ret 0usize
+}
+
+fn device_ends(text: str, suffix: str) -> bool {
+    if text.len < suffix.len { ret false }
+    if !same(text[text.len - suffix.len..text.len], suffix) { ret false }
+    // A whole name, or a literal's suffix after its digits.
+    if text.len == suffix.len { ret true }
+    let before = text[text.len - suffix.len - 1usize]
+    ret before >= 48u8 && before <= 57u8
 }
 
 fn check_function_swept(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
@@ -16116,6 +16327,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
 // for every one of them before.
 fn error_name(value: err) -> str {
     if value == Capacity { ret "check.Capacity" }
+    if value == DeviceElement { ret "check.DeviceElement" }
     if value == ResourceViolation { ret "check.ResourceViolation" }
     if value == Unsupported { ret "check.Unsupported" }
     if value == MissingContext { ret "check.MissingContext" }
@@ -17099,12 +17311,75 @@ fn kept_callee(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     ret (0usize, false)
 }
 
+// (D1589) Whether a function is device-only (spec section 10, What runs where): its
+// source reads `gpu.gid`, `gpu.lid`, `gpu.wgid` or `gpu.sid`, meets `gpu.barrier()`, a
+// `gpu.atomic_*` or a subgroup builtin, or names a `shared` type. Read from the text
+// of its declaration, past comments and literals; a program without `e.gpu` has none.
+fn device_only(c: *Checker, g: *graph.Graph, function_index: usize) -> bool {
+    if function_index >= c.function_count { ret false }
+    if c.device_program == 0u8 {
+        let (gpu_module, has_gpu) = graph.find_module(g, "e.gpu")
+        if has_gpu { c.device_program = 2u8 } else { c.device_program = 1u8 }
+    }
+    if c.device_program != 2u8 { ret false }
+    let function = c.functions[function_index]
+    if function.gpu || function.intrinsic || function.external || function.module_index >= g.count { ret false }
+    // e.gpu's own functions are the builtins' implementations, not callers of them.
+    if same(g.modules[function.module_index].name, "e.gpu") { ret false }
+    let slot = function_index % c.device_memo.len
+    if c.device_memo[slot] / 2usize == function_index + 1usize { ret c.device_memo[slot] % 2usize == 1usize }
+    let text = g.modules[function.module_index].text
+    var answer = false
+    var at = function.source_start
+    let end = function.source_end
+    while at < end && at < text.len && !answer {
+        let byte = text[at]
+        if byte == 47u8 && at + 1usize < text.len && text[at + 1usize] == 47u8 {
+            while at < text.len && text[at] != 10u8 { at += 1usize }
+            continue
+        }
+        if byte == 34u8 {
+            at += 1usize
+            while at < text.len && text[at] != 34u8 {
+                if text[at] == 92u8 { at += 1usize }
+                at += 1usize
+            }
+            at += 1usize
+            continue
+        }
+        let boundary = at == 0usize || !device_identifier_byte(text[at - 1usize])
+        if boundary && device_word(text, at, "gpu.") {
+            let member = at + 4usize
+            if device_word(text, member, "gid") || device_word(text, member, "lid") || device_word(text, member, "wgid") || device_word(text, member, "sid") || device_word(text, member, "barrier") || device_word(text, member, "atomic_") || device_word(text, member, "subgroup") { answer = true }
+        }
+        if boundary && device_word(text, at, "shared") && (at + 6usize >= text.len || !device_identifier_byte(text[at + 6usize])) { answer = true }
+        at += 1usize
+    }
+    var stored = (function_index + 1usize) * 2usize
+    if answer { stored += 1usize }
+    c.device_memo[slot] = stored
+    ret answer
+}
+
+fn device_identifier_byte(byte: u8) -> bool {
+    ret byte == 95u8 || (byte >= 97u8 && byte <= 122u8) || (byte >= 65u8 && byte <= 90u8) || (byte >= 48u8 && byte <= 57u8)
+}
+
+fn device_word(text: str, at: usize, word: str) -> bool {
+    if at + word.len > text.len { ret false }
+    ret same(text[at..at + word.len], word)
+}
+
 // (D1588) Section 10's restrictions on device code, checked from a kernel through every
 // function it reaches: a kernel's body and its helpers' are walked as `callee_keeps`
 // walks a callee's (D1565), over each module's own tree, and the first construct the
 // device cannot run is reported at the kernel with the chain of calls that reaches it.
 // The walk is the kernel's alone, so it costs a program without kernels nothing.
 type DeviceWalk = struct {
+    // (D1589) The capabilities the reach needs so far, and the bound `caps(...)` puts on
+    // them (bit 512 set when there is one).
+    caps: usize,
+    bound: usize,
     // The functions on the current chain, the kernel first.
     stack: [32]usize,
     depth: usize,
@@ -17328,7 +17603,8 @@ fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
             if callee.external { device_found(walk, "a call to the extern fn", callee.name) }
             if same(callee_module, "e.thread") || same(callee_module, "e.atomic") { device_found(walk, "a host call to", callee_module) }
             if same(callee_module, "e.mem") && same(callee.name, "cast") { device_found(walk, "a pointer cast,", "mem.cast") }
-            if !walk.found && !callee.intrinsic && !callee.external && !callee.gpu && !callee.generic { try device_walk(c, g, callee_index, walk) }
+            // A generic helper is walked in its template: the rules read its syntax (D1589).
+            if !walk.found && !callee.intrinsic && !callee.external && !callee.gpu { try device_walk(c, g, callee_index, walk) }
         } else {
             // A qualified intrinsic with no function of its own -- `mem.cast[T](p)` --
             // named by its module and member.
@@ -17458,6 +17734,46 @@ fn device_body(c: *Checker, g: *graph.Graph, function: Function, walk: *DeviceWa
         parameter_at += 1usize
     }
     let node = tree.nodes[declaration]
+    // (D1589) What this function needs of the device: its parameters' types, and every
+    // primitive its declaration names or a literal's suffix spells, with `gpu.sid` and
+    // the subgroup builtins, and a 64-bit `Atomic`.
+    var caps = 0usize
+    var typed_at = 0usize
+    while typed_at < function.parameter_count {
+        caps = caps | type_caps(c, c.parameters[function.first_parameter + typed_at].ty, 0usize)
+        typed_at += 1usize
+    }
+    var token_at = usize(node.token_start)
+    while token_at < usize(node.token_end) && token_at < c.token_count {
+        let token = c.tokens[token_at]
+        if token.kind == .Identifier || token.kind == .Integer || token.kind == .Float {
+            let spelled = text[token.start..token.end]
+            caps = caps | name_caps(spelled)
+            if same(spelled, "gpu") && token_at + 2usize < c.token_count {
+                let member_token = c.tokens[token_at + 2usize]
+                let member_name = text[member_token.start..member_token.end]
+                if same(member_name, "sid") || device_word(member_name, 0usize, "subgroup") { caps = caps | 64usize }
+                if same(member_name, "subgroup_ballot") { caps = caps | 4usize }
+            }
+            if same(spelled, "Atomic") && token_at + 2usize < c.token_count {
+                let element_token = c.tokens[token_at + 2usize]
+                let element_name = text[element_token.start..element_token.end]
+                if same(element_name, "i64") || same(element_name, "u64") { caps = caps | 32usize }
+            }
+        }
+        token_at += 1usize
+    }
+    walk.caps = walk.caps | caps
+    // The bound: what the kernel's `caps(...)` does not list, but for `.Ftz`, which
+    // `ftz` gives, and `.DenormPreserve`, which the build infers.
+    if (walk.bound & 512usize) != 0usize {
+        let outside = caps & (127usize ^ (walk.bound & 127usize))
+        if outside != 0usize {
+            var bit = 1usize
+            while (outside & bit) == 0usize { bit = bit * 2usize }
+            device_found(walk, "the capability", gpu_cap_name(bit))
+        }
+    }
     let end = usize(node.first_child) + usize(node.child_count)
     var at = usize(node.first_child)
     while at < end {
@@ -17491,8 +17807,17 @@ fn check_kernel_profile(c: *Checker, g: *graph.Graph, module_index: usize, node:
     let (function_index, found) = find_function(c, module_index, function.name)
     if !found { ret ok }
     var walk: DeviceWalk = zero
+    walk.bound = c.kernel_options & 1023usize
     try device_walk(c, g, function_index, &walk)
-    if !walk.found { ret ok }
+    if !walk.found {
+        // The inferred set, for the Interface (spec section 10, Capabilities): `ftz`
+        // gives `.Ftz`; any other kernel that uses a float keeps its denormals.
+        var inferred = walk.caps & 127usize
+        if (c.kernel_options & 1024usize) != 0usize { inferred = inferred | 128usize }
+        if (c.kernel_options & 1024usize) == 0usize && (walk.caps & 512usize) != 0usize { inferred = inferred | 256usize }
+        set_kernel_fact(c, function_index, 18446744073709486080usize, inferred)
+        ret ok
+    }
     // The chain from the kernel to where the construct is, as `a -> b -> c`.
     var chain = ""
     var link = 0usize
@@ -17502,6 +17827,10 @@ fn check_kernel_profile(c: *Checker, g: *graph.Graph, module_index: usize, node:
     }
     var subject = ""
     if walk.subject.len != 0usize { subject = device_text(c, " `", walk.subject, "`", "") }
+    if same(walk.reason, "the capability") {
+        record_failure(c, module_index, node, .GpuLaunch, function.name, device_text(c, "needs", subject, device_text(c, " through ", chain, ", which its `caps(...)` does not list (spec section 10, Capabilities)", ""), ""))
+        ret InvalidType
+    }
     record_failure(c, module_index, node, .GpuLaunch, function.name, device_text(c, "reaches ", walk.reason, subject, device_text(c, " through ", chain, ", which device code cannot run (spec section 10's restrictions)", "")))
     ret InvalidType
 }

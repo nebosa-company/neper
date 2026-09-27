@@ -6595,6 +6595,9 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         let (shared_bytes, shared_error) = lower_shared_vars(c, g, tree, module_index, node, shared_base, builder, bindings, &binding_count)
         if shared_error != ok { ret shared_error }
         shared_total = shared_bytes
+        // (D1589) The kernel's shared total, for its Interface entry (spec section 10).
+        let (kernel_index, kernel_named) = check.find_function(c, function.module_index, function.name)
+        if kernel_named { check.set_kernel_fact(c, kernel_index, 65535usize, shared_bytes * 65536usize) }
         // Every parameter is in the entry block, which dominates the resumes; the
         // dispatch comes after them.
         let (dispatch_branch, dispatch_branch_error) = emit_branch(builder, c.tokens[usize(node.token_start)])

@@ -6723,7 +6723,7 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
     if checker.failure_kind == .GpuAttribute {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)
-        ret write_all(file, "` carries `@gpu` without a usable workgroup size: one to three positive integer literals whose product is at most 1024, on a function that is not extern")
+        ret write_all(file, "` carries `@gpu` without a usable workgroup size: one to three positive integer literals whose product is at most 1024, then at most one `caps(...)` of distinct `gpu.Cap` members and one `ftz`, on a function that is not extern")
     }
     if checker.failure_kind == .GpuLaunch {
         if checker.failure_detail.len == 0usize { ret write_all(file, checker.failure_detail2) }
@@ -6824,6 +6824,9 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
     // `Generic` means nothing along the way recorded a reason, so the error value is
     // the only evidence of which check rejected the program. Naming it turns "type
     // checking failed" from a dead end into somewhere to start.
+    if checker.failure_kind == .Generic && check_error == check.DeviceElement {
+        ret write_all(file, "a `gpu.Buf[T]` holds device memory, so its element is a device storage type: a fixed-width integer, a float, an enum, `err`, or a struct or array of them -- not `usize`, `isize`, `bool`, a pointer, a slice or a union (spec section 10)")
+    }
     if checker.failure_kind == .Generic {
         let name = check.error_name(check_error)
         if name.len != 0usize {
