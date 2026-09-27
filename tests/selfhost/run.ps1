@@ -2943,6 +2943,19 @@ $saxpyOutput = & $saxpyPath
 if ($LASTEXITCODE -ne 0 -or ($saxpyOutput -join "`n") -ne 'cpu    checksum 16777216') { throw "examples/saxpy.e answered wrongly: $($saxpyOutput -join "`n")" }
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-TYPE-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
+# (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
+# a private slice, a module-scope var behind a helper and a `usize` parameter are
+# refused at the kernel with the chain; slices of device and shared memory are not.
+foreach ($gpuProfileCase in @(
+    @('recursion', 'main.e:14:1: error[E-TYPE-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth'),
+    @('private', 'main.e:9:1: error[E-TYPE-9999]: `fill` reaches a slice of the private variable `local` through fill'),
+    @('global', 'main.e:11:1: error[E-TYPE-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump'),
+    @('param', 'main.e:5:1: error[E-TYPE-9999]: `fill` takes `n`, which is neither a device storage type'))) {
+    $gpuProfile = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\gpu_profile_$($gpuProfileCase[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or -not ($gpuProfile -join "`n").Contains($gpuProfileCase[1])) { throw "the device profile did not refuse $($gpuProfileCase[0]): $($gpuProfile -join "`n")" }
+}
+$gpuProfileValid = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_profile_valid\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 0 -or ($gpuProfileValid -join "`n") -ne 'module check ok') { throw "a valid kernel was refused: $($gpuProfileValid -join "`n")" }
 $gpuBare = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_bare_attribute\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuBare -join "`n") -notmatch 'main\.e:4:1: error\[E-TYPE-9999\]: `fill` carries `@gpu` without a usable workgroup size') { throw "a bare @gpu was not refused: $($gpuBare -join "`n")" }
 $gpuArgument = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_launch_argument\src\main.e') $repo 'x64' 'windows' 2>&1

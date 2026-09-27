@@ -2614,6 +2614,19 @@ case "$gpu_direct" in
     *'main.e:9:5: error[E-TYPE-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;
     *) printf '%s\n' "a direct kernel call was not refused: $gpu_direct" >&2; exit 1 ;;
 esac
+# (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
+# a private slice, a module-scope var behind a helper and a `usize` parameter are
+# refused at the kernel with the chain; slices of device and shared memory are not.
+for gpu_profile_case in 'recursion|main.e:14:1: error[E-TYPE-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth' 'private|main.e:9:1: error[E-TYPE-9999]: `fill` reaches a slice of the private variable `local` through fill' 'global|main.e:11:1: error[E-TYPE-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump' 'param|main.e:5:1: error[E-TYPE-9999]: `fill` takes `n`, which is neither a device storage type'; do
+    gpu_profile_name=${gpu_profile_case%%|*}
+    gpu_profile_expected=${gpu_profile_case#*|}
+    gpu_profile=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_profile_$gpu_profile_name/src/main.e" "$repo" x64 linux 2>&1 || true)
+    case "$gpu_profile" in
+        *"$gpu_profile_expected"*) ;;
+        *) printf '%s\n' "the device profile did not refuse $gpu_profile_name: $gpu_profile" >&2; exit 1 ;;
+    esac
+done
+[ "$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_profile_valid/src/main.e" "$repo" x64 linux)" = 'module check ok' ]
 gpu_bare=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_bare_attribute/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_bare" in
     *'main.e:4:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'*) ;;
