@@ -29148,3 +29148,39 @@ At every other distance the two loops leave the same bytes: a destination at or 
 - **Speed.** The same 200 MB takes 46 ms instead of 336 ms (7×).
 - **Fixture.** `bytes_plan` gains codes 86–88. They cover every source and destination offset from 0 to 19 and every length up to 40, inside one buffer so every overlap distance occurs, checked against a forward byte loop. The check fails with 87 when the overlap guard is removed.
 - **Hosts.** `bytes_plan`, `bytes_codec`, `db`, `x_sqlite`, `x_postgresql`, `x_mysql` and the memory-driver example pass on Windows. The six fixtures pass cross-emitted in WSL.
+
+## D1601 — `e.ui.audit`: the accessibility audit, checked in
+
+D1598's audit ran from a scratch copy of the gallery. It is now a library module that any page can be audited with, and the gallery's own `ui audit`.
+
+`audit.run(a, runtime, page, options, out)` builds the caller's page through `e.ui.testing`'s harness. A `Page` is a build callback, so an app hands over the builder it already has. The page is built twice, so a control that waits a frame shows, and checked for:
+
+- **Name, role** (4.1.2) and **target** (2.5.8) on the semantic tree. A target under 24 passes when a 24 circle on it meets no other target, as the spacing exception allows.
+- **Contrast** (1.4.3), measured on the rendered pixels, 3:1 for text 30 tall or more. A text whose box the viewport clips, or that draws nothing, is not judged.
+- A **Tab walk** from nothing focused:
+  - reach (2.1.1);
+  - focus lost and focus trap (2.1.1, 2.1.2), each reported against the stop it happened after;
+  - focus visible (2.4.7), a change within 24 of the control, since a field shows its focus on its frame;
+  - focus obscured (2.4.11), the stop outside the surface.
+
+What the scratch version got wrong, now right:
+
+- A composite counts as reached when a stop of the same role sits inside it: a calendar's days are rows apart in one grid. Generic groups beside each other are no composite.
+- The walk starts from nothing focused. `widget.clear_focus` is new for this, and apps can use it when they replace a whole page.
+
+The page's frame is reconciled in the run's own frame arena (`frame_bytes`), because `testing.pump`'s 4 MB does not hold a gallery page. The findings' names are copied out of the tree's storage.
+
+- **Gallery.** `ui audit` audits the 15 tabs in the light, dark and high-contrast palettes, walks Tab in the light one, prints a line per finding and a count per kind, and exits 1 when there is any. It takes about 50 s.
+- **Findings open today:**
+  - 5 contrast readings of 4.07:1 on a stepper's thin "-", anti-aliasing of a 1px stroke whose token passes;
+  - 16 reach findings, the column resize handles and the document tabs' close buttons, neither of which the keyboard can reach;
+  - 11 focus-lost findings in the top tab strip, from its eighth tab onward. The walk does not match the live app there, so this is not settled.
+  - 2 focus-visible findings on the strip's first tab;
+  - 2 focus-obscured findings, the sign-in form's fields laid out 0 tall.
+- **Linux build.** The gallery's header now says to cross-emit the Linux build with the Windows-hosted compiler. The Linux-hosted one fails the gallery with `tool.Capacity`, as it did before this change.
+
+Fixture, both hosts: `link/ui_audit`. A clean page gives no finding. A faulty page gives name, role, target, reach and focus obscured:
+
+- two unnamed 16 buttons touching;
+- a pressable group with nothing to focus;
+- a button placed past the surface.

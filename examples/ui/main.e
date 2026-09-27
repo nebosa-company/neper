@@ -4,13 +4,20 @@
 // the next frame shows it. One source builds for Windows and Linux.
 //
 //   build\windows\tests\selfhost\neper-self.exe emit-executable examples\ui\main.e . x64 windows build\examples\ui.exe
-//   build/linux/tests/selfhost/neper-self emit-executable examples/ui/main.e . x64 linux build/examples/ui
+//   build\windows\tests\selfhost\neper-self.exe emit-executable examples\ui\main.e . x64 linux build\examples\ui
 //   ui [tab 0-14]
+//   ui audit
+//
+// The Linux build is cross-emitted by the Windows-hosted compiler: the gallery is
+// past what the Linux-hosted one holds (tool.Capacity). `ui audit` runs
+// `e.ui.audit` over every tab in three palettes without a window, prints a line
+// per finding and a count of each kind, and exits 1 when there is any (D1601).
 //
 // The text is set in Segoe UI on Windows and DejaVu Sans on Linux; with no font
 // the page is silent boxes, so the program says so and stops.
 
 use e.fs
+use e.gpu
 use e.io
 use e.mem
 use e.os
@@ -23,6 +30,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
 use e.ui.app
+use e.ui.audit
 use e.ui.collection
 use e.ui.control
 use e.ui.input
@@ -2475,6 +2483,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     model.pair_count = 2usize
     model.values[V_TOKEN_TEXT] = copy_into(model.token_text[..], "Earth")
     let seeded = on_token_add(mem.cast[*void](model))
+    // `ui audit`: every tab audited without a window, the findings printed.
+    if args.len > 1usize && str.eq(args[1usize], "audit") { ret audit_gallery(a, model) }
     let options = app.Options {
         window: window.Options { title: "Neper controls", width: 1280u32, height: 800u32, min_width: 480u32, min_height: 320u32, resizable: true, transparent: false, mode: .Windowed },
         widget_limits: widget.Limits { max_elements: 16384usize, max_states: 2048usize, state_bytes: 512usize, state_classes: 8u16, max_depth: 64u16, max_commands: 65536usize },
@@ -2670,5 +2680,89 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("the gallery stopped on an error\n")
         os.exit(3i32)
     }
+    ret ok
+}
+
+// ---------------------------------------------------------------- audit
+
+// The page the audit builds: the gallery's own frame, on the model's current tab.
+fn audit_build(ctx: *void, context: *widget.BuildContext) -> (widget.Node, err) {
+    let (node, node_error) = build(mem.cast[*Model](ctx), context)
+    ret (node, node_error)
+}
+
+// A finding as a line: palette, tab, check, role, name, bounds and its measure.
+fn print_finding(palette: str, tab: usize, f: *const audit.Finding, scratch: []u8) {
+    var arena = mem.arena_from(scratch)
+    let (b, b_error) = str.builder(&arena, scratch.len - 16usize)
+    if b_error != ok { ret }
+    var sb = b
+    let said = str.push(&sb, palette) == ok && str.push(&sb, "\t") == ok && str.push_usize(&sb, tab) == ok && str.push(&sb, "\t") == ok && str.push(&sb, audit.check_name(f.check)) == ok && str.push(&sb, "\t") == ok && str.push(&sb, audit.role_name(f.role)) == ok && str.push(&sb, "\t") == ok && str.push(&sb, f.label) == ok && str.push(&sb, "\t") == ok && str.push_f32(&sb, f.bounds.x) == ok && str.push(&sb, ",") == ok && str.push_f32(&sb, f.bounds.y) == ok && str.push(&sb, " ") == ok && str.push_f32(&sb, f.bounds.width) == ok && str.push(&sb, "x") == ok && str.push_f32(&sb, f.bounds.height) == ok && str.push(&sb, "\t") == ok && str.push_f32(&sb, f.measure) == ok && str.push(&sb, "\n") == ok
+    if said { let printed = io.print(str.done(&sb)) }
+}
+
+// Every tab in the light, dark and high-contrast palettes: names, roles, targets
+// and contrast in each, the Tab walk in the light one. The findings are printed a
+// line each, then a count of each kind; the gallery exits 1 when there is any.
+fn audit_gallery(a: *mem.Arena, model: *Model) -> err {
+    let (device, open_error) = gpu.open(a, .Cpu, 0u32)
+    if open_error != ok { ret open_error }
+    let (q, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret queue_error }
+    let (r, renderer_error) = scene.renderer(a, device, q, 1280u32, 800u32)
+    if renderer_error != ok { ret renderer_error }
+    var renderer = r
+    let limits = widget.Limits { max_elements: 16384usize, max_states: 2048usize, state_bytes: 512usize, state_classes: 8u16, max_depth: 64u16, max_commands: 65536usize }
+    let (rt, runtime_error) = widget.runtime(a, &renderer, limits)
+    if runtime_error != ok { ret runtime_error }
+    var runtime = rt
+    // One region reused by every run: the harness, the frame, the trees, the shots.
+    let (region, region_error) = mem.alloc[u8](a, 201326592usize)
+    if region_error != ok { ret region_error }
+    let (findings, findings_error) = mem.alloc[audit.Finding](a, 512usize)
+    if findings_error != ok { ret findings_error }
+    var line: [512]u8 = zero
+    var totals: [9]usize = zero
+    let palettes: [3]style.Palette = [3]style.Palette{ .Light, .Dark, .HighContrast }
+    let names: [3]str = [3]str{ "light", "dark", "contrast" }
+    let gallery_page = audit.Page { ctx: mem.cast[*void](model), build: audit_build }
+    var o = audit.options()
+    o.frame_bytes = 67108864usize
+    var p = 0usize
+    while p < 3usize {
+        model.tokens = style.reference(palettes[p])
+        o.keyboard = p == 0usize
+        var tab = 0usize
+        while tab < TABS {
+            model.tab = tab
+            var run_arena = mem.arena_from(region)
+            let (report, run_error) = audit.run(&run_arena, &runtime, gallery_page, o, findings)
+            if run_error != ok { ret run_error }
+            var i = 0usize
+            while i < report.count {
+                print_finding(names[p], tab, &findings[i], line[..])
+                totals[usize(mem.bitcast[u8](findings[i].check))] += 1usize
+                i += 1usize
+            }
+            tab += 1usize
+        }
+        p += 1usize
+    }
+    var any = 0usize
+    var c = 0usize
+    while c < 9usize {
+        if totals[c] > 0usize {
+            let check = mem.bitcast[audit.Check](u8(c))
+            try io.print(counted(a, "", totals[c]))
+            try io.print(" ")
+            try io.print(audit.check_meaning(check))
+            try io.print("\n")
+            any += totals[c]
+        }
+        c += 1usize
+    }
+    try io.print(counted(a, "audit: ", any))
+    try io.print(" findings\n")
+    if any > 0usize { os.exit(1i32) }
     ret ok
 }

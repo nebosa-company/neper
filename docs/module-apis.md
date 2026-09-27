@@ -9665,6 +9665,7 @@ fn state[T: type](ctx: *BuildContext, key: Key, initial: T) -> (*T, StateId, err
 fn invalidate(widget_runtime: *Runtime, element: ElementId)
 fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, constraints: ui_layout.Constraints) -> (scene.SceneId, err)
 fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err
+fn clear_focus(widget_runtime: *Runtime) -> err
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err
 fn focused(widget_runtime: *const Runtime) -> (ElementId, bool)
 fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction
@@ -9935,6 +9936,48 @@ stands in for and sends the insets event). `gallery` is the reference page: one 
 each primitive under a theme -- a heading, a filled button, an outlined field, a
 checkbox, a list in a viewport, a tooltip overlay -- with stable keys 1..9 and 20..25
 and its state in a `Gallery` the caller owns.
+
+### `e.ui.audit`
+
+```neper
+type Check = enum u8 { Name, Role, Target, Contrast, Reach, FocusLost, FocusTrap, FocusVisible, FocusObscured }
+type Finding = struct { check: Check, role: accessibility.Role, label: str, bounds: geometry.Rect, measure: f32 }
+type Page = struct { ctx: *void, build: fn(*void, *widget.BuildContext) -> (widget.Node, err) }
+type Options = struct { width: u32, height: u32, keyboard: bool, contrast: bool, max_stops: usize, frame_bytes: usize }
+type Report = struct { count: usize, dropped: usize, nodes: usize, stops: usize }
+error TooLarge
+
+fn options() -> Options
+fn run(a: *mem.Arena, runtime: *widget.Runtime, page: Page, o: Options, out: []Finding) -> (Report, err)
+fn check_name(check: Check) -> str
+fn role_name(role: accessibility.Role) -> str
+fn check_meaning(check: Check) -> str
+```
+
+An accessibility audit of a page, without a window (D1601), over `e.ui.testing`'s
+harness. The page is built the way an app builds it, twice so a control that waits
+a frame shows. The audit then checks the semantic tree a screen reader would be
+given and the pixels a person would see:
+
+- **Name and role** (WCAG 4.1.2): every control has a name and a role of its own.
+- **Target** (2.5.8): every control takes a pointer 24 across, or stands where a
+  24 circle on it meets no other target.
+- **Contrast** (1.4.3): every drawn text stands 4.5:1 against its ground, or 3:1
+  when it is large. The ratio is measured on the rendered pixels: the ground is the
+  most frequent pixel and the ink the pixel that stands out most from it.
+- **Keyboard walk**, with Tab from nothing focused:
+  - **Reach** (2.1.1): every control is reached. One stop of a composite (a grid, a
+    list, a menu) reaches its kind.
+  - **FocusLost and FocusTrap** (2.1.1, 2.1.2): Tab neither drops the focus nor
+    leaves it where it was.
+  - **FocusVisible** (2.4.7): a stop changes the pixels within 24 of the control.
+  - **FocusObscured** (2.4.11): a stop stands inside the surface.
+
+Each failure is a `Finding`: the check, the node's role, its name (copied into `a`)
+and bounds, and a measure. The measure is a contrast ratio, a target's least side,
+or the stop at which the focus was lost. `run` answers the totals, and findings past
+`out`'s length are only counted. The audit finds what a machine can find: whether a
+name is a good one is a person's judgement.
 
 ### `e.ui.control`
 
