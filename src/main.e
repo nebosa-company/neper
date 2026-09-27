@@ -1134,7 +1134,7 @@ fn dispatch_short_form(a: *mem.Arena, args: []str) -> err {
                 }
                 copy += 1usize
             }
-            ret dispatch(a, stripped[0usize..count])
+            ret run_arguments(a, stripped[0usize..count])
         }
         at += 1usize
     }
@@ -11584,8 +11584,19 @@ fn hex16_is(text: str, value: usize) -> bool {
     ret true
 }
 
+// Spec section 2's spellings -- `neper build FILE`, `neper check FILE`, ... -- are
+// rewritten into the positional forms and dispatched (D276). (D1605) Tried here,
+// before `dispatch` rather than inside it, so a short spelling holds one `dispatch`
+// frame and not two: the C bootstrap's is 150 KB, and with the lowering crew beneath
+// it the stage-1 compiler's 1 MB stack overflowed.
+fn run_arguments(a: *mem.Arena, args: []str) -> err {
+    let short_result = dispatch_short_form(a, args)
+    if short_result != NotShortForm { ret short_result }
+    ret dispatch(a, args)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
-    let result = dispatch(a, args)
+    let result = run_arguments(a, args)
     if result == ok { ret ok }
     var code = "E-TOOL-9999"
     var message = "internal compiler failure"
@@ -11637,10 +11648,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
 fn dispatch(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
-    // Spec section 2's spellings -- `neper build FILE`, `neper check FILE`, ... -- are
-    // rewritten into the positional forms below and dispatched again (D276).
-    let short_result = dispatch_short_form(a, args)
-    if short_result != NotShortForm { ret short_result }
     if args.len == 2usize && same(args[1usize], "self-test") {
         try self_test()
         try io.print("selfhost lexer ok\n")

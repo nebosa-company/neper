@@ -29308,6 +29308,13 @@ Not changed: code placement still follows the artifact order. A program that rea
 
 **The same run found the short `build` spelling overflowing the stack on Windows** (0xC00000FD, `neper build FILE -o OUT --json` writing only its header). `link_elf.write_dwarf` held its type memo and path tables as locals, about 270 KB, while `build` nests `dispatch` inside `dispatch_short_form`. The tables now live in a region `write_dwarf` reserves per link and clears itself, since what `reserve` hands back is not zero. The region is never released, because `e.os` has no release the C bootstrap knows; a process links once. The C bootstrap miscompiles a nested write through an element (`memos[0].names[at] = ""`, an access violation in stage 1), so the clearing goes through a pointer. Images are byte-identical before and after on both targets, and stage 2 equals stage 3.
 
+That was not enough for the stage-1 compiler, which the suite runs: the C bootstrap links it with a 1 MB stack, and its frames keep every local. The short path held `dispatch` (150 KB), `dispatch_short_form`, `dispatch` again, and `crew_begin` (760 KB, three `nir.Builder`s in a blank `LowerWorker`). Two changes:
+
+- The short spelling is now tried in `run_arguments` before `dispatch`, not inside it, so only one `dispatch` frame is ever held.
+- `codegen_x64.append_symbol_table`'s four path tables (290 KB) moved to a reserved region, as `write_dwarf`'s did.
+
+The stage-1 short build then matches its golden, `--language-version` still routes, stage 2 equals stage 3, and images are unchanged.
+
 A third stale thing held both suites: b7475462 had changed `comptime_call_runtime`'s refusal to name "a call to a generic, extern or intrinsic function", and the suites still expected the old words. They are pinned to the new words in 8192326d.
 
 ---
