@@ -28430,3 +28430,29 @@ Fixture, Linux only, since the X translation has no Windows counterpart: `link/o
 - 6, 7 and 10 to 12 are nothing.
 
 Against the unfixed library it stops at exit 11, on button 6. With the fix it prints `os window buttons ok` from both the Windows-hosted and the Linux-hosted compiler, and `os_window` still passes.
+
+## D1572 — The arena as comptime interpreter memory
+
+Section 9 lets an evaluated body use "`mem.arena_from` over a comptime array and `mem.alloc` from it". With D1569's memory, D1570's pointers and D1571's `err`, the arena needed only its three seeded operations. `mem.arena_from` is ordinary Neper (`Arena { base: &buf[0], cap: buf.len, off: 0usize }`), and the interpreter runs it as written.
+
+- **`mem.alloc[T](a, n)`** does what the C runtime's `neper_mem_alloc` does:
+  - the offset is rounded up to `T`'s alignment;
+  - `n` of `T` are handed out if they fit, and the arena's offset moves past them;
+  - `Exhausted` beside an empty slice if they do not, and the offset stays;
+  - `n` of zero answers the current offset with length zero.
+
+  The results are a `[]T` and an `err`, in an area of their own at the call. The area's descriptor stores the slice type once per worker, since a generic intrinsic has no function record to describe its results. `try mem.alloc` and `let (xs, e) = mem.alloc` work as for any call with several results.
+- **`mem.mark(a)`** answers the offset.
+- **`mem.reset(a, m)`** takes the offset back to `m`. A mark past the offset is refused.
+- **Debug fills.** Memory handed out is filled with 0xCD and memory a reset releases with 0xDD: section 11's debug fills, in every build mode. The checker knows no build mode, and a constant's value does not depend on one: a correct evaluation never reads what a fill wrote. Section 9's cache key still names the mode, and nothing here needs it to.
+
+The arena's buffer must be interpreter memory (a local array, or an arena's own allocation). An arena over anything else is refused where it would be written.
+
+Fixture, both hosts: `link/comptime_arena`:
+
+- eight `u32` allocated and summed;
+- a `mark`, then two `u64` allocated at the next 8-aligned offset and read back as 0xCDCDCDCDCDCDCDCD;
+- a `reset` to the mark, then `Exhausted` for 1000 bytes with the offset unchanged;
+- `try mem.alloc` in a function answering `(u32, err)`.
+
+Accept, reject and emit sweeps against D1571's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.
