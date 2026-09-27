@@ -427,11 +427,13 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try append_startup(output)
     try patch_arena(output, code_offset, builder.arena_bytes)
     let machine_start = output.count
-    try emit_x64.append_bytes(output, machine.bytes[0usize..machine.count])
+    try emit_x64.append_bytes(output, machine.bytes[0usize..table_at])
     let runtime_start = output.count
     let (runtime_limit, runtime_limit_error) = runtime_prefix(builder, relocations, relocation_count)
     if runtime_limit_error != ok { ret runtime_limit_error }
     try runtime_elf_x64.append(output, runtime_limit)
+    var table_file = 0usize
+    try place_symbol_table(builder, output, machine, table_at, machine_start, relocations, relocation_count, &table_file)
     let text_end = output.count
 
     // The writable segment starts on the next page, at the same offset within it as
@@ -513,7 +515,27 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try patch_little_u64(output, 88usize + 56usize * 4usize, dynamic_address)
     try patch_little_u64(output, 96usize + 56usize * 4usize, dynamic_size)
     try patch_little_u64(output, 104usize + 56usize * 4usize, dynamic_size)
-    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, text_end)
+    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, table_file)
+    ret ok
+}
+
+// (D1586) The `.nepersym` table after the runtime rather than between the code and it,
+// so a section can name it alone: aligned for its 64-bit fields, its entries made
+// addresses, and every trap site's reference to it pointed at where it now is. The
+// loaded segment still covers it -- the trap walk reads it -- and `table_file` is where
+// it starts, or where it would, for a machine buffer with none (a test's).
+fn place_symbol_table(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_x64.Buffer, table_at: usize, machine_start: usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_file: *usize) -> err {
+    *table_file = output.count
+    if table_at >= machine.count { ret ok }
+    try pad_to(output, align_up_to(output.count, 8usize))
+    *table_file = output.count
+    try emit_x64.append_bytes(output, machine.bytes[table_at..machine.count])
+    try codegen_x64.rebase_symbol_table(output, *table_file, 4194304usize + machine_start)
+    var at = 0usize
+    while at < relocation_count {
+        if codegen_x64.is_symbols_reference(builder, relocations[at]) { try emit_x64.patch_relative32(output, machine_start + relocations[at].displacement_at, *table_file) }
+        at += 1usize
+    }
     ret ok
 }
 
@@ -593,11 +615,13 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try append_startup(output)
     try patch_arena(output, code_offset, builder.arena_bytes)
     let machine_start = output.count
-    try emit_x64.append_bytes(output, machine.bytes[0usize..machine.count])
+    try emit_x64.append_bytes(output, machine.bytes[0usize..table_at])
     let runtime_start = output.count
     let (runtime_limit, runtime_limit_error) = runtime_prefix(builder, relocations, relocation_count)
     if runtime_limit_error != ok { ret runtime_limit_error }
     try runtime_elf_x64.append(output, runtime_limit)
+    var table_file = 0usize
+    try place_symbol_table(builder, output, machine, table_at, machine_start, relocations, relocation_count, &table_file)
     let main_offset = machine_start + function_offsets[main_index]
     try emit_x64.patch_relative32(output, code_offset + 232usize, main_offset)
     var relocation_at = 0usize
@@ -663,7 +687,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
             global_at += 1usize
         }
     }
-    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, code_end)
+    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, table_file)
     ret ok
 }
 
@@ -1125,6 +1149,8 @@ fn function_name(output: *emit_x64.Buffer, placed: nir.Function) -> err {
     ret ok
 }
 
+// `text_end` is where the code and the runtime end, and the `.nepersym` table starts
+// (D1586).
 fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_x64.Buffer, machine_start: usize, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, text_start: usize, text_end: usize) -> err {
     let base = 4194304usize
     let code_address = base + machine_start
@@ -1179,7 +1205,7 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
     try pad_to(output, headers_offset)
     try section_header(output, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
     try section_header(output, 1usize, 1usize, 6usize, base + text_start, text_start, text_end - text_start, 0usize, 0usize, 16usize, 0usize)
-    try section_header(output, 7usize, 1usize, 2usize, code_address + table_at, machine_start + table_at, machine.count - table_at, 0usize, 0usize, 4usize, 0usize)
+    try section_header(output, 7usize, 1usize, 2usize, base + text_end, text_end, machine.count - table_at, 0usize, 0usize, 8usize, 0usize)
     try section_header(output, 17usize, 2usize, 0usize, 0usize, symtab_offset, strtab_offset - symtab_offset, 4usize, symbols, 8usize, 24usize)
     try section_header(output, 25usize, 3usize, 0usize, 0usize, strtab_offset, dwarf.abbrev - strtab_offset, 0usize, 0usize, 1usize, 0usize)
     try section_header(output, 33usize, 1usize, 0usize, 0usize, dwarf.abbrev, dwarf.abbrev_end - dwarf.abbrev, 0usize, 0usize, 1usize, 0usize)

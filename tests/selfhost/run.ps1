@@ -249,9 +249,10 @@ if ($LASTEXITCODE -ne 0) { throw 'self-hosted PE executable did not run successf
 $executableBytes = [IO.File]::ReadAllBytes($executablePath)
 $executableText = [Text.Encoding]::ASCII.GetString($executableBytes)
 if ([BitConverter]::ToUInt16($executableBytes, 134) -ne 7 -or [BitConverter]::ToUInt32($executableBytes, 272) -eq 0 -or [BitConverter]::ToUInt32($executableBytes, 360) -eq 0) { throw 'PE executable omitted its import directory or IAT' }
-# (D1583) .text, .idata and five DWARF sections named through the COFF string table, which
-# follows a symbol per function at the end of the file.
-if ([Text.Encoding]::ASCII.GetString($executableBytes[472..473]) -ne '/4' -or [BitConverter]::ToUInt32($executableBytes, 140) -eq 0 -or [BitConverter]::ToUInt32($executableBytes, 144) -eq 0) { throw 'PE executable omitted its debug sections or symbols' }
+# (D1583) .text, .idata, the trap table's own .nepsym (D1586) and the DWARF sections --
+# this program has no location list, so four -- named through the COFF string table,
+# which follows a symbol per function at the end of the file.
+if ([Text.Encoding]::ASCII.GetString($executableBytes[472..478]) -ne '.nepsym' -or [Text.Encoding]::ASCII.GetString($executableBytes[512..513]) -ne '/4' -or [BitConverter]::ToUInt32($executableBytes, 140) -eq 0 -or [BitConverter]::ToUInt32($executableBytes, 144) -eq 0) { throw 'PE executable omitted its debug sections or symbols' }
 if ($executableText -notmatch '\.debug_info' -or $executableText -notmatch '\.debug_line' -or $executableText -notmatch 'main\.main') { throw 'PE executable string table omitted a debug section or function name' }
 if ($executableText -notmatch 'KERNEL32\.dll' -or $executableText -notmatch 'ExitProcess') { throw 'PE executable omitted its fixed kernel32 import' }
 $scalarExecutablePath = Join-Path $testBuild 'scalar-selfhost.exe'

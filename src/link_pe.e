@@ -290,7 +290,11 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let (runtime_size, runtime_error) = runtime_prefix(builder, relocations, relocation_count)
     if runtime_error != ok { ret runtime_error }
     builder.runtime_prefix = runtime_size
-    let text_size = runtime_size + machine.count
+    // (D1586) The code up to the `.nepersym` table; the table is a section of its own,
+    // `.nepsym` -- a PE section name has eight bytes -- after `.idata`.
+    if table_at > machine.count { ret InvalidExecutable }
+    let table_size = machine.count - table_at
+    let text_size = runtime_size + table_at
     let (text_raw_size, text_raw_error) = align_up(text_size, 512usize)
     if text_raw_error != ok { ret text_raw_error }
     let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
@@ -309,7 +313,15 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let idata_raw_offset = headers_size + text_raw_size
     let (idata_virtual_size, idata_virtual_error) = align_up(idata_size, 4096usize)
     if idata_virtual_error != ok { ret idata_virtual_error }
-    let image_size = idata_address + idata_virtual_size
+    let table_address = idata_address + idata_virtual_size
+    let table_raw_offset = idata_raw_offset + idata_raw_size
+    let (table_raw_size, table_raw_error) = align_up(table_size, 512usize)
+    if table_raw_error != ok { ret table_raw_error }
+    let (table_virtual_size, table_virtual_error) = align_up(table_size, 4096usize)
+    if table_virtual_error != ok { ret table_virtual_error }
+    var sections = 2usize
+    if table_size != 0usize { sections = 3usize }
+    let image_size = table_address + table_virtual_size
     let import_address_address = import_address_table(builder, idata_address, 0usize)
 
     try emit_x64.byte(output, 77usize)
@@ -322,7 +334,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.byte(output, 0usize)
     try emit_x64.byte(output, 0usize)
     try little_u16(output, 34404usize)
-    try little_u16(output, 2usize)
+    try little_u16(output, sections)
     try emit_x64.little_u32(output, 0usize)
     try emit_x64.little_u32(output, 0usize)
     try emit_x64.little_u32(output, 0usize)
@@ -332,7 +344,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.byte(output, 0usize)
     try emit_x64.byte(output, 0usize)
     try emit_x64.little_u32(output, text_raw_size)
-    try emit_x64.little_u32(output, idata_raw_size)
+    try emit_x64.little_u32(output, idata_raw_size + table_raw_size)
     try emit_x64.little_u32(output, 0usize)
     try emit_x64.little_u32(output, text_address)
     try emit_x64.little_u32(output, text_address)
@@ -394,6 +406,19 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try little_u16(output, 0usize)
     try little_u16(output, 0usize)
     try emit_x64.little_u32(output, 3221225536usize)
+    if table_size != 0usize {
+        try append_name(output, ".nepsym", 8usize)
+        try emit_x64.little_u32(output, table_size)
+        try emit_x64.little_u32(output, table_address)
+        try emit_x64.little_u32(output, table_raw_size)
+        try emit_x64.little_u32(output, table_raw_offset)
+        try emit_x64.little_u32(output, 0usize)
+        try emit_x64.little_u32(output, 0usize)
+        try little_u16(output, 0usize)
+        try little_u16(output, 0usize)
+        // Initialised data, readable.
+        try emit_x64.little_u32(output, 1073741888usize)
+    }
     try pad_to(output, headers_size)
 
     let runtime_file = output.count
@@ -411,7 +436,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         }
     }
     let machine_file = output.count
-    try emit_x64.append_bytes(output, machine.bytes[0usize..machine.count])
+    try emit_x64.append_bytes(output, machine.bytes[0usize..table_at])
     let main_file = machine_file + function_offsets[main_index]
     try runtime_pe_x64.patch(output, runtime_file, text_address, main_file, import_address_address, runtime_size)
     var relocation_at = 0usize
@@ -459,8 +484,25 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try pad_to(output, idata_raw_offset + idata_size)
     if output.count != idata_raw_offset + idata_size { ret InvalidExecutable }
     try pad_to(output, idata_raw_offset + idata_raw_size)
+    if table_size != 0usize {
+        // The table's entries made addresses, and each trap site's reference to it, from
+        // `.text`, pointed at the section.
+        try emit_x64.append_bytes(output, machine.bytes[table_at..machine.count])
+        try codegen_x64.rebase_symbol_table(output, table_raw_offset, 5368709120usize + text_address + machine_file - headers_size)
+        var site_at = 0usize
+        while site_at < relocation_count {
+            if codegen_x64.is_symbols_reference(builder, relocations[site_at]) {
+                let site = machine_file + relocations[site_at].displacement_at
+                let next_rva = text_address + site - headers_size + 4usize
+                if table_address < next_rva { ret InvalidExecutable }
+                try emit_x64.patch_little_u32(output, site, table_address - next_rva)
+            }
+            site_at += 1usize
+        }
+        try pad_to(output, table_raw_offset + table_raw_size)
+    }
     if !debug { ret ok }
-    ret append_debug(builder, output, function_offsets, lines, table_at, main_index, machine_file, headers_size, image_size)
+    ret append_debug(builder, output, function_offsets, lines, table_at, main_index, machine_file, headers_size, image_size, sections)
 }
 
 // (D1583) What a foreign debugger reads from a PE image, as MinGW's linker writes it:
@@ -470,7 +512,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
 // function, which that string table follows at the end of the file, mapped by nothing.
 // Section 13 asks for CodeView here; that comes with the PDB writer (M4), and until
 // then lldb and gdb read these.
-fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, main_index: usize, machine_file: usize, headers_size: usize, image_size: usize) -> err {
+fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, main_index: usize, machine_file: usize, headers_size: usize, image_size: usize, sections: usize) -> err {
     let text_address = 4096usize
     let code_address = 5368709120usize + text_address + machine_file - headers_size
     var dwarf: link_elf.DwarfSections = zero
@@ -502,7 +544,7 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, function_offset
     var section = 0usize
     var written = 0usize
     while section < 5usize {
-        let entry = 472usize + written * 40usize
+        let entry = 392usize + (sections + written) * 40usize
         let size = ends[section] - starts[section]
         if size == 0usize {
             section += 1usize
@@ -536,7 +578,7 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, function_offset
         section += 1usize
         written += 1usize
     }
-    output.bytes[134usize] = u8(2usize + written)
+    output.bytes[134usize] = u8(sections + written)
     try emit_x64.patch_little_u32(output, 208usize, address)
     // The symbols, then the string table: its size, the five section names, and a
     // `module.function` name per symbol.
