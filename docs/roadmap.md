@@ -986,7 +986,7 @@ when a relevant backend, ABI, module, package or protocol changes.
 | GP-01 self-hosted compiler | `neper-0` and M2 |
 | GP-02 CLI, GP-03 parallel executor, GP-06 streaming parser, GP-07 bounded cache, GP-13 binary format | M1 tooling plus the M2 library set |
 | GP-04 HTTP service | later `e.async`, `e.net` and `e.net.http` |
-| GP-05 database client, GP-08 plugin C ABI | M1 FFI, M4 dynamic linking, `e.db`, and one of `x.sqlite.sqlite`, `x.oracle.mysql` or `x.postgresql.libpq` |
+| GP-05 database client, GP-08 plugin C ABI | M1 FFI, M4 dynamic linking, `e.db`, and one of `x.sqlite.sqlite`, `x.oracle.mysql`, `x.postgresql.libpq` or `x.microsoft.odbc` |
 | GP-09 SIMD codec | M1 SIMD; rerun for each M4 CPU backend |
 | GP-10 CPU/GPU numerical work | M3; rerun for M4 PTX, M5 Metal and later `e.gpu.tensor` |
 | GP-11 terminal application | platform support plus a separately specified terminal package owned by its actual provider |
