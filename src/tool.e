@@ -6750,11 +6750,21 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     // the artifacts already under `.neper/<mode>/em/` stay authorised.
     var carried = ""
     if reasons.len == 0usize { carried = manifest_previous_records(a, manifest_path) }
-    let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize + 90usize)
-    if storage_error != ok { ret storage_error }
+    // The unsafe inventory can be much larger than a typical module row. Grow the
+    // arena-backed buffer instead of imposing a hidden project-size ceiling.
+    var capacity = 65536usize + g.count * 512usize + 90usize
     var out: Out = zero
-    out.bytes = storage
-    try manifest_write(a, &out, arch, os_name, g, mode, unchecked, relative_path, digest, reasons, carried)
+    while true {
+        let (storage, storage_error) = mem.alloc[u8](a, capacity)
+        if storage_error != ok { ret storage_error }
+        var fresh: Out = zero
+        out = fresh
+        out.bytes = storage
+        let written = manifest_write(a, &out, arch, os_name, g, mode, unchecked, relative_path, digest, reasons, carried)
+        if written == ok && out.count + 90usize <= out.bytes.len { break }
+        if written != ok && written != Capacity { ret written }
+        capacity = capacity * 2usize
+    }
     // Authenticate the exact manifest prefix before its final top-level `}`. A hostile
     // cache may rewrite both artifacts and JSON, but not this tag without the user key.
     if out.count == 0usize || out.bytes[out.count - 1usize] != 125u8 { ret Capacity }
