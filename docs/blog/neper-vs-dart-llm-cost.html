@@ -98,6 +98,8 @@
     .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
     .callout p:last-child { margin-bottom: 0; }
     .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
     footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
     :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
     ::selection { background: var(--primary-container); color: var(--on-primary-container); }
@@ -213,6 +215,9 @@
       <p>Every number above comes from one command, and the script is in the repository:</p>
       <pre><code>python scripts/lang-stats.py --harness claude -d 7</code></pre>
       <p>Run it on your own transcripts. If your numbers disagree with ours, we want to know.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
     </article>
 
     <footer>
