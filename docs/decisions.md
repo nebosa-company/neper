@@ -28376,3 +28376,24 @@ This is a library package, not a compiler or tooling capability, so no work-queu
 GP-05 as a verification workload still needs its written design (arena topology, ownership,
 concurrency, foreign boundaries). That design should cover what this package leaves out:
 callbacks and user-defined functions, which are GP-08's foreign-callback surface.
+
+## D1570 — Pointers in the comptime interpreter
+
+Section 9 lists pointers among what an evaluated body may use: "`&x`, slicing and `mem.cast` yield addresses into it". With D1569's memory, a pointer is an address in it:
+
+- **The value.** A pointer is a scalar, a word, and `interp_holds` takes any pointer: what it points at is asked when it is read.
+- **`&x`.** The address of any place: a local, a field, an element. Its type `*T` is interned once per pointee per worker (`interp_pointer_to`), so a loop taking addresses does not grow the type table.
+- **`*p`.** A place and a value. A field through a pointer (`c.hits += by` with `c: *Counter`) is the field of what it points at. A read through a null pointer is refused.
+- **Comparison.** Two pointers compare for equality only, as addresses.
+- **`mem.cast[*U](p)`.** The same address seen as another pointer type. The target is read with `comptime_type`, as the checker reads it, since `*u8` in a call's brackets parses as an expression. A load then reinterprets the bytes in the target's layout: the first byte of a `u32` of 258 is 2, little-endian.
+- **Functions with no result** are called for what they do, `bump(&counter, 3u32)` as a statement: no `ret` value is needed, and the body may end without one.
+- **Pointer-free results.** A constant whose call answers a pointer is refused, naming the constant (section 9: "a const's final value must be pointer-free"). An address into the interpreter's memory means nothing once the evaluation ends.
+
+The C bootstrap holds 160 fields to a struct, and the `Checker` reached it. The interpreter's memory, string region and pointer cache are now one field, `interp_space: InterpSpace`.
+
+Fixtures, both hosts:
+
+- `link/comptime_pointer`: a store and a read through `*p`; a struct changed through a pointer by a function with no result; addresses of an element compared; `mem.cast` between pointer types; one result used as an array length.
+- `check/comptime_pointer_result`: a constant that would be a pointer, refused.
+
+Accept, reject and emit sweeps against D1569's compiler: only the new fixtures changed, and every other link fixture's executable is byte-identical. Stage 2 equals stage 3 on both hosts.

@@ -9605,11 +9605,8 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
     into.memo_on = true
     into.interp_ready = false
     // (D1569) The interpreter's memory, too, is the worker's own.
-    var no_interp_memory: []u8 = zero
-    into.interp_memory = no_interp_memory
-    into.interp_static = no_interp_memory
-    into.interp_top = 0usize
-    into.interp_static_top = 0usize
+    var no_interp_space: check.InterpSpace = zero
+    into.interp_space = no_interp_space
     into.arena = a
     ret ok
 }

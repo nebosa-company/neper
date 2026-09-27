@@ -4566,6 +4566,16 @@ $comptimeArrayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $comptimeArrayWritten -ne 'executable written') { throw 'comptime array call fixture executable emission failed' }
 & $comptimeArrayPath
 if ($LASTEXITCODE -ne 0) { throw "an array across a comptime call was wrong: exit $LASTEXITCODE" }
+# Pointers in the interpreter (D1570): `&x`, `*p`, a field through a pointer, a call
+# that changes what it is handed, `mem.cast`; a constant that would be a pointer.
+$comptimePointerPath = Join-Path $testBuild 'comptime-pointer-selfhost.exe'
+$comptimePointerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_pointer\src\main.e') $repo 'x64' 'windows' $comptimePointerPath
+if ($LASTEXITCODE -ne 0 -or $comptimePointerWritten -ne 'executable written') { throw 'comptime pointer fixture executable emission failed' }
+& $comptimePointerPath
+if ($LASTEXITCODE -ne 0) { throw "a constant folded through pointers was wrong: exit $LASTEXITCODE" }
+Require-Fixture 'check/comptime_pointer_result'
+$comptimePointerResult = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_pointer_result\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($comptimePointerResult -join "`n") -notmatch 'main\.e:9:15: error\[E-COMPTIME-9999\]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold') { throw "a pointer-valued constant was not refused: $($comptimePointerResult -join "`n")" }
 Require-Fixture 'check/comptime_slice_bounds'
 $comptimeBounds = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_slice_bounds\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimeBounds -join "`n") -notmatch 'main\.e:7:9: error\[E-COMPTIME-9999\]: constant `BAD` cannot be evaluated at compile time: its call reached an index out of bounds') { throw "a comptime index past a slice was not refused: $($comptimeBounds -join "`n")" }

@@ -755,14 +755,9 @@ type Checker = struct {
     // since an untyped literal takes its type from that.
     expr_cache: []ExprCacheEntry,
     interp_depth: usize,
-    // (D1569) Section 9's interpreter memory: every frame's locals, arrays and
-    // aggregates, byte for byte in the target's layout, from `INTERP_BASE` up; and the
-    // read-only bytes of the string literals an evaluation read, at addresses tagged
-    // `INTERP_STATIC`. A worker starts with neither (`interp_ready` false).
-    interp_memory: []u8,
-    interp_top: usize,
-    interp_static: []u8,
-    interp_static_top: usize,
+    // (D1569) Section 9's interpreter memory, one field: the C bootstrap holds 160
+    // fields to a struct, and the checker is at that count.
+    interp_space: InterpSpace,
     function_count: usize,
     parameter_count: usize,
     return_type_count: usize,
@@ -5558,6 +5553,9 @@ fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) 
         c.interp_depth = 0usize
         let (result, result_type, call_error) = interp_call(c, c.graph, expression.module_index, expression.name, values[..expression.argument_count], types[..expression.argument_count], expression.site, expression.module_index, 0usize)
         if call_error != ok { ret (normalized_integer(0usize, false), invalid_type(), call_error) }
+        // (D1570) Section 9: a constant's value is pointer-free; an address into the
+        // interpreter's memory means nothing once the evaluation ends.
+        if result_type.kind == .Pointer { ret (normalized_integer(0usize, false), invalid_type(), interp_fail(c, expression.module_index, expression.site, "a pointer as its value, which a constant cannot hold")) }
         record_explain_comptime_call(c, expression)
         let (contextual_type, context_error) = apply_context(c, result_type, expected)
         if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
@@ -5926,6 +5924,21 @@ fn layout_field(c: *Checker, ty: Type, name: str) -> (LayoutField, err) {
     ret (invalid, InvalidType)
 }
 
+// Section 9's interpreter memory (D1569): every frame's locals, arrays and aggregates,
+// byte for byte in the target's layout, from `INTERP_BASE` up to `top`; the read-only
+// bytes of the string literals an evaluation read, at addresses tagged
+// `INTERP_STATIC`; and the pointer types `&x` has made, one stored type per pointee
+// (D1570). A worker starts with none of it (`interp_ready` false).
+type InterpSpace = struct {
+    memory: []u8,
+    top: usize,
+    statics: []u8,
+    static_top: usize,
+    pointees: [32]Type,
+    pointee_index: [32]usize,
+    pointee_count: usize,
+}
+
 // A frame of the interpreter (D1569): each local's name, type and address in the
 // interpreter memory. Every allocation site -- a binding, a literal, a call's result
 // -- keeps one slot per frame, taken the first time the site runs and reused after,
@@ -5993,11 +6006,9 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
     if !c.interp_ready {
         // (D1569) A worker's memory is its own: whatever the copy it began from held
         // is another checker's.
-        var no_memory: []u8 = zero
-        c.interp_memory = no_memory
-        c.interp_static = no_memory
-        c.interp_top = INTERP_BASE
-        c.interp_static_top = 0usize
+        var no_space: InterpSpace = zero
+        c.interp_space = no_space
+        c.interp_space.top = INTERP_BASE
         let (trees, trees_error) = mem.alloc[parse.Tree](c.arena, g.count)
         if trees_error != ok { ret (0usize, trees_error) }
         let (parsed, parsed_error) = mem.alloc[bool](c.arena, g.count)
@@ -6074,7 +6085,8 @@ fn interp_bind(frame: *InterpFrame, name: str, ty: Type, address: usize) -> err 
 // one it holds, a string, or a struct whose fields it holds.
 fn interp_holds(c: *Checker, ty: Type, depth: usize) -> bool {
     if depth > 16usize { ret false }
-    if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .String { ret true }
+    // (D1570) A pointer is an address; what it points at is asked when it is read.
+    if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .String || ty.kind == .Pointer { ret true }
     if ty.kind == .Array || ty.kind == .Slice {
         if !ty.has_element || ty.element >= c.type_count { ret false }
         ret interp_holds(c, c.types[ty.element], depth + 1usize)
@@ -6093,7 +6105,48 @@ fn interp_holds(c: *Checker, ty: Type, depth: usize) -> bool {
 
 // A value held as its bits (an integer or a bool), not at an address.
 fn interp_scalar(ty: Type) -> bool {
-    ret ty.kind == .Integer || ty.kind == .Bool
+    ret ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Pointer
+}
+
+// The bytes a scalar takes: a pointer is a word.
+fn interp_scalar_size(ty: Type) -> usize {
+    if ty.kind == .Pointer { ret 8usize }
+    ret layout_scalar_size(ty)
+}
+
+// `*T` for `&x` of a `T` (D1570): the pointee stored once per worker and reused, so a
+// loop taking addresses does not grow the type table.
+fn interp_pointer_to(c: *Checker, module_index: usize, node: syntax.Node, element: Type) -> (Type, err) {
+    var index = 0usize
+    var found = false
+    var at = 0usize
+    while at < c.interp_space.pointee_count && !found {
+        if c.interp_space.pointees[at].kind == element.kind && type_equal(c, c.interp_space.pointees[at], element) {
+            index = c.interp_space.pointee_index[at]
+            found = true
+        }
+        at += 1usize
+    }
+    if !found {
+        let (stored, store_error) = store_type(c, element)
+        if store_error != ok { ret (invalid_type(), interp_fail(c, module_index, node, "an address of a type it cannot record")) }
+        index = stored
+        if c.interp_space.pointee_count < 32usize {
+            c.interp_space.pointees[c.interp_space.pointee_count] = element
+            c.interp_space.pointee_index[c.interp_space.pointee_count] = stored
+            c.interp_space.pointee_count += 1usize
+        }
+    }
+    var pointer = make_type(.Pointer, "", module_index)
+    pointer.has_element = true
+    pointer.element = index
+    ret (pointer, ok)
+}
+
+// What a pointer points at, or an invalid type.
+fn interp_pointee(c: *Checker, ty: Type) -> Type {
+    if ty.kind != .Pointer || !ty.has_element || ty.element >= c.type_count { ret invalid_type() }
+    ret c.types[ty.element]
 }
 
 fn interp_layout(c: *Checker, module_index: usize, node: syntax.Node, ty: Type) -> (LayoutInfo, err) {
@@ -6122,35 +6175,35 @@ fn interp_allocate(c: *Checker, module_index: usize, node: syntax.Node, frame: *
 
 // `size` bytes at the top of the interpreter memory, which grows to the budget.
 fn interp_reserve(c: *Checker, module_index: usize, node: syntax.Node, size: usize, alignment: usize) -> (usize, err) {
-    if INTERP_BASE > c.interp_top { c.interp_top = INTERP_BASE }
+    if INTERP_BASE > c.interp_space.top { c.interp_space.top = INTERP_BASE }
     var align = alignment
     if align == 0usize { align = 1usize }
-    let (start, start_error) = layout_align_up(c.interp_top, align)
-    if start_error != ok || start > INTERP_BUDGET || size > INTERP_BUDGET - start || c.interp_static_top > INTERP_BUDGET - start - size {
+    let (start, start_error) = layout_align_up(c.interp_space.top, align)
+    if start_error != ok || start > INTERP_BUDGET || size > INTERP_BUDGET - start || c.interp_space.static_top > INTERP_BUDGET - start - size {
         record_failure(c, module_index, node, .ComptimeEvaluation, c.interp_constant, "sixty-four mebibytes of interpreter memory")
         ret (0usize, ComptimeBudget)
     }
     let grow_error = interp_grow(c, start + size)
     if grow_error != ok { ret (0usize, grow_error) }
-    c.interp_top = start + size
+    c.interp_space.top = start + size
     ret (start, ok)
 }
 
 // The memory at least `needed` bytes long: doubled from 64 KiB, the old bytes kept.
 fn interp_grow(c: *Checker, needed: usize) -> err {
-    if needed <= c.interp_memory.len { ret ok }
-    var length = c.interp_memory.len * 2usize
+    if needed <= c.interp_space.memory.len { ret ok }
+    var length = c.interp_space.memory.len * 2usize
     if length < 65536usize { length = 65536usize }
     while length < needed { length = length * 2usize }
     if INTERP_BUDGET < length { length = INTERP_BUDGET }
     let (grown, grown_error) = mem.alloc[u8](c.arena, length)
     if grown_error != ok { ret grown_error }
     var at = 0usize
-    while at < c.interp_top && at < c.interp_memory.len {
-        grown[at] = c.interp_memory[at]
+    while at < c.interp_space.top && at < c.interp_space.memory.len {
+        grown[at] = c.interp_space.memory[at]
         at += 1usize
     }
-    c.interp_memory = grown
+    c.interp_space.memory = grown
     ret ok
 }
 
@@ -6159,35 +6212,35 @@ fn interp_static_bytes(c: *Checker, module_index: usize, node: syntax.Node, spel
     var raw = false
     let (contents, contents_error) = literal_contents(spelling, &raw)
     if contents_error != ok { ret (0usize, 0usize, interp_fail(c, module_index, node, "a string literal it cannot read")) }
-    if contents.len > INTERP_BUDGET - c.interp_static_top || c.interp_top > INTERP_BUDGET - c.interp_static_top - contents.len {
+    if contents.len > INTERP_BUDGET - c.interp_space.static_top || c.interp_space.top > INTERP_BUDGET - c.interp_space.static_top - contents.len {
         record_failure(c, module_index, node, .ComptimeEvaluation, c.interp_constant, "sixty-four mebibytes of interpreter memory")
         ret (0usize, 0usize, ComptimeBudget)
     }
-    if c.interp_static_top + contents.len > c.interp_static.len {
-        var length = c.interp_static.len * 2usize
+    if c.interp_space.static_top + contents.len > c.interp_space.statics.len {
+        var length = c.interp_space.statics.len * 2usize
         if length < 4096usize { length = 4096usize }
-        while length < c.interp_static_top + contents.len { length = length * 2usize }
+        while length < c.interp_space.static_top + contents.len { length = length * 2usize }
         let (grown, grown_error) = mem.alloc[u8](c.arena, length)
         if grown_error != ok { ret (0usize, 0usize, grown_error) }
         var copied = 0usize
-        while copied < c.interp_static_top {
-            grown[copied] = c.interp_static[copied]
+        while copied < c.interp_space.static_top {
+            grown[copied] = c.interp_space.statics[copied]
             copied += 1usize
         }
-        c.interp_static = grown
+        c.interp_space.statics = grown
     }
-    let start = c.interp_static_top
+    let start = c.interp_space.static_top
     var at = 0usize
     var count = 0usize
     while at < contents.len {
         var next = at
         let (byte, byte_error) = literal_byte(contents, at, raw, &next)
         if byte_error != ok { ret (0usize, 0usize, interp_fail(c, module_index, node, "a string literal it cannot read")) }
-        c.interp_static[start + count] = byte
+        c.interp_space.statics[start + count] = byte
         count += 1usize
         at = next
     }
-    c.interp_static_top = start + count
+    c.interp_space.static_top = start + count
     ret (INTERP_STATIC + start, count, ok)
 }
 
@@ -6196,19 +6249,19 @@ fn interp_static_bytes(c: *Checker, module_index: usize, node: syntax.Node, spel
 fn interp_readable(c: *Checker, address: usize, size: usize) -> bool {
     if INTERP_STATIC <= address {
         let offset = address - INTERP_STATIC
-        ret offset <= c.interp_static_top && size <= c.interp_static_top - offset
+        ret offset <= c.interp_space.static_top && size <= c.interp_space.static_top - offset
     }
-    ret address >= INTERP_BASE && address <= c.interp_top && size <= c.interp_top - address
+    ret address >= INTERP_BASE && address <= c.interp_space.top && size <= c.interp_space.top - address
 }
 
 fn interp_byte_at(c: *Checker, address: usize) -> u8 {
-    if INTERP_STATIC <= address { ret c.interp_static[address - INTERP_STATIC] }
-    ret c.interp_memory[address]
+    if INTERP_STATIC <= address { ret c.interp_space.statics[address - INTERP_STATIC] }
+    ret c.interp_space.memory[address]
 }
 
 // A scalar read in the target's layout: little-endian, a bool one byte.
 fn interp_load(c: *Checker, module_index: usize, node: syntax.Node, address: usize, ty: Type) -> (IntegerValue, err) {
-    let size = layout_scalar_size(ty)
+    let size = interp_scalar_size(ty)
     if size == 0usize || !interp_readable(c, address, size) { ret (normalized_integer(0usize, false), interp_fail(c, module_index, node, "a read outside the interpreter's memory")) }
     var bits = 0usize
     var at = size
@@ -6217,17 +6270,18 @@ fn interp_load(c: *Checker, module_index: usize, node: syntax.Node, address: usi
         bits = bits * 256usize + usize(interp_byte_at(c, address + at))
     }
     if ty.kind == .Bool { ret (normalized_integer(bits & 1usize, false), ok) }
+    if ty.kind == .Pointer { ret (normalized_integer(bits, false), ok) }
     ret (integer_from_bits(bits, ty), ok)
 }
 
 fn interp_store(c: *Checker, module_index: usize, node: syntax.Node, address: usize, ty: Type, value: IntegerValue) -> err {
-    let size = layout_scalar_size(ty)
+    let size = interp_scalar_size(ty)
     if size == 0usize || address >= INTERP_STATIC || !interp_readable(c, address, size) { ret interp_fail(c, module_index, node, "a write outside the interpreter's memory") }
     var bits = value.magnitude
     if ty.kind == .Integer { bits = integer_bits(value, integer_width(ty)) }
     var at = 0usize
     while at < size {
-        c.interp_memory[address + at] = u8(bits & 255usize)
+        c.interp_space.memory[address + at] = u8(bits & 255usize)
         bits = bits / 256usize
         at += 1usize
     }
@@ -6237,7 +6291,7 @@ fn interp_store(c: *Checker, module_index: usize, node: syntax.Node, address: us
 fn interp_clear(c: *Checker, address: usize, size: usize) {
     var at = 0usize
     while at < size {
-        c.interp_memory[address + at] = 0u8
+        c.interp_space.memory[address + at] = 0u8
         at += 1usize
     }
 }
@@ -6248,7 +6302,7 @@ fn interp_copy(c: *Checker, module_index: usize, node: syntax.Node, to: usize, f
     if to >= INTERP_STATIC || !interp_readable(c, to, size) || !interp_readable(c, from, size) { ret interp_fail(c, module_index, node, "a copy outside the interpreter's memory") }
     var at = 0usize
     while at < size {
-        c.interp_memory[to + at] = interp_byte_at(c, from + at)
+        c.interp_space.memory[to + at] = interp_byte_at(c, from + at)
         at += 1usize
     }
     ret ok
@@ -6313,16 +6367,34 @@ fn interp_place(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpF
         if !found { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a place that is no local")) }
         ret (frame.addresses[slot], frame.types[slot], ok)
     }
+    // (D1570) `*p`: what the pointer holds the address of.
+    if node.kind == .UnaryExpr && c.tokens[usize(node.token_start)].kind == .PunctStar {
+        let (inner, has_inner) = first_node_child(tree, node)
+        if !has_inner { ret (0usize, invalid_type(), parse.InvalidSyntax) }
+        let (pointer, pointer_type, pointer_error) = interp_expr(c, g, tree, frame, inner, invalid_type())
+        if pointer_error != ok { ret (0usize, invalid_type(), pointer_error) }
+        let pointee = interp_pointee(c, pointer_type)
+        if pointee.kind == .Invalid { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a `*` of something that is not a pointer")) }
+        if pointer.magnitude == 0usize { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a read through a null pointer")) }
+        ret (pointer.magnitude, pointee, ok)
+    }
     if node.kind == .FieldExpr {
         let (base_index, has_base) = first_node_child(tree, node)
         let (member, has_member) = field_expression_name(c, text, tree, node)
         if !has_base || !has_member { ret (0usize, invalid_type(), parse.InvalidSyntax) }
-        let (base, base_type, base_error) = interp_expr(c, g, tree, frame, base_index, invalid_type())
+        let (base, raw_base_type, base_error) = interp_expr(c, g, tree, frame, base_index, invalid_type())
         if base_error != ok { ret (0usize, invalid_type(), base_error) }
+        // (D1570) A field through a pointer is the field of what it points at.
+        var base_address = base.magnitude
+        var base_type = raw_base_type
+        if raw_base_type.kind == .Pointer {
+            base_type = interp_pointee(c, raw_base_type)
+            if base_address == 0usize { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a read through a null pointer")) }
+        }
         if base_type.kind != .Named { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a field of something that is not a struct")) }
         let (field, field_error) = layout_field(c, base_type, member)
         if field_error != ok { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a field the struct does not have")) }
-        ret (base.magnitude + field.offset, field.ty, ok)
+        ret (base_address + field.offset, field.ty, ok)
     }
     if node.kind == .BracketPostfix {
         var bracket: BracketInfo = zero
@@ -6453,8 +6525,8 @@ fn interp_convert(c: *Checker, module_index: usize, node: syntax.Node, value: In
         ret (value, into, ok)
     }
     // (D1569) An aggregate stands at its address: its type has to be the one declared,
-    // or one assignable to it (`[]T` into `[]const T`).
-    if !interp_scalar(into) {
+    // or one assignable to it (`[]T` into `[]const T`); so does a pointer (D1570).
+    if !interp_scalar(into) || into.kind == .Pointer {
         if !interp_holds(c, into, 0usize) { ret (value, from, interp_fail(c, module_index, node, "a type it does not hold")) }
         if !type_equal(c, from, into) && !type_assignable(c, from, into) { ret (value, from, interp_fail(c, module_index, node, "a value of another type")) }
         ret (value, into, ok)
@@ -6599,6 +6671,20 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
             if value_type.kind == .Integer && !integer_representable(negated, value_type) { ret (none, invalid_type(), interp_fail(c, module_index, node, "a negation the type cannot hold")) }
             ret (negated, value_type, ok)
         }
+        // (D1570) `&x`: the place's address; `*p`: what is there.
+        if op == .PunctAmp {
+            let (address, place_type, place_error) = interp_place(c, g, tree, frame, inner)
+            if place_error != ok { ret (none, invalid_type(), place_error) }
+            let (pointer_type, pointer_error) = interp_pointer_to(c, module_index, node, place_type)
+            if pointer_error != ok { ret (none, invalid_type(), pointer_error) }
+            ret (normalized_integer(address, false), pointer_type, ok)
+        }
+        if op == .PunctStar {
+            let (address, pointee, place_error) = interp_place(c, g, tree, frame, node_index)
+            if place_error != ok { ret (none, invalid_type(), place_error) }
+            let (pointed, get_error) = interp_get(c, module_index, node, address, pointee)
+            ret (pointed, pointee, get_error)
+        }
         if op == .PunctTilde {
             let (value, value_type, value_error) = interp_expr(c, g, tree, frame, inner, expected)
             if value_error != ok { ret (none, invalid_type(), value_error) }
@@ -6643,6 +6729,12 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         let (right, raw_right_type, right_error) = interp_expr(c, g, tree, frame, children[1usize], right_expected)
         if right_error != ok { ret (none, invalid_type(), right_error) }
         if is_comparison(op) {
+            // (D1570) Two addresses compare as addresses, and only for equality.
+            if left_type.kind == .Pointer || raw_right_type.kind == .Pointer {
+                if left_type.kind != raw_right_type.kind || (op != .PunctEqEq && op != .PunctBangEq) { ret (none, invalid_type(), interp_fail(c, module_index, node, "an ordering of pointers")) }
+                if interp_compare(op, left, right) { ret (normalized_integer(1usize, false), interp_bool_type(module_index), ok) }
+                ret (none, interp_bool_type(module_index), ok)
+            }
             if left_type.kind == .Bool || raw_right_type.kind == .Bool {
                 if left_type.kind != raw_right_type.kind || (op != .PunctEqEq && op != .PunctBangEq) { ret (none, invalid_type(), interp_fail(c, module_index, node, "an ordering of bools")) }
             } else {
@@ -6724,6 +6816,31 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
             ret (value, cast_type, ok)
         }
     } else {
+        // (D1570) `mem.cast[*U](p)`: the same address, seen as another pointer type.
+        if callee.kind == .BracketPostfix {
+            var generic_base = 0usize
+            var type_argument = 0usize
+            var generic_count = 0usize
+            let generic_end = usize(callee.first_child) + usize(callee.child_count)
+            var generic_at = usize(callee.first_child)
+            while generic_at < generic_end {
+                if parse.child_is_node_at(tree, generic_at) {
+                    if generic_count == 0usize { generic_base = parse.child_index_at(tree, generic_at) }
+                    if generic_count == 1usize { type_argument = parse.child_index_at(tree, generic_at) }
+                    generic_count += 1usize
+                }
+                generic_at += 1usize
+            }
+            if generic_count != 2usize || tree.nodes[generic_base].kind != .FieldExpr { ret (none, invalid_type(), interp_fail(c, module_index, node, "a generic call it does not evaluate")) }
+            let (generic_module, generic_member, found_generic) = qualified_member(c, g, tree, module_index, tree.nodes[generic_base])
+            if !found_generic || !module_is_mem(c, generic_module) || !same(generic_member, "cast") || argument_count != 1usize { ret (none, invalid_type(), interp_fail(c, module_index, node, "a generic call it does not evaluate")) }
+            let (cast_to, cast_to_error) = comptime_type(c, g, tree, module_index, type_argument)
+            if cast_to_error != ok || cast_to.kind != .Pointer { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem.cast` to something that is not a pointer")) }
+            let (cast_value, cast_from, cast_error) = interp_expr(c, g, tree, frame, arguments[0usize], invalid_type())
+            if cast_error != ok { ret (none, invalid_type(), cast_error) }
+            if cast_from.kind != .Pointer { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem.cast` of something that is not a pointer")) }
+            ret (cast_value, cast_to, ok)
+        }
         if callee.kind != .FieldExpr { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call through a value")) }
         let (qualified_module, member, found_member) = qualified_member(c, g, tree, module_index, callee)
         if !found_member { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call through a value")) }
@@ -6780,17 +6897,21 @@ fn interp_call(c: *Checker, g: *graph.Graph, module_index: usize, name: str, arg
     let function = c.functions[function_index]
     if function.generic || function.external || function.intrinsic { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a generic, extern or intrinsic function")) }
     if function.parameter_count != arguments.len { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call with the wrong number of arguments")) }
-    if function.return_count != 1usize { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning other than one value")) }
-    let return_type = c.return_types[function.first_return]
-    // (D1569) An aggregate result needs its caller's slot; an evaluation's own result
-    // is an integer or a bool.
-    if !interp_holds(c, return_type, 0usize) || (!interp_scalar(return_type) && into == 0usize) { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning other than an integer or bool")) }
+    if function.return_count > 1usize { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning more than one value")) }
+    // (D1570) A function with no result is called for what it does to memory.
+    var return_type = make_type(.Void, "", module_index)
+    if function.return_count == 1usize {
+        return_type = c.return_types[function.first_return]
+        // (D1569) An aggregate result needs its caller's slot; an evaluation's own
+        // result is an integer or a bool.
+        if !interp_holds(c, return_type, 0usize) || (!interp_scalar(return_type) && into == 0usize) { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning other than an integer or bool")) }
+    }
     let (parsed_module, parse_error) = interp_module(c, g, module_index)
     if parse_error != ok { ret (none, invalid_type(), parse_error) }
     // The callee's frame is taken from the top and given back; a string literal read
     // outlives it, until no evaluation holds memory.
-    if INTERP_BASE >= c.interp_top { c.interp_static_top = 0usize }
-    let saved_top = c.interp_top
+    if INTERP_BASE >= c.interp_space.top { c.interp_space.static_top = 0usize }
+    let saved_top = c.interp_space.top
     // The callee's tokens stand in for the caller's while its body runs.
     let saved_tokens = c.tokens
     let saved_token_count = c.token_count
@@ -6801,13 +6922,13 @@ fn interp_call(c: *Checker, g: *graph.Graph, module_index: usize, name: str, arg
     c.interp_depth = c.interp_depth - 1usize
     var answer = result
     var answer_error = body_error
-    if body_error == ok && !interp_scalar(result_type) {
+    if body_error == ok && !interp_scalar(result_type) && result_type.kind != .Void {
         let (info, info_error) = layout_type_info(c, result_type)
         answer_error = info_error
         if info_error == ok { answer_error = interp_copy(c, site_module, site, into, result.magnitude, info.size) }
         answer = normalized_integer(into, false)
     }
-    c.interp_top = saved_top
+    c.interp_space.top = saved_top
     c.tokens = saved_tokens
     c.token_count = saved_token_count
     ret (answer, result_type, answer_error)
@@ -6862,7 +6983,10 @@ fn interp_function(c: *Checker, g: *graph.Graph, module_index: usize, function_i
             if tree.nodes[child_index].kind == .Block {
                 let (control, control_error) = interp_block(c, g, tree, &frame, child_index)
                 if control_error != ok { ret (none, invalid_type(), control_error) }
-                if control != interp_control_return() { ret (none, invalid_type(), interp_fail(c, module_index, tree.nodes[child_index], "the end of a body without `ret`")) }
+                if control != interp_control_return() {
+                    if return_type.kind == .Void { ret (none, return_type, ok) }
+                    ret (none, invalid_type(), interp_fail(c, module_index, tree.nodes[child_index], "the end of a body without `ret`"))
+                }
                 ret (frame.result, frame.result_type, ok)
             }
         }
@@ -7020,7 +7144,12 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
     }
     if node.kind == .ReturnStmt {
         let (value_index, has_value) = first_node_child(tree, node)
-        if !has_value { ret (0usize, interp_fail(c, module_index, node, "a `ret` with no value")) }
+        if !has_value {
+            if frame.return_type.kind != .Void { ret (0usize, interp_fail(c, module_index, node, "a `ret` with no value")) }
+            frame.result = normalized_integer(0usize, false)
+            frame.result_type = frame.return_type
+            ret (interp_control_return(), ok)
+        }
         let (value, value_type, value_error) = interp_expr(c, g, tree, frame, value_index, frame.return_type)
         if value_error != ok { ret (0usize, value_error) }
         let (converted, converted_type, convert_error) = interp_convert(c, module_index, node, value, value_type, frame.return_type)
@@ -7028,6 +7157,14 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         frame.result = converted
         frame.result_type = converted_type
         ret (interp_control_return(), ok)
+    }
+    // (D1570) A call for what it does.
+    if node.kind == .CallStmt {
+        let (call_index, has_call) = first_node_child(tree, node)
+        if !has_call || tree.nodes[call_index].kind != .CallExpr { ret (0usize, interp_fail(c, module_index, node, "a statement it does not evaluate")) }
+        let (ignored_value, ignored_type, call_error) = interp_call_node(c, g, tree, frame, call_index)
+        if call_error != ok { ret (0usize, call_error) }
+        ret (interp_control_next(), ok)
     }
     if node.kind == .BreakStmt { ret (interp_control_break(), ok) }
     if node.kind == .ContinueStmt { ret (interp_control_continue(), ok) }
@@ -14726,10 +14863,10 @@ fn when_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
             let (ignored_module, ready_error) = interp_module(c, g, module_index)
             if ready_error != ok { ret (false, ready_error) }
         }
-        if INTERP_BASE >= c.interp_top { c.interp_static_top = 0usize }
-        let saved_top = c.interp_top
+        if INTERP_BASE >= c.interp_space.top { c.interp_space.static_top = 0usize }
+        let saved_top = c.interp_space.top
         let (value, value_type, value_error) = interp_expr(c, g, tree, &frame, node_index, interp_bool_type(module_index))
-        c.interp_top = saved_top
+        c.interp_space.top = saved_top
         c.interp_constant = outer_constant
         if value_error != ok { ret (false, value_error) }
         if value_type.kind != .Bool {
