@@ -88,6 +88,12 @@ suites.
 
 ### 2. Borrowed rows (driver contract)
 
+**Done as D1599, differently from what follows.** Shortening `reader_next_err`'s lifetime
+would have left the drivers' own `scalar` helpers, which return a value after closing
+the reader, pointing at freed memory. So borrowing is a second call,
+`db.reader_next_borrowed`, with its own `db.Driver` entry. Measured −10% on the Windows
+SQLite scan. The original proposal is kept below for the record.
+
 `lib/e/db.e`: a `Text` or `Bytes` value a reader fills is valid until the next
 `reader_next_err` or `close_rows` on that reader; a caller that keeps one copies it.
 Every C API already has exactly that lifetime (`sqlite3_column_text` until the next

@@ -145,7 +145,7 @@ type Parameter = struct { name: str, value: Value }
 type Column = struct { name: str, kind: ValueKind, nullable: bool }
 type Driver = struct { close: fn(ctx: *void) -&gt; err, prepare: ..., execute: ..., query: ..., begin: ...,
                        statement_close: ..., statement_execute: ..., statement_query: ...,
-                       rows_columns: ..., rows_next: fn(ctx: *void, dst: []Value) -&gt; (bool, err), rows_close: ...,
+                       rows_columns: ..., rows_next: fn(ctx: *void, dst: []Value) -&gt; (bool, err), rows_next_borrowed: ..., rows_close: ...,
                        transaction_execute: ..., transaction_query: ..., transaction_commit: ..., transaction_rollback: ... }
 error Closed
 error InvalidQuery
@@ -154,7 +154,7 @@ error Busy
 error Unsupported</code></pre>
       <ul>
         <li><strong>A handle is a context plus a table.</strong> Every <code>e.db</code> call dispatches through the table. Closing, committing or rolling back sets the context to <code>nil</code>, and a <code>nil</code> handle answers <code>Closed</code> without reaching the driver. So a double close, or a query after commit, behaves the same under every driver, and no driver has to write that logic.</li>
-        <li><strong>Values are one tagged union of eight kinds.</strong> Parameters are positional or named. Columns report a kind, and <code>rows_next</code> fills a caller-owned row, which is a slice of <code>Value</code>.</li>
+        <li><strong>Values are one tagged union of eight kinds.</strong> Parameters are positional or named. Columns report a kind, and <code>rows_next</code> fills a caller-owned row, which is a slice of <code>Value</code>. Its text stays valid until the next row, even after the reader is closed; <code>rows_next_borrowed</code> hands back the library's own bytes, which are valid only until the next row or the close.</li>
         <li><strong>Five portable errors, and each driver adds its own.</strong> Code that only needs to know "was it a constraint" stays portable, and a driver's <code>detail</code> call returns the vendor's code and message when you need them.</li>
         <li><strong>Nothing is hidden.</strong> There is no driver registry, no global pool and no hidden allocator. The arena you pass to a driver's <code>open</code> is the only memory it uses, and each driver documents what it keeps there. (<code>e.db.pool</code> exists as a pure state machine for when you do want pooling.)</li>
       </ul>
@@ -228,6 +228,7 @@ fn m_rows_next(ctx: *void, dst: []db.Value) -&gt; (bool, err) {
     driver.execute = m_execute
     driver.query = m_query
     driver.rows_next = m_rows_next
+    driver.rows_next_borrowed = m_rows_next   // its rows are already its own
     // ... the other eleven
     ret db.Connection { ctx: mem.cast[*void](s), driver: driver }
 }</code></pre>

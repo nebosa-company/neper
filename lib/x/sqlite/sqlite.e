@@ -4,8 +4,9 @@
 //
 // Memory: the arena handed to `open` is retained and borrowed for the connection's life.
 // Every statement, row reader and transaction context comes from it, and a reader's text and
-// blob values are copied into a buffer of the reader's that is valid until its next row. The
-// caller marks and resets that arena around work whose results it no longer needs.
+// blob values are copied into a buffer of the reader's that is valid until its next row, or,
+// read with `db.reader_next_borrowed`, are SQLite's own bytes, valid until the next row or
+// the reader's close. The caller marks and resets that arena around work whose results it no longer needs.
 //
 // Values: a parameter binds by its SQLite storage class -- `Bool` as 0/1, `Time` as the
 // instant's nanoseconds, `U64` only while it fits an `i64`. A column's kind is its declared
@@ -30,7 +31,7 @@ const MIN_VERSION: i32 = 3007014i32
 
 type Conn = struct { handle: usize, arena: *mem.Arena, driver: *const db.Driver, note: str }
 type Stmt = struct { conn: *Conn, handle: usize }
-type Reader = struct { conn: *Conn, handle: usize, statement: *Stmt, owned: bool, pending: i32, columns: []db.Column, buffer: []u8, used: usize }
+type Reader = struct { conn: *Conn, handle: usize, statement: *Stmt, owned: bool, pending: i32, columns: []db.Column, buffer: []u8, used: usize, borrow: bool }
 type Tx = struct { conn: *Conn }
 
 const SQLITE_OK: i32 = 0i32
@@ -80,7 +81,7 @@ fn open(a: *mem.Arena, path: str) -> (db.Connection, err) {
         let closed_driver = capi.close_v2(handle)
         ret (connection, driver_error)
     }
-    drivers[0usize] = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
+    drivers[0usize] = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_next_borrowed: d_rows_next_borrowed, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
     conns[0usize] = Conn { handle: handle, arena: a, driver: &drivers[0usize], note: "" }
     let c = &conns[0usize]
     connection.ctx = mem.cast[*void](c)
@@ -362,7 +363,7 @@ fn reader(c: *Conn, handle: usize, statement: *Stmt, owned: bool) -> (db.Rows, e
     // Arena memory is not cleared, so every field is written.
     var no_buffer: []u8 = zero
     var no_columns: []db.Column = zero
-    readers[0usize] = Reader { conn: c, handle: handle, statement: statement, owned: owned, pending: rc, columns: no_columns, buffer: no_buffer, used: 0usize }
+    readers[0usize] = Reader { conn: c, handle: handle, statement: statement, owned: owned, pending: rc, columns: no_columns, buffer: no_buffer, used: 0usize, borrow: false }
     let r = &readers[0usize]
     let count = usize(capi.column_count(handle))
     let (cols, cols_error) = mem.alloc[db.Column](c.arena, count)
@@ -446,12 +447,22 @@ fn reserve(r: *Reader, n: usize) -> err {
     ret ok
 }
 
-// The bytes of a text or blob column, copied into the reader's buffer.
+// The bytes of a text or blob column, copied into the reader's buffer -- or, for a borrowed
+// row, SQLite's own, which it keeps until the statement steps, resets or is finalized.
+// `column_bytes` comes after `column_text`/`column_blob`, the order SQLite says leaves the
+// pointer valid.
 fn column_copy(r: *Reader, column: i32, blob: bool) -> ([]u8, err) {
     var p = capi.column_text(r.handle, column)
     if blob { p = capi.column_blob(r.handle, column) }
     let n = usize(capi.column_bytes(r.handle, column))
     if n == 0usize || mem.address_of(p) == 0usize { ret (r.buffer[0usize..0usize], ok) }
+    if r.borrow {
+        var region: mem.Arena = zero
+        region.base = p
+        region.cap = n
+        region.off = 0usize
+        ret (mem.view(&region, 0usize, n), ok)
+    }
     let reserve_error = reserve(r, n)
     if reserve_error != ok { ret (r.buffer[0usize..0usize], reserve_error) }
     let start = r.used
@@ -584,6 +595,19 @@ fn d_rows_columns(ctx: *void) -> []const db.Column { ret reader_of(ctx).columns 
 
 fn d_rows_next(ctx: *void, dst: []db.Value) -> (bool, err) {
     let r = reader_of(ctx)
+    r.borrow = false
+    let (more, next_error) = next_row(r, dst)
+    ret (more, next_error)
+}
+
+fn d_rows_next_borrowed(ctx: *void, dst: []db.Value) -> (bool, err) {
+    let r = reader_of(ctx)
+    r.borrow = true
+    let (more, next_error) = next_row(r, dst)
+    ret (more, next_error)
+}
+
+fn next_row(r: *Reader, dst: []db.Value) -> (bool, err) {
     if r.statement != nil && r.statement.handle == 0usize { ret (false, db.Closed) }
     if dst.len < r.columns.len { ret (false, refuse(r.conn, "the row buffer is shorter than the row", db.InvalidQuery)) }
     if r.pending == 0i32 { r.pending = capi.step(r.handle) }

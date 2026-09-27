@@ -172,7 +172,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var store: Store = zero
     store.cols[0] = db.Column { name: "id", kind: .I64, nullable: false }
     store.cols[1] = db.Column { name: "name", kind: .Text, nullable: true }
-    let driver = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
+    let driver = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_next_borrowed: d_rows_next, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
     var connection = db.Connection { ctx: mem.cast[*void](&store), driver: &driver }
     var ids: [8]i64 = zero
     var names: [8]str = zero
@@ -193,6 +193,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if db.close_rows(&rows) != db.Closed { os.exit(7) }
     let (more, e5) = db.reader_next_err(&rows, zero)
     if e5 != db.Closed || db.columns(&rows).len != 0usize { os.exit(8) }
+    let (borrowed_more, borrowed_error) = db.reader_next_borrowed(&rows, zero)
+    if borrowed_error != db.Closed { os.exit(8) }
     // A prepared statement.
     let (statement0, e6) = db.prepare(&connection, "insert")
     if e6 != ok { os.exit(9) }

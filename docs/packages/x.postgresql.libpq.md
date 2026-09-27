@@ -58,6 +58,8 @@ so they are reachable, and the unit fixture calls them, but they are not the sur
   encodings are allocated and reset around each call.
 - A reader copies each value it keeps into its own buffer. The copy stays valid until the
   reader's next row. libpq's result for the row is cleared as soon as the row is filled.
+- `db.reader_next_borrowed` skips the copy for text and `bytea`. It keeps the row's result
+  until the next row or the reader's end, and its values point into that result (D1599).
 - Error text lives in fixed buffers the connection allocates once, so failures do not grow
   the arena.
 - One connection belongs to one thread.

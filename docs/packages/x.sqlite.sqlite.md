@@ -59,6 +59,8 @@ visibility (spec section 12), so they are reachable, but they are not the surfac
 - A reader copies each text and blob value into a buffer that it owns. The copy stays
   valid until the reader's next row. A growing buffer is a fresh allocation, so values
   already returned for the current row stay intact.
+- `db.reader_next_borrowed` skips the copy. Its text and blob values are SQLite's own
+  bytes, valid until the reader's next row or its close (D1599).
 - `db.close` uses `sqlite3_close_v2`, so statements that are still open are not cut off.
   Closing a statement finalizes it, and its reader then answers `db.Closed`.
 - One connection belongs to one thread. The package adds no locking.

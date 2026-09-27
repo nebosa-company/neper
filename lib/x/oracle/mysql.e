@@ -3,7 +3,9 @@
 //
 // Memory: the arena handed to `open` is retained and borrowed for the connection's life.
 // Contexts, column names and row buffers come from it; a reader's values are copied into a
-// buffer of its own that is valid until its next row. Error text is kept in fixed buffers the
+// buffer of its own that is valid until its next row. Read with `db.reader_next_borrowed`,
+// text and binary values are the client library's row instead, valid until the next row or
+// the reader's end. Error text is kept in fixed buffers the
 // connection allocates once, so failures do not grow the arena.
 //
 // Parameters: `?` placeholders, positional. Values are rendered into the statement on this
@@ -42,7 +44,7 @@ const MIN_VERSION: usize = 50700usize
 
 type Conn = struct { handle: usize, arena: *mem.Arena, driver: *const db.Driver, active: *Reader, in_transaction: bool, statements: u64, code: u32, state: []u8, state_len: usize, message: []u8, message_len: usize }
 type Stmt = struct { conn: *Conn, sql: str, placeholders: usize, closed: bool }
-type Reader = struct { conn: *Conn, statement: *Stmt, result: usize, done: bool, closed: bool, types: []u32, flags: []u32, binary: []bool, widths: []usize, columns: []db.Column, buffer: []u8, used: usize }
+type Reader = struct { conn: *Conn, statement: *Stmt, result: usize, done: bool, closed: bool, types: []u32, flags: []u32, binary: []bool, widths: []usize, columns: []db.Column, buffer: []u8, used: usize, borrow: bool }
 type Tx = struct { conn: *Conn }
 type Scan = struct { placeholders: usize, statements: usize }
 
@@ -118,7 +120,7 @@ fn open(a: *mem.Arena, options: Options) -> (db.Connection, err) {
         mysqlclient.close(handle)
         ret (connection, db.Unsupported)
     }
-    drivers[0usize] = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
+    drivers[0usize] = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_next_borrowed: d_rows_next_borrowed, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
     // Arena memory is not cleared, so every field is written.
     conns[0usize] = Conn { handle: handle, arena: a, driver: &drivers[0usize], active: nil, in_transaction: false, statements: 0u64, code: 0u32, state: text_buffers[0usize..STATE_CAP], state_len: 0usize, message: text_buffers[STATE_CAP..], message_len: 0usize }
     let c = &conns[0usize]
@@ -640,7 +642,7 @@ fn start_reader(c: *Conn, statement: *Stmt) -> (db.Rows, err) {
         i += 1usize
     }
     var no_buffer: []u8 = zero
-    readers[0usize] = Reader { conn: c, statement: statement, result: result, done: result == 0usize, closed: false, types: types, flags: flags, binary: binary, widths: widths, columns: cols, buffer: no_buffer, used: 0usize }
+    readers[0usize] = Reader { conn: c, statement: statement, result: result, done: result == 0usize, closed: false, types: types, flags: flags, binary: binary, widths: widths, columns: cols, buffer: no_buffer, used: 0usize, borrow: false }
     let r = &readers[0usize]
     if result == 0usize {
         let (after, after_error) = collect(c)
@@ -788,6 +790,15 @@ fn decode(r: *Reader, i: usize, v: []const u8) -> (db.Value, err) {
             ret (value, ok)
         }
     }
+    if r.borrow {
+        if kind == .Bytes {
+            value = db.Value{ Bytes: v }
+        } else {
+            let borrowed_text: str = v
+            value = db.Value{ Text: borrowed_text }
+        }
+        ret (value, ok)
+    }
     let (copied, copy_error) = take(r, v)
     if copy_error != ok { ret (value, copy_error) }
     if kind == .Bytes {
@@ -923,6 +934,19 @@ fn d_rows_columns(ctx: *void) -> []const db.Column { ret reader_of(ctx).columns 
 
 fn d_rows_next(ctx: *void, dst: []db.Value) -> (bool, err) {
     let r = reader_of(ctx)
+    r.borrow = false
+    let (more, next_error) = next_row(r, dst)
+    ret (more, next_error)
+}
+
+fn d_rows_next_borrowed(ctx: *void, dst: []db.Value) -> (bool, err) {
+    let r = reader_of(ctx)
+    r.borrow = true
+    let (more, next_error) = next_row(r, dst)
+    ret (more, next_error)
+}
+
+fn next_row(r: *Reader, dst: []db.Value) -> (bool, err) {
     if r.closed { ret (false, db.Closed) }
     if r.done { ret (false, ok) }
     if dst.len < r.columns.len { ret (false, refuse(r.conn, "the row buffer is shorter than the row", db.InvalidQuery)) }

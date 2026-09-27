@@ -124,6 +124,7 @@ fn open(s: *Store, driver: *db.Driver) -> db.Connection {
     driver.statement_query = m_statement_query
     driver.rows_columns = m_rows_columns
     driver.rows_next = m_rows_next
+    driver.rows_next_borrowed = m_rows_next
     driver.rows_close = m_rows_close
     driver.transaction_execute = m_transaction_execute
     driver.transaction_query = m_transaction_query
