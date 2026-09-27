@@ -2372,6 +2372,31 @@ sqlite_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$sqlite_written" = 'executable written' ]
 chmod +x "$test_build/x-sqlite-selfhost"
 TMPDIR=/tmp "$test_build/x-sqlite-selfhost"
+# The PostgreSQL and MySQL drivers' own logic -- numeric decoding, parameter encoding, the MySQL
+# statement scanner and literal rendering, error mapping -- with no server and no client library.
+db_units_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_db_units/src/main.e" "$repo" x64 linux "$test_build/x-db-units-selfhost")
+[ "$db_units_written" = 'executable written' ]
+chmod +x "$test_build/x-db-units-selfhost"
+"$test_build/x-db-units-selfhost"
+# `x.postgresql.libpq` and `x.oracle.mysql` against live servers: db_servers.sh starts a fresh
+# PostgreSQL (55432) and MySQL (53306) under /tmp from the distribution's packages, and they are
+# stopped whatever the fixtures answer.
+postgresql_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_postgresql/src/main.e" "$repo" x64 linux "$test_build/x-postgresql-selfhost")
+[ "$postgresql_written" = 'executable written' ]
+mysql_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_mysql/src/main.e" "$repo" x64 linux "$test_build/x-mysql-selfhost")
+[ "$mysql_written" = 'executable written' ]
+chmod +x "$test_build/x-postgresql-selfhost" "$test_build/x-mysql-selfhost"
+db_servers=/tmp/neper-db-servers-$$
+bash "$repo/tests/selfhost/db_servers.sh" start "$db_servers"
+db_status=0
+"$test_build/x-postgresql-selfhost" "host=127.0.0.1 port=55432 user=neper dbname=postgres options='-c client_min_messages=warning'" || db_status=$?
+[ "$db_status" -ne 0 ] || "$test_build/x-mysql-selfhost" 53306 || db_status=$?
+bash "$repo/tests/selfhost/db_servers.sh" stop "$db_servers"
+rm -rf "$db_servers"
+if [ "$db_status" -ne 0 ]; then
+    echo "a database driver fixture failed: exit $db_status" >&2
+    exit 1
+fi
 # D131's property: a program that uses `e.os` and opens no library needs no loader. It checks
 # itself -- it reads its own image and walks its own program headers -- so nothing here has to
 # have `readelf`, and what is asserted is the file that was produced rather than what the

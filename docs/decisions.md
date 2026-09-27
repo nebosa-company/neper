@@ -28456,3 +28456,73 @@ Fixture, both hosts: `link/comptime_arena`:
 - `try mem.alloc` in a function answering `(u32, err)`.
 
 Accept, reject and emit sweeps against D1574's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.
+
+## D1591 — `x.postgresql.libpq`: binary results, single-row streaming, settled parameter types
+
+The PostgreSQL driver for `e.db`, specified in `docs/packages/x.postgresql.libpq.md`. It binds
+libpq by `@import` through `x.postgresql.capi` (`libpq.dll` / `libpq.so.5`); the floor is libpq
+9.2.
+
+**Binary results, not text.** Every query asks for binary results. That makes integers,
+floats, booleans, `bytea` and timestamps exact without a parser. `numeric` is rendered from its
+base-10000 digits to its exact decimal at the stored scale, and `uuid` to its canonical
+spelling. A type the driver does not know arrives as `Bytes` holding its binary
+representation, which loses nothing.
+
+**Single-row mode.** `PQsetSingleRowMode` streams a result row by row; nothing buffers it
+whole. The cost is libpq's rule that one command is in flight per connection. The driver
+states that as `db.Busy` for any call made while a reader is open, and commit, rollback and
+close end the reader first.
+
+**Parameter types.** An unprepared statement sends each value in its natural type, with
+`Text` as `unknown` so the server types it from context. A prepared statement is described
+once (`PQsendDescribePrepared`), and each execution then encodes values into the types the
+server settled. That is how an `I64` reaches an `int4` column in the right width, with a range
+check.
+
+**PostgreSQL's silent rollback.** A `COMMIT` of a transaction a statement failed in answers
+with a rollback and no error. The driver checks `PQtransactionStatus` first and returns
+`Aborted` instead of a success that did not happen.
+
+## D1592 — `x.oracle.mysql`: the text protocol, a client-side scanner, per-OS `unsigned long`
+
+The MySQL driver for `e.db`, specified in `docs/packages/x.oracle.mysql.md`. It binds MySQL's
+client library by `@import` through `x.oracle.mysqlclient` (`libmysql.dll` /
+`libmysqlclient.so.21`); the floor is client 5.7.
+
+**No `MYSQL_BIND`.** The prepared-statement API passes values in `MYSQL_BIND` structs, whose
+layout has changed between client versions and differs in MariaDB's fork. The driver uses the
+text protocol and renders parameters into the statement, the same approach as drivers without
+a binding API:
+- text through `mysql_real_escape_string`;
+- blobs as hex;
+- doubles as the shortest round-tripping literal plus `e0`, because `0.1` alone is a
+  `DECIMAL` literal and `SELECT ? + 0` is what catches the `1e300e0` alias trap;
+- times as UTC datetimes, with the session zone set to UTC at `open`.
+
+A scanner that follows MySQL's lexer finds `?` and `;` outside strings, identifiers and
+comments. `prepare` still has the server compile the text (`PREPARE ... FROM`), so a bad
+statement fails there.
+
+**`unsigned long` is two types.** `unsigned long` is 32 bits on Windows and 64 on Linux. The
+two `mysqlclient` variants export one surface (`usize` wrappers, `length_at`, and the
+`MYSQL_FIELD` offsets as constants) over private raw externs of each width. The
+`MYSQL_FIELD` layout was read from the 8.4 header.
+
+**Errors under `HY000`.** MySQL reports a CHECK violation (3819) and a `NOWAIT` lock (3572)
+under the generic `HY000`, so those are mapped by number. The fixture found the CHECK case.
+
+**Verification for D1591 and D1592.**
+- `link/x_db_units` needs no server and no library; its binaries reference neither, which
+  was checked in the images.
+- `link/x_postgresql` and `link/x_mysql` run against throwaway servers that
+  `tests/selfhost/db_servers.{ps1,sh}` starts per suite run:
+  - Windows: PostgreSQL 18.6 and MySQL 8.4.9 from `D:\tools`, installed from the official
+    archives for this.
+  - Linux: PostgreSQL 16 and MySQL 8.0.46 from the Ubuntu packages.
+- Both fixtures pass on both hosts, and the new runner blocks were run on their own on both
+  (17 s each, servers stopped afterwards).
+- Mutation checks each caught a break in the driver:
+  - PostgreSQL: a numeric digit (exit 30), SQLSTATE mapping (68), the busy guard (91);
+  - MySQL: the statement splitter (69), the single-quote lexer (42), and both the missing
+    and the doubled double-literal suffix (44 and 40).
