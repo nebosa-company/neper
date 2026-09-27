@@ -5645,6 +5645,12 @@ thread_perturb_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$thread_perturb_written" = 'executable written' ]
 chmod +x "$thread_perturb_path"
 "$thread_perturb_path"
+# Every position `try` may take (D1567).
+try_positions_path="$test_build/try-positions-selfhost"
+try_positions_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/try_positions/src/main.e" "$repo" x64 linux "$try_positions_path")
+[ "$try_positions_written" = 'executable written' ]
+chmod +x "$try_positions_path"
+"$try_positions_path"
 # Build, then freeze (D1559, H02).
 list_freeze_path="$test_build/list-freeze-selfhost"
 list_freeze_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/list_freeze/src/main.e" "$repo" x64 linux "$list_freeze_path")

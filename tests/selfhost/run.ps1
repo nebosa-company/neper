@@ -5860,6 +5860,13 @@ $threadPerturbWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $threadPerturbWritten -ne 'executable written') { throw 'thread perturb executable emission failed' }
 & $threadPerturbPath
 if ($LASTEXITCODE -ne 0) { throw 'a perturbed schedule changed what the threads computed' }
+# Every position `try` may take (D1567): bindings and assignments of one and two
+# results, and the statement, in a function answering more than its `err`.
+$tryPositionsPath = Join-Path $testBuild 'try-positions-selfhost.exe'
+$tryPositionsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\try_positions\src\main.e') $repo 'x64' 'windows' $tryPositionsPath
+if ($LASTEXITCODE -ne 0 -or $tryPositionsWritten -ne 'executable written') { throw 'try positions executable emission failed' }
+& $tryPositionsPath
+if ($LASTEXITCODE -ne 0) { throw "a try binding or assignment did not return or continue as the spec says: exit $LASTEXITCODE" }
 # Build, then freeze (D1559, H02): a list builder consumed into a read-only slice.
 $listFreezePath = Join-Path $testBuild 'list-freeze-selfhost.exe'
 $listFreezeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\list_freeze\src\main.e') $repo 'x64' 'windows' $listFreezePath

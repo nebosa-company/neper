@@ -28263,3 +28263,15 @@ Fixtures, both hosts:
 Sweeps against D1565's compiler: none of 159 earlier reject answers and 609 earlier accept sources changed. Stage 2 equals stage 3 on both hosts. H01 on the compiler source stays +13.4% in instructions (1,897M / 1,673M).
 
 The diagnostic is D722's E-SAFETY-0003 wording, "moved out of its aggregate", which already names owned slices. A partition-specific message would change the catalog goldens, whose drift is the user's open decision.
+
+## D1567 — `try` lowers in a binding and an assignment
+
+The spec gives `try` three positions: a whole statement, the entire initializer of a `let` or `var` (`let s = try str.format[...](...)`, `let (a, b) = try f()`), and the entire right-hand side of an assignment (`l.items = try mem.alloc[T](a, n)`). The checker accepted all three. The self-hosted lowering took only the statement, and only in a function whose one result is its `err`. `let x = try f()` stopped the build with "construct is not implemented in self-hosted lowering", so did a statement `try` in a function answering `(T, err)`, and an assigned `try` failed with `check.ArgumentCount`.
+
+Nothing in `lib/` or the link fixtures used either form, which is how the gap went unseen. The accept fixtures that use them (`safety.e`, the owned-slice transfers) are only checked, never built. The failure-safe container for obligated elements (D1568) needs them: `let f = try os.dup(...)` beside a list that must be ended on every path.
+
+`lower_try_call` is one path for all three positions. It lowers the call's results, then tests the last one, the `err`. A failure runs the deferred calls and returns the error beside the zero value of every other return slot, as spec §"Zero values" requires. `emit_zero_value` gives an aggregate a cleared stack slot. Otherwise the remaining results go to the binding (`bind_call_results`, or the one name through the ordinary path) or to the assignment's places, lowered first as the multi-result assignment already does. The return itself is `emit_return_values`, the tail of `lower_return` taken out as a function, so a `ret` and a failed `try` share the return-slot layout, the deferred calls, and `main`'s failure line. A binding `try` that fails in `main` reports `error: <module>.<name>` and exits 1.
+
+Fixture, both hosts: `link/try_positions`, a binding of one result and of two, an assignment of one and of two, and a statement `try`, in a function answering `(usize, Pair, err)`. Each of the five failures returns the error beside zeros, the deferred call runs six times across the six calls, and `main` binds one too. The D725 accept fixture `safety_owned_slice_offset_transfer.e` now builds and runs as well.
+
+All 575 earlier link fixtures emit byte-identical executables with D1566's compiler and this one, so the `lower_return` split changed no existing code. Stage 2 equals stage 3 on both hosts.
