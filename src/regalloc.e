@@ -20,7 +20,13 @@ type LiveRange = struct {
     defined: bool,
     // Read by some instruction; a value that is not is a promoted local's former load.
     used: bool,
+    // Live across a call -- defined before it and used after (D1607).
+    crosses_call: bool,
 }
+
+// The registers a call clobbers come first in the pool: x64's five (`codegen_x64`'s
+// `caller_saved_count`), which this module cannot import.
+const CALLER_SAVED: usize = 5usize
 
 type Allocation = struct {
     kind: AllocationKind,
@@ -562,7 +568,7 @@ fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRan
             if live[result].defined {
                 live[result].last = instruction_at
             } else {
-                live[result] = LiveRange { first: instruction_at, last: instruction_at, defined: true, used: false }
+                live[result] = LiveRange { first: instruction_at, last: instruction_at, defined: true, used: false, crosses_call: false }
             }
         }
         let operand_end = instructions[instruction_at].first_operand + instructions[instruction_at].operand_count
@@ -583,7 +589,42 @@ fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRan
         if !ranges[value_at].defined { ret InvalidIR }
         value_at += 1usize
     }
-    ret extend_loop_liveness(builder, function, ranges, scratch)
+    try extend_loop_liveness(builder, function, ranges, scratch)
+    // Which values are live across a call (D1607), with the test `live_register_mask`
+    // makes: a call strictly inside the range. The calls' positions go in the scratch,
+    // which is free until the allocation fills it, and each value's first call after its
+    // definition is a binary search. A function with more calls than the scratch holds
+    // marks nothing and is allocated as it was before; the mark is a preference, never
+    // a correctness question.
+    var calls = 0usize
+    instruction_at = function.first_instruction
+    while instruction_at < instruction_end {
+        let opcode = instructions[instruction_at].opcode
+        if opcode == .Call || opcode == .IndirectCall {
+            if calls >= scratch.len { ret ok }
+            scratch[calls] = instruction_at
+            calls += 1usize
+        }
+        instruction_at += 1usize
+    }
+    if calls == 0usize { ret ok }
+    value_at = 0usize
+    while value_at < function.value_count {
+        let first = live[value_at].first
+        var low = 0usize
+        var high = calls
+        while low < high {
+            let middle = low + (high - low) / 2usize
+            if scratch[middle] <= first {
+                low = middle + 1usize
+            } else {
+                high = middle
+            }
+        }
+        if low < calls && scratch[low] < live[value_at].last { live[value_at].crosses_call = true }
+        value_at += 1usize
+    }
+    ret ok
 }
 
 // --- The allocation (D305) ------------------------------------------------------------
@@ -684,12 +725,19 @@ fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: 
         let last = ranges[value_at].last
         var register = 0usize
         var found_register = false
-        while register < register_count {
+        // A value live across a call tries the registers a call keeps first (D1607): in
+        // one of those it needs no save and restore around each call, only the one the
+        // function's entry and returns make. Any other value keeps the lowest free one.
+        var start = 0usize
+        if ranges[value_at].crosses_call && CALLER_SAVED < register_count { start = CALLER_SAVED }
+        var tried = 0usize
+        while tried < register_count {
+            register = (start + tried) % register_count
             if counts[register] == 0usize || heaps[register * capacity * 2usize] < first {
                 found_register = true
                 break
             }
-            register += 1usize
+            tried += 1usize
         }
         if found_register {
             let push_error = heap_push(heaps, counts[..], capacity, register, last, value_at)

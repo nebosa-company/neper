@@ -83,126 +83,13 @@ neper_entry PROC
     mov qword ptr [r14+8], 0
     xor r15d, r15d
 
-    call qword ptr [__imp_GetCommandLineW]
-    test rax, rax
-    jz entry_fail
-    mov rbx, rax
-
-    xor edi, edi
-entry_command_length:
-    cmp word ptr [rbx+rdi*2], 0
-    je entry_command_scratch
-    inc rdi
-    jmp entry_command_length
-entry_command_scratch:
-    lea rdx, [rdi+1]
-    shl rdx, 1
+; The arguments, parsed into the table at the arena's base by the helper `os.args` shares.
     mov rcx, r13
-    mov r8d, 2
-    call np_arena_alloc
+    mov rdx, r12
+    call np_parse_args
     test rax, rax
-    jz entry_fail
-    mov [rsp+32], rax
-
-entry_skip_space:
-    movzx eax, word ptr [rbx]
-    cmp eax, 20h
-    je entry_skip_one
-    cmp eax, 9
-    jne entry_arg_start
-entry_skip_one:
-    add rbx, 2
-    jmp entry_skip_space
-
-entry_arg_start:
-    cmp word ptr [rbx], 0
-    je entry_args_done
-    cmp r15, 256
-    jae entry_fail
-    mov rsi, [rsp+32]
-    xor edi, edi
-    xor r11d, r11d
-entry_decode_char:
-    movzx eax, word ptr [rbx]
-    test eax, eax
-    jz entry_convert
-    cmp eax, 5ch
-    je entry_decode_slashes
-    cmp eax, 22h
-    je entry_decode_quote
-    cmp eax, 20h
-    je entry_decode_space
-    cmp eax, 9
-    je entry_decode_space
-entry_decode_copy:
-    mov [rsi+rdi*2], ax
-    add rbx, 2
-    inc rdi
-    jmp entry_decode_char
-
-entry_decode_space:
-    test r11d, r11d
-    jz entry_convert
-    jmp entry_decode_copy
-
-entry_decode_quote:
-    xor r11d, 1
-    add rbx, 2
-    jmp entry_decode_char
-
-entry_decode_slashes:
-    xor r10d, r10d
-entry_count_slashes:
-    cmp word ptr [rbx], 5ch
-    jne entry_after_slashes
-    inc r10
-    add rbx, 2
-    jmp entry_count_slashes
-entry_after_slashes:
-    cmp word ptr [rbx], 22h
-    jne entry_copy_all_slashes
-    mov rdx, r10
-    shr rdx, 1
-entry_copy_half_slashes:
-    test rdx, rdx
-    jz entry_slash_quote
-    mov word ptr [rsi+rdi*2], 5ch
-    inc rdi
-    dec rdx
-    jmp entry_copy_half_slashes
-entry_slash_quote:
-    test r10b, 1
-    jz entry_slash_delimiter
-    mov word ptr [rsi+rdi*2], 22h
-    inc rdi
-    add rbx, 2
-    jmp entry_decode_char
-entry_slash_delimiter:
-    xor r11d, 1
-    add rbx, 2
-    jmp entry_decode_char
-entry_copy_all_slashes:
-    test r10, r10
-    jz entry_decode_char
-    mov word ptr [rsi+rdi*2], 5ch
-    inc rdi
-    dec r10
-    jmp entry_copy_all_slashes
-
-entry_convert:
-    mov word ptr [rsi+rdi*2], 0
-    mov rcx, r13
-    mov rdx, rsi
-    mov r8, rdi
-    call np_utf16_to_utf8
-    test rax, rax
-    jz entry_fail
-    mov rcx, r15
-    shl rcx, 4
-    mov [r12+rcx], rax
-    mov [r12+rcx+8], rdx
-    inc r15
-    jmp entry_skip_space
+    js entry_fail
+    mov r15, rax
 
 entry_args_done:
     mov [r14+8], r15
@@ -448,6 +335,160 @@ utf16_done:
     pop r12
     ret
 np_utf16_to_utf8 ENDP
+
+; The command line, parsed the way the C runtime does (D1607): rcx = the arena the strings come
+; from, rdx = a table of 256 (pointer, length) entries. rax = the count, or -1 when the arena is
+; exhausted, a string does not convert, or there are more than 256. The entry parses into the
+; root arena's first page; `os.args` parses again into the caller's arena, rather than trust a
+; register to still hold the entry's table -- a callee-saved register a function allocates
+; holds that function's value, and a thread's never held the table at all.
+np_parse_args PROC
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r15
+    sub rsp, 40
+    mov r13, rcx
+    mov r12, rdx
+    xor r15d, r15d
+    call qword ptr [__imp_GetCommandLineW]
+    test rax, rax
+    jz parse_fail
+    mov rbx, rax
+
+    xor edi, edi
+parse_command_length:
+    cmp word ptr [rbx+rdi*2], 0
+    je parse_command_scratch
+    inc rdi
+    jmp parse_command_length
+parse_command_scratch:
+    lea rdx, [rdi+1]
+    shl rdx, 1
+    mov rcx, r13
+    mov r8d, 2
+    call np_arena_alloc
+    test rax, rax
+    jz parse_fail
+    mov [rsp+32], rax
+
+parse_skip_space:
+    movzx eax, word ptr [rbx]
+    cmp eax, 20h
+    je parse_skip_one
+    cmp eax, 9
+    jne parse_arg_start
+parse_skip_one:
+    add rbx, 2
+    jmp parse_skip_space
+
+parse_arg_start:
+    cmp word ptr [rbx], 0
+    je parse_done
+    cmp r15, 256
+    jae parse_fail
+    mov rsi, [rsp+32]
+    xor edi, edi
+    xor r11d, r11d
+parse_decode_char:
+    movzx eax, word ptr [rbx]
+    test eax, eax
+    jz parse_convert
+    cmp eax, 5ch
+    je parse_decode_slashes
+    cmp eax, 22h
+    je parse_decode_quote
+    cmp eax, 20h
+    je parse_decode_space
+    cmp eax, 9
+    je parse_decode_space
+parse_decode_copy:
+    mov [rsi+rdi*2], ax
+    add rbx, 2
+    inc rdi
+    jmp parse_decode_char
+
+parse_decode_space:
+    test r11d, r11d
+    jz parse_convert
+    jmp parse_decode_copy
+
+parse_decode_quote:
+    xor r11d, 1
+    add rbx, 2
+    jmp parse_decode_char
+
+parse_decode_slashes:
+    xor r10d, r10d
+parse_count_slashes:
+    cmp word ptr [rbx], 5ch
+    jne parse_after_slashes
+    inc r10
+    add rbx, 2
+    jmp parse_count_slashes
+parse_after_slashes:
+    cmp word ptr [rbx], 22h
+    jne parse_copy_all_slashes
+    mov rdx, r10
+    shr rdx, 1
+parse_copy_half_slashes:
+    test rdx, rdx
+    jz parse_slash_quote
+    mov word ptr [rsi+rdi*2], 5ch
+    inc rdi
+    dec rdx
+    jmp parse_copy_half_slashes
+parse_slash_quote:
+    test r10b, 1
+    jz parse_slash_delimiter
+    mov word ptr [rsi+rdi*2], 22h
+    inc rdi
+    add rbx, 2
+    jmp parse_decode_char
+parse_slash_delimiter:
+    xor r11d, 1
+    add rbx, 2
+    jmp parse_decode_char
+parse_copy_all_slashes:
+    test r10, r10
+    jz parse_decode_char
+    mov word ptr [rsi+rdi*2], 5ch
+    inc rdi
+    dec r10
+    jmp parse_copy_all_slashes
+
+parse_convert:
+    mov word ptr [rsi+rdi*2], 0
+    mov rcx, r13
+    mov rdx, rsi
+    mov r8, rdi
+    call np_utf16_to_utf8
+    test rax, rax
+    jz parse_fail
+    mov rcx, r15
+    shl rcx, 4
+    mov [r12+rcx], rax
+    mov [r12+rcx+8], rdx
+    inc r15
+    jmp parse_skip_space
+
+parse_done:
+    mov rax, r15
+    jmp parse_return
+parse_fail:
+    mov rax, -1
+parse_return:
+    add rsp, 40
+    pop r15
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+np_parse_args ENDP
 
 np_error PROC
     mov eax, 06F777EBFh
@@ -1474,55 +1515,34 @@ clock_failed:
     ret
 neper_os_clock ENDP
 
+; rcx = the result ([]str, err), rdx = the arena. The command line is parsed again, into a
+; table and strings from the caller's arena (D1607); it reads no register the entry set.
 neper_os_args PROC
-    push rbx
-    push rsi
-    push rdi
     push r12
     push r13
     push r14
-    push r15
     sub rsp, 48
     mov r13, rcx
     mov r14, rdx
-    mov rbx, r12
     mov rax, [r14+16]
     mov [rsp+32], rax
     mov qword ptr [r13], 0
     mov qword ptr [r13+8], 0
     mov dword ptr [r13+16], 0
-    mov rax, r15
-    shl rax, 4
-    jc args_oom
-    mov rdx, rax
     mov rcx, r14
+    mov edx, 4096
     mov r8d, 8
     call np_arena_alloc
     test rax, rax
     jz args_oom
-    mov [r13], rax
-    mov [r13+8], r15
     mov r12, rax
-args_copy_loop:
-    test r15, r15
-    jz args_copied
-    mov rdx, [rbx+8]
     mov rcx, r14
-    mov r8d, 1
-    call np_arena_alloc
+    mov rdx, r12
+    call np_parse_args
     test rax, rax
-    jz args_oom
-    mov [r12], rax
-    mov rcx, [rbx+8]
-    mov [r12+8], rcx
-    mov rdi, rax
-    mov rsi, [rbx]
-    rep movsb
-    add rbx, 16
-    add r12, 16
-    dec r15
-    jmp args_copy_loop
-args_copied:
+    js args_oom
+    mov [r13], r12
+    mov [r13+8], rax
     jmp args_done
 args_oom:
     mov rax, [rsp+32]
@@ -1532,13 +1552,9 @@ args_oom:
     mov dword ptr [r13+16], 06979AADCh
 args_done:
     add rsp, 48
-    pop r15
     pop r14
     pop r13
     pop r12
-    pop rdi
-    pop rsi
-    pop rbx
     ret
 neper_os_args ENDP
 

@@ -1925,6 +1925,12 @@ $pointerFloatArgsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $pointerFloatArgsWritten -ne 'executable written') { throw 'pointer_float_args emission failed' }
 & $pointerFloatArgsPath
 if ($LASTEXITCODE -ne 0) { throw "a pointer_float_args check failed: exit $LASTEXITCODE" }
+# Arguments moved straight into the argument registers: swapped, rotated, repeated, interleaved with floats, past the registers, indirect; eight values live across calls (D1607).
+$callMovesPath = Join-Path $testBuild 'call-moves-selfhost.exe'
+$callMovesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\call_moves\src\main.e') $repo 'x64' 'windows' $callMovesPath
+if ($LASTEXITCODE -ne 0 -or $callMovesWritten -ne 'executable written') { throw 'call_moves emission failed' }
+$callMovesOut = & $callMovesPath
+if ($LASTEXITCODE -ne 0 -or $callMovesOut -ne 'call moves ok') { throw "a call_moves check failed: exit $LASTEXITCODE" }
 # `e.game.nav`: region coverage and portals, funnel corners on three corridors, flow distances against Dijkstra, HPA* within 5% of BFS on 20 maps (D865).
 $gameNavPath = Join-Path $testBuild 'game-nav-selfhost.exe'
 $gameNavWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\game_nav\src\main.e') $repo 'x64' 'windows' $gameNavPath

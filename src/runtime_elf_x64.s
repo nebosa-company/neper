@@ -979,81 +979,169 @@ neper_os_open:
     pop r12
     ret
 
+# rdi = the result ([]str, err), rsi = the arena. The arguments are the kernel's own copy,
+# /proc/self/cmdline -- each one followed by a NUL -- read into the arena, with a table of
+# (pointer, length) views into it (D1607). No register the startup code set is read: a
+# callee-saved register a function allocates holds that function's value, and a thread's
+# never held the startup's table at all. The file is read twice, once to measure it, since a
+# /proc file reports no size; the measuring buffer is given back before the second read.
 .global neper_os_args
 neper_os_args:
     push rbx
     push r12
+    push r13
     push r14
     push r15
     sub rsp, 16
     mov r12, rdi
     mov rbx, rsi
-    mov r14, r13
-    mov r15, qword ptr [r14]
-    sub r15, r14
-    shr r15, 4
     mov qword ptr [r12], 0
     mov qword ptr [r12 + 8], 0
     mov dword ptr [r12 + 16], 0
     mov rax, qword ptr [rbx + 16]
     mov qword ptr [rsp], rax
-    test r15, r15
-    jz .Largs_done
-    mov rsi, r15
-    shl rsi, 4
+    lea rdi, [rip + .Largs_path]
+    mov esi, 0x80000
+    xor edx, edx
+    mov eax, 2
+    syscall
+    test rax, rax
+    js .Largs_errno
+    mov qword ptr [rsp + 8], rax
     mov rdi, rbx
+    mov esi, 4096
+    mov edx, 1
+    call np_alloc
+    test rax, rax
+    jz .Largs_oom_open
+    mov r13, rax
+    xor r14d, r14d
+.Largs_measure:
+    mov rdi, qword ptr [rsp + 8]
+    mov rsi, r13
+    mov edx, 4096
+    xor eax, eax
+    syscall
+    test rax, rax
+    js .Largs_errno_open
+    jz .Largs_measured
+    add r14, rax
+    jmp .Largs_measure
+.Largs_measured:
+    mov rax, qword ptr [rsp]
+    mov qword ptr [rbx + 16], rax
+    mov rdi, qword ptr [rsp + 8]
+    xor esi, esi
+    xor edx, edx
+    mov eax, 8
+    syscall
+    test rax, rax
+    js .Largs_errno_open
+    mov rdi, rbx
+    mov rsi, r14
+    mov edx, 1
+    call np_alloc
+    test rax, rax
+    jz .Largs_oom_open
+    mov r13, rax
+    xor r15d, r15d
+.Largs_fill:
+    cmp r15, r14
+    jae .Largs_filled
+    mov rdi, qword ptr [rsp + 8]
+    lea rsi, [r13 + r15]
+    mov rdx, r14
+    sub rdx, r15
+    xor eax, eax
+    syscall
+    test rax, rax
+    js .Largs_errno_open
+    jz .Largs_filled
+    add r15, rax
+    jmp .Largs_fill
+.Largs_filled:
+    mov r14, r15
+    mov rdi, qword ptr [rsp + 8]
+    mov eax, 3
+    syscall
+    xor ecx, ecx
+    xor eax, eax
+.Largs_count:
+    cmp rcx, r14
+    jae .Largs_counted
+    cmp byte ptr [r13 + rcx], 0
+    jne .Largs_count_next
+    inc rax
+.Largs_count_next:
+    inc rcx
+    jmp .Largs_count
+.Largs_counted:
+    test rax, rax
+    jz .Largs_done
+    mov r15, rax
+    mov rdi, rbx
+    mov rsi, rax
+    shl rsi, 4
     mov edx, 8
     call np_alloc
     test rax, rax
     jz .Largs_oom
-    mov qword ptr [rsp + 8], rax
-    xor r10d, r10d
-.Largs_copy:
-    cmp r10, r15
-    jae .Largs_copied
-    mov rcx, r10
-    shl rcx, 4
-    mov r11, qword ptr [r14 + rcx]
-    mov rsi, qword ptr [r14 + rcx + 8]
-    mov rdi, rbx
-    mov edx, 1
-    push r10
-    push r11
-    call np_alloc
-    pop r11
-    pop r10
-    test rax, rax
-    jz .Largs_oom
-    mov rcx, r10
-    shl rcx, 4
-    mov rdx, qword ptr [r14 + rcx + 8]
-    mov rdi, rax
-    mov rsi, r11
-    mov rcx, rdx
-    rep movsb
-    mov r8, qword ptr [rsp + 8]
-    mov rcx, r10
-    shl rcx, 4
-    mov qword ptr [r8 + rcx], rax
-    mov qword ptr [r8 + rcx + 8], rdx
-    inc r10
-    jmp .Largs_copy
-.Largs_copied:
-    mov rax, qword ptr [rsp + 8]
     mov qword ptr [r12], rax
     mov qword ptr [r12 + 8], r15
+    mov r8, rax
+    mov r9, r13
+    xor ecx, ecx
+.Largs_split:
+    cmp rcx, r14
+    jae .Largs_done
+    cmp byte ptr [r13 + rcx], 0
+    jne .Largs_split_next
+    lea rdx, [r13 + rcx]
+    sub rdx, r9
+    mov qword ptr [r8], r9
+    mov qword ptr [r8 + 8], rdx
+    add r8, 16
+    lea r9, [r13 + rcx + 1]
+.Largs_split_next:
+    inc rcx
+    jmp .Largs_split
+.Largs_errno_open:
+    mov r15, rax
+    mov rdi, qword ptr [rsp + 8]
+    mov eax, 3
+    syscall
+    mov rax, r15
+.Largs_errno:
+    neg eax
+    mov edi, eax
+    call np_error
+    mov r15d, eax
+    mov rax, qword ptr [rsp]
+    mov qword ptr [rbx + 16], rax
+    mov qword ptr [r12], 0
+    mov qword ptr [r12 + 8], 0
+    mov dword ptr [r12 + 16], r15d
     jmp .Largs_done
+.Largs_oom_open:
+    mov rdi, qword ptr [rsp + 8]
+    mov eax, 3
+    syscall
 .Largs_oom:
     mov rax, qword ptr [rsp]
     mov qword ptr [rbx + 16], rax
+    mov qword ptr [r12], 0
+    mov qword ptr [r12 + 8], 0
     mov dword ptr [r12 + 16], 0x6979aadc
 .Largs_done:
     add rsp, 16
     pop r15
     pop r14
+    pop r13
     pop r12
     pop rbx
     ret
+.Largs_path:
+    .asciz "/proc/self/cmdline"
 
 .global neper_os_reserve
 neper_os_reserve:

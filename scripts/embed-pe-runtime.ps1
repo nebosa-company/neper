@@ -155,8 +155,9 @@ foreach ($line in [IO.File]::ReadAllLines($source)) {
 }
 [void]$builder.AppendLine('// Where a procedure ends: the start of the next in source order, or the end of the')
 [void]$builder.AppendLine('// runtime for the last. The entry, its arena size word, its fault handler with its touch and its writer, and its')
-[void]$builder.AppendLine('// callees are the first seven, so their end is the least any program carries.')
-[void]$builder.AppendLine(("fn floor() -> usize {{ ret {0}usize }}" -f $textSymbols[$procedures[7]]))
+[void]$builder.AppendLine('// callees -- the command-line parser among them (D1607) -- are the first eight, so their end is the least any')
+[void]$builder.AppendLine('// program carries.')
+[void]$builder.AppendLine(("fn floor() -> usize {{ ret {0}usize }}" -f $textSymbols[$procedures[8]]))
 [void]$builder.AppendLine()
 [void]$builder.AppendLine('fn symbol_end(name: str) -> (usize, bool) {')
 for ($index = 0; $index -lt $procedures.Count; $index++) {
