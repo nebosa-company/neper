@@ -14,7 +14,11 @@ main{max-width:64rem;margin:auto;padding:clamp(2rem,6vw,5rem) 1.25rem}header{mar
 .lab{color:var(--muted);font-size:.85rem;font-weight:600}.val{margin:.35rem 0;font-size:2.65rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}.pc{font-size:1.2rem;color:var(--muted)}
 .delta{margin-left:.5rem;font:600 .72rem ui-monospace,"Cascadia Mono",Consolas,monospace}.delta.up{color:#168052}.delta.down{color:#c4322b}.delta.flat{color:var(--muted)}
 .track{height:.5rem;margin:.8rem 0;background:var(--track);border-radius:1rem;overflow:hidden}.track i{display:block;height:100%;background:var(--fill);border-radius:inherit}.sub{color:var(--muted);font-size:.75rem}
-.method,footer{color:var(--muted);font-size:.8rem}.method{margin:1.5rem 0 0}.method a{color:inherit}footer{margin-top:2rem;padding-top:1rem;border-top:1px solid var(--rule)}
+footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--rule)}
+.tools{margin-top:2.5rem}.tools h2{margin:0 0 .25rem;font-size:1.5rem}.tools h3{margin:1.5rem 0 .5rem;font-size:1rem}
+.tools table{width:100%;border-collapse:collapse;font-size:.85rem}.tools td{padding:.45rem .6rem;border-top:1px solid var(--rule);vertical-align:top}
+.tools td:first-child{width:45%;overflow-wrap:anywhere}.tools code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.8rem}
+@media(max-width:40rem){.tools td{display:block;width:auto}.tools td:first-child{width:auto;border-top:1px solid var(--rule);padding-bottom:0}.tools td+td{border-top:0}}
 </style>
 </head>
 <body>
@@ -26,11 +30,51 @@ main{max-width:64rem;margin:auto;padding:clamp(2rem,6vw,5rem) 1.25rem}header{mar
 <div class="tile"><div class="lab">UI and host integration</div><div class="val">100.00<span class="pc">%</span><span class="delta up">+14.37 pp</span></div><div class="track" role="img" aria-label="UI and host integration: 100.00 percent complete"><i style="width:100.0%"></i></div><div class="sub">341 of 341 capabilities</div></div>
 <div class="tile"><div class="lab">Tooling</div><div class="val">79.39<span class="pc">%</span><span class="delta down">-9.53 pp</span></div><div class="track" role="img" aria-label="Tooling: 79.39 percent complete"><i style="width:79.4%"></i></div><div class="sub">22.23 of 28 capabilities</div></div>
 </section>
-<p class="method">Compiler and tooling use the <a href="work-queue.json">active queue</a>
-and <a href="work-done.jsonl">completion ledger</a>; module and UI totals are computed
-from their machine-readable plans and committed source.</p>
+<section class="tools" aria-label="How to run the tools">
+<h2>Tools</h2>
+<p class="sub">From the repository root. PowerShell on Windows, Bash on Linux and macOS.</p>
+<h3>Build and test the compiler</h3>
+<table>
+<tr><td><code>scripts/build-bootstrap.ps1</code> / <code>scripts/build-bootstrap.sh</code></td><td>Build the C bootstrap compiler into <code>build/windows</code> or <code>build/linux</code>.</td></tr>
+<tr><td><code>scripts/build-selfhost.ps1</code> / <code>scripts/build-selfhost.sh</code></td><td>Build the self-hosted compiler (<code>neper-self</code>) with the bootstrap.</td></tr>
+<tr><td><code>pwsh tests/selfhost/run.ps1</code> / <code>bash tests/selfhost/run.sh</code></td><td>The full self-host suite: fixed point (stage 2 equals stage 3), every link, check and conformance fixture, tool goldens.</td></tr>
+<tr><td><code>bash scripts/check-fixture.sh NAME [--keep]</code></td><td>Build and run one link fixture with the self-hosted compiler.</td></tr>
+<tr><td><code>python -m unittest discover -s tests -p "test_*.py"</code></td><td>The Python unit tests: module plan, module surfaces, widget plan, GPU contracts, LLM edit benchmark scoring. Run one with <code>python tests/test_module_surfaces.py</code>.</td></tr>
+<tr><td><code>python scripts/lint_bootstrap.py src</code></td><td>Find source the C bootstrap cannot compile before building it.</td></tr>
+<tr><td><code>build/windows/patch.exe SPEC</code></td><td>Apply a multi-site edit spec (<code>@@@</code> file, <code>&lt;&lt;&lt;</code> old, <code>===</code>, new <code>&gt;&gt;&gt;</code>); source in <code>tools/patch</code>.</td></tr>
+</table>
+<h3>Check the plans and goldens</h3>
+<table>
+<tr><td><code>python scripts/check_module_surfaces.py [--compiler PATH --os TARGET]</code></td><td>Every module fence in <code>docs/module-apis.md</code> against the declarations in <code>lib/e</code>.</td></tr>
+<tr><td><code>python scripts/check_module_plan.py</code> / <code>python scripts/check_widget_plan.py</code></td><td>Validate <code>docs/modules.json</code> and <code>docs/widget-plan.json</code>.</td></tr>
+<tr><td><code>python scripts/library_fixtures.py [--write]</code></td><td>Check, or regenerate, <code>docs/library-fixtures.json</code>.</td></tr>
+<tr><td><code>python scripts/validate_stream.py [PATH ...]</code></td><td>Validate the committed <code>.jsonl</code> goldens and <code>docs/modules.json</code> against the v1 stream schema.</td></tr>
+<tr><td><code>python scripts/card_examples.py COMPILER ROOT ARCH OS OUTDIR</code></td><td>Check every example in the language card with the compiler.</td></tr>
+</table>
+<h3>Regenerate documents</h3>
+<table>
+<tr><td><code>python scripts/render_progress.py</code></td><td>This page, from the work queue, the completion ledger, the module and widget plans and the committed source.</td></tr>
+<tr><td><code>python scripts/render_tasks.py</code></td><td>One task file per unfinished feature under <code>docs/tasks</code>.</td></tr>
+<tr><td><code>python scripts/render_card.py [--check]</code></td><td>The LLM language card from the grammar and the diagnostic registry.</td></tr>
+<tr><td><code>python scripts/render_ux_theme.py [--check]</code></td><td>The UI theme block in <code>lib/e/ui/style.e</code> from <code>docs/ux/tokens.json</code>.</td></tr>
+<tr><td><code>scripts/build-docs-pdf.ps1</code> / <code>scripts/build-docs-pdf.sh</code></td><td>The documentation PDF, <code>docs/neper.pdf</code>; the wrappers make <code>.venv-docs-pdf</code> and install the pinned dependencies. Direct: <code>python scripts/build-docs-pdf.py [--out docs/neper.pdf] [--quiet]</code>.</td></tr>
+<tr><td><code>python scripts/render_module_apis.py [--output PATH]</code></td><td>The module API catalogue PDF (default <code>output/pdf/module-apis.pdf</code>); needs <code>reportlab</code>.</td></tr>
+</table>
+<h3>Website</h3>
+<table>
+<tr><td><code>python -m http.server 8000 -d docs</code></td><td>Preview the landing page, <code>docs/index.html</code>, at <code>http://localhost:8000</code>. It is a static GitHub Pages site with no build step.</td></tr>
+<tr><td><code>docs/landing-page-maintenance.md</code></td><td>Where each number on the page comes from, the one-line recounts for modules, signatures, algorithms and controls, and how to refresh compile time and executable size.</td></tr>
+</table>
+<h3>Measure</h3>
+<table>
+<tr><td><code>python scripts/lang-stats.py [--days N] [--harness] [--color] [--help]</code></td><td>What it costs an LLM to write Neper against Dart, Rust, JS, TS and Python, from local agent transcripts; <code>--help</code> explains every column.</td></tr>
+<tr><td><code>python benchmarks/baseline/measure.py --compiler PATH --repo ROOT --host windows|linux</code></td><td>Cold and warm build times, peak memory and image size on the compiler and the scale workloads.</td></tr>
+<tr><td><code>python scripts/check_batch_snapshots.py COMPILER ROOT ARCH OS WORKDIR [CYCLES]</code></td><td>Batch-session snapshot soak.</td></tr>
+<tr><td><code>scripts/embed-pe-runtime.ps1</code> / <code>scripts/embed-elf-runtime.ps1</code></td><td>Regenerate the embedded runtimes after a runtime source change.</td></tr>
+</table>
+</section>
 <footer>Generated by <code>scripts/render_progress.py</code> at
-<code>8eac1c22</code> (2026-09-27).</footer>
+<code>4938ddfe</code> (2026-09-27 09:15:21 UTC+02:00).</footer>
 </main>
 </body>
 </html>
