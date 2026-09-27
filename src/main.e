@@ -2540,6 +2540,89 @@ fn nptest_join(a: *mem.Arena, dir: str, name: str) -> (str, err) {
     ret (buffer[0usize..at], ok)
 }
 
+// `eval EXPR ROOT ARCH OS [FILE]` (D1577, D470): the expression as a `const`
+// initialiser in FILE's scope -- or an empty module's -- folded by section 9's
+// interpreter and printed. Nothing is generated or linked: what it cannot fold is
+// what a `const` cannot, refused as a `const` is.
+fn eval_command(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
+    var loaded: graph.Graph = zero
+    try init_cli_graph(a, &loaded)
+    var operand = "eval.e"
+    var base = "fn main() {}\n"
+    if args.len == 7usize {
+        operand = args[6usize]
+        let (file_text, file_error) = graph.load_file(a, operand)
+        if file_error != ok {
+            try stderr_text("error[E-CLI-9999]: the file cannot be read\n")
+            os.exit(2i32)
+            ret ok
+        }
+        base = file_text
+    }
+    let prefix = "\nconst NEPER_EVAL = "
+    let expression = args[2usize]
+    let (buffer, buffer_error) = mem.alloc[u8](a, base.len + prefix.len + expression.len + 1usize)
+    if buffer_error != ok { ret buffer_error }
+    var at = nptest_append(buffer, 0usize, base)
+    at = nptest_append(buffer, at, prefix)
+    at = nptest_append(buffer, at, expression)
+    buffer[at] = 10u8
+    at += 1usize
+    loaded.root_text = buffer[0usize..at]
+    loaded.root_text_given = true
+    let load_error = load_graph(a, &report, &loaded, operand, args[3usize], args[4usize], args[5usize])
+    if load_error != ok {
+        try finish_report(&report)
+        os.exit(1i32)
+        ret ok
+    }
+    var resolver: resolve.Resolver = zero
+    try init_cli_resolver(a, &resolver, &loaded, &report)
+    let resolve_error = resolve.collect(&resolver, &loaded)
+    if resolve_error != ok {
+        try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
+        try finish_report(&report)
+        os.exit(1i32)
+        ret ok
+    }
+    var checker: check.Checker = zero
+    let check_error = check_file_declarations(a, &report, &checker, &resolver, &loaded)
+    if check_error != ok {
+        try print_check_diagnostic(&report, &loaded, &checker, check_error)
+        try finish_report(&report)
+        os.exit(1i32)
+        ret ok
+    }
+    let (constant_index, found) = check.find_constant(&checker, 0usize, "NEPER_EVAL")
+    if !found {
+        try stderr_text("error[E-CLI-9999]: the expression did not become a constant\n")
+        os.exit(1i32)
+        ret ok
+    }
+    let evaluate_error = check.evaluate_constant(&checker, constant_index)
+    if evaluate_error != ok {
+        try print_check_diagnostic(&report, &loaded, &checker, evaluate_error)
+        try finish_report(&report)
+        os.exit(1i32)
+        ret ok
+    }
+    let value = checker.constants[constant_index].value
+    let kind = checker.constants[constant_index].ty.kind
+    if kind == .Bool {
+        if value.magnitude != 0usize { ret io.print("true\n") }
+        ret io.print("false\n")
+    }
+    if kind != .Integer && kind != .UntypedInteger {
+        try stderr_text("error[E-CLI-9999]: the value is not an integer or a bool, which is all `eval` prints\n")
+        os.exit(1i32)
+        ret ok
+    }
+    if value.negative && value.magnitude != 0usize { try io.print("-") }
+    try io.print(check.decimal_text(&checker, value.magnitude))
+    ret io.print("\n")
+}
+
 fn manifest_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     var loaded: graph.Graph = zero
@@ -11731,6 +11814,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len >= 13usize && same(args[1usize], "plan-add-parameter-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--parameter") && (same(args[11usize], "--argument") || same(args[11usize], "--arguments")) && args[10usize].len != 0usize && args[12usize].len != 0usize && overlays_only_after(args, 13usize) { ret query_file(a, &report, args, 6usize) }
     // `check-file PATH ROOT ARCH OS [--json]`: with `--json`, the stream of docs/tooling.md
     // -- header, a diagnostic record each, the result -- on stdout (D228).
+    // `eval EXPR ROOT ARCH OS [FILE]` (D1577): a constant folded and printed.
+    if (args.len == 6usize || args.len == 7usize) && same(args[1usize], "eval") { ret eval_command(a, args) }
     if args.len >= 6usize && same(args[1usize], "check-file") && check_flags(a, &report, args) {
         if report.json {
             try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"check\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")

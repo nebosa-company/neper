@@ -4545,6 +4545,15 @@ comptime_meta_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$comptime_meta_written" = 'executable written' ]
 chmod +x "$comptime_meta_path"
 "$comptime_meta_path"
+# `eval` (D1577).
+[ "$($test_build/neper-self eval '1usize << 40' "$repo" x64 linux)" = '1099511627776' ]
+[ "$($test_build/neper-self eval '3 > 2 && 1 == 1' "$repo" x64 linux)" = 'true' ]
+[ "$($test_build/neper-self eval '0i32 - 5i32' "$repo" x64 linux)" = '-5' ]
+[ "$($test_build/neper-self eval 'layout_sum() + member_sum()' "$repo" x64 linux "$repo/tests/selfhost/fixtures/link/comptime_meta/src/main.e")" = '1572' ]
+eval_missing_status=0
+eval_missing=$($test_build/neper-self eval 'nope()' "$repo" x64 linux 2>&1) || eval_missing_status=$?
+[ "$eval_missing_status" -eq 1 ]
+case "$eval_missing" in *E-NAME-9999*) ;; *) printf '%s\n' "eval of an unknown name was not refused: $eval_missing" >&2; exit 1 ;; esac
 check_protocol_diagnostic comptime_pointer_result 'main.e:9:15: error[E-COMPTIME-9999]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold'
 check_protocol_diagnostic comptime_slice_bounds 'main.e:7:9: error[E-COMPTIME-9999]: constant `BAD` cannot be evaluated at compile time: its call reached an index out of bounds'
 # `emit-executable --arena SIZE` (D225): the root arena is the size given. Twelve
