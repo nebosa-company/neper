@@ -3807,6 +3807,23 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     if strings_error != ok { ret strings_error }
     report.build.pools[stats.POOL_NIR_STRINGS] = strings.len
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
+    // (D1582) The named locals lowering binds and selection places, and the descriptor
+    // text an artifact writer spells their types in; committed as they are touched.
+    let (debug_locals, debug_locals_error) = mem.alloc[nir.DebugLocal](a, instruction_capacity / 8usize + 256usize)
+    if debug_locals_error != ok { ret debug_locals_error }
+    builder.debug.locals = debug_locals
+    let (debug_vars, debug_vars_error) = mem.alloc[nir.DebugVar](a, instruction_capacity / 8usize + 256usize)
+    if debug_vars_error != ok { ret debug_vars_error }
+    builder.debug.vars = debug_vars
+    let (debug_text, debug_text_error) = mem.alloc[u8](a, 1048576usize / scale + 4096usize)
+    if debug_text_error != ok { ret debug_text_error }
+    builder.debug.text = debug_text
+    let (debug_wanted, debug_wanted_error) = mem.alloc[check.Type](a, 4096usize)
+    if debug_wanted_error != ok { ret debug_wanted_error }
+    builder.debug.wanted = debug_wanted
+    let (debug_definitions, debug_definitions_error) = mem.alloc[str](a, 4096usize)
+    if debug_definitions_error != ok { ret debug_definitions_error }
+    builder.debug.definitions = debug_definitions
     // The shared trap messages' bytes and names (D927), committed as they are written.
     let (trap_text, trap_text_error) = mem.alloc[u8](a, 4194304usize / scale)
     if trap_text_error != ok { ret trap_text_error }
@@ -8931,6 +8948,7 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
             function_offsets[function_at] = function_start
             let relocation_start = *context.relocation_count
             let line_start = *context.line_count
+            let var_start = builder.debug.var_count
             if reuse.on && function_at < lowered_end {
                 let (spliced, splice_error) = splice_function(loaded, builder, function_at, reuse, context)
                 if splice_error != ok { ret splice_error }
@@ -8943,6 +8961,7 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
                 context.output.count = function_start
                 *context.relocation_count = relocation_start
                 *context.line_count = line_start
+                builder.debug.var_count = var_start
             }
             if report.timing { report.codegen_ns = report.codegen_ns -% nptest_now() }
             let codegen_error = codegen_x64.function(builder, function_at, stack_slots, context)
@@ -8966,6 +8985,7 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
                     context.output.count = function_start
                     *context.relocation_count = relocation_start
                     *context.line_count = line_start
+                    builder.debug.var_count = var_start
                     function_offsets[function_at] = folded_at
                 }
                 if report.timing { report.fold_ns = report.fold_ns +% nptest_now() }
@@ -8988,6 +9008,8 @@ type Reuse = struct {
     emission_first: usize,
     line_starts: []usize,
     line_counts: []usize,
+    var_starts: []usize,
+    var_counts: []usize,
     names: lookup.Index,
     module_index: usize,
     reused: usize,
@@ -9010,6 +9032,11 @@ fn reuse_open(a: *mem.Arena, bytes: []const u8, module_index: usize, reuse: *Reu
     let (counts, counts_error) = mem.alloc[usize](a, count)
     if counts_error != ok { ret counts_error }
     if em.code_lines_index(bytes, count, starts, counts) != ok { ret ok }
+    let (var_starts, var_starts_error) = mem.alloc[usize](a, count)
+    if var_starts_error != ok { ret var_starts_error }
+    let (var_counts, var_counts_error) = mem.alloc[usize](a, count)
+    if var_counts_error != ok { ret var_counts_error }
+    if em.code_vars_index(bytes, count, var_starts, var_counts) != ok { ret ok }
     let (entries, entries_error) = mem.alloc[lookup.Entry](a, count * 8usize + 256usize)
     if entries_error != ok { ret entries_error }
     var names: lookup.Index = zero
@@ -9027,6 +9054,8 @@ fn reuse_open(a: *mem.Arena, bytes: []const u8, module_index: usize, reuse: *Reu
     reuse.emission_first = emission_first
     reuse.line_starts = starts
     reuse.line_counts = counts
+    reuse.var_starts = var_starts
+    reuse.var_counts = var_counts
     reuse.names = names
     reuse.module_index = module_index
     reuse.on = true
@@ -9097,6 +9126,23 @@ fn splice_function(loaded: *graph.Graph, builder: *nir.Builder, function_at: usi
         context.lines[*context.line_count] = entry
         *context.line_count = *context.line_count + 1usize
         row_at += 1usize
+    }
+    // (D1582) And its named locals, their types as the previous artifact spelled them,
+    // and the structs those name, taken whole the first time.
+    let vars = reuse.var_counts[old_index]
+    if vars > builder.debug.vars.len - builder.debug.var_count { ret (false, ok) }
+    let (old_strings, old_strings_found, old_strings_error) = em.find_section_unchecked(reuse.bytes, em.strings_kind())
+    if old_strings_error != ok || !old_strings_found { ret (false, ok) }
+    if vars != 0usize && builder.debug.inherited == 0usize {
+        if !em.inherit_definitions(reuse.bytes, old_strings, &builder.debug) { ret (false, ok) }
+    }
+    var var_at = 0usize
+    while var_at < vars {
+        let (placed, placed_error) = em.read_var(reuse.bytes, old_strings, reuse.var_starts[old_index] + var_at * em.var_record_size(), start)
+        if placed_error != ok { ret (false, ok) }
+        builder.debug.vars[builder.debug.var_count] = placed
+        builder.debug.var_count += 1usize
+        var_at += 1usize
     }
     ret (true, ok)
 }
@@ -9319,7 +9365,7 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild, largest_bytes: usize) -> err {
     let (string_slots, string_slots_error) = mem.alloc[usize](a, 131072usize)
     if string_slots_error != ok { ret string_slots_error }
     try em.init_strings(&hot.strings, string_values, string_slots)
-    let (sections, sections_error) = mem.alloc[em.Section](a, 10usize)
+    let (sections, sections_error) = mem.alloc[em.Section](a, 11usize)
     if sections_error != ok { ret sections_error }
     hot.sections = sections
     let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
@@ -10121,6 +10167,9 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     w.stage.count = 0usize
     w.relocation_count = 0usize
     w.line_count = 0usize
+    w.builder.debug.var_count = 0usize
+    w.builder.debug.definition_count = 0usize
+    w.builder.debug.inherited = 0usize
     var no_fold: Fold = zero
     // (D1515) What the artifact records for the next build to reuse, and, in a hot
     // build of a module rebuilt with a previous artifact (a source change; D1516: an
@@ -12448,7 +12497,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 if string_slots_error != ok { ret string_slots_error }
                 var strings: em.StringTable = zero
                 try em.init_strings(&strings, string_values, string_slots)
-                let (sections, sections_error) = mem.alloc[em.Section](a, 10usize)
+                let (sections, sections_error) = mem.alloc[em.Section](a, 11usize)
                 if sections_error != ok { ret sections_error }
                 let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
                 if triple_error != ok { ret triple_error }

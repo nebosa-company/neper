@@ -544,6 +544,79 @@ fn table_position(table: *FunctionTable, module_index: usize, name: str, instanc
 // -- the same edge set `nir` walks after lowering, so an image linked from artifacts drops the
 // same functions from the same sequence as one compiled from source. Over the prebuilt table:
 // no artifact is re-read, so a pass is the edges, not the file.
+// (D1582) The named locals of every copied function, placed where its code landed, in
+// code order: what the image's DWARF describes. Each artifact's Vars section is located
+// once; one without it has none.
+fn assemble_vars(a: *mem.Arena, artifacts: []Artifact, table: *FunctionTable, copies: []bool, code_offset: []usize, program: *Program) -> err {
+    let (starts, starts_error) = mem.alloc[usize](a, table.count + 1usize)
+    if starts_error != ok { ret starts_error }
+    let (counts, counts_error) = mem.alloc[usize](a, table.count + 1usize)
+    if counts_error != ok { ret counts_error }
+    var total = 0usize
+    var artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let first = table.base[artifact_at]
+        let count = table.base[artifact_at + 1usize] - first
+        if count != 0usize {
+            let index_error = em.code_vars_index(artifacts[artifact_at].bytes, count, starts[first..first + count], counts[first..first + count])
+            if index_error != ok { ret index_error }
+        }
+        artifact_at += 1usize
+    }
+    var position = 0usize
+    while position < table.count {
+        if copies[position] { total += counts[position] }
+        position += 1usize
+    }
+    let (vars, vars_error) = mem.alloc[nir.DebugVar](a, total + 1usize)
+    if vars_error != ok { ret vars_error }
+    program.builder.debug.vars = vars
+    program.builder.debug.var_count = 0usize
+    // Every artifact's struct definitions: the linker writes each distinct one once.
+    var definition_total = 0usize
+    artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let (definitions_first, definitions_count, has_definitions) = em.vars_definitions(artifacts[artifact_at].bytes)
+        if has_definitions { definition_total += definitions_count }
+        artifact_at += 1usize
+    }
+    let (definitions, definitions_error) = mem.alloc[str](a, definition_total + 1usize)
+    if definitions_error != ok { ret definitions_error }
+    program.builder.debug.definitions = definitions
+    program.builder.debug.definition_count = 0usize
+    artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let bytes = artifacts[artifact_at].bytes
+        let (strings, strings_found, strings_error) = em.find_section_unchecked(bytes, em.strings_kind())
+        if strings_error != ok || !strings_found { ret InvalidInput }
+        let (definitions_first, definitions_count, has_definitions) = em.vars_definitions(bytes)
+        var definition_at = 0usize
+        while has_definitions && definition_at < definitions_count {
+            let (start, length, bounds_error) = em.string_bounds_in(bytes, strings, binary.read_u32_at(bytes, definitions_first + definition_at * 4usize))
+            if bounds_error != ok { ret InvalidInput }
+            definitions[program.builder.debug.definition_count] = bytes[start..start + length]
+            program.builder.debug.definition_count += 1usize
+            definition_at += 1usize
+        }
+        position = table.base[artifact_at]
+        while position < table.base[artifact_at + 1usize] {
+            if copies[position] {
+                var var_at = 0usize
+                while var_at < counts[position] {
+                    let (placed, placed_error) = em.read_var(bytes, strings, starts[position] + var_at * em.var_record_size(), code_offset[position])
+                    if placed_error != ok { ret InvalidInput }
+                    vars[program.builder.debug.var_count] = placed
+                    program.builder.debug.var_count += 1usize
+                    var_at += 1usize
+                }
+            }
+            position += 1usize
+        }
+        artifact_at += 1usize
+    }
+    ret ok
+}
+
 fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.Index, table: *FunctionTable, kept: []bool, edge_base: []usize, edge_target: []usize) -> (bool, err) {
     let total = table.count
     if total > kept.len { ret (false, InvalidInput) }
@@ -1000,6 +1073,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         }
         position += 1usize
     }
+    try assemble_vars(a, artifacts, &table, copies, code_offset, program)
     // Without a `main` nothing was walked, and the references resolve by name as
     // before, so that the missing entry is the error reported, not a missing callee.
     program.builder.targets_preset = rooted

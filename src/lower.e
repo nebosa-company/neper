@@ -121,6 +121,7 @@ fn bind_value(c: *check.Checker, g: *graph.Graph, module_index: usize, token: le
     }
     let name = g.modules[module_index].text[token.start..token.end]
     try add_binding(bindings, binding_count, Binding { name: name, ty: ty, value: stored_value, address: address })
+    nir.add_debug_local(builder, stored_value, name, ty, 0usize, address)
     ret check.add_local(c, name, ty, mutable)
 }
 
@@ -6578,6 +6579,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         let (instruction, result, parameter_error) = nir.emit(builder, .Parameter, parameter.ty, true, parameter_at + hidden_parameters, c.tokens[usize(node.token_start)])
         if parameter_error != ok { ret parameter_error }
         try add_binding(bindings, &binding_count, Binding { name: parameter.name, ty: parameter.ty, value: result, address: aggregate_value(c, parameter.ty) })
+        if !function.gpu { nir.add_debug_local(builder, result, parameter.name, parameter.ty, parameter_at + 1usize, aggregate_value(c, parameter.ty)) }
         try check.add_local(c, parameter.name, parameter.ty, false)
         parameter_at += 1usize
     }

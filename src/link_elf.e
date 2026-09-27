@@ -670,7 +670,18 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
 // release image carries them too. `debug_bound` is what the caller adds to the image's
 // buffer for them.
 fn debug_bound(builder: *nir.Builder, lines: []codegen_x64.LineEntry) -> usize {
-    var total = 4096usize + lines.len * 24usize
+    // The type entries, at most the memo's, and per var its entry and location list.
+    var total = 4096usize + lines.len * 24usize + 2048usize * 96usize
+    var var_at = 0usize
+    while var_at < builder.debug.var_count {
+        total += builder.debug.vars[var_at].name.len + builder.debug.vars[var_at].descriptor.len + 96usize
+        var_at += 1usize
+    }
+    var definition_at = 0usize
+    while definition_at < builder.debug.definition_count {
+        total += builder.debug.definitions[definition_at].len * 2usize + 64usize
+        definition_at += 1usize
+    }
     var at = 0usize
     while at < builder.function_count {
         total += 2usize * (builder.functions[at].module_name.len + builder.functions[at].name.len) + 64usize
@@ -770,6 +781,327 @@ fn line_row(output: *emit_x64.Buffer, state: *LineState, code_address: usize, of
     ret emit_x64.byte(output, 1usize)
 }
 
+// (D1582) The vars of the function whose code starts at `start` in the machine buffer:
+// they arrive in code order.
+fn debug_vars_of(builder: *nir.Builder, start: usize) -> (usize, usize) {
+    var low = 0usize
+    var high = builder.debug.var_count
+    while low < high {
+        let middle = low + (high - low) / 2usize
+        if builder.debug.vars[middle].function_start < start { low = middle + 1usize } else { high = middle }
+    }
+    var count = 0usize
+    while low + count < builder.debug.var_count && builder.debug.vars[low + count].function_start == start { count += 1usize }
+    ret (low, count)
+}
+
+// A named local's first record, which later pieces (`kind` plus 16) continue; a saved
+// register's record (`kind` 4) is the frame description's.
+fn local_head(placed: nir.DebugVar) -> bool {
+    ret placed.kind >= 1usize && placed.kind <= 5usize && placed.kind != 4usize
+}
+
+fn var_pieces_end(builder: *nir.Builder, at: usize, limit: usize) -> usize {
+    var end = at + 1usize
+    while end < limit && builder.debug.vars[end].kind > 16usize { end += 1usize }
+    ret end
+}
+
+fn whole_function(placed: nir.DebugVar, start: usize, end: usize) -> bool {
+    ret placed.start <= start && placed.end >= end
+}
+
+fn sleb_size(magnitude: usize) -> usize {
+    var size = 1usize
+    var rest = magnitude / 64usize
+    while rest != 0usize {
+        size += 1usize
+        rest = rest / 128usize
+    }
+    ret size
+}
+
+// A var's DWARF location: its register (DW_OP_reg), memory at a register and a
+// displacement (DW_OP_breg), or the address held there (and DW_OP_deref).
+fn location_size(placed: nir.DebugVar) -> usize {
+    if placed.kind % 16usize == 1usize { ret 1usize }
+    var magnitude = placed.displacement
+    if placed.displacement >= 9223372036854775808usize { magnitude = (0usize -% placed.displacement) - 1usize }
+    var size = 1usize + sleb_size(magnitude)
+    if placed.kind % 16usize == 3usize || placed.kind % 16usize == 5usize { size += 1usize }
+    ret size
+}
+
+fn location_expression(output: *emit_x64.Buffer, placed: nir.DebugVar) -> err {
+    if placed.kind % 16usize == 1usize { ret emit_x64.byte(output, 80usize + placed.register) }
+    try emit_x64.byte(output, 112usize + placed.register)
+    if placed.displacement >= 9223372036854775808usize { try sleb(output, 0usize -% placed.displacement, true) } else { try sleb(output, placed.displacement, false) }
+    if placed.kind % 16usize == 3usize { try emit_x64.byte(output, 6usize) }
+    // The address itself as the value (DW_OP_stack_value).
+    if placed.kind % 16usize == 5usize { try emit_x64.byte(output, 159usize) }
+    ret ok
+}
+
+// The type entries a link has written, by descriptor (D1582), and where each is from
+// the unit's start. Open-addressed; a full table leaves the rest untyped.
+type TypeMemo = struct {
+    names: [2048]str,
+    offsets: [2048]usize,
+    info_offset: usize,
+}
+
+fn memo_slot(memo: *TypeMemo, descriptor: str) -> (usize, bool) {
+    var slot = codegen_x64.path_bucket(descriptor) % 2048usize
+    var probes = 0usize
+    while probes < 2048usize {
+        if memo.names[slot].len == 0usize { ret (slot, false) }
+        if check.same(memo.names[slot], descriptor) { ret (slot, true) }
+        slot = (slot + 1usize) % 2048usize
+        probes += 1usize
+    }
+    ret (2048usize, false)
+}
+
+fn digits_until(text: str, from: usize, stop: u8) -> (usize, usize, bool) {
+    var value = 0usize
+    var at = from
+    while at < text.len && text[at] != stop {
+        if text[at] < 48u8 || text[at] > 57u8 { ret (0usize, 0usize, false) }
+        value = value * 10usize + usize(text[at] - 48u8)
+        at += 1usize
+    }
+    if at >= text.len || at == from { ret (0usize, 0usize, false) }
+    ret (value, at + 1usize, true)
+}
+
+fn pointer_die(output: *emit_x64.Buffer, memo: *TypeMemo, element: str) -> (usize, bool) {
+    let (element_offset, has_element) = type_die(output, memo, element)
+    if !has_element { ret (0usize, false) }
+    let offset = output.count - memo.info_offset
+    if uleb(output, 5usize) != ok || emit_x64.byte(output, 8usize) != ok || emit_x64.little_u32(output, element_offset) != ok { ret (0usize, false) }
+    ret (offset, true)
+}
+
+fn member_die(output: *emit_x64.Buffer, name: str, type_offset: usize, offset: usize) -> bool {
+    ret uleb(output, 8usize) == ok && append_text(output, name) == ok && emit_x64.byte(output, 0usize) == ok && emit_x64.little_u32(output, type_offset) == ok && emit_x64.little_u32(output, offset) == ok
+}
+
+// The end of the descriptor that starts at `at` within `text` -- a struct's field types
+// are written one after another -- by the grammar `em.spell_type` writes.
+fn descriptor_end(text: str, at: usize) -> (usize, bool) {
+    if at >= text.len { ret (0usize, false) }
+    let head = text[at]
+    // A pointer's or a slice's or an array's element follows its prefix.
+    var element_at = 0usize
+    if head == 42u8 {
+        if at + 1usize < text.len && text[at + 1usize] == 63u8 { ret (at + 2usize, true) }
+        element_at = at + 1usize
+    }
+    if head == 91u8 {
+        if at + 1usize < text.len && text[at + 1usize] == 93u8 {
+            element_at = at + 2usize
+        } else {
+            let (count, after, counted) = digits_until(text, at + 1usize, 93u8)
+            if !counted { ret (0usize, false) }
+            element_at = after
+        }
+    }
+    if element_at != 0usize {
+        let (element_end, element_ok) = descriptor_end(text, element_at)
+        ret (element_end, element_ok)
+    }
+    if head == 35u8 || head == 123u8 || head == 61u8 {
+        let (size, after_size, sized) = digits_until(text, at + 1usize, 58u8)
+        let (length, after_length, measured) = digits_until(text, after_size, 58u8)
+        if !sized || !measured || after_length + length > text.len { ret (0usize, false) }
+        var cursor = after_length + length
+        if head == 35u8 { ret (cursor, true) }
+        let (count, after_count, has_count) = digits_until(text, cursor, 58u8)
+        if !has_count { ret (0usize, false) }
+        cursor = after_count
+        var item = 0usize
+        while item < count {
+            let (item_length, after_item, has_item) = digits_until(text, cursor, 58u8)
+            if !has_item || after_item + item_length > text.len { ret (0usize, false) }
+            cursor = after_item + item_length
+            if head == 61u8 && cursor < text.len && text[cursor] == 45u8 { cursor += 1usize }
+            let (number, after_number, has_number) = digits_until(text, cursor, 58u8)
+            if !has_number { ret (0usize, false) }
+            cursor = after_number
+            if head == 123u8 {
+                let (field_end, field_ok) = descriptor_end(text, cursor)
+                if !field_ok || field_end >= text.len || text[field_end] != 59u8 { ret (0usize, false) }
+                cursor = field_end + 1usize
+            }
+            item += 1usize
+        }
+        ret (cursor, true)
+    }
+    var end = at
+    while end < text.len && ((text[end] >= 97u8 && text[end] <= 122u8) || (text[end] >= 48u8 && text[end] <= 57u8)) { end += 1usize }
+    ret (end, end > at)
+}
+
+// A struct's entry (`{`) and its members, or an enum's (`=`) and its enumerators: the
+// field types written first, so the members refer back to them.
+fn aggregate_die(output: *emit_x64.Buffer, memo: *TypeMemo, descriptor: str) -> (usize, bool) {
+    let head = descriptor[0usize]
+    let (size, after_size, sized) = digits_until(descriptor, 1usize, 58u8)
+    let (length, after_length, measured) = digits_until(descriptor, after_size, 58u8)
+    if !sized || !measured || after_length + length > descriptor.len { ret (0usize, false) }
+    let name = descriptor[after_length..after_length + length]
+    let (count, first_item, has_count) = digits_until(descriptor, after_length + length, 58u8)
+    if !has_count { ret (0usize, false) }
+    var cursor = first_item
+    var item = 0usize
+    if head == 123u8 {
+        while item < count {
+            let (item_length, after_item, has_item) = digits_until(descriptor, cursor, 58u8)
+            if !has_item { ret (0usize, false) }
+            let (field_offset, field_type_at, has_offset) = digits_until(descriptor, after_item + item_length, 58u8)
+            let (field_end, field_ok) = descriptor_end(descriptor, field_type_at)
+            if !has_offset || !field_ok { ret (0usize, false) }
+            let (field_type, has_type) = type_die(output, memo, descriptor[field_type_at..field_end])
+            let (field_slot, field_known) = memo_slot(memo, descriptor[field_type_at..field_end])
+            if !has_type || !field_known { ret (0usize, false) }
+            cursor = field_end + 1usize
+            item += 1usize
+        }
+    }
+    let offset = output.count - memo.info_offset
+    if head == 123u8 {
+        if uleb(output, 7usize) != ok || append_text(output, name) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.little_u32(output, size) != ok { ret (0usize, false) }
+    } else {
+        if uleb(output, 18usize) != ok || append_text(output, name) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.byte(output, size) != ok { ret (0usize, false) }
+    }
+    cursor = first_item
+    item = 0usize
+    while item < count {
+        let (item_length, after_item, has_item) = digits_until(descriptor, cursor, 58u8)
+        if !has_item { ret (0usize, false) }
+        let item_name = descriptor[after_item..after_item + item_length]
+        cursor = after_item + item_length
+        if head == 123u8 {
+            let (field_offset, field_type_at, has_offset) = digits_until(descriptor, cursor, 58u8)
+            let (field_end, field_ok) = descriptor_end(descriptor, field_type_at)
+            let (field_slot, field_known) = memo_slot(memo, descriptor[field_type_at..field_end])
+            if !has_offset || !field_ok || !field_known { ret (0usize, false) }
+            if !member_die(output, item_name, memo.offsets[field_slot], field_offset) { ret (0usize, false) }
+            cursor = field_end + 1usize
+        } else {
+            var negative = false
+            if cursor < descriptor.len && descriptor[cursor] == 45u8 {
+                negative = true
+                cursor += 1usize
+            }
+            let (value, after_value, has_value) = digits_until(descriptor, cursor, 58u8)
+            if !has_value { ret (0usize, false) }
+            if uleb(output, 19usize) != ok || append_text(output, item_name) != ok || emit_x64.byte(output, 0usize) != ok || sleb(output, value, negative && value != 0usize) != ok { ret (0usize, false) }
+            cursor = after_value
+        }
+        item += 1usize
+    }
+    if emit_x64.byte(output, 0usize) != ok { ret (0usize, false) }
+    ret (offset, true)
+}
+
+// A descriptor's entry, written once (its elements first) and then found: the base
+// types by name, `u8` as characters behind a `str`, pointers, the two words of a
+// slice, arrays with their count, and a structure of a size for anything else.
+fn type_die(output: *emit_x64.Buffer, memo: *TypeMemo, descriptor: str) -> (usize, bool) {
+    let (known_slot, known) = memo_slot(memo, descriptor)
+    if known { ret (memo.offsets[known_slot], true) }
+    if known_slot >= 2048usize || descriptor.len == 0usize { ret (0usize, false) }
+    var offset = 0usize
+    if descriptor[0usize] == 42u8 {
+        if check.same(descriptor, "*?") {
+            offset = output.count - memo.info_offset
+            if uleb(output, 6usize) != ok || emit_x64.byte(output, 8usize) != ok { ret (0usize, false) }
+        } else {
+            let (pointer, has_pointer) = pointer_die(output, memo, descriptor[1usize..descriptor.len])
+            if !has_pointer { ret (0usize, false) }
+            offset = pointer
+        }
+    } else {
+    if check.same(descriptor, "str") || (descriptor.len > 2usize && descriptor[0usize] == 91u8 && descriptor[1usize] == 93u8) {
+        var element = "c8"
+        if !check.same(descriptor, "str") { element = descriptor[2usize..descriptor.len] }
+        let (pointer, has_pointer) = pointer_die(output, memo, element)
+        let (length, has_length) = type_die(output, memo, "usize")
+        if !has_pointer || !has_length { ret (0usize, false) }
+        offset = output.count - memo.info_offset
+        if uleb(output, 7usize) != ok || append_text(output, descriptor) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.little_u32(output, 16usize) != ok { ret (0usize, false) }
+        if !member_die(output, "ptr", pointer, 0usize) || !member_die(output, "len", length, 8usize) || emit_x64.byte(output, 0usize) != ok { ret (0usize, false) }
+    } else {
+    if descriptor[0usize] == 91u8 {
+        let (count, rest, counted) = digits_until(descriptor, 1usize, 93u8)
+        if !counted { ret (0usize, false) }
+        let (element, has_element) = type_die(output, memo, descriptor[rest..descriptor.len])
+        if !has_element { ret (0usize, false) }
+        offset = output.count - memo.info_offset
+        if uleb(output, 9usize) != ok || emit_x64.little_u32(output, element) != ok || uleb(output, 10usize) != ok || emit_x64.little_u32(output, count) != ok || emit_x64.byte(output, 0usize) != ok { ret (0usize, false) }
+    } else {
+    if descriptor[0usize] == 123u8 || descriptor[0usize] == 61u8 {
+        let (aggregate, has_aggregate) = aggregate_die(output, memo, descriptor)
+        if !has_aggregate { ret (0usize, false) }
+        offset = aggregate
+    } else {
+    if descriptor[0usize] == 35u8 {
+        let (size, after_size, sized) = digits_until(descriptor, 1usize, 58u8)
+        let (length, after_length, measured) = digits_until(descriptor, after_size, 58u8)
+        if !sized || !measured || after_length + length != descriptor.len { ret (0usize, false) }
+        offset = output.count - memo.info_offset
+        if uleb(output, 11usize) != ok || append_text(output, descriptor[after_length..descriptor.len]) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.little_u32(output, size) != ok { ret (0usize, false) }
+    } else {
+        var name = descriptor
+        var encoding = 0usize
+        var size = 0usize
+        if check.same(descriptor, "bool") {
+            encoding = 2usize
+            size = 1usize
+        }
+        if check.same(descriptor, "err") {
+            encoding = 7usize
+            size = 4usize
+        }
+        if check.same(descriptor, "c8") {
+            name = "u8"
+            encoding = 8usize
+            size = 1usize
+        }
+        if encoding == 0usize && descriptor.len >= 2usize {
+            if descriptor[0usize] == 117u8 { encoding = 7usize }
+            if descriptor[0usize] == 105u8 { encoding = 5usize }
+            if descriptor[0usize] == 102u8 { encoding = 4usize }
+            if check.same(descriptor, "usize") || check.same(descriptor, "isize") {
+                size = 8usize
+            } else {
+                var bits = 0usize
+                var at = 1usize
+                while at < descriptor.len && descriptor[at] >= 48u8 && descriptor[at] <= 57u8 {
+                    bits = bits * 10usize + usize(descriptor[at] - 48u8)
+                    at += 1usize
+                }
+                if at == descriptor.len { size = bits / 8usize }
+            }
+        }
+        if encoding == 0usize || size == 0usize { ret (0usize, false) }
+        offset = output.count - memo.info_offset
+        if uleb(output, 4usize) != ok || append_text(output, name) != ok || emit_x64.byte(output, 0usize) != ok || emit_x64.byte(output, encoding) != ok || emit_x64.byte(output, size) != ok { ret (0usize, false) }
+    }
+    }
+    }
+    }
+    }
+    // The slot again: the elements written meanwhile may have taken it.
+    let (slot, found) = memo_slot(memo, descriptor)
+    if !found && slot < 2048usize {
+        memo.names[slot] = descriptor
+        memo.offsets[slot] = offset
+    }
+    ret (offset, true)
+}
+
 fn function_name(output: *emit_x64.Buffer, placed: nir.Function) -> err {
     try append_text(output, placed.module_name)
     try emit_x64.byte(output, 46usize)
@@ -829,7 +1161,61 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
     // 2: a subprogram -- name, low_pc, high_pc, external; 3: the same, and the program's
     // main (DW_AT_main_subprogram), where a debugger's backtrace stops.
     try append_blob(output, "\x02\x2e\x00\x03\x08\x11\x01\x12\x07\x3f\x19\x00\x00")
-    try append_blob(output, "\x03\x2e\x00\x03\x08\x11\x01\x12\x07\x3f\x19\x6a\x19\x00\x00\x00")
+    try append_blob(output, "\x03\x2e\x00\x03\x08\x11\x01\x12\x07\x3f\x19\x6a\x19\x00\x00")
+    // (D1582) The locals: 4 a base type, 5 a pointer, 6 a pointer to anything, 7 a
+    // structure and 8 its member, 9 an array and 10 its count, 11 a structure known by
+    // its size alone, 12 and 13 subprograms 2 and 3 with children, 14 and 15 a parameter
+    // placed for the whole function or by a location list, 16 and 17 a variable so.
+    try append_blob(output, "\x04\x24\x00\x03\x08\x3e\x0b\x0b\x0b\x00\x00")
+    try append_blob(output, "\x05\x0f\x00\x0b\x0b\x49\x13\x00\x00")
+    try append_blob(output, "\x06\x0f\x00\x0b\x0b\x00\x00")
+    try append_blob(output, "\x07\x13\x01\x03\x08\x0b\x06\x00\x00")
+    try append_blob(output, "\x08\x0d\x00\x03\x08\x49\x13\x38\x06\x00\x00")
+    try append_blob(output, "\x09\x01\x01\x49\x13\x00\x00")
+    try append_blob(output, "\x0a\x21\x00\x37\x06\x00\x00")
+    // 11 is a declaration: a debugger finds the full structure of that name if there is one.
+    try append_blob(output, "\x0b\x13\x00\x03\x08\x0b\x06\x3c\x19\x00\x00")
+    try append_blob(output, "\x0c\x2e\x01\x03\x08\x11\x01\x12\x07\x3f\x19\x00\x00")
+    try append_blob(output, "\x0d\x2e\x01\x03\x08\x11\x01\x12\x07\x3f\x19\x6a\x19\x00\x00")
+    try append_blob(output, "\x0e\x05\x00\x03\x08\x49\x13\x02\x18\x00\x00")
+    try append_blob(output, "\x0f\x05\x00\x03\x08\x49\x13\x02\x17\x00\x00")
+    try append_blob(output, "\x10\x34\x00\x03\x08\x49\x13\x02\x18\x00\x00")
+    try append_blob(output, "\x11\x34\x00\x03\x08\x49\x13\x02\x17\x00\x00")
+    // 18 an enumeration and 19 its enumerator.
+    try append_blob(output, "\x12\x04\x01\x03\x08\x0b\x0b\x00\x00")
+    try append_blob(output, "\x13\x28\x00\x03\x08\x1c\x0d\x00\x00\x00")
+    // The location lists, before the entries that name them: a var placed for part of its
+    // function has one, in the order the entries are written below.
+    let loc_offset = output.count
+    at = 0usize
+    placed_max = 0usize
+    while at < builder.function_count {
+        if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) {
+            let (end, end_error) = codegen_x64.placed_end_after(builder, function_offsets, at, table_at)
+            if end_error != ok { ret end_error }
+            let (vars_first, vars_count) = debug_vars_of(builder, function_offsets[at])
+            var var_at = vars_first
+            while var_at < vars_first + vars_count {
+                let placed = builder.debug.vars[var_at]
+                let pieces_end = var_pieces_end(builder, var_at, vars_first + vars_count)
+                if local_head(placed) && !(pieces_end == var_at + 1usize && whole_function(placed, function_offsets[at], end)) {
+                    var piece_at = var_at
+                    while piece_at < pieces_end {
+                        let piece = builder.debug.vars[piece_at]
+                        try emit_x64.little_u64(output, piece.start)
+                        try emit_x64.little_u64(output, piece.end)
+                        try little_u16(output, location_size(piece))
+                        try location_expression(output, piece)
+                        piece_at += 1usize
+                    }
+                    try emit_x64.little_u64(output, 0usize)
+                    try emit_x64.little_u64(output, 0usize)
+                }
+                var_at = pieces_end
+            }
+        }
+        at += 1usize
+    }
     let info_offset = output.count
     try emit_x64.little_u32(output, 0usize)
     try little_u16(output, 4usize)
@@ -845,16 +1231,85 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
     try emit_x64.little_u64(output, code_address)
     try emit_x64.little_u64(output, table_at)
     try emit_x64.little_u32(output, 0usize)
+    // Every type a var names, written before the subprograms so each entry refers back
+    // to its type's.
+    var memo: TypeMemo = zero
+    memo.info_offset = info_offset
+    // The struct definitions first: the vars and fields name them.
+    var definition_at = 0usize
+    while definition_at < builder.debug.definition_count {
+        let (definition_offset, has_definition) = type_die(output, &memo, builder.debug.definitions[definition_at])
+        definition_at += 1usize
+    }
+    var type_at = 0usize
+    while type_at < builder.debug.var_count {
+        let (type_offset, has_type) = type_die(output, &memo, builder.debug.vars[type_at].descriptor)
+        builder.debug.vars[type_at].type_entry = 0usize
+        if has_type { builder.debug.vars[type_at].type_entry = type_offset + 1usize }
+        type_at += 1usize
+    }
+    var loc_cursor = 0usize
     at = 0usize
     placed_max = 0usize
     while at < builder.function_count {
         if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) {
             let (end, end_error) = codegen_x64.placed_end_after(builder, function_offsets, at, table_at)
             if end_error != ok { ret end_error }
-            if at == main_index { try uleb(output, 3usize) } else { try uleb(output, 2usize) }
+            let (vars_first, vars_count) = debug_vars_of(builder, function_offsets[at])
+            var locals = 0usize
+            var local_at = vars_first
+            while local_at < vars_first + vars_count {
+                if local_head(builder.debug.vars[local_at]) { locals += 1usize }
+                local_at += 1usize
+            }
+            var code = 2usize
+            if at == main_index { code = 3usize }
+            if locals != 0usize { code += 10usize }
+            try uleb(output, code)
             try function_name(output, builder.functions[at])
             try emit_x64.little_u64(output, code_address + function_offsets[at])
             try emit_x64.little_u64(output, end - function_offsets[at])
+            if locals != 0usize {
+                var var_at = vars_first
+                while var_at < vars_first + vars_count {
+                    let placed = builder.debug.vars[var_at]
+                    let pieces_end = var_pieces_end(builder, var_at, vars_first + vars_count)
+                    if !local_head(placed) {
+                        var_at = pieces_end
+                        continue
+                    }
+                    let whole = pieces_end == var_at + 1usize && whole_function(placed, function_offsets[at], end)
+                    let has_type = placed.type_entry != 0usize
+                    var type_offset = 0usize
+                    if has_type { type_offset = placed.type_entry - 1usize }
+                    if has_type {
+                        var entry = 16usize
+                        if placed.parameter != 0usize { entry = 14usize }
+                        if !whole { entry += 1usize }
+                        try uleb(output, entry)
+                        try append_text(output, placed.name)
+                        try emit_x64.byte(output, 0usize)
+                        try emit_x64.little_u32(output, type_offset)
+                        if whole {
+                            try uleb(output, location_size(placed))
+                            try location_expression(output, placed)
+                        } else {
+                            try emit_x64.little_u32(output, loc_cursor)
+                        }
+                    }
+                    // The list was written for it whether or not its type has an entry.
+                    if !whole {
+                        var piece_at = var_at
+                        while piece_at < pieces_end {
+                            loc_cursor += 18usize + location_size(builder.debug.vars[piece_at])
+                            piece_at += 1usize
+                        }
+                        loc_cursor += 16usize
+                    }
+                    var_at = pieces_end
+                }
+                try emit_x64.byte(output, 0usize)
+            }
         }
         at += 1usize
     }
@@ -923,8 +1378,42 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
         try append_blob(output, "\x00\x01\x01")
     }
     try emit_x64.patch_little_u32(output, line_offset, output.count - line_offset - 4usize)
+    // The frame description (section 13's unwind info): one CIE -- the return address at
+    // the CFA less 8, the CFA the stack pointer plus 8 at entry -- and per placed function
+    // an FDE: after `push rbp` the CFA is 16 above the stack pointer and rbp is saved
+    // below it, after `mov rbp, rsp` the CFA is rbp plus 16, and each callee-saved
+    // register the function uses is in its slot.
+    let frame_offset = output.count
+    try append_blob(output, "\x14\x00\x00\x00\xff\xff\xff\xff\x01\x00\x01\x78\x10\x0c\x07\x08\x90\x01\x00\x00\x00\x00\x00\x00")
+    at = 0usize
+    placed_max = 0usize
+    while at < builder.function_count {
+        if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) {
+            let (end, end_error) = codegen_x64.placed_end_after(builder, function_offsets, at, table_at)
+            if end_error != ok { ret end_error }
+            let fde_offset = output.count
+            try emit_x64.little_u32(output, 0usize)
+            try emit_x64.little_u32(output, 0usize)
+            try emit_x64.little_u64(output, code_address + function_offsets[at])
+            try emit_x64.little_u64(output, end - function_offsets[at])
+            try append_blob(output, "\x41\x0e\x10\x86\x02\x43\x0d\x06")
+            let (vars_first, vars_count) = debug_vars_of(builder, function_offsets[at])
+            var saved_at = vars_first
+            while saved_at < vars_first + vars_count {
+                let saved = builder.debug.vars[saved_at]
+                if saved.kind == 4usize && saved.register < 64usize {
+                    try emit_x64.byte(output, 128usize + saved.register)
+                    try uleb(output, (16usize + (0usize -% saved.displacement)) / 8usize)
+                }
+                saved_at += 1usize
+            }
+            while (output.count - fde_offset) % 8usize != 0usize { try emit_x64.byte(output, 0usize) }
+            try emit_x64.patch_little_u32(output, fde_offset, output.count - fde_offset - 4usize)
+        }
+        at += 1usize
+    }
     let names_offset = output.count
-    try append_blob(output, "\x00.text\x00.nepersym\x00.symtab\x00.strtab\x00.debug_abbrev\x00.debug_info\x00.debug_line\x00.shstrtab\x00")
+    try append_blob(output, "\x00.text\x00.nepersym\x00.symtab\x00.strtab\x00.debug_abbrev\x00.debug_info\x00.debug_line\x00.shstrtab\x00.debug_loc\x00.debug_frame\x00")
     let names_end = output.count
     let headers_offset = align_up_to(output.count, 8usize)
     try pad_to(output, headers_offset)
@@ -933,15 +1422,17 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
     try section_header(output, 7usize, 1usize, 2usize, code_address + table_at, machine_start + table_at, machine.count - table_at, 0usize, 0usize, 4usize, 0usize)
     try section_header(output, 17usize, 2usize, 0usize, 0usize, symtab_offset, strtab_offset - symtab_offset, 4usize, symbols, 8usize, 24usize)
     try section_header(output, 25usize, 3usize, 0usize, 0usize, strtab_offset, abbrev_offset - strtab_offset, 0usize, 0usize, 1usize, 0usize)
-    try section_header(output, 33usize, 1usize, 0usize, 0usize, abbrev_offset, info_offset - abbrev_offset, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 33usize, 1usize, 0usize, 0usize, abbrev_offset, loc_offset - abbrev_offset, 0usize, 0usize, 1usize, 0usize)
     try section_header(output, 47usize, 1usize, 0usize, 0usize, info_offset, line_offset - info_offset, 0usize, 0usize, 1usize, 0usize)
     try section_header(output, 59usize, 1usize, 0usize, 0usize, line_offset, names_offset - line_offset, 0usize, 0usize, 1usize, 0usize)
     try section_header(output, 71usize, 3usize, 0usize, 0usize, names_offset, names_end - names_offset, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 81usize, 1usize, 0usize, 0usize, loc_offset, info_offset - loc_offset, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 92usize, 1usize, 0usize, 0usize, frame_offset, names_offset - frame_offset, 0usize, 0usize, 8usize, 0usize)
     // The ELF header's section fields: the table's offset, its entry size, its count
     // and the index of the section names.
     try patch_little_u64(output, 40usize, headers_offset)
     output.bytes[58usize] = 64u8
-    output.bytes[60usize] = 9u8
+    output.bytes[60usize] = 11u8
     output.bytes[62usize] = 8u8
     ret ok
 }
@@ -977,7 +1468,7 @@ fn self_test() -> err {
     // than at a literal offset.
     let machine_start = 120usize + 267usize
     let total = machine_start + machine.count
-    if executable.count <= total || executable.bytes[60usize] != 9u8 || executable.bytes[62usize] != 8u8 { ret InvalidExecutable }
+    if executable.count <= total || executable.bytes[60usize] != 11u8 || executable.bytes[62usize] != 8u8 { ret InvalidExecutable }
     if executable.bytes[0usize] != 127u8 || executable.bytes[16usize] != 2u8 || executable.bytes[18usize] != 62u8 || executable.bytes[24usize] != 120u8 || executable.bytes[25usize] != 0u8 || executable.bytes[26usize] != 64u8 { ret InvalidExecutable }
     if executable.bytes[64usize] != 1u8 || executable.bytes[68usize] != 5u8 { ret InvalidExecutable }
     if executable.bytes[96usize] != u8(total % 256usize) || executable.bytes[97usize] != u8((total / 256usize) % 256usize) { ret InvalidExecutable }

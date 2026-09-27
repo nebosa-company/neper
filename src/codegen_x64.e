@@ -95,6 +95,14 @@ type FunctionContext = struct {
     // Per block of the function being selected, whether a branch enters it (D923);
     // empty when there is no arena to hold it, and then every block is laid out.
     entered: []bool,
+    // (D1582) For a function with debug locals: where each of its instructions begins
+    // in the code, and each stack object's frame slot plus one, by the value that is
+    // its address. Empty otherwise.
+    instruction_offsets: []usize,
+    stack_value_slots: []usize,
+    // Each call's window with registers in their preserve slots: start, end, mask.
+    debug_windows: []usize,
+    debug_window_count: usize,
 }
 
 const TRAP_RECORDS: usize = 64usize
@@ -436,7 +444,7 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
     if !instruction.has_result { ret Unsupported }
     if instruction.opcode == .AtomicCas {
         if instruction.operand_count != 3usize { ret Unsupported }
-        try save_live_registers(output, mask, preserve_base, preserve_count)
+        try save_live_registers(output, mask, preserve_base, preserve_count, context)
         let (address, address_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
         if address_error != ok { ret InvalidMemoryAddress }
         if address != 10usize { try emit_x64.mov_register(output, 10usize, address) }
@@ -450,7 +458,7 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
         if expected != 0usize { try emit_x64.mov_register(output, 0usize, expected) }
         try emit_x64.atomic_compare_exchange(output, 10usize, 11usize, width)
         try emit_x64.mov_register(output, 10usize, 0usize)
-        try restore_live_registers(output, mask, preserve_base, preserve_count)
+        try restore_live_registers(output, mask, preserve_base, preserve_count, context)
         let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
         if destination_error != ok { ret destination_error }
         try emit_x64.normalize_integer(output, destination, 10usize, width, signed)
@@ -458,7 +466,7 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
     }
     if instruction.opcode != .AtomicRmw || instruction.operand_count != 2usize { ret Unsupported }
     let kind = instruction.immediate / 8usize
-    try save_live_registers(output, mask, preserve_base, preserve_count)
+    try save_live_registers(output, mask, preserve_base, preserve_count, context)
     let (address, address_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
     if address_error != ok { ret InvalidMemoryAddress }
     if address != 10usize { try emit_x64.mov_register(output, 10usize, address) }
@@ -483,7 +491,7 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
         }
     }
     try emit_x64.mov_register(output, 10usize, 11usize)
-    try restore_live_registers(output, mask, preserve_base, preserve_count)
+    try restore_live_registers(output, mask, preserve_base, preserve_count, context)
     let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
     if destination_error != ok { ret destination_error }
     try emit_x64.normalize_integer(output, destination, 10usize, width, signed)
@@ -1850,7 +1858,7 @@ fn preserve_mask(builder: *nir.Builder, current: nir.Function, instruction: nir.
     ret mask
 }
 
-fn save_live_registers(output: *emit_x64.Buffer, mask: usize, base: usize, count: usize) -> err {
+fn save_live_registers(output: *emit_x64.Buffer, mask: usize, base: usize, count: usize, context: *FunctionContext) -> err {
     var at = 0usize
     while at < count {
         if (mask >> at) & 1usize == 1usize {
@@ -1860,10 +1868,21 @@ fn save_live_registers(output: *emit_x64.Buffer, mask: usize, base: usize, count
         }
         at += 1usize
     }
+    // (D1582) From here to the restore, a register the mask names holds its value in
+    // its preserve slot and nowhere else a caller's frame can see.
+    if context.debug_windows.len != 0usize && context.debug_window_count * 3usize + 3usize <= context.debug_windows.len && mask & 31usize != 0usize {
+        context.debug_windows[context.debug_window_count * 3usize] = output.count
+        context.debug_windows[context.debug_window_count * 3usize + 1usize] = output.count
+        context.debug_windows[context.debug_window_count * 3usize + 2usize] = mask
+        context.debug_window_count += 1usize
+    }
     ret ok
 }
 
-fn restore_live_registers(output: *emit_x64.Buffer, mask: usize, base: usize, count: usize) -> err {
+fn restore_live_registers(output: *emit_x64.Buffer, mask: usize, base: usize, count: usize, context: *FunctionContext) -> err {
+    if context.debug_window_count != 0usize && context.debug_windows[context.debug_window_count * 3usize - 2usize] == context.debug_windows[context.debug_window_count * 3usize - 3usize] {
+        context.debug_windows[context.debug_window_count * 3usize - 2usize] = output.count
+    }
     var at = 0usize
     while at < count {
         if (mask >> at) & 1usize == 1usize {
@@ -2592,7 +2611,7 @@ fn select_index_address(builder: *nir.Builder, current: nir.Function, instructio
     // Only the check needs the length, in rax; without it nothing is clobbered.
     var mask = 0usize
     if !instruction.nocheck { mask = preserve_mask(builder, current, instruction, 1usize, false, context) }
-    try save_live_registers(output, mask, preserve_base, preserve_count)
+    try save_live_registers(output, mask, preserve_base, preserve_count, context)
     let base_value = builder.operands[instruction.first_operand]
     let index_value = builder.operands[instruction.first_operand + 1usize]
     let length_value = builder.operands[instruction.first_operand + 2usize]
@@ -2610,7 +2629,7 @@ fn select_index_address(builder: *nir.Builder, current: nir.Function, instructio
     }
     if instruction.immediate != 1usize { try emit_x64.multiply_immediate(output, 11usize, 11usize, instruction.immediate) }
     try emit_x64.add_register(output, 11usize, 10usize)
-    try restore_live_registers(output, mask, preserve_base, preserve_count)
+    try restore_live_registers(output, mask, preserve_base, preserve_count, context)
     let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
     if destination_error != ok { ret destination_error }
     if destination != 11usize { try emit_x64.mov_register(output, destination, 11usize) }
@@ -2621,7 +2640,7 @@ fn select_slice(builder: *nir.Builder, current: nir.Function, instruction: nir.I
     let output = context.output
     if instruction.has_result || instruction.operand_count != 5usize || instruction.immediate == 0usize { ret Unsupported }
     let mask = preserve_mask(builder, current, instruction, 19usize, true, context)
-    try save_live_registers(output, mask, preserve_base, preserve_count)
+    try save_live_registers(output, mask, preserve_base, preserve_count, context)
     let destination_value = builder.operands[instruction.first_operand]
     let data_value = builder.operands[instruction.first_operand + 1usize]
     let length_value = builder.operands[instruction.first_operand + 2usize]
@@ -2652,7 +2671,7 @@ fn select_slice(builder: *nir.Builder, current: nir.Function, instruction: nir.I
     try emit_x64.store_memory(output, 9usize, 10usize, 64usize)
     try emit_x64.add_immediate(output, 9usize, 8usize)
     try emit_x64.store_memory(output, 9usize, 1usize, 64usize)
-    ret restore_live_registers(output, mask, preserve_base, preserve_count)
+    ret restore_live_registers(output, mask, preserve_base, preserve_count, context)
 }
 
 // For every instruction of the function, the registers holding a value live strictly
@@ -2746,7 +2765,28 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     builder.definers = definers
     builder.definers_first = current.first_instruction
     builder.definers_valid = true
+    context.instruction_offsets = context.instruction_offsets[0usize..0usize]
+    context.stack_value_slots = context.stack_value_slots[0usize..0usize]
+    let (debug_first, debug_count) = nir.debug_locals_of(builder, current.first_instruction)
+    // ELF images only for now: a PE image has no debug format to carry them yet (D1582).
+    if debug_count != 0usize && context.abi != .Windows {
+        let (offsets, offsets_error) = mem.alloc[usize](context.arena, current.instruction_count + 1usize)
+        if offsets_error != ok { ret offsets_error }
+        let (slots, slots_error) = mem.alloc[usize](context.arena, current.value_count + 1usize)
+        if slots_error != ok { ret slots_error }
+        clear_slots(slots)
+        context.instruction_offsets = offsets
+        context.stack_value_slots = slots
+        let (windows, windows_error) = mem.alloc[usize](context.arena, current.instruction_count * 3usize + 3usize)
+        if windows_error != ok { ret windows_error }
+        context.debug_windows = windows
+    }
+    context.debug_window_count = 0usize
     let body_error = function_body(builder, function_index, stack_slots, context)
+    context.instruction_offsets = context.instruction_offsets[0usize..0usize]
+    context.stack_value_slots = context.stack_value_slots[0usize..0usize]
+    context.debug_windows = context.debug_windows[0usize..0usize]
+    context.debug_window_count = 0usize
     builder.definers_valid = false
     context.live_masks = context.live_masks[0usize..0usize]
     mem.reset(context.arena, mark)
@@ -2816,6 +2856,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
     var next_block = 0usize
     var stack_cursor = 0usize
     while at < end {
+        if context.instruction_offsets.len != 0usize { context.instruction_offsets[at - current.first_instruction] = output.count }
         while next_block < current.block_count && builder.blocks[current.first_block + next_block].first_instruction == at {
             block_offsets[next_block] = output.count
             if context.has_short && context.short_block == next_block {
@@ -2869,6 +2910,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 if !instruction.has_result || instruction.operand_count != 0usize { ret Unsupported }
                 let slot = local_base + stack_cursor + stack_object_slots(instruction) - 1usize
                 stack_cursor += stack_object_slots(instruction)
+                if instruction.result < context.stack_value_slots.len { context.stack_value_slots[instruction.result] = slot + 1usize }
                 let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
                 if destination_error != ok { ret destination_error }
                 try emit_x64.stack_address(output, destination, slot)
@@ -2907,7 +2949,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
             if instruction.opcode == .Copy {
                 if instruction.has_result || instruction.operand_count != 2usize { ret Unsupported }
                 let copy_mask = preserve_mask(builder, current, instruction, 17usize, false, context)
-                try save_live_registers(output, copy_mask, preserve_base, preserve_count)
+                try save_live_registers(output, copy_mask, preserve_base, preserve_count, context)
                 let destination_value = builder.operands[instruction.first_operand]
                 let source_value = builder.operands[instruction.first_operand + 1usize]
                 let (destination_source, destination_error) = read_value(allocations, destination_value, 10usize, output)
@@ -2917,7 +2959,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 if source_error != ok { ret source_error }
                 if source != 11usize { try emit_x64.mov_register(output, 11usize, source) }
                 try emit_x64.copy_memory(output, 10usize, 11usize, instruction.immediate)
-                try restore_live_registers(output, copy_mask, preserve_base, preserve_count)
+                try restore_live_registers(output, copy_mask, preserve_base, preserve_count, context)
             } else {
             if instruction.opcode == .Load {
                 if !instruction.has_result || instruction.operand_count != 1usize { ret Unsupported }
@@ -3023,7 +3065,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 let (left_type, left_type_error) = value_type(builder, current, left_value)
                 if left_type_error != ok || left_type.kind != .Integer { ret Unsupported }
                 let shift_mask = preserve_mask(builder, current, instruction, 2usize, false, context)
-                try save_live_registers(output, shift_mask, preserve_base, preserve_count)
+                try save_live_registers(output, shift_mask, preserve_base, preserve_count, context)
                 let (left, left_error) = read_value(allocations, left_value, 10usize, output)
                 if left_error != ok { ret left_error }
                 let (right, right_error) = read_value(allocations, right_value, 11usize, output)
@@ -3033,7 +3075,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 if !instruction.nocheck && !builder.release { try emit_shift_check(builder, current, instruction.site, instruction.path, integer_width(left_type), context) }
                 try emit_x64.and_immediate8(output, 1usize, integer_width(left_type) - 1usize)
                 try emit_x64.shift_register(output, 10usize, instruction.opcode == .ShiftLeft, signed_integer(left_type))
-                try restore_live_registers(output, shift_mask, preserve_base, preserve_count)
+                try restore_live_registers(output, shift_mask, preserve_base, preserve_count, context)
                 let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                 if destination_error != ok { ret destination_error }
                 try emit_x64.normalize_integer(output, destination, 10usize, integer_width(instruction.ty), signed_integer(instruction.ty))
@@ -3046,7 +3088,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 let (left_type, left_type_error) = value_type(builder, current, left_value)
                 if left_type_error != ok || left_type.kind != .Integer { ret Unsupported }
                 let divide_mask = preserve_mask(builder, current, instruction, 5usize, false, context)
-                try save_live_registers(output, divide_mask, preserve_base, preserve_count)
+                try save_live_registers(output, divide_mask, preserve_base, preserve_count, context)
                 let (left, left_error) = read_value(allocations, left_value, 10usize, output)
                 if left_error != ok { ret left_error }
                 let (right, right_error) = read_value(allocations, right_value, 11usize, output)
@@ -3076,7 +3118,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     try emit_x64.mov_register(output, 10usize, 2usize)
                 }
                 }
-                try restore_live_registers(output, divide_mask, preserve_base, preserve_count)
+                try restore_live_registers(output, divide_mask, preserve_base, preserve_count, context)
                 let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                 if destination_error != ok { ret destination_error }
                 try emit_x64.normalize_integer(output, destination, 10usize, integer_width(instruction.ty), signed_integer(instruction.ty))
@@ -3139,7 +3181,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     if indirect { first_argument = 1usize }
                     let argument_total = instruction.operand_count - first_argument
                     let live_mask = live_register_mask(context, current.value_count, at, preserve_count)
-                    try save_live_registers(output, live_mask, preserve_base, preserve_count)
+                    try save_live_registers(output, live_mask, preserve_base, preserve_count, context)
                     if indirect {
                         let callee_value = builder.operands[instruction.first_operand]
                         let (callee_source, callee_error) = read_value(allocations, callee_value, 10usize, output)
@@ -3196,7 +3238,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                         }
                         if multiple_results { try emit_x64.mov_register(output, 11usize, 2usize) }
                     }
-                    try restore_live_registers(output, live_mask, preserve_base, preserve_count)
+                    try restore_live_registers(output, live_mask, preserve_base, preserve_count, context)
                     if instruction.has_result && !multiple_results {
                         let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                         if destination_error != ok { ret destination_error }
@@ -3361,6 +3403,155 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
         try emit_x64.patch_relative32(output, fixup.displacement_at, block_offsets[fixup.block])
         fixup_at += 1usize
     }
+    if context.instruction_offsets.len != 0usize {
+        context.instruction_offsets[current.instruction_count] = output.count
+        try place_debug_locals(builder, current, stack_slots, preserve_base, function_code_start, context)
+    }
+    // (D1582) Where the function keeps the callee-saved registers it uses, for the
+    // image's frame description: a caller's values in them are there while it runs.
+    var saved_at = 0usize
+    while saved_at < saved_count && context.abi != .Windows && builder.debug.vars.len != 0usize && builder.debug.var_count < builder.debug.vars.len {
+        let (saved_physical, saved_physical_error) = hardware_register(caller_saved_count() + saved_at)
+        if saved_physical_error != ok { ret saved_physical_error }
+        var saved: nir.DebugVar = zero
+        saved.function_start = function_code_start
+        saved.start = function_code_start
+        saved.end = output.count
+        saved.kind = 4usize
+        saved.register = dwarf_register(saved_physical)
+        saved.displacement = 0usize -% ((saved_base + saved_at + 1usize) * 8usize)
+        builder.debug.vars[builder.debug.var_count] = saved
+        builder.debug.var_count += 1usize
+        saved_at += 1usize
+    }
+    ret ok
+}
+
+// One placed var, or its next piece (`kind` plus 16) when a call window splits it.
+fn add_debug_var(builder: *nir.Builder, placed: nir.DebugVar) {
+    if builder.debug.var_count >= builder.debug.vars.len { ret }
+    builder.debug.vars[builder.debug.var_count] = placed
+    builder.debug.var_count += 1usize
+}
+
+// The DWARF register number of an allocator register's hardware one: rax, rdx, rcx,
+// rbx, rsi, rdi, rbp, rsp, then r8 to r15 as themselves.
+fn dwarf_register(physical: usize) -> usize {
+    if physical == 1usize { ret 2usize }
+    if physical == 2usize { ret 1usize }
+    if physical == 4usize { ret 7usize }
+    if physical == 5usize { ret 6usize }
+    if physical == 6usize { ret 4usize }
+    if physical == 7usize { ret 5usize }
+    ret physical
+}
+
+// (D1582) Each debug local of the function just selected, placed. A stack object the
+// allocator left in memory (an aggregate, or a `var` whose address escapes) and a
+// parameter's incoming slot hold theirs for the whole function; any other value holds
+// it in its register or spill slot from its definition to its last use, the range the
+// allocator gave it, and nowhere after. A value nothing reads has no range to show.
+fn place_debug_locals(builder: *nir.Builder, current: nir.Function, stack_slots: usize, preserve_base: usize, function_code_start: usize, context: *FunctionContext) -> err {
+    let (first, count) = nir.debug_locals_of(builder, current.first_instruction)
+    let function_end = context.instruction_offsets[current.instruction_count]
+    var at = first
+    while at < first + count {
+        let local = builder.debug.locals[at]
+        at += 1usize
+        if local.value >= current.value_count || local.value >= context.allocations.len || builder.debug.var_count >= builder.debug.vars.len { continue }
+        var placed: nir.DebugVar = zero
+        placed.function_start = function_code_start
+        placed.start = function_code_start
+        placed.end = function_end
+        placed.name = local.name
+        placed.ty = local.ty
+        placed.parameter = local.parameter
+        placed.register = 6usize
+        var definer = 0usize
+        if builder.definers_valid && local.value < builder.definers.len { definer = builder.definers[local.value] }
+        if definer == 0usize { continue }
+        let defining = builder.instructions[definer - 1usize]
+        if defining.opcode == .Stack && local.value < context.stack_value_slots.len && context.stack_value_slots[local.value] != 0usize {
+            // The object itself, or -- a local bound to `&object` -- its address (`kind` 5).
+            placed.kind = 5usize
+            if local.address { placed.kind = 2usize }
+            placed.displacement = 0usize -% (context.stack_value_slots[local.value] * 8usize)
+        } else {
+        if defining.opcode == .Parameter {
+            placed.kind = 2usize
+            if local.address { placed.kind = 3usize }
+            placed.displacement = 0usize -% ((stack_slots + defining.immediate + 1usize) * 8usize)
+        } else {
+            // A `var` the allocator promoted (D236) was bound as its stack object's
+            // address; the object became the value itself, defined by a zero and bitcasts.
+            var address = local.address
+            if defining.opcode == .Zero || defining.opcode == .Bitcast { address = false }
+            let range = context.ranges[local.value]
+            if !range.used || range.first < current.first_instruction || range.last >= current.first_instruction + current.instruction_count { continue }
+            // From after the instruction that defines it: during that one it is not yet there.
+            placed.start = context.instruction_offsets[range.first + 1usize - current.first_instruction]
+            placed.end = context.instruction_offsets[range.last + 1usize - current.first_instruction]
+            if placed.start >= placed.end { continue }
+            let allocation = context.allocations[local.value]
+            if allocation.kind == .Register {
+                let (physical, physical_error) = hardware_register(allocation.index)
+                if physical_error != ok { ret physical_error }
+                placed.register = dwarf_register(physical)
+                placed.kind = 1usize
+                if address { placed.kind = 2usize }
+                // A register a call clobbers is in its preserve slot through each call
+                // window that saves it: the range is cut there, the window's piece in memory.
+                if allocation.index < caller_saved_count() {
+                    let window_end = placed.end
+                    let in_register = placed
+                    var piece = placed
+                    var window = 0usize
+                    var pieces = 0usize
+                    while window < context.debug_window_count {
+                        let window_start = context.debug_windows[window * 3usize]
+                        let window_stop = context.debug_windows[window * 3usize + 1usize]
+                        let window_mask = context.debug_windows[window * 3usize + 2usize]
+                        window += 1usize
+                        if (window_mask >> allocation.index) & 1usize == 0usize || window_stop <= piece.start || window_start >= window_end { continue }
+                        if window_start > piece.start {
+                            piece.end = window_start
+                            if pieces != 0usize { piece.kind = in_register.kind + 16usize }
+                            add_debug_var(builder, piece)
+                            pieces += 1usize
+                        }
+                        var saved_piece = in_register
+                        saved_piece.start = window_start
+                        if saved_piece.start < piece.start { saved_piece.start = piece.start }
+                        saved_piece.end = window_stop
+                        if saved_piece.end > window_end { saved_piece.end = window_end }
+                        saved_piece.register = 6usize
+                        saved_piece.displacement = 0usize -% ((preserve_base + allocation.index + 1usize) * 8usize)
+                        saved_piece.kind = 2usize
+                        if address { saved_piece.kind = 3usize }
+                        if pieces != 0usize { saved_piece.kind += 16usize }
+                        add_debug_var(builder, saved_piece)
+                        pieces += 1usize
+                        piece = in_register
+                        piece.start = saved_piece.end
+                    }
+                    if piece.start < window_end {
+                        piece.end = window_end
+                        if pieces != 0usize { piece.kind = in_register.kind + 16usize }
+                        add_debug_var(builder, piece)
+                    }
+                    continue
+                }
+            } else {
+                if allocation.kind != .Stack { continue }
+                placed.kind = 2usize
+                if address { placed.kind = 3usize }
+                placed.displacement = 0usize -% ((allocation.index + 1usize) * 8usize)
+            }
+        }
+        }
+        builder.debug.vars[builder.debug.var_count] = placed
+        builder.debug.var_count += 1usize
+    }
     ret ok
 }
 
@@ -3399,7 +3590,7 @@ fn self_test() -> err {
     var lines: [8]LineEntry = zero
     var line_count = 0usize
     let no_masks = block_offsets[0usize..0usize]
-    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero }
+    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero, instruction_offsets: no_masks, stack_value_slots: no_masks, debug_windows: no_masks, debug_window_count: 0usize }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 14usize || output.bytes[0usize] != 85u8 || output.bytes[4usize] != 184u8 || output.bytes[5usize] != 7u8 || output.bytes[12usize] != 93u8 || output.bytes[13usize] != 195u8 { ret Unsupported }
     allocations[0usize].kind = .Stack
