@@ -28592,3 +28592,7 @@ A change that does not move a number is not the feature (the item's own rule), s
 C082's head position asked for parallel declaration collection, reachability and layout, or work stolen per function, next. Measured on a quiet run of sc500k (2.16 s wall), what stays sequential is the declarations (152 ms), resolve (74 ms), the link from artifacts (130 ms) and the link, write and manifest (39 ms). The declaration passes write the checker's shared tables, whose type, function and field indices point into one another. Running them per module means worker-local tables merged in module order with every index relocated: a redesign of the checker's data model for at most about 150 ms. D1578 already showed that stealing per module does not pay.
 
 Asked, the user moved C082 to the end of the queue. It keeps its score (0.75), its evidence and these numbers. The next head is C083, then C084, and the tooling items follow the compiler's.
+
+## D1580 — C083 follows C096
+
+C083, the determinism harness, is at 0.9, and its one open case is "the device-reached edit case that waits on M3". That case is the whole of C096 (M3-08), and it needs the GPU line (C089-C095) first. At the head of the queue, C083 could only wait. It now sits right after C096, with its score and evidence unchanged, and C084 (debug info) heads the queue.
