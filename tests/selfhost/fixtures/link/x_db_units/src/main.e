@@ -1,7 +1,7 @@
 // Unit tests for the database drivers' own logic, with no server and no client library: the
 // language has no visibility, so a driver's internal functions are called directly. Nothing
-// here reaches an `@import`, so the executable binds neither libpq nor libmysql and runs on a
-// host that has neither. Every check has its own exit code.
+// here reaches an `@import`, so the executable binds none of libpq, libmysql and the ODBC
+// driver manager and runs on a host that has none of them. Every check has its own exit code.
 //
 // `x.postgresql.libpq`: big-endian reads, the binary `numeric` renderer on hand-built values
 // (the same encodings the server-side fixture reads back from PostgreSQL), `uuid` spelling,
@@ -9,6 +9,8 @@
 // `x.oracle.mysql`: the statement scanner (placeholders and statement ends outside strings,
 // identifiers and comments), rendering (double literals, hex blobs, datetimes), datetime
 // parsing including zero dates, column kinds, and error mapping.
+// `x.microsoft.odbc`: SQLSTATE mapping, UTF-16 conversion (a leading U+FEFF, surrogate pairs,
+// an unpaired surrogate, empty text), TIMESTAMP_STRUCT both ways, and ODBC type codes.
 use e.os
 use e.mem
 use e.str
@@ -16,6 +18,8 @@ use e.time
 use e.db
 use x.postgresql.libpq
 use x.oracle.mysql
+use x.microsoft.odbc
+use e.text.utf8
 
 fn same_bytes(x: []const u8, y: []const u8) -> bool {
     if x.len != y.len { ret false }
@@ -227,9 +231,54 @@ fn oracle_mysql(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
+fn microsoft_odbc(a: *mem.Arena) -> i32 {
+    // SQLSTATEs onto `e.db`.
+    if odbc.classify("23505") != db.Constraint || odbc.classify("23000") != db.Constraint { ret 80i32 }
+    if odbc.classify("40001") != db.Busy || odbc.classify("HYT00") != db.Busy || odbc.classify("55P03") != db.Busy { ret 81i32 }
+    if odbc.classify("42601") != db.InvalidQuery || odbc.classify("22012") != db.InvalidQuery || odbc.classify("07002") != db.InvalidQuery || odbc.classify("37000") != db.InvalidQuery { ret 82i32 }
+    if odbc.classify("HY000") != odbc.Failed || odbc.classify("08S01") != odbc.Failed || odbc.classify("") != odbc.Failed { ret 83i32 }
+
+    // UTF-16 in, UTF-8 out: a leading U+FEFF stays text, a surrogate pair joins, and an
+    // unpaired surrogate is refused.
+    let (units, count, wide_error) = odbc.wide(a, "\xef\xbb\xbfa\xf0\x9f\x98\x80")
+    if wide_error != ok || count != 4usize || units[0usize] != 65279u16 || units[2usize] != 55357u16 || units[4usize] != 0u16 { ret 84i32 }
+    var out: [16]u8 = zero
+    let (n, narrow_error) = odbc.narrow(odbc.bytes_of(units[0usize..count]), out[0usize..])
+    if narrow_error != ok || !same_bytes(out[0usize..n], "\xef\xbb\xbfa\xf0\x9f\x98\x80") { ret 85i32 }
+    var lone: [4]u8 = zero
+    lone[0usize] = 61u8
+    lone[1usize] = 216u8
+    lone[2usize] = 97u8
+    let (m, lone_error) = odbc.narrow(lone[0usize..], out[0usize..])
+    if lone_error != utf8.Invalid { ret 86i32 }
+    let (empty, empty_count, empty_error) = odbc.wide(a, "")
+    if empty_error != ok || empty_count != 0usize || empty.len != 1usize { ret 87i32 }
+
+    // TIMESTAMP_STRUCT both ways, before the epoch included, and fields that name no instant.
+    var stamp: [16]u8 = zero
+    odbc.put_stamp(time.Instant { nanos: 1700000000123456789i64 }, stamp[0usize..])
+    if odbc.get16(stamp[0usize..], 0usize) != 2023i64 || odbc.get16(stamp[0usize..], 2usize) != 11i64 || odbc.get16(stamp[0usize..], 4usize) != 14i64 || odbc.get16(stamp[0usize..], 6usize) != 22i64 { ret 88i32 }
+    let (back, back_ok) = odbc.read_stamp(stamp[0usize..])
+    if !back_ok || back != 1700000000123456789i64 { ret 89i32 }
+    odbc.put_stamp(time.Instant { nanos: -1i64 }, stamp[0usize..])
+    if odbc.get16(stamp[0usize..], 0usize) != 1969i64 || odbc.get16(stamp[0usize..], 10usize) != 59i64 { ret 90i32 }
+    let (early, early_ok) = odbc.read_stamp(stamp[0usize..])
+    if !early_ok || early != -1i64 { ret 91i32 }
+    stamp[2usize] = 13u8
+    let (bad, bad_ok) = odbc.read_stamp(stamp[0usize..])
+    if bad_ok { ret 92i32 }
+
+    // ODBC types onto kinds; the negative codes are the ones D1651 made comparable.
+    if odbc.kind_of(-7i16) != .Bool || odbc.kind_of(-5i16) != .I64 || odbc.kind_of(-6i16) != .I64 || odbc.kind_of(4i16) != .I64 { ret 93i32 }
+    if odbc.kind_of(8i16) != .F64 || odbc.kind_of(7i16) != .F64 || odbc.kind_of(-3i16) != .Bytes || odbc.kind_of(-4i16) != .Bytes { ret 94i32 }
+    if odbc.kind_of(93i16) != .Time || odbc.kind_of(91i16) != .Time || odbc.kind_of(92i16) != .Text || odbc.kind_of(2i16) != .Text || odbc.kind_of(-10i16) != .Text { ret 95i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena) -> err {
     var code = postgresql(a)
     if code == 0i32 { code = oracle_mysql(a) }
+    if code == 0i32 { code = microsoft_odbc(a) }
     if code != 0i32 { os.exit(code) }
     ret ok
 }

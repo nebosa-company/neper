@@ -700,7 +700,12 @@ fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, toke
     if ty.kind != .Integer { ret (0usize, check.InvalidConstant) }
     let width = check.integer_width(ty)
     if width == 0usize { ret (0usize, check.InvalidType) }
-    let immediate = check.integer_bits(c.constants[constant_index].value, width)
+    // A negative constant is its 64-bit two's complement, as `Negate` leaves a narrow value in
+    // its register (D1651). Its width's bit pattern read as a positive number, and a named
+    // `-5i32` compared unequal to a computed one.
+    var bits_width = width
+    if c.constants[constant_index].value.negative { bits_width = 64usize }
+    let immediate = check.integer_bits(c.constants[constant_index].value, bits_width)
     let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, ty, true, immediate, token)
     ret (result, emit_error)
 }

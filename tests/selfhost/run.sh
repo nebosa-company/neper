@@ -2371,6 +2371,12 @@ dl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtur
 [ "$dl_written" = 'executable written' ]
 chmod +x "$test_build/os-dl-selfhost"
 "$test_build/os-dl-selfhost"
+# A negative named constant narrower than 64 bits equals the same value computed at run time
+# (D1651).
+negative_constants_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/negative_constants/src/main.e" "$repo" x64 linux "$test_build/negative-constants-selfhost")
+[ "$negative_constants_written" = 'executable written' ]
+chmod +x "$test_build/negative-constants-selfhost"
+[ "$("$test_build/negative-constants-selfhost")" = 'negative constants ok' ]
 # `x.sqlite.sqlite`: the `e.db` driver over the host's own SQLite (`libsqlite3.so.0`), every value
 # kind round-tripped, SQLite's errors mapped with their extended codes, statements, transactions,
 # and a database file locked by one connection and refused as `Busy` by the other. Run from /tmp
@@ -2392,13 +2398,18 @@ postgresql_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$postgresql_written" = 'executable written' ]
 mysql_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_mysql/src/main.e" "$repo" x64 linux "$test_build/x-mysql-selfhost")
 [ "$mysql_written" = 'executable written' ]
-chmod +x "$test_build/x-postgresql-selfhost" "$test_build/x-mysql-selfhost"
+# `x.microsoft.odbc` reaches the same PostgreSQL through unixODBC and psqlODBC (the `unixodbc`
+# and `odbc-postgresql` packages), naming the driver by its path (D1650).
+odbc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_odbc/src/main.e" "$repo" x64 linux "$test_build/x-odbc-selfhost")
+[ "$odbc_written" = 'executable written' ]
+chmod +x "$test_build/x-postgresql-selfhost" "$test_build/x-mysql-selfhost" "$test_build/x-odbc-selfhost"
 db_servers=/tmp/neper-db-servers-$$
 bash "$repo/tests/selfhost/db_servers.sh" start "$db_servers"
 . "$db_servers/ports"
 db_status=0
 "$test_build/x-postgresql-selfhost" "host=127.0.0.1 port=$pg_port user=neper dbname=postgres options='-c client_min_messages=warning'" || db_status=$?
 [ "$db_status" -ne 0 ] || "$test_build/x-mysql-selfhost" "$mysql_port" || db_status=$?
+[ "$db_status" -ne 0 ] || "$test_build/x-odbc-selfhost" "Driver=/usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so;Server=127.0.0.1;Port=$pg_port;Uid=neper;Database=postgres;BoolsAsChar=0" || db_status=$?
 bash "$repo/tests/selfhost/db_servers.sh" stop "$db_servers"
 rm -rf "$db_servers"
 if [ "$db_status" -ne 0 ]; then

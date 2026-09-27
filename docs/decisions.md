@@ -29203,3 +29203,47 @@ Fixture, both hosts: `link/ui_audit`. A clean page gives no finding. A faulty pa
 
 - **Fixtures.** `db`, `x_sqlite`, `x_postgresql`, `x_mysql`, `bytes_plan`, `bytes_codec` and the memory-driver example pass on Windows (libpq 18, chunked). The six fixtures pass cross-emitted in WSL (libpq 16, single-row fallback). The first Windows run failed with 101, which is how the chunked path showed itself.
 - **Speed.** Windows PostgreSQL scan of 20,000 rows, medians of five interleaved rounds: D1597's binary 7.9 ms, this one 4.2 ms, `bench.c` 4.5 ms. C still uses single-row mode.
+
+## D1650 — `x.microsoft.odbc`: the `e.db` driver over ODBC, named for the API's owner
+
+The fourth `e.db` driver, and the first that is not tied to one database. Its package specification is `docs/packages/x.microsoft.odbc.md`. It binds the host's ODBC driver manager: `odbc32.dll` on Windows and unixODBC's `libodbc.so.2` on Linux. The database's own ODBC driver is the user's.
+
+**The name.** It is `x.*` and not `e.db.odbc`. D63 lets no `e.*` module bind a host library except through `e.os`. D81 puts concrete drivers under `x.*` and leaves `e.db` as the contract they implement, and ODBC is one more backend behind that contract. D78 asks for an `x.*` package's "actual external owner". Here that is read as the owner of the API the package programs against, not of the binary that answers on each host. Microsoft defines ODBC's functions, handles, return codes and SQLSTATEs. unixODBC implements the same API, down to the same headers. So the package is `x.microsoft.odbc` on both hosts, and the library is a per-OS variant (`x.microsoft.capi`). That keeps one module with one surface; two modules (`x.microsoft.odbc`, `x.unixodbc.odbc`) would have identical APIs and make every caller pick one per OS. The reading matches the existing `x.khronos.vulkan` and `x.khronos.opengl` reservations, whose loaders also come from other vendors.
+
+**Shape.**
+
+- **Wide entry points only.** The narrow ones convert through the process code page on Windows and the locale on Linux. `SQLWCHAR` is a UTF-16 unit on both, so SQL text, parameters, names and diagnostics cross as UTF-16, using `e.text.utf8`'s encoder and a local decoder. The decoder is local because `utf8.decode_utf16` drops a leading U+FEFF as a byte-order mark, which would lose data.
+- **Prepare everything.** Every statement goes through `SQLPrepareW`, so `SQLNumParams` can hold it to the parameters given, as the other drivers do. psqlODBC prepares multi-statement text, and `execute` sums `SQLRowCount` over `SQLMoreResults`, skipping result sets. `SQL_NO_DATA` from `SQLExecute` is a searched `UPDATE` or `DELETE` that matched nothing, not an error.
+- **No borrowed rows.** `SQLGetData` copies by definition, so both reader entries share one function (D1599 allows this). A long value is read in pieces: 256 bytes, then exactly the remainder `SQLGetData` reports.
+- **Kinds come from ODBC types.** `DECIMAL`, `NUMERIC`, `TIME`, `GUID` and anything unnamed are `Text`. A timestamp is its wall time read as UTC, since ODBC's carries no zone.
+- **Transactions are autocommit off and `SQLEndTran`.** Closing a connection with a transaction open rolls it back, because `SQLDisconnect` refuses a connection inside one. Whether a failed statement aborts the transaction is the driver's choice: psqlODBC's default rolls back only that statement, and the fixture asserts that.
+
+**Test drivers, installed with the user's consent.** WSL got `unixodbc` and `odbc-postgresql` from the Ubuntu archive. Windows got psqlODBC 17.00.0010's MSI from ftp.postgresql.org (unsigned, 4,345,856 bytes as listed), unpacked with `msiexec /a` into `D:\tools\psqlodbc`. Nothing was installed or registered system-wide. The Windows runner names the DLL through a per-user DSN (`HKCU\Software\ODBC\ODBC.INI\neper_psqlodbc`, `Driver` = the DLL's path), because `DRIVER={path}` needs a registered driver there, and it removes the DSN afterwards. On Linux, `Driver=` takes the `.so`'s path directly. Both reuse D1596's throwaway PostgreSQL.
+
+**Found on the way.** D1651: every negative ODBC type code compared unequal to its constant, so `BIGINT`, `BIT` and `VARBINARY` columns all came back as `Text`.
+
+**Verification.**
+
+- `link/x_odbc` against a live PostgreSQL, about 150 checks with one exit code each, passes on Windows (psqlODBC 17, PostgreSQL 18.6) and Linux (unixODBC 2.3.12, psqlODBC 16, PostgreSQL 16). It covers every value kind, counts, SQLSTATEs and `detail`, the driver's refusals, prepared statements, 1000 rows, 100 KB values in pieces, transactions, a `NOWAIT` lock refused as `Busy` across two connections, and a missing data source.
+- `link/x_db_units` gains the pure logic: SQLSTATE mapping, UTF-16 edge cases, `TIMESTAMP_STRUCT` both ways, and type codes.
+- Three deliberate driver defects were each caught at their own check: U+FEFF taken for a byte-order mark (23), an off-by-two in the piece arithmetic (105), and `SQL_BIGINT` unmapped (17).
+
+This is a library package, so no work-queue item moves.
+
+## D1651 — A negative named constant narrower than 64 bits is its 64-bit two's complement
+
+`const SQL_BIGINT: i16 = -5i16` never equalled a `-5` that ODBC wrote into an `i16`. A computed narrow integer sits in its register as `normalize_integer` leaves it, sign-extended when signed, and a literal `-5i32` lowers as `ConstInteger 5` then `Negate`, which leaves the same. `lower_constant` emitted `check.integer_bits(value, width)`, the width's bit pattern (`0x00000000FFFFFFFB`). Codegen moved that immediate into the register as it was, and the 64-bit compare saw two different numbers. `i64` constants were right, because their width is the register's.
+
+- **The fix.** It is in `lower_constant`: a negative constant's immediate is its 64-bit two's complement. Stores and extern arguments use only the low bits, so they are unchanged.
+- **A first attempt was wrong.** It sign-extended every signed `ConstInteger` in codegen, and the emit sweep caught it. A literal's immediate is its magnitude, not a bit pattern: `2147483648i32` in `0i32 - 2147483648i32` is 2³¹. Extending it made -2³¹, and `mem_bitcast` and `simd_lanes` trapped on an overflow that was not there.
+- **Enums are not affected.** Negative enum members of a signed backing were checked separately and already compare correctly: both sides of every tag compare come from `enum_member_bits`.
+
+`link/negative_constants`, both hosts, covers `i8`, `i16`, `i32` and `i64` constants against computed values, `i32`'s minimum, an `i16` written through a pointer as foreign code writes an out parameter, and a positive control. Against the unfixed compiler it stops at 10.
+
+**Emit sweep.** All 598 link fixtures were emitted for Windows by compilers built from HEAD with and without the fix, and 587 are byte-identical. The 11 that differ:
+
+- `negative_constants`, `x_odbc` and `x_db_units`, which are new or changed;
+- `os_gaps`, which reaches `os.windows.e`'s `EXCEPTION_CONTINUE_EXECUTION`;
+- `os_window` and six `ui_*` fixtures, which reach its `CW_USEDEFAULT`.
+
+Those two constants are the only negative narrow constants in `lib/` and `src/`. Both are values handed to Windows, which reads their low 32 bits, so no behaviour changed until something compared one. All 11 pass under the fixed compiler. Stage 2 equals stage 3 on Windows.

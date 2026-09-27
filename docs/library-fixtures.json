@@ -1871,6 +1871,7 @@
     "ui_workspace",
     "x_db_units",
     "x_mysql",
+    "x_odbc",
     "x_postgresql",
     "x_sqlite"
    ]
