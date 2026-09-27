@@ -28939,3 +28939,17 @@ port, which could shut down any MySQL there that accepted `root` without a passw
 - On both hosts, a bare `start` with nothing in the way chose 55432 and 53306, and the overrides
   (55501 and 53501) were honoured.
 - `stop` left no server of ours running on either host.
+
+## D1587 — C084 closes; CodeView goes with M4's PDB writer
+
+C084 closes, and CodeView moves to M4. The user asked for this.
+
+Its last open line was CodeView on PE. In an image, CodeView lives in a PDB, and the PDB writer is already M4's work in the roadmap. It is in the own linker's hard case: "the PDB writer — MSF container, DBI, module, symbol and line streams". So C084's CodeView line is that M4 item's, and C084 does not wait on it.
+
+What C084 delivered (D1581-D1586), on both hosts:
+
+- **Symbols and lines:** section headers, a symbol per function, and DWARF lines, in every ELF image. On PE, the same DWARF in `.debug_*` sections, plus COFF symbols, which lldb and gdb read on Windows.
+- **Locals and types:** parameters and locals with their locations in every frame, scoped to their blocks. Types cover primitives, pointers, slices, arrays, structs, enums, unions and tagged unions, and each image has frame descriptions.
+- **The trap table:** now section 13's `NEPS` layout, in `.nepersym` and `.nepsym`, which both runtimes binary-search.
+
+Until M4, WinDbg and Visual Studio see a Neper image's code but not its variables.
