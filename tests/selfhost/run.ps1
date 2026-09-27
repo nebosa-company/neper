@@ -4573,6 +4573,12 @@ $comptimePointerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $comptimePointerWritten -ne 'executable written') { throw 'comptime pointer fixture executable emission failed' }
 & $comptimePointerPath
 if ($LASTEXITCODE -ne 0) { throw "a constant folded through pointers was wrong: exit $LASTEXITCODE" }
+# Errors, several results and `try` in the interpreter (D1571).
+$comptimeErrorsPath = Join-Path $testBuild 'comptime-errors-selfhost.exe'
+$comptimeErrorsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_errors\src\main.e') $repo 'x64' 'windows' $comptimeErrorsPath
+if ($LASTEXITCODE -ne 0 -or $comptimeErrorsWritten -ne 'executable written') { throw 'comptime errors fixture executable emission failed' }
+& $comptimeErrorsPath
+if ($LASTEXITCODE -ne 0) { throw "a constant folded through errors and try was wrong: exit $LASTEXITCODE" }
 Require-Fixture 'check/comptime_pointer_result'
 $comptimePointerResult = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_pointer_result\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimePointerResult -join "`n") -notmatch 'main\.e:9:15: error\[E-COMPTIME-9999\]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold') { throw "a pointer-valued constant was not refused: $($comptimePointerResult -join "`n")" }
