@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>One SQL contract, three drivers — Neper blog</title>
-  <meta name="description" content="e.db, Neper's SQL contract, and its SQLite, PostgreSQL and MySQL drivers: how the contract works, how to write a driver, what differs between the three, and the same workload measured against hand-written C.">
+  <meta name="description" content="e.db, Neper's SQL contract, and its SQLite, PostgreSQL and MySQL drivers: how the contract works, how to write a driver, what differs between the three, and the same workload measured against C, Go and Rust.">
   <link rel="canonical" href="https://neper.dev/blog/e-db-three-drivers.html">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
   <meta property="og:title" content="One SQL contract, three drivers">
-  <meta property="og:description" content="e.db over SQLite, PostgreSQL and MySQL: round-trip-bound work at C speed, scans at half, and the float parser that made MySQL the outlier.">
+  <meta property="og:description" content="e.db over SQLite, PostgreSQL and MySQL, measured against C, Go and Rust: C 86%, Rust 80%, Neper 69%, Go 59% of the fastest, and scans are where Neper loses.">
   <meta property="og:url" content="https://neper.dev/blog/e-db-three-drivers.html">
   <meta property="og:image" content="https://neper.dev/blog/img/e-db-three-drivers.svg">
   <meta property="article:published_time" content="2026-09-27">
@@ -132,7 +132,7 @@
       <p class="meta">September 27, 2026 · <code>lib/e/db.e</code>, <code>lib/x/</code>, <code>benchmarks/db</code></p>
       <img class="banner" src="img/e-db-three-drivers.svg" width="1200" height="630" alt="One SQL contract, three drivers. Median microseconds per primary-key lookup on Windows, Neper against C: SQLite 18.9 and 17.4, PostgreSQL 42.5 and 36.8, MySQL 124.4 and 119.8.">
 
-      <p class="lede">Neper's standard library has had a database contract, <code>e.db</code>, for a while, with nothing behind it. Today it has three drivers: SQLite, PostgreSQL and MySQL. Each binds the vendor's own C client library, and each is tested against a live server on Windows and Linux. This post walks through the contract, shows how to write a driver, explains what differs between the three, and ends with numbers: the same workload through the drivers and through hand-written C.</p>
+      <p class="lede">Neper's standard library has had a database contract, <code>e.db</code>, for a while, with nothing behind it. Today it has three drivers: SQLite, PostgreSQL and MySQL. Each binds the vendor's own C client library, and each is tested against a live server on Windows and Linux. This post walks through the contract, shows how to write a driver, explains what differs between the three, and ends with numbers: the same workload in Neper, C, Go and Rust, and which one wins.</p>
 
       <h2>The contract</h2>
       <p><code>e.db</code> is deliberately small. It defines four handles, one table of functions, a value type and five errors:</p>
@@ -287,8 +287,63 @@ extern fn getvalue(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
         <li><strong>scan</strong>: every row back through one streaming reader;</li>
         <li><strong>lookup</strong>: primary-key reads through one prepared statement.</li>
       </ul>
-      <p>The same work is written directly against each C API in <code>benchmarks/db/c/bench.c</code>, using the strategy the matching driver uses: prepared statements for SQLite, binary parameters and single-row mode for PostgreSQL, escaped text for MySQL. The C baseline is therefore the floor for that design, not a different design.</p>
-      <p>Both sides ran 9 times, alternated, and the tables report medians. <em>N</em> is 100,000 rows and 20,000 lookups for SQLite, and 20,000 rows and 5,000 lookups for the servers. Everything ran on one laptop, a Core i5-12500H, under Windows 11 and under WSL2 Ubuntu 24.04. The servers were local and throwaway (PostgreSQL with <code>fsync=off</code>, MySQL at its defaults), and SQLite wrote a file with its default rollback journal. Other work was running on the machine, so read absolute numbers as ±15%; the Neper-to-C ratios are the stable part.</p>
+      <p>The same work is written four times:</p>
+      <ul>
+        <li><strong>Neper</strong>, through <code>e.db</code> and the three drivers above (<code>benchmarks/db/src</code>).</li>
+        <li><strong>C</strong>, directly against each C API (<code>benchmarks/db/c/bench.c</code>), using the strategy the matching Neper driver uses: prepared statements for SQLite, binary parameters and single-row mode for PostgreSQL, escaped text for MySQL. It is the floor for that design.</li>
+        <li><strong>Go 1.27</strong>, with each database's standard Go driver (<code>benchmarks/db/go</code>):
+          <ul>
+            <li>PostgreSQL: <code>pgx</code>.</li>
+            <li>MySQL: <code>go-sql-driver/mysql</code>.</li>
+            <li>SQLite: <code>mattn/go-sqlite3</code> bound through cgo to the system library on Linux; <code>modernc.org/sqlite</code>, a Go translation of SQLite, on Windows, which has no gcc here.</li>
+          </ul>
+        </li>
+        <li><strong>Rust 1.98</strong>, with the standard synchronous crates (<code>benchmarks/db/rust</code>): <code>rusqlite</code> on the system SQLite, <code>postgres</code> and <code>mysql</code>.</li>
+      </ul>
+      <p>Go and Rust speak the PostgreSQL and MySQL wire protocols themselves rather than through libpq and libmysql, and for MySQL they use server-side prepared statements where Neper and C render text.</p>
+      <p>Each round ran every language once, alternated, 9 rounds after a warm-up, and the tables report medians. <em>N</em> is 100,000 rows and 20,000 lookups for SQLite, and 20,000 rows and 5,000 lookups for the servers. Everything ran on one laptop, a Core i5-12500H, under Windows 11 and under WSL2 Ubuntu 24.04. The servers were local and throwaway (PostgreSQL with <code>fsync=off</code>, MySQL at its defaults), and SQLite wrote a file with its default rollback journal.</p>
+      <p>Other work shared the machine, so the absolute speeds moved between runs. The interquartile spread was 5–20% for scans on Linux, and up to 150% for server work on Windows. Each cell below is therefore each language's median as a percentage of the fastest median in the same round, where 100% means it won the cell.</p>
+
+      <div class="callout">
+        <strong>The verdict: C, then Rust, then Neper, then Go.</strong>
+        <p>Scored against the fastest in each of the 18 cells (3 workloads × 3 databases × 2 hosts), the geometric means are <b>C 86%, Rust 80%, Neper 69%, Go 59%</b>. C wins 7 cells, Rust 6, Go 3 and Neper 2. Neper finishes ahead of Go and behind Rust and C, and nearly all of its gap is in one workload: scans.</p>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Windows 11</th><th>Neper</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
+          <tbody>
+            <tr><td>SQLite insert</td><td>61%</td><td class="win">100%</td><td>28%</td><td>37%</td></tr>
+            <tr><td>SQLite scan</td><td>52%</td><td>87%</td><td>21%</td><td class="win">100%</td></tr>
+            <tr><td>SQLite lookup</td><td>85%</td><td>85%</td><td>58%</td><td class="win">100%</td></tr>
+            <tr><td>PostgreSQL insert</td><td>88%</td><td class="win">100%</td><td>54%</td><td>56%</td></tr>
+            <tr><td>PostgreSQL scan</td><td>51%</td><td>96%</td><td class="win">100%</td><td>48%</td></tr>
+            <tr><td>PostgreSQL lookup</td><td class="win">100%</td><td>67%</td><td>66%</td><td>100%</td></tr>
+            <tr><td>MySQL insert</td><td>70%</td><td>80%</td><td class="win">100%</td><td>61%</td></tr>
+            <tr><td>MySQL scan</td><td>52%</td><td>93%</td><td>84%</td><td class="win">100%</td></tr>
+            <tr><td>MySQL lookup</td><td>89%</td><td>78%</td><td class="win">100%</td><td>96%</td></tr>
+            <tr><td><strong>Geometric mean</strong></td><td><strong>70%</strong></td><td class="win">87%</td><td><strong>60%</strong></td><td><strong>73%</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Linux (WSL2)</th><th>Neper</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
+          <tbody>
+            <tr><td>SQLite insert</td><td>76%</td><td>86%</td><td>50%</td><td class="win">100%</td></tr>
+            <tr><td>SQLite scan</td><td>53%</td><td class="win">100%</td><td>25%</td><td>82%</td></tr>
+            <tr><td>SQLite lookup</td><td>75%</td><td class="win">100%</td><td>67%</td><td>97%</td></tr>
+            <tr><td>PostgreSQL insert</td><td class="win">100%</td><td>99%</td><td>52%</td><td>92%</td></tr>
+            <tr><td>PostgreSQL scan</td><td>53%</td><td class="win">100%</td><td>90%</td><td>46%</td></tr>
+            <tr><td>PostgreSQL lookup</td><td>93%</td><td class="win">100%</td><td>50%</td><td>95%</td></tr>
+            <tr><td>MySQL insert</td><td>75%</td><td>68%</td><td>75%</td><td class="win">100%</td></tr>
+            <tr><td>MySQL scan</td><td>66%</td><td class="win">100%</td><td>82%</td><td>96%</td></tr>
+            <tr><td>MySQL lookup</td><td>45%</td><td>41%</td><td>64%</td><td class="win">100%</td></tr>
+            <tr><td><strong>Geometric mean</strong></td><td><strong>68%</strong></td><td><strong>85%</strong></td><td><strong>58%</strong></td><td class="win">88%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The winner of each row is highlighted. The raw medians and every sample are in <code>benchmarks/db/results/</code>.</p>
       <div class="table-scroll">
         <table>
           <thead><tr><th>Windows 11</th><th>Insert rows/s<br>Neper · C</th><th>Scan rows/s<br>Neper · C</th><th>Lookup µs<br>Neper · C</th></tr></thead>
@@ -309,23 +364,31 @@ extern fn getvalue(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
           </tbody>
         </table>
       </div>
-      <p>Where Neper's median beat C's, the cell is highlighted.</p>
-      <p><strong>Work bound by round trips runs at C's speed.</strong> Inserts and lookups against a server spend 37 to 260 µs per statement on the loopback round trip, and the driver disappears into that. Neper lands within about 25% of C in either direction, sometimes ahead, which is this machine's noise. The same goes for SQLite inserts: 79% of C on Windows, 116% on Linux.</p>
-      <p><strong>A scanned row costs 105 to 215 ns more than in C.</strong> The C loop reads each value in place and throws it away. The driver copies each text value into the reader's buffer so it stays valid until the next row, builds a tagged <code>Value</code> per column, and dispatches through <code>e.db</code>. That is what a portable row costs. It shows up as half of C's throughput only because this benchmark does nothing with its rows.</p>
-      <p><strong>SQLite lookups cost 1.5 to 2 µs more.</strong> The likely cause, not yet profiled, is that each execution of a prepared query builds a fresh reader and re-reads its column names and declared types. Caching that on the statement is the obvious fix.</p>
-      <p><strong>MySQL's scan is the outlier, at 7–9% of C.</strong> On the text protocol a <code>DOUBLE</code> arrives as digits. The driver parses them with <code>e.str.parse_f64</code>, which is correctly rounded but has no fast path yet: a probe measured it at 4.0 µs per call, where C's <code>strtod</code> takes tens of nanoseconds. That one call is the whole gap: without the <code>DOUBLE</code> column, lookups land within 4% of C. Formatting has the same shape. <code>push_f64</code> finds the shortest round-trip digits by bisection, re-parsing at each step, and takes 18 µs, which accounts for most of the MySQL insert gap.</p>
+      <p><strong>Scans are where Neper loses, and it loses everywhere.</strong> Neper reaches 51–66% of the fastest scan on every database and both hosts. On Linux the spread for scans is 5–20%, so that gap is real, not noise. The reason is the same in each case:</p>
+      <ul>
+        <li>the C loop reads each value in place;</li>
+        <li><code>rusqlite</code> and Rust's <code>postgres</code> hand back borrowed rows;</li>
+        <li>Neper's reader copies every text value into its own buffer, so the value stays valid until the next row, builds a tagged <code>Value</code> per column, and dispatches through <code>e.db</code>.</li>
+      </ul>
+      <p>A reader that lends the library's own bytes for the life of the row is the fix this points to. Go loses scans too, and harder: 21–25% of the fastest on SQLite. Its SQLite path pays for cgo on Linux and for the translated engine on Windows.</p>
+      <p><strong>Inserts and lookups are close contests.</strong> Against a server each statement waits on a loopback round trip of 37–260 µs, and the language mostly disappears into it. Neper wins PostgreSQL lookups on Windows and PostgreSQL inserts on Linux, and is otherwise within reach of the leader. The one wide gap is MySQL lookups on Linux: Rust 77 µs, Go 120 µs, Neper 171 µs, C 185 µs. That is a protocol choice, not a language: Rust and Go use server-side prepared statements over the binary protocol, while Neper and C render each statement as text.</p>
+      <p><strong>Go is last overall, mainly on SQLite.</strong> Its PostgreSQL scans are strong (90–100%) and it wins MySQL inserts and lookups on Windows, but its SQLite numbers (21–67%) and its PostgreSQL inserts (52–54%) pull its mean to 59%.</p>
+      <p><strong>C and Rust trade the top.</strong> C is the steadier of the two: it wins 7 cells and never falls below 41%. Rust has the best Linux mean (88%), but on Windows its SQLite inserts (37%) and PostgreSQL inserts (56%) pull its mean down to 73%.</p>
 
       <div class="callout">
-        <strong>Two bugs the benchmark found.</strong>
-        <p>The first is the float speed above. A Clinger fast path for <code>parse_f64</code> and a direct shortest-digits algorithm for <code>push_f64</code> are queued, and they must leave every result unchanged. The second is in the Linux linker. It places all dynamic-linking metadata in the 4 KB before the code, so a program importing more than about 48 C symbols fails to link, and a program using all three drivers imports about 80. Each driver alone fits, so the benchmark is now one small program per driver over a shared workload module, and lifting the limit is queued too.</p>
-        <p><em>Update, the same day:</em> the float fix has landed (D1593). <code>parse_f64</code> gained Clinger's and Eisel-Lemire's fast paths, and <code>push_f64</code> now uses Ryu, with every result unchanged. Parsing a short double went from about 4 µs to about 0.1 µs, and pushing one from about 18 µs to about 0.6 µs. MySQL's scan went from 206K to 1.50M rows/s (from 8% to 63% of C), and its insert from 75% to 93% of C.</p>
+        <strong>Two bugs the first run found, both fixed.</strong>
+        <p>MySQL's scan first ran at 7–9% of C because <code>e.str.parse_f64</code> took about 4 µs a call. It now has Clinger's and Eisel-Lemire's fast paths, and <code>push_f64</code> uses Ryu, with every result unchanged (D1593); that scan now reaches 52–66% of the fastest. A Linux program importing more than about 48 C symbols failed to link, and one declaring more than about 58 externs failed to build on either target. Both limits are lifted (D1594), so a single program can now use all three drivers.</p>
       </div>
 
       <h2>Try it</h2>
-      <p>The drivers are in <code>lib/x/sqlite</code>, <code>lib/x/postgresql</code> and <code>lib/x/oracle</code>. Each has a specification under <code>docs/packages/</code> covering upstream version, targets, ownership and licensing. To reproduce the numbers, start the throwaway servers and run the harness. On Windows, <code>libpq.dll</code> and <code>libmysql.dll</code> must be on PATH:</p>
-      <pre><code>pwsh tests/selfhost/db_servers.ps1 start build/db
-python benchmarks/db/run.py --neper build/bench --c build/bench-c.exe --runs 9 --out results.json
-bash benchmarks/db/run-linux.sh build/linux/bench results-linux.json</code></pre>
+      <p>The drivers are in <code>lib/x/sqlite</code>, <code>lib/x/postgresql</code> and <code>lib/x/oracle</code>. Each has a specification under <code>docs/packages/</code> covering upstream version, targets, ownership and licensing. To reproduce the numbers, build the Go and Rust programs with <code>benchmarks/db/tools-env.ps1</code> sourced, which keeps both toolchains' caches in one directory. Then start the throwaway servers, which record the ports they took in <code>build/db/ports</code>, and run the harness with those ports. On Windows, <code>libpq.dll</code> and <code>libmysql.dll</code> must be on PATH. The Linux script does all of this in one step:</p>
+      <pre><code>. benchmarks/db/tools-env.ps1
+go -C benchmarks/db/go build -o ../../../build/bench-go.exe .
+cargo +stable-x86_64-pc-windows-msvc build --release --manifest-path benchmarks/db/rust/Cargo.toml
+copy $env:CARGO_TARGET_DIR/release/bench-rust.exe build/
+pwsh tests/selfhost/db_servers.ps1 start build/db
+python benchmarks/db/run.py --neper build/bench --c build/bench-c.exe --go build/bench-go.exe --rust build/bench-rust.exe --pg-port 55432 --mysql-port 53306 --runs 9 --out results.json
+bash benchmarks/db/run-linux-all.sh build/linux/bench results-linux.json</code></pre>
       <p>The raw samples behind every number above are in <code>benchmarks/db/results/</code>. If your numbers disagree with ours, we want to know.</p>
       <div class="try-cta">
         <a class="button nu-btn lg" href="../">Try Neper →</a>

@@ -28983,3 +28983,11 @@ Section 10's Restrictions table is now enforced from each kernel through every f
 - **Fixed point.** Stage 2 equals stage 3 on both hosts.
 
 **What the walk does not see.** It reads syntax, as D1565's does, so a generic helper's instance is not followed. A local's slice-ness is judged from its declaration, and a call's result counts as a slice. Neither is a new refusal of valid code; each is a gap in what is caught.
+
+## D1597 — The e.db benchmark compares Neper with C, Go and Rust
+
+**Why.** A comparison against C alone did not say who wins. The same workload now also runs in Go and Rust, each using the driver its ecosystem reaches for first: `pgx`, `go-sql-driver/mysql`, `mattn/go-sqlite3` (cgo, system libsqlite3; `modernc.org/sqlite` where there is no cgo), and `rusqlite`, `postgres` and `mysql` (minimal features). Every program prints the same line, and `run.py` alternates all four within each round and records the winner of each cell.
+
+**Where the tools live.** `benchmarks/db/tools-env.{ps1,sh}` put both toolchains, their module and build caches, Go telemetry and Cargo's registry under `D:\tools` (`/mnt/d/tools`). Nothing is written to the system drive. On Windows, Rust builds with the MSVC toolchain because the GNU one needs `dlltool`. It links `winsqlite3` for SQLite, copied as `sqlite3.lib`.
+
+**Result.** The score is the geometric mean of each implementation's percentage of the fastest, over 18 cells (3 drivers × 3 workloads × 2 hosts): C 86%, Rust 80%, Neper 69%, Go 59%. C wins 7 cells, Rust 6, Go 3 and Neper 2. Neper's gap is scans, at 51–66% everywhere, because each row is copied into the reader's buffer; a borrowed-row reader is the fix. Inserts and lookups are close. Samples are in `benchmarks/db/results/*-four-way.json`, and the post is `docs/blog/e-db-three-drivers.html`.
