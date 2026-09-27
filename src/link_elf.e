@@ -671,7 +671,8 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
 // buffer for them.
 fn debug_bound(builder: *nir.Builder, lines: []codegen_x64.LineEntry) -> usize {
     // The type entries, at most the memo's, and per var its entry and location list.
-    var total = 4096usize + lines.len * 24usize + 2048usize * 96usize
+    // The PE path pads each of its five sections to 512 as well.
+    var total = 16384usize + lines.len * 24usize + 2048usize * 96usize
     var var_at = 0usize
     while var_at < builder.debug.var_count {
         total += builder.debug.vars[var_at].name.len + builder.debug.vars[var_at].descriptor.len + 96usize
@@ -1155,7 +1156,61 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
         if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) { try function_name(output, builder.functions[at]) }
         at += 1usize
     }
+    var dwarf: DwarfSections = zero
+    try write_dwarf(builder, output, function_offsets, lines, table_at, code_address, main_index, 1usize, &dwarf)
+    let names_offset = output.count
+    try append_blob(output, "\x00.text\x00.nepersym\x00.symtab\x00.strtab\x00.debug_abbrev\x00.debug_info\x00.debug_line\x00.shstrtab\x00.debug_loc\x00.debug_frame\x00")
+    let names_end = output.count
+    let headers_offset = align_up_to(output.count, 8usize)
+    try pad_to(output, headers_offset)
+    try section_header(output, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    try section_header(output, 1usize, 1usize, 6usize, base + text_start, text_start, text_end - text_start, 0usize, 0usize, 16usize, 0usize)
+    try section_header(output, 7usize, 1usize, 2usize, code_address + table_at, machine_start + table_at, machine.count - table_at, 0usize, 0usize, 4usize, 0usize)
+    try section_header(output, 17usize, 2usize, 0usize, 0usize, symtab_offset, strtab_offset - symtab_offset, 4usize, symbols, 8usize, 24usize)
+    try section_header(output, 25usize, 3usize, 0usize, 0usize, strtab_offset, dwarf.abbrev - strtab_offset, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 33usize, 1usize, 0usize, 0usize, dwarf.abbrev, dwarf.abbrev_end - dwarf.abbrev, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 47usize, 1usize, 0usize, 0usize, dwarf.info, dwarf.info_end - dwarf.info, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 59usize, 1usize, 0usize, 0usize, dwarf.line, dwarf.line_end - dwarf.line, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 71usize, 3usize, 0usize, 0usize, names_offset, names_end - names_offset, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 81usize, 1usize, 0usize, 0usize, dwarf.loc, dwarf.loc_end - dwarf.loc, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 92usize, 1usize, 0usize, 0usize, dwarf.frame, dwarf.frame_end - dwarf.frame, 0usize, 0usize, 8usize, 0usize)
+    // The ELF header's section fields: the table's offset, its entry size, its count
+    // and the index of the section names.
+    try patch_little_u64(output, 40usize, headers_offset)
+    output.bytes[58usize] = 64u8
+    output.bytes[60usize] = 11u8
+    output.bytes[62usize] = 8u8
+    ret ok
+}
+
+// (D1583) Where `write_dwarf` put each section, as offsets into the output.
+type DwarfSections = struct {
+    abbrev: usize,
+    abbrev_end: usize,
+    loc: usize,
+    loc_end: usize,
+    info: usize,
+    info_end: usize,
+    line: usize,
+    line_end: usize,
+    frame: usize,
+    frame_end: usize,
+}
+
+fn pad_aligned(output: *emit_x64.Buffer, alignment: usize) -> err {
+    ret pad_to(output, align_up_to(output.count, alignment))
+}
+
+// (D1583) The DWARF both linkers write -- abbreviations, location lists, the unit and
+// its entries, the line program and the frame description -- each section starting on
+// a multiple of `alignment` (a PE image's file alignment; one for ELF). `code_address`
+// is where the machine buffer's first byte is loaded.
+fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, code_address: usize, main_index: usize, alignment: usize, sections: *DwarfSections) -> err {
+    var at = 0usize
+    var placed_max = 0usize
+    try pad_aligned(output, alignment)
     let abbrev_offset = output.count
+    sections.abbrev = abbrev_offset
     // 1: the compile unit -- producer, language, name, low_pc, high_pc, stmt_list.
     try append_blob(output, "\x01\x11\x01\x25\x08\x13\x05\x03\x08\x11\x01\x12\x07\x10\x17\x00\x00")
     // 2: a subprogram -- name, low_pc, high_pc, external; 3: the same, and the program's
@@ -1186,7 +1241,10 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
     try append_blob(output, "\x13\x28\x00\x03\x08\x1c\x0d\x00\x00\x00")
     // The location lists, before the entries that name them: a var placed for part of its
     // function has one, in the order the entries are written below.
+    sections.abbrev_end = output.count
+    try pad_aligned(output, alignment)
     let loc_offset = output.count
+    sections.loc = loc_offset
     at = 0usize
     placed_max = 0usize
     while at < builder.function_count {
@@ -1216,7 +1274,10 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
         }
         at += 1usize
     }
+    sections.loc_end = output.count
+    try pad_aligned(output, alignment)
     let info_offset = output.count
+    sections.info = info_offset
     try emit_x64.little_u32(output, 0usize)
     try little_u16(output, 4usize)
     try emit_x64.little_u32(output, 0usize)
@@ -1317,7 +1378,10 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
     try emit_x64.patch_little_u32(output, info_offset, output.count - info_offset - 4usize)
     // The line program: the files in the order the rows first name them, then a row
     // per entry -- the file when it changes, the address and line advanced, a copy.
+    sections.info_end = output.count
+    try pad_aligned(output, alignment)
     let line_offset = output.count
+    sections.line = line_offset
     try emit_x64.little_u32(output, 0usize)
     try little_u16(output, 4usize)
     let header_length_at = output.count
@@ -1383,7 +1447,10 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
     // an FDE: after `push rbp` the CFA is 16 above the stack pointer and rbp is saved
     // below it, after `mov rbp, rsp` the CFA is rbp plus 16, and each callee-saved
     // register the function uses is in its slot.
+    sections.line_end = output.count
+    try pad_aligned(output, alignment)
     let frame_offset = output.count
+    sections.frame = frame_offset
     try append_blob(output, "\x14\x00\x00\x00\xff\xff\xff\xff\x01\x00\x01\x78\x10\x0c\x07\x08\x90\x01\x00\x00\x00\x00\x00\x00")
     at = 0usize
     placed_max = 0usize
@@ -1412,28 +1479,7 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
         }
         at += 1usize
     }
-    let names_offset = output.count
-    try append_blob(output, "\x00.text\x00.nepersym\x00.symtab\x00.strtab\x00.debug_abbrev\x00.debug_info\x00.debug_line\x00.shstrtab\x00.debug_loc\x00.debug_frame\x00")
-    let names_end = output.count
-    let headers_offset = align_up_to(output.count, 8usize)
-    try pad_to(output, headers_offset)
-    try section_header(output, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
-    try section_header(output, 1usize, 1usize, 6usize, base + text_start, text_start, text_end - text_start, 0usize, 0usize, 16usize, 0usize)
-    try section_header(output, 7usize, 1usize, 2usize, code_address + table_at, machine_start + table_at, machine.count - table_at, 0usize, 0usize, 4usize, 0usize)
-    try section_header(output, 17usize, 2usize, 0usize, 0usize, symtab_offset, strtab_offset - symtab_offset, 4usize, symbols, 8usize, 24usize)
-    try section_header(output, 25usize, 3usize, 0usize, 0usize, strtab_offset, abbrev_offset - strtab_offset, 0usize, 0usize, 1usize, 0usize)
-    try section_header(output, 33usize, 1usize, 0usize, 0usize, abbrev_offset, loc_offset - abbrev_offset, 0usize, 0usize, 1usize, 0usize)
-    try section_header(output, 47usize, 1usize, 0usize, 0usize, info_offset, line_offset - info_offset, 0usize, 0usize, 1usize, 0usize)
-    try section_header(output, 59usize, 1usize, 0usize, 0usize, line_offset, names_offset - line_offset, 0usize, 0usize, 1usize, 0usize)
-    try section_header(output, 71usize, 3usize, 0usize, 0usize, names_offset, names_end - names_offset, 0usize, 0usize, 1usize, 0usize)
-    try section_header(output, 81usize, 1usize, 0usize, 0usize, loc_offset, info_offset - loc_offset, 0usize, 0usize, 1usize, 0usize)
-    try section_header(output, 92usize, 1usize, 0usize, 0usize, frame_offset, names_offset - frame_offset, 0usize, 0usize, 8usize, 0usize)
-    // The ELF header's section fields: the table's offset, its entry size, its count
-    // and the index of the section names.
-    try patch_little_u64(output, 40usize, headers_offset)
-    output.bytes[58usize] = 64u8
-    output.bytes[60usize] = 11u8
-    output.bytes[62usize] = 8u8
+    sections.frame_end = output.count
     ret ok
 }
 

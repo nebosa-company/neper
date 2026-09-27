@@ -2768,8 +2768,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     context.instruction_offsets = context.instruction_offsets[0usize..0usize]
     context.stack_value_slots = context.stack_value_slots[0usize..0usize]
     let (debug_first, debug_count) = nir.debug_locals_of(builder, current.first_instruction)
-    // ELF images only for now: a PE image has no debug format to carry them yet (D1582).
-    if debug_count != 0usize && context.abi != .Windows {
+    if debug_count != 0usize {
         let (offsets, offsets_error) = mem.alloc[usize](context.arena, current.instruction_count + 1usize)
         if offsets_error != ok { ret offsets_error }
         let (slots, slots_error) = mem.alloc[usize](context.arena, current.value_count + 1usize)
@@ -3410,7 +3409,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
     // (D1582) Where the function keeps the callee-saved registers it uses, for the
     // image's frame description: a caller's values in them are there while it runs.
     var saved_at = 0usize
-    while saved_at < saved_count && context.abi != .Windows && builder.debug.vars.len != 0usize && builder.debug.var_count < builder.debug.vars.len {
+    while saved_at < saved_count && builder.debug.vars.len != 0usize && builder.debug.var_count < builder.debug.vars.len {
         let (saved_physical, saved_physical_error) = hardware_register(caller_saved_count() + saved_at)
         if saved_physical_error != ok { ret saved_physical_error }
         var saved: nir.DebugVar = zero
