@@ -28377,7 +28377,7 @@ GP-05 as a verification workload still needs its written design (arena topology,
 concurrency, foreign boundaries). That design should cover what this package leaves out:
 callbacks and user-defined functions, which are GP-08's foreign-callback surface.
 
-## D1570 — Pointers in the comptime interpreter
+## D1573 — Pointers in the comptime interpreter
 
 Section 9 lists pointers among what an evaluated body may use: "`&x`, slicing and `mem.cast` yield addresses into it". With D1569's memory, a pointer is an address in it:
 
@@ -28398,7 +28398,7 @@ Fixtures, both hosts:
 
 Accept, reject and emit sweeps against D1569's compiler: only the new fixtures changed, and every other link fixture's executable is byte-identical. Stage 2 equals stage 3 on both hosts.
 
-## D1571 — Errors, several results and try in the comptime interpreter
+## D1574 — Errors, several results and try in the comptime interpreter
 
 Section 9 allows "`try` inside a function the interpreter executes", and the arena's `mem.alloc` answers `([]T, err)`. The interpreter took one result per call and knew no `err`.
 
@@ -28414,7 +28414,7 @@ Fixture, both hosts: `link/comptime_errors`:
 - a statement `try` in a function answering only `err`;
 - errors compared by name, with one result used as an array length.
 
-Accept, reject and emit sweeps against D1570's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.
+Accept, reject and emit sweeps against D1573's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.
 
 ## D1572 — X buttons 6, 7 and 10 on are no event, not a primary click
 
@@ -28431,9 +28431,9 @@ Fixture, Linux only, since the X translation has no Windows counterpart: `link/o
 
 Against the unfixed library it stops at exit 11, on button 6. With the fix it prints `os window buttons ok` from both the Windows-hosted and the Linux-hosted compiler, and `os_window` still passes.
 
-## D1572 — The arena as comptime interpreter memory
+## D1575 — The arena as comptime interpreter memory
 
-Section 9 lets an evaluated body use "`mem.arena_from` over a comptime array and `mem.alloc` from it". With D1569's memory, D1570's pointers and D1571's `err`, the arena needed only its three seeded operations. `mem.arena_from` is ordinary Neper (`Arena { base: &buf[0], cap: buf.len, off: 0usize }`), and the interpreter runs it as written.
+Section 9 lets an evaluated body use "`mem.arena_from` over a comptime array and `mem.alloc` from it". With D1569's memory, D1573's pointers and D1574's `err`, the arena needed only its three seeded operations. `mem.arena_from` is ordinary Neper (`Arena { base: &buf[0], cap: buf.len, off: 0usize }`), and the interpreter runs it as written.
 
 - **`mem.alloc[T](a, n)`** does what the C runtime's `neper_mem_alloc` does:
   - the offset is rounded up to `T`'s alignment;
@@ -28455,4 +28455,4 @@ Fixture, both hosts: `link/comptime_arena`:
 - a `reset` to the mark, then `Exhausted` for 1000 bytes with the offset unchanged;
 - `try mem.alloc` in a function answering `(u32, err)`.
 
-Accept, reject and emit sweeps against D1571's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.
+Accept, reject and emit sweeps against D1574's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.

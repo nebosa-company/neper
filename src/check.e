@@ -5553,7 +5553,7 @@ fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) 
         c.interp_depth = 0usize
         let (result, result_type, call_error) = interp_call(c, c.graph, expression.module_index, expression.name, values[..expression.argument_count], types[..expression.argument_count], expression.site, expression.module_index, 0usize)
         if call_error != ok { ret (normalized_integer(0usize, false), invalid_type(), call_error) }
-        // (D1570) Section 9: a constant's value is pointer-free; an address into the
+        // (D1573) Section 9: a constant's value is pointer-free; an address into the
         // interpreter's memory means nothing once the evaluation ends.
         if result_type.kind == .Pointer { ret (normalized_integer(0usize, false), invalid_type(), interp_fail(c, expression.module_index, expression.site, "a pointer as its value, which a constant cannot hold")) }
         record_explain_comptime_call(c, expression)
@@ -5928,7 +5928,7 @@ fn layout_field(c: *Checker, ty: Type, name: str) -> (LayoutField, err) {
 // byte for byte in the target's layout, from `INTERP_BASE` up to `top`; the read-only
 // bytes of the string literals an evaluation read, at addresses tagged
 // `INTERP_STATIC`; and the pointer types `&x` has made, one stored type per pointee
-// (D1570). A worker starts with none of it (`interp_ready` false).
+// (D1573). A worker starts with none of it (`interp_ready` false).
 type InterpSpace = struct {
     memory: []u8,
     top: usize,
@@ -5954,7 +5954,7 @@ type InterpFrame = struct {
     site_addresses: [64]usize,
     site_count: usize,
     module_index: usize,
-    // (D1571) The function's results: its index, where its results start in
+    // (D1574) The function's results: its index, where its results start in
     // `return_types`, and how many there are.
     function_index: usize,
     return_first: usize,
@@ -5971,7 +5971,7 @@ const INTERP_BASE: usize = 16usize
 const INTERP_STATIC: usize = 4611686018427387904usize
 // The allocation site of a parameter: its position past this.
 const INTERP_PARAMETER_SITE: usize = 1099511627776usize
-// (D1571) The site of the n-th name a binding of several values binds is its node's
+// (D1574) The site of the n-th name a binding of several values binds is its node's
 // past n times this; a failed `try` answers its results from its node's past
 // `INTERP_TRY_SITE`.
 const INTERP_RESULT_SITE: usize = 17592186044416usize
@@ -6095,8 +6095,8 @@ fn interp_bind(frame: *InterpFrame, name: str, ty: Type, address: usize) -> err 
 // one it holds, a string, or a struct whose fields it holds.
 fn interp_holds(c: *Checker, ty: Type, depth: usize) -> bool {
     if depth > 16usize { ret false }
-    // (D1570) A pointer is an address; what it points at is asked when it is read.
-    // (D1571) An `err` is four bytes.
+    // (D1573) A pointer is an address; what it points at is asked when it is read.
+    // (D1574) An `err` is four bytes.
     if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .String || ty.kind == .Pointer || ty.kind == .Err { ret true }
     if ty.kind == .Array || ty.kind == .Slice {
         if !ty.has_element || ty.element >= c.type_count { ret false }
@@ -6119,7 +6119,7 @@ fn interp_scalar(ty: Type) -> bool {
     ret ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Pointer || ty.kind == .Err
 }
 
-// (D1571) A call's several results, as one area laid out as a struct of them in
+// (D1574) A call's several results, as one area laid out as a struct of them in
 // order; the pseudo-type names the function whose results they are.
 fn interp_results_type(module_index: usize, function_index: usize) -> Type {
     var results = make_type(.Other, "(results)", module_index)
@@ -6158,7 +6158,7 @@ fn interp_result_slot(c: *Checker, module_index: usize, node: syntax.Node, funct
     ret (wanted, wanted_offset, size, alignment, size_error)
 }
 
-// The error an `err` names (D1571): its symbol plus one, `ok` zero. An `err` never
+// The error an `err` names (D1574): its symbol plus one, `ok` zero. An `err` never
 // leaves an evaluation, so the number need only be one per error within it.
 fn interp_error_value(c: *Checker, module_index: usize, name: str) -> (IntegerValue, bool) {
     let (symbol_index, found_symbol) = resolve.find(c.resolver, module_index, name, .Value)
@@ -6178,7 +6178,7 @@ fn interp_scalar_size(ty: Type) -> usize {
     ret layout_scalar_size(ty)
 }
 
-// `*T` for `&x` of a `T` (D1570): the pointee stored once per worker and reused, so a
+// `*T` for `&x` of a `T` (D1573): the pointee stored once per worker and reused, so a
 // loop taking addresses does not grow the type table.
 fn interp_pointer_to(c: *Checker, module_index: usize, node: syntax.Node, element: Type) -> (Type, err) {
     let (index, index_error) = interp_type_index(c, module_index, node, element)
@@ -6189,7 +6189,7 @@ fn interp_pointer_to(c: *Checker, module_index: usize, node: syntax.Node, elemen
     ret (pointer, ok)
 }
 
-// A type's index in the type table, stored once per worker and reused (D1570): what a
+// A type's index in the type table, stored once per worker and reused (D1573): what a
 // pointer or a slice the interpreter makes names as its element.
 fn interp_type_index(c: *Checker, module_index: usize, node: syntax.Node, element: Type) -> (usize, err) {
     var at = 0usize
@@ -6207,7 +6207,7 @@ fn interp_type_index(c: *Checker, module_index: usize, node: syntax.Node, elemen
     ret (stored, ok)
 }
 
-// (D1572) `mem.alloc`'s results: its `[]T` beside an `err`, the slice's type stored.
+// (D1575) `mem.alloc`'s results: its `[]T` beside an `err`, the slice's type stored.
 fn interp_alloc_results_type(module_index: usize, slice_index: usize) -> Type {
     var results = make_type(.Other, "(alloc)", module_index)
     results.has_element = true
@@ -6231,7 +6231,7 @@ fn interp_results_at(c: *Checker, module_index: usize, node: syntax.Node, ty: Ty
     ret (slot_type, slot_offset, area_size, area_alignment, slot_error)
 }
 
-// An arena's field, through the pointer a `mem` operation is handed (D1572).
+// An arena's field, through the pointer a `mem` operation is handed (D1575).
 fn interp_arena_field(c: *Checker, module_index: usize, node: syntax.Node, arena_pointer: IntegerValue, pointer_type: Type, name: str) -> (usize, Type, err) {
     let arena = interp_pointee(c, pointer_type)
     if arena.kind != .Named || !same(arena.name, "Arena") || !module_is_mem(c, arena.module_index) { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a `mem` operation on something that is not an arena")) }
@@ -6253,7 +6253,7 @@ fn interp_fill(c: *Checker, module_index: usize, node: syntax.Node, address: usi
     ret ok
 }
 
-// (D1572) `mem.alloc[T](a, n)`, as the runtime does it: the offset rounded up to `T`'s
+// (D1575) `mem.alloc[T](a, n)`, as the runtime does it: the offset rounded up to `T`'s
 // alignment, `n` of `T` if they fit and `Exhausted` if not, the memory handed out
 // filled with 0xCD (section 11's debug fill: the checker knows no build mode, and a
 // constant does not depend on one), and the arena's offset moved past it.
@@ -6553,7 +6553,7 @@ fn interp_place(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpF
         if !found { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a place that is no local")) }
         ret (frame.addresses[slot], frame.types[slot], ok)
     }
-    // (D1570) `*p`: what the pointer holds the address of.
+    // (D1573) `*p`: what the pointer holds the address of.
     if node.kind == .UnaryExpr && c.tokens[usize(node.token_start)].kind == .PunctStar {
         let (inner, has_inner) = first_node_child(tree, node)
         if !has_inner { ret (0usize, invalid_type(), parse.InvalidSyntax) }
@@ -6570,7 +6570,7 @@ fn interp_place(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpF
         if !has_base || !has_member { ret (0usize, invalid_type(), parse.InvalidSyntax) }
         let (base, raw_base_type, base_error) = interp_expr(c, g, tree, frame, base_index, invalid_type())
         if base_error != ok { ret (0usize, invalid_type(), base_error) }
-        // (D1570) A field through a pointer is the field of what it points at.
+        // (D1573) A field through a pointer is the field of what it points at.
         var base_address = base.magnitude
         var base_type = raw_base_type
         if raw_base_type.kind == .Pointer {
@@ -6715,7 +6715,7 @@ fn interp_convert(c: *Checker, module_index: usize, node: syntax.Node, value: In
         ret (value, into, ok)
     }
     // (D1569) An aggregate stands at its address: its type has to be the one declared,
-    // or one assignable to it (`[]T` into `[]const T`); so does a pointer (D1570).
+    // or one assignable to it (`[]T` into `[]const T`); so does a pointer (D1573).
     if !interp_scalar(into) || into.kind == .Pointer {
         if !interp_holds(c, into, 0usize) { ret (value, from, interp_fail(c, module_index, node, "a type it does not hold")) }
         if !type_equal(c, from, into) && !type_assignable(c, from, into) { ret (value, from, interp_fail(c, module_index, node, "a value of another type")) }
@@ -6788,7 +6788,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         }
         let (constant_index, found_constant) = find_constant(c, module_index, name)
         if !found_constant {
-            // (D1571) An error's name is an `err`.
+            // (D1574) An error's name is an `err`.
             let (error_value, is_error) = interp_error_value(c, module_index, name)
             if is_error { ret (error_value, make_type(.Err, "err", module_index), ok) }
             ret (none, invalid_type(), interp_fail(c, module_index, node, "a name that is no local or constant"))
@@ -6871,7 +6871,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
             if value_type.kind == .Integer && !integer_representable(negated, value_type) { ret (none, invalid_type(), interp_fail(c, module_index, node, "a negation the type cannot hold")) }
             ret (negated, value_type, ok)
         }
-        // (D1570) `&x`: the place's address; `*p`: what is there.
+        // (D1573) `&x`: the place's address; `*p`: what is there.
         if op == .PunctAmp {
             let (address, place_type, place_error) = interp_place(c, g, tree, frame, inner)
             if place_error != ok { ret (none, invalid_type(), place_error) }
@@ -6929,7 +6929,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         let (right, raw_right_type, right_error) = interp_expr(c, g, tree, frame, children[1usize], right_expected)
         if right_error != ok { ret (none, invalid_type(), right_error) }
         if is_comparison(op) {
-            // (D1570) Two addresses compare as addresses, and only for equality.
+            // (D1573) Two addresses compare as addresses, and only for equality.
             if left_type.kind == .Pointer || raw_right_type.kind == .Pointer || left_type.kind == .Err || raw_right_type.kind == .Err {
                 if left_type.kind != raw_right_type.kind || (op != .PunctEqEq && op != .PunctBangEq) { ret (none, invalid_type(), interp_fail(c, module_index, node, "an ordering of pointers")) }
                 if interp_compare(op, left, right) { ret (normalized_integer(1usize, false), interp_bool_type(module_index), ok) }
@@ -6973,7 +6973,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
     ret (none, invalid_type(), interp_fail(c, module_index, node, "an expression it does not evaluate"))
 }
 
-// (D1571) `try f(..)`: the call, and its last result -- its `err` -- tested. A failure
+// (D1574) `try f(..)`: the call, and its last result -- its `err` -- tested. A failure
 // returns that error from this frame beside the zero value of every other result, and
 // answers `true`.
 fn interp_try(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, site_index: usize, call_index: usize) -> (IntegerValue, Type, bool, err) {
@@ -7058,7 +7058,7 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
             ret (value, cast_type, ok)
         }
     } else {
-        // (D1570) `mem.cast[*U](p)`: the same address, seen as another pointer type.
+        // (D1573) `mem.cast[*U](p)`: the same address, seen as another pointer type.
         if callee.kind == .BracketPostfix {
             var generic_base = 0usize
             var type_argument = 0usize
@@ -7092,7 +7092,7 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         if callee.kind != .FieldExpr { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call through a value")) }
         let (qualified_module, member, found_member) = qualified_member(c, g, tree, module_index, callee)
         if !found_member { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call through a value")) }
-        // (D1572) `mem.mark(a)` answers the arena's offset; `mem.reset(a, m)` fills what
+        // (D1575) `mem.mark(a)` answers the arena's offset; `mem.reset(a, m)` fills what
         // lies past `m` with 0xDD, section 11's debug fill, and takes the offset back.
         if module_is_mem(c, qualified_module) && (same(member, "mark") || same(member, "reset")) {
             if argument_count == 0usize { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem` call with no arena")) }
@@ -7131,7 +7131,7 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         argument_at += 1usize
     }
     // (D1569) An aggregate result has its slot here, in the caller's frame, before the
-    // callee's frame is taken above it; so do several results (D1571).
+    // callee's frame is taken above it; so do several results (D1574).
     var into = 0usize
     let (called_index, called_found) = find_function(c, target_module, name)
     if called_found && c.functions[called_index].return_count > 1usize {
@@ -7177,7 +7177,7 @@ fn interp_call(c: *Checker, g: *graph.Graph, module_index: usize, name: str, arg
     let function = c.functions[function_index]
     if function.generic || function.external || function.intrinsic { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a generic, extern or intrinsic function")) }
     if function.parameter_count != arguments.len { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call with the wrong number of arguments")) }
-    // (D1571) Several results need their caller's area; an evaluation's own result is
+    // (D1574) Several results need their caller's area; an evaluation's own result is
     // one value.
     if function.return_count > 1usize {
         if into == 0usize { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning more than one value")) }
@@ -7187,7 +7187,7 @@ fn interp_call(c: *Checker, g: *graph.Graph, module_index: usize, name: str, arg
             result_at += 1usize
         }
     }
-    // (D1570) A function with no result is called for what it does to memory.
+    // (D1573) A function with no result is called for what it does to memory.
     var return_type = make_type(.Void, "", module_index)
     if function.return_count > 1usize { return_type = interp_results_type(module_index, function_index) }
     if function.return_count == 1usize {
@@ -7363,7 +7363,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         if !has_binding || (!has_initializer && !zeroed) { ret (0usize, interp_fail(c, module_index, node, "a binding without a value")) }
         let binding = tree.nodes[binding_index]
         let binding_token = c.tokens[usize(binding.token_start)]
-        // (D1571) `let (a, b) = f()`, `let x = try f()`, `let (a, b) = try f()`: each
+        // (D1574) `let (a, b) = f()`, `let x = try f()`, `let (a, b) = try f()`: each
         // result a binding of its own; with `try`, the `err` is tested and not bound.
         let tried = has_initializer && contains_token(c, usize(node.token_start), usize(tree.nodes[initializer_index].token_start), .KwTry)
         if tried || binding_token.kind == .PunctLParen {
@@ -7508,7 +7508,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
             frame.result_type = frame.return_type
             ret (interp_control_return(), ok)
         }
-        // (D1571) `ret (a, b)`: each value into the results area, in order.
+        // (D1574) `ret (a, b)`: each value into the results area, in order.
         if frame.return_count > 1usize {
             let function = c.functions[frame.function_index]
             let (ignored_type, ignored_offset, area_size, area_alignment, area_error) = interp_result_slot(c, module_index, node, function, 0usize)
@@ -7546,7 +7546,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         frame.result_type = converted_type
         ret (interp_control_return(), ok)
     }
-    // (D1571) `try f(..)` alone: a failure returns from this frame.
+    // (D1574) `try f(..)` alone: a failure returns from this frame.
     if node.kind == .TryStmt {
         let (tried_call, has_tried_call) = first_node_child(tree, node)
         if !has_tried_call || tree.nodes[tried_call].kind != .CallExpr { ret (0usize, interp_fail(c, module_index, node, "a `try` of something that is not a call")) }
@@ -7555,7 +7555,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         if failed { ret (interp_control_return(), ok) }
         ret (interp_control_next(), ok)
     }
-    // (D1570) A call for what it does.
+    // (D1573) A call for what it does.
     if node.kind == .CallStmt {
         let (call_index, has_call) = first_node_child(tree, node)
         if !has_call || tree.nodes[call_index].kind != .CallExpr { ret (0usize, interp_fail(c, module_index, node, "a statement it does not evaluate")) }

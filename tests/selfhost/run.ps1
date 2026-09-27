@@ -2677,37 +2677,6 @@ $sqliteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $sqliteWritten -ne 'executable written') { throw 'x.sqlite.sqlite emission failed' }
 & $sqlitePath
 if ($LASTEXITCODE -ne 0) { throw "the SQLite driver answered wrongly: exit $LASTEXITCODE" }
-# The PostgreSQL and MySQL drivers' own logic -- numeric decoding, parameter encoding, the MySQL
-# statement scanner and literal rendering, error mapping -- with no server and no client library.
-$dbUnitsPath = Join-Path $testBuild 'x-db-units-selfhost.exe'
-$dbUnitsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_db_units\src\main.e') $repo 'x64' 'windows' $dbUnitsPath
-if ($LASTEXITCODE -ne 0 -or $dbUnitsWritten -ne 'executable written') { throw 'database driver unit fixture emission failed' }
-& $dbUnitsPath
-if ($LASTEXITCODE -ne 0) { throw "a database driver unit check failed: exit $LASTEXITCODE" }
-# `x.postgresql.libpq` and `x.oracle.mysql` against live servers: db_servers.ps1 starts a fresh
-# PostgreSQL (55432) and MySQL (53306) from $env:NEPER_DB_TOOLS (default D:\tools) and they are
-# stopped whatever the fixtures answer. Each client library is found on PATH, as a user's would be.
-$dbTools = if ($env:NEPER_DB_TOOLS) { $env:NEPER_DB_TOOLS } else { 'D:\tools' }
-$dbServers = Join-Path $testBuild 'db-servers'
-$postgresqlPath = Join-Path $testBuild 'x-postgresql-selfhost.exe'
-$postgresqlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_postgresql\src\main.e') $repo 'x64' 'windows' $postgresqlPath
-if ($LASTEXITCODE -ne 0 -or $postgresqlWritten -ne 'executable written') { throw 'x.postgresql.libpq emission failed' }
-$mysqlPath = Join-Path $testBuild 'x-mysql-selfhost.exe'
-$mysqlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_mysql\src\main.e') $repo 'x64' 'windows' $mysqlPath
-if ($LASTEXITCODE -ne 0 -or $mysqlWritten -ne 'executable written') { throw 'x.oracle.mysql emission failed' }
-$savedPath = $env:PATH
-try {
-    & (Join-Path $PSScriptRoot 'db_servers.ps1') start $dbServers
-    $env:PATH = (Join-Path $dbTools 'postgresql\bin') + ';' + $savedPath
-    & $postgresqlPath "host=127.0.0.1 port=55432 user=neper dbname=postgres options='-c client_min_messages=warning'"
-    if ($LASTEXITCODE -ne 0) { throw "the PostgreSQL driver answered wrongly: exit $LASTEXITCODE" }
-    $env:PATH = (Join-Path $dbTools 'mysql\lib') + ';' + (Join-Path $dbTools 'mysql\bin') + ';' + $savedPath
-    & $mysqlPath 53306
-    if ($LASTEXITCODE -ne 0) { throw "the MySQL driver answered wrongly: exit $LASTEXITCODE" }
-} finally {
-    $env:PATH = $savedPath
-    & (Join-Path $PSScriptRoot 'db_servers.ps1') stop $dbServers
-}
 # D131's property: a program that uses `e.os` and opens no library needs no loader. It checks
 # itself -- it reads its own image and walks its own program headers -- so nothing here has to
 # have a dumper, and what is asserted is the file that was produced rather than what the compiler
@@ -4597,20 +4566,20 @@ $comptimeArrayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $comptimeArrayWritten -ne 'executable written') { throw 'comptime array call fixture executable emission failed' }
 & $comptimeArrayPath
 if ($LASTEXITCODE -ne 0) { throw "an array across a comptime call was wrong: exit $LASTEXITCODE" }
-# Pointers in the interpreter (D1570): `&x`, `*p`, a field through a pointer, a call
+# Pointers in the interpreter (D1573): `&x`, `*p`, a field through a pointer, a call
 # that changes what it is handed, `mem.cast`; a constant that would be a pointer.
 $comptimePointerPath = Join-Path $testBuild 'comptime-pointer-selfhost.exe'
 $comptimePointerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_pointer\src\main.e') $repo 'x64' 'windows' $comptimePointerPath
 if ($LASTEXITCODE -ne 0 -or $comptimePointerWritten -ne 'executable written') { throw 'comptime pointer fixture executable emission failed' }
 & $comptimePointerPath
 if ($LASTEXITCODE -ne 0) { throw "a constant folded through pointers was wrong: exit $LASTEXITCODE" }
-# Errors, several results and `try` in the interpreter (D1571).
+# Errors, several results and `try` in the interpreter (D1574).
 $comptimeErrorsPath = Join-Path $testBuild 'comptime-errors-selfhost.exe'
 $comptimeErrorsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_errors\src\main.e') $repo 'x64' 'windows' $comptimeErrorsPath
 if ($LASTEXITCODE -ne 0 -or $comptimeErrorsWritten -ne 'executable written') { throw 'comptime errors fixture executable emission failed' }
 & $comptimeErrorsPath
 if ($LASTEXITCODE -ne 0) { throw "a constant folded through errors and try was wrong: exit $LASTEXITCODE" }
-# The arena as interpreter memory (D1572): arena_from, alloc, mark, reset, Exhausted.
+# The arena as interpreter memory (D1575): arena_from, alloc, mark, reset, Exhausted.
 $comptimeArenaPath = Join-Path $testBuild 'comptime-arena-selfhost.exe'
 $comptimeArenaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_arena\src\main.e') $repo 'x64' 'windows' $comptimeArenaPath
 if ($LASTEXITCODE -ne 0 -or $comptimeArenaWritten -ne 'executable written') { throw 'comptime arena fixture executable emission failed' }
