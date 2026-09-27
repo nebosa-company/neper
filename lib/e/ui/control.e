@@ -4436,7 +4436,9 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         editor[at] = hint_node
         at += 1usize
     }
-    editor[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style))
+    if named_error != ok { ret (zero, named_error) }
+    editor[at] = named
     // (D1456, docs/ux/components/TextField, text area) A multiline editor stands
     // in a viewport `rows` lines tall (keyed `key + 1048612`) that scrolls its
     // overflow and keeps the caret's line in view: the caret's hard line (the
@@ -4472,7 +4474,9 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         scrolled_style.width = style.Length { Px: inner }
         let (scrolled, scrolled_error) = mem.alloc[widget.Node](a, 1usize)
         if scrolled_error != ok { ret (zero, TooLarge) }
-        scrolled[0usize] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, scrolled_style)
+        let (scrolled_named, scrolled_named_error) = named_editor(a, key, label, options.placeholder, options.invalid, scrolled_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, scrolled_style))
+        if scrolled_named_error != ok { ret (zero, scrolled_named_error) }
+        scrolled[0usize] = scrolled_named
         var viewport = style.defaults()
         viewport.width = style.Length { Px: inner }
         viewport.height = style.Length { Px: f32(options.rows) * line }
@@ -4593,11 +4597,37 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..column_count])
+    // The name and the invalid state are the editor's own (D1598): this group
+    // only holds the field together.
     var sem: widget.Semantics = zero
     sem.role = 2u8
-    sem.label = label
-    if options.invalid { sem.states = accessibility.STATE_INVALID }
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// (D1598) An editor named for the accessibility tree: a TextField wrapper round it
+// with the field's label, its placeholder as the hint (the tree names an unlabelled
+// field by its hint) and the invalid state, keyed `key + 1048613` so it
+// keeps its place when the field's shape around it changes. The tree folds the two
+// into one node, so the element that takes the focus is the one with the name.
+fn named_editor(a: *mem.Arena, key: widget.Key, label: str, hint: str, invalid: bool, s: style.Style, editor: widget.Node) -> (widget.Node, err) {
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = editor
+    var sem: widget.Semantics = zero
+    sem.role = 7u8
+    sem.label = label
+    sem.hint = hint
+    if invalid { sem.states = accessibility.STATE_INVALID }
+    // The wrapper takes the editor's size, so a share or a percent resolves as it
+    // did; its look -- padding, edge, fill, margin -- stays the editor's alone.
+    var outer = style.defaults()
+    outer.width = s.width
+    outer.height = s.height
+    outer.min_width = s.min_width
+    outer.min_height = s.min_height
+    outer.max_width = s.max_width
+    outer.max_height = s.max_height
+    ret (widget.semantics(key + 1048613u64, sem, outer, inner[0usize..1usize]), ok)
 }
 
 // An outlined box with its floated label in a notch over its top edge, `pad_x` in;
@@ -4753,6 +4783,11 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: line }
     layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    var search_name = options.placeholder
+    if search_name.len == 0usize { search_name = "Search" }
+    let (named_search, named_search_error) = named_editor(a, key, "", search_name, false, editor_style, layers[at])
+    if named_search_error != ok { ret (zero, named_search_error) }
+    layers[at] = named_search
     at += 1usize
     var count = 1usize
     if len != 0usize { count = 2usize }
@@ -6382,7 +6417,9 @@ fn tab_view(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str
 // double-click restores) and the size a drag began at, whether a drag is under
 // way, and whether Escape cancelled it (its later moves are ignored).
 // (D1310) `collapsible`: a wish below half of `low` reports 0, the pane shut.
-type Handle = struct { runtime: *widget.Runtime, pane: widget.Key, bound: widget.Key, vertical: bool, size: f32, thick: f32, low: f32, high: f32, reserve: f32, change: widget.Change[f32], cell: *SashCell, has_cell: bool, collapsible: bool }
+// `from` is the size at the press of the drag under way (D1598), for a sash whose
+// cell is not made yet; the cell's `start` otherwise.
+type Handle = struct { runtime: *widget.Runtime, pane: widget.Key, bound: widget.Key, vertical: bool, size: f32, thick: f32, low: f32, high: f32, reserve: f32, change: widget.Change[f32], cell: *SashCell, has_cell: bool, collapsible: bool, from: f32 }
 type Nudge = struct { handle: *Handle, amount: f32 }
 // (D1356) `open` is the last size above 0, which a collapse eases down from.
 type SashCell = struct { initial: f32, start: f32, dragging: bool, cancelled: bool, open: f32 }
@@ -6426,8 +6463,13 @@ fn keyed_bounds(runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bo
     ret (area, has_area)
 }
 
-fn handle_report(h: *const Handle, wanted: f32) -> err {
-    if h.collapsible && wanted < h.low * 0.5 { ret widget.fire_change[f32](h.change, 0.0) }
+// (D1598) The handle keeps the size it reports, as the caller's next build would:
+// a drag moves from it, a key nudges it, and an Escape knows where the drag began.
+fn handle_report(h: *Handle, wanted: f32) -> err {
+    if h.collapsible && wanted < h.low * 0.5 {
+        h.size = 0.0
+        ret widget.fire_change[f32](h.change, 0.0)
+    }
     var value = wanted
     if h.high > 0.0 {
         if value > h.high { value = h.high }
@@ -6442,6 +6484,7 @@ fn handle_report(h: *const Handle, wanted: f32) -> err {
         }
     }
     if value < h.low { value = h.low }
+    h.size = value
     ret widget.fire_change[f32](h.change, value)
 }
 
@@ -6454,7 +6497,13 @@ fn handle_drag(ctx: *void, g: widget.Gesture) -> err {
             h.cell.dragging = true
             h.cell.cancelled = false
         }
-        ret ok
+        h.from = h.size
+        // (D1598) The travel that made the press a drag arrives with the start.
+        let now = widget.pointer_position(h.runtime)
+        var travel = now.x - p.x
+        if h.vertical { travel = now.y - p.y }
+        if travel == 0.0 { ret ok }
+        ret handle_report(h, h.size + travel)
     case .DragEnd as p:
         if h.has_cell {
             h.cell.dragging = false
@@ -6466,10 +6515,21 @@ fn handle_drag(ctx: *void, g: widget.Gesture) -> err {
         ret ok
     case .DragMove as d:
         if h.has_cell && h.cell.cancelled { ret ok }
-        let (area, has_area) = keyed_bounds(h.runtime, h.pane)
+        let (_, has_area) = keyed_bounds(h.runtime, h.pane)
         if !has_area { ret ok }
-        if h.vertical { ret handle_report(h, d.position.y - area.y - h.thick * 0.5) }
-        ret handle_report(h, d.position.x - area.x - h.thick * 0.5)
+        // (D1598) The size moves by the pointer's travel, not to the pointer: the
+        // sash takes input 24 across, so where in it the pointer lands must not
+        // move the edge. With its cell, the size at the press plus the whole
+        // travel, so a limit or a fold on the way does not eat it; without, each
+        // move's travel from the size last reported.
+        var travel = d.delta.x
+        var whole = d.position.x - d.start.x
+        if h.vertical {
+            travel = d.delta.y
+            whole = d.position.y - d.start.y
+        }
+        if h.has_cell && h.cell.dragging { ret handle_report(h, h.cell.start + whole) }
+        ret handle_report(h, h.from + whole)
     default:
         ret ok
     }
@@ -6609,7 +6669,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
         let opened = eased_emphasized(t, key + 2u64, key + 3u64, open_goal, false, t.tokens.durations.medium2)
         shown = kept.open * opened
     }
-    handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: hit, low: low, high: high, reserve: reserve, change: change, cell: kept, has_cell: has_kept, collapsible: collapsible }
+    handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: hit, low: low, high: high, reserve: reserve, change: change, cell: kept, has_cell: has_kept, collapsible: collapsible, from: size }
     let (nudges, nudges_error) = mem.alloc[Nudge](a, 6usize)
     if nudges_error != ok { ret (zero, TooLarge) }
     nudges[0usize] = Nudge { handle: &handles[0usize], amount: -8.0 }
@@ -6627,16 +6687,24 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     pane_style.overflow = .Clip
     var grip = style.defaults()
     let full = style.Length { Percent: 100.0 }
+    // (D1598) With a pointer the sash stands 8 in the layout but takes input 24
+    // across, WCAG 2.5.8's minimum: it reaches 8 over each side, its line centred.
+    var reach: f32 = 0.0
+    if !touch { reach = 8.0 }
+    let over = style.Length { Px: 0.0 - reach }
+    let flat = style.Length { Px: 0.0 }
     if vertical {
         pane_style.height = style.Length { Px: shown }
         pane_style.width = full
-        grip.height = style.Length { Px: hit }
+        grip.height = style.Length { Px: hit + 2.0 * reach }
         grip.width = full
+        grip.margin = style.EdgeLengths { left: flat, top: over, right: flat, bottom: over }
     } else {
         pane_style.width = style.Length { Px: shown }
         pane_style.height = full
-        grip.width = style.Length { Px: hit }
+        grip.width = style.Length { Px: hit + 2.0 * reach }
         grip.height = full
+        grip.margin = style.EdgeLengths { left: over, top: flat, right: over, bottom: flat }
     }
     parts[0usize] = widget.box(key + 1u64, pane_style, body[0usize..1usize])
     // The sash's look in its state.
@@ -6647,7 +6715,9 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
         if vertical { cursor_shape = 5u8 }
         widget.request_cursor(t.runtime, cursor_shape)
     }
-    var sashes_line = style.color(t.tokens, .OutlineVariant)
+    // (D1598) `outline`, not D966's `outline-variant`: the line is all that shows
+    // the sash is there, and WCAG 1.4.11 asks 3:1 of it (`outline-variant` is 1.3-2).
+    var sashes_line = style.color(t.tokens, .Outline)
     var line_width: f32 = 1.0
     var grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
     if touch { grip_color = style.color(t.tokens, .OnSurfaceVariant) }
@@ -6701,10 +6771,15 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     }
     let (grip_node, grip_error) = mem.alloc[widget.Node](a, 1usize)
     if grip_error != ok { ret (zero, TooLarge) }
-    grip_node[0usize] = widget.region(key + 2u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&handles[0usize]), invoke: handle_drag }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: true }, grip, drawn[0usize..1usize])
+    // (D1598) The sash's size and reach stand on its outermost node, which the hit
+    // test must find the pointer inside; the scope and the region fill it.
+    var filling = style.defaults()
+    filling.width = full
+    filling.height = full
+    grip_node[0usize] = widget.region(key + 2u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&handles[0usize]), invoke: handle_drag }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: true }, filling, drawn[0usize..1usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound_keys], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), grip_node[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound_keys], default_action: zero, cancel_action: zero, keys: zero }, filling, grip_node[0usize..1usize])
     let (said, said_error) = mem.alloc[u8](a, 24usize)
     if said_error != ok { ret (zero, TooLarge) }
     var said_len = write_i64(said, i64(size))
@@ -6715,7 +6790,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     sem.value = said[0usize..said_len]
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
     sem.controls = key + 1u64
-    parts[1usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    parts[1usize] = widget.semantics(0u64, sem, grip, scoped[0usize..1usize])
     ret (widget.flex(key, ui_layout.Flex { axis: axis, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
 }
 
@@ -7525,7 +7600,8 @@ fn stepped(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i
     pill.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .Outline) }
     let inset = style.Length { Px: step_inset(t) }
     pill.padding = style.EdgeLengths { left: inset, top: inset, right: inset, bottom: inset }
-    if role == 2u8 { pill = style.defaults() }
+    // A spin box (role 2, and its own role since D1598) is a field, not a pill.
+    if role == 2u8 || role == accessibility.ROLE_SPIN_BUTTON { pill = style.defaults() }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, pill, parts[0usize..used])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
@@ -7570,11 +7646,13 @@ fn stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i
 // `value` through `change`. A group in the tree named `label`, the field inside
 // it labelled the same.
 // v2 (D956, docs/ux/components/SpinBox): with a pointer, the buttons are a stacked
-// pair of 24 x 18 arrows (`key + 2` up, `key + 1` down) inside the field's end, 8
+// pair of 24 x 24 arrows (`key + 2` up, `key + 1` down; D1598) inside the field's end, 8
 // from it, their 16 chevrons in `on-surface-variant` under their own state layers,
 // the v2 disabled colours at a bound; on touch they flank the field as D952's.
 fn spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str]) -> (widget.Node, err) {
-    let (made, made_error) = spin_box_sized(a, key, t, label, buffer, value, low, high, step, change, typed, 4.0 * t.tokens.spacing.lg)
+    // (D1598) 96 wide, not 64: at 64 the arrows left the digits 16 wide, a target
+    // under WCAG 2.5.8's 24 that had no room to make it up.
+    let (made, made_error) = spin_box_sized(a, key, t, label, buffer, value, low, high, step, change, typed, 6.0 * t.tokens.spacing.lg)
     ret (made, made_error)
 }
 
@@ -7586,11 +7664,18 @@ fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     var options = field_options()
     options.width = width
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
-    if !touch { options.end_space = 24.0 - 8.0 }
+    // (D1598) Two 24 arrows stack only in a field 48 or taller; a denser field
+    // puts them side by side, Decrease then Increase, and the value gives way.
+    let h = t.tokens.metrics.control_height + 16.0
+    let stacked = h >= 48.0
+    if !touch {
+        options.end_space = 24.0 - 8.0
+        if !stacked { options.end_space = 48.0 - 8.0 }
+    }
     let (editor, editor_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
     if editor_error != ok { ret (zero, editor_error) }
     if touch {
-        let (made, made_error) = stepped(a, key + 3u64, t, label, value, editor, buttons, shortcuts, 2u8)
+        let (made, made_error) = stepped(a, key + 3u64, t, label, value, editor, buttons, shortcuts, accessibility.ROLE_SPIN_BUTTON)
         ret (made, made_error)
     }
     let (arrows, arrows_error) = mem.alloc[widget.Node](a, 4usize)
@@ -7601,20 +7686,31 @@ fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     if down_error != ok { ret (zero, down_error) }
     arrows[0usize] = up
     arrows[1usize] = down
-    arrows[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), arrows[0usize..2usize])
-    let h = t.tokens.metrics.control_height + 16.0
+    var arrows_x = options.width - 8.0 - 24.0
+    var arrows_y = max_zero((h - 48.0) * 0.5)
+    if stacked {
+        arrows[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), arrows[0usize..2usize])
+    } else {
+        arrows[0usize] = down
+        arrows[1usize] = up
+        arrows[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), arrows[0usize..2usize])
+        arrows_x = options.width - 8.0 - 48.0
+        arrows_y = max_zero((h - 24.0) * 0.5)
+    }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
-    layers[1usize] = widget.positioned(0u64, options.width - 8.0 - 24.0, max_zero((h - 36.0) * 0.5), style.defaults(), arrows[2usize..3usize])
+    layers[1usize] = widget.positioned(0u64, arrows_x, arrows_y, style.defaults(), arrows[2usize..3usize])
     let boxed = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
     var none: []widget.Node = zero
-    let (made, made_error) = stepped(a, key + 3u64, t, label, value, boxed, none, shortcuts, 2u8)
+    let (made, made_error) = stepped(a, key + 3u64, t, label, value, boxed, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
     ret (made, made_error)
 }
 
-// A spin box's arrow: 24 x 18 with `radius-xs` corners, a 16 chevron in
-// `on-surface-variant` under the state layer of that colour.
+// A spin box's arrow: 24 x 24 with `radius-xs` corners, a 16 chevron in
+// `on-surface-variant` under the state layer of that colour. (D1598) The design's
+// 24 x 18 fell short of WCAG 2.5.8's 24 x 24 target, and the stacked pair left no
+// spacing to make it up; the pair now fills the field's 48.
 fn arrow_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
     let state = control_state(t, key, enabled, false)
     let muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -7627,7 +7723,7 @@ fn arrow_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
     look.padding = 4.0
     look.padding_y = 1.0
     look.min_width = 24.0
-    look.min_height = 18.0
+    look.min_height = 24.0
     let (chevron, chevron_error) = mark_glyph(a, look.foreground, kind, 16.0)
     if chevron_error != ok { ret (zero, chevron_error) }
     let (node, node_error) = pressable(a, key, t, 3u8, label, look, enabled, false, action, chevron)
@@ -8267,7 +8363,9 @@ fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, toke
     if len == 0usize && tokens.len == 0usize && label.len != 0usize { input_count = 2usize }
     let (input_parts, input_parts_error) = mem.alloc[widget.Node](a, input_count)
     if input_parts_error != ok { ret (zero, TooLarge) }
-    input_parts[input_count - 1usize] = bare
+    let (named_bare, named_bare_error) = named_editor(a, key, label, "", false, editor_style, bare)
+    if named_bare_error != ok { ret (zero, named_bare_error) }
+    input_parts[input_count - 1usize] = named_bare
     if input_count == 2usize {
         var hint = text_options()
         hint.role = role

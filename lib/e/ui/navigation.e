@@ -6997,6 +6997,9 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: style.text_style(t.tokens, .BodyLarge).line_height }
     layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: query_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let (named_query, named_query_error) = control.named_editor(a, key, "Search commands", "", false, editor_style, layers[at])
+    if named_query_error != ok { ret (zero, named_query_error) }
+    layers[at] = named_query
     at += 1usize
     let (lens, lens_error) = control.icon_square(a, muted, .Search, 24.0)
     if lens_error != ok { ret (zero, lens_error) }
@@ -7053,6 +7056,9 @@ fn palette_compact_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: style.text_style(t.tokens, .BodyMedium).line_height }
     parts[2usize + at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: query_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let (named_compact, named_compact_error) = control.named_editor(a, key, "Search commands", "", false, editor_style, parts[2usize + at])
+    if named_compact_error != ok { ret (zero, named_compact_error) }
+    parts[2usize + at] = named_compact
     at += 1usize
     var grow = style.defaults()
     grow.width = style.Length { Flex: 1.0 }
@@ -7356,6 +7362,9 @@ fn switcher_filter_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: style.text_style(t.tokens, .BodyLarge).line_height }
     layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: typed, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
+    let (named_filter, named_filter_error) = control.named_editor(a, key, "Filter windows", "", false, editor_style, layers[at])
+    if named_filter_error != ok { ret (zero, named_filter_error) }
+    layers[at] = named_filter
     at += 1usize
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }

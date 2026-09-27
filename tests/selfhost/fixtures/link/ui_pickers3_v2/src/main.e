@@ -303,12 +303,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_query || !near(query.x, fonts_box.x + 16.0 + 42.0) || !roughly(shot, at(fonts_box.x + 16.5, fonts_box.y + 36.0), outline) || !roughly(shot, at(fonts_box.x + 275.5, fonts_box.y + 36.0), outline) { os.exit(48i32) }
     if !has_fonts || !has_list || !near(list.y, fonts_box.y + 16.0 + 40.0 + 16.0 + 4.0) || !has_row0 || !has_row1 || !near(fonts_box.width, 520.0) || !near(list.width, 260.0) || !near(list.x, fonts_box.x + 16.0) || !near(list.height, 208.0) || !near(row0.height, 40.0) || !near(row1.y, row0.y + 40.0) { os.exit(33i32) }
     if !is_color(shot, at(fonts_box.x + 284.0, fonts_box.y + 100.0), low) || !is_color(shot, at(row0.x + 8.0, row0.y + 20.0), page_color) || !is_color(shot, at(row1.x + 8.0, row1.y + 20.0), style.color(&tokens, .SecondaryContainer)) { os.exit(34i32) }
-    // The style picker 40 tall and the size spin box 104 x 40 (its 36 arrow pair
-    // centred 8 from the end), in the right column.
+    // The style picker 40 tall and the size spin box 104 x 40 (D1598: 40 is too
+    // short to stack two 24 arrows, so they stand side by side, Increase 8 from
+    // the end, centred), in the right column.
     let (faces, has_faces) = bounds(&harness, &runtime, 664u64)
     let (sized, has_sized) = bounds(&harness, &runtime, 683u64)
     let (up, has_up) = bounds(&harness, &runtime, 682u64)
-    if !has_faces || !has_sized || !near(faces.height, 40.0) || !near(faces.x, fonts_box.x + 292.0) || !near(sized.width, 104.0) || !has_up || !near(up.x, sized.x + 104.0 - 32.0) || !near(up.y, sized.y + 2.0) || !roughly(shot, at(sized.x + 0.5, sized.y + 20.0), outline) { os.exit(35i32) }
+    if !has_faces || !has_sized || !near(faces.height, 40.0) || !near(faces.x, fonts_box.x + 292.0) || !near(sized.width, 104.0) || !has_up || !near(up.x, sized.x + 104.0 - 32.0) || !near(up.y, sized.y + 8.0) || !roughly(shot, at(sized.x + 0.5, sized.y + 20.0), outline) { os.exit(35i32) }
     // The preview: 212 wide, at least 88 tall, the 1px outline-variant edge on surface.
     let (preview, has_preview) = bounds(&harness, &runtime, 684u64)
     if !has_preview || !near(preview.width, 212.0) || preview.height < 87.99 || !near(preview.x, faces.x) { os.exit(36i32) }

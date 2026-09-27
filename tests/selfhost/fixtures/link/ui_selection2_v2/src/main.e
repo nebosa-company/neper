@@ -159,12 +159,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let mid = level.y + 22.0
     let handle = level.x + 8.0 + 52.0
     if !is_color(shot, at(handle, level.y + 4.0), primary) || !is_color(shot, at(level.x + 30.0, mid), primary) || !is_color(shot, at(handle - 6.5, mid), page) || !is_color(shot, at(level.x + 90.0, mid), secondary) { os.exit(19i32) }
-    // The spin box: its 24 x 18 arrows stacked inside the field's end, 8 from it,
+    // The spin box: its 24 x 24 arrows (D1598) stacked inside the field's end, 8 from it,
     // the value stopping before them.
     let (up, has_up) = bounds(&harness, &runtime, 102u64)
     let (down, has_down) = bounds(&harness, &runtime, 101u64)
     let (digits, has_digits) = bounds(&harness, &runtime, 100u64)
-    if !has_up || !has_down || !has_digits || !near(up.width, 24.0) || !near(up.height, 18.0) || !near(down.y - up.y, 18.0) || !near(down.x, up.x) || digits.x + digits.width > up.x + 0.01 { os.exit(23i32) }
+    if !has_up || !has_down || !has_digits || !near(up.width, 24.0) || !near(up.height, 24.0) || !near(down.y - up.y, 24.0) || !near(down.x, up.x) || digits.x + digits.width > up.x + 0.01 { os.exit(23i32) }
     if !is_color(shot, at(up.x + 24.0 + 7.5, up.y + 18.0), style.color(&tokens, .Outline)) { os.exit(24i32) }
     // The open select: 48 tall in the 2px primary outline; its menu 4 below, the
     // chosen row on the secondary container, the other on the container.

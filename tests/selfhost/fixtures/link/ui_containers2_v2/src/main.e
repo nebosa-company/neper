@@ -211,13 +211,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (shot, shot_error) = testing.snapshot(&harness, a)
     if shot_error != ok { os.exit(11i32) }
     let ground = style.color(&tokens, .SurfaceContainer)
-    let edge = style.color(&tokens, .OutlineVariant)
+    // (D1598) A sash's line is `outline`, its only mark, at 3:1 or better.
+    let edge = style.color(&tokens, .Outline)
     let primary = style.color(&tokens, .Primary)
-    // The pane's sash: 8 wide after the 100 pane, its 1px outline-variant line 3
-    // in, no grip at rest.
-    let (sash, has_sash) = bounds(&harness, &runtime, 12u64)
+    // The pane's sash: 8 wide after the 100 pane, its 1px outline line 3 in, no
+    // grip at rest; (D1598) it takes input 24 across, 8 over each side.
+    let (sash_reach, has_sash) = bounds(&harness, &runtime, 12u64)
+    let sash = geometry.Rect { x: sash_reach.x + 8.0, y: sash_reach.y, width: sash_reach.width - 16.0, height: sash_reach.height }
     let (inner, has_inner) = bounds(&harness, &runtime, 11u64)
-    if !has_sash || !has_inner || !near(sash.width, 8.0) || !near(inner.width, 100.0) || !near(sash.x, inner.x + 100.0) { os.exit(12i32) }
+    if !has_sash || !has_inner || !near(sash_reach.width, 24.0) || !near(sash.width, 8.0) || !near(inner.width, 100.0) || !near(sash.x, inner.x + 100.0) { os.exit(12i32) }
     let mid = sash.y + sash.height * 0.5
     if !is_color(shot, at(sash.x + 3.5, mid), edge) || !is_color(shot, at(sash.x + 5.5, mid), ground) { os.exit(13i32) }
     // A slider named for the pane, its value the size.
@@ -239,7 +241,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.drag(&harness, geometry.Point { x: sash.x + 4.0, y: mid }, geometry.Point { x: sash.x + 24.0, y: mid }, 4usize) != ok || stores[0usize].sizes == 0usize { os.exit(21i32) }
     var shifted: input.Modifiers = zero
     shifted.shift = true
-    if testing.press_key(&harness, 39u32, shifted) != ok || !near(stores[0usize].size, 148.0) { os.exit(22i32) }
+    // (D1598) From the dragged 120, which the sash keeps as it goes; it read the
+    // 100 it was built with until the next rebuild.
+    if testing.press_key(&harness, 39u32, shifted) != ok || !near(stores[0usize].size, 168.0) { os.exit(22i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || !near(stores[0usize].size, 200.0) { os.exit(23i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !near(stores[0usize].size, 60.0) { os.exit(24i32) }
     // (D1212) Escape during a drag restores the size the drag began at and the
@@ -247,7 +251,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !press_at(&harness, sash.x + 4.0, mid) || !move_at(&harness, sash.x + 20.0, mid) || !move_at(&harness, sash.x + 40.0, mid) || near(stores[0usize].size, 100.0) { os.exit(40i32) }
     let (root_drag, root_drag_error) = build(&f, &theme, &stores[0usize])
     if root_drag_error != ok || testing.pump(&harness, root_drag, now) != ok { os.exit(41i32) }
-    if testing.press_key(&harness, 27u32, zero) != ok || !near(stores[0usize].size, 100.0) { os.exit(42i32) }
+    // (D1598) Home left it at 60, where this drag began.
+    if testing.press_key(&harness, 27u32, zero) != ok || !near(stores[0usize].size, 60.0) { os.exit(42i32) }
     let sizes_cancelled = stores[0usize].sizes
     if !move_at(&harness, sash.x + 60.0, mid) || !release_at(&harness, sash.x + 60.0, mid) || stores[0usize].sizes != sizes_cancelled { os.exit(43i32) }
     let (root_rest, root_rest_error) = build(&f, &theme, &stores[0usize])
@@ -268,8 +273,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, closer.x + 16.0, closer.y + 16.0) != ok || stores[0usize].closes != 1usize { os.exit(28i32) }
     // The dock layout: the left sash's hairline over a surface centre; hovered,
     // a 4px primary bar.
-    let (left_sash, has_left) = bounds(&harness, &runtime, 73u64)
-    if !has_left || !near(left_sash.width, 8.0) { os.exit(29i32) }
+    let (left_reach, has_left) = bounds(&harness, &runtime, 73u64)
+    let left_sash = geometry.Rect { x: left_reach.x + 8.0, y: left_reach.y, width: left_reach.width - 16.0, height: left_reach.height }
+    if !has_left || !near(left_reach.width, 24.0) || !near(left_sash.width, 8.0) { os.exit(29i32) }
     let dock_mid = left_sash.y + 40.0
     if !is_color(shot, at(left_sash.x + 3.5, dock_mid), edge) || !is_color(shot, at(left_sash.x + 1.5, dock_mid), ground) || !is_color(shot, at(left_sash.x + 30.0, dock_mid), style.color(&tokens, .Background)) { os.exit(30i32) }
     if testing.hover(&harness, left_sash.x + 4.0, dock_mid) != ok { os.exit(31i32) }

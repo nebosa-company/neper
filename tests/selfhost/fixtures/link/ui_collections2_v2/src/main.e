@@ -274,8 +274,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // The header: 47 of `surface-container` over the 1px line; the sorted Name's
     // arrow in `on-surface` 16 in; the resize line 12 in from top and bottom.
     let (name, has_name) = bounds(&harness, &runtime, 2u64)
-    let (grip, has_grip) = bounds(&harness, &runtime, 3u64)
-    if !has_name || !has_grip || !near(name.height, 47.0) || !near(name.width, 112.0) || !near(grip.x, name.x + 112.0) { os.exit(13i32) }
+    // (D1598) The handle takes input 24 across, 16 back over Name's header; its
+    // 8 slot, where its line stands, still starts at Name's end.
+    let (grip_reach, has_grip) = bounds(&harness, &runtime, 3u64)
+    let grip = geometry.Rect { x: grip_reach.x + 16.0, y: grip_reach.y, width: grip_reach.width - 16.0, height: grip_reach.height }
+    if !has_name || !has_grip || !near(name.height, 47.0) || !near(name.width, 112.0) || !near(grip_reach.width, 24.0) || !near(grip.x, name.x + 112.0) { os.exit(13i32) }
     if !is_color(shot, at(name.x + 80.0, name.y + 24.0), style.color(&tokens, .SurfaceContainer)) || !is_color(shot, at(name.x + 80.0, name.y + 47.5), rule) { os.exit(14i32) }
     if !any_color(shot, name.x + 16.0, name.y + 14.0, 18.0, 20.0, style.color(&tokens, .OnSurface)) || any_color(shot, name.x + 40.0, name.y + 4.0, 60.0, 40.0, style.color(&tokens, .OnSurface)) { os.exit(15i32) }
     if !is_color(shot, at(grip.x + 3.5, grip.y + 24.0), rule) || !is_color(shot, at(grip.x + 3.5, grip.y + 6.0), style.color(&tokens, .SurfaceContainer)) { os.exit(16i32) }

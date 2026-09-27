@@ -321,7 +321,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let step = first_value.x - first_name.x
     if step - 145.6 > 0.01 || 145.6 - step > 0.01 { os.exit(24i32) }
     let (remove_node, has_remove_node) = find(tree, .Button, "Remove API")
-    let (value_node, has_value_node) = find(tree, .Group, "Value of API")
+    let (value_node, has_value_node) = find(tree, .TextField, "Value of API")
     let (headers, has_headers) = find(tree, .Table, "Headers")
     if !has_remove_node || !has_value_node || !has_headers || headers.position.column_count != 3u32 || headers.position.row_count != 2u32 { os.exit(25i32) }
     if testing.tap(&harness, first_remove.x + 20.0, first_remove.y + 20.0) != ok || logs[0usize].removes != 1usize || logs[0usize].removed != 0usize { os.exit(26i32) }

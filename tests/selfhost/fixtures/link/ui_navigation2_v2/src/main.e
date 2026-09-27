@@ -456,9 +456,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (open_row, has_open_row) = bounds(&harness, &runtime, 2404u64)
     let (auto_row, has_auto_row) = bounds(&harness, &runtime, 2406u64)
     if !has_open_row || !has_auto_row || !near(open_row.height, 32.0) || !near(auto_row.y, open_row.y + 81.0) || !is_color(shot_menu, at(menu.x + 100.0, open_row.y + 72.5), style.color(&tokens, .OutlineVariant)) { os.exit(29i32) }
-    let (auto_node, has_auto_node) = find(tree_3, .MenuItem, "Autosave")
-    let (delete_node, has_delete_node) = find(tree_3, .MenuItem, "Delete")
-    let (auto_check, has_auto_check) = find(tree_3, .MenuItemCheckbox, "Autosave")
+    // The open menu's tree, taken now: `tree_3` predates the menu, and its storage
+    // is the harness's, which every later query rebuilds (D1598 made the trees
+    // smaller, and the menu's rows fell past `tree_3`'s old length).
+    let (tree_menu, tree_menu_error) = testing.semantics(&harness)
+    if tree_menu_error != ok { os.exit(30i32) }
+    let (auto_node, has_auto_node) = find(tree_menu, .MenuItem, "Autosave")
+    let (delete_node, has_delete_node) = find(tree_menu, .MenuItem, "Delete")
+    let (auto_check, has_auto_check) = find(tree_menu, .MenuItemCheckbox, "Autosave")
     if testing.by_role(&harness, .MenuItem).count != 4usize || !has_auto_check || !auto_check.state.checked || has_auto_node || !has_delete_node || !delete_node.state.disabled { os.exit(30i32) }
     if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(69i32) }
     s.counters[9usize].count = 0usize

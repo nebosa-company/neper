@@ -461,16 +461,23 @@ fn page_indicator(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count
         let (mark, mark_error) = mem.alloc[widget.Node](a, 1usize)
         if mark_error != ok { ret (zero, TooLarge) }
         mark[0usize] = widget.box(0u64, dot, zero)
-        // The dot sits in the middle of a hit target a large space square.
+        // The dot sits in the middle of a hit target 24 square, WCAG 2.5.8's
+        // minimum (D1598; a large space, 16, was under it and the dots touch).
         let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
         if centred_error != ok { ret (zero, TooLarge) }
-        centred[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(t.tokens.spacing.lg, t.tokens.spacing.lg), mark[0usize..1usize])
+        centred[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(24.0, 24.0), mark[0usize..1usize])
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
         control.focus_look(t)
         region[0usize] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&actions[i]), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), centred[0usize..1usize])
+        // Named "Page 3"; its place, "of 9", is the column and the count.
+        let (named, named_error) = mem.alloc[u8](a, 24usize)
+        if named_error != ok { ret (zero, TooLarge) }
+        mem.copy[u8](named[0usize..5usize], "Page ")
+        let digits = control.write_i64(named[5usize..24usize], i64(i + 1usize))
         var sem: widget.Semantics = zero
         sem.role = 19u8
+        sem.label = named[0usize..5usize + digits]
         sem.column = u32(i + 1usize)
         sem.column_count = u32(count)
         sem.actions = accessibility.ACTION_PRESS
@@ -1751,11 +1758,22 @@ fn resize_key(ctx: *void) -> err {
 fn resize_drag(ctx: *void, g: widget.Gesture) -> err {
     let r = mem.cast[*Resizing](ctx)
     switch g {
+    case .DragStart as down:
+        // The travel that made the press a drag arrives with the start, not as a
+        // move's delta.
+        var started = r.width + widget.pointer_position(r.runtime).x - down.x
+        if started < r.low { started = r.low }
+        r.width = started
+        ret widget.fire_change[ColumnResize](r.resize, ColumnResize { column: r.column, width: started })
     case .DragMove as d:
-        let (area, has_area) = keyed_bounds_of(r.runtime, r.header)
+        let (_, has_area) = keyed_bounds_of(r.runtime, r.header)
         if !has_area { ret ok }
-        var width = d.position.x - area.x
+        // (D1598) The width moves by the pointer's travel, not to the pointer: the
+        // handle takes input 24 across, so where in it the pointer lands must not
+        // count. The width is kept as it goes, for the next move before a rebuild.
+        var width = r.width + d.delta.x
         if width < r.low { width = r.low }
+        r.width = width
         ret widget.fire_change[ColumnResize](r.resize, ColumnResize { column: r.column, width: width })
     default:
         ret ok
@@ -2016,7 +2034,18 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         drawn[0usize] = widget.box(0u64, mark, zero)
         let (grip_node, grip_node_error) = mem.alloc[widget.Node](a, 1usize)
         if grip_node_error != ok { ret (zero, TooLarge) }
-        grip_node[0usize] = widget.region(grip_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&resizes[i]), invoke: resize_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: false }, control.sized_style(grip, inner), drawn[0usize..1usize])
+        // (D1598) The handle stands `grip` (8) in the header but takes input 24
+        // across, WCAG 2.5.8's minimum: its outermost node (the hit test looks only
+        // inside a node's own bounds) reaches 16 back over its column's header,
+        // which is placed before it and so yields; the region fills it, the marks
+        // where they were.
+        var grip_outer = control.sized_style(grip + 16.0, inner)
+        grip_outer.margin = style.EdgeLengths { left: style.Length { Px: -16.0 }, top: flat, right: flat, bottom: flat }
+        var grip_style = style.defaults()
+        grip_style.width = style.Length { Percent: 100.0 }
+        grip_style.height = style.Length { Percent: 100.0 }
+        grip_style.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: flat, right: flat, bottom: flat }
+        grip_node[0usize] = widget.region(grip_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&resizes[i]), invoke: resize_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: false }, grip_style, drawn[0usize..1usize])
         let (grip_label, grip_label_error) = mem.alloc[u8](a, columns[i].title.len + 7usize)
         if grip_label_error != ok { ret (zero, TooLarge) }
         var grip_label_len = control.copy_text(grip_label, "Resize ")
@@ -2032,7 +2061,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         grip_sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
         grip_sem.controls = header_key
         grip_sem.on_action = widget.Change[u32] { ctx: ctx_of(&resizes[i]), invoke: resize_action }
-        cells[n] = widget.semantics(0u64, grip_sem, style.defaults(), grip_node[0usize..1usize])
+        cells[n] = widget.semantics(0u64, grip_sem, grip_outer, grip_node[0usize..1usize])
         n += 1usize
         i += 1usize
     }
@@ -2242,7 +2271,10 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     sem.role = role
     sem.row = u32(index + 1usize)
     sem.row_count = u32(count)
-    if !owned && !disabled {
+    // (D1598) As a group (role 2) the row is a tree table's cells inside the tree
+    // row that owns it and its press: pressable too, it stood in the tree as a
+    // second, nameless control over the named row.
+    if !owned && !disabled && role != 2u8 {
         sem.actions = accessibility.ACTION_PRESS
         sem.on_action = widget.Change[u32] { ctx: ctx_of(&picks[0usize]), invoke: row_pick_action }
     }
@@ -3529,6 +3561,9 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         let (edits, edits_error) = mem.alloc[widget.Node](a, 1usize)
         if edits_error != ok { ret (zero, TooLarge) }
         edits[0usize] = widget.edit(key + 2u64, widget.Edit { buffer: draft, len: state.len, style: look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: widget.Change[str] { ctx: ctx_of(&fires[1usize]), invoke: grid_typed }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: style.color(t.tokens, .Primary), untabbed: false, ringed: false }, editor_style)
+        let (named_cell, named_cell_error) = control.named_editor(a, key + 2u64, label, "", false, editor_style, edits[0usize])
+        if named_cell_error != ok { ret (zero, named_cell_error) }
+        edits[0usize] = named_cell
         layers[layer_count] = widget.overlay(0u64, widget.Overlay { anchor: key + 1u64, placement: .TopCenter, offset: zero, modal: true, dismiss: widget.Submit { ctx: ctx_of(&fires[0usize]), invoke: grid_fire } }, style.defaults(), edits[0usize..1usize])
         layer_count += 1usize
     }
@@ -3915,7 +3950,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             detail_style.padding = style.EdgeLengths { left: style.Length { Px: 68.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 12.0 } }
             inner[0usize] = rows[i]
             inner[1usize] = widget.box(row_keys[i] ^ hash.fnv1a64("row-detail"), detail_style, inner[2usize..3usize])
-            rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), inner[0usize..2usize])
+            rows[i] = widget.flex(row_derived(row_keys[i], "row-with-detail"), ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), inner[0usize..2usize])
         }
         if first + i + 1usize < total {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
@@ -3925,7 +3960,10 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             rule.height = style.Length { Px: t.tokens.sizes.divider }
             rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
             pair[1usize] = widget.box(0u64, rule, zero)
-            rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+            // (D1598) Keyed by its row, as every wrapper of a virtual row must be:
+            // matched by position, it held another row once the window scrolled,
+            // and the focused row was made afresh.
+            rows[i] = widget.flex(row_derived(row_keys[i], "row-rule"), ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
         }
         i += 1usize
     }
@@ -4866,7 +4904,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             if paired_error != ok { ret (none, TooLarge) }
             paired[0usize] = rows[i]
             paired[1usize] = waits[3usize]
-            rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), paired[0usize..2usize])
+            rows[i] = widget.flex(row_derived(entry.key, "tree-loading-pair"), ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), paired[0usize..2usize])
         }
         i += 1usize
     }
@@ -4880,7 +4918,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             rule.height = style.Length { Px: t.tokens.sizes.divider }
             rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
             pair[1usize] = widget.box(0u64, rule, zero)
-            rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+            rows[i] = widget.flex(row_derived(visible[i].key, "row-rule"), ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
             i += 1usize
         }
     }
@@ -5523,6 +5561,8 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     }
                     var value_sem: widget.Semantics = zero
                     value_sem.role = 14u8
+                    // (D1598) Named by its property, which names the editor in it.
+                    value_sem.label = p.name
                     value_sem.row = u32(r + 1usize)
                     value_sem.column = 2u32
                     var value_style = style.defaults()
@@ -6747,6 +6787,14 @@ type KeySource = struct { ctx: *void, key: fn(*void, usize) -> widget.Key }
 
 // Vertical virtual focus: rows are addressed in the full source, not only the
 // built window, and every target is revealed through the caller's offset.
+// (D1598) The key of a node that wraps a row, derived from the row's so it follows
+// the row as a virtual window scrolls; none for a row with no key of its own (a
+// grid whose rows are all 0), whose wrappers would otherwise share one key.
+fn row_derived(row_of_it: widget.Key, salt: str) -> widget.Key {
+    if row_of_it == 0u64 { ret 0u64 }
+    ret row_of_it ^ hash.fnv1a64(salt)
+}
+
 fn virtual_roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, source: KeySource, first: usize, total: usize, page_size: usize, offset: f32, height: f32, extent: f32, change: widget.Change[f32], before: widget.Key) -> err {
     if nodes.len == 0usize || mem.address_of(t.runtime) == 0usize { ret ok }
     var page = page_size
@@ -6778,7 +6826,11 @@ fn virtual_roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, 
         bind_virtual_move(moves, shortcuts, base + 4usize, t.runtime, source.key(source.ctx, 0usize), 0usize, total, offset, height, extent, 36u32, change)
         bind_virtual_move(moves, shortcuts, base + 5usize, t.runtime, source.key(source.ctx, total - 1usize), total - 1usize, total, offset, height, extent, 35u32, change)
         held[i] = nodes[i]
-        nodes[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..base + 6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
+        // (D1598) Keyed by its row: an unkeyed scope matched by position, so once
+        // the window scrolled a row's scope held another row, and the focused row
+        // was made afresh -- a Tab that scrolled a focused row into view lost it.
+        let rove_key = row_derived(source.key(source.ctx, index), "virtual-rove")
+        nodes[i] = widget.scope(rove_key, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..base + 6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
         i += 1usize
     }
     ret ok
@@ -7776,7 +7828,7 @@ fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
             let (drawn, drawn_error) = control.divider_of(a, 0u64, t, line)
             if drawn_error != ok { ret (zero, drawn_error) }
             pair[1usize] = drawn
-            rows[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+            rows[i] = widget.flex(row_derived(source.key(source.ctx, first + i), "row-rule"), ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
         }
         i += 1usize
     }

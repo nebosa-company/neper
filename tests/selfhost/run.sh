@@ -3180,6 +3180,13 @@ ui_field_focus_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/ui-field-focus-selfhost"
 ui_field_focus_output=$("$test_build/ui-field-focus-selfhost")
 [ "$ui_field_focus_output" = 'ui field focus ok' ]
+# The controls the accessibility audit found wanting: names, roles, 24 targets, and a
+# Tab walk that keeps every focus and brings it into view (D1598).
+ui_a11y_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_a11y_controls/src/main.e" "$repo" x64 linux "$test_build/ui-a11y-controls-selfhost")
+[ "$ui_a11y_written" = 'executable written' ]
+chmod +x "$test_build/ui-a11y-controls-selfhost"
+ui_a11y_output=$("$test_build/ui-a11y-controls-selfhost")
+[ "$ui_a11y_output" = 'ui a11y controls ok' ]
 # Basic choice (D824, widget plan P1-11): a select with its menu, a list box.
 ui_choice_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_choice/src/main.e" "$repo" x64 linux "$test_build/ui-choice-selfhost")
 [ "$ui_choice_written" = 'executable written' ]

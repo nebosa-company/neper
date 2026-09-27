@@ -353,6 +353,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.hover(&harness, 1.0, 1.0) != ok { os.exit(93i32) }
     // Virtual-list keys move by stable source index. A target beyond the built
     // window asks for the minimum offset, then receives focus after the rebuild.
+    // (D1598) The Tab walk above brought each row it focused into view, which
+    // scrolled the list and the grid; both back at their tops first.
+    s.list_offset = 0.0
+    s.grid_offset = 0.0
+    let (root_top, root_top_error) = build(&f, &theme, s)
+    if root_top_error != ok || testing.pump(&harness, root_top, now) != ok { os.exit(45i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 4000u64).element) != ok { os.exit(45i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 4001u64) { os.exit(46i32) }
     if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 4003u64) || !near(s.list_offset, 48.0) { os.exit(47i32) }
