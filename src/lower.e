@@ -6156,6 +6156,7 @@ fn lower_switch_arm(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     let binding_checkpoint = *binding_count
     let defer_checkpoint = defers.count
     let (capture, has_capture) = check.switch_capture_name(c, g.modules[module_index].text, arm)
+    let debug_checkpoint = builder.debug.local_count
     if has_capture {
         if !has_aggregate || c.aggregates[aggregate_index].kind != .TaggedUnion { ret check.InvalidSwitch }
         var field_index = 0usize
@@ -6215,6 +6216,7 @@ fn lower_switch_arm(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
     defers.count = defer_checkpoint
+    nir.close_debug_scope(builder, debug_checkpoint)
     ret ok
 }
 
@@ -6423,6 +6425,7 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let binding_checkpoint = *binding_count
     let defer_checkpoint = defers.count
     let end = usize(node.first_child) + usize(node.child_count)
+    let debug_checkpoint = builder.debug.local_count
     var at = usize(node.first_child)
     var proofs_opened = 0usize
     let equalities_before = builder.proof_equal_count
@@ -6444,6 +6447,7 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
     defers.count = defer_checkpoint
+    nir.close_debug_scope(builder, debug_checkpoint)
     ret ok
 }
 

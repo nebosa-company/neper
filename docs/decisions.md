@@ -28743,3 +28743,32 @@ The `benchmarks/db` MySQL scan went from 206K to 1.50M rows/s (8% to 63% of C), 
 insert went from 75% to 93% of C. SQLite and PostgreSQL are unchanged within noise, since
 neither parses floats from text. The raw runs are in
 `benchmarks/db/results/windows-2026-09-27-d1593-{before,after}.json`.
+
+## D1584 — Locals scoped to their blocks
+
+A local's name is now in scope where its block is, not across its whole function. Neper refuses a shadowing name, so this governs two things: whether a debugger lists a local at all, and which of two sibling blocks' same-named locals it means.
+
+**Recording scopes.**
+
+- `nir.add_debug_local` records the instruction index at the binding.
+- `lower_block` and `lower_switch_arm` (a capture is bound there) close the scope of the locals they declared at their exit (`nir.close_debug_scope`). An inner block's locals have already been closed by then.
+- Selection maps both ends to code offsets. A local whose block never closes keeps the function's end.
+- A Vars record now carries its scope (format 19, 36-byte records), and the emission identity covers it.
+
+**Writing the blocks.** Locals arrive in binding order, so their scopes nest. The linker keeps a stack of open blocks per function:
+
+- A local whose scope ends before the innermost block's does opens a `DW_TAG_lexical_block` inside it.
+- A local that ends with the innermost block joins it.
+- Blocks are closed as later locals begin past their end.
+
+So the DWARF nesting follows the source's blocks, and a block's lexical entry starts at its first local's binding. One imprecision follows: a later local of the same block is listed, as `<optimized out>`, before its own binding.
+
+**Evidence.**
+
+- **gdb.** In a program whose `if` and `else` each bind `piece`, gdb stopped in the `if` branch's call shows `piece = 50` and `total = 60`. Stopped after the branches, it has `after = 61` and answers `No symbol "piece" in current context`.
+- **Suite.** `run.sh` requires a lexical block in the release fixture's debug image.
+- **Fixed point.** Stage 2 equals stage 3 on both hosts.
+
+**Suite expectations.** Both runners expect format 19.
+
+Still open: CodeView through the M4 PDB writer, `.nepsym` on PE, `.nepersym` in section 13's layout, and unions and tagged unions beyond their size.

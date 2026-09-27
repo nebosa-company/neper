@@ -3416,6 +3416,8 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
         saved.function_start = function_code_start
         saved.start = function_code_start
         saved.end = output.count
+        saved.scope_start = function_code_start
+        saved.scope_end = output.count
         saved.kind = 4usize
         saved.register = dwarf_register(saved_physical)
         saved.displacement = 0usize -% ((saved_base + saved_at + 1usize) * 8usize)
@@ -3466,6 +3468,16 @@ fn place_debug_locals(builder: *nir.Builder, current: nir.Function, stack_slots:
         placed.ty = local.ty
         placed.parameter = local.parameter
         placed.register = 6usize
+        // (D1584) Its scope in the code: a parameter's is the function; a local's runs
+        // from its binding to its block's end, the function's if that never closed.
+        placed.scope_start = function_code_start
+        placed.scope_end = function_end
+        if local.parameter == 0usize {
+            let function_last = current.first_instruction + current.instruction_count
+            if local.scope_start >= current.first_instruction && local.scope_start <= function_last { placed.scope_start = context.instruction_offsets[local.scope_start - current.first_instruction] }
+            if local.scope_end >= current.first_instruction && local.scope_end <= function_last { placed.scope_end = context.instruction_offsets[local.scope_end - current.first_instruction] }
+            if placed.scope_end < placed.scope_start { placed.scope_end = placed.scope_start }
+        }
         var definer = 0usize
         if builder.definers_valid && local.value < builder.definers.len { definer = builder.definers[local.value] }
         if definer == 0usize { continue }
