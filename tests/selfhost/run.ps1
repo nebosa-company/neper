@@ -2682,6 +2682,13 @@ $dlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link
 if ($LASTEXITCODE -ne 0 -or $dlWritten -ne 'executable written') { throw 'e.os loader emission failed' }
 & $dlPath
 if ($LASTEXITCODE -ne 0) { throw "an e.os loader call answered wrongly: exit $LASTEXITCODE" }
+# A negative named constant narrower than 64 bits equals the same value computed at run time
+# (D1651).
+$negativeConstantsPath = Join-Path $testBuild 'negative-constants-selfhost.exe'
+$negativeConstantsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\negative_constants\src\main.e') $repo 'x64' 'windows' $negativeConstantsPath
+if ($LASTEXITCODE -ne 0 -or $negativeConstantsWritten -ne 'executable written') { throw 'negative_constants emission failed' }
+$negativeConstantsOutput = & $negativeConstantsPath
+if ($LASTEXITCODE -ne 0 -or $negativeConstantsOutput -ne 'negative constants ok') { throw "a negative constant compared wrongly: exit $LASTEXITCODE" }
 # `x.sqlite.sqlite`: the `e.db` driver over the host's own SQLite (`winsqlite3.dll`), every value
 # kind round-tripped, SQLite's errors mapped with their extended codes, statements, transactions,
 # and a database file in %TMP% locked by one connection and refused as `Busy` by the other.
@@ -2709,6 +2716,12 @@ if ($LASTEXITCODE -ne 0 -or $postgresqlWritten -ne 'executable written') { throw
 $mysqlPath = Join-Path $testBuild 'x-mysql-selfhost.exe'
 $mysqlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_mysql\src\main.e') $repo 'x64' 'windows' $mysqlPath
 if ($LASTEXITCODE -ne 0 -or $mysqlWritten -ne 'executable written') { throw 'x.oracle.mysql emission failed' }
+# `x.microsoft.odbc` reaches the same PostgreSQL through odbc32.dll and psqlODBC, unpacked (not
+# installed) to <tools>\psqlodbc; a per-user DSN names the driver's DLL for the run (D1650).
+$odbcPath = Join-Path $testBuild 'x-odbc-selfhost.exe'
+$odbcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_odbc\src\main.e') $repo 'x64' 'windows' $odbcPath
+if ($LASTEXITCODE -ne 0 -or $odbcWritten -ne 'executable written') { throw 'x.microsoft.odbc emission failed' }
+$odbcDsn = 'HKCU:\Software\ODBC\ODBC.INI\neper_psqlodbc'
 $savedPath = $env:PATH
 try {
     & (Join-Path $PSScriptRoot 'db_servers.ps1') start $dbServers
@@ -2723,7 +2736,13 @@ try {
     $env:PATH = (Join-Path $dbTools 'mysql\lib') + ';' + (Join-Path $dbTools 'mysql\bin') + ';' + $savedPath
     & $mysqlPath $dbPorts['mysql_port']
     if ($LASTEXITCODE -ne 0) { throw "the MySQL driver answered wrongly: exit $LASTEXITCODE" }
+    New-Item -Force $odbcDsn | Out-Null
+    New-ItemProperty -Force $odbcDsn -Name Driver -Value (Join-Path $dbTools 'psqlodbc\podbc35w.dll') | Out-Null
+    $env:PATH = (Join-Path $dbTools 'psqlodbc') + ';' + $savedPath
+    & $odbcPath "DSN=neper_psqlodbc;Server=127.0.0.1;Port=$($dbPorts['pg_port']);Uid=neper;Database=postgres;BoolsAsChar=0"
+    if ($LASTEXITCODE -ne 0) { throw "the ODBC driver answered wrongly: exit $LASTEXITCODE" }
 } finally {
+    Remove-Item -Force -ErrorAction SilentlyContinue $odbcDsn
     $env:PATH = $savedPath
     & (Join-Path $PSScriptRoot 'db_servers.ps1') stop $dbServers
 }

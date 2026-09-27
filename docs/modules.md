@@ -337,6 +337,10 @@ because toolchain-owned facilities use the domain namespaces above:
   `lib/x/sqlite/` (D1571), [`x.postgresql.libpq`](packages/x.postgresql.libpq.md) under
   `lib/x/postgresql/` (D1591) and [`x.oracle.mysql`](packages/x.oracle.mysql.md) under
   `lib/x/oracle/` (D1592).
+- `x.microsoft.odbc`: the `e.db` driver over any database's ODBC driver, through the
+  host's driver manager (`odbc32.dll`, unixODBC). It is named for the owner of the API it
+  programs against, as `x.khronos.*` is, not for either host's library (D1650). Delivered:
+  [`x.microsoft.odbc`](packages/x.microsoft.odbc.md) under `lib/x/microsoft/`.
 
 A package has no promised declarations until its own versioned specification pins its
 upstream ABI/data version and enumerates the complete surface. Compiler backends such
