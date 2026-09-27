@@ -6129,7 +6129,7 @@ fn interp_results_type(module_index: usize, function_index: usize) -> Type {
 }
 
 fn interp_is_results(ty: Type) -> bool {
-    ret ty.kind == .Other && ty.has_element && same(ty.name, "(results)")
+    ret ty.kind == .Other && ty.has_element && (same(ty.name, "(results)") || same(ty.name, "(alloc)"))
 }
 
 // Result `index` of `function`: its type and its offset in the results area; and the
@@ -6181,30 +6181,152 @@ fn interp_scalar_size(ty: Type) -> usize {
 // `*T` for `&x` of a `T` (D1570): the pointee stored once per worker and reused, so a
 // loop taking addresses does not grow the type table.
 fn interp_pointer_to(c: *Checker, module_index: usize, node: syntax.Node, element: Type) -> (Type, err) {
-    var index = 0usize
-    var found = false
-    var at = 0usize
-    while at < c.interp_space.pointee_count && !found {
-        if c.interp_space.pointees[at].kind == element.kind && type_equal(c, c.interp_space.pointees[at], element) {
-            index = c.interp_space.pointee_index[at]
-            found = true
-        }
-        at += 1usize
-    }
-    if !found {
-        let (stored, store_error) = store_type(c, element)
-        if store_error != ok { ret (invalid_type(), interp_fail(c, module_index, node, "an address of a type it cannot record")) }
-        index = stored
-        if c.interp_space.pointee_count < 32usize {
-            c.interp_space.pointees[c.interp_space.pointee_count] = element
-            c.interp_space.pointee_index[c.interp_space.pointee_count] = stored
-            c.interp_space.pointee_count += 1usize
-        }
-    }
+    let (index, index_error) = interp_type_index(c, module_index, node, element)
+    if index_error != ok { ret (invalid_type(), index_error) }
     var pointer = make_type(.Pointer, "", module_index)
     pointer.has_element = true
     pointer.element = index
     ret (pointer, ok)
+}
+
+// A type's index in the type table, stored once per worker and reused (D1570): what a
+// pointer or a slice the interpreter makes names as its element.
+fn interp_type_index(c: *Checker, module_index: usize, node: syntax.Node, element: Type) -> (usize, err) {
+    var at = 0usize
+    while at < c.interp_space.pointee_count {
+        if c.interp_space.pointees[at].kind == element.kind && type_equal(c, c.interp_space.pointees[at], element) { ret (c.interp_space.pointee_index[at], ok) }
+        at += 1usize
+    }
+    let (stored, store_error) = store_type(c, element)
+    if store_error != ok { ret (0usize, interp_fail(c, module_index, node, "a type it cannot record")) }
+    if c.interp_space.pointee_count < 32usize {
+        c.interp_space.pointees[c.interp_space.pointee_count] = element
+        c.interp_space.pointee_index[c.interp_space.pointee_count] = stored
+        c.interp_space.pointee_count += 1usize
+    }
+    ret (stored, ok)
+}
+
+// (D1572) `mem.alloc`'s results: its `[]T` beside an `err`, the slice's type stored.
+fn interp_alloc_results_type(module_index: usize, slice_index: usize) -> Type {
+    var results = make_type(.Other, "(alloc)", module_index)
+    results.has_element = true
+    results.element = slice_index
+    ret results
+}
+
+// How many results an area holds, and result `index`'s type and offset with the
+// area's size and alignment: a function's results, or `mem.alloc`'s two.
+fn interp_results_count(c: *Checker, ty: Type) -> usize {
+    if same(ty.name, "(alloc)") { ret 2usize }
+    ret c.functions[ty.element].return_count
+}
+
+fn interp_results_at(c: *Checker, module_index: usize, node: syntax.Node, ty: Type, index: usize) -> (Type, usize, usize, usize, err) {
+    if same(ty.name, "(alloc)") {
+        if index == 0usize { ret (c.types[ty.element], 0usize, 24usize, 8usize, ok) }
+        ret (make_type(.Err, "err", module_index), 16usize, 24usize, 8usize, ok)
+    }
+    let (slot_type, slot_offset, area_size, area_alignment, slot_error) = interp_result_slot(c, module_index, node, c.functions[ty.element], index)
+    ret (slot_type, slot_offset, area_size, area_alignment, slot_error)
+}
+
+// An arena's field, through the pointer a `mem` operation is handed (D1572).
+fn interp_arena_field(c: *Checker, module_index: usize, node: syntax.Node, arena_pointer: IntegerValue, pointer_type: Type, name: str) -> (usize, Type, err) {
+    let arena = interp_pointee(c, pointer_type)
+    if arena.kind != .Named || !same(arena.name, "Arena") || !module_is_mem(c, arena.module_index) { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a `mem` operation on something that is not an arena")) }
+    if arena_pointer.magnitude == 0usize { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a read through a null pointer")) }
+    let (field, field_error) = layout_field(c, arena, name)
+    if field_error != ok { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "an arena field it cannot find")) }
+    ret (arena_pointer.magnitude + field.offset, field.ty, ok)
+}
+
+// `count` bytes of `byte` from `address`, which must be interpreter memory.
+fn interp_fill(c: *Checker, module_index: usize, node: syntax.Node, address: usize, count: usize, byte: u8) -> err {
+    if count == 0usize { ret ok }
+    if INTERP_STATIC <= address || !interp_readable(c, address, count) { ret interp_fail(c, module_index, node, "an arena whose buffer is not interpreter memory") }
+    var at = 0usize
+    while at < count {
+        c.interp_space.memory[address + at] = byte
+        at += 1usize
+    }
+    ret ok
+}
+
+// (D1572) `mem.alloc[T](a, n)`, as the runtime does it: the offset rounded up to `T`'s
+// alignment, `n` of `T` if they fit and `Exhausted` if not, the memory handed out
+// filled with 0xCD (section 11's debug fill: the checker knows no build mode, and a
+// constant does not depend on one), and the arena's offset moved past it.
+fn interp_alloc(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, node_index: usize, element: Type, arguments: []const usize) -> (IntegerValue, Type, err) {
+    let module_index = frame.module_index
+    let node = tree.nodes[node_index]
+    let none = normalized_integer(0usize, false)
+    if arguments.len != 2usize || !interp_holds(c, element, 0usize) { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem.alloc` it does not evaluate")) }
+    let (arena_pointer, pointer_type, pointer_error) = interp_expr(c, g, tree, frame, arguments[0usize], invalid_type())
+    if pointer_error != ok { ret (none, invalid_type(), pointer_error) }
+    let usize_type = make_type(.Integer, "usize", module_index)
+    let (count, count_type, count_error) = interp_expr(c, g, tree, frame, arguments[1usize], usize_type)
+    if count_error != ok { ret (none, invalid_type(), count_error) }
+    if count_type.kind != .Integer || count.negative { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem.alloc` count that is not a usize")) }
+    let (base_address, base_type, base_error) = interp_arena_field(c, module_index, node, arena_pointer, pointer_type, "base")
+    if base_error != ok { ret (none, invalid_type(), base_error) }
+    let (cap_address, cap_type, cap_error) = interp_arena_field(c, module_index, node, arena_pointer, pointer_type, "cap")
+    if cap_error != ok { ret (none, invalid_type(), cap_error) }
+    let (off_address, off_type, off_error) = interp_arena_field(c, module_index, node, arena_pointer, pointer_type, "off")
+    if off_error != ok { ret (none, invalid_type(), off_error) }
+    let (base, base_load_error) = interp_load(c, module_index, node, base_address, base_type)
+    if base_load_error != ok { ret (none, invalid_type(), base_load_error) }
+    let (cap, cap_load_error) = interp_load(c, module_index, node, cap_address, cap_type)
+    if cap_load_error != ok { ret (none, invalid_type(), cap_load_error) }
+    let (off, off_load_error) = interp_load(c, module_index, node, off_address, off_type)
+    if off_load_error != ok { ret (none, invalid_type(), off_load_error) }
+    let (info, info_error) = interp_layout(c, module_index, node, element)
+    if info_error != ok { ret (none, invalid_type(), info_error) }
+    // The results area at the call, and the slice type it answers.
+    let (element_index, element_index_error) = interp_type_index(c, module_index, node, element)
+    if element_index_error != ok { ret (none, invalid_type(), element_index_error) }
+    var slice_type = make_type(.Slice, "", module_index)
+    slice_type.has_element = true
+    slice_type.element = element_index
+    let (slice_index, slice_index_error) = interp_type_index(c, module_index, node, slice_type)
+    if slice_index_error != ok { ret (none, invalid_type(), slice_index_error) }
+    let (area, area_error) = interp_allocate(c, module_index, node, frame, node_index + 1usize, 24usize, 8usize)
+    if area_error != ok { ret (none, invalid_type(), area_error) }
+    interp_clear(c, area, 24usize)
+    let results_type = interp_alloc_results_type(module_index, slice_index)
+    var at = 0usize
+    var fits = off.magnitude <= cap.magnitude && info.alignment != 0usize
+    if fits {
+        let (aligned, aligned_error) = layout_align_up(off.magnitude, info.alignment)
+        fits = aligned_error == ok && aligned <= cap.magnitude
+        at = aligned
+    }
+    if fits && info.size != 0usize { fits = count.magnitude <= (cap.magnitude - at) / info.size }
+    if !fits {
+        let mem_module = arena_module(c, pointer_type)
+        let (exhausted, has_exhausted) = interp_error_value(c, mem_module, "Exhausted")
+        if !has_exhausted { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem.alloc` failure with no `Exhausted` to name it")) }
+        let failed_store = interp_store(c, module_index, node, area + 16usize, make_type(.Err, "err", module_index), exhausted)
+        if failed_store != ok { ret (none, invalid_type(), failed_store) }
+        ret (normalized_integer(area, false), results_type, ok)
+    }
+    let bytes = count.magnitude * info.size
+    if count.magnitude != 0usize {
+        let fill_error = interp_fill(c, module_index, node, base.magnitude + at, bytes, 205u8)
+        if fill_error != ok { ret (none, invalid_type(), fill_error) }
+        let moved_error = interp_store(c, module_index, node, off_address, off_type, normalized_integer(at + bytes, false))
+        if moved_error != ok { ret (none, invalid_type(), moved_error) }
+    } else {
+        at = off.magnitude
+    }
+    let slice_error = interp_slice_write(c, module_index, node, area, base.magnitude + at, count.magnitude)
+    if slice_error != ok { ret (none, invalid_type(), slice_error) }
+    ret (normalized_integer(area, false), results_type, ok)
+}
+
+// The module an arena pointer's `Arena` is declared in.
+fn arena_module(c: *Checker, pointer_type: Type) -> usize {
+    ret interp_pointee(c, pointer_type).module_index
 }
 
 // What a pointer points at, or an invalid type.
@@ -6865,8 +6987,7 @@ fn interp_try(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFra
         failure = value
     } else {
         if !interp_is_results(value_type) { ret (none, invalid_type(), false, interp_fail(c, module_index, node, "a `try` of a call that answers no `err`")) }
-        let called = c.functions[value_type.element]
-        let (last_type, last_offset, ignored_size, ignored_alignment, slot_error) = interp_result_slot(c, module_index, node, called, called.return_count - 1usize)
+        let (last_type, last_offset, ignored_size, ignored_alignment, slot_error) = interp_results_at(c, module_index, node, value_type, interp_results_count(c, value_type) - 1usize)
         if slot_error != ok { ret (none, invalid_type(), false, slot_error) }
         if last_type.kind != .Err { ret (none, invalid_type(), false, interp_fail(c, module_index, node, "a `try` of a call that answers no `err`")) }
         let (loaded, load_error) = interp_load(c, module_index, node, value.magnitude + last_offset, last_type)
@@ -6954,6 +7075,12 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
             }
             if generic_count != 2usize || tree.nodes[generic_base].kind != .FieldExpr { ret (none, invalid_type(), interp_fail(c, module_index, node, "a generic call it does not evaluate")) }
             let (generic_module, generic_member, found_generic) = qualified_member(c, g, tree, module_index, tree.nodes[generic_base])
+            if found_generic && module_is_mem(c, generic_module) && same(generic_member, "alloc") {
+                let (alloc_element, alloc_element_error) = comptime_type(c, g, tree, module_index, type_argument)
+                if alloc_element_error != ok { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem.alloc` of a type it cannot name")) }
+                let (allocated, allocated_type, allocated_error) = interp_alloc(c, g, tree, frame, node_index, alloc_element, arguments[..argument_count])
+                ret (allocated, allocated_type, allocated_error)
+            }
             if !found_generic || !module_is_mem(c, generic_module) || !same(generic_member, "cast") || argument_count != 1usize { ret (none, invalid_type(), interp_fail(c, module_index, node, "a generic call it does not evaluate")) }
             let (cast_to, cast_to_error) = comptime_type(c, g, tree, module_index, type_argument)
             if cast_to_error != ok || cast_to.kind != .Pointer { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem.cast` to something that is not a pointer")) }
@@ -6965,6 +7092,31 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         if callee.kind != .FieldExpr { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call through a value")) }
         let (qualified_module, member, found_member) = qualified_member(c, g, tree, module_index, callee)
         if !found_member { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call through a value")) }
+        // (D1572) `mem.mark(a)` answers the arena's offset; `mem.reset(a, m)` fills what
+        // lies past `m` with 0xDD, section 11's debug fill, and takes the offset back.
+        if module_is_mem(c, qualified_module) && (same(member, "mark") || same(member, "reset")) {
+            if argument_count == 0usize { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem` call with no arena")) }
+            let (arena_pointer, pointer_type, pointer_error) = interp_expr(c, g, tree, frame, arguments[0usize], invalid_type())
+            if pointer_error != ok { ret (none, invalid_type(), pointer_error) }
+            let (off_address, off_type, off_error) = interp_arena_field(c, module_index, node, arena_pointer, pointer_type, "off")
+            if off_error != ok { ret (none, invalid_type(), off_error) }
+            let (off, off_load_error) = interp_load(c, module_index, node, off_address, off_type)
+            if off_load_error != ok { ret (none, invalid_type(), off_load_error) }
+            if same(member, "mark") { ret (off, make_type(.Integer, "usize", module_index), ok) }
+            if argument_count != 2usize { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem.reset` without its mark")) }
+            let (mark, mark_type, mark_error) = interp_expr(c, g, tree, frame, arguments[1usize], make_type(.Integer, "usize", module_index))
+            if mark_error != ok { ret (none, invalid_type(), mark_error) }
+            if mark_type.kind != .Integer || mark.negative || mark.magnitude > off.magnitude { ret (none, invalid_type(), interp_fail(c, module_index, node, "a `mem.reset` to a mark past the arena's offset")) }
+            let (base_address, base_type, base_error) = interp_arena_field(c, module_index, node, arena_pointer, pointer_type, "base")
+            if base_error != ok { ret (none, invalid_type(), base_error) }
+            let (base, base_load_error) = interp_load(c, module_index, node, base_address, base_type)
+            if base_load_error != ok { ret (none, invalid_type(), base_load_error) }
+            let fill_error = interp_fill(c, module_index, node, base.magnitude + mark.magnitude, off.magnitude - mark.magnitude, 221u8)
+            if fill_error != ok { ret (none, invalid_type(), fill_error) }
+            let reset_error = interp_store(c, module_index, node, off_address, off_type, mark)
+            if reset_error != ok { ret (none, invalid_type(), reset_error) }
+            ret (none, make_type(.Void, "", module_index), ok)
+        }
         target_module = qualified_module
         name = member
     }
@@ -7231,13 +7383,9 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
                 results_type = called_type
             }
             // The values bound: every result, but the `err` a `try` tested.
-            var called: Function = zero
             var count = 1usize
             let several = interp_is_results(results_type)
-            if several {
-                called = c.functions[results_type.element]
-                count = called.return_count
-            }
+            if several { count = interp_results_count(c, results_type) }
             if tried { count = count - 1usize }
             var bound_at = 0usize
             var token_at = usize(binding.token_start)
@@ -7249,7 +7397,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
                         var result_type = results_type
                         var result_value = results
                         if several {
-                            let (slot_type, slot_offset, ignored_size, ignored_alignment, slot_error) = interp_result_slot(c, module_index, node, called, bound_at)
+                            let (slot_type, slot_offset, ignored_size, ignored_alignment, slot_error) = interp_results_at(c, module_index, node, results_type, bound_at)
                             if slot_error != ok { ret (0usize, slot_error) }
                             let (loaded, load_error) = interp_get(c, module_index, node, results.magnitude + slot_offset, slot_type)
                             if load_error != ok { ret (0usize, load_error) }
