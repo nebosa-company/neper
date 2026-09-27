@@ -6418,7 +6418,7 @@ $listSurface = Get-Content (Join-Path $repo 'lib\e\data\list.e') |
         if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.data.list contains an unreadable public declaration' }
         $Matches[1]
     }
-$expectedListSurface = @('List', 'Iter', 'init', 'from_slice', 'slice', 'slice_const', 'reserve', 'push', 'pop', 'insert', 'remove', 'clear', 'iter', 'iter_next')
+$expectedListSurface = @('List', 'Iter', 'init', 'from_slice', 'slice', 'slice_const', 'reserve', 'push', 'pop', 'insert', 'remove', 'clear', 'iter', 'iter_next', 'Builder', 'builder', 'build_push', 'built', 'freeze', 'builder_drop', 'Owning', 'owning', 'own_put', 'own_take', 'owned_count', 'owning_finish')
 if (($listSurface -join "`n") -ne ($expectedListSurface -join "`n")) { throw 'e.data.list public declarations differ from module-apis.md' }
 $listParsed = & $compiler parse-file (Join-Path $repo 'lib\e\data\list.e')
 if ($LASTEXITCODE -ne 0 -or $listParsed -ne 'parse file ok') { throw 'e.data.list failed CLI parsing' }
@@ -6560,14 +6560,16 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $hoistedCompiler)) { th
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hoistedCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built with its literals hoisted is not the stable stage' }
 # The compiler with its locals renamed (D528, H10, H17): every local and parameter of
 # `src/` renamed through the index, and the compiler built from the result is the
-# stable stage byte for byte -- the index names every reference of a large module.
+# stable stage byte for byte outside its debug sections, which name every local (D1640)
+# -- the index names every reference of a large module.
 $renamedSrc = Join-Path $testBuild 'renamed-src'
 & python (Join-Path $repo 'benchmarks/metamorphic/rename_locals.py') $compiler $repo (Join-Path $repo 'src') (Join-Path $renamedSrc 'src') windows
 if ($LASTEXITCODE -ne 0) { throw 'the locals of the compiler could not be renamed' }
 $renamedCompiler = Join-Path $testBuild 'neper-renamed.exe'
 & $ownCompilerPath emit-executable (Join-Path $renamedSrc 'src\main.e') $repo 'x64' 'windows' $renamedCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $renamedCompiler)) { throw 'the compiler did not build from its sources with the locals renamed' }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $renamedCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built with its locals renamed is not the stable stage' }
+& python (Join-Path $repo 'benchmarks/metamorphic/images.py') $renamedCompiler $stableCompilerPath
+if ($LASTEXITCODE -ne 0) { throw 'the compiler built with its locals renamed is not the stable stage' }
 # The compiler with its functions and types renamed (D529, D560, H10, H17): every function
 # but `main` and every type of `src/` and `lib/` renamed through one cross-root index, and
 # the compiler built from the result builds the original sources to the stable stage
@@ -6635,7 +6637,11 @@ foreach ($libTurn in @(@('strip_comments.py', 'lib-blanked', @()), @('hoist_cons
     $libCompiler = Join-Path $testBuild "neper-$($libTurn[1]).exe"
     & $ownCompilerPath emit-executable (Join-Path $libProject 'src\main.e') $libProject 'x64' 'windows' $libCompiler | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $libCompiler)) { throw "the compiler did not build against the library turned by $($libTurn[0])" }
-    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $libCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler built against the library turned by $($libTurn[0]) is not the stable stage" }
+    # A rename reaches the debug sections, which name every local (D1640); the other turns reach nothing.
+    if ($libTurn[0] -eq 'rename_locals.py') {
+        & python (Join-Path $repo 'benchmarks/metamorphic/images.py') $libCompiler $stableCompilerPath
+        if ($LASTEXITCODE -ne 0) { throw "the compiler built against the library turned by $($libTurn[0]) is not the stable stage" }
+    } elseif ((Get-FileHash -Algorithm SHA256 -LiteralPath $libCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler built against the library turned by $($libTurn[0]) is not the stable stage" }
 }
 # The formatted library (D549, H10): every module of `lib/` through `fmt -` into a
 # project of the compiler's sources, the compiler built against it, and the compiler
@@ -6732,7 +6738,8 @@ Copy-Item (Join-Path $renamedSrc 'src\check.e') (Join-Path $warmProject 'src\che
 if ($LASTEXITCODE -ne 0) { throw 'the warm build of the compiler after renaming one module''s locals failed' }
 & python (Join-Path $repo 'scripts/check_incremental.py') $warmManifest 'check=rebuilt:source-changed' 'lex=kept:stable' 'main=kept:edges-hold'
 if ($LASTEXITCODE -ne 0) { throw 'the warm build after renaming one module''s locals did not keep the rest' }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmCold).Hash) { throw 'the warm build after renaming one module''s locals is not the cold build' }
+& python (Join-Path $repo 'benchmarks/metamorphic/images.py') $warmExe $warmCold
+if ($LASTEXITCODE -ne 0) { throw 'the warm build after renaming one module''s locals is not the cold build' }
 # The warm path under the turns in release (D536, H14): the same three edits over a
 # cold release build with artifacts; a module that inlines from the edited one is
 # rebuilt by its body edge, and the image is the cold release build's each time.
