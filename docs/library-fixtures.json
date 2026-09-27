@@ -149,7 +149,8 @@
     "bytes_codec",
     "bytes_plan",
     "differential",
-    "fmt_jwt"
+    "fmt_jwt",
+    "gfx_phash256"
    ]
   },
   {
@@ -932,8 +933,8 @@
    "module": "e.gfx.image",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 29,
-   "delivered": 29,
+   "catalogue": 31,
+   "delivered": 31,
    "pending": [],
    "fixtures": [
     "fmt_jpeg",
@@ -941,6 +942,7 @@
     "fmt_webp",
     "gfx_core",
     "gfx_paint_plan",
+    "gfx_phash256",
     "gfx_scene",
     "ui_actions_v2",
     "ui_asset",

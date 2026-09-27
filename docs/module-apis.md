@@ -4435,11 +4435,18 @@ fn hashable(image: ConstImage) -> bool
 fn ahash(image: ConstImage) -> (u64, err)
 fn dhash(image: ConstImage) -> (u64, err)
 fn phash(image: ConstImage) -> (u64, err)
+fn gray601(image: ConstImage, x: usize, y: usize) -> f64
+fn phash256(image: ConstImage) -> ([32]u8, err)
 fn hamming_distance(a: u64, b: u64) -> u32
 ```
 
 Images are pixel views, not codecs or GPU resources. Encoders and decoders belong in
 `e.fmt.*`; upload and caching belong in `e.gfx.scene`.
+
+`phash256` is mtg.studio's card-scan hash, not a wider `phash`: Rec. 601 grayscale,
+`package:image`'s bilinear resize to 64x64, the orthonormal DCT-II's lowest 16x16 less
+DC against their median, bit `i` in bit `i & 7` of byte `i >> 3` (D1570). Its 32 bytes
+compare with `e.gfx.vision.hamming`.
 
 ### `e.text.bidi`
 
