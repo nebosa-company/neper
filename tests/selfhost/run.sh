@@ -2386,8 +2386,8 @@ db_units_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/x-db-units-selfhost"
 "$test_build/x-db-units-selfhost"
 # `x.postgresql.libpq` and `x.oracle.mysql` against live servers: db_servers.sh starts a fresh
-# PostgreSQL (55432) and MySQL (53306) under /tmp from the distribution's packages, and they are
-# stopped whatever the fixtures answer.
+# PostgreSQL and MySQL under /tmp from the distribution's packages on free ports, 55432 and 53306
+# when nothing holds them (D1596), and they are stopped whatever the fixtures answer.
 postgresql_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_postgresql/src/main.e" "$repo" x64 linux "$test_build/x-postgresql-selfhost")
 [ "$postgresql_written" = 'executable written' ]
 mysql_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_mysql/src/main.e" "$repo" x64 linux "$test_build/x-mysql-selfhost")
@@ -2395,9 +2395,10 @@ mysql_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 chmod +x "$test_build/x-postgresql-selfhost" "$test_build/x-mysql-selfhost"
 db_servers=/tmp/neper-db-servers-$$
 bash "$repo/tests/selfhost/db_servers.sh" start "$db_servers"
+. "$db_servers/ports"
 db_status=0
-"$test_build/x-postgresql-selfhost" "host=127.0.0.1 port=55432 user=neper dbname=postgres options='-c client_min_messages=warning'" || db_status=$?
-[ "$db_status" -ne 0 ] || "$test_build/x-mysql-selfhost" 53306 || db_status=$?
+"$test_build/x-postgresql-selfhost" "host=127.0.0.1 port=$pg_port user=neper dbname=postgres options='-c client_min_messages=warning'" || db_status=$?
+[ "$db_status" -ne 0 ] || "$test_build/x-mysql-selfhost" "$mysql_port" || db_status=$?
 bash "$repo/tests/selfhost/db_servers.sh" stop "$db_servers"
 rm -rf "$db_servers"
 if [ "$db_status" -ne 0 ]; then

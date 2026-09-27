@@ -28899,3 +28899,43 @@ The printed backtrace is unchanged. Section 13's "`?` fields" for an address no 
 **Capacity.** The machine buffer's allowance for the table grows from 24 to 48 bytes per function: an entry, a name's length and a row count.
 
 Still open: CodeView, through the M4 PDB writer (roadmap).
+
+## D1596 — Throwaway database servers pick free ports
+
+`tests/selfhost/db_servers.{ps1,sh}` started PostgreSQL on 55432 and MySQL on 53306, and both
+runners passed those ports to `link/x_postgresql` and `link/x_mysql`. On 2026-09-27 that
+collided twice. Another session ran a PostgreSQL inside WSL on 127.0.0.1:55432, and WSL2
+forwards a WSL localhost listener to Windows through `wslrelay.exe`, so the port was taken on
+Windows too. `start` then failed with "could not create any TCP/IP sockets". A third session,
+in another repository, runs its own PostgreSQL from the same `D:\tools` on 55439. The two
+suites could not run their database blocks at the same time, or next to any other server.
+
+**Ports.** `NEPER_PG_PORT` and `NEPER_MYSQL_PORT` are used when set. Otherwise each server takes
+the first free port counting up from its old default, so with nothing in the way the ports
+are the same as before.
+- Windows tests a port with a real bind to 127.0.0.1 (a `TcpListener`). That is what sees a
+  port `wslrelay` holds on behalf of a WSL listener: `Get-NetTCPConnection` shows the relay's
+  process as the owner.
+- Linux tests a port with a connect through bash's `/dev/tcp`: a refused connection means the
+  port is free.
+
+`start` writes the two ports to `<dir>/ports` as `pg_port=N` and `mysql_port=N`. `run.sh` and
+`benchmarks/db/run-linux.sh` source that file; `run.ps1` splits it on `=`. The fixtures and
+`benchmarks/db/run.py` (`--pg-port`, `--mysql-port`) already took their ports as arguments.
+
+**Stopping only what is ours.** `stop` used to run `mysqladmin shutdown` against the fixed
+port, which could shut down any MySQL there that accepted `root` without a password.
+- Windows: `stop` now uses the port recorded in `<dir>/ports`. It then force-stops only a
+  `mysqld` whose command line names this data directory, if one outlives the shutdown.
+- Linux: `stop` shuts MySQL down through its own socket in `<dir>`, with a kill of the process
+  in its pid file as the fallback.
+- PostgreSQL was already stopped through its data directory on both hosts.
+
+**Verified.**
+- The runners' database blocks ran standalone, as for `5c3ca205`:
+  - Windows, with 55432 held first by a Windows listener and then by a WSL listener forwarded
+    through `wslrelay`: PostgreSQL moved to 55433 and both fixtures passed.
+  - Linux, with a WSL listener on 55432: PostgreSQL moved to 55433 and both fixtures passed.
+- On both hosts, a bare `start` with nothing in the way chose 55432 and 53306, and the overrides
+  (55501 and 53501) were honoured.
+- `stop` left no server of ours running on either host.
