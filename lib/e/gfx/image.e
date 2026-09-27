@@ -20,7 +20,9 @@
 // window that fits. `ahash`, `dhash` and `phash` shrink by integer box averages
 // (`floor(i * source / target)` to the next box start, at least one pixel) and pack
 // the bits row-major, first bit highest, as `imagehash` does; `hamming_distance`
-// counts the bits two hashes differ in.
+// counts the bits two hashes differ in. `phash256` is a different hash, not a wider
+// `phash`: mtg.studio's card-scan index, reproduced bit for bit (see its comment), whose
+// 32-byte results `e.gfx.vision.hamming` compares.
 
 use e.bytes
 use e.math
@@ -389,6 +391,131 @@ fn phash(image: ConstImage) -> (u64, err) {
     while i < 64usize {
         hash = hash << 1u32
         if low[i] > median { hash |= 1u64 }
+        i += 1usize
+    }
+    ret (hash, ok)
+}
+
+// A pixel's Rec. 601 luma in `f64`, clamped and truncated to a byte, as `package:image`
+// stores its grayscale. `R8` is read as three equal channels.
+fn gray601(image: ConstImage, x: usize, y: usize) -> f64 {
+    let at = y * image.stride + x * bytes_per_pixel(image.format)
+    var r = f64(image.pixels[at])
+    var g = r
+    var b = r
+    if image.format == .Rgba8 {
+        g = f64(image.pixels[at + 1usize])
+        b = f64(image.pixels[at + 2usize])
+    }
+    if image.format == .Bgra8 {
+        r = f64(image.pixels[at + 2usize])
+        g = f64(image.pixels[at + 1usize])
+        b = f64(image.pixels[at])
+    }
+    var l = 0.299f64 * r + 0.587f64 * g + 0.114f64 * b
+    if l > 255.0f64 { l = 255.0f64 }
+    ret math.trunc[f64](l)
+}
+
+// The 256-bit perceptual hash of mtg.studio's card-scan index (`pHash256Of`, `pHash256`),
+// bit for bit, so its bytes compare by Hamming distance against that index. Every
+// operation keeps the reference's order: Rec. 601 grayscale at full size; `package:image`'s
+// bilinear resize to 64x64 (sample `i * source / 64`, not pixel-centred), truncated to
+// bytes; each byte re-weighted as `0.299 v + 0.587 v + 0.114 v`, whose rounding noise the
+// index carries; the orthonormal DCT-II of the lowest 16x16, rows then columns; the 255
+// coefficients past DC, row-major, set where above their median. Bit `i` is bit `i & 7`
+// of byte `i >> 3`; bit 255 is always clear.
+fn phash256(image: ConstImage) -> ([32]u8, err) {
+    if !hashable(image) { ret (zero, Invalid) }
+    let width = usize(image.width)
+    let height = usize(image.height)
+    let dx = f64(width) / 64.0f64
+    let dy = f64(height) / 64.0f64
+    var f: [4096]f64 = zero
+    var y = 0usize
+    while y < 64usize {
+        let fy = f64(y) * dy
+        let iy = usize(i64(fy))
+        let ky = fy - f64(iy)
+        var ny = iy + 1usize
+        if ny > height - 1usize { ny = height - 1usize }
+        var x = 0usize
+        while x < 64usize {
+            let fx = f64(x) * dx
+            let ix = usize(i64(fx))
+            let kx = fx - f64(ix)
+            var nx = ix + 1usize
+            if nx > width - 1usize { nx = width - 1usize }
+            let icc = gray601(image, ix, iy)
+            let inc = gray601(image, nx, iy)
+            let icn = gray601(image, ix, ny)
+            let inn = gray601(image, nx, ny)
+            let v = f64(i64(icc + kx * (inc - icc + ky * (icc + inn - icn - inc)) + ky * (icn - icc)))
+            f[y * 64usize + x] = 0.299f64 * v + 0.587f64 * v + 0.114f64 * v
+            x += 1usize
+        }
+        y += 1usize
+    }
+    var basis: [1024]f64 = zero
+    var k = 0usize
+    while k < 16usize {
+        var ck = math.sqrt[f64](2.0f64 / 64.0f64)
+        if k == 0usize { ck = math.sqrt[f64](1.0f64 / 64.0f64) }
+        var x = 0usize
+        while x < 64usize {
+            basis[k * 64usize + x] = ck * math.cos[f64](f64((2usize * x + 1usize) * k) * 3.141592653589793f64 / 128.0f64)
+            x += 1usize
+        }
+        k += 1usize
+    }
+    var rows: [1024]f64 = zero
+    k = 0usize
+    while k < 16usize {
+        y = 0usize
+        while y < 64usize {
+            var s = 0.0f64
+            var x = 0usize
+            while x < 64usize {
+                s += basis[k * 64usize + x] * f[y * 64usize + x]
+                x += 1usize
+            }
+            rows[k * 64usize + y] = s
+            y += 1usize
+        }
+        k += 1usize
+    }
+    var coeffs: [255]f64 = zero
+    var sorted: [255]f64 = zero
+    var n = 0usize
+    k = 0usize
+    while k < 16usize {
+        var l = 0usize
+        while l < 16usize {
+            if k != 0usize || l != 0usize {
+                var s = 0.0f64
+                y = 0usize
+                while y < 64usize {
+                    s += basis[l * 64usize + y] * rows[k * 64usize + y]
+                    y += 1usize
+                }
+                coeffs[n] = s
+                var j = n
+                while j > 0usize && sorted[j - 1usize] > s {
+                    sorted[j] = sorted[j - 1usize]
+                    j -= 1usize
+                }
+                sorted[j] = s
+                n += 1usize
+            }
+            l += 1usize
+        }
+        k += 1usize
+    }
+    let median = sorted[127usize]
+    var hash: [32]u8 = zero
+    var i = 0usize
+    while i < 255usize {
+        if coeffs[i] > median { hash[i / 8usize] |= u8(1u32 << u32(i % 8usize)) }
         i += 1usize
     }
     ret (hash, ok)

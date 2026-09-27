@@ -2137,7 +2137,7 @@ gfx_paint_plan_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$gfx_paint_plan_written" = 'executable written' ]
 chmod +x "$test_build/gfx-paint-plan-selfhost"
 "$test_build/gfx-paint-plan-selfhost"
-# `e.gfx.image.phash256`: mtg.studio's 256-bit card-scan hash, bit for bit on eight real card arts from its Dart parity vectors and on four noise images in every 8-bit format hashed by its JS port (D1569).
+# `e.gfx.image.phash256`: mtg.studio's 256-bit card-scan hash, bit for bit on eight real card arts from its Dart parity vectors and on four noise images in every 8-bit format hashed by its JS port (D1570).
 gfx_phash256_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_phash256/src/main.e" "$repo" x64 linux "$test_build/gfx-phash256-selfhost")
 [ "$gfx_phash256_written" = 'executable written' ]
 chmod +x "$test_build/gfx-phash256-selfhost"

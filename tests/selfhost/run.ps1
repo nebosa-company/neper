@@ -2398,7 +2398,7 @@ $gfxPaintPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $gfxPaintPlanWritten -ne 'executable written') { throw 'gfx_paint_plan emission failed' }
 & $gfxPaintPlanPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_paint_plan check failed: exit $LASTEXITCODE" }
-# `e.gfx.image.phash256`: mtg.studio's 256-bit card-scan hash, bit for bit on eight real card arts from its Dart parity vectors and on four noise images in every 8-bit format hashed by its JS port (D1569).
+# `e.gfx.image.phash256`: mtg.studio's 256-bit card-scan hash, bit for bit on eight real card arts from its Dart parity vectors and on four noise images in every 8-bit format hashed by its JS port (D1570).
 $gfxPhash256Path = Join-Path $testBuild 'gfx-phash256-selfhost.exe'
 $gfxPhash256Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_phash256\src\main.e') $repo 'x64' 'windows' $gfxPhash256Path
 if ($LASTEXITCODE -ne 0 -or $gfxPhash256Written -ne 'executable written') { throw 'gfx_phash256 emission failed' }

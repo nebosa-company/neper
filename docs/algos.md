@@ -999,7 +999,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 637. **Quantization Matrix Application** – Lossy step dividing frequency coefficients to discard perceptually insignificant data. → skip: an implementation detail of an existing module, not an API
 638. **Chroma Subsampling** – Color compression reducing chrominance resolution relative to luminance (4 : 2 : 2, 4 : 2 : 0). → skip: an implementation detail of an existing module, not an API
 639. **Vector Quantization (LBG)** – Lossy vector clustering mapping continuous features to discrete codebook vectors. → `e.ml.cluster.vector_quantize`
-640. **pHash (Perceptual Hash)** – Fingerprinting media files based on visual features rather than exact binary representations. → `e.gfx.image.phash`
+640. **pHash (Perceptual Hash)** – Fingerprinting media files based on visual features rather than exact binary representations. → `e.gfx.image.phash` (64-bit, `imagehash`'s), `e.gfx.image.phash256` (256-bit, mtg.studio's card-scan index)
 641. **Average Hash (aHash)** – Fast perceptual image hash comparing pixels against average luminance. → `e.gfx.image.ahash`
 642. **Difference Hash (dHash)** – Perceptual image hash tracking directional pixel brightness gradients. → `e.gfx.image.dhash`
 643. **Block Truncation Coding (BTC)** – Lossy image compression preserving local sample mean and standard deviation. → skip: implementable, but too specialised for the standard library
