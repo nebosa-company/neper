@@ -1,6 +1,7 @@
 // x64 instruction selection from allocated scalar NIR.
 
 use e.mem
+use e.os
 use check
 use lookup
 use emit_x64
@@ -1404,6 +1405,47 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
 // trap site -- is resolved here to the table's start; a linker that moves the table
 // moves them with it. The functions the fold dropped are skipped: their offsets are
 // the survivor's, which is the name the walk should print.
+// The symbol table's path tables in a region reserved for this link, cleared here:
+// what `reserve` hands back is not promised to be zero. Cleared one element at a
+// time; the C bootstrap miscompiles a write through a nested element.
+// ponytail: the region (about 300 KB) is not released -- `e.os` has no release the
+// bootstrap knows -- which a process that links once does not feel.
+type PathTables = struct { paths: []str, offsets: []usize, heads: []usize, next: []usize }
+
+fn path_tables() -> (PathTables, err) {
+    var none: PathTables = zero
+    let capacity = 524288usize
+    let (base, reserve_error) = os.reserve(capacity)
+    if reserve_error != ok { ret (none, reserve_error) }
+    let commit_error = os.commit(base, capacity)
+    if commit_error != ok { ret (none, commit_error) }
+    var region: mem.Arena = zero
+    region.base = base
+    region.cap = capacity
+    let (paths, paths_error) = mem.alloc[str](&region, 8192usize)
+    if paths_error != ok { ret (none, paths_error) }
+    let (offsets, offsets_error) = mem.alloc[usize](&region, 8192usize)
+    if offsets_error != ok { ret (none, offsets_error) }
+    let (heads, heads_error) = mem.alloc[usize](&region, 4096usize)
+    if heads_error != ok { ret (none, heads_error) }
+    let (links, links_error) = mem.alloc[usize](&region, 8192usize)
+    if links_error != ok { ret (none, links_error) }
+    var at = 0usize
+    while at < 8192usize {
+        paths[at] = ""
+        offsets[at] = 0usize
+        links[at] = 0usize
+        if at < 4096usize { heads[at] = 0usize }
+        at += 1usize
+    }
+    var tables: PathTables = zero
+    tables.paths = paths
+    tables.offsets = offsets
+    tables.heads = heads
+    tables.next = links
+    ret (tables, ok)
+}
+
 fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []Relocation, relocation_count: usize, lines: []LineEntry, line_count: usize) -> err {
     let table_start = machine.count
     var emitted = 0usize
@@ -1433,13 +1475,16 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
         }
         at += 1usize
     }
-    // The distinct paths, at most one per module, laid out after the names.
-    var paths: [8192]str = zero
-    var path_offsets: [8192]usize = zero
-    // The paths by hash bucket, chained (D332): a head is a path's index plus one,
-    // zero being the end.
-    var path_heads: [4096]usize = zero
-    var path_next: [8192]usize = zero
+    // The distinct paths, at most one per module, laid out after the names; and the
+    // paths by hash bucket, chained (D332): a head is a path's index plus one, zero
+    // being the end. (D1605) In a region, not on the stack: as locals they were
+    // 290 KB of the main thread's, and the short `build` spelling overflowed it.
+    let (tables, tables_error) = path_tables()
+    if tables_error != ok { ret tables_error }
+    let paths = tables.paths
+    let path_offsets = tables.offsets
+    let path_heads = tables.heads
+    let path_next = tables.next
     var path_count = 0usize
     var paths_total = 0usize
     var row = 0usize
