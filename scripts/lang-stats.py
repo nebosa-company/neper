@@ -6,8 +6,8 @@ pooled; with --harness it is a language as one agent wrote it. Codex's apply_pat
 agent is costed with Claude's token weights and priced at the Opus list rate, so $ compares
 effort, not bills.
 
-Code reaches a file three ways and all three count: the Write/Edit tools, `cat > file <<EOF`
-heredocs, and Python patch or generator scripts (written to a .py file or inlined as `python - <<EOF`) whose
+Code reaches a file four ways and all four count: the Write/Edit tools, `cat > file <<EOF`
+heredocs, patch.exe specs (D1455; their new sides count as direct code), and Python patch or generator scripts (written to a .py file or inlined as `python - <<EOF`) whose
 old/new strings carry the code. A script's new code is credited to the language it
 patches, and so is the script's whole cost; a run of the script is one edit application,
 so an `assert count == 1` failure is an edit that did not apply. All other Python in a
@@ -56,7 +56,8 @@ ROOT = os.path.expanduser('~/.claude/projects')
 LANG = {'.e': 'Neper', '.dart': 'Dart', '.rs': 'Rust', '.js': 'JS', '.mjs': 'JS', '.jsx': 'JS', '.ts': 'TS', '.tsx': 'TS', '.py': 'Python'}
 CODE = {'e': 'Neper', 'dart': 'Dart', 'rs': 'Rust', 'js': 'JS', 'ts': 'TS'}  # what a script may patch and be credited for
 ROWS = ['Neper', 'Dart', 'Rust', 'JS', 'TS', 'Python']
-BUILD = re.compile(r'\b(cargo|flutter|dart|neper|tsc|npm|pnpm|node|vitest|jest|pytest|run\.sh|suite|make|gcc|clang|bootstrap|go (build|test)|dotnet)\b')
+# neper is the binary (neper-self, neper-try.exe), never the repo path: repos/neper, D--repos-neper, src/neper.e
+BUILD = re.compile(r'\b(cargo|flutter|dart|(?<!-)(?<!repos[\\/])neper(?:-\w+)*(?:\.exe)?(?![\w\\/.-])|tsc|npm|pnpm|node|vitest|jest|pytest|run\.sh|suite|make|gcc|clang|bootstrap|go (build|test)|dotnet)\b')
 COMPILE = {'Neper': re.compile(r'\bE-[A-Z]+-\d{4}\b'), 'Rust': re.compile(r'error(\[E\d{4}\]|: )'), 'Dart': re.compile(r'\bError: |\berror •'),
            'JS': re.compile(r'\b(SyntaxError|TypeError|ReferenceError)\b'), 'TS': re.compile(r'\berror TS\d{4}\b'), 'Python': re.compile(r'Traceback|SyntaxError')}
 READS = ('Read', 'Grep', 'Glob')
@@ -64,6 +65,8 @@ TARGET = re.compile(r"""['"]([^'"\n]{1,200}?\.(e|dart|rs|js|ts|md|json|jsonl|ps1
 HEREDOC = re.compile(r"(?ms)^([^\n]*?<<-?\s*['\"]?(\w+)['\"]?[^\n]*)\n(.*?)\n\2[ \t]*$")
 PYRUN = re.compile(r'\bpython3?\s+(?:"[^"]*[/\\])?([\w.-]+\.py)\b')
 SCRATCH = re.compile(r'scratchpad|[\\/](build|tmp|Temp)[\\/]', re.I)
+SPEC = re.compile(r'(?m)^@@@ (.+?)\s*$')  # a patch.exe spec (D1455): `@@@ path`, then <<< old === new >>> blocks
+PATCHER = re.compile(r'\bpatch\.exe\b')
 USD = 5e-6  # dollars per input-token equivalent: Opus 5 list price, $5 per million
 KB = 1000   # a kilobyte of source, not a kibibyte
 CODES = {'Neper': re.compile(r'\bE-[A-Z]+-\d{4}\b'), 'Rust': re.compile(r'\bE\d{4}\b'), 'TS': re.compile(r'\bTS\d{4}\b'),
@@ -100,6 +103,17 @@ def new_code(code, kind):
 scripts = {}  # basename -> script_kind of every .py the transcripts wrote, so a later run is recognised
 
 
+def spec_code(body):
+    """What a patch.exe spec lands, one entry per file: the new sides of its edits, written directly."""
+    parts = SPEC.split(body)  # text before the first file, then path, section, path, section...
+    out = []
+    for path, section in zip(parts[1::2], parts[2::2]):
+        L = LANG.get(os.path.splitext(path)[1].lower())
+        if L and not (L == 'Python' and SCRATCH.search(path)):
+            out.append((L, 'direct', sum(len(n.encode()) for n in re.findall(r'(?ms)^===\n(.*?)^>>>', section)), {path}))
+    return out
+
+
 def landed(t, full):
     """What a tool call lands: (lang, mode, new_bytes, target_files). mode is direct (the tool
     wrote the code), script (a Python script carries it) or helper (Python tooling, no code)."""
@@ -120,10 +134,12 @@ def landed(t, full):
         L = LANG.get(os.path.splitext(path)[1].lower())
         if L == 'Python': python(path, body or '')
         elif L: out.append((L, 'direct', len((body or '').encode()), {path}))
+        elif n == 'Write' and SPEC.search(body or ''): out += spec_code(body)
     elif n == 'Bash':
         for m in HEREDOC.finditer(str(i.get('command', ''))):
             line, body = m.group(1), m.group(3)
             if re.search(r'\bpython3?\s+-\s*<<', line): python(None, body)
+            elif SPEC.search(body): out += spec_code(body)
             else:
                 tgt = re.search(r'(?<![\d&])>\s*[\'"]?([^\s\'"&|;]+)', line)
                 if not tgt: continue
@@ -346,6 +362,9 @@ for agent, msgs, order, results in itertools.chain(claude(), codex(), deepseek()
                         S[(tag(k[1]), 'script')]['applied'] += 1; S[(tag(k[1]), 'script')]['apply_err'] += failed; since_build += not failed
                         if repair: repair[1] += not failed
                     else: ks = []
+                if PATCHER.search(cmd) and not es:  # a spec written earlier is applied now; its code was counted when written
+                    S[(hk, 'direct')]['apply_err'] += failed
+                    if not BUILD.search(cmd): continue
                 if not ks and (BUILD.search(cmd) or PYRUN.search(cmd)):  # a build or test run, or a script written outside these transcripts
                     text = r.get('text', '')
                     H['builds'] += 1; H['build_fail'] += failed; build_s[hk].append(dur)
