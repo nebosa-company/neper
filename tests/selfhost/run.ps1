@@ -5451,6 +5451,20 @@ if ($LASTEXITCODE -ne 0) { throw 'the change-signature plan did not apply' }
 $signatureChecked = & $compiler check-file (Join-Path $signatureScratch 'src/signature.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $signatureChecked -ne 'module check ok') { throw "the program with the changed signature does not check: $signatureChecked" }
 if (-not (Select-String -LiteralPath (Join-Path $signatureScratch 'src/signature.e') -Pattern 'fn adjust\(offset: f32, reading: f32, gain: f32\)' -Quiet)) { throw 'the signature was not reordered' }
+# A call nested in another's arguments (D1641): one edit over the outer list, the inner call
+# reordered inside it -- two edits, none overlapping, and the plan applies.
+$nestedPlan = Join-Path $testBuild 'conformance-tools-plan-signature-nested.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-change-signature-file signature_nested.e `"$repo`" x64 windows --json --symbol signature_nested.pair --order 1,0 > `"$nestedPlan`""
+if ($LASTEXITCODE -ne 0 -or -not (Select-String -LiteralPath $nestedPlan -Pattern '"edits":2,' -SimpleMatch -Quiet)) { throw 'a nested call was not planned as one edit' }
+$nestedScratch = Join-Path $testBuild 'plan-signature-nested-scratch'
+if (Test-Path -LiteralPath $nestedScratch) { Remove-Item -LiteralPath $nestedScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $nestedScratch 'src') | Out-Null
+Copy-Item (Join-Path $conformanceRoot 'tools/signature_nested.e') (Join-Path $nestedScratch 'src')
+& $compiler apply-plan $nestedPlan --root (Join-Path $nestedScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the plan over a nested call did not apply' }
+$nestedChecked = & $compiler check-file (Join-Path $nestedScratch 'src/signature_nested.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $nestedChecked -ne 'module check ok') { throw "the program with the nested call reordered does not check: $nestedChecked" }
+if (-not (Select-String -LiteralPath (Join-Path $nestedScratch 'src/signature_nested.e') -Pattern 'pair(3i64, pair(2i64, 1i64))' -SimpleMatch -Quiet)) { throw 'the nested call was not reordered' }
 # A parameter removed (D439, H17): `0,1` drops `scale`, which the body never names,
 # from the declaration and every call; `0,2` would drop `gain`, which it reads, refused.
 $removeActual = Join-Path $testBuild 'conformance-tools-plan-signature-remove.jsonl'

@@ -5656,6 +5656,16 @@ rm -rf "$signature_scratch" && mkdir -p "$signature_scratch/src" && cp "$conform
 signature_checked=$($test_build/neper-self check-file "$signature_scratch/src/signature.e" "$repo" x64 linux)
 [ "$signature_checked" = 'module check ok' ]
 grep -q 'fn adjust(offset: f32, reading: f32, gain: f32)' "$signature_scratch/src/signature.e"
+# A call nested in another's arguments (D1641): one edit over the outer list, the inner call
+# reordered inside it -- two edits, none overlapping, and the plan applies.
+nested_plan="$test_build/conformance-tools-plan-signature-nested.jsonl"
+(cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature_nested.e "$repo" x64 linux --json --symbol signature_nested.pair --order 1,0 > "$nested_plan")
+grep -q '"edits":2,' "$nested_plan"
+nested_scratch="$test_build/plan-signature-nested-scratch"
+rm -rf "$nested_scratch" && mkdir -p "$nested_scratch/src" && cp "$conformance_root/tools/signature_nested.e" "$nested_scratch/src/"
+"$test_build/neper-self" apply-plan "$nested_plan" --root "$nested_scratch/src" > /dev/null
+[ "$($test_build/neper-self check-file "$nested_scratch/src/signature_nested.e" "$repo" x64 linux)" = 'module check ok' ]
+grep -q 'pair(3i64, pair(2i64, 1i64))' "$nested_scratch/src/signature_nested.e"
 # A parameter removed (D439, H17): `0,1` drops the unused `scale`; `0,2` is refused.
 remove_actual="$test_build/conformance-tools-plan-signature-remove.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature_remove.e "$repo" x64 linux --json --symbol signature_remove.adjust --order 0,1 > "$remove_actual")

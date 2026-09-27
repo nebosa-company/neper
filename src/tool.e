@@ -4611,7 +4611,8 @@ fn list_items(tokens: []const lex.Token, name_at: usize) -> ListItems {
 // the old list; an index left out removes that parameter, and no index may repeat.
 // The declaration's list and every resolved call's argument list are re-rendered
 // from the texts of their items -- what was written, in the new order, joined by
-// `, ` -- as one edit per site over the text between the parentheses. A function
+// `, ` -- as one edit per site over the text between the parentheses; a call nested in
+// another's arguments is reordered inside that call's edit, not by its own (D1641). A function
 // named as a value or chosen by a protocol is refused as D406 refuses it; the
 // process entry point is fixed too. So is a list with more items than the order
 // names or more than sixteen.
@@ -4623,6 +4624,72 @@ fn body_names(module: graph.Module, from: usize, to: usize, name: str) -> bool {
         let token = module.tokens[at]
         if token.start >= from && token.end <= to && token.kind == .Identifier && graph.same(module.text[token.start..token.end], name) { ret true }
         at += 1usize
+    }
+    ret false
+}
+
+// The use site whose argument list lies in `[from, to)` of the same module and starts
+// first there, `skip` aside: the outermost call to the function inside that text (D1641).
+fn nested_site(g: *graph.Graph, sites: PlanSites, module_index: usize, skip: usize, from: usize, to: usize) -> (usize, bool) {
+    var best = 0usize
+    var best_start = to
+    var found = false
+    var site = 0usize
+    while site < sites.count {
+        if site != skip && sites.kinds[site] != 0u8 && sites.modules[site] == module_index {
+            let items = list_items(g.modules[module_index].tokens, sites.offsets[site])
+            if items.found && items.inner_start >= from && items.inner_end <= to && items.inner_start < best_start {
+                best = site
+                best_start = items.inner_start
+                found = true
+            }
+        }
+        site += 1usize
+    }
+    ret (best, found)
+}
+
+// A site's list in the new order: each item's text as written, except that a call to the
+// same function inside it is itself reordered (D1641). One edit then covers the nest.
+fn render_reordered(g: *graph.Graph, sites: PlanSites, site: usize, order: []const usize, dst: []u8, at: usize) -> usize {
+    let module_index = sites.modules[site]
+    let site_text = g.modules[module_index].text
+    let items = list_items(g.modules[module_index].tokens, sites.offsets[site])
+    var written = at
+    var order_at = 0usize
+    while order_at < order.len {
+        if order_at != 0usize { written = nptest_copy(dst, written, ", ") }
+        var cursor = items.item_start[order[order_at]]
+        let stop = items.item_end[order[order_at]]
+        while cursor < stop {
+            let (inner, has_inner) = nested_site(g, sites, module_index, site, cursor, stop)
+            if !has_inner {
+                written = nptest_copy(dst, written, site_text[cursor..stop])
+                cursor = stop
+            } else {
+                let inner_items = list_items(g.modules[module_index].tokens, sites.offsets[inner])
+                written = nptest_copy(dst, written, site_text[cursor..inner_items.inner_start])
+                written = render_reordered(g, sites, inner, order, dst, written)
+                cursor = inner_items.inner_end
+            }
+        }
+        order_at += 1usize
+    }
+    ret written
+}
+
+// Whether a use site's list lies inside another site's list: an argument of a call to the
+// same function, which that call's edit already covers (D1641).
+fn site_is_nested(g: *graph.Graph, sites: PlanSites, site: usize) -> bool {
+    let module_index = sites.modules[site]
+    let mine = list_items(g.modules[module_index].tokens, sites.offsets[site])
+    var other = 0usize
+    while other < sites.count {
+        if other != site && sites.modules[other] == module_index {
+            let theirs = list_items(g.modules[module_index].tokens, sites.offsets[other])
+            if theirs.found && theirs.inner_start < mine.inner_start && mine.inner_end <= theirs.inner_end { ret true }
+        }
+        other += 1usize
     }
     ret false
 }
@@ -4732,7 +4799,12 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
     let (files, preconditions_error) = plan_preconditions(a, &out, g, sites)
     if preconditions_error != ok { ret preconditions_error }
     var site = 0usize
+    var edits = 0usize
     while site < sites.count {
+        if site_is_nested(g, sites, site) {
+            site += 1usize
+            continue
+        }
         let module = g.modules[sites.modules[site]]
         let (root, relative) = source_identity_of(g, module.path)
         let (path, path_error) = manifest_slashes(a, relative)
@@ -4753,18 +4825,12 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
         try token_span(&out, root, path, module.text, first, last)
         try text(&out, ",\"replacement\":")
         var replacement_storage: [2048]u8 = zero
-        var replacement_at = 0usize
-        var order_at = 0usize
-        while order_at < order_count {
-            if order_at != 0usize { replacement_at = nptest_copy(replacement_storage[..], replacement_at, ", ") }
-            let item = order[order_at]
-            replacement_at = nptest_copy(replacement_storage[..], replacement_at, module.text[items.item_start[item]..items.item_end[item]])
-            order_at += 1usize
-        }
+        let replacement_at = render_reordered(g, sites, site, order[0usize..order_count], replacement_storage[..], 0usize)
         try quoted(&out, replacement_storage[0usize..replacement_at])
         try owned_note(&out, g, sites.modules[site], first.start)
         try byte(&out, 125u8)
         try flush(&out)
+        edits += 1usize
         site += 1usize
     }
     try text(&out, "{\"record\":\"postcondition\",\"check\":\"check-file passes; context-file --symbol ")
@@ -4778,7 +4844,7 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
     try text(&out, " sites\"}")
     try flush(&out)
     try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":")
-    try decimal(&out, sites.count)
+    try decimal(&out, edits)
     try text(&out, ",\"files\":")
     try decimal(&out, files)
     try text(&out, ",\"complete\":")

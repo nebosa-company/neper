@@ -29451,3 +29451,28 @@ Each of these is built by a struct literal. A literal wrote its fields and nothi
 - The Windows run predates the library-rename change, so that check was confirmed on the run's images with `images.py`, and `run.ps1` parses cleanly.
 
 ---
+
+## D1641 — A call nested in its own arguments is reordered inside the outer call's edit; the Linux goldens catch up with D1602
+
+**Why.** Once D1640 was in, two causes held the suites' last failures besides the arena gate.
+
+- **The reorder check.** `reorder_parameters.py` (D562) reverses the parameters of every function in `src/` it can. Since before D1606, `apply-plan` refused the combined plan with E-TOOL-0003 (edits overlap). In `check.e`, two calls read `device_text(c, …, device_text(c, …), …)`, a call to the function inside its own arguments. `plan-change-signature` rendered each site's list from its items' text: the outer edit carried the inner call as written, and the inner call had an edit of its own inside the outer's span. Neither edit alone was right. The outer one would have restored the inner call's old order.
+- **The Linux goldens.** 18 `x64-linux` conformance goldens still had the snapshots, the `e.os` interface hash and `explain_inline`'s inlining records from before D1602. D1605 regenerated them for Windows only.
+
+**Decision.**
+
+- **Composed edit.** `plan_signature_json` renders a site's list through `render_reordered`. An item's text is copied as written, except that a call to the same function inside it (`nested_site`, the use site whose list starts first within the item) is rendered reordered in its place, recursively. A site whose list lies inside another's (`site_is_nested`) gets no edit, since the enclosing edit covers it. `data.edits` counts the edits written, no longer the sites. A plan without nested calls is unchanged, byte for byte.
+- **Linux goldens.** They were regenerated from a Linux suite run by a script that compared every record first. 17 differ in `snapshot` and the interface `value` alone. `explain_inline` keeps every old record except `e.os.accessibility_publish`'s two "inlinable" rows. It gains 104 records about `e.os`, and the `vectorize` transformation record `aecaeb96` added, which the Windows golden already had.
+
+**Evidence.**
+
+- **A direct check.** `tests/conformance/tools/signature_nested.e` holds `pair(pair(1, 2), 3)`, reordered `1,0`:
+  - the D1640 compiler plans 3 edits, and `apply-plan` refuses them as overlapping;
+  - this one plans 2, which apply to `pair(3i64, pair(2i64, 1i64))` and check.
+
+  Both suites run it; it has no golden, so a snapshot cannot drift it.
+- **The compiler reordered.** 1,982 functions in 15,091 edits apply, and the compiler built from the result is the stable stage on both hosts. Both `device_text` nests come out reversed at both levels.
+- **Goldens.** The regenerated Linux goldens validate (632 records in 31 files, 0 invalid).
+- **Suites.** Windows and Linux each fail one check, down from 2 and 20: the static gate's arena high-water, +2.4% to +2.7% over a +0% budget, still to be explained and re-pinned.
+
+---
