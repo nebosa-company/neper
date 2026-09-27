@@ -1,4 +1,4 @@
-// Errors, several results and `try` in the comptime interpreter (D1571, C066): a
+// Errors, several results and `try` in the comptime interpreter (D1574, C066): a
 // function answering a value beside an `err`, one that passes a failure on with
 // `try` (the zero value beside it), a pair of results, `_` discarding one, a `try`
 // statement in a function answering only `err`; and the errors compared by name.

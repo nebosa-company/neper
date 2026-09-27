@@ -1,4 +1,4 @@
-// The arena as interpreter memory (D1572, C066): `mem.arena_from` over a local array,
+// The arena as interpreter memory (D1575, C066): `mem.arena_from` over a local array,
 // `mem.alloc` from it (the offset rounded to the element's alignment, the memory
 // filled with 0xCD), `mem.mark` and `mem.reset`, `Exhausted` past the end, and
 // `try mem.alloc` in a function answering an `err` -- all at compile time.

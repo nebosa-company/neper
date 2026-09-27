@@ -1,4 +1,4 @@
-// Pointers in the comptime interpreter (D1570, C066): `&x` of a local, a field and
+// Pointers in the comptime interpreter (D1573, C066): `&x` of a local, a field and
 // an element; a store and a read through `*p`; a field through a pointer; a pointer
 // handed to a function that changes what it points at; two addresses compared; and
 // `mem.cast` between pointer types over the same bytes, read in the target's layout.
