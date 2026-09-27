@@ -28569,3 +28569,20 @@ The command lives in `main.e` and is documented in `tooling.md` section 7. The s
 Stage 2 equals stage 3 on both hosts.
 
 With D1569 and D1573-D1577, every line of C066 has landed: structs, slices and strings, arrays across calls, pointers, errors with several results and `try`, the arena, reflection in an evaluated body, and `eval`. The item closes. What the interpreter still refuses is recorded in its decisions: `f.ty` and `meta.kind`'s enum, generic calls other than `mem.cast` and `mem.alloc`, `switch`, `defer`, unions, and function values. A constant's own value stays an integer or a bool.
+
+## D1578 — Work stolen per module does not pay
+
+C082's gap says the crew's work "is assigned statically, not stolen". The static schedule hands the modules out largest first, each to the least-loaded worker by text length (D325), and every later phase keeps that assignment: the oracles and the lowering run on the worker whose checker checked the bodies (D326, D327). Stealing was built and measured, and it does not pay at a module's granularity, so it was not kept.
+
+What was built:
+
+- `os.fetch_add(p: *usize, n: usize) -> usize`, a read-modify-write the C bootstrap and the self-hosted compiler both know: the bootstrap's runtime with the host's interlocked add, the self-hosted lowering with the `AtomicRmw` instruction `atomic.fetch_add` already becomes.
+- The crew's queue in the static schedule's order. Each worker claimed the next module as it finished one, up to the heaviest static share its tables are sized for; the first worker was uncapped so every module was claimed. Every later phase kept the claims. `--perturb` kept its schedule.
+- Stage 2 equalled stage 3, and the image did not change.
+
+What it measured:
+
+- **The compiler's own source.** The static body phase waits on one worker (663 ms against 364-526). That worker holds `check.e`, a single module, and stealing leaves it the slowest (180 ms against about 70 on a warm build): a module cannot be split, so the phase is bound by the largest module whichever worker takes it.
+- **`sc500k`** (500 modules of one shape, three alternating runs each). The bodies were no faster (525-700 ms against 455-676), and the lowering was slower (1734-1881 ms against 1259-1504). The claims follow the bodies' timing, and the lowering, which keeps them, loses the static schedule's balance by size.
+
+A change that does not move a number is not the feature (the item's own rule), so the queue, the claims and `os.fetch_add`, which nothing else used, were reverted. So was the rebuilt bootstrap. The lever that remains is the function, not the module: stealing a module's functions across workers in the body phase. That needs the instances a body check makes to reach the worker that lowers the module, which is the D326/D327 coupling this measurement ran into.
