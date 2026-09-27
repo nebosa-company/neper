@@ -29400,3 +29400,26 @@ Only the SQLite scan is clear of the round-to-round spread. The drivers' images 
 - `main_args` and the rest of the suites: as D1607.
 
 ---
+
+## D1609 — A struct literal's padding is zero, as `zero`'s is
+
+**Why.** valgrind on `ui_status3_v2` under Linux reported 83 uninitialised reads in 7 contexts. All were at `widget.reconcile_node`'s `me.subtree_hash == subtree_hash`, and they came from stack memory in `style.defaults`, `control.pressable_states_fill`, `control.severity_well` and `control.stroked_glyph`. `widget.hash_node` hashes values by their bytes:
+
+- the node's `Style`, `Flex`, `Wrap`, `Button`, `Image`, `Region` and `Semantics`;
+- every `Custom` node's state, such as `Glyph`, `Star`, `Sash` and `Tint`.
+
+Each of these is built by a struct literal. A literal wrote its fields and nothing between or after them: `Style`'s two `u8` enums leave two bytes before its first `Length`, and `Glyph`'s `kind` leaves seven before its pointer. The subtree hash therefore read whatever the stack held. A subtree could replay when it had changed, or repaint when it had not, depending on the frame layout. This was the same shape as the dead-frame view D1607 fixed in `badge_bare`. Tagged unions were already fully zeroed, both `Length { Px: v }` and a bare `.Auto`, so only struct padding was left.
+
+**Decision.**
+
+- **Lowering.** `lower.lower_aggregate_literal` zeroes a struct literal's storage before storing its fields when the fields do not cover its size (`struct_has_padding`: the sum of the field sizes against the struct's). This is the same `.Zero` a tagged union literal already had. A struct without padding compiles as before, and a bare `union` literal keeps its unspecified bytes.
+- **Spec.** §4 says so: a struct literal's padding is zero, as `zero`'s is, and so is every byte of a `union enum` literal beyond its tag and payload. A value's bytes are therefore defined wherever it was built. The rule against a hidden memset still holds for fields, because an omitted field is still an error.
+- **Why here, not in `e.ui`.** Hashing values field by field would have meant about 20 types and 12 `Custom` sites, and the next state built as a literal would have brought the bug back. Here it is fixed once, for every program.
+
+**Evidence.**
+
+- valgrind on `ui_status3_v2` (Linux): 0 errors, from 83, and the fixture passes.
+- The new `literal_padding` fixture branches on every padding byte of a leading-byte struct, a trailing-byte struct, a struct in a struct, and a tagged union with and without a payload. Under valgrind it fails with the old compiler (exit 99, 5 uninitialised reads) and is clean with the new one. The Linux suite runs it under valgrind when valgrind is installed, as it runs gdb, and Windows runs it plainly. Stack garbage could not stand in for valgrind: the slot a literal takes is not one an earlier call reliably dirties.
+- Suites: Windows fails the same 6 checks as D1607 and Linux the same 24, and every conformance output a failing check compares is unchanged. The static gate's sc500k images are the same size to the byte. The `dis` goldens do not move.
+
+---

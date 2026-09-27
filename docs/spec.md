@@ -511,8 +511,12 @@ compile error — and `_` takes the count from the list; a `Vec` literal (Vector
 below) supplies exactly its `N` lanes. A struct literal names every field exactly
 once, in any order, and `neper fmt` writes them in declaration order; an omitted
 field is a compile error, never zero, because there is no hidden memset (§5) —
-`= zero` is the spelling for all-zero. A `union` literal names exactly one member,
-`Value{ i: 42 }`, and the bytes beyond that member are unspecified.
+`= zero` is the spelling for all-zero. A struct literal's padding is zero, as
+`zero`'s is, and so is every byte of a `union enum` literal beyond its tag and its
+member's payload: those bytes hold no field, so a value's bytes are defined wherever
+it was built, and hashing or comparing them is deterministic. A `union` literal
+names exactly one member, `Value{ i: 42 }`, and the bytes beyond that member are
+unspecified.
 
 There is no tuple type. `(A, B)` appears only in a return signature, where it
 declares multiple return values rather than a value of some product type — see §5.
