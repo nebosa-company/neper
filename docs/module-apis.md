@@ -609,6 +609,7 @@ false. Ignore-file precedence/negation is application policy, not an implicit gl
 type List[T: type] = struct { items: []T, len: usize, arena: *mem.Arena }
 type Iter[T: type] = struct { items: []const T, index: usize }
 type Builder[T: type] = resource(builder_drop) struct { list: List[T] }
+type Owning[T: type] = resource(owning_finish) struct { list: List[T] }
 
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (List[T], err)
 fn from_slice[T: type](a: *mem.Arena, src: []const T) -> (List[T], err)
@@ -627,6 +628,11 @@ fn build_push[T: type](b: *Builder[T], v: own T) -> err
 fn built[T: type](b: *const Builder[T]) -> []const T
 fn freeze[T: type](b: own Builder[T]) -> []const T
 fn builder_drop[T: type](b: own Builder[T])
+fn owning[T: type](a: *mem.Arena, capacity: usize) -> (Owning[T], err)
+fn own_put[T: type](o: *Owning[T], v: own T) -> (T, bool)
+fn own_take[T: type](o: *Owning[T]) -> (T, bool)
+fn owned_count[T: type](o: *const Owning[T]) -> usize
+fn owning_finish[T: type](o: own Owning[T])
 ```
 
 ### `e.data.deque`

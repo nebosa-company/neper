@@ -141,3 +141,46 @@ fn freeze[T: type](b: own Builder[T]) -> []const T {
 @unsafe
 fn builder_drop[T: type](b: own Builder[T]) {
 }
+
+// ---- a list that owns what it holds (D1567, H01/H02) --------------------------
+//
+// `List[T]` cannot hold an element that must be closed: a failed `push` would take
+// it and drop it. `Owning` can. Every slot is taken by `owning`, before any element
+// is handed over, so the allocation is the only failure and it moves nothing.
+// `own_put` takes an element, or hands it back when the list is full: the caller
+// owns it again and nothing is lost. `own_take` gives one back. The list itself is
+// a resource owed to `owning_finish`, which ends an empty list and traps on one
+// still holding elements rather than lose them: take and close each first.
+type Owning[T: type] = resource(owning_finish) struct { list: List[T] }
+
+fn owning[T: type](a: *mem.Arena, capacity: usize) -> (Owning[T], err) {
+    let (made, made_error) = init[T](a, capacity)
+    ret (Owning[T] { list: made }, made_error)
+}
+
+// `(v, true)` when full: `v` is the caller's again. `(zero, false)`: it was taken.
+@unsafe
+fn own_put[T: type](o: *Owning[T], v: own T) -> (T, bool) {
+    if o.list.len == o.list.items.len { ret (v, true) }
+    o.list.items[o.list.len] = v
+    o.list.len += 1usize
+    ret (zero, false)
+}
+
+// The last element, now the caller's; `(zero, false)` when there is none. The slot
+// is out of the count before the element leaves, so it has one owner throughout.
+@unsafe
+fn own_take[T: type](o: *Owning[T]) -> (T, bool) {
+    if o.list.len == 0usize { ret (zero, false) }
+    o.list.len -= 1usize
+    ret (o.list.items[o.list.len], true)
+}
+
+fn owned_count[T: type](o: *const Owning[T]) -> usize {
+    ret o.list.len
+}
+
+@unsafe
+fn owning_finish[T: type](o: own Owning[T]) {
+    if o.list.len != 0usize { unreachable("an owning list finished holding elements") }
+}

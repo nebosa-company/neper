@@ -28275,3 +28275,29 @@ Nothing in `lib/` or the link fixtures used either form, which is how the gap we
 Fixture, both hosts: `link/try_positions`, a binding of one result and of two, an assignment of one and of two, and a statement `try`, in a function answering `(usize, Pair, err)`. Each of the five failures returns the error beside zeros, the deferred call runs six times across the six calls, and `main` binds one too. The D725 accept fixture `safety_owned_slice_offset_transfer.e` now builds and runs as well.
 
 All 575 earlier link fixtures emit byte-identical executables with D1566's compiler and this one, so the `lower_return` split changed no existing code. Stage 2 equals stage 3 on both hosts.
+
+## D1568 — A list that owns what it holds
+
+No generic container could hold an element that must be closed. `list.List[os.File]` does not instantiate: `push`'s `try reserve` exits still owning `v`, which is E-SAFETY-0002 in the library's own body. That refusal is right: a push that fails to grow drops what it was given. A fixed array is the only container of files, and its size is a constant.
+
+`list.Owning[T]` is the container:
+
+- **`owning(a, capacity)`** reserves every slot when the list is made. The allocation is the only failure, and it happens before any element is handed over, so it moves nothing.
+- **`own_put(&o, v)`** takes `v` when a slot is free and answers `(zero, false)`. When the list is full it answers `(v, true)`: the element is the caller's again, obligated as before. A full list loses nothing, and a failure never leaves ownership unspecified.
+- **`own_take(&o)`** answers the last element and `true`, now the caller's, or `(zero, false)`. The slot leaves the count before the element leaves the slot, so the element has one owner throughout.
+- **`owned_count`** reads the length.
+- **`owning_finish(o)`** is the list's cleanup: `Owning` is `resource(owning_finish)`, so every exit must end it. An empty list ends. One still holding elements traps (`unreachable`) rather than drop what it holds, since dropping elements is the one thing it may not do silently.
+
+`own_put`, `own_take` and `owning_finish` are `@unsafe`. The module keeps the invariant the checker cannot see: a slot below the count holds an owned element, and one above it holds nothing.
+
+Nothing new was needed in the checker; the rules already cover the rest. The list is obligated, so forgetting it is E-SAFETY-0002. A handed-back or taken element is obligated through its flag, so dropping it is E-SAFETY-0002. A second `own_put` of the same file is E-SAFETY-0001. A `try` while the list holds files is refused unless the exit ends the list. The failure-safe shape is a `close_all(own Owning[File])` deferred once, which closes every element, keeps the first close failure and still closes the rest, then ends the list. It needed D1567's binding `try` to build.
+
+Fixtures, both hosts:
+
+- `link/list_owning`: the deferred `close_all`, a full list handing the second file back, and, run as `unfinished`, the trap (exit 134, "an owning list finished holding elements").
+- `reject/owning_forgotten`: a list no exit ends; E-SAFETY-0002.
+- `reject/owning_put_back_ignored`: a handed-back file dropped; E-SAFETY-0002.
+
+The API is in `docs/module-apis.md`, and the surface test passes. All 575 link fixtures build with `Owning` in `list.e`.
+
+With D1563-D1568, every line of C059 has landed, and the item closes.
