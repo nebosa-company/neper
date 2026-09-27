@@ -2137,6 +2137,11 @@ gfx_paint_plan_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$gfx_paint_plan_written" = 'executable written' ]
 chmod +x "$test_build/gfx-paint-plan-selfhost"
 "$test_build/gfx-paint-plan-selfhost"
+# `e.gfx.image.phash256`: mtg.studio's 256-bit card-scan hash, bit for bit on eight real card arts from its Dart parity vectors and on four noise images in every 8-bit format hashed by its JS port (D1569).
+gfx_phash256_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_phash256/src/main.e" "$repo" x64 linux "$test_build/gfx-phash256-selfhost")
+[ "$gfx_phash256_written" = 'executable written' ]
+chmod +x "$test_build/gfx-phash256-selfhost"
+"$test_build/gfx-phash256-selfhost"
 # `e.gfx.scene` planned functions: a perspective-correct rasterizer, painter's ordering, deferred shading, clustered lights, cascaded and PCF shadows, SSAO, screen-space reflections, temporal and FXAA anti-aliasing, depth peeling, sphere tracing and volumetric fog, each on a sixteen-pixel-square buffer against a numpy replica (D884).
 gfx_scene_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_scene_plan/src/main.e" "$repo" x64 linux "$test_build/gfx-scene-plan-selfhost")
 [ "$gfx_scene_plan_written" = 'executable written' ]
@@ -4469,6 +4474,18 @@ chmod +x "$comptime_call_path"
 check_protocol_diagnostic comptime_call_runtime 'main.e:8:19: error[E-COMPTIME-9999]: constant `CODE` cannot be evaluated at compile time: its call reached a statement it does not evaluate'
 check_protocol_diagnostic comptime_call_budget 'main.e:6:11: error[E-COMPTIME-9999]: constant `FOREVER` cannot be evaluated at compile time: its call reached ten million steps'
 check_protocol_diagnostic comptime_call_in_type 'main.e:5:28: error[E-COMPTIME-9999]: a constant that calls a function is used in a type'
+# Structs, slices and strings in the interpreter's memory (D1569).
+comptime_struct_path="$test_build/comptime-struct-selfhost"
+comptime_struct_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/comptime_struct/src/main.e" "$repo" x64 linux "$comptime_struct_path")
+[ "$comptime_struct_written" = 'executable written' ]
+chmod +x "$comptime_struct_path"
+"$comptime_struct_path"
+comptime_array_path="$test_build/comptime-array-call-selfhost"
+comptime_array_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/comptime_array_call/src/main.e" "$repo" x64 linux "$comptime_array_path")
+[ "$comptime_array_written" = 'executable written' ]
+chmod +x "$comptime_array_path"
+"$comptime_array_path"
+check_protocol_diagnostic comptime_slice_bounds 'main.e:7:9: error[E-COMPTIME-9999]: constant `BAD` cannot be evaluated at compile time: its call reached an index out of bounds'
 # `emit-executable --arena SIZE` (D225): the root arena is the size given. Twelve
 # mebibytes fit the default and not eight.
 arena_path="$test_build/arena-size-selfhost"

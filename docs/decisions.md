@@ -28301,3 +28301,36 @@ Fixtures, both hosts:
 The API is in `docs/module-apis.md`, and the surface test passes. All 575 link fixtures build with `Owning` in `list.e`.
 
 With D1563-D1568, every line of C059 has landed, and the item closes.
+
+## D1569 — `phash256` is mtg.studio's card-scan hash, and its limit is the libm's
+
+`e.gfx.image.phash256(image) -> ([32]u8, err)` is the 256-bit perceptual hash that mtg.studio's card scanner indexes: `pHash256Of` in its Dart scan-spike, which built the shipped `/scan/index?algo=1`, and `pHash256` in its web client (`js/domain/scan-phash.js`). It is a separate function, not a wider `phash`, because every step differs from `imagehash`'s 64-bit hash. That hash uses PIL's integer luma per box. This one takes Rec. 601 in `f64`, truncated, at full size. It then resizes to 64x64 with `package:image`'s bilinear sampler: sample points at `i * source / 64`, not pixel-centred, with the result truncated to bytes. Each byte is re-weighted as `0.299 v + 0.587 v + 0.114 v`, and the index carries that step's rounding noise. The hash then takes the orthonormal DCT-II of the lowest 16x16, rows then columns, and sets a bit where one of the 255 coefficients past DC is above their median. Bit `i` is bit `i & 7` of byte `i >> 3`, and bit 255 is clear. The operations run in the reference's order. The 32 bytes compare with `e.gfx.vision.hamming`, which already existed. The function reads 8-bit views, with `R8` taken as three equal channels, and refuses a half-float or empty view as `Invalid`. It needs no arena: the grayscale is taken per sample, not as a full-size copy.
+
+The ceiling is the cosine. The basis is computed at run time with `math.cos`, and that differs from V8's `Math.cos` in 3 of the 1,024 entries. V8 is not correctly rounded in 32 of them, and Neper in 30. Both are within the 1 ULP `e.math` promises. The Dart builder calls the platform libm, so there is no single correct table to bake in. A hash bit depends on this only where a coefficient lies within a few ULPs of the median. A flat image is the one case found, since there every coefficient is rounding noise, so a 1x1 image's hash is not pinned. All eight real card arts and four noise images agree bit for bit.
+
+Fixture `link/gfx_phash256`, run on both hosts, is written by `generate.mjs` from mtg.studio.web. It holds the eight real card arts from mtg.studio's Dart-emitted parity vectors (`tests/fixtures/scan-phash/vectors.json`). Each 64x64 grayscale is rebuilt as Rgba8 pixels chosen to gray to exactly those bytes; `(v, v, v)` fails for 65 of the 256 values. This makes the resize the identity, so the hash must equal the Dart one. The fixture also hashes four LCG-noise images with mtg.studio's JS port as the reference: Rgba8 137x191 shrunk, Bgra8 50x37 with a padded stride and enlarged, R8 312x445, and Rgba8 3x2. Last, it checks that a 1x1 image hashes and that half-float and empty views are refused.
+
+## D1569 — The comptime interpreter's memory: structs, slices, strings, arrays across calls
+
+Section 9 promises that any function is callable at compile time, with stack arrays, slices and structs in "a byte-addressed arena owned by the compiler ... in the target's layout". D218-D221's interpreter kept a sign-and-magnitude integer per local and a run of integer cells per array, in its own frame. So no struct existed, no slice, no string, and no array crossed a call.
+
+The interpreter now has that memory:
+
+- **One memory per worker.** `interp_memory`, a byte buffer from `INTERP_BASE` (zero stays the null address) that doubles as it grows, up to the section's 64 MiB budget. Every local, parameter, array and struct lives in it, and a scalar load or store reads or writes the target's bytes, little-endian, at the type's width.
+- **String literals.** Their bytes go to a read-only region at addresses tagged `INTERP_STATIC`, as rodata would hold them, so a `str` a function returns stays valid. The region is emptied when no evaluation holds memory.
+- **Allocation sites.** A frame keeps one slot per allocation site (a binding, a literal, a range, a call's result, a parameter). The slot is taken the first time the site runs and reused after, as a compiled frame's stack slots are, so a loop does not grow the memory. The frame's memory goes when the function returns.
+- **Values.** A scalar is its value. An aggregate (struct, array, slice, string) is its address, and binding, passing, returning and assigning copy it, which is value semantics. A slice or a string is its two words, pointer and length.
+- **Aggregate results.** Their slot is taken in the caller's frame before the callee's frame goes above it, and the result is copied there before the callee's memory is given back.
+- **What it evaluates.** Struct literals, fields (nested, as places and as values), `.len` of arrays, slices and strings, indexing any of the three (bounds checked, a failure naming the constant), and `x[a..b]` of any of the three. Bindings and parameters of any type it holds: integers, bools, strings, arrays and slices of those, and non-generic structs of those. An evaluation's own result is still an integer or a bool.
+
+The layout had to come to the checker. `layout.e` imports `check`, so the target layout (D239 `@reorder`, D925 `@packed`/`@align`, the `Vec`/`Mask` rule) moved into `check.e` unchanged as `layout_*`. `layout.e` forwards to it and keeps its own errors. Every link fixture's executable is byte-identical with D1568's compiler across the move and the rewrite (577 of 578; the 578th is the new fixture). A worker starts with no memory of its own: the copy it began from is another checker's (`interp_ready`, and the worker reset in `main.e`).
+
+Fixtures, both hosts:
+
+- `link/comptime_struct`: four constants folded through structs built, nested, copied, changed and put in an array; a slice of an array handed to a function; a string field's length and byte. One constant is used as an array length, so the fold is not a run-time call.
+- `link/comptime_array_call`: an array returned by value and passed by value to two functions, one of which changes its copy while the caller's stays unchanged.
+- `check/comptime_slice_bounds`: an index past a slice's end, refused naming the constant.
+
+The existing comptime fixtures pass unchanged. Accept and reject sweeps against D1568's compiler are unchanged but for the new source. Stage 2 equals stage 3 on both hosts.
+
+Not yet: pointers (`&x`, `mem.cast`) and the arena as interpreter memory (`mem.arena_from`, `mem.alloc`), meta-only calls in a body, and `neper eval EXPR`.
