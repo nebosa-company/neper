@@ -6394,20 +6394,18 @@ fn interp_grow(c: *Checker, needed: usize) -> err {
 }
 
 // A string literal's bytes in the read-only region, its address tagged static.
-fn interp_static_bytes(c: *Checker, module_index: usize, node: syntax.Node, spelling: str) -> (usize, usize, err) {
-    var raw = false
-    let (contents, contents_error) = literal_contents(spelling, &raw)
-    if contents_error != ok { ret (0usize, 0usize, interp_fail(c, module_index, node, "a string literal it cannot read")) }
-    if contents.len > INTERP_BUDGET - c.interp_space.static_top || c.interp_space.top > INTERP_BUDGET - c.interp_space.static_top - contents.len {
+// Room for `count` more read-only bytes, within the budget (D1569).
+fn interp_static_room(c: *Checker, module_index: usize, node: syntax.Node, count: usize) -> err {
+    if count > INTERP_BUDGET - c.interp_space.static_top || c.interp_space.top > INTERP_BUDGET - c.interp_space.static_top - count {
         record_failure(c, module_index, node, .ComptimeEvaluation, c.interp_constant, "sixty-four mebibytes of interpreter memory")
-        ret (0usize, 0usize, ComptimeBudget)
+        ret ComptimeBudget
     }
-    if c.interp_space.static_top + contents.len > c.interp_space.statics.len {
+    if c.interp_space.static_top + count > c.interp_space.statics.len {
         var length = c.interp_space.statics.len * 2usize
         if length < 4096usize { length = 4096usize }
-        while length < c.interp_space.static_top + contents.len { length = length * 2usize }
+        while length < c.interp_space.static_top + count { length = length * 2usize }
         let (grown, grown_error) = mem.alloc[u8](c.arena, length)
-        if grown_error != ok { ret (0usize, 0usize, grown_error) }
+        if grown_error != ok { ret grown_error }
         var copied = 0usize
         while copied < c.interp_space.static_top {
             grown[copied] = c.interp_space.statics[copied]
@@ -6415,6 +6413,30 @@ fn interp_static_bytes(c: *Checker, module_index: usize, node: syntax.Node, spel
         }
         c.interp_space.statics = grown
     }
+    ret ok
+}
+
+// (D1576) A name the compiler knows -- a type's, a field's, a member's -- as read-only
+// bytes, the way `meta.type_name` hands one out at run time.
+fn interp_static_name(c: *Checker, module_index: usize, node: syntax.Node, name: str) -> (usize, err) {
+    let room_error = interp_static_room(c, module_index, node, name.len)
+    if room_error != ok { ret (0usize, room_error) }
+    let start = c.interp_space.static_top
+    var at = 0usize
+    while at < name.len {
+        c.interp_space.statics[start + at] = name[at]
+        at += 1usize
+    }
+    c.interp_space.static_top = start + name.len
+    ret (INTERP_STATIC + start, ok)
+}
+
+fn interp_static_bytes(c: *Checker, module_index: usize, node: syntax.Node, spelling: str) -> (usize, usize, err) {
+    var raw = false
+    let (contents, contents_error) = literal_contents(spelling, &raw)
+    if contents_error != ok { ret (0usize, 0usize, interp_fail(c, module_index, node, "a string literal it cannot read")) }
+    let room_error = interp_static_room(c, module_index, node, contents.len)
+    if room_error != ok { ret (0usize, 0usize, room_error) }
     let start = c.interp_space.static_top
     var at = 0usize
     var count = 0usize
@@ -6825,6 +6847,16 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         if receiver_is_value {
             let (member, has_member) = field_expression_name(c, text, tree, node)
             if !has_member { ret (none, invalid_type(), parse.InvalidSyntax) }
+            // (D1576) A field or a member a meta walk bound: its name, its offset or
+            // its value, from the record the walk wrote.
+            if tree.nodes[receiver_index].kind == .NameExpr {
+                let walked_token = c.tokens[usize(tree.nodes[receiver_index].token_start)]
+                let (walked_slot, walked_found) = interp_lookup(frame, text[walked_token.start..walked_token.end])
+                if walked_found && interp_is_walked(frame.types[walked_slot]) {
+                    let (walked_value, walked_type, walked_error) = interp_walked_member(c, module_index, node, frame.addresses[walked_slot], frame.types[walked_slot], member)
+                    ret (walked_value, walked_type, walked_error)
+                }
+            }
             if same(member, "len") {
                 let (receiver, receiver_type, receiver_error) = interp_expr(c, g, tree, frame, receiver_index, invalid_type())
                 if receiver_error != ok { ret (none, invalid_type(), receiver_error) }
@@ -6973,6 +7005,110 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
     ret (none, invalid_type(), interp_fail(c, module_index, node, "an expression it does not evaluate"))
 }
 
+// (D1576) A field or a member a meta walk binds: a record of its name (a string's two
+// words), then a field's offset or a member's value (eight bytes); the marker type
+// names the aggregate walked.
+fn interp_is_walked(ty: Type) -> bool {
+    ret ty.kind == .Other && ty.has_element && (same(ty.name, "(field)") || same(ty.name, "(member)"))
+}
+
+fn interp_walked_member(c: *Checker, module_index: usize, node: syntax.Node, record: usize, walked: Type, member: str) -> (IntegerValue, Type, err) {
+    let none = normalized_integer(0usize, false)
+    if same(member, "name") { ret (normalized_integer(record, false), make_type(.String, "str", module_index), ok) }
+    if same(walked.name, "(field)") && same(member, "offset") {
+        let usize_type = make_type(.Integer, "usize", module_index)
+        let (offset, offset_error) = interp_load(c, module_index, node, record + 16usize, usize_type)
+        ret (offset, usize_type, offset_error)
+    }
+    if same(walked.name, "(member)") && same(member, "value") {
+        let backing = c.aggregates[walked.element].backing_type
+        let (value, value_error) = interp_load(c, module_index, node, record + 16usize, backing)
+        ret (value, backing, value_error)
+    }
+    ret (none, invalid_type(), interp_fail(c, module_index, node, "a part of a field or member it does not read, such as its type"))
+}
+
+// `for f in meta.fields[T]() { .. }` over a struct's fields and `for m in
+// meta.members[E]() { .. }` over an enum's members, unrolled: the body once per field
+// or member, in declaration order, with the name bound to its record.
+fn interp_meta_walk(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, node_index: usize, subject_index: usize, body_index: usize) -> (usize, err) {
+    let module_index = frame.module_index
+    let node = tree.nodes[node_index]
+    let text = g.modules[module_index].text
+    let subject = tree.nodes[subject_index]
+    let (callee_index, has_callee) = first_node_child(tree, subject)
+    if subject.kind != .CallExpr || !has_callee || tree.nodes[callee_index].kind != .BracketPostfix { ret (0usize, interp_fail(c, module_index, node, "a `for` that is not over a range or a meta walk")) }
+    let callee = tree.nodes[callee_index]
+    var base_index = 0usize
+    var type_index = 0usize
+    var count = 0usize
+    let end = usize(callee.first_child) + usize(callee.child_count)
+    var at = usize(callee.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            if count == 0usize { base_index = parse.child_index_at(tree, at) }
+            if count == 1usize { type_index = parse.child_index_at(tree, at) }
+            count += 1usize
+        }
+        at += 1usize
+    }
+    if count != 2usize || tree.nodes[base_index].kind != .FieldExpr { ret (0usize, interp_fail(c, module_index, node, "a `for` that is not over a range or a meta walk")) }
+    let (walk_module, walk_member, found_walk) = qualified_member(c, g, tree, module_index, tree.nodes[base_index])
+    let fields = found_walk && same(walk_member, "fields")
+    let members = found_walk && same(walk_member, "members")
+    if !found_walk || !same(g.modules[walk_module].name, "e.meta") || (!fields && !members) { ret (0usize, interp_fail(c, module_index, node, "a `for` that is not over a range or a meta walk")) }
+    let (walked, walked_error) = comptime_type(c, g, tree, module_index, type_index)
+    if walked_error != ok { ret (0usize, interp_fail(c, module_index, node, "a meta walk over a type it cannot name")) }
+    let (aggregate_index, found_aggregate) = aggregate_for_type(c, walked)
+    if !found_aggregate { ret (0usize, interp_fail(c, module_index, node, "a meta walk over something that is not a struct or an enum")) }
+    let kind = c.aggregates[aggregate_index].kind
+    if (fields && kind != .Struct) || (members && kind != .Enum) { ret (0usize, interp_fail(c, module_index, node, "a meta walk over something that is not a struct or an enum")) }
+    let name_token = c.tokens[usize(node.token_start) + 1usize]
+    if name_token.kind != .Identifier { ret (0usize, interp_fail(c, module_index, node, "a `for` of a shape it does not evaluate")) }
+    let (record, record_error) = interp_allocate(c, module_index, node, frame, node_index + 1usize, 24usize, 8usize)
+    if record_error != ok { ret (0usize, record_error) }
+    var marker = make_type(.Other, "(field)", module_index)
+    if members { marker.name = "(member)" }
+    marker.has_element = true
+    marker.element = aggregate_index
+    if frame.mark_count == frame.marks.len { ret (0usize, Capacity) }
+    frame.marks[frame.mark_count] = frame.count
+    frame.mark_count += 1usize
+    let bind_error = interp_bind(frame, text[name_token.start..name_token.end], marker, record)
+    if bind_error != ok { ret (0usize, bind_error) }
+    let word = make_type(.Integer, "i64", module_index)
+    var control = interp_control_next()
+    var item_at = 0usize
+    while item_at < c.aggregates[aggregate_index].field_count {
+        let item = c.aggregate_fields[c.aggregates[aggregate_index].first_field + item_at]
+        let (name_bytes, name_error) = interp_static_name(c, module_index, node, item.name)
+        if name_error != ok { ret (0usize, name_error) }
+        let name_write_error = interp_slice_write(c, module_index, node, record, name_bytes, item.name.len)
+        if name_write_error != ok { ret (0usize, name_write_error) }
+        var second = normalized_integer(0usize, false)
+        if fields {
+            let (placed, placed_error) = layout_field(c, walked, item.name)
+            if placed_error != ok { ret (0usize, interp_fail(c, module_index, node, "a field with no layout")) }
+            second = normalized_integer(placed.offset, false)
+        } else {
+            second = normalized_integer(item.enum_value, item.enum_negative)
+        }
+        let second_error = interp_store(c, module_index, node, record + 16usize, word, second)
+        if second_error != ok { ret (0usize, second_error) }
+        let (body_control, body_error) = interp_statement(c, g, tree, frame, body_index)
+        if body_error != ok { ret (0usize, body_error) }
+        if body_control == interp_control_return() {
+            control = body_control
+            break
+        }
+        if body_control == interp_control_break() { break }
+        item_at += 1usize
+    }
+    frame.mark_count = frame.mark_count - 1usize
+    frame.count = frame.marks[frame.mark_count]
+    ret (control, ok)
+}
+
 // (D1574) `try f(..)`: the call, and its last result -- its `err` -- tested. A failure
 // returns that error from this frame beside the zero value of every other result, and
 // answers `true`.
@@ -7074,6 +7210,29 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
                 generic_at += 1usize
             }
             if generic_count != 2usize || tree.nodes[generic_base].kind != .FieldExpr { ret (none, invalid_type(), interp_fail(c, module_index, node, "a generic call it does not evaluate")) }
+            // (D1576) A reflection question: the checker's answer, as a body folds it.
+            let (reflected, reflected_error) = meta_info(c, g, tree, module_index, callee)
+            if reflected.matched {
+                if reflected_error != ok || reflected.deferred || argument_count != 0usize { ret (none, invalid_type(), interp_fail(c, module_index, node, "a reflection question it cannot answer")) }
+                if reflected.query == .TypeName {
+                    let (name_bytes, name_error) = interp_static_name(c, module_index, node, reflected.name)
+                    if name_error != ok { ret (none, invalid_type(), name_error) }
+                    let (name_header, header_error) = interp_allocate(c, module_index, node, frame, node_index + 1usize, 16usize, 8usize)
+                    if header_error != ok { ret (none, invalid_type(), header_error) }
+                    let name_write_error = interp_slice_write(c, module_index, node, name_header, name_bytes, reflected.name.len)
+                    if name_write_error != ok { ret (none, invalid_type(), name_write_error) }
+                    ret (normalized_integer(name_header, false), make_type(.String, "str", module_index), ok)
+                }
+                if reflected.query == .SizeOf || reflected.query == .AlignOf {
+                    let (subject_info, subject_error) = interp_layout(c, module_index, node, reflected.subject)
+                    if subject_error != ok { ret (none, invalid_type(), subject_error) }
+                    var answer = subject_info.size
+                    if reflected.query == .AlignOf { answer = subject_info.alignment }
+                    ret (normalized_integer(answer, false), make_type(.Integer, "usize", module_index), ok)
+                }
+                if reflected.query == .Signed || reflected.query == .ArrayLen { ret (normalized_integer(reflected.value, false), reflected.result, ok) }
+                ret (none, invalid_type(), interp_fail(c, module_index, node, "a `meta.kind`, whose enum the interpreter does not hold"))
+            }
             let (generic_module, generic_member, found_generic) = qualified_member(c, g, tree, module_index, tree.nodes[generic_base])
             if found_generic && module_is_mem(c, generic_module) && same(generic_member, "alloc") {
                 let (alloc_element, alloc_element_error) = comptime_type(c, g, tree, module_index, type_argument)
@@ -7578,6 +7737,11 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
                 part_count += 1usize
             }
             at += 1usize
+        }
+        // (D1576) `for f in meta.fields[T]()` and `for m in meta.members[E]()`.
+        if part_count == 2usize {
+            let (walk_control, walk_error) = interp_meta_walk(c, g, tree, frame, node_index, parts[0usize], parts[1usize])
+            ret (walk_control, walk_error)
         }
         if part_count != 3usize { ret (0usize, interp_fail(c, module_index, node, "a `for` that is not over a range")) }
         let name_token = c.tokens[usize(node.token_start) + 1usize]

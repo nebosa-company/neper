@@ -4540,6 +4540,11 @@ comptime_arena_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$comptime_arena_written" = 'executable written' ]
 chmod +x "$comptime_arena_path"
 "$comptime_arena_path"
+comptime_meta_path="$test_build/comptime-meta-selfhost"
+comptime_meta_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/comptime_meta/src/main.e" "$repo" x64 linux "$comptime_meta_path")
+[ "$comptime_meta_written" = 'executable written' ]
+chmod +x "$comptime_meta_path"
+"$comptime_meta_path"
 check_protocol_diagnostic comptime_pointer_result 'main.e:9:15: error[E-COMPTIME-9999]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold'
 check_protocol_diagnostic comptime_slice_bounds 'main.e:7:9: error[E-COMPTIME-9999]: constant `BAD` cannot be evaluated at compile time: its call reached an index out of bounds'
 # `emit-executable --arena SIZE` (D225): the root arena is the size given. Twelve

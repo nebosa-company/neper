@@ -4616,6 +4616,12 @@ $comptimeArenaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $comptimeArenaWritten -ne 'executable written') { throw 'comptime arena fixture executable emission failed' }
 & $comptimeArenaPath
 if ($LASTEXITCODE -ne 0) { throw "a constant folded through a comptime arena was wrong: exit $LASTEXITCODE" }
+# Meta-only calls in an evaluated body (D1576): fields, members, and the type questions.
+$comptimeMetaPath = Join-Path $testBuild 'comptime-meta-selfhost.exe'
+$comptimeMetaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_meta\src\main.e') $repo 'x64' 'windows' $comptimeMetaPath
+if ($LASTEXITCODE -ne 0 -or $comptimeMetaWritten -ne 'executable written') { throw 'comptime meta fixture executable emission failed' }
+& $comptimeMetaPath
+if ($LASTEXITCODE -ne 0) { throw "a constant folded through reflection was wrong: exit $LASTEXITCODE" }
 Require-Fixture 'check/comptime_pointer_result'
 $comptimePointerResult = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_pointer_result\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimePointerResult -join "`n") -notmatch 'main\.e:9:15: error\[E-COMPTIME-9999\]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold') { throw "a pointer-valued constant was not refused: $($comptimePointerResult -join "`n")" }

@@ -28526,3 +28526,28 @@ under the generic `HY000`, so those are mapped by number. The fixture found the 
   - PostgreSQL: a numeric digit (exit 30), SQLSTATE mapping (68), the busy guard (91);
   - MySQL: the statement splitter (69), the single-quote lexer (42), and both the missing
     and the doubled double-literal suffix (44 and 40).
+
+## D1576 — Meta-only calls in an evaluated body
+
+Section 9 counts "every call to a comptime-only core function -- `meta.fields`, `meta.members`, `meta.type_name` ... standing in an ordinary function body" as comptime context, and D138 made those folds work in a compiled body. Inside an evaluation they were refused: a constant's function could not walk a struct's fields or ask a type's name, because the interpreter knew neither the reflection calls nor a `for` over them.
+
+- **Type questions.** A generic call the checker recognises as a reflection question (`meta_info`) is answered from the checker's own answer, as the lowering answers it:
+  - `meta.type_name[T]()` gives the name's bytes in the read-only string region;
+  - `mem.size_of[T]()` and `mem.align_of[T]()` come from the target layout, which the checker holds since D1569;
+  - `meta.array_len` and `meta.signed` give their values.
+  - `meta.kind` answers an enum the interpreter does not hold yet, and is refused with that reason.
+- **Walks.** `for f in meta.fields[T]()` over a struct and `for m in meta.members[E]()` over an enum are unrolled in declaration order. The loop name is bound to a record the walk writes before each pass:
+  - `f.name` or `m.name`, a string, its bytes read-only;
+  - `f.offset`, the field's offset in the target layout;
+  - `m.value`, the member's value in the enum's backing type.
+
+  `f.ty` stays refused: a type is not a value the interpreter holds.
+
+Fixture, both hosts: `link/comptime_meta`:
+
+- the fields of a three-field struct summed by name length and offset;
+- the members of an enum with explicit values summed;
+- a type's name, size, alignment, an array's length and two signedness questions folded into one number;
+- one result used as an array length.
+
+Accept, reject and emit sweeps against D1575's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.
