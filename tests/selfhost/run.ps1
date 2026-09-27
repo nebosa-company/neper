@@ -4099,6 +4099,13 @@ if ($LASTEXITCODE -ne 0 -or $releaseWritten -ne 'executable written') { throw 'r
 $releaseOutput = & $releasePath 2>&1
 if ($LASTEXITCODE -ne 0 -or ($releaseOutput -join "`n") -ne '') { throw "the release build did not give section 4's release results: exit $LASTEXITCODE, $($releaseOutput -join "`n")" }
 if ((Get-Item -LiteralPath $releasePath).Length -ge (Get-Item -LiteralPath $releaseDebugPath).Length) { throw 'the release build is not smaller than the debug build' }
+# (D1585) The debug types fixture: a struct, an enum, a bare union and a tagged union in
+# an image that carries their DWARF, which runs (gdb reads them on Linux).
+$debugTypesPath = Join-Path $testBuild 'debug-types-selfhost.exe'
+$debugTypesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\debug_types\src\main.e') $repo 'x64' 'windows' $debugTypesPath
+if ($LASTEXITCODE -ne 0 -or $debugTypesWritten -ne 'executable written') { throw 'debug types fixture emission failed' }
+$debugTypesOutput = & $debugTypesPath
+if ($LASTEXITCODE -ne 0 -or $debugTypesOutput -ne 'debug types ok') { throw "the debug types fixture failed: $debugTypesOutput" }
 # Section 12's incremental rebuild: unchanged sources keep every artifact, a body edit
 # behind a signature edge rebuilds only its module and links equal to a clean build,
 # and a signature edit rebuilds the dependent too.
