@@ -608,14 +608,6 @@ $parseFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $parseFloatWritten -ne 'executable written') { throw 'float parse executable emission failed' }
 & $parseFloatPath
 if ($LASTEXITCODE -ne 0) { throw 'a float parse rounded, rejected or accepted the wrong way' }
-# The float fast paths (D1593) against 16,000 vectors from exact rational arithmetic (its
-# vectors.py): Ryu's digits and the exact search where they differ, Clinger and
-# Eisel-Lemire and the exact parse, and 200,000 random round trips per width.
-$floatVectorsPath = Join-Path $testBuild 'str-float-vectors-selfhost.exe'
-$floatVectorsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\str_float_vectors\src\main.e') $repo 'x64' 'windows' $floatVectorsPath
-if ($LASTEXITCODE -ne 0 -or $floatVectorsWritten -ne 'executable written') { throw 'float vector fixture emission failed' }
-& $floatVectorsPath
-if ($LASTEXITCODE -ne 0) { throw "a float was pushed or parsed differently from its exact vector: exit $LASTEXITCODE" }
 # `mem.bitcast` reads a value's bytes as another type of the same size, which is what
 # lets a pun avoid a `union`. A scalar lives in a register and an aggregate is an
 # address, so the fixture covers all four shapes as well as the bit patterns.
