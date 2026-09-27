@@ -4,7 +4,9 @@
 //
 // Memory: the arena handed to `open` is retained and borrowed for the connection's life.
 // Contexts, column names and row buffers come from it; a reader's values are copied into a
-// buffer of its own that is valid until its next row. Error text is kept in fixed buffers the
+// buffer of its own that is valid until its next row. Read with `db.reader_next_borrowed`,
+// text and `bytea` values are libpq's own bytes instead: the row's result is kept until the
+// next row or the reader's end rather than cleared once the row is filled. Error text is kept in fixed buffers the
 // connection allocates once, so failures do not grow the arena.
 //
 // Wire format: results are asked for in binary, so integers, floats, booleans, `bytea` and
@@ -33,7 +35,7 @@ const MIN_VERSION: i32 = 90200i32
 
 type Conn = struct { handle: usize, arena: *mem.Arena, driver: *const db.Driver, active: *Reader, statements: u64, state: []u8, state_len: usize, message: []u8, message_len: usize, constraint: []u8, constraint_len: usize }
 type Stmt = struct { conn: *Conn, name: []u8, oids: []u32, closed: bool }
-type Reader = struct { conn: *Conn, statement: *Stmt, result: usize, done: bool, closed: bool, oids: []u32, columns: []db.Column, buffer: []u8, used: usize }
+type Reader = struct { conn: *Conn, statement: *Stmt, result: usize, done: bool, closed: bool, oids: []u32, columns: []db.Column, buffer: []u8, used: usize, borrow: bool, held: usize }
 type Tx = struct { conn: *Conn }
 // `address` is where the value starts; an empty non-null value keeps a byte behind it, since a
 // null address is SQL NULL.
@@ -111,7 +113,7 @@ fn open(a: *mem.Arena, conninfo: str) -> (db.Connection, err) {
         capi.finish(handle)
         ret (connection, db.Unsupported)
     }
-    drivers[0usize] = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
+    drivers[0usize] = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_next_borrowed: d_rows_next_borrowed, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
     // Arena memory is not cleared, so every field is written.
     let state_end = STATE_CAP
     let message_end = STATE_CAP + MESSAGE_CAP
@@ -681,7 +683,7 @@ fn start_reader(c: *Conn, statement: *Stmt) -> (db.Rows, err) {
         if after_error != ok { ret (rows, after_error) }
     }
     var no_buffer: []u8 = zero
-    readers[0usize] = Reader { conn: c, statement: statement, result: result, done: done, closed: false, oids: oids, columns: cols, buffer: no_buffer, used: 0usize }
+    readers[0usize] = Reader { conn: c, statement: statement, result: result, done: done, closed: false, oids: oids, columns: cols, buffer: no_buffer, used: 0usize, borrow: false, held: 0usize }
     let r = &readers[0usize]
     if !done { c.active = r }
     clear_detail(c)
@@ -710,6 +712,7 @@ fn start_query(c: *Conn, sql: str, params: []const db.Parameter) -> (db.Rows, er
 
 // Ends a reader that has not reached its end, reading and discarding what is left.
 fn finish_reader(r: *Reader) {
+    release_held(r)
     if r.done { ret }
     if r.result != 0usize { capi.clear(r.result) }
     r.result = 0usize
@@ -910,6 +913,15 @@ fn decode(r: *Reader, oid: u32, v: []const u8) -> (db.Value, err) {
     var body = v
     // `jsonb`'s binary form is a version byte ahead of the text.
     if oid == OID_JSONB && v.len > 0usize { body = v[1usize..] }
+    if r.borrow {
+        if is_text_oid(oid) {
+            let borrowed_text: str = body
+            value = db.Value{ Text: borrowed_text }
+        } else {
+            value = db.Value{ Bytes: body }
+        }
+        ret (value, ok)
+    }
     let (copied, copy_error) = take(r, body.len)
     if copy_error != ok { ret (value, copy_error) }
     mem.copy[u8](copied, body)
@@ -1099,6 +1111,25 @@ fn d_rows_columns(ctx: *void) -> []const db.Column { ret reader_of(ctx).columns 
 
 fn d_rows_next(ctx: *void, dst: []db.Value) -> (bool, err) {
     let r = reader_of(ctx)
+    r.borrow = false
+    let (more, next_error) = next_row(r, dst)
+    ret (more, next_error)
+}
+
+fn d_rows_next_borrowed(ctx: *void, dst: []db.Value) -> (bool, err) {
+    let r = reader_of(ctx)
+    r.borrow = true
+    let (more, next_error) = next_row(r, dst)
+    ret (more, next_error)
+}
+
+fn release_held(r: *Reader) {
+    if r.held != 0usize { capi.clear(r.held) }
+    r.held = 0usize
+}
+
+fn next_row(r: *Reader, dst: []db.Value) -> (bool, err) {
+    release_held(r)
     if r.closed { ret (false, db.Closed) }
     if r.done { ret (false, ok) }
     if dst.len < r.columns.len { ret (false, refuse(r.conn, "the row buffer is shorter than the row", db.InvalidQuery)) }
@@ -1124,7 +1155,12 @@ fn d_rows_next(ctx: *void, dst: []db.Value) -> (bool, err) {
         }
     }
     let fill_error = fill(r, dst)
-    capi.clear(r.result)
+    // A borrowed row's values point into its result, so it is kept until the next row.
+    if r.borrow && fill_error == ok {
+        r.held = r.result
+    } else {
+        capi.clear(r.result)
+    }
     r.result = 0usize
     if fill_error != ok { ret (false, fill_error) }
     ret (true, ok)

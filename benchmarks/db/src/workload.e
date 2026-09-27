@@ -4,7 +4,8 @@
 // the client library it uses.
 //
 // insert  <rows> rows (bigint, text, double) through one prepared statement in one transaction
-// scan    every row back through one streaming reader, summing a column so nothing is skipped
+// scan    every row back through one streaming reader, summing a column so nothing is skipped;
+//         the rows are borrowed (`db.reader_next_borrowed`), as C's and Rust's are
 // lookup  <lookups> primary-key reads through one prepared statement, each its own reader
 //
 // Each phase prints its elapsed nanoseconds; benchmarks/db/run.py repeats runs and reports
@@ -89,7 +90,7 @@ fn run(a: *mem.Arena, c: *db.Connection, driver: str, args: []str, numbered: boo
     var id_sum = 0i64
     var text_bytes = 0usize
     while true {
-        let (more, next_error) = db.reader_next_err(&scan, row[0..])
+        let (more, next_error) = db.reader_next_borrowed(&scan, row[0..])
         if next_error != ok { ret next_error }
         if !more { break }
         switch row[0] {
@@ -126,7 +127,7 @@ fn run(a: *mem.Arena, c: *db.Connection, driver: str, args: []str, numbered: boo
         let (hit0, hit_error) = db.query_statement(&select, key[0..])
         if hit_error != ok { ret hit_error }
         var hit = hit0
-        let (more, next_error) = db.reader_next_err(&hit, pair[0..])
+        let (more, next_error) = db.reader_next_borrowed(&hit, pair[0..])
         if next_error != ok { ret next_error }
         if more { found += 1u64 }
         if db.close_rows(&hit) != ok { ret Failed }

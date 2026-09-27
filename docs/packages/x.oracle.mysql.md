@@ -59,6 +59,8 @@ so a `TIMESTAMP` reads back as the instant that was written.
   allocated and reset around each call.
 - A reader copies each value it keeps into its own buffer. The copy stays valid until the
   reader's next row.
+- `db.reader_next_borrowed` skips the copy. Its text and binary values are the client
+  library's row, valid until the next row or the reader's end (D1599).
 - Error text lives in fixed buffers the connection allocates once.
 - One connection belongs to one thread.
 

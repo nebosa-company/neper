@@ -8838,7 +8838,7 @@ type Value = union enum u8 { Null, Bool: bool, I64: i64, U64: u64, F64: f64, Tex
 type Parameter = struct { name: str, value: Value }
 type Column = struct { name: str, kind: ValueKind, nullable: bool }
 type ValueKind = enum u8 { Null, Bool, I64, U64, F64, Text, Bytes, Time }
-type Driver = struct { close: fn(ctx: *void) -> err, prepare: fn(ctx: *void, sql: str) -> (Statement, err), execute: fn(ctx: *void, sql: str, params: []const Parameter) -> (u64, err), query: fn(ctx: *void, sql: str, params: []const Parameter) -> (Rows, err), begin: fn(ctx: *void) -> (Transaction, err), statement_close: fn(ctx: *void) -> err, statement_execute: fn(ctx: *void, params: []const Parameter) -> (u64, err), statement_query: fn(ctx: *void, params: []const Parameter) -> (Rows, err), rows_columns: fn(ctx: *void) -> []const Column, rows_next: fn(ctx: *void, dst: []Value) -> (bool, err), rows_close: fn(ctx: *void) -> err, transaction_execute: fn(ctx: *void, sql: str, params: []const Parameter) -> (u64, err), transaction_query: fn(ctx: *void, sql: str, params: []const Parameter) -> (Rows, err), transaction_commit: fn(ctx: *void) -> err, transaction_rollback: fn(ctx: *void) -> err }
+type Driver = struct { close: fn(ctx: *void) -> err, prepare: fn(ctx: *void, sql: str) -> (Statement, err), execute: fn(ctx: *void, sql: str, params: []const Parameter) -> (u64, err), query: fn(ctx: *void, sql: str, params: []const Parameter) -> (Rows, err), begin: fn(ctx: *void) -> (Transaction, err), statement_close: fn(ctx: *void) -> err, statement_execute: fn(ctx: *void, params: []const Parameter) -> (u64, err), statement_query: fn(ctx: *void, params: []const Parameter) -> (Rows, err), rows_columns: fn(ctx: *void) -> []const Column, rows_next: fn(ctx: *void, dst: []Value) -> (bool, err), rows_next_borrowed: fn(ctx: *void, dst: []Value) -> (bool, err), rows_close: fn(ctx: *void) -> err, transaction_execute: fn(ctx: *void, sql: str, params: []const Parameter) -> (u64, err), transaction_query: fn(ctx: *void, sql: str, params: []const Parameter) -> (Rows, err), transaction_commit: fn(ctx: *void) -> err, transaction_rollback: fn(ctx: *void) -> err }
 error Closed
 error InvalidQuery
 error Constraint
@@ -8854,6 +8854,7 @@ fn execute_statement(statement: *Statement, params: []const Parameter) -> (u64, 
 fn query_statement(statement: *Statement, params: []const Parameter) -> (Rows, err)
 fn columns(rows: *Rows) -> []const Column
 fn reader_next_err(rows: *Rows, dst: []Value) -> (bool, err)
+fn reader_next_borrowed(rows: *Rows, dst: []Value) -> (bool, err)
 fn close_rows(rows: *Rows) -> err
 fn begin(connection: *Connection) -> (Transaction, err)
 fn execute_transaction(transaction: *Transaction, sql: str, params: []const Parameter) -> (u64, err)

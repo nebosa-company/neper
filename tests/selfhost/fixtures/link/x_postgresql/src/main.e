@@ -464,6 +464,37 @@ fn statements(a: *mem.Arena, c: *db.Connection) -> i32 {
     ret 0i32
 }
 
+// `reader_next_borrowed` hands back the library's own bytes: each row checked before the
+// next is read, the copying reader interleaved on the same stream, a 60 KB value, an empty
+// one, and `Closed` after the close.
+fn borrowed(c: *db.Connection) -> i32 {
+    let (made, made_error) = db.execute(c, "DROP TABLE IF EXISTS words; CREATE TABLE words(id bigint, w text, b bytea); INSERT INTO words VALUES (1, 'alpha', decode('0001', 'hex')), (2, 'bravo', decode('02', 'hex')), (3, repeat('xyz', 20000), NULL), (4, '', NULL);", zero)
+    if made_error != ok { ret 190i32 }
+    let (rows0, rows_error) = db.query(c, "SELECT w, b FROM words ORDER BY id", zero)
+    if rows_error != ok { ret 191i32 }
+    var rows = rows0
+    var row: [2]db.Value = zero
+    let (m1, e1) = db.reader_next_borrowed(&rows, row[0..])
+    let (w1, w1_ok) = as_text(row[0])
+    let (b1, b1_ok) = as_bytes(row[1])
+    if e1 != ok || !m1 || !w1_ok || !same_bytes(w1, "alpha") || !b1_ok || b1.len != 2usize || b1[0usize] != 0u8 || b1[1usize] != 1u8 { ret 192i32 }
+    let (m2, e2) = db.reader_next_err(&rows, row[0..])
+    let (w2, w2_ok) = as_text(row[0])
+    if e2 != ok || !m2 || !w2_ok || !same_bytes(w2, "bravo") { ret 193i32 }
+    let (m3, e3) = db.reader_next_borrowed(&rows, row[0..])
+    let (w3, w3_ok) = as_text(row[0])
+    if e3 != ok || !m3 || !w3_ok || w3.len != 60000usize || w3[0usize] != 120u8 || w3[59999usize] != 122u8 || !is_null(row[1]) { ret 194i32 }
+    let (m4, e4) = db.reader_next_borrowed(&rows, row[0..])
+    let (w4, w4_ok) = as_text(row[0])
+    if e4 != ok || !m4 || !w4_ok || w4.len != 0usize { ret 195i32 }
+    let (m5, e5) = db.reader_next_borrowed(&rows, row[0..])
+    if e5 != ok || m5 { ret 196i32 }
+    if db.close_rows(&rows) != ok { ret 197i32 }
+    let (m6, e6) = db.reader_next_borrowed(&rows, row[0..])
+    if e6 != db.Closed { ret 198i32 }
+    ret 0i32
+}
+
 fn transactions(a: *mem.Arena, c: *db.Connection) -> i32 {
     let (tx0, begin_error) = db.begin(c)
     if begin_error != ok { ret 140i32 }
@@ -557,6 +588,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if code == 0i32 { code = counts_and_errors(a, &c) }
     if code == 0i32 { code = streaming(a, &c) }
     if code == 0i32 { code = statements(a, &c) }
+    if code == 0i32 { code = borrowed(&c) }
     if code == 0i32 { code = transactions(a, &c) }
     if code == 0i32 { code = two_connections(a, args[1]) }
     if code == 0i32 && db.close(&c) != ok { code = 4i32 }

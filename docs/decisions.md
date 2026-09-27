@@ -29111,3 +29111,21 @@ Fixture changes that follow the contract, not the behaviour:
 - The geometry fixtures expect the new reaches and arrows. `ui_containers2_v2` and `ui_panes` expect a sash that keeps its dragged size between rebuilds, and `ui_panes` reopens a folded pane by dragging right from 0, where the old absolute drag measured from the pointer.
 
 New fixture, both hosts: `link/ui_a11y_controls`. It checks the names, the SpinButton, the page dots, the reorderable rows and the 24 targets. It walks Tab 40 stops through a page that scrolls and a virtual data grid, and every focus must survive its rebuild and stand in the page's viewport. At HEAD it does not compile, since there is no SpinButton role. Without the reveal it fails at 23. The audit afterwards found no name, role, target or focus-visibility failures.
+
+## D1599 — Borrowed rows are a second reader call, not a new lifetime for the first
+
+**Why.** `docs/db-perf-plan.md` item 2 proposed shortening the lifetime of every `Text` and `Bytes` value a reader fills, from "until the next row" to "until the next row or the reader's close", so the drivers could stop copying. The drivers' own fixtures showed why that is unsafe. Their `scalar` helpers read a value, close the reader, then return the value. Under the shorter lifetime that value points into memory SQLite, libpq or MySQL has already freed, and nothing catches it: the D731 borrow contracts cover a function's result, not a slice a dispatched call fills.
+
+**Decision.** `db.reader_next_err` keeps its lifetime. `db.reader_next_borrowed` is added, with a `rows_next_borrowed` entry in `db.Driver`. A `Text` or `Bytes` value it fills is the driver's own bytes, and is valid until the reader's next row or until anything else is done on its connection, closing the reader included. A driver whose values are already its own copies puts `rows_next` in both entries: the memory driver example and the `db` fixture do. Struct literals must name every field, so every driver table changes. Adding the entry is a breaking change to `db.Driver`, taken now while every driver is in this tree.
+
+**Per driver.**
+
+- **SQLite:** hands back `sqlite3_column_text` and `_blob`. They are read before `column_bytes`, the order SQLite says keeps the pointer valid until the next step, reset or finalize.
+- **libpq:** keeps the row's single-tuple result in `Reader.held` until the next row or `finish_reader`, instead of clearing it once the row is filled. Text-like OIDs and `bytea` are views; `jsonb` is a view past its version byte. Values the driver rewrites (numeric, uuid, infinities) still go through the reader's buffer.
+- **MySQL:** hands back the `mysql_fetch_row` cell, which lives until the next fetch or `mysql_free_result`.
+
+**Evidence.**
+
+- **Fixtures.** `x_sqlite`, `x_postgresql` and `x_mysql` each gain `borrowed()` (codes 190–198). It checks two rows of text and binary, a copying read interleaved on the same stream, a 60 KB value, an empty value, the end of the rows and `Closed` after the close. The `db` fixture checks `Closed` through the new entry.
+- **Hosts.** All four fixtures and `examples/db/memory_driver` pass on Windows. The four fixtures, cross-emitted, pass in WSL against fresh servers.
+- **Benchmark.** `benchmarks/db/src/workload.e` now reads its scan and lookups borrowed, as `bench.c` and the Rust program do. The Windows SQLite scan median went from 24.2 to 21.8 ms (−10%) over five interleaved rounds on a loaded machine.
