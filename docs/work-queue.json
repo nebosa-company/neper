@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C083",
-      "category": "compiler",
-      "group": "Back end",
-      "order": 83,
-      "title": "Determinism harness",
-      "score": 0.9,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "compiler fixed point on both platforms, artifact-linked equals source-linked for every artifact fixture, and incremental equals clean for link/incremental (D205); the compiler's own 31 artifacts, listed in graph order, link byte-equal to the source build, and so does the set with one module rebuilt incrementally (D213, D214) -- `link-em` lays functions out in the order the artifacts are given, so the order is an input. `-j N` caps every phase's workers and `--perturb` turns the crew's schedule around (D331): both suites require the compiler built under `-j 1` and under `-j 3 --perturb` to be the stable stage byte for byte, and the inlined release fixture under `-j 1 --perturb` the default build; the hot build under either is the cold image. A relocated build is the same image (D337): the sources spelled from the project root in the line table, so the operand's spelling and the project's place change nothing, pinned by both suites. The fixed point caught the crew's one shared scratch table (D505): the workers' checkers forked every table they append to but the constant expressions, so D500's fold on eight workers wrote over each other's copies and once folded `if 4991usize < limit` away in a loaded stage 3; each worker now has its own. Not yet: the device-reached edit case that waits on M3"
-    },
-    {
       "id": "C084",
       "category": "compiler",
       "group": "Back end",
@@ -112,6 +101,17 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": ""
+    },
+    {
+      "id": "C083",
+      "category": "compiler",
+      "group": "Back end",
+      "order": 83,
+      "title": "Determinism harness",
+      "score": 0.9,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "compiler fixed point on both platforms, artifact-linked equals source-linked for every artifact fixture, and incremental equals clean for link/incremental (D205); the compiler's own 31 artifacts, listed in graph order, link byte-equal to the source build, and so does the set with one module rebuilt incrementally (D213, D214) -- `link-em` lays functions out in the order the artifacts are given, so the order is an input. `-j N` caps every phase's workers and `--perturb` turns the crew's schedule around (D331): both suites require the compiler built under `-j 1` and under `-j 3 --perturb` to be the stable stage byte for byte, and the inlined release fixture under `-j 1 --perturb` the default build; the hot build under either is the cold image. A relocated build is the same image (D337): the sources spelled from the project root in the line table, so the operand's spelling and the project's place change nothing, pinned by both suites. The fixed point caught the crew's one shared scratch table (D505): the workers' checkers forked every table they append to but the constant expressions, so D500's fold on eight workers wrote over each other's copies and once folded `if 4991usize < limit` away in a loaded stage 3; each worker now has its own. Not yet: the device-reached edit case that waits on M3 Placed after C096 (D1580): the one case left is C096's device-reached edit case, which the GPU line before it has to deliver first."
     },
     {
       "id": "C088",
