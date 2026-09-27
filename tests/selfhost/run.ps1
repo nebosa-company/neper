@@ -3005,6 +3005,16 @@ $gpuSharedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $gpuSharedWritten -ne 'executable written') { throw 'gpu_shared emission failed' }
 $gpuSharedOutput = & $gpuSharedPath
 if ($LASTEXITCODE -ne 0 -or $gpuSharedOutput -ne 'gpu shared ok') { throw "a kernel with shared memory answered wrongly: exit $LASTEXITCODE" }
+# (D1590) Section 10's address spaces: shared slices and pointers through a typed helper,
+# a `*shared` parameter and a generic helper instantiated per space run; a shared slice
+# given to a device slice parameter is refused.
+$gpuSpacesPath = Join-Path $testBuild 'gpu-spaces-selfhost.exe'
+$gpuSpacesWritten = & $compiler emit-executable (Join-Path $repo 'tests\selfhost\fixtures\link\gpu_spaces\src\main.e') $repo 'x64' 'windows' $gpuSpacesPath
+if ($LASTEXITCODE -ne 0 -or $gpuSpacesWritten -ne 'executable written') { throw 'gpu_spaces emission failed' }
+$gpuSpacesOutput = & $gpuSpacesPath
+if ($LASTEXITCODE -ne 0 -or $gpuSpacesOutput -ne 'gpu spaces ok') { throw "shared address spaces answered wrongly: exit $LASTEXITCODE" }
+$gpuSpaceMix = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_space_mix\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or -not ($gpuSpaceMix -join "`n").Contains('main.e:14:5: error[E-TYPE-0002]: type mismatch: expected `[]const u32`, found `[]shared u32`')) { throw "a shared slice crossed into device memory's space: $($gpuSpaceMix -join "`n")" }
 $gpuSharedOutside = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_shared_outside\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuSharedOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-TYPE-9999\]: `shared var` is legal only directly in a kernel') { throw "a shared var outside a kernel was not refused: $($gpuSharedOutside -join "`n")" }
 $gpuSharedInit = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_shared_initializer\src\main.e') $repo 'x64' 'windows' 2>&1

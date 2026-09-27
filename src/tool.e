@@ -5806,12 +5806,14 @@ fn type_text(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type, dept
     if ty.kind == .Pointer {
         try byte(out, 42u8)
         if ty.is_const { try text(out, "const ") }
+        if ty.in_shared { try text(out, "shared ") }
         if ty.has_element && ty.element < c.type_count { ret type_text(out, c, g, c.types[ty.element], depth + 1usize) }
         ret text(out, "?")
     }
     if ty.kind == .Slice {
         try text(out, "[]")
         if ty.is_const { try text(out, "const ") }
+        if ty.in_shared { try text(out, "shared ") }
         if ty.has_element && ty.element < c.type_count { ret type_text(out, c, g, c.types[ty.element], depth + 1usize) }
         ret text(out, "?")
     }

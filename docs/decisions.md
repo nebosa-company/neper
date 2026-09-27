@@ -29023,3 +29023,37 @@ C089's remaining lines from D1588, and the kernel walk extended to generic helpe
 - **Suite:** both runners expect format 20.
 
 **Still open.** `[]shared T` and `*shared T` are erased in the checker's types, so they convert freely to and from `[]T`. Section 10 makes them distinct types with no conversion.
+
+## D1590 — Shared memory as its own address space; C089 closes
+
+Section 10's address spaces are now distinct types, and C089 closes.
+
+**The flag.** A `check.Type` carries `in_shared` (`shared` is a keyword). It sits in the struct's padding, so `Type` keeps its size.
+
+- **Written types:** `type_from_node` sets it for `[]shared T` and `*shared T`. The keyword was refused outright until now: `composite_const` answered `Unsupported`. So the "parse and are erased" of C089's evidence was true of the parser alone, and a signature naming `[]shared T` failed as "type checking failed".
+- **A `shared var`:** its own array type carries the flag.
+- **Slicing:** a slice inherits it from its base.
+- **`&`:** the address of a place inherits it from the place's root (`place_shared`). The root is a `shared var`, or a shared slice or pointer, through indexes, fields and dereferences.
+
+**Distinct types.** `type_equal` and `type_assignable` compare the flag for pointers and slices, and a shared `[]const u8` is not a string's shape. So a `[]shared u32` is no `[]const u32`, and passing one where the other is wanted is a type mismatch naming both. A generic helper is instantiated once per space, since its argument types differ.
+
+**Printing and encoding.** Diagnostics print `[]shared T` and `*shared T`. The Interface's type encoding carries the flag as bit 8 of its flags, and the reader accepts it.
+
+**Evidence.**
+
+- **`gpu_spaces` (both hosts):** a kernel slices its `shared var` into a `[]const shared u32` for a typed helper. It hands that slice and a device slice to one generic helper, and `&tile[2]` to a `*shared u32` parameter. Its results are the arithmetic's.
+- **`gpu_space_mix`:** refused with "expected `[]const u32`, found `[]shared u32`".
+- **Regressions:** every other GPU fixture runs as before.
+- **Fixed point:** stage 2 equals stage 3 on both hosts.
+
+**What C089 delivered (D1588-D1590):**
+
+- section 10's restrictions from each kernel through what it reaches, generic helpers included, with the call chain;
+- kernel parameters as device storage types;
+- device-only helpers refused from CPU code;
+- the `gpu.Buf[T]` element rule;
+- `caps(...)` and `ftz`, with inferred capabilities bounded;
+- the capability set and shared total in the Interface entry;
+- the two address spaces.
+
+The walk reads syntax, as D1565's does. A local's slice-ness is judged from its declaration, and a capability from the type names a declaration spells and its parameters' types. The gaps that leaves are in what is caught, not refusals of valid code.

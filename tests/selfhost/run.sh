@@ -2690,6 +2690,17 @@ gpu_shared_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/gpu-shared-selfhost"
 gpu_shared_output=$("$test_build/gpu-shared-selfhost")
 [ "$gpu_shared_output" = 'gpu shared ok' ]
+# (D1590) Section 10's address spaces: shared slices and pointers through a typed helper,
+# a `*shared` parameter and a generic helper instantiated per space run; a shared slice
+# given to a device slice parameter is refused.
+[ "$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_spaces/src/main.e" "$repo" x64 linux "$test_build/gpu-spaces-selfhost")" = 'executable written' ]
+chmod +x "$test_build/gpu-spaces-selfhost"
+[ "$("$test_build/gpu-spaces-selfhost")" = 'gpu spaces ok' ]
+gpu_space_mix=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_space_mix/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$gpu_space_mix" in
+    *'main.e:14:5: error[E-TYPE-0002]: type mismatch: expected `[]const u32`, found `[]shared u32`'*) ;;
+    *) printf '%s\n' "a shared slice crossed into device memory's space: $gpu_space_mix" >&2; exit 1 ;;
+esac
 gpu_shared_outside=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_shared_outside/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_shared_outside" in
     *'main.e:4:5: error[E-TYPE-9999]: `shared var` is legal only directly in a kernel'*) ;;
