@@ -2398,6 +2398,12 @@ $gfxPaintPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $gfxPaintPlanWritten -ne 'executable written') { throw 'gfx_paint_plan emission failed' }
 & $gfxPaintPlanPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_paint_plan check failed: exit $LASTEXITCODE" }
+# `e.gfx.image.phash256`: mtg.studio's 256-bit card-scan hash, bit for bit on eight real card arts from its Dart parity vectors and on four noise images in every 8-bit format hashed by its JS port (D1569).
+$gfxPhash256Path = Join-Path $testBuild 'gfx-phash256-selfhost.exe'
+$gfxPhash256Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_phash256\src\main.e') $repo 'x64' 'windows' $gfxPhash256Path
+if ($LASTEXITCODE -ne 0 -or $gfxPhash256Written -ne 'executable written') { throw 'gfx_phash256 emission failed' }
+& $gfxPhash256Path
+if ($LASTEXITCODE -ne 0) { throw "a gfx_phash256 check failed: exit $LASTEXITCODE" }
 # `e.gfx.scene` planned functions: a perspective-correct rasterizer, painter's ordering, deferred shading, clustered lights, cascaded and PCF shadows, SSAO, screen-space reflections, temporal and FXAA anti-aliasing, depth peeling, sphere tracing and volumetric fog, each on a sixteen-pixel-square buffer against a numpy replica (D884).
 $gfxScenePlanPath = Join-Path $testBuild 'gfx-scene-plan-selfhost.exe'
 $gfxScenePlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_scene_plan\src\main.e') $repo 'x64' 'windows' $gfxScenePlanPath
@@ -4540,6 +4546,21 @@ if ($LASTEXITCODE -ne 1 -or ($comptimeRuntime -join "`n") -notmatch 'main\.e:8:1
 Require-Fixture 'check/comptime_call_budget'
 $comptimeBudget = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_call_budget\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimeBudget -join "`n") -notmatch 'main\.e:6:11: error\[E-COMPTIME-9999\]: constant `FOREVER` cannot be evaluated at compile time: its call reached ten million steps') { throw "a constant past the budget was not refused: $($comptimeBudget -join "`n")" }
+# Structs, slices and strings in the interpreter's memory (D1569): four constants
+# folded through them, one an array length; an index past a slice's end refused.
+$comptimeStructPath = Join-Path $testBuild 'comptime-struct-selfhost.exe'
+$comptimeStructWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_struct\src\main.e') $repo 'x64' 'windows' $comptimeStructPath
+if ($LASTEXITCODE -ne 0 -or $comptimeStructWritten -ne 'executable written') { throw 'comptime struct fixture executable emission failed' }
+& $comptimeStructPath
+if ($LASTEXITCODE -ne 0) { throw "a constant folded through structs and slices was wrong: exit $LASTEXITCODE" }
+$comptimeArrayPath = Join-Path $testBuild 'comptime-array-call-selfhost.exe'
+$comptimeArrayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_array_call\src\main.e') $repo 'x64' 'windows' $comptimeArrayPath
+if ($LASTEXITCODE -ne 0 -or $comptimeArrayWritten -ne 'executable written') { throw 'comptime array call fixture executable emission failed' }
+& $comptimeArrayPath
+if ($LASTEXITCODE -ne 0) { throw "an array across a comptime call was wrong: exit $LASTEXITCODE" }
+Require-Fixture 'check/comptime_slice_bounds'
+$comptimeBounds = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_slice_bounds\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($comptimeBounds -join "`n") -notmatch 'main\.e:7:9: error\[E-COMPTIME-9999\]: constant `BAD` cannot be evaluated at compile time: its call reached an index out of bounds') { throw "a comptime index past a slice was not refused: $($comptimeBounds -join "`n")" }
 Require-Fixture 'check/comptime_call_in_type'
 $comptimeInType = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_call_in_type\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimeInType -join "`n") -notmatch 'main\.e:5:28: error\[E-COMPTIME-9999\]: a constant that calls a function is used in a type') { throw "a calling constant in a type was not refused with its reason: $($comptimeInType -join "`n")" }
