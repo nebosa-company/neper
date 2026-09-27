@@ -213,6 +213,14 @@ to the function's end (the moving expression included, so a move through the
 pointer itself stays refused), the pin has ended; with an unknown holder, or in a
 loop, the block's end still rules.
 
+A container for elements that must be closed (D1568): `list.Owning[T]`, a
+resource owed to `owning_finish`. Its slots are reserved when it is made, so the
+allocation is the only failure and it moves nothing. `own_put` hands the element
+back when the list is full, and `own_take` gives one out. `owning_finish` traps on
+a list still holding elements rather than lose them. The checker's part is the one
+it already has: the list is obligated, a handed-back or taken element is the
+caller's, and every exit, a failed `try` included, must discharge both.
+
 ## 8. Implementation record
 
 **D354** delivered sections 2, 3 and 6 in `src/check.e`, on the state machinery
