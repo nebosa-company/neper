@@ -28596,3 +28596,21 @@ Asked, the user moved C082 to the end of the queue. It keeps its score (0.75), i
 ## D1580 — C083 follows C096
 
 C083, the determinism harness, is at 0.9, and its one open case is "the device-reached edit case that waits on M3". That case is the whole of C096 (M3-08), and it needs the GPU line (C089-C095) first. At the head of the queue, C083 could only wait. It now sits right after C096, with its score and evidence unchanged, and C084 (debug info) heads the queue.
+
+## D1581 — DWARF lines and symbols in every ELF image
+
+C084's first line, "DWARF or CodeView for a foreign debugger", now holds on ELF. `link_elf.append_debug` appends the following after the last byte the loader maps, and no segment maps any of it:
+
+- a section header table: `.text`, `.nepersym`, `.symtab`, `.strtab`, `.debug_abbrev`, `.debug_info`, `.debug_line` and `.shstrtab`;
+- a local function symbol for the startup (`_start`) and one for each placed function;
+- DWARF 4: one compile unit, a subprogram per placed function (its `module.function` name and its range) and a line program.
+
+Main's subprogram carries `DW_AT_main_subprogram`, so gdb's backtrace stops there. The line program is built from the same rows the D206 table and the trap walk read. It is written function by function in code order, and each function gets an extra row at its entry. A debugger skips a prologue by moving to the function's second row, and without a row at the entry it has none to skip: gdb had put a breakpoint on `add` at `add+4`, with no line.
+
+The line and symbol tables go into release images too, because section 13 asks for them "in every build mode". Only the loaded bytes decide what a program does, and those are unchanged: for every one of the 589 link fixtures, the Linux image is the old image, byte for byte, with the section data appended. The only other change is the ELF header's four section fields. Windows images are byte-identical.
+
+`.nepersym` now names the D206 table where it already lies, after the code. So a named `.nepersym` section exists on ELF, though it keeps the D206 layout rather than section 13's `NEPS` one. Line paths are as the build names them, relative to its root, and no `DW_AT_comp_dir` is written, because it would tie the image to the directory of the build. gdb finds the sources from the root, or through `directory`.
+
+In WSL with gdb 15.1, `break main.main` stops at `main.e:11` in the release fixture. `next` steps by source line, and a backtrace names `add`, `main` and `_start` with their lines. `addr2line` and `objdump -d` name every function, in the release image as well. On the self-hosted compiler, `break lex.line_of` resolves to `src/lex.e:182`. `run.sh` checks the sections on the debug and the release image, and checks gdb's stop at a line. Stage 2 equals stage 3 on both hosts.
+
+Still open: CodeView and `.nepsym` on PE, `.nepersym` in section 13's layout, and variables (the locals-and-types subset).
