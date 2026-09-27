@@ -3491,6 +3491,12 @@ $uiA11yWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $uiA11yWritten -ne 'executable written') { throw 'ui_a11y_controls emission failed' }
 $uiA11yOutput = & $uiA11yPath
 if ($LASTEXITCODE -ne 0 -or $uiA11yOutput -ne 'ui a11y controls ok') { throw "the controls' accessibility answered wrongly: exit $LASTEXITCODE" }
+# The accessibility audit (D1601): silent on a clean page, each check firing on a faulty one.
+$uiAuditPath = Join-Path $testBuild 'ui-audit-selfhost.exe'
+$uiAuditWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_audit\src\main.e') $repo 'x64' 'windows' $uiAuditPath
+if ($LASTEXITCODE -ne 0 -or $uiAuditWritten -ne 'executable written') { throw 'ui_audit emission failed' }
+$uiAuditOutput = & $uiAuditPath
+if ($LASTEXITCODE -ne 0 -or $uiAuditOutput -ne 'ui audit ok') { throw "the accessibility audit answered wrongly: exit $LASTEXITCODE" }
 # Basic choice (D824, widget plan P1-11): a select with its menu, a list box.
 $uiChoicePath = Join-Path $testBuild 'ui-choice-selfhost.exe'
 $uiChoiceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_choice\src\main.e') $repo 'x64' 'windows' $uiChoicePath

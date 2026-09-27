@@ -979,6 +979,16 @@ fn set_ripple_phase(widget_runtime: *Runtime, phase: f32) {
     s.ripple_phase = max_f(min_f(phase, 1.0), 0.0)
 }
 
+// (D1601) No element holds the focus: where an audit's Tab walk starts, and a
+// reset an app may want when it replaces a whole page.
+fn clear_focus(widget_runtime: *Runtime) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    s.has_focus = false
+    s.focus_visible = false
+    ret ok
+}
+
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err {
     let (s, state_error) = state_of(widget_runtime)
     if state_error != ok { ret state_error }
