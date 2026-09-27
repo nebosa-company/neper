@@ -4700,7 +4700,7 @@ foreach ($case in @(@('reject', 'safety_dynamic_array_read', 1), @('reject', 'sa
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
 }
 # D721-D725: explicit ownership transfer and exhaustive cleanup for resource slices.
-foreach ($case in @(@('reject', 'safety_owned_slice_leak', 1), @('reject', 'safety_owned_slice_partial', 1), @('accept', 'safety_owned_slice_sweep', 0), @('accept', 'safety_owned_slice_transfer', 0), @('accept', 'safety_owned_slice_offset_transfer', 0))) {
+foreach ($case in @(@('reject', 'safety_owned_slice_leak', 1), @('reject', 'safety_owned_slice_partial', 1), @('accept', 'safety_owned_slice_sweep', 0), @('accept', 'safety_owned_slice_transfer', 0), @('accept', 'safety_owned_slice_offset_transfer', 0), @('accept', 'safety_owned_slice_partition', 0), @('reject', 'safety_owned_slice_partition_half', 1), @('reject', 'safety_owned_slice_partition_bound', 1), @('reject', 'safety_owned_slice_partition_mutable', 1), @('reject', 'safety_owned_slice_partition_block', 1))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
     $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
     $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"

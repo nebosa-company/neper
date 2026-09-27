@@ -493,6 +493,25 @@ retains the transfer site as provenance for later-use diagnostics.
 moves exactly that suffix. Earlier slots remain the caller's obligations; a runtime
 lower bound is rejected because it cannot form two precise ownership partitions.
 
+**D1566 follow-up.** A runtime bound now forms a partition, as long as both sides
+name it. `x[..k]` (or `x[0..k]`) and `x[k..]` of an owned resource slice or a
+tracked fixed array, handed to `own []T` parameters, together move all of `x`.
+
+- **The bound** must be an immutable local (a `let` or a parameter) or a comptime
+  value, so both sides name the same split.
+- **Between the sides,** every owed element is maybe-moved: any other use of `x`,
+  and any exit (a `try` included), is refused as a use after move or a forgotten
+  cleanup.
+- **The other side** must follow before the block or switch arm that opened the
+  partition ends, so no branch join ever sees one half-open.
+- **A comptime bound** of a tracked array still moves exact slots: D725's suffix,
+  and now a prefix.
+- **An owned slice's `x[..]`** moves it whole.
+
+A range of an owned slice used to move nothing, so the caller still owed, and could
+close, what the callee had closed. Any other range of one, `x[a..b]` with a nonzero
+`a` or a `var` bound, is now E-SAFETY-0003.
+
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
 returns a plain `Handle` view when callers need the platform value, so `File.raw`

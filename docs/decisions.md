@@ -28238,3 +28238,28 @@ Fixtures, both hosts:
 - `reject/regions_noescape_store`: E-SAFETY-0020 for `o.name = p`.
 
 Sweeps against D1564's compiler: none of the 158 earlier reject answers and none of 609 accept sources changed. Stage 2 equals stage 3 on both hosts.
+
+## D1566 — Owned resources split at a runtime bound
+
+D725 moved a comptime suffix of a tracked fixed array into an `own []T` parameter and refused a runtime lower bound, which cannot say which slots moved. Probing that edge found the reverse gap as well: a range of an owned resource slice, `files[0..k]` handed to `own []os.File`, moved nothing. The caller still owed every element, and could close what the callee had closed. A comptime prefix of an array, `files[..2]`, moved nothing either.
+
+A partition now closes both. `resource_consume_range` handles a range of an owned resource slice or a tracked array given to a consuming parameter:
+
+- **`x[..]` of an owned slice moves it whole.** An array's `x[..]` stays D724's.
+- **A comptime bound of a tracked array moves its slots exactly:** D725's suffix, and now a prefix.
+- **Any other single bound opens a partition.** That is `x[..k]`, `x[0..k]` or `x[k..]`, with `k` an immutable local (a `let` or a parameter) or a comptime value for a slice. Every owed element becomes maybe-moved, and the resource records the bound, the side that went, and a serial. The other side with the same bound closes it and moves everything.
+- **Between the two sides nothing else may touch `x`.** Its maybe state makes every other use a use after move, and every exit a forgotten cleanup. `try drain(x[..k])` is refused on its error path, which is right: that path would leak the other half. The complement range alone passes `resource_uses`.
+- **A partition must close before the block or switch arm that opened it ends** (`resource_partition_closed`, from the serial). A branch join therefore never sees one half-open, and the snapshots need not carry the bound.
+- **Any other range of one is E-SAFETY-0003:** two bounds with a nonzero lower one, or a `var` bound. So is a partition under `defer`.
+
+Fixtures, both hosts:
+
+- `accept/safety_owned_slice_partition`: an owned slice split at a parameter, an array at a runtime `let`, and an array at a comptime prefix, with the errors tested after both sides.
+- `reject/safety_owned_slice_partition_half`: one side, then an exit; E-SAFETY-0002.
+- `reject/safety_owned_slice_partition_bound`: sides at different bounds; E-SAFETY-0001.
+- `reject/safety_owned_slice_partition_mutable`: a `var` bound; E-SAFETY-0003.
+- `reject/safety_owned_slice_partition_block`: one side in an `if` arm; E-SAFETY-0003 at the arm's end.
+
+Sweeps against D1565's compiler: none of 159 earlier reject answers and 609 earlier accept sources changed. Stage 2 equals stage 3 on both hosts. H01 on the compiler source stays +13.4% in instructions (1,897M / 1,673M).
+
+The diagnostic is D722's E-SAFETY-0003 wording, "moved out of its aggregate", which already names owned slices. A partition-specific message would change the catalog goldens, whose drift is the user's open decision.

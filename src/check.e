@@ -433,6 +433,13 @@ type Resource = struct {
     // (D1556, H04) A thread handle's entry function plus one, while the thread is
     // unjoined: what module-scope variables the thread may touch.
     thread_entry: usize,
+    // (D1566, H01) An open partition of an owned resource slice or a tracked array:
+    // the bound's local plus one, or its comptime value plus one; whether the suffix
+    // went first; and the serial it opened with, for the block that must close it.
+    partition_local: usize,
+    partition_value: usize,
+    partition_suffix: bool,
+    partition_serial: usize,
 }
 
 // Pointer-bearing fields past a named aggregate's two inline aliases (D696),
@@ -714,6 +721,8 @@ type Checker = struct {
     // (D1563) How many thread handles this body bound, so a name read asks about
     // module-scope variables only once a thread is running.
     threads_started: usize,
+    // (D1566) Partitions opened in this body, the last one's serial.
+    partition_next: usize,
     // (D1565) `callee_keeps` answers, per worker.
     keeps_memo: [512]KeepsMemo,
 
@@ -6624,7 +6633,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     var no_fields: []u8 = zero
     var no_elements_acquired: []usize = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, thread_entry: 0usize, points_to: 0usize, points_to_field: "", slice_offset: 0usize, slice_offset_known: false }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, thread_entry: 0usize, points_to: 0usize, points_to_field: "", slice_offset: 0usize, slice_offset_known: false, partition_local: 0usize, partition_value: 0usize, partition_suffix: false, partition_serial: 0usize }
     // (D1563) A cached answer for the locals so far extends by the one added.
     if c.affine_answer_valid && c.affine_answer_count == c.local_count {
         c.affine_answer = c.affine_answer || state != resource_plain
@@ -12403,8 +12412,10 @@ fn check_children(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
 
 fn check_block(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
     let checkpoint = c.local_count
+    let partitions_before = c.partition_next
     c.block_depth += 1usize
-    let block_error = check_children(c, r, g, tree, module_index, node, function)
+    var block_error = check_children(c, r, g, tree, module_index, node, function)
+    if block_error == ok { block_error = resource_partition_closed(c, g, module_index, node, partitions_before) }
     // The pointers taken in this block die with it (D351): what they pinned is free.
     if c.pins_live != 0usize {
         var pinned_at = 0usize
@@ -13283,6 +13294,7 @@ fn check_dependent_switch(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                 let arm_end = usize(arm.first_child) + usize(arm.child_count)
                 var arm_at = usize(arm.first_child)
                 var body_error = ok
+                let partitions_before = c.partition_next
                 while arm_at < arm_end {
                     if parse.child_is_node_at(tree, arm_at) {
                         let statement_index = parse.child_index_at(tree, arm_at)
@@ -13293,6 +13305,7 @@ fn check_dependent_switch(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                     }
                     arm_at += 1usize
                 }
+                if body_error == ok { body_error = resource_partition_closed(c, g, module_index, arm, partitions_before) }
                 c.break_depth = c.break_depth - 1usize
                 if body_error == ok && switch_arm_returns(c, tree, module_index, arm) { returning_arm_count += 1usize }
                 c.local_count = checkpoint
@@ -13397,6 +13410,7 @@ fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                 }
                 arm_at = usize(arm.first_child)
                 var body_error = ok
+                let partitions_before = c.partition_next
                 while arm_at < arm_end {
                     if parse.child_is_node_at(tree, arm_at) {
                         let statement_index = parse.child_index_at(tree, arm_at)
@@ -13407,6 +13421,7 @@ fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                     }
                     arm_at += 1usize
                 }
+                if body_error == ok { body_error = resource_partition_closed(c, g, module_index, arm, partitions_before) }
                 c.break_depth = c.break_depth - 1usize
                 let arm_returns = switch_arm_returns(c, tree, module_index, arm)
                 if body_error == ok && arm_returns { returning_arm_count += 1usize }
@@ -14081,6 +14096,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     c.block_depth = 0usize
     c.pins_live = 0usize
     c.threads_started = 0usize
+    c.partition_next = 0usize
 
     c.affine_answer_valid = false
     c.active_noescape = function.import_symbol
@@ -16903,6 +16919,8 @@ fn resource_uses(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, skip_first_name: bool, parent: syntax.Kind) -> err {
     let node = tree.nodes[node_index]
     if node.kind == .Block { ret ok }
+    // (D1566) The side an open partition still owes is the owner's to read or hand on.
+    if node.kind == .BracketPostfix && resource_partition_complement(c, g, tree, module_index, node_index) { ret ok }
     // `&x` of a lent local is the sanctioned way to reach it -- an atomic, another
     // thread -- and not a read (D365).
     if node.kind == .UnaryExpr && c.tokens[usize(node.token_start)].kind == .PunctAmp {
@@ -17019,6 +17037,8 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let node = tree.nodes[node_index]
     if node.kind == .FieldExpr { ret resource_consume_field(c, g, tree, module_index, node_index) }
     if node.kind == .BracketPostfix {
+        let (consumed_range, range_error) = resource_consume_range(c, g, tree, module_index, node_index)
+        if consumed_range { ret range_error }
         let (consumed_slice, slice_error) = resource_consume_full_slice(c, g, tree, module_index, node_index)
         if consumed_slice { ret slice_error }
         ret resource_consume_element(c, g, tree, module_index, node_index)
@@ -17125,6 +17145,212 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
             record_explain_view_end(c, module_index, node, c.locals[viewer].name, 2u8)
         }
         viewer += 1usize
+    }
+    ret ok
+}
+
+// The range an owned resource slice or a tracked fixed array is handed over as, when
+// it is one (D1566): its local, its bound's node, whether the bound is the upper one
+// (`x[..k]`, `x[0..k]`), and whether it has no bound at all (`x[..]`). A range of
+// anything else answers `found` false; `bad` is a range of one that names no
+// partition -- two bounds with a lower one not zero.
+type ResourceRange = struct {
+    local: usize,
+    bound: usize,
+    prefix: bool,
+    whole: bool,
+    array: bool,
+    found: bool,
+    bad: bool,
+}
+
+fn resource_range_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> ResourceRange {
+    var range: ResourceRange = zero
+    let node = tree.nodes[node_index]
+    if node.kind != .BracketPostfix { ret range }
+    var bracket: BracketInfo = zero
+    if read_bracket(c, tree, node, &bracket) != ok || !bracket.range || bracket.child_count == 0usize || bracket.child_count > 3usize { ret range }
+    let base = tree.nodes[bracket.base]
+    if base.kind != .NameExpr { ret range }
+    let token = c.tokens[usize(base.token_start)]
+    if token.kind != .Identifier { ret range }
+    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    if !found { ret range }
+    range.array = c.locals[local_index].ty.kind == .Array && c.resources[local_index].fields.len != 0usize
+    let owned_slice = c.locals[local_index].ty.kind == .Slice && c.resources[local_index].state != resource_plain && !c.resources[local_index].borrowed && affine_slice_kind(c, c.locals[local_index].ty) != 0u8
+    if !range.array && !owned_slice { ret range }
+    range.local = local_index
+    range.found = true
+    if bracket.child_count == 1usize {
+        range.whole = true
+        ret range
+    }
+    if bracket.child_count == 3usize {
+        let (lower, lower_constant) = resource_index_value(c, g, tree, module_index, bracket.first)
+        if !lower_constant || lower != 0usize {
+            range.bad = true
+            ret range
+        }
+        range.bound = bracket.second
+        range.prefix = true
+        ret range
+    }
+    var range_at = usize(base.token_end)
+    while range_at < usize(node.token_end) && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
+    range.bound = bracket.first
+    range.prefix = usize(tree.nodes[bracket.first].token_start) > range_at
+    ret range
+}
+
+// A partition's bound (D1566): a comptime value plus one, or an immutable local plus
+// one, which both sides then name the same; neither answers zero and zero.
+fn resource_partition_bound(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, bound_index: usize) -> (usize, usize) {
+    let (value, constant) = resource_index_value(c, g, tree, module_index, bound_index)
+    if constant { ret (0usize, value + 1usize) }
+    let bound = tree.nodes[bound_index]
+    if bound.kind != .NameExpr { ret (0usize, 0usize) }
+    let token = c.tokens[usize(bound.token_start)]
+    if token.kind != .Identifier { ret (0usize, 0usize) }
+    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    if !found || c.locals[local_index].mutable { ret (0usize, 0usize) }
+    ret (local_index + 1usize, 0usize)
+}
+
+// Whether a range is the side an open partition still owes: the same bound, the
+// other side. Reading or handing it over is the owner's; the rest is not.
+fn resource_partition_complement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> bool {
+    if c.partition_next == 0usize { ret false }
+    let range = resource_range_of(c, g, tree, module_index, node_index)
+    if !range.found || range.whole || range.bad { ret false }
+    let local_index = range.local
+    if c.resources[local_index].partition_local == 0usize && c.resources[local_index].partition_value == 0usize { ret false }
+    let (bound_local, bound_value) = resource_partition_bound(c, g, tree, module_index, range.bound)
+    ret bound_local == c.resources[local_index].partition_local && bound_value == c.resources[local_index].partition_value && c.resources[local_index].partition_suffix == range.prefix
+}
+
+// (D1566, H01) A range of an owned resource slice or a tracked fixed array handed to
+// an `own` slice parameter. `x[..]` of an owned slice moves it whole. One bound --
+// `x[..k]` (or `x[0..k]`) or `x[k..]` -- opens a partition: every owed element is
+// maybe-moved, so no use and no exit accepts it, until the other side follows with
+// the same bound, a comptime value or an immutable local, before the block or arm
+// that opened it ends. A comptime bound of a tracked array moves its slots exactly
+// (D725's suffix, and a prefix). Any other range of one is a partial move.
+fn resource_consume_range(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
+    let range = resource_range_of(c, g, tree, module_index, node_index)
+    if !range.found { ret (false, ok) }
+    let node = tree.nodes[node_index]
+    let local_index = range.local
+    if range.whole && range.array { ret (false, ok) }
+    if range.bad || c.defer_depth != 0usize {
+        record_failure_related(c, module_index, node, .ResourcePartialMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+        ret (true, ResourceViolation)
+    }
+    if c.resources[local_index].pinned != 0usize {
+        record_failure_related(c, module_index, node, .ResourceMovedWhileBorrowed, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].pin_at), c.resources[local_index].pin_at)
+        ret (true, ResourceViolation)
+    }
+    let open = c.resources[local_index].partition_local != 0usize || c.resources[local_index].partition_value != 0usize
+    if range.whole {
+        if open || c.resources[local_index].state != resource_owned {
+            record_failure_related(c, module_index, node, .ResourceUseAfterMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+            ret (true, ResourceViolation)
+        }
+        c.resources[local_index].state = resource_moved
+        c.resources[local_index].acquired = usize(node.token_start)
+        record_explain_move(c, module_index, node, c.locals[local_index].name)
+        ret (true, ok)
+    }
+    let (bound_local, bound_value) = resource_partition_bound(c, g, tree, module_index, range.bound)
+    // A tracked array split at a comptime bound moves exactly its slots.
+    if range.array && bound_value != 0usize && !open {
+        if !range.prefix { ret (false, ok) }
+        if bound_value - 1usize > c.resources[local_index].fields.len {
+            record_failure_related(c, module_index, node, .ResourcePartialMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+            ret (true, ResourceViolation)
+        }
+        let moved_error = resource_partition_slots(c, g, module_index, node, local_index, 0usize, bound_value - 1usize, resource_owned, resource_moved)
+        ret (true, moved_error)
+    }
+    if bound_local == 0usize && bound_value == 0usize {
+        record_failure_related(c, module_index, node, .ResourcePartialMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+        ret (true, ResourceViolation)
+    }
+    if !open {
+        // The first side: all of it owned now, none of it after.
+        if range.array {
+            let slots_error = resource_partition_slots(c, g, module_index, node, local_index, 0usize, c.resources[local_index].fields.len, resource_owned, resource_maybe)
+            if slots_error != ok { ret (true, slots_error) }
+        } else {
+            if c.resources[local_index].state != resource_owned {
+                record_failure_related(c, module_index, node, .ResourceUseAfterMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+                ret (true, ResourceViolation)
+            }
+            c.resources[local_index].state = resource_maybe
+        }
+        c.partition_next += 1usize
+        c.resources[local_index].partition_local = bound_local
+        c.resources[local_index].partition_value = bound_value
+        c.resources[local_index].partition_suffix = !range.prefix
+        c.resources[local_index].partition_serial = c.partition_next
+        c.resources[local_index].acquired = usize(node.token_start)
+        record_explain_move(c, module_index, node, c.locals[local_index].name)
+        ret (true, ok)
+    }
+    if bound_local != c.resources[local_index].partition_local || bound_value != c.resources[local_index].partition_value || c.resources[local_index].partition_suffix != range.prefix {
+        record_failure_related(c, module_index, node, .ResourceUseAfterMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+        ret (true, ResourceViolation)
+    }
+    // The other side: the partition closes, and all of it has moved.
+    if range.array {
+        let slots_error = resource_partition_slots(c, g, module_index, node, local_index, 0usize, c.resources[local_index].fields.len, resource_maybe, resource_moved)
+        if slots_error != ok { ret (true, slots_error) }
+    } else {
+        c.resources[local_index].state = resource_moved
+    }
+    c.resources[local_index].partition_local = 0usize
+    c.resources[local_index].partition_value = 0usize
+    c.resources[local_index].acquired = usize(node.token_start)
+    record_explain_move(c, module_index, node, c.locals[local_index].name)
+    ret (true, ok)
+}
+
+// The owed slots in `first..end` of a tracked array, each in `from`, set to `to`.
+fn resource_partition_slots(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node, local_index: usize, first: usize, end: usize, from: u8, to: u8) -> err {
+    var at = first
+    while at < end {
+        let byte = c.resources[local_index].fields[at]
+        if field_owed(byte) && field_state(byte) != from {
+            let acquired = resource_part_acquired(c, local_index, at)
+            record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
+            ret ResourceViolation
+        }
+        at += 1usize
+    }
+    at = first
+    while at < end {
+        if field_owed(c.resources[local_index].fields[at]) {
+            c.resources[local_index].fields[at] = field_with(to, true)
+            c.resources[local_index].elements_acquired[at] = usize(node.token_start)
+        }
+        at += 1usize
+    }
+    c.resources[local_index].acquired = usize(node.token_start)
+    ret ok
+}
+
+// A partition opened since `serial` and still open when its block or arm ends: the
+// side it owes is lost with the block's paths (D1566).
+fn resource_partition_closed(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node, serial: usize) -> err {
+    if c.partition_next == serial { ret ok }
+    var at = 0usize
+    while at < c.local_count {
+        if c.resources[at].partition_serial > serial && (c.resources[at].partition_local != 0usize || c.resources[at].partition_value != 0usize) {
+            var closing = node
+            if node.token_end > node.token_start { closing.token_start = node.token_end - 1u32 }
+            record_failure_related(c, module_index, closing, .ResourcePartialMove, c.locals[at].name, line_detail(c, g, module_index, c.resources[at].acquired), c.resources[at].acquired)
+            ret ResourceViolation
+        }
+        at += 1usize
     }
     ret ok
 }
