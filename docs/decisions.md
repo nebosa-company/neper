@@ -28334,3 +28334,45 @@ Not yet: pointers (`&x`, `mem.cast`) and the arena as interpreter memory (`mem.a
 The ceiling is the cosine. The basis is computed at run time with `math.cos`, and that differs from V8's `Math.cos` in 3 of the 1,024 entries. V8 is not correctly rounded in 32 of them, and Neper in 31. Both are within the 1 ULP `e.math` promises. The Dart builder calls the platform libm, so there is no single correct table to bake in. A hash bit depends on this only where a coefficient lies within a few ULPs of the median. A flat image is the one case found, since there every coefficient is rounding noise, so a 1x1 image's hash is not pinned. All eight real card arts and four noise images agree bit for bit.
 
 Fixture `link/gfx_phash256`, run on both hosts, is written by `generate.mjs` from mtg.studio.web. It holds the eight real card arts from mtg.studio's Dart-emitted parity vectors (`tests/fixtures/scan-phash/vectors.json`). Each 64x64 grayscale is rebuilt as Rgba8 pixels chosen to gray to exactly those bytes; `(v, v, v)` fails for 65 of the 256 values. This makes the resize the identity, so the hash must equal the Dart one. The fixture also hashes four LCG-noise images with mtg.studio's JS port as the reference: Rgba8 137x191 shrunk, Bgra8 50x37 with a padded stride and enlarged, R8 312x445, and Rgba8 3x2. Last, it checks that a 1x1 image hashes and that half-float and empty views are refused.
+
+## D1571 — `x.sqlite.sqlite`: the first `e.db` driver, over the host's own SQLite
+
+The first concrete `e.db` driver. Its package specification is
+`docs/packages/x.sqlite.sqlite.md`, which fixes the four things `modules.md` requires before an
+`x.*` package exists. The upstream is the SQLite 3 C interface through its v2 entry points, with
+a floor of 3.7.14 checked at `open`. The targets are x64 Windows (`winsqlite3.dll`, in System32
+since Windows 10) and x64 Linux (`libsqlite3.so.0`). The connection's arena is retained and
+borrowed for its lifetime. SQLite is public domain and none of its code is vendored.
+
+**Where it lives.** The package lives under `lib/x/sqlite/` in the toolchain tree. The graph
+already resolves `x.<owner>.<name>` through `lib/` exactly as it resolves `e.*`, and until
+pacman's P1 vendoring exists no other location is reachable from a project. It is not a toolchain
+module: `modules.json` keeps it as a package reservation, and the surface gate reads `lib/e` only.
+
+**`@import` instead of `os.dlopen`.** The binding is `@import`, not `os.dlopen`/`dlsym`.
+`@import` is the path that has proven ABI handling for narrow returns (the widening fix), floats
+and five-argument calls. A never-called import costs nothing (D128), so only a program that
+actually opens a database needs the library. The raw declarations sit in `x.sqlite.capi`, one
+variant per OS that differs only in the library name, so the driver itself is one portable file.
+
+**Three shape decisions, each pinned by the fixture.** First, a query steps once before
+returning, so SQL that fails does so at `query` and an expression column can take its kind from
+the first row. Second, affected rows are counted only when `sqlite3_total_changes` moved;
+`sqlite3_changes` alone would report the previous DML's count after a `CREATE`. Third, a failed
+`COMMIT` is rolled back, because `e.db` has already closed the handle that could have retried it.
+
+**Found on the way.** `mem.alloc` does not clear memory. A context written field by field left
+the reader's `buffer` slice as garbage, and the first text column crashed at
+`0xffffffffffffffff`. Every context is now assigned as one struct literal.
+
+**Verification.** `link/x_sqlite` runs in both suites against the real library on each host, with
+one exit code per check across about 130 checks. It covers every `db.Value` kind round-tripped,
+named and positional parameters, extended error codes through `detail`, statement reuse and
+closing a statement under its reader, transactions, a 100 KB value, 1000 streamed rows, and a
+file database locked by one connection and refused as `Busy` by another. Two deliberate driver
+defects were each caught: a mapping change failed at 58, and a dropped length check trapped.
+
+This is a library package, not a compiler or tooling capability, so no work-queue item moves.
+GP-05 as a verification workload still needs its written design (arena topology, ownership,
+concurrency, foreign boundaries). That design should cover what this package leaves out:
+callbacks and user-defined functions, which are GP-08's foreign-callback surface.

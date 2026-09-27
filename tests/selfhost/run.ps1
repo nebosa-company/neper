@@ -2669,6 +2669,14 @@ $dlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link
 if ($LASTEXITCODE -ne 0 -or $dlWritten -ne 'executable written') { throw 'e.os loader emission failed' }
 & $dlPath
 if ($LASTEXITCODE -ne 0) { throw "an e.os loader call answered wrongly: exit $LASTEXITCODE" }
+# `x.sqlite.sqlite`: the `e.db` driver over the host's own SQLite (`winsqlite3.dll`), every value
+# kind round-tripped, SQLite's errors mapped with their extended codes, statements, transactions,
+# and a database file in %TMP% locked by one connection and refused as `Busy` by the other.
+$sqlitePath = Join-Path $testBuild 'x-sqlite-selfhost.exe'
+$sqliteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_sqlite\src\main.e') $repo 'x64' 'windows' $sqlitePath
+if ($LASTEXITCODE -ne 0 -or $sqliteWritten -ne 'executable written') { throw 'x.sqlite.sqlite emission failed' }
+& $sqlitePath
+if ($LASTEXITCODE -ne 0) { throw "the SQLite driver answered wrongly: exit $LASTEXITCODE" }
 # D131's property: a program that uses `e.os` and opens no library needs no loader. It checks
 # itself -- it reads its own image and walks its own program headers -- so nothing here has to
 # have a dumper, and what is asserted is the file that was produced rather than what the compiler

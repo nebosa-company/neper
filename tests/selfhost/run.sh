@@ -2364,6 +2364,14 @@ dl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtur
 [ "$dl_written" = 'executable written' ]
 chmod +x "$test_build/os-dl-selfhost"
 "$test_build/os-dl-selfhost"
+# `x.sqlite.sqlite`: the `e.db` driver over the host's own SQLite (`libsqlite3.so.0`), every value
+# kind round-tripped, SQLite's errors mapped with their extended codes, statements, transactions,
+# and a database file locked by one connection and refused as `Busy` by the other. Run from /tmp
+# so the lock is a native file lock rather than the 9p mount's.
+sqlite_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_sqlite/src/main.e" "$repo" x64 linux "$test_build/x-sqlite-selfhost")
+[ "$sqlite_written" = 'executable written' ]
+chmod +x "$test_build/x-sqlite-selfhost"
+TMPDIR=/tmp "$test_build/x-sqlite-selfhost"
 # D131's property: a program that uses `e.os` and opens no library needs no loader. It checks
 # itself -- it reads its own image and walks its own program headers -- so nothing here has to
 # have `readelf`, and what is asserted is the file that was produced rather than what the
