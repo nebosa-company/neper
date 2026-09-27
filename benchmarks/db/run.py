@@ -15,7 +15,7 @@ WORK = {
     "postgresql": {"rows": 20000, "lookups": 5000},
     "mysql": {"rows": 20000, "lookups": 5000},
 }
-PG = "host=127.0.0.1 port=55432 user=neper dbname=postgres options='-c client_min_messages=warning'"
+PORTS = {"postgresql": 55432, "mysql": 53306}
 
 
 def location(driver, scratch, label):
@@ -25,7 +25,9 @@ def location(driver, scratch, label):
             if os.path.exists(path + suffix):
                 os.remove(path + suffix)
         return path
-    return PG if driver == "postgresql" else "53306"
+    if driver == "postgresql":
+        return f"host=127.0.0.1 port={PORTS['postgresql']} user=neper dbname=postgres options='-c client_min_messages=warning'"
+    return str(PORTS["mysql"])
 
 
 def once(command, driver, scratch, label):
@@ -43,7 +45,10 @@ def main():
     ap.add_argument("--scratch", default=".")
     ap.add_argument("--out", required=True)
     ap.add_argument("--drivers", default="sqlite,postgresql,mysql")
+    ap.add_argument("--pg-port", type=int, default=PORTS["postgresql"])
+    ap.add_argument("--mysql-port", type=int, default=PORTS["mysql"])
     args = ap.parse_args()
+    PORTS["postgresql"], PORTS["mysql"] = args.pg_port, args.mysql_port
     results = {"host": platform.system().lower(), "runs": args.runs, "work": WORK, "drivers": {}}
     suffix = ".exe" if os.name == "nt" else ""
     for driver in args.drivers.split(","):
