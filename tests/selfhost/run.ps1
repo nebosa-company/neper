@@ -2956,6 +2956,19 @@ foreach ($gpuProfileCase in @(
 }
 $gpuProfileValid = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_profile_valid\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 0 -or ($gpuProfileValid -join "`n") -ne 'module check ok') { throw "a valid kernel was refused: $($gpuProfileValid -join "`n")" }
+# (D1589) A device-only helper called from CPU code, a `gpu.Buf` of `usize`, a
+# capability outside `caps(...)` and a repeated `caps` member are refused; a kernel
+# within its `caps(...)` and `ftz` is not.
+foreach ($gpuRuleCase in @(
+    @('gpu_device_only', 'main.e:15:9: error[E-TYPE-9999]: `lane` is device-only'),
+    @('gpu_buf_element', 'main.e:5:5: error[E-TYPE-9999]: a `gpu.Buf[T]` holds device memory'),
+    @('gpu_caps_bound', 'main.e:14:1: error[E-TYPE-9999]: `fill` needs `.Float64` through fill -> scaled -> widen'),
+    @('gpu_caps_duplicate', 'main.e:5:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'))) {
+    $gpuRule = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($gpuRuleCase[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or -not ($gpuRule -join "`n").Contains($gpuRuleCase[1])) { throw "$($gpuRuleCase[0]) was not refused: $($gpuRule -join "`n")" }
+}
+$gpuCapsValid = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_caps_valid\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 0 -or ($gpuCapsValid -join "`n") -ne 'module check ok') { throw "a kernel within its caps was refused: $($gpuCapsValid -join "`n")" }
 $gpuBare = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_bare_attribute\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuBare -join "`n") -notmatch 'main\.e:4:1: error\[E-TYPE-9999\]: `fill` carries `@gpu` without a usable workgroup size') { throw "a bare @gpu was not refused: $($gpuBare -join "`n")" }
 $gpuArgument = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_launch_argument\src\main.e') $repo 'x64' 'windows' 2>&1
@@ -4888,7 +4901,7 @@ $noescapeSummaryWritten = & $compiler emit-em (Join-Path $conformanceRoot 'accep
 if ($LASTEXITCODE -ne 0 -or $noescapeSummaryWritten -ne 'compiled module written') { throw 'writing the noescape-summary artifact failed' }
 $noescapeSummaryBytes = [IO.File]::ReadAllBytes($noescapeSummaryArtifact)
 $noescapeSummaryInterface = [BitConverter]::ToUInt64($noescapeSummaryBytes, 64)
-if ([BitConverter]::ToUInt16($noescapeSummaryBytes, 4) -ne 19) { throw 'the noescape-summary artifact did not use format 19' }
+if ([BitConverter]::ToUInt16($noescapeSummaryBytes, 4) -ne 20) { throw 'the noescape-summary artifact did not use format 20' }
 if ([BitConverter]::ToUInt32($noescapeSummaryBytes, [int]$noescapeSummaryInterface + 48) -ne 1 -or [BitConverter]::ToUInt32($noescapeSummaryBytes, [int]$noescapeSummaryInterface + 52) -ne 2) { throw 'the function interface did not serialize noescape={2}' }
 $noescapeMultiArtifact = Join-Path $testBuild 'noescape-multi.x64-windows.em'
 $noescapeMultiWritten = & $compiler emit-em (Join-Path $conformanceRoot 'accept\regions_noescape_multi_artifact.e') $repo x64 windows $noescapeMultiArtifact
@@ -6827,7 +6840,7 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 19 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 20 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 11) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'

@@ -28991,3 +28991,35 @@ Section 10's Restrictions table is now enforced from each kernel through every f
 **Where the tools live.** `benchmarks/db/tools-env.{ps1,sh}` put both toolchains, their module and build caches, Go telemetry and Cargo's registry under `D:\tools` (`/mnt/d/tools`). Nothing is written to the system drive. On Windows, Rust builds with the MSVC toolchain because the GNU one needs `dlltool`. It links `winsqlite3` for SQLite, copied as `sqlite3.lib`.
 
 **Result.** The score is the geometric mean of each implementation's percentage of the fastest, over 18 cells (3 drivers × 3 workloads × 2 hosts): C 86%, Rust 80%, Neper 69%, Go 59%. C wins 7 cells, Rust 6, Go 3 and Neper 2. Neper's gap is scans, at 51–66% everywhere, because each row is copied into the reader's buffer; a borrowed-row reader is the fix. Inserts and lookups are close. Samples are in `benchmarks/db/results/*-four-way.json`, and the post is `docs/blog/e-db-three-drivers.html`.
+
+## D1589 — Device-only helpers, Buf elements, generic helpers, caps and the shared total
+
+C089's remaining lines from D1588, and the kernel walk extended to generic helpers.
+
+**Device-only helpers.** A function whose source reads `gpu.gid`, `gpu.lid`, `gpu.wgid` or `gpu.sid`, meets `gpu.barrier()`, a `gpu.atomic_*` or a subgroup builtin, or names a `shared` type is device-only (spec section 10, What runs where).
+
+- **The refusal:** a call to one from a function that is neither a kernel nor itself device-only is refused at the call: "`lane` is device-only ... only a kernel or another device-only helper can call it".
+- **How it is read:** from the declaration's text, past comments and string literals. The answer is memoised per function in the checker, and a program without `e.gpu` never looks.
+- **Exceptions:** `e.gpu`'s own functions implement the builtins and are not device-only.
+
+**`gpu.Buf[T]` elements.** Instantiating `e.gpu`'s `Buf` with an element that is not a device storage type is refused (`check.DeviceElement`). That covers `usize`, `isize`, `bool`, pointers, slices, and either union. A `union enum` is included because its device layout is not its CPU layout. The message names the rule.
+
+**Generic helpers.** The kernel walk now follows a generic helper into its template. Every rule the walk checks reads syntax, so a module `var` behind `pick[T]` is reported through `fill -> pick`.
+
+**`caps(...)` and `ftz`.**
+
+- **Parsing:** `@gpu(X, ...)` takes them after its workgroup size, each at most once, `caps` with distinct `gpu.Cap` members. Anything else is the attribute's refusal, whose message now names the options.
+- **Inference:** the walk infers each function's capabilities: 8-, 16- and 64-bit integers, `f16`, `bf16` and `f64` from the types its declaration names, its literals' suffixes and its parameters' types, including through structs, arrays, slices and pointers. `gpu.sid` and the subgroup builtins give `.Subgroup`, `subgroup_ballot` also `.Int64`, and a 64-bit `Atomic` gives `.Atomic64`.
+- **The bound:** a capability outside a declared `caps(...)` is refused at the kernel with the chain, for example "`fill` needs `.Float64` through fill -> scaled -> widen, which its `caps(...)` does not list".
+- **What the set also gets:** `ftz` adds `.Ftz`. Any other kernel that uses a float gets `.DenormPreserve`.
+
+**Interface entry (format 20).** A kernel's entry carries the inferred capabilities in two spare bytes of the attribute tail. Its `shared var` total is recorded in a new `u32`, taken from lowering. Both come through a small worker-local table, `kernel_facts`, so the function record keeps its size. A kernel with `ftz`, `f64`, `u16` and a 64-element `f64` tile records `146` (`.Ftz`, `.Float64`, `.Int16`) and `512`.
+
+**Evidence.**
+
+- **Refusals:** five check fixtures, `gpu_device_only`, `gpu_buf_element`, `gpu_caps_bound` and `gpu_caps_duplicate`, are refused on both hosts, and `gpu_caps_valid` is accepted.
+- **No regressions:** every GPU link fixture builds and runs as before. `gpu_divergence`'s trap is the previous compiler's.
+- **Fixed point:** stage 2 equals stage 3 on both hosts.
+- **Suite:** both runners expect format 20.
+
+**Still open.** `[]shared T` and `*shared T` are erased in the checker's types, so they convert freely to and from `[]T`. Section 10 makes them distinct types with no conversion.

@@ -2627,6 +2627,19 @@ for gpu_profile_case in 'recursion|main.e:14:1: error[E-TYPE-9999]: `fill` reach
     esac
 done
 [ "$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_profile_valid/src/main.e" "$repo" x64 linux)" = 'module check ok' ]
+# (D1589) A device-only helper called from CPU code, a `gpu.Buf` of `usize`, a
+# capability outside `caps(...)` and a repeated `caps` member are refused; a kernel
+# within its `caps(...)` and `ftz` is not.
+for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-TYPE-9999]: `lane` is device-only' 'gpu_buf_element|main.e:5:5: error[E-TYPE-9999]: a `gpu.Buf[T]` holds device memory' 'gpu_caps_bound|main.e:14:1: error[E-TYPE-9999]: `fill` needs `.Float64` through fill -> scaled -> widen' 'gpu_caps_duplicate|main.e:5:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'; do
+    gpu_rule_name=${gpu_rule_case%%|*}
+    gpu_rule_expected=${gpu_rule_case#*|}
+    gpu_rule=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$gpu_rule_name/src/main.e" "$repo" x64 linux 2>&1 || true)
+    case "$gpu_rule" in
+        *"$gpu_rule_expected"*) ;;
+        *) printf '%s\n' "$gpu_rule_name was not refused: $gpu_rule" >&2; exit 1 ;;
+    esac
+done
+[ "$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_caps_valid/src/main.e" "$repo" x64 linux)" = 'module check ok' ]
 gpu_bare=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_bare_attribute/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_bare" in
     *'main.e:4:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'*) ;;
@@ -4803,7 +4816,7 @@ done
 noescape_summary_artifact="$test_build/noescape-summary.x64-linux.em"
 [ "$($test_build/neper-self emit-em "$conformance_root/accept/regions_noescape_contract_artifact.e" "$repo" x64 linux "$noescape_summary_artifact")" = 'compiled module written' ]
 noescape_summary_interface=$(od -An -tu8 -j64 -N8 "$noescape_summary_artifact" | tr -d ' ')
-[ "$(od -An -tu2 -j4 -N2 "$noescape_summary_artifact" | tr -d ' ')" = '19' ]
+[ "$(od -An -tu2 -j4 -N2 "$noescape_summary_artifact" | tr -d ' ')" = '20' ]
 [ "$(od -An -tu4 -j$((noescape_summary_interface + 48)) -N4 "$noescape_summary_artifact" | tr -d ' ')" = '1' ]
 [ "$(od -An -tu4 -j$((noescape_summary_interface + 52)) -N4 "$noescape_summary_artifact" | tr -d ' ')" = '2' ]
 noescape_multi_artifact="$test_build/noescape-multi.x64-linux.em"
@@ -6676,7 +6689,7 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '19' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '20' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '11' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
