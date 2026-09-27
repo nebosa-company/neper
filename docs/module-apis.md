@@ -8866,8 +8866,8 @@ fn rollback(transaction: *Transaction) -> err
 
 `e.db` defines the generic SQL connection, prepared-statement, transaction and
 streaming row-reader contract. Concrete database drivers are owner-qualified
-packages—initially `x.sqlite.sqlite`, `x.oracle.mysql` and
-`x.postgresql.libpq`; queries, parameters and row buffers are always explicit, and the module
+packages—`x.sqlite.sqlite`, `x.oracle.mysql`, `x.postgresql.libpq`, and `x.microsoft.odbc`
+for any database with an ODBC driver; queries, parameters and row buffers are always explicit, and the module
 does not discover drivers or allocate hidden connection pools.
 
 ---
