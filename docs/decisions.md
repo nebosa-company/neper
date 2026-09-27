@@ -28674,3 +28674,72 @@ A Windows image now carries what D1581 and D1582 gave an ELF image: the DWARF li
 - **Suite.** `run.ps1` now expects the basic image's seven sections, the first debug section named `/4`, a symbol table, and `.debug_info`, `.debug_line` and `main.main` among its strings.
 
 Still open: CodeView through the M4 PDB writer, a `.nepsym` section on PE (the table lies inside `.text`, which a PE section cannot cover), `.nepersym` in section 13's layout, unions and tagged unions beyond their size, and lexical scopes.
+
+## D1593 — Fast float text: Clinger, Eisel-Lemire and Ryu, with every result unchanged
+
+`e.str`'s float parse and push were exact but slow. Each did an arbitrary-precision decimal
+walk that is linear in the exponent. `parse_f64("4999.5")` took about 4 µs and `push_f64`
+about 18 µs. A random bit pattern took about 1 ms to parse back and 5 ms to push. That made
+the MySQL driver's scan, which parses one double per row on the text protocol, run at 8% of
+C's speed. The surface is frozen and exact (`source`), so nothing could be added: every fast
+path is inline in the four functions it serves, and their results are the same bits and the
+same text as before.
+
+**parse_f64.** Up to 19 significant digits make an exact `u64` `w`, so the value is
+`w * 10^q`. When `w <= 2^53` and `|q| <= 22` (Clinger), one IEEE multiply or divide of two
+exact doubles is the correctly rounded answer. Otherwise Eisel-Lemire multiplies `w` by a
+128-bit truncation of `5^q` from a 651-entry table and reads the rounding off the top bits.
+Where the truncation cannot decide it, and for longer inputs, the old exact path takes over.
+A zero or an infinity is the same `BadNumber` the exact path reports, and the fast paths
+only run inside the exact path's own exponent bounds. The 64 x 64 -> 128 multiply is built
+from four 32-bit products, since the language has no wider integer.
+
+**parse_f32.** `parse_f32` reads `parse_f64`'s nearest double, since the two grammars are
+identical, and rounds it to the nearest float in integer arithmetic. Rounding twice
+reproduces rounding once unless the double lies exactly on a float midpoint: every float
+and every midpoint between floats is a double. That case, and any input the double parse
+refuses, go to the exact float path.
+
+**push_f64 / push_f32.** Ryu (d2s/f2s, with 128-bit and 64-bit tables) computes the
+shortest digits directly. The rule here is not quite Ryu's. This function prints the fewest
+digits `p` whose *correctly rounded* value reads back, while Ryu prints the shortest string
+in the rounding interval. The two agree except where Ryu bumps `vr` up because it sits on an
+excluded lower end. That happens only at a power of two, where the interval is lopsided and
+the nearest `p`-digit value misses while a farther one hits. There the old bisection runs
+and prints one more digit: 46 doubles (for example `7.1202363472230444e-307` where Ryu has
+`7.120236347223045e-307`) and 3 floats. A Python prototype of all four paths matched
+`vectors.push` on 206,148 doubles and 202,667 floats before any Neper was written.
+
+**Tables.** All five tables are hex string literals, written into `str.e` by
+`tests/selfhost/fixtures/link/str_float_vectors/powers.py`. The table text lives in
+string literals because a large array literal exhausts the register allocator.
+
+**Verification.**
+- `link/str_float_vectors` runs 16,443 vectors whose text and bits `vectors.py` derives from
+  exact `Decimal`/`Fraction` arithmetic. They cover random bit patterns, subnormals, every
+  power of two, powers of ten, exact halfway strings of up to 767 digits and their
+  neighbours, 16- to 20-digit inputs, and the fast paths' edges. The fixture also runs
+  200,000 random push-then-parse round trips per width. It passed on the *unchanged*
+  implementation first, which proves the generator encodes the old rules, and it passes now
+  on Windows and Linux.
+- A differential built all 217 link fixtures that mention `f64` or `f32` twice, against
+  this `str.e` and against HEAD's, and compared exit codes and output: all 217 are
+  identical. `str_push_float`, `str_parse_float`, `fmt_json`, `fmt_json_schema`,
+  `io_printf`, `format_generic`, `str_format`, `x_mysql` and `x_postgresql` pass on both
+  hosts.
+
+**Measured** (release, ns per call, same machine):
+
+| | before | after |
+|---|---|---|
+| parse_f64, short value | 5,000–8,100 | 96–147 |
+| parse_f64, random 17 digits | ~1,000,000 | 317–581 |
+| push_f64, short value | 22,000–30,000 | 508–793 |
+| push_f64, random value | ~5,200,000 | 695–963 |
+| parse_f32 | 2,500–2,900 | 151–328 |
+| push_f32, random value | 93,000–105,000 | 485–912 |
+
+The `benchmarks/db` MySQL scan went from 206K to 1.50M rows/s (8% to 63% of C), and its
+insert went from 75% to 93% of C. SQLite and PostgreSQL are unchanged within noise, since
+neither parses floats from text. The raw runs are in
+`benchmarks/db/results/windows-2026-09-27-d1593-{before,after}.json`.

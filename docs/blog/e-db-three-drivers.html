@@ -318,6 +318,7 @@ extern fn getvalue(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
       <div class="callout">
         <strong>Two bugs the benchmark found.</strong>
         <p>The first is the float speed above. A Clinger fast path for <code>parse_f64</code> and a direct shortest-digits algorithm for <code>push_f64</code> are queued, and they must leave every result unchanged. The second is in the Linux linker. It places all dynamic-linking metadata in the 4 KB before the code, so a program importing more than about 48 C symbols fails to link, and a program using all three drivers imports about 80. Each driver alone fits, so the benchmark is now one small program per driver over a shared workload module, and lifting the limit is queued too.</p>
+        <p><em>Update, the same day:</em> the float fix has landed (D1593). <code>parse_f64</code> gained Clinger's and Eisel-Lemire's fast paths, and <code>push_f64</code> now uses Ryu, with every result unchanged. Parsing a short double went from about 4 µs to about 0.1 µs, and pushing one from about 18 µs to about 0.6 µs. MySQL's scan went from 206K to 1.50M rows/s (from 8% to 63% of C), and its insert from 75% to 93% of C.</p>
       </div>
 
       <h2>Try it</h2>

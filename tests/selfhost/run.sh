@@ -638,6 +638,13 @@ parse_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$parse_float_written" = 'executable written' ]
 chmod +x "$test_build/str-parse-float-selfhost"
 "$test_build/str-parse-float-selfhost"
+# The float fast paths (D1593) against 16,000 vectors from exact rational arithmetic (its
+# vectors.py): Ryu's digits and the exact search where they differ, Clinger and
+# Eisel-Lemire and the exact parse, and 200,000 random round trips per width.
+float_vectors_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/str_float_vectors/src/main.e" "$repo" x64 linux "$test_build/str-float-vectors-selfhost")
+[ "$float_vectors_written" = 'executable written' ]
+chmod +x "$test_build/str-float-vectors-selfhost"
+"$test_build/str-float-vectors-selfhost"
 # `mem.bitcast` reads a value's bytes as another type of the same size, which is what
 # lets a pun avoid a `union`. A scalar lives in a register and an aggregate is an
 # address, so the fixture covers all four shapes as well as the bit patterns.
