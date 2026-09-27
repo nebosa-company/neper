@@ -14,7 +14,8 @@ fixture's root module and checked against the untouched build:
   with the same code and write the same bytes to stdout.
 - `renamed` (D477, D484): every local and parameter is renamed to a name of
   the same length through the index's symbols and references, so the columns
-  are unchanged and the image must be byte-identical.
+  are unchanged and the image must be byte-identical outside its DWARF sections,
+  which name every local (D1582, D1605).
 - `fields` (D477): every `struct { ... }` has its fields reversed; the layout
   changes, so the image may differ, but the program must behave the same.
 - `symbols` (D478): every function but `main` and every type is renamed to a
@@ -106,6 +107,45 @@ def tokens_of(main):
 KEYWORDS = set('''fn let var ret if else while for in break continue use type error const struct union
 enum true false nil ok zero undef extern unreachable shared own try defer switch case match as
 and or not import pub mut static comptime test gpu when is do loop'''.split())
+
+
+def without_debug_sections(image):
+    """The image with its DWARF sections' bytes zeroed (D1605): since D1582 the debug
+    information names every local, so a rename reaches those bytes and no others. ELF
+    names them `.debug_*` in its section-name table; PE, MinGW-style, as `/N` whose
+    name is at offset N of the COFF string table."""
+    import struct
+    out = bytearray(image)
+    if image[:4] == b'\x7fELF':
+        shoff = struct.unpack_from('<Q', image, 0x28)[0]
+        shentsize, shnum, shstrndx = struct.unpack_from('<HHH', image, 0x3a)
+        names = shoff + shstrndx * shentsize
+        names_offset = struct.unpack_from('<Q', image, names + 0x18)[0]
+        for i in range(shnum):
+            header = shoff + i * shentsize
+            name_at = struct.unpack_from('<I', image, header)[0]
+            name = image[names_offset + name_at:image.index(b'\0', names_offset + name_at)]
+            offset, size = struct.unpack_from('<QQ', image, header + 0x18)
+            if name.startswith(b'.debug_') and struct.unpack_from('<I', image, header + 4)[0] != 8:
+                out[offset:offset + size] = bytes(size)
+        return bytes(out)
+    if image[:2] == b'MZ':
+        pe = struct.unpack_from('<I', image, 0x3c)[0]
+        sections, = struct.unpack_from('<H', image, pe + 6)
+        symbols, symbol_count = struct.unpack_from('<II', image, pe + 12)
+        optional, = struct.unpack_from('<H', image, pe + 20)
+        strings = symbols + symbol_count * 18
+        for i in range(sections):
+            header = pe + 24 + optional + i * 40
+            name = image[header:header + 8].rstrip(b'\0')
+            if name.startswith(b'/') and symbols:
+                at = strings + int(name[1:])
+                name = image[at:image.index(b'\0', at)]
+            size, offset = struct.unpack_from('<II', image, header + 16)
+            if name.startswith(b'.debug_'):
+                out[offset:offset + size] = bytes(size)
+        return bytes(out)
+    return image
 
 
 def renamed(main, index_json_lines, keywords, spelled):
@@ -365,7 +405,7 @@ for main in fixtures:
     open(aliased_main, 'wb').write(renamed(original_main, index, KEYWORDS, set(spelled)))
     for release in (False, True):
         image = build(aliased_main, os.path.join(outdir, '%s-renamed-%d%s' % (name, release, exe)), release)
-        if image != images[release]:
+        if without_debug_sections(image) != without_debug_sections(images[release]):
             sys.exit('metamorphic: %s with renamed locals builds a different %s image' % (name, 'release' if release else 'debug'))
     # fields: the same behaviour.
     turned = variant_dir(fixture_dir, name + '-fields')
