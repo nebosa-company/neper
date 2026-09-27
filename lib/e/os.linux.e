@@ -2979,7 +2979,11 @@ fn x_event(unit: []const u8) {
             ret
         }
         // Buttons 4 and 5 are the wheel; 1, 2, 3 are primary, middle, secondary; 8
-        // and 9 back and forward.
+        // and 9 back and forward. 6 and 7 are the wheel's horizontal steps, which
+        // Windows does not report either, and 10 on are buttons with no name here:
+        // none of them is a press, least of all a primary one (a sideways nudge of
+        // a trackpad was a click).
+        if detail == 6u32 || detail == 7u32 || detail > 9u32 { ret }
         if detail == 4u32 || detail == 5u32 {
             if kind != 4u32 { ret }
             event.kind = .Scroll

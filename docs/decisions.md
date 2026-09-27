@@ -28415,3 +28415,18 @@ Fixture, both hosts: `link/comptime_errors`:
 - errors compared by name, with one result used as an array length.
 
 Accept, reject and emit sweeps against D1570's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.
+
+## D1572 — X buttons 6, 7 and 10 on are no event, not a primary click
+
+The Linux window host (`x_event`, D795) turned any X button it did not name into a primary press. X numbers the wheel's horizontal steps 6 and 7, so a sideways wheel or trackpad nudge clicked whatever was under the pointer. It was found driving the UI gallery (`examples/ui`) under WSLg: pages switched tabs, opened dialogs and toggled tree nodes with no click made.
+
+- **What xdotool sends.** `xdotool click --window W 5` is a synthetic ButtonPress and ButtonRelease of button 5 (xev: `synthetic YES`, button 5). `x_event` masks the synthetic bit, so it is one `.Scroll` of -120, never a press. Under WSLg, xdotool's `--window` coordinates are sometimes garbage (x=32730, (-106,-127)), so that scroll can land nowhere. Plain `xdotool click` (XTEST) reaches no window under WSLg at all. The widget layer turns `.Scroll` only into zoom or `scroll_by` (widget.e), never into a tap. So a button-5 click cannot tap, and after the fix ten of them over the gallery changed nothing. The taps the gallery showed need a button `x_event` did not name, or real pointer input.
+- **The fix.** Buttons 6 and 7 are dropped, as Windows drops WM_MOUSEHWHEEL (the host answers only WM_MOUSEWHEEL). So is every button from 10 on. The five named buttons and the vertical wheel are unchanged. Horizontal scrolling waits for a `WindowEvent` with a horizontal delta on both hosts.
+
+Fixture, Linux only, since the X translation has no Windows counterpart: `link/os_window_buttons`. It feeds raw ButtonPress and ButtonRelease units to `os.x_event` for a hidden window and polls:
+
+- buttons 1, 3, 2, 8 and 9 are a press and a release of 0 to 4 at the unit's position;
+- 4 and 5, and a synthetic 5, are one Scroll each, with no event for the release;
+- 6, 7 and 10 to 12 are nothing.
+
+Against the unfixed library it stops at exit 11, on button 6. With the fix it prints `os window buttons ok` from both the Windows-hosted and the Linux-hosted compiler, and `os_window` still passes.

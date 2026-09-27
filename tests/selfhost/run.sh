@@ -2681,6 +2681,13 @@ os_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/os-window-selfhost"
 os_window_output=$("$test_build/os-window-selfhost")
 [ "$os_window_output" = 'os window ok' ]
+# X button codes (D1572): the wheel's horizontal steps (6, 7) and unnamed buttons
+# (10 on) are no event, where each was a primary click.
+os_window_buttons_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_window_buttons/src/main.e" "$repo" x64 linux "$test_build/os-window-buttons-selfhost")
+[ "$os_window_buttons_written" = 'executable written' ]
+chmod +x "$test_build/os-window-buttons-selfhost"
+os_window_buttons_output=$("$test_build/os-window-buttons-selfhost")
+[ "$os_window_buttons_output" = 'os window buttons ok' ]
 # `e.gfx.scene` (D796): the CPU reference renderer over an offscreen target -- fills,
 # an anti-aliased edge, clips, a gradient, a stroke, an image, a glyph, a layer, a
 # rotation -- checked pixel by pixel, and the refusals.
