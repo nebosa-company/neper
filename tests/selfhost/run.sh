@@ -4645,7 +4645,7 @@ comptime_call_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$comptime_call_written" = 'executable written' ]
 chmod +x "$comptime_call_path"
 "$comptime_call_path"
-check_protocol_diagnostic comptime_call_runtime 'main.e:8:19: error[E-COMPTIME-9999]: constant `CODE` cannot be evaluated at compile time: its call reached a statement it does not evaluate'
+check_protocol_diagnostic comptime_call_runtime 'main.e:8:19: error[E-COMPTIME-9999]: constant `CODE` cannot be evaluated at compile time: its call reached a call to a generic, extern or intrinsic function'
 check_protocol_diagnostic comptime_call_budget 'main.e:6:11: error[E-COMPTIME-9999]: constant `FOREVER` cannot be evaluated at compile time: its call reached ten million steps'
 check_protocol_diagnostic comptime_call_in_type 'main.e:5:28: error[E-COMPTIME-9999]: a constant that calls a function is used in a type'
 # Structs, slices and strings in the interpreter's memory (D1569).

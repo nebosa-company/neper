@@ -4695,7 +4695,7 @@ if ($LASTEXITCODE -ne 0 -or $comptimeCallWritten -ne 'executable written') { thr
 if ($LASTEXITCODE -ne 0) { throw "a constant evaluated by the interpreter disagrees with run time: exit $LASTEXITCODE" }
 Require-Fixture 'check/comptime_call_runtime'
 $comptimeRuntime = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_call_runtime\src\main.e') $repo 'x64' 'windows' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($comptimeRuntime -join "`n") -notmatch 'main\.e:8:19: error\[E-COMPTIME-9999\]: constant `CODE` cannot be evaluated at compile time: its call reached a statement it does not evaluate') { throw "a constant reaching runtime state was not refused: $($comptimeRuntime -join "`n")" }
+if ($LASTEXITCODE -ne 1 -or ($comptimeRuntime -join "`n") -notmatch 'main\.e:8:19: error\[E-COMPTIME-9999\]: constant `CODE` cannot be evaluated at compile time: its call reached a call to a generic, extern or intrinsic function') { throw "a constant reaching runtime state was not refused: $($comptimeRuntime -join "`n")" }
 Require-Fixture 'check/comptime_call_budget'
 $comptimeBudget = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_call_budget\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimeBudget -join "`n") -notmatch 'main\.e:6:11: error\[E-COMPTIME-9999\]: constant `FOREVER` cannot be evaluated at compile time: its call reached ten million steps') { throw "a constant past the budget was not refused: $($comptimeBudget -join "`n")" }
