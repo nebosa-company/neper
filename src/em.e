@@ -118,7 +118,8 @@ type CodeRelocation = struct {
 // (D1510) Format 15: function and aggregate records carry an attribute tail.
 // (D1514) Format 16: the Globals section carries each global's type after its records.
 // (D1515) Format 17: the Emission section.
-fn format_version() -> usize { ret 17usize }
+// (D1582) Format 18: the Vars section.
+fn format_version() -> usize { ret 18usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -141,6 +142,11 @@ fn inventory_kind() -> usize { ret 10usize }
 // instruction selection read, zero for none, and a trap stub's operand moves.
 fn emission_kind() -> usize { ret 11usize }
 fn emission_record_size() -> usize { ret 16usize }
+// (D1582) Per code function, in the Code section's order: its named locals for a
+// debugger -- a code range within the function, the name, the type as a descriptor,
+// the parameter position plus one, and the location.
+fn vars_kind() -> usize { ret 12usize }
+fn var_record_size() -> usize { ret 28usize }
 
 fn declaration_function_kind() -> usize { ret 1usize }
 fn declaration_aggregate_kind() -> usize { ret 2usize }
@@ -168,7 +174,7 @@ fn mode_id(mode: BuildMode) -> usize {
 }
 
 fn known_kind(kind: usize) -> bool {
-    ret kind >= strings_kind() && kind <= emission_kind()
+    ret kind >= strings_kind() && kind <= vars_kind()
 }
 
 // One row of a code function's line table as an artifact carries it.
@@ -2912,7 +2918,7 @@ fn write_interface_artifact(c: *check.Checker, g: *graph.Graph, module_index: us
 }
 
 fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, target_triple: str, mode: BuildMode, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, line_count: usize, strings: *StringTable, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
-    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 10usize || output.count != 0usize { ret InvalidArtifact }
+    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 11usize || output.count != 0usize { ret InvalidArtifact }
     try reset_strings(strings)
     let (target_index, target_error) = intern(strings, target_triple)
     if target_error != ok { ret target_error }
@@ -2920,6 +2926,7 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     var constant_marks: [8192]u8 = zero
     try collect_module_strings(c, g, builder, module_index, strings, aggregate_marks[..], constant_marks[..])
     try collect_line_paths(builder, c, module_index, machine, function_offsets, lines, line_count, strings)
+    try collect_vars(builder, c, g, module_index, machine, function_offsets, strings)
     var writer: Writer = zero
     try begin(&writer, output, section_values, target_index, 0usize, mode)
     try begin_section(&writer, strings_kind(), required_flag())
@@ -2956,7 +2963,382 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     try begin_section(&writer, emission_kind(), required_flag())
     try write_emission(builder, c, module_index, output)
     try end_section(&writer)
+    try begin_section(&writer, vars_kind(), 0usize)
+    try write_vars(builder, c, module_index, strings, machine, function_offsets, output)
+    try end_section(&writer)
     ret finish(&writer)
+}
+
+// (D1582) A type as the Vars section spells it, appended to the builder's descriptor
+// text: a primitive by its name (`u32`, `f64`, `bool`, `err`), `str`, `*T` (`*?` for a
+// pointer to anything else), `[]T`, `[N]T`; a struct as `{size:n:name` and its field
+// count `k:`, then per field `n:name`, its offset, `:` and its type; an enum as
+// `=size:n:name` and its member count `k:`, then per member `n:name`, its value (`-`
+// before a negative one) and `:`; and any other type -- or a struct or enum nested
+// past `depth` 2, which keeps a type that points at itself finite -- as
+// `#size:n:name`, a structure of that size. Names carry their length, since a generic
+// instance's has brackets and commas. False for a type with no spelling.
+//
+// A struct is named, not spelled, where a var or a field has it -- `#size:n:module.name`
+// -- and its definition is spelled once for the artifact's type table (`definition`
+// true). A debugger finds the definition by the name; a name spelled once keeps a
+// descriptor short and a type that points at itself finite.
+fn spell_type(c: *check.Checker, g: *graph.Graph, ty: check.Type, info: *nir.DebugInfo) -> bool {
+    ret spell_type_at(c, g, ty, info, false)
+}
+
+fn spell_name(info: *nir.DebugInfo, name: str) -> bool {
+    ret spell_number(info, name.len) && spell_text(info, ":") && spell_text(info, name)
+}
+
+// `module.name`, its length first: two modules may each have a `Node`.
+fn spell_qualified(g: *graph.Graph, info: *nir.DebugInfo, ty: check.Type) -> bool {
+    if ty.module_index >= g.count { ret spell_name(info, ty.name) }
+    let module_name = g.modules[ty.module_index].name
+    ret spell_number(info, module_name.len + 1usize + ty.name.len) && spell_text(info, ":") && spell_text(info, module_name) && spell_text(info, ".") && spell_text(info, ty.name)
+}
+
+// A struct a descriptor names, to be defined: each once.
+fn want_definition(info: *nir.DebugInfo, ty: check.Type) {
+    var at = 0usize
+    while at < info.wanted_count {
+        if info.wanted[at].module_index == ty.module_index && check.same(info.wanted[at].name, ty.name) { ret }
+        at += 1usize
+    }
+    if info.wanted_count < info.wanted.len {
+        info.wanted[info.wanted_count] = ty
+        info.wanted_count += 1usize
+    }
+}
+
+fn spell_type_at(c: *check.Checker, g: *graph.Graph, ty: check.Type, info: *nir.DebugInfo, definition: bool) -> bool {
+    if ty.kind == .Bool { ret spell_text(info, "bool") }
+    if ty.kind == .Err { ret spell_text(info, "err") }
+    if ty.kind == .Integer || ty.kind == .Float { ret spell_text(info, ty.name) }
+    if ty.kind == .String { ret spell_text(info, "str") }
+    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .Array {
+        if ty.kind == .Pointer && !spell_text(info, "*") { ret false }
+        if ty.kind == .Slice && !spell_text(info, "[]") { ret false }
+        if ty.kind == .Array {
+            if !ty.has_length || !spell_text(info, "[") || !spell_number(info, ty.array_length) || !spell_text(info, "]") { ret false }
+        }
+        if !ty.has_element || ty.element >= c.types.len { ret ty.kind == .Pointer && spell_text(info, "?") }
+        let mark = info.text_count
+        if spell_type_at(c, g, c.types[ty.element], info, false) { ret true }
+        info.text_count = mark
+        ret ty.kind == .Pointer && spell_text(info, "?")
+    }
+    if ty.kind == .Named || ty.kind == .Tag {
+        let (layout, layout_error) = check.layout_type_info(c, ty)
+        if layout_error != ok { ret false }
+        let (aggregate_index, is_aggregate) = check.layout_aggregate_index(c, ty)
+        if is_aggregate && aggregate_index < c.aggregate_count {
+            let aggregate = c.aggregates[aggregate_index]
+            let mark = info.text_count
+            if aggregate.kind == .Struct && definition {
+                if spell_text(info, "{") && spell_number(info, layout.size) && spell_text(info, ":") && spell_qualified(g, info, ty) && spell_number(info, aggregate.field_count) && spell_text(info, ":") {
+                    var field_at = 0usize
+                    var spelled = true
+                    while field_at < aggregate.field_count && spelled {
+                        let field = c.aggregate_fields[aggregate.first_field + field_at]
+                        let (placed, placed_error) = check.layout_field(c, ty, field.name)
+                        spelled = placed_error == ok && spell_name(info, field.name) && spell_number(info, placed.offset) && spell_text(info, ":") && spell_type_at(c, g, placed.ty, info, false) && spell_text(info, ";")
+                        field_at += 1usize
+                    }
+                    if spelled { ret true }
+                }
+                info.text_count = mark
+                ret false
+            }
+            if aggregate.kind == .Struct { want_definition(info, ty) }
+            if aggregate.kind == .Enum {
+                if spell_text(info, "=") && spell_number(info, layout.size) && spell_text(info, ":") && spell_qualified(g, info, ty) && spell_number(info, aggregate.field_count) && spell_text(info, ":") {
+                    var member_at = 0usize
+                    var spelled = true
+                    while member_at < aggregate.field_count && spelled {
+                        let member = c.aggregate_fields[aggregate.first_field + member_at]
+                        spelled = spell_name(info, member.name) && (!member.enum_negative || spell_text(info, "-")) && spell_number(info, member.enum_value) && spell_text(info, ":")
+                        member_at += 1usize
+                    }
+                    if spelled { ret true }
+                }
+                info.text_count = mark
+            }
+        }
+        ret spell_text(info, "#") && spell_number(info, layout.size) && spell_text(info, ":") && spell_qualified(g, info, ty)
+    }
+    ret false
+}
+
+// (D1582) The type table a reused function's vars refer into: the previous artifact's
+// definitions, taken whole ahead of this one's.
+fn inherit_definitions(bytes: []const u8, strings: Section, info: *nir.DebugInfo) -> bool {
+    let (first, count, found) = vars_definitions(bytes)
+    if !found { ret true }
+    var at = 0usize
+    while at < count && info.definition_count < info.definitions.len {
+        let (start, length, bounds_error) = string_bounds_in(bytes, strings, binary.read_u32_at(bytes, first + at * 4usize))
+        if bounds_error != ok { ret false }
+        info.definitions[info.definition_count] = bytes[start..start + length]
+        info.definition_count += 1usize
+        at += 1usize
+    }
+    info.inherited = info.definition_count
+    ret true
+}
+
+// Where the Vars section's type table is: after the functions' records, a count and a
+// string index per definition.
+fn vars_definitions(bytes: []const u8) -> (usize, usize, bool) {
+    let (section, found, section_error) = find_section_unchecked(bytes, vars_kind())
+    if section_error != ok || !found || section.length < 4usize { ret (0usize, 0usize, false) }
+    let end = section.offset + section.length
+    let function_count = binary.read_u32_at(bytes, section.offset)
+    var cursor = section.offset + 4usize
+    var at = 0usize
+    while at < function_count {
+        if cursor > end || 4usize > end - cursor { ret (0usize, 0usize, false) }
+        let var_count = binary.read_u32_at(bytes, cursor)
+        cursor += 4usize
+        if var_count > (end - cursor) / var_record_size() { ret (0usize, 0usize, false) }
+        cursor += var_count * var_record_size()
+        at += 1usize
+    }
+    if cursor > end || 4usize > end - cursor { ret (0usize, 0usize, false) }
+    let count = binary.read_u32_at(bytes, cursor)
+    if count > (end - cursor - 4usize) / 4usize { ret (0usize, 0usize, false) }
+    ret (cursor + 4usize, count, true)
+}
+
+fn spell_text(info: *nir.DebugInfo, text: str) -> bool {
+    if info.text_count + text.len > info.text.len { ret false }
+    os.copy_bytes(info.text[info.text_count..info.text_count + text.len], text)
+    info.text_count += text.len
+    ret true
+}
+
+fn spell_number(info: *nir.DebugInfo, value: usize) -> bool {
+    var digits: [20]u8 = zero
+    var count = 0usize
+    var rest = value
+    while count == 0usize || rest != 0usize {
+        digits[count] = u8(48usize + rest % 10usize)
+        rest = rest / 10usize
+        count += 1usize
+    }
+    if info.text_count + count > info.text.len { ret false }
+    var at = 0usize
+    while at < count {
+        info.text[info.text_count + at] = digits[count - 1usize - at]
+        at += 1usize
+    }
+    info.text_count += count
+    ret true
+}
+
+// The first placed var of the function starting at `start` in the machine buffer, and
+// how many: selection placed them in code order.
+fn vars_of(builder: *nir.Builder, start: usize) -> (usize, usize) {
+    var low = 0usize
+    var high = builder.debug.var_count
+    while low < high {
+        let middle = low + (high - low) / 2usize
+        if builder.debug.vars[middle].function_start < start { low = middle + 1usize } else { high = middle }
+    }
+    var count = 0usize
+    while low + count < builder.debug.var_count && builder.debug.vars[low + count].function_start == start { count += 1usize }
+    ret (low, count)
+}
+
+// Each var's name and descriptor interned, a fresh one's type spelled first; a var
+// whose type has no spelling is left out (`kind` zero).
+fn collect_vars(builder: *nir.Builder, c: *check.Checker, g: *graph.Graph, module_index: usize, machine: *emit_x64.Buffer, function_offsets: []usize, table: *StringTable) -> err {
+    builder.debug.text_count = 0usize
+    builder.debug.wanted_count = 0usize
+    builder.debug.definition_count = builder.debug.inherited
+    var inherited_at = 0usize
+    while inherited_at < builder.debug.inherited {
+        let (inherited_index, inherited_error) = intern(table, builder.debug.definitions[inherited_at])
+        if inherited_error != ok { ret inherited_error }
+        inherited_at += 1usize
+    }
+    let (nir_first, nir_end) = span_of(c, span_nir(), module_index)
+    var function_at = nir_first
+    while function_at < nir_end {
+        if builder.functions[function_at].module_index == module_index && function_at < function_offsets.len {
+            let (first, count) = vars_of(builder, function_offsets[function_at])
+            var at = first
+            while at < first + count {
+                // A saved register's record (`kind` 4) names no local and has no type.
+                if builder.debug.vars[at].descriptor.len == 0usize && builder.debug.vars[at].kind != 4usize {
+                    let mark = builder.debug.text_count
+                    if spell_type(c, g, builder.debug.vars[at].ty, &builder.debug) {
+                        let spelled = builder.debug.text[mark..builder.debug.text_count]
+                        let known = table.count
+                        let (spelled_index, spelled_error) = intern(table, spelled)
+                        if spelled_error != ok { ret spelled_error }
+                        // Spelled before: the table keeps the first copy, and the text goes back.
+                        if table.count == known {
+                            builder.debug.text_count = mark
+                            builder.debug.vars[at].descriptor = table.values[spelled_index]
+                        } else {
+                            builder.debug.vars[at].descriptor = spelled
+                        }
+                    } else {
+                        builder.debug.text_count = mark
+                        builder.debug.vars[at].kind = 0usize
+                    }
+                }
+                if builder.debug.vars[at].kind != 0usize {
+                    let (descriptor_index, descriptor_error) = intern(table, builder.debug.vars[at].descriptor)
+                    if descriptor_error != ok { ret descriptor_error }
+                    let (name_index, name_error) = intern(table, builder.debug.vars[at].name)
+                    if name_error != ok { ret name_error }
+                }
+                at += 1usize
+            }
+        }
+        function_at += 1usize
+    }
+    // The structs the descriptors named, each defined once; a definition names more,
+    // which join the list behind it. One the reused functions' table already has is not
+    // spelled again.
+    var wanted_at = 0usize
+    while wanted_at < builder.debug.wanted_count && builder.debug.definition_count < builder.debug.definitions.len {
+        let mark = builder.debug.text_count
+        if spell_type_at(c, g, builder.debug.wanted[wanted_at], &builder.debug, true) {
+            let spelled = builder.debug.text[mark..builder.debug.text_count]
+            let known = table.count
+            let (spelled_index, spelled_error) = intern(table, spelled)
+            if spelled_error != ok { ret spelled_error }
+            if table.count == known {
+                builder.debug.text_count = mark
+                var defined = false
+                var defined_at = 0usize
+                while defined_at < builder.debug.definition_count && !defined {
+                    defined = check.same(builder.debug.definitions[defined_at], table.values[spelled_index])
+                    defined_at += 1usize
+                }
+                if !defined {
+                    builder.debug.definitions[builder.debug.definition_count] = table.values[spelled_index]
+                    builder.debug.definition_count += 1usize
+                }
+            } else {
+                builder.debug.definitions[builder.debug.definition_count] = spelled
+                builder.debug.definition_count += 1usize
+            }
+        } else {
+            builder.debug.text_count = mark
+        }
+        wanted_at += 1usize
+    }
+    ret ok
+}
+
+fn write_vars(builder: *nir.Builder, c: *check.Checker, module_index: usize, table: *StringTable, machine: *emit_x64.Buffer, function_offsets: []usize, output: *binary.Buffer) -> err {
+    try binary.little_u32(output, module_nir_function_count(builder, c, module_index))
+    let (nir_first, nir_end) = span_of(c, span_nir(), module_index)
+    var function_at = nir_first
+    while function_at < nir_end {
+        if builder.functions[function_at].module_index == module_index {
+            if function_at >= function_offsets.len { ret InvalidArtifact }
+            let start = function_offsets[function_at]
+            let (first, count) = vars_of(builder, start)
+            var written = 0usize
+            var at = first
+            while at < first + count {
+                if builder.debug.vars[at].kind != 0usize { written += 1usize }
+                at += 1usize
+            }
+            try binary.little_u32(output, written)
+            at = first
+            while at < first + count {
+                let placed = builder.debug.vars[at]
+                if placed.kind != 0usize {
+                    let (name_index, name_error) = string_index(table, placed.name)
+                    if name_error != ok { ret name_error }
+                    let (descriptor_index, descriptor_error) = string_index(table, placed.descriptor)
+                    if descriptor_error != ok { ret descriptor_error }
+                    try binary.little_u32(output, placed.start - start)
+                    try binary.little_u32(output, placed.end - start)
+                    try binary.little_u32(output, name_index)
+                    try binary.little_u32(output, descriptor_index)
+                    try binary.little_u32(output, placed.parameter)
+                    try binary.little_u32(output, placed.kind + placed.register * 256usize)
+                    try binary.little_u32(output, placed.displacement % 4294967296usize)
+                }
+                at += 1usize
+            }
+        }
+        function_at += 1usize
+    }
+    // The type table.
+    try binary.little_u32(output, builder.debug.definition_count)
+    var definition_at = 0usize
+    while definition_at < builder.debug.definition_count {
+        let (definition_index, definition_error) = string_index(table, builder.debug.definitions[definition_at])
+        if definition_error != ok { ret definition_error }
+        try binary.little_u32(output, definition_index)
+        definition_at += 1usize
+    }
+    ret ok
+}
+
+// The Vars records of every code function, located once like the lines (D1582): an
+// artifact without the section has none, which is not an error.
+fn code_vars_index(bytes: []const u8, count: usize, starts: []usize, counts: []usize) -> err {
+    let (section, found, section_error) = find_section_unchecked(bytes, vars_kind())
+    if section_error != ok || starts.len < count || counts.len < count { ret InvalidArtifact }
+    var at = 0usize
+    if !found {
+        while at < count {
+            starts[at] = 0usize
+            counts[at] = 0usize
+            at += 1usize
+        }
+        ret ok
+    }
+    if section.length < 4usize { ret InvalidArtifact }
+    let (function_count, count_error) = binary.read_u32(bytes, section.offset)
+    if count_error != ok || function_count != count { ret InvalidArtifact }
+    let end = section.offset + section.length
+    var cursor = section.offset + 4usize
+    while at < count {
+        if cursor > end || 4usize > end - cursor { ret InvalidArtifact }
+        let var_count = binary.read_u32_at(bytes, cursor)
+        cursor += 4usize
+        if var_count > (end - cursor) / var_record_size() { ret InvalidArtifact }
+        starts[at] = cursor
+        counts[at] = var_count
+        cursor += var_count * var_record_size()
+        at += 1usize
+    }
+    ret ok
+}
+
+// One Vars record at `record`, placed in a function starting at `start`: the name and
+// descriptor read from the artifact's own strings.
+fn read_var(bytes: []const u8, strings: Section, record: usize, start: usize) -> (nir.DebugVar, err) {
+    var placed: nir.DebugVar = zero
+    let (name_start, name_length, name_error) = string_bounds_in(bytes, strings, binary.read_u32_at(bytes, record + 8usize))
+    if name_error != ok { ret (placed, name_error) }
+    let (descriptor_start, descriptor_length, descriptor_error) = string_bounds_in(bytes, strings, binary.read_u32_at(bytes, record + 12usize))
+    if descriptor_error != ok { ret (placed, descriptor_error) }
+    let name = bytes[name_start..name_start + name_length]
+    let descriptor = bytes[descriptor_start..descriptor_start + descriptor_length]
+    let location = binary.read_u32_at(bytes, record + 20usize)
+    var displacement = binary.read_u32_at(bytes, record + 24usize)
+    if displacement >= 2147483648usize { displacement = displacement -% 4294967296usize }
+    placed.function_start = start
+    placed.start = start + binary.read_u32_at(bytes, record)
+    placed.end = start + binary.read_u32_at(bytes, record + 4usize)
+    placed.name = name
+    placed.descriptor = descriptor
+    placed.parameter = binary.read_u32_at(bytes, record + 16usize)
+    placed.kind = location % 256usize
+    placed.register = location / 256usize
+    placed.displacement = displacement
+    ret (placed, ok)
 }
 
 // (D1515) The Emission section: the count, then per code function its emission
@@ -3010,6 +3392,17 @@ fn emission_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, func
         let site_error = emission_site(builder, instruction, origin_base, scratch)
         if site_error != ok { ret (0usize, site_error) }
         at += 1usize
+    }
+    // (D1582) The named locals selection places: a renamed local selects the same
+    // code, and its record must not carry the old name.
+    let (debug_first, debug_count) = nir.debug_locals_of(builder, function.first_instruction)
+    var debug_at = debug_first
+    while debug_at < debug_first + debug_count {
+        let local = builder.debug.locals[debug_at]
+        var flags = local.parameter * 2usize
+        if local.address { flags += 1usize }
+        if canonical_text(scratch, local.name) != ok || binary.little_u32(scratch, local.value) != ok || binary.little_u32(scratch, flags) != ok { ret (0usize, binary.Capacity) }
+        debug_at += 1usize
     }
     let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
     // Zero stands for none.

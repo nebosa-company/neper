@@ -302,7 +302,60 @@ type InlinedRef = struct {
     caller_function: usize,
 }
 
+// (D1582) A named local or parameter as lowering bound it, for a foreign debugger
+// (section 13): its function by the function's first instruction, which a prune does
+// not move, the value that holds it, and whether that value is its address.
+type DebugLocal = struct {
+    function_start: usize,
+    value: usize,
+    name: str,
+    ty: check.Type,
+    // One more than the parameter's position; zero for a local.
+    parameter: usize,
+    address: bool,
+}
+
+// Where a debugger finds one, as selection placed it: a code range in the machine
+// buffer and a location -- a register (`kind` 1), memory at a register plus a
+// displacement (2), or the address held there (3). `descriptor` is the type as an
+// artifact spells it (D1582), empty until one is written or when `ty` is still to be
+// spelled.
+type DebugVar = struct {
+    function_start: usize,
+    start: usize,
+    end: usize,
+    name: str,
+    ty: check.Type,
+    descriptor: str,
+    parameter: usize,
+    kind: usize,
+    register: usize,
+    displacement: usize,
+    // The linker's: where the type's entry is, one more than its offset; zero for none.
+    type_entry: usize,
+}
+
+type DebugInfo = struct {
+    locals: []DebugLocal,
+    local_count: usize,
+    vars: []DebugVar,
+    var_count: usize,
+    // The descriptors an artifact writer spells, which its string table points into
+    // until the artifact is written.
+    text: []u8,
+    text_count: usize,
+    // The structs the descriptors refer to by name, and their definitions: the first
+    // `inherited` taken whole from a reused artifact, the rest spelled for this one.
+    wanted: []check.Type,
+    wanted_count: usize,
+    definitions: []str,
+    definition_count: usize,
+    inherited: usize,
+}
+
 type Builder = struct {
+    // (D1582) Named locals for a debugger: bound by lowering, placed by selection.
+    debug: DebugInfo,
     // The (module, instance, name) index over `function_refs` and the name index over
     // `strings` (D306): both interners scanned their whole table per call site and per
     // literal. Absent, they scan; the CLI attaches them.
@@ -858,6 +911,8 @@ fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions:
     // lives in arena memory, which a debug build fills rather than zeroes.
     builder.used_complete = false
     builder.used_count = 0usize
+    var no_debug: DebugInfo = zero
+    builder.debug = no_debug
     builder.trap_text = builder.trap_text[0usize..0usize]
     builder.trap_data_strings = builder.trap_data_strings[0usize..0usize]
     builder.trap_data_refs = builder.trap_data_refs[0usize..0usize]
@@ -1139,6 +1194,30 @@ fn intern_string(builder: *Builder, spelling: str) -> (usize, err) {
     builder.strings[index] = StringConstant { spelling: spelling }
     builder.string_count += 1usize
     ret (index, ok)
+}
+
+// (D1582) A named local of the function being lowered, for a debug build's DWARF. A
+// release build names none (section 13: the locals and types are a debug build's), a
+// builder without the table (an oracle, a test) skips it, and one past its capacity
+// drops it: a debugger then shows less, never something wrong.
+fn add_debug_local(builder: *Builder, value: usize, name: str, ty: check.Type, parameter: usize, address: bool) {
+    if builder.release || builder.frame_mode || !builder.function_active || builder.debug.local_count >= builder.debug.locals.len { ret }
+    builder.debug.locals[builder.debug.local_count] = DebugLocal { function_start: builder.functions[builder.current_function].first_instruction, value: value, name: name, ty: ty, parameter: parameter, address: address }
+    builder.debug.local_count += 1usize
+}
+
+// The first of a function's debug locals and how many, by its first instruction: they
+// were added in that order, one function at a time.
+fn debug_locals_of(builder: *Builder, function_start: usize) -> (usize, usize) {
+    var low = 0usize
+    var high = builder.debug.local_count
+    while low < high {
+        let middle = low + (high - low) / 2usize
+        if builder.debug.locals[middle].function_start < function_start { low = middle + 1usize } else { high = middle }
+    }
+    var count = 0usize
+    while low + count < builder.debug.local_count && builder.debug.locals[low + count].function_start == function_start { count += 1usize }
+    ret (low, count)
 }
 
 fn begin_function(builder: *Builder, module_index: usize, name: str, instance: usize) -> (usize, err) {
@@ -1659,13 +1738,15 @@ type Mark = struct {
     operand_count: usize,
     inlined_count: usize,
     inline_origin_count: usize,
+    debug_local_count: usize,
 }
 
 fn mark(builder: *Builder) -> Mark {
-    ret Mark { function_count: builder.function_count, block_count: builder.block_count, instruction_count: builder.instruction_count, operand_count: builder.operand_count, inlined_count: builder.inlined_count, inline_origin_count: builder.inline_origin_count }
+    ret Mark { function_count: builder.function_count, block_count: builder.block_count, instruction_count: builder.instruction_count, operand_count: builder.operand_count, inlined_count: builder.inlined_count, inline_origin_count: builder.inline_origin_count, debug_local_count: builder.debug.local_count }
 }
 
 fn reset(builder: *Builder, at: Mark) {
+    builder.debug.local_count = at.debug_local_count
     builder.function_count = at.function_count
     builder.block_count = at.block_count
     builder.instruction_count = at.instruction_count
@@ -1686,6 +1767,8 @@ fn discard_bodies(builder: *Builder, at: Mark) {
     if held > builder.instruction_peak { builder.instruction_peak = held }
     builder.block_total += builder.block_count - at.block_count
     builder.operand_total += builder.operand_count - at.operand_count
+    // The locals name values in the bodies that go (D1582).
+    builder.debug.local_count = at.debug_local_count
     builder.block_count = at.block_count
     builder.instruction_count = at.instruction_count
     builder.operand_count = at.operand_count

@@ -28614,3 +28614,42 @@ The line and symbol tables go into release images too, because section 13 asks f
 In WSL with gdb 15.1, `break main.main` stops at `main.e:11` in the release fixture. `next` steps by source line, and a backtrace names `add`, `main` and `_start` with their lines. `addr2line` and `objdump -d` name every function, in the release image as well. On the self-hosted compiler, `break lex.line_of` resolves to `src/lex.e:182`. `run.sh` checks the sections on the debug and the release image, and checks gdb's stop at a line. Stage 2 equals stage 3 on both hosts.
 
 Still open: CodeView and `.nepsym` on PE, `.nepersym` in section 13's layout, and variables (the locals-and-types subset).
+
+## D1582 — Locals, types and frames for a debugger on ELF
+
+C084's last line, "variables", holds on ELF. gdb shows each function's parameters and named locals with their values, in the frame stopped in and in every caller, together with their types: primitives, `bool`, `err`, `str` (as its bytes and length), pointers, slices, arrays, structs with their fields, and enums by member name.
+
+**Where a local is.** Lowering records every name it binds (`bind_value`, and each parameter) with the NIR value that holds it, keyed by the function's first instruction, which a prune does not move. Release builds and kernel frames record none. Selection then places each local:
+
+- A stack object the allocator left in memory (an aggregate, or a `var` whose address is taken) and a parameter's incoming slot keep the local for the whole function, at a fixed displacement from `rbp`. A local bound to `&object` is that address as a value (`DW_OP_stack_value`).
+- Any other value keeps its local in its register or spill slot for the range the allocator gave it, from after its defining instruction to its last use. D236's promoted `var`s are among these: their "address" became the value itself.
+- A register a call clobbers holds the value in its preserve slot through each save-to-restore window around a call, and the location list switches to that slot there. So a caller's frame shows the right value while its callee runs.
+- After its last use a local is `<optimized out>`, as a debugger expects of an optimised build. The roadmap had planned one stable frame slot per local. That would have taken the registers away from debug builds, and the compiler is itself a debug build.
+
+**How it gets to the image.** Every executable links from artifacts, so the placements travel in a new `.em` Vars section (format 18). Per code function, each record holds a code range, the name, a type descriptor, the parameter position and the location. After the records comes a type table: one definition per struct the descriptors name.
+
+A descriptor is a short string. A struct is named (`#size:n:module.name`) wherever a variable or a field has it, and its fields are spelled once, in its definition. So a type that points at itself stays finite, and a `*Checker` local does not repeat Checker's 160 fields.
+
+Emission reuse (D1515) carries a reused function's records and its artifact's definitions over. The emission identity now includes the locals' names, so a rename is selected again. A warm build of an edited program, with three functions reused, is byte-identical to a clean build.
+
+**What the linker writes.** In every ELF image:
+
+- a DWARF 4 entry per type;
+- per subprogram, its parameters and variables, with an expression for a whole-function location or a `.debug_loc` list for ranges;
+- a `.debug_frame`: a CIE, and per function an FDE that follows the `push rbp` / `mov rbp, rsp` prologue and says where the function saved each callee-saved register it uses. Selection records those slots too.
+
+Section 13 asks for unwind information in release as well, so release images carry the frame description. Without it gdb had shown a caller's `rbx`-held values as whatever the callee left there.
+
+A struct is written as a DWARF declaration wherever it is referred to by name, and gdb resolves each declaration to the definition with that qualified name. Unions and tagged unions are still structures known only by their size.
+
+**Evidence.**
+
+- **gdb 15.1 in WSL.** On a test program, gdb shows `add (a=2, b=3)` and `length (p=..., name=...)` with `p = {x = 3, y = 4}`. In the caller it shows `ratio = 1.5`, `flag = true`, `shade = Green`, and `head = {value = 7, next = ..., tint = Blue, corner = {x = 3, y = 4}}`. It prints `*head.next` through the pointer, and `ptype head` gives `struct vars.Node` with its four fields. Inside the self-hosted compiler, `check.check_expr` shows its arguments and `check_binding`'s locals.
+- **Suite.** `run.sh` checks that gdb prints the release fixture's `n = 6` and `args = {ptr = ..., len = 1}`.
+- **Images.** The loaded bytes of every link fixture are unchanged. Windows images are byte-identical, since placement is ELF-only until a PE debug format exists.
+- **Fixed point.** Stage 2 equals stage 3 on both hosts.
+- **Cost.** A cold build of the compiler for Linux costs about 7% more time (about 70 ms), for an image 2.3 MB larger. A Windows build costs nothing measurable.
+
+**Suite expectations.** Both runners now expect format 18 and an 11-section module artifact. The section count had not been updated when D1515 added the Emission section: artifacts already had 10 sections while the check said 9.
+
+Still open: CodeView and `.nepsym` on PE; `.nepersym` in section 13's layout; unions and tagged unions as more than their size; and lexical scopes, since a local is listed for its whole function even before its binding.
