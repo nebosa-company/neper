@@ -190,6 +190,9 @@ type Type = struct {
     is_const: bool,
     array_length: usize,
     has_length: bool,
+    // (D1590) Section 10's shared address space: a `[]shared T` or `*shared T`, which is
+    // no `[]T` or `*T`; and a `shared var`'s own array, whose slices and addresses are.
+    in_shared: bool,
 }
 
 type FunctionSignature = struct {
@@ -1204,7 +1207,7 @@ fn ends_with(text: str, suffix: str) -> bool {
 }
 
 fn make_type(kind: Kind, name: str, module_index: usize) -> Type {
-    ret Type { kind: kind, name: name, module_index: module_index, element: 0usize, has_element: false, is_const: false, array_length: 0usize, has_length: false }
+    ret Type { kind: kind, name: name, module_index: module_index, element: 0usize, has_element: false, is_const: false, array_length: 0usize, has_length: false, in_shared: false }
 }
 
 fn store_type(c: *Checker, ty: Type) -> (usize, err) {
@@ -1241,7 +1244,7 @@ fn is_untyped(ty: Type) -> bool {
 
 fn is_string_shape(c: *Checker, ty: Type) -> bool {
     if ty.kind == .String { ret true }
-    if ty.kind != .Slice || !ty.is_const || !ty.has_element || ty.element >= c.type_count { ret false }
+    if ty.kind != .Slice || !ty.is_const || ty.in_shared || !ty.has_element || ty.element >= c.type_count { ret false }
     let element = c.types[ty.element]
     ret element.kind == .Integer && same(element.name, "u8")
 }
@@ -1266,7 +1269,7 @@ fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
     if a.kind == .TypeParameter { ret a.has_element && b.has_element && a.element == b.element && a.has_length == b.has_length }
     if a.kind == .Integer || a.kind == .Float { ret same(a.name, b.name) }
     if a.kind == .Pointer || a.kind == .Slice {
-        if a.is_const != b.is_const || !a.has_element || !b.has_element { ret false }
+        if a.is_const != b.is_const || a.in_shared != b.in_shared || !a.has_element || !b.has_element { ret false }
         if a.element >= c.type_count || b.element >= c.type_count { ret false }
         ret type_equal(c, c.types[a.element], c.types[b.element])
     }
@@ -1303,7 +1306,7 @@ fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
 fn type_assignable(c: *Checker, actual: Type, expected: Type) -> bool {
     if type_equal(c, actual, expected) { ret true }
     if actual.kind == expected.kind && (actual.kind == .Pointer || actual.kind == .Slice) {
-        if actual.is_const || !expected.is_const || !actual.has_element || !expected.has_element { ret false }
+        if actual.is_const || !expected.is_const || actual.in_shared != expected.in_shared || !actual.has_element || !expected.has_element { ret false }
         if actual.element >= c.type_count || expected.element >= c.type_count { ret false }
         ret type_equal(c, c.types[actual.element], c.types[expected.element])
     }
@@ -1612,7 +1615,7 @@ fn composite_const(c: *Checker, node: syntax.Node, child: syntax.Node) -> (bool,
     var at = usize(node.token_start)
     while at < usize(child.token_start) {
         if c.tokens[at].kind == .KwConst { is_const = true }
-        if c.tokens[at].kind == .KwShared { ret (false, Unsupported) }
+        // `shared` is the address space (D1590), read by `type_from_node`.
         at += 1usize
     }
     ret (is_const, ok)
@@ -2012,6 +2015,12 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         result.element = element_index
         result.has_element = true
         result.is_const = is_const
+        // (D1590) `[]shared T`, `*shared T`: the keyword before the element.
+        var qualifier_at = usize(node.token_start)
+        while qualifier_at < usize(child.token_start) && qualifier_at < c.token_count {
+            if c.tokens[qualifier_at].kind == .KwShared { result.in_shared = true }
+            qualifier_at += 1usize
+        }
         ret (result, ok)
     }
     if node.kind == .ArrayType {
@@ -12824,6 +12833,8 @@ fn check_bracket_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         var result = make_type(.Slice, "", module_index)
         result.element = stored_element
         result.has_element = true
+        // (D1590) A slice of shared storage -- a `shared var` or a shared slice -- is one.
+        result.in_shared = base.in_shared
         if base.kind == .String {
             result.is_const = true
         } else {
@@ -13256,6 +13267,8 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             pointer.element = element_index
             pointer.has_element = true
             pointer.is_const = !mutable
+            // (D1590) The address of shared storage is a `*shared T`.
+            pointer.in_shared = place_shared(c, g, tree, module_index, child_index)
             let (result_type, context_error) = apply_context(c, pointer, expected)
             ret (result_type, context_error)
         }
@@ -15246,7 +15259,33 @@ fn check_shared_var(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         record_failure(c, module_index, node, .GpuLaunch, name, "is a `shared var` of a type that is not device storage: no pointer, slice, string, bool or function lives in a workgroup's memory")
         ret InvalidType
     }
-    ret add_local(c, name, declared, true)
+    // (D1590) Workgroup storage: its slices and addresses are in the shared space.
+    var workgroup = declared
+    workgroup.in_shared = true
+    ret add_local(c, name, workgroup, true)
+}
+
+// (D1590) Whether a place is shared storage: rooted, through indexes, fields and
+// dereferences, at a `shared var` or at a shared slice or pointer.
+fn place_shared(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> bool {
+    let text = g.modules[module_index].text
+    var at = node_index
+    var steps = 0usize
+    while steps < 32usize {
+        let node = tree.nodes[at]
+        if node.kind == .NameExpr {
+            let token = c.tokens[usize(node.token_start)]
+            if token.kind != .Identifier { ret false }
+            let (local_index, is_local) = find_local(c, text[token.start..token.end])
+            ret is_local && c.locals[local_index].ty.in_shared
+        }
+        if node.kind != .BracketPostfix && node.kind != .FieldExpr && node.kind != .GroupExpr && node.kind != .UnaryExpr { ret false }
+        let (inner, has_inner) = first_node_child(tree, node)
+        if !has_inner { ret false }
+        at = inner
+        steps += 1usize
+    }
+    ret false
 }
 
 // The identifier after `shared var`.

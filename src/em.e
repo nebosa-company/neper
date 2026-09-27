@@ -220,6 +220,8 @@ fn type_flags(ty: check.Type) -> usize {
     if ty.is_const { flags += 1usize }
     if ty.has_element { flags += 2usize }
     if ty.has_length { flags += 4usize }
+    // (D1590) The shared address space of a slice or pointer (section 10).
+    if ty.in_shared { flags += 8usize }
     ret flags
 }
 
@@ -4477,7 +4479,7 @@ fn interface_type_end(bytes: []const u8, cursor: usize, end: usize, depth: usize
     if depth > 64usize || cursor > end || end > bytes.len || end - cursor < 20usize { ret (0usize, InvalidArtifact) }
     let kind = usize(bytes[cursor])
     let flags = usize(bytes[cursor + 1usize])
-    if kind == 0usize || kind > 16usize || flags > 7usize { ret (0usize, InvalidArtifact) }
+    if kind == 0usize || kind > 16usize || flags > 15usize { ret (0usize, InvalidArtifact) }
     var next = cursor + 20usize
     if (kind == 9usize || kind == 10usize || kind == 11usize) && (flags & 2usize) != 0usize {
         let (element_end, element_error) = interface_type_end(bytes, next, end, depth + 1usize)
@@ -4934,6 +4936,7 @@ fn decode_type(c: *check.Checker, g: *graph.Graph, bytes: []const u8, cursor: us
     var ty = check.make_type(kind, name, owner)
     ty.is_const = (flags & 1usize) != 0usize
     ty.has_length = (flags & 4usize) != 0usize
+    ty.in_shared = (flags & 8usize) != 0usize
     if ty.has_length { ty.array_length = length }
     var next = cursor + 20usize
     if (flags & 2usize) != 0usize && aggregate_type(kind) {
