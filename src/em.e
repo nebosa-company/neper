@@ -119,7 +119,8 @@ type CodeRelocation = struct {
 // (D1514) Format 16: the Globals section carries each global's type after its records.
 // (D1515) Format 17: the Emission section.
 // (D1582) Format 18: the Vars section.
-fn format_version() -> usize { ret 18usize }
+// (D1584) Format 19: a Vars record carries its scope.
+fn format_version() -> usize { ret 19usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -146,7 +147,7 @@ fn emission_record_size() -> usize { ret 16usize }
 // debugger -- a code range within the function, the name, the type as a descriptor,
 // the parameter position plus one, and the location.
 fn vars_kind() -> usize { ret 12usize }
-fn var_record_size() -> usize { ret 28usize }
+fn var_record_size() -> usize { ret 36usize }
 
 fn declaration_function_kind() -> usize { ret 1usize }
 fn declaration_aggregate_kind() -> usize { ret 2usize }
@@ -3266,6 +3267,8 @@ fn write_vars(builder: *nir.Builder, c: *check.Checker, module_index: usize, tab
                     try binary.little_u32(output, placed.parameter)
                     try binary.little_u32(output, placed.kind + placed.register * 256usize)
                     try binary.little_u32(output, placed.displacement % 4294967296usize)
+                    try binary.little_u32(output, placed.scope_start - start)
+                    try binary.little_u32(output, placed.scope_end - start)
                 }
                 at += 1usize
             }
@@ -3338,6 +3341,8 @@ fn read_var(bytes: []const u8, strings: Section, record: usize, start: usize) ->
     placed.kind = location % 256usize
     placed.register = location / 256usize
     placed.displacement = displacement
+    placed.scope_start = start + binary.read_u32_at(bytes, record + 28usize)
+    placed.scope_end = start + binary.read_u32_at(bytes, record + 32usize)
     ret (placed, ok)
 }
 
@@ -3401,7 +3406,12 @@ fn emission_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, func
         let local = builder.debug.locals[debug_at]
         var flags = local.parameter * 2usize
         if local.address { flags += 1usize }
-        if canonical_text(scratch, local.name) != ok || binary.little_u32(scratch, local.value) != ok || binary.little_u32(scratch, flags) != ok { ret (0usize, binary.Capacity) }
+        // The scope from the function's start: selection places it.
+        var scope_start = 0usize
+        var scope_end = 0usize
+        if local.scope_start >= function.first_instruction { scope_start = local.scope_start - function.first_instruction }
+        if local.scope_end >= function.first_instruction { scope_end = local.scope_end - function.first_instruction }
+        if canonical_text(scratch, local.name) != ok || binary.little_u32(scratch, local.value) != ok || binary.little_u32(scratch, flags) != ok || binary.little_u32(scratch, scope_start) != ok || binary.little_u32(scratch, scope_end) != ok { ret (0usize, binary.Capacity) }
         debug_at += 1usize
     }
     let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])

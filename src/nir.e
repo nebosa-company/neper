@@ -313,6 +313,10 @@ type DebugLocal = struct {
     // One more than the parameter's position; zero for a local.
     parameter: usize,
     address: bool,
+    // (D1584) Its scope, as instruction indexes: from its binding to the end of the
+    // block that declares it, zero until that block ends (the function's end then).
+    scope_start: usize,
+    scope_end: usize,
 }
 
 // Where a debugger finds one, as selection placed it: a code range in the machine
@@ -328,6 +332,9 @@ type DebugVar = struct {
     ty: check.Type,
     descriptor: str,
     parameter: usize,
+    // (D1584) Where its name is in scope, in the machine buffer.
+    scope_start: usize,
+    scope_end: usize,
     kind: usize,
     register: usize,
     displacement: usize,
@@ -1202,8 +1209,18 @@ fn intern_string(builder: *Builder, spelling: str) -> (usize, err) {
 // drops it: a debugger then shows less, never something wrong.
 fn add_debug_local(builder: *Builder, value: usize, name: str, ty: check.Type, parameter: usize, address: bool) {
     if builder.release || builder.frame_mode || !builder.function_active || builder.debug.local_count >= builder.debug.locals.len { ret }
-    builder.debug.locals[builder.debug.local_count] = DebugLocal { function_start: builder.functions[builder.current_function].first_instruction, value: value, name: name, ty: ty, parameter: parameter, address: address }
+    builder.debug.locals[builder.debug.local_count] = DebugLocal { function_start: builder.functions[builder.current_function].first_instruction, value: value, name: name, ty: ty, parameter: parameter, address: address, scope_start: builder.instruction_count, scope_end: 0usize }
     builder.debug.local_count += 1usize
+}
+
+// (D1584) The end of a block: the locals it declared, from `first` on, go out of scope
+// here; an inner block's already have.
+fn close_debug_scope(builder: *Builder, first: usize) {
+    var at = first
+    while at < builder.debug.local_count {
+        if builder.debug.locals[at].scope_end == 0usize { builder.debug.locals[at].scope_end = builder.instruction_count }
+        at += 1usize
+    }
 }
 
 // The first of a function's debug locals and how many, by its first instruction: they

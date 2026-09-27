@@ -1238,7 +1238,9 @@ fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets
     try append_blob(output, "\x11\x34\x00\x03\x08\x49\x13\x02\x17\x00\x00")
     // 18 an enumeration and 19 its enumerator.
     try append_blob(output, "\x12\x04\x01\x03\x08\x0b\x0b\x00\x00")
-    try append_blob(output, "\x13\x28\x00\x03\x08\x1c\x0d\x00\x00\x00")
+    try append_blob(output, "\x13\x28\x00\x03\x08\x1c\x0d\x00\x00")
+    // (D1584) 20 a lexical block: its range, and the locals its block declares.
+    try append_blob(output, "\x14\x0b\x01\x11\x01\x12\x07\x00\x00\x00")
     // The location lists, before the entries that name them: a var placed for part of its
     // function has one, in the order the entries are written below.
     sections.abbrev_end = output.count
@@ -1331,6 +1333,11 @@ fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets
             try emit_x64.little_u64(output, code_address + function_offsets[at])
             try emit_x64.little_u64(output, end - function_offsets[at])
             if locals != 0usize {
+                // (D1584) The open lexical blocks' ends, innermost last. The locals come
+                // in binding order, so a block's scopes nest: one that ends where the
+                // innermost does is that block's; one that ends sooner opens a block inside.
+                var scope_ends: [64]usize = zero
+                var depth = 0usize
                 var var_at = vars_first
                 while var_at < vars_first + vars_count {
                     let placed = builder.debug.vars[var_at]
@@ -1338,6 +1345,20 @@ fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets
                     if !local_head(placed) {
                         var_at = pieces_end
                         continue
+                    }
+                    if placed.parameter == 0usize {
+                        while depth != 0usize && scope_ends[depth - 1usize] <= placed.scope_start {
+                            try emit_x64.byte(output, 0usize)
+                            depth = depth - 1usize
+                        }
+                        let nested = depth == 0usize || placed.scope_end < scope_ends[depth - 1usize]
+                        if nested && depth < scope_ends.len && placed.scope_end > placed.scope_start {
+                            try uleb(output, 20usize)
+                            try emit_x64.little_u64(output, code_address + placed.scope_start)
+                            try emit_x64.little_u64(output, placed.scope_end - placed.scope_start)
+                            scope_ends[depth] = placed.scope_end
+                            depth += 1usize
+                        }
                     }
                     let whole = pieces_end == var_at + 1usize && whole_function(placed, function_offsets[at], end)
                     let has_type = placed.type_entry != 0usize
@@ -1368,6 +1389,10 @@ fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets
                         loc_cursor += 16usize
                     }
                     var_at = pieces_end
+                }
+                while depth != 0usize {
+                    try emit_x64.byte(output, 0usize)
+                    depth = depth - 1usize
                 }
                 try emit_x64.byte(output, 0usize)
             }

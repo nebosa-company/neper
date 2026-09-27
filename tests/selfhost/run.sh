@@ -4103,6 +4103,8 @@ if command -v readelf >/dev/null 2>&1; then
             esac
         done
     done
+    # (D1584) A block's locals sit in a lexical block of their own.
+    readelf --debug-dump=info "$release_debug_path" | grep -q DW_TAG_lexical_block || { printf '%s\n' 'the debug image has no lexical block' >&2; exit 1; }
 fi
 if command -v gdb >/dev/null 2>&1; then
     debug_gdb=$(gdb -q -batch -ex 'set debuginfod enabled off' -ex 'break main.main' -ex run -ex bt -ex next -ex next -ex 'print n' -ex 'info args' "$release_debug_path" 2>&1 || true)
@@ -4759,7 +4761,7 @@ done
 noescape_summary_artifact="$test_build/noescape-summary.x64-linux.em"
 [ "$($test_build/neper-self emit-em "$conformance_root/accept/regions_noescape_contract_artifact.e" "$repo" x64 linux "$noescape_summary_artifact")" = 'compiled module written' ]
 noescape_summary_interface=$(od -An -tu8 -j64 -N8 "$noescape_summary_artifact" | tr -d ' ')
-[ "$(od -An -tu2 -j4 -N2 "$noescape_summary_artifact" | tr -d ' ')" = '18' ]
+[ "$(od -An -tu2 -j4 -N2 "$noescape_summary_artifact" | tr -d ' ')" = '19' ]
 [ "$(od -An -tu4 -j$((noescape_summary_interface + 48)) -N4 "$noescape_summary_artifact" | tr -d ' ')" = '1' ]
 [ "$(od -An -tu4 -j$((noescape_summary_interface + 52)) -N4 "$noescape_summary_artifact" | tr -d ' ')" = '2' ]
 noescape_multi_artifact="$test_build/noescape-multi.x64-linux.em"
@@ -6632,7 +6634,7 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '18' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '19' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '11' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
