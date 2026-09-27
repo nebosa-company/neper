@@ -4483,14 +4483,22 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     let (lines, lines_error) = mem.alloc[widget.Node](a, 4usize)
     if lines_error != ok { ret (zero, TooLarge) }
     var parts_at = 0usize
+    // (D1595) A field that can float its label keeps the same shape floated or not:
+    // the unkeyed nodes round the editor are matched by position, so a node that
+    // comes or goes before them remakes the editor and drops the focus the float
+    // answered. An empty box holds the place of what is not shown.
+    let can_float = label.len != 0usize && !dense
     // The floated label on a filled box rides at the top, inside.
-    if floated && options.filled {
-        var small = text_options()
-        small.role = .BodySmall
-        small.wrap = .None
-        let (small_node, small_error) = colored_text(a, 0u64, label, t, small, label_color)
-        if small_error != ok { ret (zero, small_error) }
-        lines[parts_at] = small_node
+    if can_float && options.filled {
+        lines[parts_at] = widget.box(0u64, style.defaults(), zero)
+        if floated {
+            var small = text_options()
+            small.role = .BodySmall
+            small.wrap = .None
+            let (small_node, small_error) = colored_text(a, 0u64, label, t, small, label_color)
+            if small_error != ok { ret (zero, small_error) }
+            lines[parts_at] = small_node
+        }
         parts_at += 1usize
     }
     var grow = style.defaults()
@@ -4507,6 +4515,9 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         let (pre, pre_error) = colored_text(a, 0u64, options.prefix, t, affix, with_alpha(muted, value_color.alpha))
         if pre_error != ok { ret (zero, pre_error) }
         row_parts[row_at] = pre
+        row_at += 1usize
+    } else if options.prefix.len != 0usize {
+        row_parts[row_at] = widget.box(0u64, style.defaults(), zero)
         row_at += 1usize
     }
     row_parts[row_at] = value_stack
@@ -4557,10 +4568,11 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         frame_style.radius = t.tokens.radii.xs
     }
     let frame = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, lines[0usize..parts_at])
-    // The outlined field's floated label sits in a notch over its top edge.
+    // The outlined field's floated label sits in a notch over its top edge; the
+    // stack that holds the notch is there floated or not.
     var boxed = frame
-    if floated && !options.filled {
-        let (notched_node, notched_error) = notched(a, t, frame, label, label_color, pad_x)
+    if can_float && !options.filled {
+        let (notched_node, notched_error) = notched(a, t, frame, label, label_color, pad_x, floated)
         if notched_error != ok { ret (zero, notched_error) }
         boxed = notched_node
     }
@@ -4588,8 +4600,15 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
 }
 
-// An outlined box with its floated label in a notch over its top edge, `pad_x` in.
-fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color: paint.Color, pad_x: f32) -> (widget.Node, err) {
+// An outlined box with its floated label in a notch over its top edge, `pad_x` in;
+// not `shown`, the box alone in the same stack.
+fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color: paint.Color, pad_x: f32, shown: bool) -> (widget.Node, err) {
+    if !shown {
+        let (alone, alone_error) = mem.alloc[widget.Node](a, 1usize)
+        if alone_error != ok { ret (zero, TooLarge) }
+        alone[0usize] = frame
+        ret (widget.stack(0u64, style.defaults(), alone[0usize..1usize]), ok)
+    }
     var notch = text_options()
     notch.role = .BodySmall
     notch.wrap = .None
@@ -4893,8 +4912,8 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     let (head_node, head_error) = pressable_states(a, key, t, 3u8, shown, look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, content)
     if head_error != ok { ret (zero, head_error) }
     var framed = head_node
-    if chosen && label.len != 0usize && notch {
-        let (notched_node, notched_error) = notched(a, t, head_node, label, label_color, pad_x)
+    if label.len != 0usize && notch {
+        let (notched_node, notched_error) = notched(a, t, head_node, label, label_color, pad_x, chosen)
         if notched_error != ok { ret (zero, notched_error) }
         framed = notched_node
     }

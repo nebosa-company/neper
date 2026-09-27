@@ -3136,6 +3136,12 @@ ui_field_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/ui-field-selfhost"
 ui_field_output=$("$test_build/ui-field-selfhost")
 [ "$ui_field_output" = 'ui field ok' ]
+# A labelled field and a select keep the focus across the rebuild their float causes (D1595).
+ui_field_focus_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_field_focus/src/main.e" "$repo" x64 linux "$test_build/ui-field-focus-selfhost")
+[ "$ui_field_focus_written" = 'executable written' ]
+chmod +x "$test_build/ui-field-focus-selfhost"
+ui_field_focus_output=$("$test_build/ui-field-focus-selfhost")
+[ "$ui_field_focus_output" = 'ui field focus ok' ]
 # Basic choice (D824, widget plan P1-11): a select with its menu, a list box.
 ui_choice_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_choice/src/main.e" "$repo" x64 linux "$test_build/ui-choice-selfhost")
 [ "$ui_choice_written" = 'executable written' ]

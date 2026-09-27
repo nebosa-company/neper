@@ -3435,6 +3435,12 @@ $uiFieldWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $uiFieldWritten -ne 'executable written') { throw 'ui_field emission failed' }
 $uiFieldOutput = & $uiFieldPath
 if ($LASTEXITCODE -ne 0 -or $uiFieldOutput -ne 'ui field ok') { throw "the text fields answered wrongly: exit $LASTEXITCODE" }
+# A labelled field and a select keep the focus across the rebuild their float causes (D1595).
+$uiFieldFocusPath = Join-Path $testBuild 'ui-field-focus-selfhost.exe'
+$uiFieldFocusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_field_focus\src\main.e') $repo 'x64' 'windows' $uiFieldFocusPath
+if ($LASTEXITCODE -ne 0 -or $uiFieldFocusWritten -ne 'executable written') { throw 'ui_field_focus emission failed' }
+$uiFieldFocusOutput = & $uiFieldFocusPath
+if ($LASTEXITCODE -ne 0 -or $uiFieldFocusOutput -ne 'ui field focus ok') { throw "a labelled field lost its focus: exit $LASTEXITCODE" }
 # Basic choice (D824, widget plan P1-11): a select with its menu, a list box.
 $uiChoicePath = Join-Path $testBuild 'ui-choice-selfhost.exe'
 $uiChoiceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_choice\src\main.e') $repo 'x64' 'windows' $uiChoicePath
