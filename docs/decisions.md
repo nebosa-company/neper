@@ -28212,3 +28212,29 @@ Result, check-bodies with resource checking against without:
 D352's budget is wall-clock, +10% on the debug rows, and both rows are now inside it: `sc500k` by the deterministic count, and the compiler source by the median. The count is still +12.9% on the compiler source, because its functions hold an unchecked error almost everywhere, and those errors are resources. The remainder is the per-statement walk, alias and region recording at bindings, and branch snapshots. A wall-clock budget on a busy host has no margin to spare at 9.2%, so this row should be re-measured whenever the pass grows.
 
 Sweeps against D1563's compiler: none of 608 accept sources and 158 reject answers changed. Stage 2 equals stage 3 on both hosts.
+
+## D1565 — A callee keeps what its body can keep
+
+D1562 let a container keep only what a callee takes by `own`. A callee that keeps a borrowed argument slipped past: given `&names` and a pointer into a region value, `fn remember(kept: *List[*u8], p: *u8) { list.push(kept, p) }` stores `p`, and `names` read after the reset was accepted.
+
+Counting every non-`own` argument was D1562's first version, and the compiler's own writers failed it. `quoted(&out, digest)` copies the digest, yet `out` was refused after the digest's region was reset. `@noescape` would say so, but the bootstrap cannot lex an attribute in `src/`, and `@noescape` refuses forwarding to an unannotated callee, so even `text` → `os.copy_bytes` would need a chain of annotations. So the callee is asked instead.
+
+A region value or a view handed to a non-`own` parameter beside a mutable `&c` now leaves `c` holding it, unless one of three things rules that out:
+
+- **The parameter is `@noescape`.**
+- **The callee's body keeps nothing of it.** `callee_keeps` loads the callee's tree (the comptime interpreter's per-module trees; the declaration is found by binary search from its first byte). It follows the parameter and every local bound or assigned from a value that may carry it, until that set stops growing. The body keeps when such a value is stored anywhere but a bare local, iterated or switched over for elements that may hold a pointer, or handed to a callee that takes it (`own`) or keeps it in turn, through any number of modules. `.len`, an element that holds no pointer, a comparison and a `ret` keep nothing; the caller follows a result. An extern or intrinsic callee keeps nothing: H02 already leaves imported functions outside its guarantee. A callee it cannot name (an indirect call), a body it cannot read, or a chain past sixteen open questions keeps.
+- **`c`'s type has no slot the parameter's pointers fit.** A pointer, slice or string slot reached from `c` through fields, elements and pointees fits when its element is the parameter's pointed-at type or any by-value part of it (`&x[i]`, `&p.f` and `s[a..b]` point into the same storage), and a const pointer fits only a const slot. A resource's fields are no slot (D348). That keeps `List`'s `arena: *mem.Arena` from making every list look able to hold a `*u8`.
+
+Recursion answers the least fixed point. A function asked again while its own answer is open answers "nothing kept" for now. A "keeps" found is always so. A "nothing kept" that leaned on an open question is remembered only once the first question settles on "nothing kept": every open question then did too, since a "keeps" below any of them reaches the first. The remembered answers (512 per worker, inline in the `Checker`) are therefore the same whichever worker asked first. A 4,096-entry table overflowed the bootstrap-built compiler's stack, because `main.e` builds `Checker` values on the stack.
+
+The order matters for cost. The first version asked for every argument of every call given `&c`, before asking whether the argument was a region value or a view at all. On the compiler's own source that was 26.6G instructions under `check_function`, against 1.9G. Asking about the argument first, the remembered body answer second and the uncached type walk last brings it to 1,887M. That is +13.4% against the build without resource checking (1,664M), from D1564's +12.9%.
+
+Found on the way: `@noescape` accepted `o.name = p` with `o` a pointer parameter, because it refused only stores into globals. A store that outlives the frame is now refused the same way: a global, `*p`, a field through a pointer, or a slice's element.
+
+Fixtures, both hosts:
+
+- `reject/regions_retained_argument`: the pointer pushed by a helper; E-SAFETY-0013 naming the list.
+- `accept/regions_retained_argument_valid`: an `@noescape` helper, a helper that only reads the pointer (no annotation), and a `List[u32]` given a `*u8`, each used after the reset.
+- `reject/regions_noescape_store`: E-SAFETY-0020 for `o.name = p`.
+
+Sweeps against D1564's compiler: none of the 158 earlier reject answers and none of 609 accept sources changed. Stage 2 equals stage 3 on both hosts.

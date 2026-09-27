@@ -714,6 +714,8 @@ type Checker = struct {
     // (D1563) How many thread handles this body bound, so a name read asks about
     // module-scope variables only once a thread is running.
     threads_started: usize,
+    // (D1565) `callee_keeps` answers, per worker.
+    keeps_memo: [512]KeepsMemo,
 
     affine_answer_count: usize,
     affine_answer: bool,
@@ -942,6 +944,11 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.tokens = tokens
     c.locals = locals
     c.resources = resources
+    var memo_at = 0usize
+    while KEEPS_MEMO > memo_at {
+        c.keeps_memo[memo_at].key = 0usize
+        memo_at += 1usize
+    }
 
     var no_resource_aliases: []ResourceAlias = zero
     c.resource_aliases = no_resource_aliases
@@ -13593,20 +13600,26 @@ fn check_compound_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
     ret Unsupported
 }
 
-fn assignment_place_is_global(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> bool {
+// Whether a store to this place outlives the call (D1565, H02): a global, or storage
+// reached through a pointer or a slice -- `*p`, a field through a pointer, a slice's
+// element. A field or element of a frame local's own value dies with the frame. An
+// `@noescape` input stored in `o.name` with `o` a pointer parameter escapes as surely
+// as one stored in a global.
+fn assignment_place_outlives_frame(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> bool {
     var base_index = node_index
-    while tree.nodes[base_index].kind == .FieldExpr || tree.nodes[base_index].kind == .BracketPostfix {
-        let (child_index, has_child) = first_node_child(tree, tree.nodes[base_index])
-        if !has_child { ret false }
+    while tree.nodes[base_index].kind != .NameExpr {
+        let place = tree.nodes[base_index]
+        if place.kind != .FieldExpr && place.kind != .BracketPostfix { ret true }
+        let (child_index, has_child) = first_node_child(tree, place)
+        if !has_child { ret true }
+        let (base_type, base_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+        if base_error != ok || base_type.kind == .Pointer || base_type.kind == .Slice || base_type.kind == .String { ret true }
         base_index = child_index
     }
-    let base = tree.nodes[base_index]
-    if base.kind != .NameExpr { ret false }
-    let token = c.tokens[usize(base.token_start)]
-    if token.kind != .Identifier { ret false }
-    let name = g.modules[module_index].text[token.start..token.end]
-    let (_, found) = find_global(c, module_index, name)
-    ret found
+    let token = c.tokens[usize(tree.nodes[base_index].token_start)]
+    if token.kind != .Identifier { ret true }
+    let (_, is_local) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    ret !is_local
 }
 
 fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
@@ -13635,7 +13648,7 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         let (actual, expression_error) = check_expr(c, g, tree, module_index, initializer_index, place_type)
         if expression_error != ok { ret expression_error }
         let noescape_from = expression_noescape_from(c, g, tree, module_index, function, initializer_index)
-        if noescape_from != 0usize && holds_pointer(c, place_type, 0usize) && assignment_place_is_global(c, g, tree, module_index, first_index) {
+        if noescape_from != 0usize && holds_pointer(c, place_type, 0usize) && assignment_place_outlives_frame(c, g, tree, module_index, first_index) {
             let parameter = c.parameters[function.first_parameter + noescape_from - 1usize]
             record_failure(c, module_index, initializer, .NoEscapeContract, parameter.name, "")
             ret ResourceViolation
@@ -15222,10 +15235,30 @@ fn region_retain(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
                     let (kept_index, has_kept) = call_argument_node(tree, node, kept_at)
                     if !has_kept { break }
                     let kept_parameter = info.function.first_parameter + kept_at
-                    if kept_at != container_at && kept_parameter < c.parameter_count && c.parameters[kept_parameter].own {
-                        var (kept, is_local) = resource_local_of(c, g, tree, module_index, kept_index)
+                    // A region value or a view handed beside the container: anything
+                    // else has nothing for the container to keep.
+                    var kept = 0usize
+                    var is_local = false
+                    if kept_at != container_at && kept_parameter < c.parameter_count {
+                        (kept, is_local) = resource_local_of(c, g, tree, module_index, kept_index)
                         if !is_local { (kept, is_local) = place_base_local(c, g, tree, module_index, kept_index) }
-                        if is_local && kept != container && kept < c.local_count && (c.resources[kept].region != 0usize || c.resources[kept].view_of != 0usize) {
+                    }
+                    if is_local && kept != container && kept < c.local_count && (c.resources[kept].region != 0usize || c.resources[kept].view_of != 0usize) {
+                        // (D1565) An `own` parameter is taken; any other the callee may
+                        // keep too, unless it declares `@noescape`, its body lets the
+                        // pointers go nowhere (`callee_keeps`), or the container's type
+                        // has nowhere to put them.
+                        var keeps = c.parameters[kept_parameter].own
+                        if !keeps && !function_noescape_at(c, info.function, kept_at + 1usize) {
+                            // The body first: its answer is remembered, the types' is not.
+                            var walk: KeepsWalk = zero
+                            if callee_keeps(c, g, info.function, kept_at, &walk) {
+                                var seen: [16]usize = zero
+                                var seen_count = 0usize
+                                keeps = type_keeps(c, c.locals[container].ty, c.parameters[kept_parameter].ty, 0usize, seen[0usize..seen.len], &seen_count)
+                            }
+                        }
+                        if keeps {
                             if c.resources[kept].region > c.resources[container].region { c.resources[container].region = c.resources[kept].region }
                             if c.resources[container].view_of == 0usize { c.resources[container].view_of = c.resources[kept].view_of }
                             region_tag(c, container, usize(node.token_start))
@@ -15237,6 +15270,506 @@ fn region_retain(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         }
         container_at += 1usize
     }
+}
+
+// (D1565, H02) Whether a value of type `held` can leave a pointer in storage reached
+// from a `holder`: some pointer, slice or string inside `held` fits a slot `holder`
+// reaches through its fields, elements and pointees. A resource's representation is
+// its module's alone (D348), so its fields are no slot; a type parameter may be
+// anything, and so fits and holds.
+fn type_keeps(c: *Checker, holder: Type, held: Type, depth: usize, seen: []usize, seen_count: *usize) -> bool {
+    if depth > 6usize || held.kind == .TypeParameter { ret true }
+    if held.kind == .Pointer || held.kind == .Slice || held.kind == .String {
+        *seen_count = 0usize
+        ret type_takes(c, holder, held, 0usize, seen, seen_count)
+    }
+    if held.kind == .Array {
+        if !held.has_element || held.element >= c.type_count { ret true }
+        ret type_keeps(c, holder, c.types[held.element], depth + 1usize, seen, seen_count)
+    }
+    if held.kind != .Named && held.kind != .Tag { ret false }
+    if resource_type(c, held) { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, held)
+    if !found { ret true }
+    var at = 0usize
+    while at < c.aggregates[aggregate_index].field_count {
+        let field_index = c.aggregates[aggregate_index].first_field + at
+        if field_index < c.aggregate_field_count && type_keeps(c, holder, c.aggregate_fields[field_index].ty, depth + 1usize, seen, seen_count) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// Whether storage of type `holder`, or reached from it, has a slot a `leaf` pointer
+// can be stored in: the same pointer, slice or string type, a mutable one fitting a
+// const slot. An aggregate is walked once per question.
+fn type_takes(c: *Checker, holder: Type, leaf: Type, depth: usize, seen: []usize, seen_count: *usize) -> bool {
+    if depth > 16usize || holder.kind == .TypeParameter { ret true }
+    if slot_fits(c, holder, leaf) { ret true }
+    if holder.kind == .Pointer || holder.kind == .Slice || holder.kind == .Array {
+        if !holder.has_element || holder.element >= c.type_count { ret true }
+        ret type_takes(c, c.types[holder.element], leaf, depth + 1usize, seen, seen_count)
+    }
+    if holder.kind != .Named && holder.kind != .Tag { ret false }
+    if resource_type(c, holder) { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, holder)
+    if !found { ret true }
+    var at = 0usize
+    while at < *seen_count {
+        if seen[at] == aggregate_index { ret false }
+        at += 1usize
+    }
+    if *seen_count == seen.len { ret true }
+    seen[*seen_count] = aggregate_index
+    *seen_count += 1usize
+    at = 0usize
+    while at < c.aggregates[aggregate_index].field_count {
+        let field_index = c.aggregates[aggregate_index].first_field + at
+        if field_index < c.aggregate_field_count && type_takes(c, c.aggregate_fields[field_index].ty, leaf, depth + 1usize, seen, seen_count) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// The names a parameter's pointer reaches in its function's body (D1565): the
+// parameter, and every local bound or assigned from an expression that may carry
+// it. `scalar` marks a name whose elements hold no pointer, so an element read
+// through it carries nothing.
+type KeptNames = struct {
+    names: [32]str,
+    scalar: [32]bool,
+    count: usize,
+    full: bool,
+}
+
+// The questions `callee_keeps` has open (D1565): a function asked again while its
+// own answer is being found answers "nothing kept" for now. A "keeps" found is
+// always so. A "nothing kept" that leaned on an open question is remembered only
+// once the first question settles on "nothing kept" too: every open question then
+// did, so every assumption held (a "keeps" anywhere below reaches the first). That
+// makes every remembered answer the least one, whichever worker asked first.
+type KeepsWalk = struct {
+    open: [16]usize,
+    count: usize,
+    assumed: bool,
+    deep: bool,
+    // The "nothing kept" answers that leaned, for the first question to settle.
+    pending: [64]usize,
+    pending_count: usize,
+}
+
+// A remembered answer: the function's index times eight plus the position, plus
+// one (zero is empty); 1 keeps, 2 does not.
+type KeepsMemo = struct {
+    key: usize,
+    answer: u8,
+}
+
+const KEEPS_MEMO: usize = 512usize
+
+// (D1565, H02) Whether `function` may keep what its parameter at `position` (from
+// zero) points at beyond the call, read from its body: a value that may carry it
+// stored anywhere but a bare local; a handing to a callee that takes it (`own`) or
+// may keep it in turn. `.len`, an element that holds no pointer, a comparison and a
+// `ret` keep nothing (the caller follows a result); an extern or intrinsic callee is
+// outside H02's guarantee and keeps nothing either. A body it cannot read, a callee
+// it cannot name, or a chain of calls past sixteen keeps.
+fn callee_keeps(c: *Checker, g: *graph.Graph, function: Function, position: usize, walk: *KeepsWalk) -> bool {
+    if !c.signatures_ready { ret true }
+    if function.external || function.intrinsic { ret false }
+    if position >= function.parameter_count { ret true }
+    let parameter = c.parameters[function.first_parameter + position]
+    if parameter.own { ret true }
+    if function_noescape_at(c, function, position + 1usize) { ret false }
+    if !holds_pointer(c, parameter.ty, 0usize) { ret false }
+    let (function_index, named) = find_function(c, function.module_index, function.name)
+    if !named || position >= 8usize { ret true }
+    let key = function_index * 8usize + position + 1usize
+    let slot = key % KEEPS_MEMO
+    if c.keeps_memo[slot].key == key { ret c.keeps_memo[slot].answer == 1u8 }
+    var at = 0usize
+    while at < walk.count {
+        if walk.open[at] == key {
+            walk.assumed = true
+            ret false
+        }
+        at += 1usize
+    }
+    // ponytail: a chain past sixteen open questions keeps, and is not remembered.
+    if walk.count == 16usize {
+        walk.deep = true
+        ret true
+    }
+    let (_, parse_error) = interp_module(c, g, function.module_index)
+    if parse_error != ok { ret true }
+    let assumed_before = walk.assumed
+    walk.assumed = false
+    walk.open[walk.count] = key
+    walk.count += 1usize
+    let saved_tokens = c.tokens
+    let saved_token_count = c.token_count
+    c.tokens = c.interp_tokens[function.module_index]
+    c.token_count = c.interp_token_counts[function.module_index]
+    let keeps = callee_body_keeps(c, g, function, parameter, walk)
+    c.tokens = saved_tokens
+    c.token_count = saved_token_count
+    walk.count = walk.count - 1usize
+    let leaned = walk.assumed
+    walk.assumed = assumed_before || leaned
+    if walk.deep { ret keeps }
+    if keeps || !leaned || walk.count == 0usize {
+        keeps_remember(c, key, keeps)
+    } else {
+        if walk.pending_count < 64usize {
+            walk.pending[walk.pending_count] = key
+            walk.pending_count += 1usize
+        }
+    }
+    if walk.count == 0usize && !keeps {
+        var pending_at = 0usize
+        while pending_at < walk.pending_count {
+            keeps_remember(c, walk.pending[pending_at], false)
+            pending_at += 1usize
+        }
+    }
+    ret keeps
+}
+
+fn keeps_remember(c: *Checker, key: usize, keeps: bool) {
+    let slot = key % KEEPS_MEMO
+    c.keeps_memo[slot].key = key
+    c.keeps_memo[slot].answer = 2u8
+    if keeps { c.keeps_memo[slot].answer = 1u8 }
+}
+
+// A function's declaration from the byte its first token starts at: the token by a
+// binary search, then the first node ending after it (a tree's nodes end in order,
+// each after its children), then forward to the top-level `fn` it starts.
+fn declaration_at(c: *Checker, tree: *parse.Tree, source_start: usize) -> (usize, bool) {
+    var low = 0usize
+    var high = c.token_count
+    while low < high {
+        let middle = low + (high - low) / 2usize
+        if c.tokens[middle].start < source_start { low = middle + 1usize } else { high = middle }
+    }
+    if low >= c.token_count || c.tokens[low].start != source_start { ret (0usize, false) }
+    let token = low
+    low = 0usize
+    high = tree.count
+    while low < high {
+        let middle = low + (high - low) / 2usize
+        if usize(tree.nodes[middle].token_end) <= token { low = middle + 1usize } else { high = middle }
+    }
+    while low < tree.count {
+        let node = tree.nodes[low]
+        if node.top_level && usize(node.token_start) == token && node.kind == .FnDecl { ret (low, true) }
+        if node.top_level && usize(node.token_start) > token { ret (0usize, false) }
+        low += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn callee_body_keeps(c: *Checker, g: *graph.Graph, function: Function, parameter: Parameter, walk: *KeepsWalk) -> bool {
+    let tree = &c.interp_trees[function.module_index]
+    let text = g.modules[function.module_index].text
+    let (declaration, declared) = declaration_at(c, tree, function.source_start)
+    if !declared { ret true }
+    var body = 0usize
+    var found = false
+    let node = tree.nodes[declaration]
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) && tree.nodes[parse.child_index_at(tree, at)].kind == .Block {
+            body = parse.child_index_at(tree, at)
+            found = true
+        }
+        at += 1usize
+    }
+    if !found { ret true }
+    var kept: KeptNames = zero
+    kept.names[0usize] = parameter.name
+    kept.scalar[0usize] = !pointer_elements(c, parameter.ty)
+    kept.count = 1usize
+    var round = 0usize
+    while round < 8usize {
+        let before = kept.count
+        kept_aliases(c, tree, text, body, &kept)
+        if kept.count == before { break }
+        round += 1usize
+    }
+    if kept.full || round == 8usize { ret true }
+    ret kept_escapes(c, g, tree, function.module_index, text, body, &kept, walk)
+}
+
+// Whether a slice's, pointer's or string's elements may hold a pointer.
+fn pointer_elements(c: *Checker, ty: Type) -> bool {
+    if ty.kind == .String { ret false }
+    if ty.kind != .Slice && ty.kind != .Pointer && ty.kind != .Array { ret true }
+    if !ty.has_element || ty.element >= c.type_count { ret true }
+    ret holds_pointer(c, c.types[ty.element], 0usize)
+}
+
+fn kept_name_at(c: *Checker, text: str, tree: *parse.Tree, node_index: usize, kept: *KeptNames) -> (usize, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .NameExpr { ret (0usize, false) }
+    let token = c.tokens[usize(node.token_start)]
+    if token.kind != .Identifier { ret (0usize, false) }
+    let name = text[token.start..token.end]
+    var at = 0usize
+    while at < kept.count {
+        if same(kept.names[at], name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// Whether the value of an expression may carry a pointer into what the kept names
+// reach.
+fn kept_carries(c: *Checker, text: str, tree: *parse.Tree, node_index: usize, kept: *KeptNames) -> bool {
+    let node = tree.nodes[node_index]
+    if node.kind == .NameExpr {
+        let (_, is_kept) = kept_name_at(c, text, tree, node_index, kept)
+        ret is_kept
+    }
+    if node.kind == .LiteralExpr || node.kind == .MemberExpr || node.kind == .BinaryExpr { ret false }
+    if node.kind == .FieldExpr {
+        let (member, has_member) = field_expression_name(c, text, tree, node)
+        if has_member && same(member, "len") { ret false }
+    }
+    if node.kind == .BracketPostfix {
+        var bracket: BracketInfo = zero
+        if read_bracket(c, tree, node, &bracket) == ok && !bracket.range {
+            let (base_at, base_kept) = kept_name_at(c, text, tree, bracket.base, kept)
+            if base_kept && kept.scalar[base_at] { ret false }
+            ret kept_carries(c, text, tree, bracket.base, kept)
+        }
+    }
+    if node.kind == .UnaryExpr {
+        let operator = c.tokens[usize(node.token_start)].kind
+        if operator != .PunctAmp && operator != .PunctStar { ret false }
+        if operator == .PunctAmp {
+            // `&p[i]`, `&p.f`: an address inside what `p` reaches.
+            var base_index = node_index
+            while true {
+                let (inner_index, has_inner) = first_node_child(tree, tree.nodes[base_index])
+                if !has_inner { break }
+                base_index = inner_index
+                let inner_kind = tree.nodes[base_index].kind
+                if inner_kind != .FieldExpr && inner_kind != .BracketPostfix && inner_kind != .UnaryExpr && inner_kind != .GroupExpr { break }
+            }
+            let (_, rooted) = kept_name_at(c, text, tree, base_index, kept)
+            if rooted { ret true }
+        }
+    }
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) && kept_carries(c, text, tree, parse.child_index_at(tree, at), kept) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn kept_add(kept: *KeptNames, name: str, scalar: bool) {
+    var at = 0usize
+    while at < kept.count {
+        if same(kept.names[at], name) { ret }
+        at += 1usize
+    }
+    if kept.count == 32usize {
+        kept.full = true
+        ret
+    }
+    kept.names[kept.count] = name
+    kept.scalar[kept.count] = scalar
+    kept.count += 1usize
+}
+
+// Whether the value keeps the kept name's element answer: the name itself or a
+// range of it.
+fn kept_value_scalar(c: *Checker, text: str, tree: *parse.Tree, value_index: usize, kept: *KeptNames) -> bool {
+    var base_index = value_index
+    if tree.nodes[base_index].kind == .BracketPostfix {
+        var bracket: BracketInfo = zero
+        if read_bracket(c, tree, tree.nodes[base_index], &bracket) != ok || !bracket.range { ret false }
+        base_index = bracket.base
+    }
+    let (at, is_kept) = kept_name_at(c, text, tree, base_index, kept)
+    ret is_kept && kept.scalar[at]
+}
+
+// The locals bound or assigned from a carrying value join the names.
+fn kept_aliases(c: *Checker, tree: *parse.Tree, text: str, node_index: usize, kept: *KeptNames) {
+    let node = tree.nodes[node_index]
+    if node.kind == .BindingStmt || node.kind == .AssignmentStmt {
+        var first_index = 0usize
+        var value_index = 0usize
+        var count = 0usize
+        let end = usize(node.first_child) + usize(node.child_count)
+        var at = usize(node.first_child)
+        while at < end {
+            if parse.child_is_node_at(tree, at) {
+                if count == 0usize { first_index = parse.child_index_at(tree, at) }
+                value_index = parse.child_index_at(tree, at)
+                count += 1usize
+            }
+            at += 1usize
+        }
+        if count != 0usize && kept_carries(c, text, tree, value_index, kept) {
+            let scalar = kept_value_scalar(c, text, tree, value_index, kept)
+            if node.kind == .AssignmentStmt {
+                if count >= 2usize && tree.nodes[first_index].kind == .NameExpr {
+                    let token = c.tokens[usize(tree.nodes[first_index].token_start)]
+                    kept_add(kept, text[token.start..token.end], scalar)
+                }
+            } else {
+                // `let x = v`, `var (a, b) = v`: the names before `=`, not the types
+                // after a `:`.
+                var token_at = usize(node.token_start)
+                var in_type = false
+                while token_at < usize(node.token_end) && c.tokens[token_at].kind != .PunctAssign {
+                    let kind = c.tokens[token_at].kind
+                    if kind == .PunctColon { in_type = true }
+                    if kind == .PunctComma || kind == .PunctRParen { in_type = false }
+                    if kind == .Identifier && !in_type { kept_add(kept, text[c.tokens[token_at].start..c.tokens[token_at].end], scalar) }
+                    token_at += 1usize
+                }
+            }
+        }
+    }
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) { kept_aliases(c, tree, text, parse.child_index_at(tree, at), kept) }
+        at += 1usize
+    }
+}
+
+// Whether the body lets a kept name's pointer outlive the call: stored in a place
+// that is not a bare local, handed to a callee that keeps it, iterated or switched
+// over for elements that may hold one.
+fn kept_escapes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, text: str, node_index: usize, kept: *KeptNames, walk: *KeepsWalk) -> bool {
+    let node = tree.nodes[node_index]
+    if node.kind == .AssignmentStmt {
+        var first_index = 0usize
+        var value_index = 0usize
+        var count = 0usize
+        let end = usize(node.first_child) + usize(node.child_count)
+        var at = usize(node.first_child)
+        while at < end {
+            if parse.child_is_node_at(tree, at) {
+                if count == 0usize { first_index = parse.child_index_at(tree, at) }
+                value_index = parse.child_index_at(tree, at)
+                count += 1usize
+            }
+            at += 1usize
+        }
+        if count >= 2usize && tree.nodes[first_index].kind != .NameExpr && kept_carries(c, text, tree, value_index, kept) { ret true }
+    }
+    if node.kind == .ForStmt || node.kind == .SwitchStmt {
+        let end = usize(node.first_child) + usize(node.child_count)
+        var at = usize(node.first_child)
+        while at < end {
+            if parse.child_is_node_at(tree, at) {
+                let subject = parse.child_index_at(tree, at)
+                if tree.nodes[subject].kind != .Block && kept_carries(c, text, tree, subject, kept) && !kept_value_scalar(c, text, tree, subject, kept) { ret true }
+            }
+            at += 1usize
+        }
+    }
+    if node.kind == .CallExpr {
+        var position = 0usize
+        while true {
+            let (argument_index, has_argument) = call_argument_node(tree, node, position)
+            if !has_argument { break }
+            if kept_carries(c, text, tree, argument_index, kept) {
+                let (callee_index, callee_found) = kept_callee(c, g, tree, module_index, text, node)
+                if !callee_found { ret true }
+                if callee_index < c.function_count && callee_keeps(c, g, c.functions[callee_index], position, walk) { ret true }
+            }
+            position += 1usize
+        }
+    }
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) && kept_escapes(c, g, tree, module_index, text, parse.child_index_at(tree, at), kept, walk) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// The function a call names: `f(..)`, `m.f(..)`, `f[T](..)`; a conversion to a
+// scalar type answers the function count (nothing to ask).
+fn kept_callee(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, text: str, call: syntax.Node) -> (usize, bool) {
+    let (callee_index, has_callee) = first_node_child(tree, call)
+    if !has_callee { ret (0usize, false) }
+    var named = tree.nodes[callee_index]
+    if named.kind == .BracketPostfix {
+        let (inner_index, has_inner) = first_node_child(tree, named)
+        if !has_inner { ret (0usize, false) }
+        named = tree.nodes[inner_index]
+    }
+    if named.kind == .NameExpr {
+        let token = c.tokens[usize(named.token_start)]
+        if token.kind != .Identifier { ret (0usize, false) }
+        let name = text[token.start..token.end]
+        if is_integer_name(name) || is_float_name(name) || same(name, "bool") { ret (c.function_count, true) }
+        let (function_index, found) = find_function(c, module_index, name)
+        ret (function_index, found)
+    }
+    if named.kind == .FieldExpr {
+        let (function_index, found) = find_qualified_function(c, g, tree, module_index, named)
+        ret (function_index, found)
+    }
+    ret (0usize, false)
+}
+
+// Whether a pointer, slice or string slot can be given a `leaf` or an address inside
+// it: `&x[i]`, `&p.field` and `s[a..b]` point into the same storage, so the slot's
+// element may be any part of the leaf's held by value. A const leaf fits only a
+// const slot.
+fn slot_fits(c: *Checker, slot: Type, leaf: Type) -> bool {
+    var slot_const = true
+    var slot_element = make_type(.Integer, "u8", 0usize)
+    if slot.kind != .String {
+        if slot.kind != .Pointer && slot.kind != .Slice { ret false }
+        if !slot.has_element || slot.element >= c.type_count { ret true }
+        slot_const = slot.is_const
+        slot_element = c.types[slot.element]
+    }
+    var leaf_const = true
+    var leaf_element = make_type(.Integer, "u8", 0usize)
+    if leaf.kind != .String {
+        if !leaf.has_element || leaf.element >= c.type_count { ret true }
+        leaf_const = leaf.is_const
+        leaf_element = c.types[leaf.element]
+    }
+    if leaf_const && !slot_const { ret false }
+    ret type_component(c, leaf_element, slot_element, 0usize)
+}
+
+// Whether `part` is `outer` or a part of it held by value: a field or an array
+// element, not what a pointer in it reaches.
+fn type_component(c: *Checker, outer: Type, part: Type, depth: usize) -> bool {
+    if depth > 6usize || outer.kind == .TypeParameter || part.kind == .TypeParameter { ret true }
+    if type_equal(c, outer, part) { ret true }
+    if outer.kind == .Array {
+        if !outer.has_element || outer.element >= c.type_count { ret true }
+        ret type_component(c, c.types[outer.element], part, depth + 1usize)
+    }
+    if outer.kind != .Named && outer.kind != .Tag { ret false }
+    if resource_type(c, outer) { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, outer)
+    if !found { ret true }
+    var at = 0usize
+    while at < c.aggregates[aggregate_index].field_count {
+        let field_index = c.aggregates[aggregate_index].first_field + at
+        if field_index < c.aggregate_field_count && type_component(c, c.aggregate_fields[field_index].ty, part, depth + 1usize) { ret true }
+        at += 1usize
+    }
+    ret false
 }
 
 // `mem.Arena` is affine and owed nothing (D351): an arena lives in one place, and

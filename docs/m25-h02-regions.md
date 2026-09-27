@@ -137,8 +137,9 @@ position set.
 
 `@noescape("p", ...)` declares that every named, distinct non-`own`, pointer-bearing
 input is not retained after the call. The checker rejects pointer-bearing returns
-and global stores containing any named input, including through tracked aggregate
-leaves, and rejects forwarding one to an unannotated/extern callee, indirect
+and stores containing any named input into storage that outlives the call -- a
+global, or anything reached through a pointer or a slice, such as another
+parameter's field (D1565) -- including through tracked aggregate leaves, and rejects forwarding one to an unannotated/extern callee, indirect
 callback or thread context. A direct callee may receive it only at an exact parameter
 position that callee also marks `@noescape` (D736-D744). Generic instances retain
 the complete summary; artifact format 14 serializes a count and ordered one-based
@@ -179,9 +180,28 @@ Retention through containers (D1562): a call given `&c` through a mutable pointe
 and a region value or a view (or its address) for an `own` parameter -- the
 callee taking it, as `list.push` takes its element -- leaves `c` holding it: `c`
 is in that region, or views that container, so after the reset or change a use of
-`c` is refused. Only an `own` handing counts: a value a callee borrows to read or
-copy is not kept. The whole container dangles, not the one element, and clearing
+`c` is refused. The whole container dangles, not the one element, and clearing
 it does not revive it.
+
+Beyond `own` (D1565): a callee may keep a borrowed argument too. A region value or
+a view handed to a non-`own` parameter beside `&c` leaves `c` holding it unless
+one of three things rules that out:
+
+- the parameter is `@noescape`;
+- the callee's body keeps nothing of it (`callee_keeps`); or
+- `c`'s type has no slot the parameter's pointers fit.
+
+The body question follows the parameter and every local bound or assigned from a
+value that may carry it. It keeps when such a value is stored anywhere but a bare
+local, or handed to a callee that takes it (`own`) or keeps it in turn, through
+any number of modules. `.len`, an element that holds no pointer, a comparison and a
+`ret` keep nothing. An extern or intrinsic callee keeps nothing too: it is outside
+the guarantee, as the introduction says. A callee it cannot name, a body it cannot read,
+or a chain past sixteen open questions keeps. Recursion answers the least fixed
+point, the same whichever caller asks first. The slot question compares pointer,
+slice and string slots with the parameter's pointer leaves and any by-value part
+of what they point at (`&x[i]`, `&p.f` and `s[a..b]` point into the same storage).
+A resource's fields are no slot (D348).
 
 Delivered since: casts keep provenance (D1558); `list.Builder` builds, then
 freezes (D1559); `slot_map` keys are generation-tagged handles with an owner
