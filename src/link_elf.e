@@ -305,7 +305,7 @@ fn append_globals(builder: *nir.Builder, output: *emit_x64.Buffer, area_offset: 
     ret ok
 }
 
-fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
+fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, table_at: usize, output: *emit_x64.Buffer) -> err {
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
     let base = 4194304usize
@@ -508,6 +508,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try patch_little_u64(output, 88usize + 56usize * 4usize, dynamic_address)
     try patch_little_u64(output, 96usize + 56usize * 4usize, dynamic_size)
     try patch_little_u64(output, 104usize + 56usize * 4usize, dynamic_size)
+    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, text_end)
     ret ok
 }
 
@@ -515,14 +516,16 @@ fn site_of(machine_start: usize, displacement_at: usize) -> usize {
     ret machine_start + displacement_at
 }
 
-fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
+// `lines` and `table_at`, where the D206 table starts in `machine`, are what a debug image's
+// DWARF is built from (D1581).
+fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, table_at: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len { ret InvalidExecutable }
     if relocation_count > relocations.len { ret InvalidExecutable }
     codegen_x64.mark_live_globals(builder, relocations, relocation_count)
     // Only an `@import` makes this image need a loader. Without one it stays the
     // freestanding static executable it has always been, byte for byte.
     if nir.import_library_count(builder) != 0usize {
-        ret write_dynamic(builder, machine, function_offsets, relocations, relocation_count, output)
+        ret write_dynamic(builder, machine, function_offsets, relocations, relocation_count, lines, table_at, output)
     }
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
@@ -655,6 +658,291 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
             global_at += 1usize
         }
     }
+    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, code_end)
+    ret ok
+}
+
+// (D1581) What a foreign debugger or profiler reads from an image, appended after
+// everything the loader maps and mapped by none of it: section headers naming the code, a
+// symbol per placed function, the D206 table as `.nepersym`, and DWARF 4 -- a compile
+// unit, a subprogram per placed function and a line program built from the rows the trap
+// walk reads. Section 13 asks for the line and symbol tables in every build mode, so a
+// release image carries them too. `debug_bound` is what the caller adds to the image's
+// buffer for them.
+fn debug_bound(builder: *nir.Builder, lines: []codegen_x64.LineEntry) -> usize {
+    var total = 4096usize + lines.len * 24usize
+    var at = 0usize
+    while at < builder.function_count {
+        total += 2usize * (builder.functions[at].module_name.len + builder.functions[at].name.len) + 64usize
+        at += 1usize
+    }
+    var row = 0usize
+    while row < lines.len {
+        if row == 0usize || !check.same(lines[row].path, lines[row - 1usize].path) { total += lines[row].path.len + 4usize }
+        row += 1usize
+    }
+    ret total
+}
+
+fn uleb(output: *emit_x64.Buffer, value: usize) -> err {
+    var rest = value
+    while true {
+        var part = rest % 128usize
+        rest = rest / 128usize
+        if rest != 0usize { part += 128usize }
+        try emit_x64.byte(output, part)
+        if rest == 0usize { break }
+    }
+    ret ok
+}
+
+// A signed LEB128 from a magnitude and a sign: a negative value's groups are the
+// complement of those of its magnitude less one.
+fn sleb(output: *emit_x64.Buffer, magnitude: usize, negative: bool) -> err {
+    var rest = magnitude
+    if negative { rest = magnitude - 1usize }
+    while true {
+        let part = rest % 128usize
+        rest = rest / 128usize
+        let last = rest == 0usize && part < 64usize
+        var encoded = part
+        if negative { encoded = 127usize - part }
+        if !last { encoded += 128usize }
+        try emit_x64.byte(output, encoded)
+        if last { break }
+    }
+    ret ok
+}
+
+fn section_header(output: *emit_x64.Buffer, name: usize, kind: usize, flags: usize, address: usize, offset: usize, size: usize, link: usize, info: usize, alignment: usize, entry_size: usize) -> err {
+    try emit_x64.little_u32(output, name)
+    try emit_x64.little_u32(output, kind)
+    try emit_x64.little_u64(output, flags)
+    try emit_x64.little_u64(output, address)
+    try emit_x64.little_u64(output, offset)
+    try emit_x64.little_u64(output, size)
+    try emit_x64.little_u32(output, link)
+    try emit_x64.little_u32(output, info)
+    try emit_x64.little_u64(output, alignment)
+    try emit_x64.little_u64(output, entry_size)
+    ret ok
+}
+
+// The line program's registers as the rows have left them.
+type LineState = struct {
+    file: usize,
+    line: usize,
+    offset: usize,
+    open: bool,
+}
+
+// One row: a sequence opened at its address, the file when it changes, the address and
+// the line advanced, a copy. A row behind the last starts a sequence of its own.
+fn line_row(output: *emit_x64.Buffer, state: *LineState, code_address: usize, offset: usize, file: usize, line: usize) -> err {
+    if state.open && offset < state.offset {
+        try append_blob(output, "\x00\x01\x01")
+        state.open = false
+    }
+    if !state.open {
+        try append_blob(output, "\x00\x09\x02")
+        try emit_x64.little_u64(output, code_address + offset)
+        state.file = 1usize
+        state.line = 1usize
+        state.offset = offset
+        state.open = true
+    }
+    if file != state.file {
+        state.file = file
+        try emit_x64.byte(output, 4usize)
+        try uleb(output, file)
+    }
+    if offset > state.offset {
+        try emit_x64.byte(output, 2usize)
+        try uleb(output, offset - state.offset)
+        state.offset = offset
+    }
+    if line != state.line {
+        try emit_x64.byte(output, 3usize)
+        if line > state.line { try sleb(output, line - state.line, false) }
+        if line < state.line { try sleb(output, state.line - line, true) }
+        state.line = line
+    }
+    ret emit_x64.byte(output, 1usize)
+}
+
+fn function_name(output: *emit_x64.Buffer, placed: nir.Function) -> err {
+    try append_text(output, placed.module_name)
+    try emit_x64.byte(output, 46usize)
+    try append_text(output, placed.name)
+    try emit_x64.byte(output, 0usize)
+    ret ok
+}
+
+fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_x64.Buffer, machine_start: usize, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, text_start: usize, text_end: usize) -> err {
+    let base = 4194304usize
+    let code_address = base + machine_start
+    let (main_index, main_error) = find_main(builder)
+    if main_error != ok { ret main_error }
+    // The symbols: a null one, the startup as `_start`, then one local function per
+    // placed function.
+    let symtab_offset = align_up_to(output.count, 8usize)
+    try pad_to(output, symtab_offset)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u32(output, 1usize)
+    try emit_x64.byte(output, 2usize)
+    try emit_x64.byte(output, 0usize)
+    try little_u16(output, 1usize)
+    try emit_x64.little_u64(output, base + text_start)
+    try emit_x64.little_u64(output, machine_start - text_start)
+    var symbols = 2usize
+    var name_at = 8usize
+    var at = 0usize
+    var placed_max = 0usize
+    while at < builder.function_count {
+        if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) {
+            let (end, end_error) = codegen_x64.placed_end_after(builder, function_offsets, at, table_at)
+            if end_error != ok { ret end_error }
+            try emit_x64.little_u32(output, name_at)
+            try emit_x64.byte(output, 2usize)
+            try emit_x64.byte(output, 0usize)
+            try little_u16(output, 1usize)
+            try emit_x64.little_u64(output, code_address + function_offsets[at])
+            try emit_x64.little_u64(output, end - function_offsets[at])
+            name_at += builder.functions[at].module_name.len + builder.functions[at].name.len + 2usize
+            symbols += 1usize
+        }
+        at += 1usize
+    }
+    let strtab_offset = output.count
+    try append_blob(output, "\x00_start\x00")
+    at = 0usize
+    placed_max = 0usize
+    while at < builder.function_count {
+        if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) { try function_name(output, builder.functions[at]) }
+        at += 1usize
+    }
+    let abbrev_offset = output.count
+    // 1: the compile unit -- producer, language, name, low_pc, high_pc, stmt_list.
+    try append_blob(output, "\x01\x11\x01\x25\x08\x13\x05\x03\x08\x11\x01\x12\x07\x10\x17\x00\x00")
+    // 2: a subprogram -- name, low_pc, high_pc, external; 3: the same, and the program's
+    // main (DW_AT_main_subprogram), where a debugger's backtrace stops.
+    try append_blob(output, "\x02\x2e\x00\x03\x08\x11\x01\x12\x07\x3f\x19\x00\x00")
+    try append_blob(output, "\x03\x2e\x00\x03\x08\x11\x01\x12\x07\x3f\x19\x6a\x19\x00\x00\x00")
+    let info_offset = output.count
+    try emit_x64.little_u32(output, 0usize)
+    try little_u16(output, 4usize)
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.byte(output, 8usize)
+    try uleb(output, 1usize)
+    try append_text(output, "neper")
+    try emit_x64.byte(output, 0usize)
+    // DW_LANG_C99: the nearest a foreign debugger knows, and what it prints types as.
+    try little_u16(output, 12usize)
+    if lines.len != 0usize { try append_text(output, lines[0usize].path) }
+    try emit_x64.byte(output, 0usize)
+    try emit_x64.little_u64(output, code_address)
+    try emit_x64.little_u64(output, table_at)
+    try emit_x64.little_u32(output, 0usize)
+    at = 0usize
+    placed_max = 0usize
+    while at < builder.function_count {
+        if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) {
+            let (end, end_error) = codegen_x64.placed_end_after(builder, function_offsets, at, table_at)
+            if end_error != ok { ret end_error }
+            if at == main_index { try uleb(output, 3usize) } else { try uleb(output, 2usize) }
+            try function_name(output, builder.functions[at])
+            try emit_x64.little_u64(output, code_address + function_offsets[at])
+            try emit_x64.little_u64(output, end - function_offsets[at])
+        }
+        at += 1usize
+    }
+    try emit_x64.byte(output, 0usize)
+    try emit_x64.patch_little_u32(output, info_offset, output.count - info_offset - 4usize)
+    // The line program: the files in the order the rows first name them, then a row
+    // per entry -- the file when it changes, the address and line advanced, a copy.
+    let line_offset = output.count
+    try emit_x64.little_u32(output, 0usize)
+    try little_u16(output, 4usize)
+    let header_length_at = output.count
+    try emit_x64.little_u32(output, 0usize)
+    try append_blob(output, "\x01\x01\x01\xfb\x0e\x0d\x00\x01\x01\x01\x01\x00\x00\x00\x01\x00\x00\x01\x00")
+    var paths: [8192]str = zero
+    var path_heads: [4096]usize = zero
+    var path_next: [8192]usize = zero
+    var path_count = 0usize
+    var last_path = 0usize
+    var row = 0usize
+    while row < lines.len {
+        let (path_index, found) = codegen_x64.path_position(paths[..path_count], lines[row].path, &last_path, path_heads[..], path_next[..])
+        if !found {
+            if path_count == paths.len { ret InvalidExecutable }
+            paths[path_count] = lines[row].path
+            let bucket = codegen_x64.path_bucket(lines[row].path)
+            path_next[path_count] = path_heads[bucket]
+            path_heads[bucket] = path_count + 1usize
+            path_count += 1usize
+            try append_text(output, lines[row].path)
+            try append_blob(output, "\x00\x00\x00\x00")
+        }
+        row += 1usize
+    }
+    try emit_x64.byte(output, 0usize)
+    try emit_x64.patch_little_u32(output, header_length_at, output.count - header_length_at - 4usize)
+    // Function by function in code order, so every row belongs to a placed function and
+    // each function's first row is at its entry: a debugger skips a prologue to the
+    // function's second row, and without one at the entry it finds none to skip.
+    var state: LineState = zero
+    var cursor = 0usize
+    at = 0usize
+    placed_max = 0usize
+    while at < builder.function_count {
+        if codegen_x64.is_placed_after(builder, function_offsets, at, &placed_max) {
+            let start = function_offsets[at]
+            let (end, end_error) = codegen_x64.placed_end_after(builder, function_offsets, at, table_at)
+            if end_error != ok { ret end_error }
+            let (first, count) = codegen_x64.line_rows_from(lines, lines.len, start, end, &cursor)
+            var row_at = first
+            while row_at < first + count {
+                let entry = lines[row_at]
+                let (path_index, found) = codegen_x64.path_position(paths[..path_count], entry.path, &last_path, path_heads[..], path_next[..])
+                if !found { ret InvalidExecutable }
+                if row_at == first && start < entry.offset { try line_row(output, &state, code_address, start, path_index + 1usize, usize(entry.line)) }
+                try line_row(output, &state, code_address, entry.offset, path_index + 1usize, usize(entry.line))
+                row_at += 1usize
+            }
+        }
+        at += 1usize
+    }
+    if state.open {
+        if table_at > state.offset {
+            try emit_x64.byte(output, 2usize)
+            try uleb(output, table_at - state.offset)
+        }
+        try append_blob(output, "\x00\x01\x01")
+    }
+    try emit_x64.patch_little_u32(output, line_offset, output.count - line_offset - 4usize)
+    let names_offset = output.count
+    try append_blob(output, "\x00.text\x00.nepersym\x00.symtab\x00.strtab\x00.debug_abbrev\x00.debug_info\x00.debug_line\x00.shstrtab\x00")
+    let names_end = output.count
+    let headers_offset = align_up_to(output.count, 8usize)
+    try pad_to(output, headers_offset)
+    try section_header(output, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    try section_header(output, 1usize, 1usize, 6usize, base + text_start, text_start, text_end - text_start, 0usize, 0usize, 16usize, 0usize)
+    try section_header(output, 7usize, 1usize, 2usize, code_address + table_at, machine_start + table_at, machine.count - table_at, 0usize, 0usize, 4usize, 0usize)
+    try section_header(output, 17usize, 2usize, 0usize, 0usize, symtab_offset, strtab_offset - symtab_offset, 4usize, symbols, 8usize, 24usize)
+    try section_header(output, 25usize, 3usize, 0usize, 0usize, strtab_offset, abbrev_offset - strtab_offset, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 33usize, 1usize, 0usize, 0usize, abbrev_offset, info_offset - abbrev_offset, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 47usize, 1usize, 0usize, 0usize, info_offset, line_offset - info_offset, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 59usize, 1usize, 0usize, 0usize, line_offset, names_offset - line_offset, 0usize, 0usize, 1usize, 0usize)
+    try section_header(output, 71usize, 3usize, 0usize, 0usize, names_offset, names_end - names_offset, 0usize, 0usize, 1usize, 0usize)
+    // The ELF header's section fields: the table's offset, its entry size, its count
+    // and the index of the section names.
+    try patch_little_u64(output, 40usize, headers_offset)
+    output.bytes[58usize] = 64u8
+    output.bytes[60usize] = 9u8
+    output.bytes[62usize] = 8u8
     ret ok
 }
 
@@ -680,14 +968,16 @@ fn self_test() -> err {
     var executable_storage: [8192]u8 = zero
     var executable: emit_x64.Buffer = zero
     try emit_x64.init(&executable, executable_storage[..])
-    try write(&builder, &machine, offsets[..], relocations[..], 0usize, &executable)
+    var lines: [1]codegen_x64.LineEntry = zero
+    try write(&builder, &machine, offsets[..], relocations[..], 0usize, lines[0usize..0usize], machine.count, &executable)
     // The startup is fixed in this file, and a program with no relocation into the runtime
-    // gets none of it (D150, D151): the image is the headers, the startup and the code.
-    // Checking the total and the segment size keeps this test honest, and the machine code
-    // is checked where `write` puts it rather than at a literal offset.
+    // gets none of it (D150, D151): the loaded image is the headers, the startup and the
+    // code, and the nine sections of D1581 follow it unloaded. Checking the segment size
+    // keeps this test honest, and the machine code is checked where `write` puts it rather
+    // than at a literal offset.
     let machine_start = 120usize + 267usize
     let total = machine_start + machine.count
-    if executable.count != total { ret InvalidExecutable }
+    if executable.count <= total || executable.bytes[60usize] != 9u8 || executable.bytes[62usize] != 8u8 { ret InvalidExecutable }
     if executable.bytes[0usize] != 127u8 || executable.bytes[16usize] != 2u8 || executable.bytes[18usize] != 62u8 || executable.bytes[24usize] != 120u8 || executable.bytes[25usize] != 0u8 || executable.bytes[26usize] != 64u8 { ret InvalidExecutable }
     if executable.bytes[64usize] != 1u8 || executable.bytes[68usize] != 5u8 { ret InvalidExecutable }
     if executable.bytes[96usize] != u8(total % 256usize) || executable.bytes[97usize] != u8((total / 256usize) % 256usize) { ret InvalidExecutable }

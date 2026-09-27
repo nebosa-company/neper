@@ -4083,6 +4083,27 @@ chmod +x "$release_path"
 release_output=$("$release_path" 2>&1)
 [ "$release_output" = '' ]
 [ "$(stat -c %s "$release_path")" -lt "$(stat -c %s "$release_debug_path")" ]
+# (D1581) Debug and release images alike carry what a foreign debugger or profiler reads
+# (section 13): section headers, a symbol per function, `.nepersym` and DWARF's line
+# table; gdb stops in `main.main` at its line.
+if command -v readelf >/dev/null 2>&1; then
+    for debug_image in "$release_debug_path" "$release_path"; do
+        debug_sections=$(readelf -S "$debug_image")
+        for debug_section in .text .nepersym .symtab .debug_info .debug_line; do
+            case "$debug_sections" in
+                *"] $debug_section "*) ;;
+                *) printf '%s\n' "$debug_image has no $debug_section: $debug_sections" >&2; exit 1 ;;
+            esac
+        done
+    done
+fi
+if command -v gdb >/dev/null 2>&1; then
+    debug_gdb=$(gdb -q -batch -ex 'set debuginfod enabled off' -ex 'break main.main' -ex run -ex bt "$release_debug_path" 2>&1 || true)
+    case "$debug_gdb" in
+        *'#0  main.main () at '*'main.e:'*) ;;
+        *) printf '%s\n' "gdb did not stop in main.main at a line: $debug_gdb" >&2; exit 1 ;;
+    esac
+fi
 # Section 12's incremental rebuild: unchanged sources keep every artifact, a body edit
 # behind a signature edge rebuilds only its module and links equal to a clean build,
 # and a signature edit rebuilds the dependent too.

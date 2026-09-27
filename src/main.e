@@ -6188,6 +6188,33 @@ fn settle_hot(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, triple: str, mo
     ret ok
 }
 
+// `link-em`'s image from the assembled program: the symbol and line table goes after the
+// code before the image is sized (D206, D209), and an ELF image's DWARF is built from the
+// same rows (D1581).
+fn link_artifact_image(a: *mem.Arena, program: *em_link.Program, is_windows: bool) -> ([]u8, err) {
+    let empty: []u8 = zero
+    let table_at = program.machine.count
+    let symbols_error = codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines, program.line_count)
+    if symbols_error != ok { ret (empty, symbols_error) }
+    let (storage, storage_error) = mem.alloc[u8](a, program.machine.count + 65536usize + link_elf.debug_bound(&program.builder, program.lines[..program.line_count]))
+    if storage_error != ok { ret (empty, storage_error) }
+    var executable: emit_x64.Buffer = zero
+    let init_error = emit_x64.init(&executable, storage)
+    if init_error != ok { ret (empty, init_error) }
+    var write_error: err = ok
+    if is_windows {
+        write_error = link_pe.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, &executable)
+    } else {
+        write_error = link_elf.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines[..program.line_count], table_at, &executable)
+    }
+    if write_error != ok { ret (empty, write_error) }
+    let (packed, packed_error) = mem.alloc[u8](a, executable.count)
+    if packed_error != ok { ret (empty, packed_error) }
+    let pack_error = emit_x64.pack(&executable, packed)
+    if pack_error != ok { ret (empty, pack_error) }
+    ret (packed, ok)
+}
+
 fn load_artifact(a: *mem.Arena, path: str) -> ([]const u8, err) {
     let (packed, load_error) = source.load(a, path)
     if load_error != ok {
@@ -11651,19 +11678,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if linux_error != ok { ret linux_error }
         if !is_windows && !is_linux { ret em_link.TargetMismatch }
         // The symbol and line table goes after the code before the image is sized (D206, D209).
-        try codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines, program.line_count)
-        let (executable_storage, executable_storage_error) = mem.alloc[u8](a, program.machine.count + 65536usize)
-        if executable_storage_error != ok { ret executable_storage_error }
-        var executable: emit_x64.Buffer = zero
-        try emit_x64.init(&executable, executable_storage)
-        if is_windows {
-            try link_pe.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, &executable)
-        } else {
-            try link_elf.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, &executable)
-        }
-        let (packed, packed_error) = mem.alloc[u8](a, executable.count)
+        let (packed, packed_error) = link_artifact_image(a, &program, is_windows)
         if packed_error != ok { ret packed_error }
-        try emit_x64.pack(&executable, packed)
         try save_bytes(a, args[2usize], packed)
         if is_linux { try os.set_mode(a, args[2usize], 493u32) }
         try io.print("artifact executable written\n")
@@ -12504,8 +12520,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 // The symbol table first, then the image buffer sized from the code with it
                 // (D306): sized before it, a mebibyte of slack covered the table of a small
                 // program and not the twenty of a large one.
+                let table_at = code.machine.count
                 try codegen_x64.append_symbol_table(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines, code.line_count)
-                let executable_capacity = code.machine.count + 1048576usize
+                let executable_capacity = code.machine.count + 1048576usize + link_elf.debug_bound(&builder, code.lines[..code.line_count])
                 let (executable_storage, executable_storage_error) = mem.alloc[u8](a, executable_capacity)
                 if executable_storage_error != ok { ret executable_storage_error }
                 report.build.pools[stats.POOL_IMAGE] = executable_storage.len
@@ -12514,7 +12531,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 if machine_abi_of(args) == .Windows {
                     try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, &executable)
                 } else {
-                    try link_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, &executable)
+                    try link_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                 }
                 report.arena_used = mem.stats(a).used
                 try report_phase(&report, "link")
