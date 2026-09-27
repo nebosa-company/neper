@@ -29295,3 +29295,15 @@ Two changes in `e.ui.accessibility` that the bridges needed:
 The whole bridge is described in `docs/ux/accessibility-bridge.md`.
 
 ---
+
+## D1605 — Debug struct definitions in text order, so a link does not depend on the artifacts' order
+
+The Windows suite stopped at `module_var links differently from artifacts than from source`. That was not because of the bridge: none of the 31 commits waiting on master since the debug-info series had been through a full suite.
+
+`em_link.assemble_vars` gathers every artifact's struct definitions, reached or not, in the order `link-em` was handed the artifacts. `link_elf` writes them into `.debug_info` before the vars. The source path orders the modules main, `e.os`, `e.mem`; the suite's `link-em` names main, `e.mem`, `e.os`. In `module_var` no `e.mem` function is reached, so `.text` agreed, and only the DWARF section (8 KB of it) differed.
+
+The definitions are now sorted by their text after gathering. Each stands alone, because a structure names another by its declaration, so their order carries no meaning. Now both artifact orders link to the source path's bytes, and the compiler's own release link is not measurably slower. The sort is an insertion sort, quadratic in one program's definitions (hundreds).
+
+Not changed: code placement still follows the artifact order. A program that reaches functions of both modules links byte-identically only when `link-em` gets the source path's order.
+
+---
