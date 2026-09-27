@@ -1009,6 +1009,19 @@ the rest `stable`, the image the clean build's -- which the suites do.
 spec section 11's memory rows left out, which the manifest records as
 `options.checks: "off"`; without it a release build keeps them.
 
+`eval EXPR ROOT ARCH OS [FILE]` (D1577, D470) prints one value: `EXPR` as the
+initialiser of a `const` added to `FILE`, so it may call `FILE`'s functions, or to an
+empty module when no file is given, folded by spec section 9's interpreter. An
+integer prints in decimal with its sign, and a bool as `true` or `false`. Nothing is
+generated or linked, and what the interpreter cannot fold is refused as the `const`
+would be, with the same diagnostic and exit status 1. An expression of untyped
+literals alone has no type (spec section 3): write a suffix, as in `eval "6usize * 7"`.
+
+```
+neper eval "1usize << 40" . x64 windows                   # 1099511627776
+neper eval "table_sum()" . x64 windows src/tables.e       # the constant folded in its module
+```
+
 ## 8. Generated source maps
 
 A generator may place `<file>.e.map.json` beside `<file>.e`. It contains

@@ -4622,6 +4622,18 @@ $comptimeMetaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $comptimeMetaWritten -ne 'executable written') { throw 'comptime meta fixture executable emission failed' }
 & $comptimeMetaPath
 if ($LASTEXITCODE -ne 0) { throw "a constant folded through reflection was wrong: exit $LASTEXITCODE" }
+# `eval EXPR ROOT ARCH OS [FILE]` (D1577): a constant folded and printed, alone and in
+# a file's scope; a name that is not there refused.
+$evalShift = & $compiler eval '1usize << 40' $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $evalShift -ne '1099511627776') { throw "eval of a shift answered $evalShift" }
+$evalBool = & $compiler eval '3 > 2 && 1 == 1' $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $evalBool -ne 'true') { throw "eval of a condition answered $evalBool" }
+$evalNegative = & $compiler eval '0i32 - 5i32' $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $evalNegative -ne '-5') { throw "eval of a negative answered $evalNegative" }
+$evalFile = & $compiler eval 'layout_sum() + member_sum()' $repo 'x64' 'windows' (Join-Path $PSScriptRoot 'fixtures\link\comptime_meta\src\main.e')
+if ($LASTEXITCODE -ne 0 -or $evalFile -ne '1572') { throw "eval in a file's scope answered $evalFile" }
+$evalMissing = & $compiler eval 'nope()' $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($evalMissing -join "`n") -notmatch 'E-NAME-9999') { throw "eval of an unknown name was not refused: $($evalMissing -join "`n")" }
 Require-Fixture 'check/comptime_pointer_result'
 $comptimePointerResult = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_pointer_result\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimePointerResult -join "`n") -notmatch 'main\.e:9:15: error\[E-COMPTIME-9999\]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold') { throw "a pointer-valued constant was not refused: $($comptimePointerResult -join "`n")" }

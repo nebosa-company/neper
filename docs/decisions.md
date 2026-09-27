@@ -28551,3 +28551,21 @@ Fixture, both hosts: `link/comptime_meta`:
 - one result used as an array length.
 
 Accept, reject and emit sweeps against D1575's compiler: only the new fixture changed. Stage 2 equals stage 3 on both hosts.
+
+## D1577 — `neper eval` folds a constant and prints it
+
+D470 promised `neper eval EXPR` once the comptime interpreter reached section 9's value kinds: "a `const` initialiser folded and printed, ... unable to disagree with `const` because it is `const`". With D1569 and D1573-D1576 it has them, and `eval` is that command.
+
+`eval EXPR ROOT ARCH OS [FILE]` adds `const NEPER_EVAL = EXPR` to `FILE`'s text, or to an empty module with a `main` when no file is given. It loads the result through the loader's in-memory root (`root_text`, D488/D490), resolves it, collects the declarations, folds the constant, and prints it: an integer in decimal with its sign, a bool as `true` or `false`. Nothing is generated or linked. A value the interpreter cannot fold is refused as the `const` would be, with the checker's diagnostic and exit status 1. So is a name `FILE` does not have, or an expression of untyped literals alone: spec section 3 gives such an expression no type, `const N = 4096` included, and `eval` does not invent one. The documented way is a suffix, `eval "6usize * 7"`. The checker's message for the untyped case ("type checking failed", with no subject) is one of T028's diagnostics that name nothing.
+
+The command lives in `main.e` and is documented in `tooling.md` section 7. The suites check, on both hosts:
+
+- a shift of a `usize`;
+- a condition;
+- a negative `i32`;
+- two functions of `link/comptime_meta` called in that file's scope (1572);
+- an unknown name refused with E-NAME-9999.
+
+Stage 2 equals stage 3 on both hosts.
+
+With D1569 and D1573-D1577, every line of C066 has landed: structs, slices and strings, arrays across calls, pointers, errors with several results and `try`, the arena, reflection in an evaluated body, and `eval`. The item closes. What the interpreter still refuses is recorded in its decisions: `f.ty` and `meta.kind`'s enum, generic calls other than `mem.cast` and `mem.alloc`, `switch`, `defer`, unions, and function values. A constant's own value stays an integer or a bool.
