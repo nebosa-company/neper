@@ -4768,6 +4768,12 @@ $nestedJobs = Join-Path $testBuild 'inline-nested-release-jobs.exe'
 $nestedJobsWritten = & $compiler emit-executable (Join-Path $nestedFixture 'src\main.e') $repo 'x64' 'windows' $nestedJobs --release -j 1 --perturb
 if ($LASTEXITCODE -ne 0 -or $nestedJobsWritten -ne 'executable written') { throw 'nested inlining release emission under -j 1 --perturb failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $nestedJobs).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $nestedRelease).Hash) { throw 'the release build under -j 1 --perturb is not the default build' }
+# `--fault-dry 2` (D1668): the one worker runs dry at its second module, after the first
+# one's tokens and tree went, and the generous one lowers the rest into the same image.
+$nestedDry = Join-Path $testBuild 'inline-nested-release-dry.exe'
+$nestedDryWritten = & $compiler emit-executable (Join-Path $nestedFixture 'src\main.e') $repo 'x64' 'windows' $nestedDry --release -j 1 --fault-dry 2
+if ($LASTEXITCODE -ne 0 -or $nestedDryWritten -ne 'executable written') { throw 'nested inlining release emission under -j 1 --fault-dry 2 failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $nestedDry).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $nestedRelease).Hash) { throw 'the release build with its one worker run dry is not the default build' }
 $nestedOutput = (& $nestedRelease trap 2>&1) -join "`n"
 if ($LASTEXITCODE -ne 134 -or $nestedOutput -notmatch 'leaf\.e:3:13: trap\[unreachable\]: leaf gave up\n  at main\.main \(' -or $nestedOutput -match 'at mid\.') { throw "the nested release trap did not name leaf.e with one frame: exit $LASTEXITCODE, $nestedOutput" }
 $nestedDebug = Join-Path $testBuild 'inline-nested-debug.exe'
@@ -6620,6 +6626,43 @@ foreach ($jobsCase in @(@('-j', '1'), @('-j', '3', '--perturb'))) {
     & $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $jobsPath @jobsCase | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $jobsPath)) { throw "the compiler did not build under $jobsCase" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $jobsPath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler built under $jobsCase is not the stable stage" }
+}
+# The generous worker after fronts went (D1668): the first lowering worker runs dry at
+# its third module, after its first two modules' tokens and trees went, and the generous
+# one checks the rest's bodies again and lowers them -- a comptime walk into a module
+# already gone parses it again from its text -- into the stable stage.
+$dryPath = Join-Path $testBuild 'neper-own-dry.exe'
+& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $dryPath -j 2 --fault-dry 3 | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $dryPath)) { throw 'the compiler did not build with its first lowering worker run dry' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $dryPath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built by the generous worker after fronts went is not the stable stage' }
+# A module's tokens and tree go right after its own artifact (D1668), and a comptime call
+# into one already gone parses it again from its text: `drop_comptime` reads q in place
+# for p and privately for r at `-j 1`, the other way round under `--perturb`, by the
+# generous worker under `--fault-dry 2`, and on real threads at `-j 3 --perturb` by the
+# compiler built here. One image in each mode, and the program exits 0.
+$dropFixture = Join-Path $PSScriptRoot 'fixtures\link\drop_comptime\src\main.e'
+foreach ($dropMode in @('--release', '--time')) {
+    $dropCases = @(
+        @{ Compiler = $compiler; Flags = @('-j', '1') },
+        @{ Compiler = $compiler; Flags = @('-j', '1', '--perturb') },
+        @{ Compiler = $compiler; Flags = @('-j', '1', '--fault-dry', '2') },
+        @{ Compiler = $ownCompilerPath; Flags = @('-j', '3', '--perturb') }
+    )
+    $dropFirst = $null
+    $dropAt = 0
+    foreach ($dropCase in $dropCases) {
+        $dropCompiler = $dropCase.Compiler
+        $dropFlags = $dropCase.Flags
+        $dropImage = Join-Path $testBuild "drop-comptime-$dropAt$dropMode.exe"
+        $dropWritten = & $dropCompiler emit-executable $dropFixture $repo 'x64' 'windows' $dropImage $dropMode @dropFlags 2>$null
+        if ($LASTEXITCODE -ne 0 -or $dropWritten -ne 'executable written') { throw "drop_comptime did not build under $dropFlags ($dropMode)" }
+        & $dropImage
+        if ($LASTEXITCODE -ne 0) { throw "drop_comptime exits $LASTEXITCODE under $dropFlags ($dropMode)" }
+        $dropHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $dropImage).Hash
+        if ($null -eq $dropFirst) { $dropFirst = $dropHash }
+        if ($dropHash -ne $dropFirst) { throw "drop_comptime under $dropFlags is not the -j 1 image ($dropMode)" }
+        $dropAt++
+    }
 }
 # The deterministic half of the performance gate (D506, H25): the image and the workers'
 # arena high-water of sc500k in both modes, built by the stable stage on eight workers,

@@ -6199,14 +6199,23 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
     // tree (D392) with the callee's body skipped: then the tokens are parsed again
     // into storage of the interpreter's own.
     var kept: parse.Tree = zero
-    // (D1511) A module declared from its Interface was never lexed: its tokens are
-    // scanned now, and it is parsed into the interpreter's own storage too.
-    let unlexed = !g.modules[module_index].has_tree && g.modules[module_index].tokens.len == 0usize
-    if unlexed {
-        let scan_error = graph.scan_module(c.arena, g, module_index)
-        if scan_error != ok { ret (0usize, scan_error) }
+    // (D1668) A module another lowering worker may give back, or has, is lexed and
+    // parsed again from its text before anything of its front is read: the same tokens
+    // and the same full tree, so the same answers. So is one with no tree kept (D1511's
+    // module declared from its Interface, never lexed): the graph's token scratch and
+    // parse pool are shared by every worker's checker, and so are its token slots.
+    // ponytail: the copy takes the header path's text-sized pools; copy it out at its
+    // own size if comptime-heavy lowerings make the pools felt.
+    let privately = !g.modules[module_index].has_tree || !graph.front_readable(g, module_index, c.fork_id)
+    var tokens: []lex.Token = zero
+    if privately {
+        let (lexed, lexed_error) = graph.lex_private(c.arena, g.modules[module_index].text)
+        if lexed_error != ok { ret (0usize, lexed_error) }
+        tokens = lexed
+    } else {
+        tokens = g.modules[module_index].tokens
     }
-    if (g.modules[module_index].has_tree && g.modules[module_index].headers_only) || unlexed {
+    if privately || g.modules[module_index].headers_only {
         let text_length = g.modules[module_index].text.len
         let (nodes, nodes_error) = mem.alloc[syntax.Node](c.arena, text_length / 2usize + 4096usize)
         if nodes_error != ok { ret (0usize, nodes_error) }
@@ -6214,16 +6223,16 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
         if children_error != ok { ret (0usize, children_error) }
         let init_error = parse.init_tree(&kept, nodes, children)
         if init_error != ok { ret (0usize, init_error) }
-        let full_error = parse.parse_tokens(&kept, g.modules[module_index].text, g.modules[module_index].tokens)
+        let full_error = parse.parse_tokens(&kept, g.modules[module_index].text, tokens)
         if full_error != ok { ret (0usize, full_error) }
     } else {
         let kept_error = graph.parse_module(g, module_index, &kept)
         if kept_error != ok { ret (0usize, kept_error) }
     }
     c.interp_trees[module_index] = kept
-    // The tokens likewise are the module's own (D316).
-    c.interp_tokens[module_index] = g.modules[module_index].tokens
-    c.interp_token_counts[module_index] = g.modules[module_index].tokens.len
+    // The tokens likewise are the module's own (D316), or the private copy's.
+    c.interp_tokens[module_index] = tokens
+    c.interp_token_counts[module_index] = tokens.len
     c.interp_parsed[module_index] = true
     ret (module_index, ok)
 }
@@ -15886,6 +15895,10 @@ fn check_instance_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, insta
     if !instance_generic.instance || instance_generic.template_index >= c.signature_function_count { ret InvalidType }
     let template = c.functions[instance_generic.template_index]
     let template_generic = c.function_generics[instance_generic.template_index]
+    // (D1668) A template's module is never droppable (`begin_drops`); one that is was
+    // missed by the pinning, and is refused by name on every schedule, not only once
+    // its owner has given it back.
+    if g.modules[instance.module_index].droppable { ret graph.ModuleDropped }
     var tree: parse.Tree = zero
     try graph.parse_module(g, instance.module_index, &tree)
     try tokenize_module(c, g, instance.module_index)
@@ -17807,6 +17820,10 @@ fn device_walk(c: *Checker, g: *graph.Graph, function_index: usize, walk: *Devic
     let (_, parse_error) = interp_module(c, g, function.module_index)
     if parse_error != ok {
         walk.depth = walk.depth - 1usize
+        // (D1668) A helper whose module could not be parsed again for want of memory
+        // (a private copy) would go unchecked and uncounted in the kernel's facts: the
+        // build stops instead.
+        if parse_error == mem.Exhausted { ret parse_error }
         ret ok
     }
     let saved_tokens = c.tokens

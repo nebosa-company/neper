@@ -4685,6 +4685,11 @@ nested_jobs="$test_build/inline-nested-release-jobs"
 nested_jobs_written=$($test_build/neper-self emit-executable "$nested_fixture/src/main.e" "$repo" x64 linux "$nested_jobs" --release -j 1 --perturb)
 [ "$nested_jobs_written" = 'executable written' ]
 cmp "$nested_jobs" "$nested_release"
+# `--fault-dry 2` (D1668): the one worker runs dry at its second module, after the first
+# one's tokens and tree went, and the generous one lowers the rest into the same image.
+nested_dry_written=$($test_build/neper-self emit-executable "$nested_fixture/src/main.e" "$repo" x64 linux "$test_build/inline-nested-release-dry" --release -j 1 --fault-dry 2)
+[ "$nested_dry_written" = 'executable written' ]
+cmp "$test_build/inline-nested-release-dry" "$nested_release"
 nested_status=0
 nested_output=$("$nested_release" trap 2>&1) || nested_status=$?
 [ "$nested_status" -eq 134 ]
@@ -6538,6 +6543,29 @@ for jobs_case in '-j 1' '-j 3 --perturb'; do
     jobs_written=$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$jobs_path" $jobs_case)
     [ "$jobs_written" = 'executable written' ]
     cmp "$jobs_path" "$stable_compiler_path"
+done
+# The generous worker after fronts went (D1668): the first lowering worker runs dry at its
+# third module, and the generous one checks and lowers the rest into the stable stage.
+dry_written=$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-own-dry" -j 2 --fault-dry 3)
+[ "$dry_written" = 'executable written' ]
+cmp "$test_build/neper-own-dry" "$stable_compiler_path"
+# A module's tokens and tree go right after its own artifact (D1668), and a comptime call
+# into one already gone parses it again from its text: `drop_comptime` at `-j 1`, under
+# `--perturb`, under `--fault-dry 2`, and on real threads at `-j 3 --perturb` by the
+# compiler built here. One image in each mode, and the program exits 0.
+drop_fixture="$repo/tests/selfhost/fixtures/link/drop_comptime/src/main.e"
+for drop_mode in --release --time; do
+    drop_first="$test_build/drop-comptime-j1$drop_mode"
+    [ "$($test_build/neper-self emit-executable "$drop_fixture" "$repo" x64 linux "$drop_first" $drop_mode -j 1 2>/dev/null)" = 'executable written' ]
+    chmod +x "$drop_first"
+    "$drop_first"
+    for drop_case in '-j 1 --perturb' '-j 1 --fault-dry 2'; do
+        drop_image="$test_build/drop-comptime$(echo "$drop_case" | tr -d ' -')$drop_mode"
+        [ "$($test_build/neper-self emit-executable "$drop_fixture" "$repo" x64 linux "$drop_image" $drop_mode $drop_case 2>/dev/null)" = 'executable written' ]
+        cmp "$drop_first" "$drop_image"
+    done
+    [ "$("$own_compiler_path" emit-executable "$drop_fixture" "$repo" x64 linux "$test_build/drop-comptime-j3$drop_mode" $drop_mode -j 3 --perturb 2>/dev/null)" = 'executable written' ]
+    cmp "$drop_first" "$test_build/drop-comptime-j3$drop_mode"
 done
 # The deterministic half of the performance gate (D506, H25): sc500k's image and arenas against the static baseline.
 python3 "$repo/benchmarks/baseline/static.py" --compiler "$own_compiler_path" --repo "$repo" --host linux --out "$test_build/static-linux.json" --fixtures "$test_build/baseline-fixtures"

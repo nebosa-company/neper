@@ -70,12 +70,19 @@ type Module = struct {
     // holds the tokens it reads, and the dead header tree. Its lines stay in the
     // worker's arena.
     front: mem.Arena,
-    // (D1667) Whether the block went back after the lowering (`drop_front`): the
-    // tokens and the tree are empty, `has_tree` still says the module was parsed this
-    // build, and `counts` holds the bytes the block gave back and, only when `--stats`
-    // asked (`counts_wanted`), what it would have counted of them; otherwise zeros.
+    // (D1667) Whether the block went back (`drop_front`), after the lowering or, since
+    // D1668, after the module's own artifact: the tokens and the tree are empty,
+    // `has_tree` still says the module was parsed this build, and `counts` holds the
+    // bytes the block gave back and, only when `--stats` asked (`counts_wanted`), what
+    // it would have counted of them; otherwise zeros.
     dropped: bool,
     counts: FrontCounts,
+    // (D1668) Whether the block goes back as soon as the module's own artifact is
+    // written, on the lowering worker whose checker is forked as `crew_owner`. Both are
+    // set once, before the lowering starts; a module declaring a generic function or
+    // aggregate is not droppable, since any worker lowers an instance from its template.
+    droppable: bool,
+    crew_owner: usize,
     first_import: usize,
     import_count: usize,
     visit_state: u8,
@@ -273,6 +280,11 @@ type Graph = struct {
     // and whether the lowering's threads have joined, so one thread reads every front.
     counts_wanted: bool,
     drops_alone: bool,
+    // (D1668) Whether the lowering workers give a droppable module's block back after
+    // its artifact, set once before they start; and `--fault-dry N`, the first lowering
+    // worker running dry before the Nth module of its run, zero for never.
+    drops_on: bool,
+    fault_dry: usize,
 }
 
 // (D1667) What `--stats` counts of a module's tree, and the bytes its block gave back.
@@ -566,6 +578,41 @@ fn drop_front(g: *Graph, module_index: usize) -> err {
     ret ok
 }
 
+// (D1668) Whether a checker forked as `fork_id` may read a module's kept tokens and
+// tree. While the lowering gives fronts back, a droppable one is its own worker's until
+// that worker gives it back, and no other thread reads its `dropped`; once the crew has
+// joined, anyone's that has not gone. No read races the owner's release. A reader this
+// misses is refused whenever the module is another worker's or its owner has given it
+// back already, which the order of a worker's modules decides: `-j 1 --perturb` and
+// `-j 3 --perturb` show such a miss where `-j 1` may not.
+fn front_readable(g: *Graph, module_index: usize, fork_id: usize) -> bool {
+    if g.drops_alone { ret !g.modules[module_index].dropped }
+    if !g.drops_on || !g.modules[module_index].droppable { ret true }
+    ret g.modules[module_index].crew_owner == fork_id && !g.modules[module_index].dropped
+}
+
+// (D1668) A module's tokens lexed again from its text into `a`, exactly as many as
+// there are: counted in one pass and kept in a second, where `scan_module` would take
+// the graph's token scratch, which the workers share.
+fn lex_private(a: *mem.Arena, text: str) -> ([]lex.Token, err) {
+    var scanner = lex.init(text)
+    var count = 0usize
+    while true {
+        let token = lex.next(&scanner)
+        count += 1usize
+        if token.kind == .Eof { break }
+    }
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, count)
+    if tokens_error != ok { ret (tokens, tokens_error) }
+    scanner = lex.init(text)
+    var at = 0usize
+    while at < count {
+        tokens[at] = lex.next(&scanner)
+        at += 1usize
+    }
+    ret (tokens, ok)
+}
+
 fn find_module(g: *Graph, name: str) -> (usize, bool) {
     var i = 0usize
     while i < g.count {
@@ -746,7 +793,7 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     var no_inventory: []const u8 = zero
     var no_front: mem.Arena = zero
     var no_counts: FrontCounts = zero
-    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, artifact_sha256: "", artifact_sha256_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, front: no_front, dropped: false, counts: no_counts, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
+    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, artifact_sha256: "", artifact_sha256_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, front: no_front, dropped: false, counts: no_counts, droppable: false, crew_owner: 0usize, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }
