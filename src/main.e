@@ -9632,6 +9632,9 @@ type Crew = struct {
     first_all_count: usize,
     second_all: []nir.InlineEntry,
     second_all_count: usize,
+    // (D1667) Whether the lowered modules' fronts go back once the crew has joined:
+    // the build's crew, not the one `emit_per_module` makes for itself.
+    drops: bool,
 }
 
 // The worker's checker forked from the program's (D326): the declaration tables
@@ -10761,6 +10764,8 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
     }
     let (failed_worker, failed) = crew_lowest_failure(crew, loaded)
     if failed { ret crew_failure(report, loaded, &crew.workers[failed_worker]) }
+    // (D1667) The lowering's threads have joined: what runs from here runs alone.
+    if crew.drops { loaded.drops_alone = true }
     // What the workers left: a worker replaced in an earlier phase has every module
     // lowered by the generous one, whose checker has them; one that ran dry now has
     // the rest of its modules lowered there, after their bodies are checked there.
@@ -10867,6 +10872,7 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
             try report_count("workers replaced by the generous one", replaced)
         }
     }
+    if crew.drops { try release_fronts(loaded, lowered, crew, checker, resolver) }
     try link_hot_artifacts(a, report, loaded, builder, hot, held, code)
     report.arena_used = mem.stats(a).used
     try report_phase(report, "link from artifacts")
@@ -10883,6 +10889,27 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         report.build.functions_spilling += crew.workers[touched_at].builder.functions_spilling
         touched_at += 1usize
     }
+    ret ok
+}
+
+// (D1667) After the lowering nothing reads a lowered module's tokens or tree: the link
+// reads artifacts, the manifest the digests the writer stored, `--stats` the counts
+// `drop_front` took. Every checker and the resolver let go of what they held of them.
+fn release_fronts(loaded: *graph.Graph, lowered: []bool, crew: *Crew, checker: *check.Checker, resolver: *resolve.Resolver) -> err {
+    var module_at = 0usize
+    while module_at < loaded.count {
+        if lowered[module_at] { try graph.drop_front(loaded, module_at) }
+        module_at += 1usize
+    }
+    check.forget_fronts(checker)
+    var worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) { check.forget_fronts(&crew.workers[worker_at].checker) }
+        worker_at += 1usize
+    }
+    resolver.has_tokens_module = false
+    resolver.tokens = resolver.tokens[0usize..0usize]
+    resolver.token_count = 0usize
     ret ok
 }
 
@@ -12091,6 +12118,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         report.timing = trailing_flags && has_flag(args, "--time")
         report.build.full = trailing_flags && has_flag(args, "--stats-full")
         report.build.on = report.build.full || (trailing_flags && has_flag(args, "--stats"))
+        // (D1667) `--stats` counts a released module's tree as its block goes back.
+        loaded.counts_wanted = report.build.on
         // With `--json` the table is a `stats` record of the stream (D476).
         report.build.json = report.json
         report.build.release = release_build
@@ -12273,6 +12302,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         let with_crew = fused && writes_executable
         if with_crew {
+            crew.drops = true
             try crew_begin(a, &crew, &report, &loaded, &checker, &resolver, &early_builder, bindings, machine_abi_of(args), &hot, held, release_build, body_skip)
         }
         if release_build && !with_crew {

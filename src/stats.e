@@ -328,45 +328,32 @@ fn insertion_sort(values: []usize) {
     }
 }
 
-type Counts = struct {
-    nodes: usize,
-    externs: usize,
-    tests: usize,
-    gpus: usize,
-    imports: usize,
-    nochecks: usize,
-}
-
-// Every module parsed once more, for what only the tree knows.
-fn count_nodes(a: *mem.Arena, r: *resolve.Resolver, g: *graph.Graph) -> (Counts, err) {
-    var counts: Counts = zero
+// Every module parsed once more, for what only the tree knows; a module whose block
+// went back after the lowering was counted then (D1667), by the same rule.
+fn count_nodes(a: *mem.Arena, g: *graph.Graph) -> (graph.FrontCounts, err) {
+    var counts: graph.FrontCounts = zero
     var module_index = 0usize
     while module_index < g.count {
-        // A module a hot build kept was neither lexed nor parsed (D322); the counts
-        // are the program's, so it is here (D412), for `--stats` alone.
-        if !g.modules[module_index].has_tree && g.modules[module_index].tokens.len == 0usize {
-            let front_error = graph.scan_and_parse(a, g, module_index)
-            if front_error != ok { ret (counts, front_error) }
-        }
-        var tree: parse.Tree = zero
-        let parse_error = graph.parse_module(g, module_index, &tree)
-        if parse_error != ok { ret (counts, parse_error) }
-        let tokens_error = resolve.tokenize_module(r, g, module_index)
-        if tokens_error != ok { ret (counts, tokens_error) }
-        counts.nodes += tree.count
-        var node_index = 1usize
-        while node_index < tree.count {
-            let node = tree.nodes[node_index]
-            if node.kind == .ExternDecl { counts.externs += 1usize }
-            if node.kind == .Attribute {
-                let name = resolve.attribute_name(r, g, module_index, node)
-                if resolve.same(name, "test") { counts.tests += 1usize }
-                if resolve.same(name, "gpu") { counts.gpus += 1usize }
-                if resolve.same(name, "import") { counts.imports += 1usize }
-                if resolve.same(name, "nocheck") { counts.nochecks += 1usize }
+        var front = g.modules[module_index].counts
+        if !g.modules[module_index].dropped {
+            // A module a hot build kept was neither lexed nor parsed (D322); the counts
+            // are the program's, so it is here (D412), for `--stats` alone.
+            if !g.modules[module_index].has_tree && g.modules[module_index].tokens.len == 0usize {
+                let front_error = graph.scan_and_parse(a, g, module_index)
+                if front_error != ok { ret (counts, front_error) }
             }
-            node_index += 1usize
+            var tree: parse.Tree = zero
+            let parse_error = graph.parse_module(g, module_index, &tree)
+            if parse_error != ok { ret (counts, parse_error) }
+            front = graph.tree_counts(g.modules[module_index].text, g.modules[module_index].tokens, &tree)
         }
+        counts.nodes += front.nodes
+        counts.externs += front.externs
+        counts.tests += front.tests
+        counts.gpus += front.gpus
+        counts.imports += front.imports
+        counts.nochecks += front.nochecks
+        counts.released += front.released
         module_index += 1usize
     }
     ret (counts, ok)
@@ -421,7 +408,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
         if r.symbols[symbol_at].kind == .Error { errors += 1usize }
         symbol_at += 1usize
     }
-    let (counts, counts_error) = count_nodes(a, r, g)
+    let (counts, counts_error) = count_nodes(a, g)
     if counts_error != ok { ret counts_error }
 
     if b.json { try out(b, "{\"record\":\"stats\"") } else { try out(b, "Metric | Value\n") }
@@ -511,6 +498,8 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
         worker_at += 1usize
     }
     try row_bytes(b, "worker arenas reached", worker_bytes)
+    // (D1667) The modules' token and tree blocks given back after the lowering.
+    try row_bytes(b, "module fronts released", counts.released)
     // (D1527) The lowering workers admitted, and the budget they were admitted under.
     try row_number(b, "workers admitted", g.workers_admitted)
     try row_bytes(b, "memory budget", g.memory_budget)

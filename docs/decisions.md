@@ -30117,3 +30117,133 @@ What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), in M
 - The cause of the `-j 1` time was not measured.
 
 ---
+
+## D1667 — The lowered modules' blocks are released after the lowering join
+
+**Why.** Increment D1 of D1660's plan, the third part of step 6 of its revised list. Since D1666 each module's tokens and tree sit in a reservation of their own, but every block was held to the end of the build. The link reads only artifacts, and it was the peak: at `sc1m -j 4` the process committed 1,078 MB at the `link from artifacts` line against 974 MB at the lowering end (D1666's table).
+
+**Decision.**
+
+- **`release_fronts`** (`main.e`). `crew_emit` calls it once the crew's threads have joined and the dry and replaced workers' modules are done, just before `link_hot_artifacts`. It calls `graph.drop_front` for every lowered module, then `check.forget_fronts` on the root checker, on every crew checker and on the generous one, and empties the resolver's token memo. Only the build's crew does this: `Crew.drops` is set in `dispatch`'s `with_crew` branch, and `emit_per_module`'s own crew keeps its fronts.
+- **`graph.drop_front`** releases the block (D1665) and empties the tokens and the tree together.
+  - Text and lines stay: names are slices of the text, and a site's line is looked up in the lines.
+  - `has_tree` stays true, since the manifest reads it as "parsed this build".
+  - A module without a block (a `declare_late` or main-thread fallback) is left whole, and a release that fails leaves the module whole.
+- **A released module is refused by name.** `graph.parse_module` and both `tokenize_module`s return `graph.ModuleDropped` before their memo tests, and so does `em.body_hash_uncached`'s token branch.
+- **`--stats`.** `drop_front` counts the tree before the release when `Graph.counts_wanted` is set (`--stats`, `--stats-full`), by `graph.tree_counts`. `stats.count_nodes` applies the same rule to a live module and never re-lexes a released one. A new row, "module fronts released", gives the bytes given back.
+- **`Graph.drops_alone`** is set after the join. Nothing reads it until D2.
+- **The check.** `tests/selfhost/run.ps1` and `run.sh` compare a cold `--stats-full` build's nodes, externs, `@tests`, `@gpus`, `@imports` and `@nochecks` rows with a warm no-edit `--stats` build's. They do this on the hot fixture in both modes and on a new fixture, `front_counts`: a `@gpu` kernel launched on the CPU device and a `@test`, beside `e.os`'s externs and `@import`s.
+
+**Review.** Two reviewers read the first version. One found nothing. The other's four findings:
+
+- **No row, no full gate, no measurements** (serious). Held. This row, the full gate and the measurements below.
+- **The release's time is charged to `link from artifacts`.** Held, and measured below. It is not given a phase of its own. `stats.Build` records twelve phases, a warm release build already records eleven, and each phase is also a `progress` record of every `--json --time` stream. The cost is stated here instead.
+- **Half the cold/warm check compared zeros.** Held for `@tests` and `@gpus`, which the hot fixture has none of. `front_counts` carries one of each, and the check runs on it too. Two limits remain:
+  - Both sides of the check now count through `graph.tree_counts`, so it would not catch a wrong name match in `front_attribute`. D1666's compiler, which counted through `resolve.attribute_name`, gives the same six rows as this one on `front_counts` (53,870 nodes, 133 externs, 1 `@test`, 1 `@gpu`, 133 `@import`s) and on `sc500k` (2,734,804 nodes).
+  - `@nochecks` counts `@nocheck` attributes, and a `@nocheck { ... }` block parses as a `NocheckStmt`, not an attribute. D1666's compiler also reports 0 for the `nocheck` fixture's three blocks. No fixture moves the row, and changing what it counts is not this row's work.
+- **`Module.counts`' comment** said the field holds what `--stats` would count. It holds that only when `--stats` asked, and always the released bytes. Reworded. The same finding's `$hotWarm =& $compiler` spacing is restored.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1667`, full, the second run):
+
+- **Lint.** 0 hard findings.
+- **Self-builds.** Stage 2 equals stage 3 (`124b37d6…`), and the release self-build is the same under `-j 3 --perturb` (`ede6315b…`).
+- **Images.** `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases.
+- **Emit sweep.** 606 link fixtures. Only `import_protocol` differs from 013ec715's compiler (exit 1 → 0). That is D1664's intended change, and the gate exits 1 on it, as D1665's and D1666's did. All 600 images the sweep wrote equal D1666's byte for byte, and `front_counts` is new.
+- **Static gate** (`sc500k`, 8 workers), debug / release:
+  - Arena high-water: 2,235 / 2,958 MB.
+  - Images: 1,936,791 / 1,458,009 B.
+  - 0 of 4 measures breached. The pin is not moved.
+
+**The first full gate run.** It failed: 19 sweep fixtures exited 139. They were `gfx_scene`, `gfx_scene_plan`, `gfx_shade`, `gfx_trace`, `gfx_vision`, ten `gpu_*` fixtures, `graph_gaps`, `grep`, `import_protocol` and `str_float_vectors`.
+
+- **What 139 means.** It is the fault handler's exit for an access violation it does not resume: an address outside any reservation, or a commit the system refused (`runtime_pe_x64.asm`). The gate keeps no text for a sweep build, so which one is not known.
+- **When they failed.** The failures fall in two windows.
+  - The first is 07:50:51-07:51:02. In it the C bootstrap assembled, compiled and linked `boot.exe` beside the gate, while WSL built stages 1-3. `gfx_texture` and `global_artifact`, built between failures in that window, passed.
+  - The second, `str_float_vectors`, is the moment `boot.exe`'s first self-build failed in 0.6 s with E-TYPE-9999, "the compiler's arena is exhausted". That is the bootstrap runtime's answer to a refused commit, and it came before any lowering.
+- **Reruns.** All 19, rebuilt by the same stage 3, give D1666's images (`import_protocol` exits 0). The second full run, alone on the machine, passed, and `boot.exe` passed five more times.
+- **A stale read would also give 139.** To rule that out, a scratch compiler filled each block with 0xA5 where `drop_front` releases it, and kept the reservation. Any later read then sees garbage on every run, instead of a fault or a reused range.
+  - Built by stage 3, its debug build writes all 601 sweep images equal to this gate's, and stage 2's bytes for `src/main.e`.
+  - Its release build writes the gate's `sc500k` images at `-j 4` and `-j 1` and its `sc1m` image at `-j 8`, and the release compiler's bytes at `-j 3 --perturb`.
+
+  So on those paths nothing reads a released front, and the 139s are attributed to commits refused under the load run beside the gate. Commit was not sampled at the time, so that is inference.
+
+The C bootstrap on Windows:
+
+- `build-bootstrap.ps1` rebuilt it, and `neper.exe build src/main.e --arena 1g` exits 0 in 22 s (beside the gate).
+- The compiler it builds builds `src/main.e` into stage 2's bytes (`124b37d6…`). Its first attempt is the failure above.
+- It also builds `sc500k` (release `--unchecked -j 4`, from a copy of the workload) into the gate's `sc500k-rel-j4` image (`89d2a478…`), which prints 121495906.
+
+`run.ps1`'s blocks, cut by line range, all pass under stage 3 and under the bootstrap-built compiler:
+
+- `lower_reset`, `import_protocol` and `bounds_proof --stats`;
+- `front_counts`, and the hot suite in both modes, each with the cold/warm check;
+- the `--memory-budget` pair and the tiny-budget refusal;
+- the `--explain --json`, progress and stats-record checks.
+
+Linux (WSL, the worktree rsynced to WSL's own disk):
+
+- **Self-builds.** The rebuilt bootstrap builds stage 1 in 14.3 s. Stage 2 equals stage 3 (`319631c5…`).
+- **Images.** `sc500k` gives one image at `-j 4`, at `-j 3 --perturb`, from stage 1 and from D1666's stage 3. The program prints 121495906.
+- **Tests.** `run.sh`'s `front_counts` block and hot block pass under stage 3 and under stage 1. `front_counts` shows `@tests | 1` and `@gpus | 1` on both builds.
+- **Memory** (release `sc500k -j 4 --stats`):
+  - Debug stage 3: compiler peak working set 2,624 (D1666) → 2,498 MB, with 125 MB released and worker arenas reached 1,964 MB.
+  - Release compilers of both sources, in three alternating pairs, gave the same image each time:
+    - peak working set 453 / 453 / 453 → 421 / 421 / 422 MB;
+    - link from artifacts 36 / 39 / 37 → 50 / 49 / 48 ms;
+    - lower and codegen 786 / 811 / 839 → 798 / 814 / 796 ms.
+- **The first run.** It failed in the `run.sh` block: the new block wrote its executable at the path of its own scratch directory. The path is fixed (`front-counts-built`), and the run above is the second.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50), D1666 → this. The `-j 4` and `-j 8` rows are the gates' own runs. `-j 1` was measured after the gate, from a copy of `sc1m` in the session's scratch directory. D1666's compiler, measured again on that copy, gives 782 MB and 10,282 ms.
+
+| workload | workers | peak commit | peak working set | worker arenas reached | link from artifacts | cold p50 |
+|---|---|---|---|---|---|---|
+| sc1m | 1 | 781 → 672 MB | 663 → 590 MB | 2,250 → 2,250 MB | 104 → 127 ms | 10,192 → 10,293 ms |
+| sc1m | 4 | 1,087 → 1,021 MB | 820 → 749 MB | 3,277 → 3,277 MB | 80 → 97 ms | 3,634 → 3,543 ms |
+| sc1m | 8 | 1,466 → 1,435 MB | 1,013 → 942 MB | 4,649 → 4,649 MB | 82 → 100 ms | 2,952 → 2,948 ms |
+| sc500k | 4 | 705 → 688 MB | 458 → 423 MB | 1,962 → 1,962 MB | 38 → 46 ms | 1,827 → 1,792 ms |
+| sc500k | 8 | 1,014 → 1,012 MB | 582 → 548 MB | 2,958 → 2,958 MB | 38 → 47 ms | 1,530 → 1,505 ms |
+| compiler | 4 | 459 → 460 MB | 241 → 218 MB | 1,440 → 1,441 MB | 15 → 15 ms | 535 → 534 ms |
+| compiler | 8 | 758 → 755 MB | 314 → 293 MB | 2,827 → 2,827 MB | 14 → 16 ms | 516 → 531 ms |
+
+- **Peak commit** falls where the link was the peak: `sc1m` by 109 MB at `-j 1` and 66 MB at `-j 4`, and `sc500k` by 17 MB at `-j 4`. At `-j 8` the lowering is the peak or close to it. `sc1m` falls 31 MB, and `sc500k` (1,006-1,013 against 1,007-1,015 MB) and `compiler` (749-769 against 754-770 MB) are within the runs' spread.
+- **Peak working set** falls in every row, by 21-71 MB at `-j 4` and `-j 8` and by 73 MB at `sc1m -j 1`.
+- **The release's cost** is in `link from artifacts`: +17 to +23 ms at `sc1m` for 249 MB in about 1,000 releases, +8 to +9 ms at `sc500k` for 125 MB, and +11 ms on Linux at `sc500k`. The cold totals are within the machine's spread.
+
+What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), in MB, D1666's release compiler → this. The two compilers ran alternately, twice each, from the scratch copy; a range is the two runs. "Module blocks" is every private reservation under 64 MB.
+
+| at the end of | root | front-end workers | module blocks | crew workers | link workers | process |
+|---|---|---|---|---|---|---|
+| load and parse | 50 → 50 | 24 → 24 | 252 → 252 | | | 323 → 322-323 |
+| resolve | 97 → 97 | 24 → 24 | 252 → 252 | | | 360 → 360 |
+| check declarations | 154 → 154 | 24 → 24 | 252 → 252 | 27-30 → 28-29 | | 431 → 431 |
+| lower and codegen | 160 → 160 | 24 → 24 | 253 → 245 | 531 → 531 | | 974 → 972-974 |
+| link from artifacts | 223 → 219 | 24 → 24 | 253 → 1 | 531 → 531 | 44 → 44 | 1,078 → 825 |
+| link | | | | | | 1,084 → 830-831 |
+
+- **The front owner at the link** is 25 MB: 24 MB of lines in the front-end workers, plus 1 MB of other small reservations. The plan expected about 27.
+- **The lowering-end walk** runs as `release_fronts` begins, so its 245 MB of blocks are already part-released.
+- **The peak now falls inside lowering, not at its end.** The process peak, 1,021 MB, is above every phase-end reading, and the highest of those is the lowering end, at 972-974 MB. In both compilers the small reservations reach 301 MB at the inline-oracles line and are back to 245-253 MB at the lowering end, so about 50 MB comes and goes during lowering. That is the plan's X. The 5 ms sampler that was to measure it was not run.
+- **Against the plan.** The plan expected the peak at the lowering end, about 1,086 MB. D1661, D1662 and D1664 had already brought that line to 974 MB.
+
+**Deviations from the plan.**
+
+- **The number.** The plan's D1 is this D1667.
+- **The refusal's name.** `em.body_hash_uncached` returns `graph.ModuleDropped`, not the plan's `InvalidArtifact`, since the brief asks for a refusal by name.
+- **One counts type.** `count_nodes` returns `graph.FrontCounts`, which also carries the released bytes, and `stats.Counts` is gone.
+- **No copies.** `drop_front` reads the block's base and capacity in place and passes `&g.modules[i].tree`. It copies neither the arena nor the tree.
+- **The memo.** `forget_fronts` clears the token memo through `forget_front(c, 0)`, so a checker whose interpreter never started is cleared too.
+- **`drops_alone`** is set but not read until D2.
+- **`checker tokens (last module)`.** This `--time` row reads 0 on a cold build. It read 50 on the incremental fixture with D1666's compiler. The plan expected this, and no test reads it.
+- **Where the call sits.** The plan's line numbers had moved. `release_fronts` sits after the explanation flush and the `--time` counts, before the link.
+- **A new fixture.** `front_counts` and its check go beyond the plan's hot-fixture check (Review).
+- **The workload copies.** `live.py` and the `-j 1` measure ran from a copy of the workloads, since this work only reads the shared tree.
+
+**Not done or not measured.**
+
+- The full suites (`tests/selfhost/run.ps1`, the Linux suite) were not run; only the blocks above were.
+- Where in lowering the peak falls, and X, were not measured (the 5 ms commit sampler was not run).
+- The owner table at `-j 1` and `-j 8`, and Linux commit per phase, were not measured.
+- The cause of the first gate run's 139s is inferred from timing and the poisoned build, not observed.
+- `@nochecks` counts nothing any source writes, as above.
+
+---

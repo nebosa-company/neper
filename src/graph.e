@@ -13,6 +13,8 @@ error Capacity
 error DuplicateModule
 error DuplicateQualifier
 error ImportCycle
+// (D1667) A module whose tokens and tree were given back, asked for them again.
+error ModuleDropped
 
 type Import = struct {
     name: str,
@@ -68,6 +70,12 @@ type Module = struct {
     // holds the tokens it reads, and the dead header tree. Its lines stay in the
     // worker's arena.
     front: mem.Arena,
+    // (D1667) Whether the block went back after the lowering (`drop_front`): the
+    // tokens and the tree are empty, `has_tree` still says the module was parsed this
+    // build, and `counts` holds the bytes the block gave back and, only when `--stats`
+    // asked (`counts_wanted`), what it would have counted of them; otherwise zeros.
+    dropped: bool,
+    counts: FrontCounts,
     first_import: usize,
     import_count: usize,
     visit_state: u8,
@@ -261,6 +269,21 @@ type Graph = struct {
     // (D1666) Whether each module's tokens and tree get a reservation of their own:
     // a build that writes an executable, whose lowering can give them back.
     module_blocks: bool,
+    // (D1667) Whether `drop_front` counts a tree before giving it back (`--stats`),
+    // and whether the lowering's threads have joined, so one thread reads every front.
+    counts_wanted: bool,
+    drops_alone: bool,
+}
+
+// (D1667) What `--stats` counts of a module's tree, and the bytes its block gave back.
+type FrontCounts = struct {
+    nodes: usize,
+    externs: usize,
+    tests: usize,
+    gpus: usize,
+    imports: usize,
+    nochecks: usize,
+    released: usize,
 }
 
 // A worker's arena (D339): a reservation of its own, committed as it is touched --
@@ -473,6 +496,8 @@ fn set_order(g: *Graph, order: []usize) {
 
 // The module's tree, parsed into the pool unless it is what the pool already holds.
 fn parse_module(g: *Graph, module_index: usize, tree: *parse.Tree) -> err {
+    // (D1667) A released module is refused by name, never handed out empty.
+    if g.modules[module_index].dropped { ret ModuleDropped }
     if g.modules[module_index].has_tree {
         *tree = g.modules[module_index].tree
         ret ok
@@ -488,6 +513,56 @@ fn parse_module(g: *Graph, module_index: usize, tree: *parse.Tree) -> err {
     g.parsed = *tree
     g.parsed_module = module_index
     g.has_parsed = true
+    ret ok
+}
+
+// (D1667) `--stats`' count of one tree: its nodes, externs and four attributes, the
+// one rule for a live module and for one counted as its block goes back.
+fn tree_counts(text: str, tokens: []const lex.Token, tree: *parse.Tree) -> FrontCounts {
+    var counts: FrontCounts = zero
+    counts.nodes = tree.count
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.kind == .ExternDecl { counts.externs += 1usize }
+        if node.kind == .Attribute {
+            let name = front_attribute(text, tokens, node)
+            if same(name, "test") { counts.tests += 1usize }
+            if same(name, "gpu") { counts.gpus += 1usize }
+            if same(name, "import") { counts.imports += 1usize }
+            if same(name, "nocheck") { counts.nochecks += 1usize }
+        }
+        node_index += 1usize
+    }
+    ret counts
+}
+
+// An attribute's name, as `resolve.attribute_name` finds it: its first identifier.
+fn front_attribute(text: str, tokens: []const lex.Token, node: syntax.Node) -> str {
+    var at = usize(node.token_start)
+    while at < usize(node.token_end) && at < tokens.len {
+        if tokens[at].kind == .Identifier { ret lex.token_text(text, tokens[at]) }
+        at += 1usize
+    }
+    ret ""
+}
+
+// (D1667) A module's tokens and tree given back with its block, counted first when
+// `--stats` asks. Text and lines stay: names are slices of the text, and a site's
+// line is looked up in the lines. A release that fails leaves the module whole.
+fn drop_front(g: *Graph, module_index: usize) -> err {
+    if g.modules[module_index].front.cap == 0usize || g.modules[module_index].dropped { ret ok }
+    var counts: FrontCounts = zero
+    if g.counts_wanted { counts = tree_counts(g.modules[module_index].text, g.modules[module_index].tokens, &g.modules[module_index].tree) }
+    counts.released = g.modules[module_index].front.cap
+    try os.release(g.modules[module_index].front.base, g.modules[module_index].front.cap)
+    var no_tree: parse.Tree = zero
+    var no_block: mem.Arena = zero
+    g.modules[module_index].tokens = g.modules[module_index].tokens[0usize..0usize]
+    g.modules[module_index].tree = no_tree
+    g.modules[module_index].front = no_block
+    g.modules[module_index].counts = counts
+    g.modules[module_index].dropped = true
     ret ok
 }
 
@@ -670,7 +745,8 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     if spelling_error != ok { ret (0usize, spelling_error) }
     var no_inventory: []const u8 = zero
     var no_front: mem.Arena = zero
-    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, artifact_sha256: "", artifact_sha256_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, front: no_front, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
+    var no_counts: FrontCounts = zero
+    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, artifact_sha256: "", artifact_sha256_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, front: no_front, dropped: false, counts: no_counts, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }

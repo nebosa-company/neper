@@ -954,6 +954,9 @@ fn body_hash_uncached(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     // not the function was lowered, which is what lets a module be kept unlowered;
     // NIR only for a function with no source of its own.
     if function.source_end > function.source_start && function.module_index < g.count {
+        // (D1667) A released module's declaration has no tokens to hash, and hashing
+        // none would be a wrong body edge, not a failure.
+        if g.modules[function.module_index].dropped { ret (0usize, graph.ModuleDropped) }
         let marker_error = binary.byte(scratch, 2usize)
         if marker_error != ok { ret (0usize, marker_error) }
         // The line the declaration starts on is part of the hash (D322): a copy of the
