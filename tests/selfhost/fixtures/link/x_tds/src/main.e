@@ -450,6 +450,38 @@ fn streaming(a: *mem.Arena, c: *db.Connection) -> i32 {
     let (length, length_ok) = as_i64(three[2])
     if !length_ok || length != 50000i64 { ret 119i32 }
     if db.close_rows(&back) != ok { ret 120i32 }
+
+    // The connection keeps nothing it grows: a caller may reset the arena around any call, the
+    // 100 KB ones included, and the connection goes on even after the freed memory is reused.
+    var round = 0usize
+    while round < 3usize {
+        let mark = mem.mark(a)
+        var update: [2]db.Parameter = zero
+        update[0] = positional(db.Value{ Bytes: big })
+        update[1] = positional(db.Value{ Text: long_text })
+        let (changed, change_error) = db.execute(c, "UPDATE item SET data = ?, name = ? WHERE id = 50", update[0..])
+        if change_error != ok || changed != 1u64 { ret 121i32 }
+        let (again0, again_error) = db.query(c, "SELECT name, data FROM item WHERE id = 50", zero)
+        if again_error != ok { ret 122i32 }
+        var again = again0
+        let (a_more, a_error) = db.reader_next_err(&again, three[0..])
+        let (again_name, again_name_ok) = as_text(three[0])
+        let (again_data, again_data_ok) = as_bytes(three[1])
+        if a_error != ok || !a_more || !again_name_ok || !same_bytes(again_name, text) || !again_data_ok || !same_bytes(again_data, big) { ret 123i32 }
+        if db.close_rows(&again) != ok { ret 124i32 }
+        mem.reset(a, mark)
+        let (scribble, scribble_error) = mem.alloc[u8](a, 600000usize)
+        if scribble_error != ok { ret 125i32 }
+        var s = 0usize
+        while s < scribble.len {
+            scribble[s] = 170u8
+            s += 1usize
+        }
+        mem.reset(a, mark)
+        round += 1usize
+    }
+    let (after, after_error) = scalar_i64(c, "SELECT 43")
+    if after_error != ok || after != 43i64 { ret 126i32 }
     ret 0i32
 }
 
