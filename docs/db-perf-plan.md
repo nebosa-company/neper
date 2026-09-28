@@ -1,6 +1,6 @@
 # Closing the e.db performance gap
 
-The four-way benchmark (D1597, `docs/blog/e-db-three-drivers.html`) scores each
+The four-way benchmark (D1597, `docs/blog/e-db-drivers.html`) scores each
 implementation as the geometric mean of its percentage of the fastest, over 18 cells
 (3 drivers × 3 workloads × 2 hosts): **C 86%, Rust 80%, Neper 69%, Go 59%**. Neper's
 inserts and lookups are close to C; its scans run at 51–66% of the fastest on every
