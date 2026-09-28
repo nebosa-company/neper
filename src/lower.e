@@ -7016,6 +7016,9 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if block_error != ok { ret block_error }
     // Lowering asks the checker again per call, so it has to know a kernel's body too.
     c.body_is_kernel = function.gpu
+    // (D1677) And a device-only helper's (D1589), which may call another: the flag held
+    // whatever body this checker checked last, so the call was refused on some schedules.
+    c.body_device_only = check.device_only(c, g, function_index)
     // The checker's local table still holds the last body it checked -- the last
     // generic instance, checked after every module's bodies -- and a name that is not
     // a local of this body but was one of that instance's would answer from it (D872):

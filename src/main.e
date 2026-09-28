@@ -12365,7 +12365,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 os.exit(1i32)
                 ret ok
             }
-            if settle_error != ok { ret settle_error }
+            // So is a declaration the checker refuses there (D1677): a record that gained
+            // `@reorder`, or lost its C layout, under an extern declared again. It goes to
+            // the diagnostics below, as a cold build's declaration failure does.
+            if settle_error != ok && checker.failure_has_token { check_error = settle_error }
+            if settle_error != ok && check_error == ok { ret settle_error }
             report.arena_used = mem.stats(a).used
             try report_phase(&report, "settle")
         }

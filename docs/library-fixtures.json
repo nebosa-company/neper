@@ -1182,6 +1182,7 @@
    "delivered": 120,
    "pending": [],
    "fixtures": [
+    "device_only_edge",
     "front_counts",
     "gfx_scene",
     "gpu_barrier",
@@ -1191,6 +1192,7 @@
     "gpu_fault_nocheck",
     "gpu_gaps",
     "gpu_present",
+    "gpu_reshape",
     "gpu_shared",
     "gpu_spaces",
     "gpu_tensor",

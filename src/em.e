@@ -535,7 +535,13 @@ fn write_function_signature_canonical(c: *check.Checker, g: *graph.Graph, functi
     let function = c.functions[function_index]
     if function.module_index >= g.count { ret InvalidArtifact }
     try binary.byte(output, declaration_function_kind())
-    try binary.byte(output, function_flags(function))
+    // An extern's `...` is part of what a caller is checked against (D1677): a call
+    // passing arguments past the declared ones is refused once it is gone, so it has to
+    // change every caller's edge. Only a C variadic sets the bit -- 8, clear of the
+    // Interface's instance 4 -- so every other signature hashes as it did.
+    var flags = function_flags(function)
+    if function.variadic { flags += 8usize }
+    try binary.byte(output, flags)
     try binary.little_u16(output, 0usize)
     try canonical_text(output, g.modules[function.module_index].name)
     try canonical_text(output, function.name)
@@ -597,6 +603,16 @@ fn write_function_signature_canonical(c: *check.Checker, g: *graph.Graph, functi
         try canonical_text(output, function.import_library)
         try canonical_text(output, function.import_symbol)
     }
+    // A kernel's `@gpu` and its workgroup size (D1677): a caller's `gpu.launch`
+    // launcher bakes the size in and calls the kernel with its frame and shared
+    // blocks first, and a direct call to a kernel is refused. Only a kernel writes
+    // it, so every other signature hashes as it did; an extern is never a kernel.
+    if function.gpu { try binary.little_u32(output, usize(function.gpu_size)) }
+    // (D1677) Device-only (D1589) decides who may call a function: a caller checked
+    // against a helper that became device-only has to be checked again. Read from the
+    // body, it is written only when set, so every other signature hashes as it did;
+    // an extern or a kernel is never device-only, so this follows neither tail above.
+    if check.device_only(c, g, function_index) { try binary.byte(output, 1usize) }
     ret ok
 }
 
@@ -652,6 +668,23 @@ fn write_aggregate_signature_canonical(c: *check.Checker, g: *graph.Graph, aggre
         try binary.little_u16(output, 0usize)
         try binary.little_u64(output, field.enum_value)
         at += 1usize
+    }
+    // An aggregate's layout attributes are part of what a dependent is compiled against
+    // (D1677): `@packed` and `@align(N)` move its fields' offsets and its size, and
+    // `@reorder` both and the FFI crossings it is refused at (D239). So is `resource`
+    // and its cleanup (D348): a dependent may not read a resource's fields (E-SAFETY-0010)
+    // and owes the value it acquires (E-SAFETY-0002). Written only when one is present,
+    // in D1510's tail bits (resource 1, reorder 2, packed 4), so every other aggregate
+    // hashes as it did.
+    if aggregate.resource || aggregate.reorder || aggregate.packed || aggregate.align != 0usize {
+        var attributes = 0usize
+        if aggregate.resource { attributes += 1usize }
+        if aggregate.reorder { attributes += 2usize }
+        if aggregate.packed { attributes += 4usize }
+        try binary.byte(output, attributes)
+        try binary.zeroes(output, 3usize)
+        try binary.little_u32(output, aggregate.align)
+        if aggregate.resource { try canonical_text(output, aggregate.cleanup) }
     }
     ret ok
 }
@@ -1569,13 +1602,17 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     }
     // (D1510) The attribute tail: what the checker keeps of a function beyond its
     // signature, so a kept module's declarations can come from here -- intrinsic 1,
-    // variadic 2, gpu 4, `@cc` 16 (D1676); the packed workgroup size; the import library and symbol
-    // (for a non-extern function the `@borrows` name and `@noescape` spelling) as
-    // string indexes plus one, zero for none; and each parameter's `own`.
+    // variadic 2, gpu 4, device-only 8 (D1677), `@cc` 16 (D1676); the packed workgroup
+    // size; the import library and symbol (for a non-extern function the `@borrows` name
+    // and `@noescape` spelling) as string indexes plus one, zero for none; and each
+    // parameter's `own`.
     var attributes = 0usize
     if function.intrinsic { attributes += 1usize }
     if function.variadic { attributes += 2usize }
     if function.gpu { attributes += 4usize }
+    // (D1677) A declaration from the Interface has no body to read device-only from, and
+    // its callers' checks and signature edges need it.
+    if check.device_only(c, g, function_index) { attributes += 8usize }
     if function.callback { attributes += 16usize }
     try binary.byte(output, attributes)
     // (D1589) A kernel's inferred capabilities (`gpu.Cap`'s members as bits) and the
@@ -4655,8 +4692,9 @@ fn interface_payload_end(bytes: []const u8, kind: usize, payload: usize, end: us
             at += 1usize
         }
         // (D1510) The attribute tail: 20 bytes (D1589) and one `own` byte a parameter.
-        // Its first byte's known bits are intrinsic 1, variadic 2, gpu 4 and `@cc` 16 (D1676).
-        if next > end || end - next < 20usize || (usize(bytes[next]) & 232usize) != 0usize { ret (0usize, InvalidArtifact) }
+        // Its first byte's known bits are intrinsic 1, variadic 2, gpu 4, device-only 8
+        // (D1677) and `@cc` 16 (D1676).
+        if next > end || end - next < 20usize || (usize(bytes[next]) & 224usize) != 0usize { ret (0usize, InvalidArtifact) }
         next += 20usize
         if parameters > end - next { ret (0usize, InvalidArtifact) }
         at = 0usize
@@ -5281,6 +5319,7 @@ fn decode_function(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payloa
     item.intrinsic = (attributes & 1usize) != 0usize
     item.variadic = (attributes & 2usize) != 0usize
     item.gpu = (attributes & 4usize) != 0usize
+    item.device_only = (attributes & 8usize) != 0usize
     item.callback = (attributes & 16usize) != 0usize
     let (gpu_size, gpu_error) = binary.read_u32(bytes, next + 4usize)
     let (library, library_error) = binary.read_u32(bytes, next + 12usize)
@@ -5368,6 +5407,9 @@ fn decode_aggregate(c: *check.Checker, g: *graph.Graph, bytes: []const u8, paylo
     item.resource = (attributes & 1usize) != 0usize
     item.reorder = (attributes & 2usize) != 0usize
     item.packed = (attributes & 4usize) != 0usize
+    // As `register_aggregate_declaration` does (D239): a decoded `@reorder` aggregate is
+    // refused at a rebuilt dependent's FFI crossing too (D1677).
+    if item.reorder { c.has_reorder = true }
     let (align, align_error) = binary.read_u32(bytes, next + 4usize)
     let (cleanup, cleanup_error) = binary.read_u32(bytes, next + 8usize)
     if align_error != ok || cleanup_error != ok { ret InvalidArtifact }

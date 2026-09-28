@@ -30497,3 +30497,118 @@ D1675 covered neper calling an `@import` extern. The other direction still used 
 **Emit sweep.** All 609 link fixtures were emitted for Windows and Linux by compilers built from master (D1675) and with this change: 608 are byte-identical on both. The one that differs is `extern_struct`. That includes the COM, UI and signal fixtures, whose `@cc` callbacks are all scalar. Both full suites pass (the Linux one in 14 minutes), each with stage 2 equal to stage 3.
 
 ---
+
+## D1677 — A record's attributes, a kernel's shape, an extern's `...` and device-only are in the signature
+
+**What was wrong.** D1672 left four facts outside the canonical signature hash (`em.write_function_signature_canonical`, `em.write_aggregate_signature_canonical`). A dependent is compiled or checked against each of them. After one changed, the dependent stayed `kept:edges-hold`, so the warm image differed from a clean build, or the warm build wrote a program the clean build refuses. The review found a fifth fact in the same record: `resource` and its cleanup. On master's compiler (D1672's stage 3), in debug unless stated:
+
+- **`@packed`, `@align(N)`, `@reorder`.** The fixture's reader stays kept. The warm build exits 34 where the clean build exits 32 (packed), 34 against 43 (align), and 289 against 35 (reorder; in release it reads garbage). A `@reorder` record crossing a `@cc(c)` function gives an image that the clean build refuses.
+- **A kernel's `@gpu` and workgroup size.** After the size changes, `main`'s launcher keeps the old one: warm 50, clean 82.
+  - Dropping `@gpu` fails at link: no artifact defines `fill$frame`.
+  - Adding `@gpu` to a directly called function writes an image that the clean build refuses.
+- **An extern's `...`.** After it is removed, the warm build writes an executable, and the clean build refuses the extra argument (`check.ArgumentCount`). This happens in both modes.
+- **Device-only (D1589).** A helper that becomes device-only leaves its CPU caller kept, and the warm build is accepted.
+  - A clean build at `-j 1` also failed with "cannot lower `tap`". Lowering asked whether `dev.tap`'s call was legal with `body_device_only` left over from whichever body the checker had checked last, so it refused a device-only helper's call to another.
+- **`resource` and its cleanup (D348).** Each case below leaves the module kept, and the clean build refuses it:
+  - a record that becomes a resource, for a module that reads its field (E-SAFETY-0010);
+  - a resource that gains a cleanup, for a module that drops it (E-SAFETY-0002);
+  - a resource held in another module's record, for a module that moves that record twice (E-SAFETY-0001).
+
+**Decision.** Each fact is written into the canonical form only when it is present, so every other hash is unchanged. It hashes the same whether the declaring module is declared from its Interface (D1511) or parsed.
+
+- **Aggregate.** When `resource`, `@reorder`, `@packed` or `@align` is present, the form ends in four fields:
+  - D1510's attribute byte (resource 1, reorder 2, packed 4);
+  - three zero bytes;
+  - the alignment, as a `u32`;
+  - the cleanup name, for a resource.
+
+  The Interface already carries all of it (D1510). A decoded `@reorder` record now sets `has_reorder`, as a parsed one does, so a rebuilt dependent's FFI crossing is refused against it (D239).
+- **Kernel.** A `@gpu` function's form ends in its `u32` workgroup size. The Interface carries the flag and the size.
+- **Extern `...`.** A C variadic sets bit 8 of the form's flags byte, clear of the Interface's instance flag 4. The Interface carries variadic as bit 2.
+- **Device-only.** This fact is inferred from the body's text, not declared. The form ends in a byte 1 when `check.device_only` answers true.
+  - **From the Interface.** A declaration from the Interface has no body. So the Interface's function attribute byte gains device-only 8, written from the same answer, and `device_only` answers that bit for a function with no span.
+  - **The module's own answer.** D1589 scanned only when `e.gpu` was anywhere in the program. So when a change elsewhere brought `e.gpu` in, a kept module answered false from its bit while a clean build of the same source answered true. No hash can see that; the review found it. The answer is now the module's own:
+    - **The builtins** count only in a module that imports `e.gpu`, since `gpu.` is that import's qualifier. This also retires D1589's false positive on a field spelled like `info.gpu.barrier_count` in a module without the import.
+    - **`shared`** counts in every module, as section 10 says: naming it in a type makes a helper device-only wherever the helper sits. It is a keyword, so the front end notes a module whose tokens hold it (`Module.names_shared`), and only such a module, or one that imports `e.gpu`, is scanned. A first version of this row scanned only modules that import `e.gpu`. That accepted a program the spec calls illegal: a helper in another module naming `[]shared u32` in a local, called from CPU code. Master refused it in a program with a kernel. It is refused now in any program (`check/gpu_shared_elsewhere`), where master accepted it in a program without `e.gpu`.
+    - **The program-wide test** stays, as a fast path only: with no module that imports `e.gpu` and none that names `shared`, every module's own answer is false. A function declared from its Interface answers its bit before that test, so a kept module never answers from the rest of the program.
+  - **Why a bit and not an edge.** An edge to the helper's body would also catch the change, but it would rebuild every caller on every body edit. An inferred bit in the signature rebuilds callers only when the answer changes.
+  - **Lowering.** Lowering now sets `body_device_only` for each function it lowers, as it sets `body_is_kernel`.
+- **Refusals in a module declared late.** A module the edge rule rebuilds is declared late (`declare_late`). A declaration refused there escaped `settle` as E-TOOL-9999.
+  - Once `@reorder` was hashed, a plain edit reached this: a record gains `@reorder` while an extern or `@cc` function in another module crosses it.
+  - Such a refusal now goes to the checker's diagnostics, as a cold build's declaration failure does, and as D495 did for the resolver.
+  - This also fixes a case already on master: an extern whose by-value record stops crossing the C ABI.
+- **No format change.** Only hashed bytes move, apart from the device-only bit.
+  - D1511 added the Interface's instance flag to an existing byte without a bump. D1510, D1514 and D1589 bumped because the layout changed, and this layout has not.
+  - A reader from before refuses the new bit as InvalidArtifact rather than misreading it.
+  - Compiler identity rebuilds another compiler's artifacts anyway (D1672).
+- **The function record keeps its size.** `device_only` is the record's fifth flag after D1676's `callback`. Together they pushed `gpu_size` past the eight bytes it shared with them, so every `check.Function` grew by eight, and every fork copies the table: the static gate's sc500k figure rose 4 MB in debug and 7 MB in release against master's 2,235 and 2,958. `generic` and `external` now sit with the other flags ahead of `gpu_size` instead of ahead of the strings, where they left six bytes of padding. The record is its old size, and the gate reads 2,235 and 2,958 again.
+
+**Tests.** `run.ps1` and `run.sh` run four new fixtures inside the hot-mode loop, in `--release` and in debug, at `-j 1`. A refusal step requires the warm build's `error[` lines to equal the clean build's, and the previous image to be untouched.
+
+- **`layout_attributes`.** `p` reads `dep.P`, and `q` reads `dep.Q`.
+  - The `@packed`, `@align` and `@reorder` edits each rebuild the reader as `edge-changed`, keep the other module, and equal the clean build.
+  - A body edit to `p` alone rebuilds it against `dep` declared from its Interface. This is the decode check for `@packed` and `@align`.
+  - `q` then crosses the `@reorder` `dep.Q` at a `@cc(c)` function and is refused at `q.e:13:1`.
+  - With `q` restored, `dep.P` becomes a resource, and `p` is refused at `p.e:8:9` with E-SAFETY-0010.
+- **`gpu_reshape`.**
+  - An edit to `main`, then a body edit to `k`, keep `main`'s edge to `k` declared from its Interface.
+  - The size edit rebuilds `main`, which then exits 82.
+  - Removing `@gpu` from the launched kernel is refused, and so is adding it to the directly called function.
+- **`variadic_drop`.** A body edit to `call` alone rebuilds it against `plat` declared from its Interface. This is the decode check for `...`. Removing `...` is then refused at `call.e:5:5`.
+- **`device_only_edge`.** All steps run at `--inline-cap 0`, so release's inlined body edges do not stand in for the signature edge.
+  - `lane_device` is refused at `host.e:5:9`.
+  - `host_plain` rebuilds `dev` as `edge-changed`.
+  - `dev_body` and `lane_body` are the decode check: `dev` is held.
+  - `host_call` is refused.
+- **Check fixture `gpu_device_only_module`.** It is accepted. A module without `use e.gpu` reads `info.gpu.barrier_count` and is called from CPU code in a program with a kernel.
+
+**Evidence.**
+
+- **Master against this compiler, per fact.** On master's compiler, every reproduction above holds. On this compiler, every warm build equals the clean build's image or its refusal.
+  - Before the review, the implementer ran every step of the four blocks, and their probes, in debug and release, at `-j 1` and at `-j 3 --perturb`.
+  - The `run.sh` blocks, cross-built for Linux and run under WSL, failed at their first assertion on master's compiler and passed on this one.
+  - After the review fixes, the blocks were run again as `run.ps1` holds them, in both modes.
+- **The reviewers' probes, which pass now.**
+  - For the resource cases, the warm build refuses with the clean build's E-SAFETY-0010, 0002 or 0001.
+  - A dependent rebuilt against a decoded resource is held after the owner's body edit.
+  - For `rffi`, `uffi` and `late`, the warm build gives the located diagnostic, not E-TOOL-9999.
+  - For the two probes where `e.gpu` enters the program, the warm build equals the clean build, which accepts.
+- **Mutants.**
+  - Removing the Interface decode of `@packed`, or of `...`, fails the new decode steps in debug. The suite had missed both, which reviewer 2 found.
+  - The blocks catch reviewer 2's mutants of the `has_reorder` line, the device-only decode and the lowering line.
+  - The commit before the review fixes fails the resource step in both modes.
+- **Images.** Master's compiler and this one produce identical images for these builds:
+  - the compiler's self-build;
+  - 16 link fixtures, in both modes: `generic`, `generic_instances`, `data_map`, `gpu_tensor`, `gpu_shared`, `gpu_barrier`, `gpu_spaces`, `gfx_scene`, `ui_actions`, `layout_packed`, `reorder`, `extern_variadic` and the four new ones.
+
+  Only artifacts that declare or call an affected declaration differ in their `.em` beyond compiler identity and checksum.
+- **Self-build.** Stage 2, built by master's compiler, equals stage 3 (SHA256 ED953FE5…4883). `lint_bootstrap.py` reports 0 findings.
+- **Suites.** Both pass on the tree as landed, rebased onto D1676 with the record's flags regrouped: `tests/selfhost/run.ps1` in 19.6 minutes and `scripts/run-linux-suite.sh` in 16 minutes, with stage 2 equal to stage 3.
+  - Two Windows runs failed on the way. The first failed in `link/fs_basics` with exit 228: the scanner held a file past the fixture's five seconds (D793), and the rerun passed there. The second breached the static gate by 4 and 7 MB, the record's growth above.
+
+**Review.** Two reviewers.
+
+- **Fixed.**
+  - `resource` and its cleanup, which both reviewers found.
+  - Device-only depending on the whole program.
+  - E-TOOL-9999 after `declare_late`.
+  - The missing decode steps for `@packed` and `...`.
+  - The missing D-row.
+- **Rejected.**
+  - The format bump, for the reasons above.
+  - A work-queue entry: no queue item covers this work. The first item is C090, and D1672 made none.
+  - The rebase onto D1675: this branch does not merge. Reviewer 2's trial merge had no conflicts, and the merged compiler passed all four blocks in both modes.
+
+**Found, not fixed.** Each of these is already on master, and none is a signature fact. In each, a dependent reads another module's body or global with no edge to it, so closing it needs a new edge source rather than more hashed bytes. The reviewers' reproductions are in the D1677 review scratch.
+
+- **The kernel device walk and its inferred caps (D1588, D1589).** Both follow helpers into other modules, but only the helpers' signatures are edges.
+  - A helper's body can start to read a module-scope `var`, use `f64` or recurse. The kernel's module then stays kept in debug, and the warm build writes an image the clean build refuses.
+  - The kept kernel's Interface caps go stale.
+  - The fix needs a body edge to each foreign function the walk visits.
+- **`callee_keeps` (D1565).** It reads the callee's body. When that body starts to keep a borrowed pointer, the caller stays kept, and the warm build writes an image the clean build refuses with E-SAFETY-0013.
+- **A comptime call into another module (D218).** It records no edge, so the constant keeps its old value: warm 6, clean 9.
+- **Another module's `var`.** Its type, and its record's layout, have no edge: warm 0, clean 5. A `@packed` added to a record that is reached only through a global gives warm 0, clean 7 in debug.
+
+**Not covered.** A cleanup name that changes while `resource` stays set is probed but not pinned by a suite step.
+
+---

@@ -55,6 +55,9 @@ type Module = struct {
     tokens: []lex.Token,
     // Whether the scanner refused a byte: the parse reports it, a later pass refuses.
     has_invalid: bool,
+    // Whether the text holds the keyword `shared`, which makes a function naming it
+    // device-only in any module (D1677): taken as the tokens are scanned.
+    names_shared: bool,
     // The module's tree, parsed once when its imports are collected and kept at its
     // own size (D317): every pass reads it, none re-parses.
     tree: parse.Tree,
@@ -465,10 +468,12 @@ fn scan_module(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     var scanner = lex.init(text)
     var count = 0usize
     var invalid = false
+    var names_shared = false
     while true {
         if count == g.token_scratch.len { ret Capacity }
         let token = lex.next(&scanner)
         if token.kind == .Invalid { invalid = true }
+        if token.kind == .KwShared { names_shared = true }
         g.token_scratch[count] = token
         count += 1usize
         if token.kind == .Eof { break }
@@ -482,6 +487,7 @@ fn scan_module(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     }
     g.modules[module_index].tokens = tokens
     g.modules[module_index].has_invalid = invalid
+    g.modules[module_index].names_shared = names_shared
     ret ok
 }
 
@@ -793,7 +799,7 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     var no_inventory: []const u8 = zero
     var no_front: mem.Arena = zero
     var no_counts: FrontCounts = zero
-    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, artifact_sha256: "", artifact_sha256_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, front: no_front, dropped: false, counts: no_counts, droppable: false, crew_owner: 0usize, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
+    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, artifact_sha256: "", artifact_sha256_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, names_shared: false, tree: no_tree, has_tree: false, headers_only: false, front: no_front, dropped: false, counts: no_counts, droppable: false, crew_owner: 0usize, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }
@@ -846,10 +852,12 @@ fn worker_module(w: *Worker, module_index: usize) -> err {
     var scanner = lex.init(text)
     var count = 0usize
     var invalid = false
+    var names_shared = false
     while true {
         if count == w.token_scratch.len { ret Capacity }
         let token = lex.next(&scanner)
         if token.kind == .Invalid { invalid = true }
+        if token.kind == .KwShared { names_shared = true }
         w.token_scratch[count] = token
         count += 1usize
         if token.kind == .Eof { break }
@@ -869,6 +877,7 @@ fn worker_module(w: *Worker, module_index: usize) -> err {
     }
     w.g.modules[module_index].tokens = tokens
     w.g.modules[module_index].has_invalid = invalid
+    w.g.modules[module_index].names_shared = names_shared
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, w.nodes, w.children)
     // A module wanted as headers only (D392) is parsed without its function bodies.
