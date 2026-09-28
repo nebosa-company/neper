@@ -3602,6 +3602,16 @@ variadic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$variadic_written" = 'executable written' ]
 chmod +x "$variadic_path"
 "$variadic_path"
+# Structs and unions by value across `extern fn` (D1675), against a shared object cc
+# builds from the fixture's cabi.c -- the compiler whose aggregate rules the calls have
+# to match -- and against libc and libm. `DT_NEEDED` is taken verbatim, so the object is
+# named `nepercabi` and found through LD_LIBRARY_PATH.
+${CC:-cc} -std=c99 -Wall -Wextra -O2 -fPIC -shared -o "$test_build/nepercabi" "$repo/tests/selfhost/fixtures/link/extern_struct/cabi.c"
+struct_path="$test_build/extern-struct-selfhost"
+struct_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/extern_struct/src/main.e" "$repo" x64 linux "$struct_path")
+[ "$struct_written" = 'executable written' ]
+chmod +x "$struct_path"
+LD_LIBRARY_PATH="$test_build" "$struct_path"
 # 138 imports from libc and libm, every one called (D1594). The loader's metadata no longer
 # fits the page before 4096, so the code starts on a later page; the fixture checks its
 # own entry point and first segment. Past about 58 externs a module's unsafe inventory also

@@ -3956,6 +3956,18 @@ $variadicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $variadicWritten -ne 'executable written') { throw 'variadic extern executable emission failed' }
 & $variadicPath
 if ($LASTEXITCODE -ne 0) { throw 'a variadic extern call printed the wrong text' }
+# Structs and unions by value across `extern fn` (D1675), against a DLL cl builds from
+# the fixture's cabi.c -- the compiler whose aggregate rules the calls have to match --
+# and against msvcrt and ucrtbase. The loader finds nepercabi.dll beside the program.
+$structFixture = Join-Path $PSScriptRoot 'fixtures\link\extern_struct'
+$structPath = Join-Path $testBuild 'extern-struct-selfhost.exe'
+$vsDevCmd = & (Join-Path $repo 'scripts\vsdevcmd.ps1')
+cmd.exe /d /s /c ('call "{0}" -arch=x64 -host_arch=x64 >nul && cl /nologo /W4 /O2 /LD /Fo:"{1}" /Fe:"{2}" "{3}"' -f $vsDevCmd, (Join-Path $testBuild 'nepercabi.obj'), (Join-Path $testBuild 'nepercabi.dll'), (Join-Path $structFixture 'cabi.c')) | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the extern_struct C library did not build' }
+$structWritten = & $compiler emit-executable (Join-Path $structFixture 'src\main.e') $repo 'x64' 'windows' $structPath
+if ($LASTEXITCODE -ne 0 -or $structWritten -ne 'executable written') { throw "struct-by-value extern executable emission failed: $structWritten" }
+$structRun = & $structPath 2>&1
+if ($LASTEXITCODE -ne 0) { throw "a struct crossed the C ABI wrongly: $structRun" }
 # Section 11's trap protocol: a failed bounds check writes `file:line:col: trap[bounds]:
 # <values>` to stderr and exits 134; the same program with no check tripped exits 0.
 $trapPath = Join-Path $testBuild 'trap-bounds-selfhost.exe'
