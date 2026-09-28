@@ -9635,8 +9635,9 @@ type Crew = struct {
 
 // The worker's checker forked from the program's (D326): the declaration tables
 // copied, with a tail of its own on each one a body check or a lowering appends to,
-// sized from the worker's share of the text. The copies are made on the worker's
-// thread, out of its arena, so eight of them cost the time of one.
+// sized from the worker's share of the text; the comptime parameters, which nothing
+// appends to, are shared (D1662). The copies are made on the worker's thread, out of
+// its arena, so eight of them cost the time of one.
 fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share: usize, largest: usize, fork_id: usize) -> err {
     *into = *from
     into.fork_id = fork_id
@@ -9659,10 +9660,9 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
     if return_types_error != ok { ret return_types_error }
     try copy_types(return_types, from.return_types[0usize..from.return_type_count])
     into.return_types = return_types
-    let (comptime_parameters, comptime_parameters_error) = mem.alloc[check.ComptimeParameter](a, from.comptime_parameter_count + sized(256usize, bytes, 1024usize))
-    if comptime_parameters_error != ok { ret comptime_parameters_error }
-    try copy_comptime_parameters(comptime_parameters, from.comptime_parameters[0usize..from.comptime_parameter_count])
-    into.comptime_parameters = comptime_parameters
+    // (D1662) Shared: nothing collects a comptime parameter after the declarations,
+    // and the slice ends at the count, so one that did would be refused as Capacity.
+    into.comptime_parameters = from.comptime_parameters[0usize..from.comptime_parameter_count]
     let (generic_arguments, generic_arguments_error) = mem.alloc[check.GenericArgument](a, from.generic_argument_count + sized(1024usize, bytes, 256usize))
     if generic_arguments_error != ok { ret generic_arguments_error }
     try copy_generic_arguments(generic_arguments, from.generic_arguments[0usize..from.generic_argument_count])
@@ -9732,9 +9732,13 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
     if spans_error != ok { ret spans_error }
     try copy_usizes(spans, from.writer_spans)
     into.writer_spans = spans
-    let (body_hashes, body_hashes_error) = mem.alloc[usize](a, from.body_hashes.len)
+    // (D1662) Only a declaration's hash is asked for (em.body_hash's three callers),
+    // and a row past the table is hashed without the memo.
+    var hashed = from.signature_function_count
+    if hashed > from.body_hashes.len { hashed = from.body_hashes.len }
+    let (body_hashes, body_hashes_error) = mem.alloc[usize](a, hashed)
     if body_hashes_error != ok { ret body_hashes_error }
-    try copy_usizes(body_hashes, from.body_hashes)
+    try copy_usizes(body_hashes, from.body_hashes[0usize..hashed])
     into.body_hashes = body_hashes
     into.fork_types = from.type_count
     into.fork_aggregates = from.aggregate_count
@@ -9756,9 +9760,10 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
     if memo_types_error != ok { ret memo_types_error }
     into.memo_types = memo_types
     into.memo_type_count = 0usize
-    var memo_slot_count = 8192usize
-    while memo_slot_count < memo_types.len * 4usize { memo_slot_count = memo_slot_count * 2usize }
-    let (memo_slots, memo_slots_error) = mem.alloc[usize](a, memo_slot_count)
+    // (D1662) Slots for the types the memo meets, doubled as they come (check.memo_grow):
+    // four for every type it could hold was 8 MB a worker cleared at `-j 4` over the
+    // million-line program, where a worker meets under 2,000.
+    let (memo_slots, memo_slots_error) = mem.alloc[usize](a, 1024usize)
     if memo_slots_error != ok { ret memo_slots_error }
     try clear_usizes(memo_slots)
     into.memo_slots = memo_slots
@@ -9808,15 +9813,6 @@ fn copy_parameters(into: []check.Parameter, from: []check.Parameter) -> err {
 }
 
 fn copy_types(into: []check.Type, from: []check.Type) -> err {
-    var at = 0usize
-    while at < from.len {
-        into[at] = from[at]
-        at += 1usize
-    }
-    ret ok
-}
-
-fn copy_comptime_parameters(into: []check.ComptimeParameter, from: []check.ComptimeParameter) -> err {
     var at = 0usize
     while at < from.len {
         into[at] = from[at]

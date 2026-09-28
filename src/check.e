@@ -12862,10 +12862,8 @@ fn is_fallible(c: *Checker, function: Function) -> bool {
     ret last.kind == .Err
 }
 
-// A type's id in the memo, interned by every field `same_expectation` compares;
-// false when the table is full, and that answer is simply not kept.
-fn memo_intern(c: *Checker, ty: Type) -> (usize, bool) {
-    if c.memo_slots.len == 0usize { ret (0usize, false) }
+// A type's hash over every field `same_expectation` compares but the kind.
+fn memo_hash(ty: Type) -> usize {
     var h = 1469598103934665603usize
     // The kind is compared, not hashed: an enum does not convert to an integer here.
     h = (h ^ ty.module_index) *% 1099511628211usize
@@ -12881,21 +12879,58 @@ fn memo_intern(c: *Checker, ty: Type) -> (usize, bool) {
         h = (h ^ usize(ty.name[at])) *% 1099511628211usize
         at += 1usize
     }
-    let mask = c.memo_slots.len - 1usize
-    var probe = h & mask
+    ret h
+}
+
+// A type's id in the memo, interned by every field `same_expectation` compares;
+// false when the table is full, or its slots cannot grow, and that answer is simply
+// not kept.
+fn memo_intern(c: *Checker, ty: Type) -> (usize, bool) {
+    if c.memo_slots.len == 0usize { ret (0usize, false) }
+    let h = memo_hash(ty)
+    var probe = h & (c.memo_slots.len - 1usize)
     while true {
         let held = c.memo_slots[probe]
         if held == 0usize {
-            if c.memo_type_count * 2usize >= c.memo_slots.len || c.memo_type_count == c.memo_types.len { ret (0usize, false) }
+            if c.memo_type_count == c.memo_types.len { ret (0usize, false) }
+            // (D1662) Half full, the slots double: an id is the order of interning,
+            // whatever the table's size, so every answer is the one it was.
+            if c.memo_type_count * 2usize >= c.memo_slots.len {
+                if !memo_grow(c) { ret (0usize, false) }
+                probe = h & (c.memo_slots.len - 1usize)
+                while c.memo_slots[probe] != 0usize { probe = (probe + 1usize) & (c.memo_slots.len - 1usize) }
+            }
             c.memo_types[c.memo_type_count] = ty
             c.memo_slots[probe] = c.memo_type_count + 1usize
             c.memo_type_count += 1usize
             ret (c.memo_type_count - 1usize, true)
         }
         if same_expectation(c.memo_types[held - 1usize], ty) { ret (held - 1usize, true) }
-        probe = (probe + 1usize) & mask
+        probe = (probe + 1usize) & (c.memo_slots.len - 1usize)
     }
     ret (0usize, false)
+}
+
+// Twice the slots, from the checker's arena as a module's memo is (D1662), the ids
+// placed again in their order; the old table is left where it lies.
+fn memo_grow(c: *Checker) -> bool {
+    let (slots, slots_error) = mem.alloc[usize](c.arena, c.memo_slots.len * 2usize)
+    if slots_error != ok { ret false }
+    var at = 0usize
+    while at < slots.len {
+        slots[at] = 0usize
+        at += 1usize
+    }
+    let mask = slots.len - 1usize
+    var id = 0usize
+    while id < c.memo_type_count {
+        var probe = memo_hash(c.memo_types[id]) & mask
+        while slots[probe] != 0usize { probe = (probe + 1usize) & mask }
+        slots[probe] = id + 1usize
+        id += 1usize
+    }
+    c.memo_slots = slots
+    ret true
 }
 
 fn memo_wanted(c: *Checker, module_index: usize, node_index: usize) -> bool {
