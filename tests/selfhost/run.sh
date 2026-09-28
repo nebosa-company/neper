@@ -3612,6 +3612,14 @@ struct_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$struct_written" = 'executable written' ]
 chmod +x "$struct_path"
 LD_LIBRARY_PATH="$test_build" "$struct_path"
+# Over a struct by value a function type's convention is part of it (D1676): a neper `fn`
+# is refused where an `extern fn(Key)` is expected, spelled whole so the two differ.
+require_fixture check/extern_fn_convention
+convention_refused=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/extern_fn_convention/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$convention_refused" in
+    *'main.e:10:5: error[E-TYPE-0002]: type mismatch: expected `extern fn(main.Key) -> i64`, found `fn(main.Key) -> i64`'*) ;;
+    *) printf '%s\n' "a neper fn was not refused as an extern fn over a struct: $convention_refused" >&2; exit 1 ;;
+esac
 # 138 imports from libc and libm, every one called (D1594). The loader's metadata no longer
 # fits the page before 4096, so the code starts on a later page; the fixture checks its
 # own entry point and first segment. Past about 58 externs a module's unsafe inventory also

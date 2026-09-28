@@ -1309,15 +1309,15 @@ fn classify_argument(abi: Abi, float: bool, index: usize, integer_used: *usize, 
     ret ok
 }
 
-fn parameter_float_width(builder: *nir.Builder, current: nir.Function, index: usize) -> usize {
+fn parameter_type(builder: *nir.Builder, current: nir.Function, index: usize) -> check.Type {
     let end = current.first_instruction + current.instruction_count
     var at = current.first_instruction
     while at < end {
         let instruction = builder.instructions[at]
-        if instruction.opcode == .Parameter && instruction.immediate == index { ret float_width(instruction.ty) }
+        if instruction.opcode == .Parameter && instruction.immediate == index { ret instruction.ty }
         at += 1usize
     }
-    ret 0usize
+    ret check.invalid_type()
 }
 
 // Every parameter is spilled to its own slot on entry, so the rest of selection never
@@ -1331,8 +1331,16 @@ fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, abi: 
     var stack_index = 0usize
     var at = 0usize
     while at < parameters {
-        let width = parameter_float_width(builder, current, at)
-        try classify_argument(abi, width != 0usize, at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+        let incoming = parameter_type(builder, current, at)
+        let width = float_width(incoming)
+        // An eightbyte a C caller put on the stack with its whole aggregate (D1676).
+        if stacked_argument(incoming) {
+            in_register = false
+            stack_index = stack_used
+            stack_used += 1usize
+        } else {
+            try classify_argument(abi, width != 0usize, at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+        }
         if in_register {
             if width == 0usize {
                 try emit_x64.store_stack(output, stack_slots + at, register)
@@ -1361,6 +1369,26 @@ fn result_pair_sse(ty: check.Type) -> usize {
     ret 0usize
 }
 
+// The other end (D1676): a `@cc` function's two halves, in r10 and r11, go to the
+// registers the pair's classes name; neper's own two results go to rax and rdx.
+fn place_result_pair(output: *emit_x64.Buffer, ty: check.Type) -> err {
+    let pair = result_pair_sse(ty)
+    if pair == 1usize {
+        try emit_x64.move_to_float(output, 0usize, 10usize, true)
+        ret emit_x64.mov_register(output, 0usize, 11usize)
+    }
+    if pair == 2usize {
+        try emit_x64.mov_register(output, 0usize, 10usize)
+        ret emit_x64.move_to_float(output, 0usize, 11usize, true)
+    }
+    if pair == 3usize {
+        try emit_x64.move_to_float(output, 0usize, 10usize, true)
+        ret emit_x64.move_to_float(output, 1usize, 11usize, true)
+    }
+    try emit_x64.mov_register(output, 0usize, 10usize)
+    ret emit_x64.mov_register(output, 2usize, 11usize)
+}
+
 fn second_result(output: *emit_x64.Buffer, ty: check.Type) -> err {
     let pair = result_pair_sse(ty)
     if pair == 1usize { ret emit_x64.mov_register(output, 11usize, 0usize) }
@@ -1376,29 +1404,33 @@ fn stacked_argument(ty: check.Type) -> bool {
     ret ty.kind == .Other && check.same(ty.name, "c-stack")
 }
 
-// The call area covers the overflow slots the calls into C take once an aggregate may
-// go to the stack whole (D1675): the classification's count, which is at most the
-// arguments past the registers whenever nothing is stacked -- so no other frame changes.
+// The call area covers the overflow slots the calls by the C convention take once an
+// aggregate may go to the stack whole (D1675) -- to an `@import` extern, a `@cc`
+// function or through an `extern fn` type (D1676): the classification's count, which is
+// at most the arguments past the registers whenever nothing is stacked -- so no other
+// frame changes. An indirect call's first operand is its callee.
 fn cover_foreign_stack(builder: *nir.Builder, current: nir.Function, abi: Abi, call_area: *usize) -> err {
     let end = current.first_instruction + current.instruction_count
     var at = current.first_instruction
     while at < end {
         let instruction = builder.instructions[at]
-        if instruction.opcode == .Call && instruction.immediate < builder.function_ref_count && builder.function_refs[instruction.immediate].library.len != 0usize {
+        if instruction.opcode == .Call || instruction.opcode == .IndirectCall {
+            var first_argument = 0usize
+            if instruction.opcode == .IndirectCall { first_argument = 1usize }
             var integer_used = 0usize
             var float_used = 0usize
             var stack_used = 0usize
             var in_register = false
             var register = 0usize
             var stack_index = 0usize
-            var operand_at = 0usize
+            var operand_at = first_argument
             while operand_at < instruction.operand_count {
                 let (operand_type, operand_type_error) = value_type(builder, current, builder.operands[instruction.first_operand + operand_at])
                 if operand_type_error != ok { ret operand_type_error }
                 if stacked_argument(operand_type) {
                     stack_used += 1usize
                 } else {
-                    try classify_argument(abi, float_width(operand_type) != 0usize, operand_at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+                    try classify_argument(abi, float_width(operand_type) != 0usize, operand_at - first_argument, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
                 }
                 operand_at += 1usize
             }
@@ -3591,8 +3623,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                             let (second_source, second_error) = read_value(allocations, second_value, 11usize, output)
                             if second_error != ok { ret second_error }
                             if second_source != 11usize { try emit_x64.mov_register(output, 11usize, second_source) }
-                            try emit_x64.mov_register(output, 0usize, 10usize)
-                            try emit_x64.mov_register(output, 2usize, 11usize)
+                            try place_result_pair(output, instruction.ty)
                         } else {
                             if instruction.operand_count != 0usize { ret Unsupported }
                             // The entry's void return is the exit status the startup reads

@@ -3,7 +3,9 @@
 // class pair, the MEMORY class, a pair that no longer fits in the registers left, a
 // struct in a variadic's `...`, and results in registers and through a hidden pointer.
 // Until D1675 an aggregate crossed as neper passes one to itself, by address, and came
-// back through a slot the callee was never told about.
+// back through a slot the callee was never told about. `back` is the other direction
+// (D1676): C calling neper's `@cc` functions, and calls through `extern fn` types.
+use back
 use cabi
 use plat
 
@@ -18,6 +20,9 @@ error ResultMemory
 error InAndOut
 error Protocol
 error Platform
+error CalledByC
+error ReturnedToC
+error CalledByNeper
 
 fn order[T: type](a: T, b: T) -> i32 {
     ret T.cmp(a, b)
@@ -170,5 +175,8 @@ fn main() -> err {
     if !in_and_out() { ret InAndOut }
     if !protocol() { ret Protocol }
     if !platform() { ret Platform }
+    if !back.called_by_c() { ret CalledByC }
+    if !back.returned_to_c() { ret ReturnedToC }
+    if !back.called_by_neper() { ret CalledByNeper }
     ret ok
 }

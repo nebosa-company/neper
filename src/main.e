@@ -6857,19 +6857,30 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     var actual_storage: [256]u8 = zero
     let mismatch = checker.failure_kind == .InitializerType || checker.failure_kind == .ReturnType || checker.failure_kind == .ProtocolSignature || (checker.failure_kind == .Generic && check_error == check.TypeMismatch)
     if mismatch && checker.failure_expected.kind != .Invalid {
+        // (D1676) Two function types apart only by convention -- which matters over an
+        // aggregate by value -- read `fn` and `fn`; spelled whole, the foreign one `extern`.
+        let conventions_differ = checker.failure_expected.kind == .Function && checker.failure_actual.kind == .Function && checker.failure_expected.foreign != checker.failure_actual.foreign
         var expected_out: tool.Out = zero
         expected_out.bytes = expected_storage[..]
+        if conventions_differ {
+            try tool.convention_type_text(&expected_out, checker, g, checker.failure_expected)
+        } else {
         if checker.failure_kind == .ProtocolSignature {
             try tool.function_type_text(&expected_out, checker, g, checker.failure_expected)
         } else {
             try tool.type_text(&expected_out, checker, g, checker.failure_expected, 0usize)
         }
+        }
         var actual_out: tool.Out = zero
         actual_out.bytes = actual_storage[..]
+        if conventions_differ {
+            try tool.convention_type_text(&actual_out, checker, g, checker.failure_actual)
+        } else {
         if checker.failure_kind == .ProtocolSignature {
             try tool.function_type_text(&actual_out, checker, g, checker.failure_actual)
         } else {
             try tool.type_text(&actual_out, checker, g, checker.failure_actual, 0usize)
+        }
         }
         report.expected_text = expected_storage[..expected_out.count]
         report.actual_text = actual_storage[..actual_out.count]

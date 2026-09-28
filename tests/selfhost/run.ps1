@@ -3968,6 +3968,11 @@ $structWritten = & $compiler emit-executable (Join-Path $structFixture 'src\main
 if ($LASTEXITCODE -ne 0 -or $structWritten -ne 'executable written') { throw "struct-by-value extern executable emission failed: $structWritten" }
 $structRun = & $structPath 2>&1
 if ($LASTEXITCODE -ne 0) { throw "a struct crossed the C ABI wrongly: $structRun" }
+# Over a struct by value a function type's convention is part of it (D1676): a neper `fn`
+# is refused where an `extern fn(Key)` is expected, spelled whole so the two differ.
+Require-Fixture 'check/extern_fn_convention'
+$conventionRefused = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\extern_fn_convention\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($conventionRefused -join "`n") -notmatch 'main\.e:10:5: error\[E-TYPE-0002\]: type mismatch: expected `extern fn\(main\.Key\) -> i64`, found `fn\(main\.Key\) -> i64`') { throw "a neper fn was not refused as an extern fn over a struct: $($conventionRefused -join "`n")" }
 # Section 11's trap protocol: a failed bounds check writes `file:line:col: trap[bounds]:
 # <values>` to stderr and exits 134; the same program with no check tripped exits 0.
 $trapPath = Join-Path $testBuild 'trap-bounds-selfhost.exe'

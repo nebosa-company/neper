@@ -193,6 +193,10 @@ type Type = struct {
     // (D1590) Section 10's shared address space: a `[]shared T` or `*shared T`, which is
     // no `[]T` or `*T`; and a `shared var`'s own array, whose slices and addresses are.
     in_shared: bool,
+    // (D1676) A function type called by the C convention: written `extern fn(...)`, or
+    // an `extern` or `@cc` function's own. The two conventions part only over an
+    // aggregate by value, which is where `type_equal` tells them apart.
+    foreign: bool,
 }
 
 type FunctionSignature = struct {
@@ -288,6 +292,9 @@ type Function = struct {
     // << 20 so the record keeps its size: sc500k's function table is arena the
     // static gate budgets at zero.
     gpu: bool,
+    // (D1676) `@cc` on a plain `fn`: C calls it, so its parameters and result cross
+    // by the C convention, and so do neper's calls to it. In the padding after `gpu`.
+    callback: bool,
     gpu_size: u32,
 }
 
@@ -1142,6 +1149,7 @@ fn function_pointer_type(c: *Checker, function: Function, module_index: usize) -
     var result = make_type(.Function, "", module_index)
     result.element = signature_index
     result.has_element = true
+    result.foreign = function.external || function.callback
     ret (result, ok)
 }
 
@@ -1207,7 +1215,7 @@ fn ends_with(text: str, suffix: str) -> bool {
 }
 
 fn make_type(kind: Kind, name: str, module_index: usize) -> Type {
-    ret Type { kind: kind, name: name, module_index: module_index, element: 0usize, has_element: false, is_const: false, array_length: 0usize, has_length: false, in_shared: false }
+    ret Type { kind: kind, name: name, module_index: module_index, element: 0usize, has_element: false, is_const: false, array_length: 0usize, has_length: false, in_shared: false, foreign: false }
 }
 
 fn store_type(c: *Checker, ty: Type) -> (usize, err) {
@@ -1247,6 +1255,26 @@ fn is_string_shape(c: *Checker, ty: Type) -> bool {
     if ty.kind != .Slice || !ty.is_const || ty.in_shared || !ty.has_element || ty.element >= c.type_count { ret false }
     let element = c.types[ty.element]
     ret element.kind == .Integer && same(element.name, "u8")
+}
+
+// Whether a signature passes or returns a struct or union by value: the one place the
+// C convention and neper's part (D1676), so the one place a function type's convention
+// makes it another type. Every other signature means the same call either way.
+fn signature_holds_aggregate(c: *Checker, signature: FunctionSignature) -> bool {
+    var at = 0usize
+    while at < signature.parameter_count + signature.return_count {
+        var index = signature.first_parameter + at
+        if at >= signature.parameter_count { index = signature.first_return + at - signature.parameter_count }
+        if index < c.type_count {
+            let (canonical, canonical_error) = canonical_type(c, c.types[index])
+            if canonical_error == ok {
+                let (aggregate_index, found) = layout_aggregate_index(c, canonical)
+                if found && canonical.kind == .Named && (c.aggregates[aggregate_index].kind == .Struct || c.aggregates[aggregate_index].kind == .Union) { ret true }
+            }
+        }
+        at += 1usize
+    }
+    ret false
 }
 
 fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
@@ -1297,7 +1325,7 @@ fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
             if !has_left_return || !has_right_return || !type_equal(c, left_return, right_return) { ret false }
             at += 1usize
         }
-        ret true
+        ret a.foreign == b.foreign || !signature_holds_aggregate(c, left)
     }
     if a.kind == .Other || a.kind == .Invalid { ret false }
     ret true
@@ -1926,6 +1954,8 @@ fn function_type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, t
     var result = make_type(.Function, "", module_index)
     result.element = signature_index
     result.has_element = true
+    // The parser starts the node at `extern` when the type is written with it.
+    result.foreign = usize(node.token_start) < c.token_count && c.tokens[usize(node.token_start)].kind == .KwExtern
     ret (result, ok)
 }
 
@@ -3726,8 +3756,10 @@ fn substitute_aggregate_type(c: *Checker, template_index: usize, first_argument:
             returns[at] = specialized
             at += 1usize
         }
-        let (result, build_error) = build_function_type(c, parameters[..signature.parameter_count], returns[..signature.return_count], ty.module_index)
-        ret (result, build_error)
+        let (built, build_error) = build_function_type(c, parameters[..signature.parameter_count], returns[..signature.return_count], ty.module_index)
+        var rebuilt = built
+        rebuilt.foreign = ty.foreign
+        ret (rebuilt, build_error)
     }
     ret (ty, ok)
 }
@@ -4570,6 +4602,7 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     // through, and a `@cc` callback's parameters and every pointee it is handed. None
     // may be a type that admits only its members.
     let callback = !item.external && declaration_has_attribute(c, g, tree, module_index, node_index, "cc")
+    item.callback = callback
     if (item.external && !item.intrinsic) || callback {
         var foreign_at = 0usize
         while foreign_at < item.parameter_count + item.return_count {
@@ -4943,9 +4976,10 @@ fn crossing_spelling(ty: Type) -> str {
 // non-empty array of a crossing type. Slices, `str`, `err`, arrays by value, tagged
 // unions, `f16`/`bf16` and the two pointee-only builtins by value do not.
 //
-// ponytail: `fn(...)` and `extern fn(...)` are one `Function` kind to the checker,
-// so a neper-convention function pointer passes here; telling them apart is the
-// type's, not this table's.
+// ponytail: a neper-convention `fn(...)` passes here too. Its type carries its convention
+// since D1676, and `type_equal` keeps the two apart where they differ, over an aggregate
+// by value; refusing a scalar-only `fn(...)` at the crossing would break the callbacks
+// `e.os` declares that way, which call the same either way.
 fn type_crosses(c: *Checker, ty: Type, depth: usize) -> bool {
     if depth > 8usize { ret false }
     let (canonical, canonical_error) = canonical_type(c, ty)
@@ -8443,8 +8477,10 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
             returns[at] = specialized
             at += 1usize
         }
-        let (result, build_error) = build_function_type(c, parameters[..signature.parameter_count], returns[..signature.return_count], ty.module_index)
-        ret (result, build_error)
+        let (built, build_error) = build_function_type(c, parameters[..signature.parameter_count], returns[..signature.return_count], ty.module_index)
+        var rebuilt = built
+        rebuilt.foreign = ty.foreign
+        ret (rebuilt, build_error)
     }
     ret (ty, ok)
 }
@@ -8639,6 +8675,7 @@ fn instantiate_function(c: *Checker, owner_module_index: usize, template_index: 
     instance.generic = !function_arguments_concrete(c, template_index, first_argument)
     instance.import_library = template.import_library
     instance.import_symbol = template.import_symbol
+    instance.callback = template.callback
     var generic: FunctionGeneric = zero
     generic.first_comptime = c.function_generics[template_index].first_comptime
     generic.comptime_count = c.function_generics[template_index].comptime_count
