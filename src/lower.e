@@ -1149,12 +1149,26 @@ fn element_operand(c: *check.Checker, element_type: check.Type, stride: usize, d
     ret (loaded, ok)
 }
 
+// The reference a protocol emitter calls a declared function through. An `extern fn`
+// bound by `@import` takes its library and foreign name from its own declaration, as
+// `emit_call_results` binds one: a reference interned without them was bound only if
+// another call had bound the same entry first, which since D1664 means one in the same
+// module, and before it meant whichever module the worker happened to lower earlier.
+fn intern_declared(builder: *nir.Builder, function: check.Function) -> (usize, err) {
+    if function.external && function.import_library.len != 0usize {
+        let (imported, import_error) = nir.intern_import(builder, function.owner_module_index, function.name, function.import_library, function.import_symbol)
+        ret (imported, import_error)
+    }
+    let (interned, intern_error) = nir.intern_function(builder, function.owner_module_index, function.name, function.instance_id)
+    ret (interned, intern_error)
+}
+
 // An element whose own module declares `fn <t>_cmp` is compared by calling it --
 // the same direct call an ordinary `T.cmp(a, b)` lowers to, and the same reference
 // that gives the artifact its dependency edge. Rule 3 passes the receiver by value,
 // which for an aggregate is its address, exactly as `element_operand` supplies it.
 fn emit_declared_cmp(c: *check.Checker, function: check.Function, slot: usize, result_type: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
-    let (function_ref, reference_error) = nir.intern_function(builder, function.owner_module_index, function.name, function.instance_id)
+    let (function_ref, reference_error) = intern_declared(builder, function)
     if reference_error != ok { ret reference_error }
     let (instruction, call_result, emit_error) = nir.emit(builder, .Call, result_type, true, function_ref, token)
     if emit_error != ok { ret emit_error }
@@ -1421,7 +1435,7 @@ fn emit_hash_seed(c: *check.Checker, module_index: usize, slot: usize, builder: 
 
 fn emit_declared_hash(c: *check.Checker, function: check.Function, slot: usize, module_index: usize, value: usize, builder: *nir.Builder, token: lex.Token) -> err {
     let u64_type = check.make_type(.Integer, "u64", module_index)
-    let (function_ref, reference_error) = nir.intern_function(builder, function.owner_module_index, function.name, function.instance_id)
+    let (function_ref, reference_error) = intern_declared(builder, function)
     if reference_error != ok { ret reference_error }
     let (instruction, call_result, emit_error) = nir.emit(builder, .Call, u64_type, true, function_ref, token)
     if emit_error != ok { ret emit_error }
@@ -1677,7 +1691,7 @@ fn store_supplied_eq_result(builder: *nir.Builder, slot: usize, boolean: check.T
 // A component whose own module declares `fn <t>_eq` is compared by calling it, the
 // same direct call an ordinary `T.eq(a, b)` lowers to.
 fn emit_declared_eq(c: *check.Checker, function: check.Function, slot: usize, boolean: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
-    let (function_ref, reference_error) = nir.intern_function(builder, function.owner_module_index, function.name, function.instance_id)
+    let (function_ref, reference_error) = intern_declared(builder, function)
     if reference_error != ok { ret reference_error }
     let (instruction, call_result, emit_error) = nir.emit(builder, .Call, boolean, true, function_ref, token)
     if emit_error != ok { ret emit_error }
@@ -7235,7 +7249,7 @@ fn emit_formatter_value(c: *check.Checker, g: *graph.Graph, module_index: usize,
     let (format_index, has_format) = check.element_format_function(c, canonical)
     if has_format && verb == .Default {
         let function = c.functions[format_index]
-        let (function_ref, reference_error) = nir.intern_function(builder, function.owner_module_index, function.name, function.instance_id)
+        let (function_ref, reference_error) = intern_declared(builder, function)
         if reference_error != ok { ret reference_error }
         let err_type = check.make_type(.Err, "err", module_index)
         let (call_instruction, call_result, call_error) = nir.emit(builder, .Call, err_type, true, function_ref, token)

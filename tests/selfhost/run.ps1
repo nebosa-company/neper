@@ -838,6 +838,49 @@ if ($LASTEXITCODE -ne 0 -or $globalArtifactLinkWritten -ne 'artifact executable 
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $globalArtifactLinked).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $globalArtifactPath).Hash) { throw 'a module-scope var links differently from artifacts than from source' }
 & $globalArtifactLinked
 if ($LASTEXITCODE -ne 0) { throw 'a module-scope var answer is wrong from artifacts' }
+# A lowering worker rolls its builder back once a module's artifact is written (D1664),
+# and the writer's spans over its rows with it: at `-j 1` one worker lowers four modules,
+# each with as many NIR functions as the last, and the image is the one `-j 3 --perturb`
+# makes and the one linked from `emit-em-all`'s artifacts, in both modes.
+$lowerReset = Join-Path $PSScriptRoot 'fixtures\link\lower_reset\src\main.e'
+foreach ($lowerResetMode in @('--release', '--time')) {
+    $lowerResetOne = Join-Path $testBuild "lower-reset-j1$lowerResetMode.exe"
+    $lowerResetWritten = & $compiler emit-executable $lowerReset $repo 'x64' 'windows' $lowerResetOne $lowerResetMode -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $lowerResetWritten -ne 'executable written') { throw "lower_reset at -j 1 failed ($lowerResetMode)" }
+    & $lowerResetOne
+    if ($LASTEXITCODE -ne 0) { throw "lower_reset at -j 1 exits $LASTEXITCODE ($lowerResetMode)" }
+    $lowerResetPerturbed = Join-Path $testBuild "lower-reset-j3$lowerResetMode.exe"
+    $lowerResetPerturbedWritten = & $compiler emit-executable $lowerReset $repo 'x64' 'windows' $lowerResetPerturbed $lowerResetMode -j 3 --perturb 2>$null
+    if ($LASTEXITCODE -ne 0 -or $lowerResetPerturbedWritten -ne 'executable written') { throw "lower_reset at -j 3 --perturb failed ($lowerResetMode)" }
+    $lowerResetArtifacts = Join-Path $testBuild "lower-reset-artifacts$lowerResetMode"
+    New-Item -ItemType Directory -Force -Path $lowerResetArtifacts | Out-Null
+    $lowerResetFlags = @()
+    if ($lowerResetMode -eq '--release') { $lowerResetFlags = @('--release') }
+    $lowerResetArtifactsWritten = & $compiler emit-em-all $lowerReset $repo 'x64' 'windows' $lowerResetArtifacts @lowerResetFlags
+    if ($LASTEXITCODE -ne 0 -or $lowerResetArtifactsWritten -ne 'compiled modules written') { throw "lower_reset artifact emission failed ($lowerResetMode)" }
+    $lowerResetLinked = Join-Path $testBuild "lower-reset-from-artifacts$lowerResetMode.exe"
+    $lowerResetLinkWritten = & $compiler link-em $lowerResetLinked (Join-Path $lowerResetArtifacts 'main.x64-windows.em') (Join-Path $lowerResetArtifacts 'm1.x64-windows.em') (Join-Path $lowerResetArtifacts 'm2.x64-windows.em') (Join-Path $lowerResetArtifacts 'm3.x64-windows.em')
+    if ($LASTEXITCODE -ne 0 -or $lowerResetLinkWritten -ne 'artifact executable written') { throw "lower_reset compiled modules did not link ($lowerResetMode)" }
+    $lowerResetHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $lowerResetOne).Hash
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $lowerResetPerturbed).Hash -ne $lowerResetHash) { throw "lower_reset at -j 1 is not the -j 3 --perturb image ($lowerResetMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $lowerResetLinked).Hash -ne $lowerResetHash) { throw "lower_reset at -j 1 is not the image linked from its artifacts ($lowerResetMode)" }
+}
+# An `@import` extern reached from a sequence's or tagged union's supplied `cmp` and
+# `hash` binds its library from its declaration in every module (D1664). Nothing calls
+# `point_cmp` by name, so an unbound call fails the link as "no artifact defines", and
+# the images at `-j 1` and `-j 3 --perturb` are one, in both modes.
+$importProtocol = Join-Path $PSScriptRoot 'fixtures\link\import_protocol\src\main.e'
+foreach ($importProtocolMode in @('--release', '--time')) {
+    $importProtocolOne = Join-Path $testBuild "import-protocol-j1$importProtocolMode.exe"
+    $importProtocolWritten = & $compiler emit-executable $importProtocol $repo 'x64' 'windows' $importProtocolOne $importProtocolMode -j 1 2>&1
+    if ($LASTEXITCODE -ne 0 -or ($importProtocolWritten -join "`n") -notmatch 'executable written') { throw "import_protocol at -j 1 failed ($importProtocolMode): $($importProtocolWritten -join "`n")" }
+    & $importProtocolOne
+    if ($LASTEXITCODE -ne 0) { throw "import_protocol at -j 1 exits $LASTEXITCODE ($importProtocolMode)" }
+    $importProtocolPerturbed = Join-Path $testBuild "import-protocol-j3$importProtocolMode.exe"
+    $importProtocolPerturbedWritten = & $compiler emit-executable $importProtocol $repo 'x64' 'windows' $importProtocolPerturbed $importProtocolMode -j 3 --perturb 2>$null
+    if ($LASTEXITCODE -ne 0 -or $importProtocolPerturbedWritten -ne 'executable written') { throw "import_protocol at -j 3 --perturb failed ($importProtocolMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $importProtocolPerturbed).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $importProtocolOne).Hash) { throw "import_protocol at -j 1 is not the -j 3 --perturb image ($importProtocolMode)" }
+}
 # `e.data.stack` and `e.data.queue` over their storage modules, and `e.algo.disjoint_set`
 # on caller storage: order, peek, non-mutating iteration, growth, and union-find with path
 # compression and union by rank.
@@ -4400,6 +4443,29 @@ foreach ($hotMode in @('--release', '--time')) {
     $layoutCleanWritten = & $compiler emit-executable (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutClean $hotMode 2>$null
     if ($LASTEXITCODE -ne 0 -or $layoutCleanWritten -ne 'executable written') { throw "the clean build of the edited layout fixture failed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $layoutExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $layoutClean).Hash) { throw "the warm build after a read layout's edit is not the clean build ($hotMode)" }
+    # A lowering worker's references start again at its mark for every module (D1664): at
+    # `-j 1` a module naming no reference, between two that do, must not leave the first's
+    # used marks to the second, whose edge to `x.widened` they would hide. A warm build
+    # after that signature changed rebuilds `c` as `edge-changed` and is the clean build.
+    $resetScratch = Join-Path $testBuild 'reset-scratch'
+    if (Test-Path -LiteralPath $resetScratch) { Remove-Item -LiteralPath $resetScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\incremental_reset') $resetScratch
+    $resetExe = Join-Path $testBuild "reset$hotMode.exe"
+    $resetFirst = & $compiler emit-executable (Join-Path $resetScratch 'src\main.e') $repo 'x64' 'windows' $resetExe $hotMode --incremental -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $resetFirst -ne 'executable written') { throw "the cold build of the reset fixture failed ($hotMode)" }
+    & $resetExe
+    if ($LASTEXITCODE -ne 0) { throw "the reset fixture did not exit 0 before the edit ($hotMode)" }
+    Copy-Item (Join-Path $resetScratch 'edits\x.e') (Join-Path $resetScratch 'src\x.e') -Force
+    $resetSecond = & $compiler emit-executable (Join-Path $resetScratch 'src\main.e') $repo 'x64' 'windows' $resetExe $hotMode --incremental -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $resetSecond -ne 'executable written') { throw "the warm build after the called signature's edit failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $resetScratch ".neper\$hotManifestMode\build-manifest.json") 'c=rebuilt:edge-changed' 'x=rebuilt:source-changed' 'a=kept:edges-hold' 'b=kept:stable'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after a called signature's edit does not say edge-changed ($hotMode)" }
+    & $resetExe
+    if ($LASTEXITCODE -ne 0) { throw "the reset fixture did not exit 0 after the edit ($hotMode)" }
+    $resetClean = Join-Path $testBuild "reset-clean$hotMode.exe"
+    $resetCleanWritten = & $compiler emit-executable (Join-Path $resetScratch 'src\main.e') $repo 'x64' 'windows' $resetClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $resetCleanWritten -ne 'executable written') { throw "the clean build of the edited reset fixture failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $resetExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $resetClean).Hash) { throw "the warm build after a called signature's edit is not the clean build ($hotMode)" }
     # A protocol function's absence is an edge (D494, H14): a warm build after the module
     # declares the `eq` the supplied rule stood in for rebuilds the instance's module as
     # `edge-changed`, exits the other way, and is the clean build of the edited tree.

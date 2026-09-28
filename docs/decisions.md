@@ -29763,3 +29763,116 @@ Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50
 - The commit at each phase end was not measured, so the plan's "−94 MB at every phase" is shown only through the process peak.
 
 ---
+
+## D1664 — A lowering worker rolls its builder back once a module's artifact is written
+
+**Why.** Increment C1c of D1660's plan. A lowering worker's builder kept every row of every module it lowered until the build ended: function headers, references and their index, strings, inlined records, trap text, and the worker's signatures. `discard_bodies` (D314) took only the bodies. The link has read only artifacts since D325, so none of those rows was needed once the module's artifact was written, but two readers still saw them. `find_nir_function` walked every header in the builder, including earlier modules', and `intern_function` answered from earlier modules' references. The rows cost commit in the crew arenas, and they made a module's `.em` depend on which modules its worker had lowered before it.
+
+**Decision.**
+
+- **The rollback.** `nir.Mark` carries the reference, string and trap text counts. `nir.discard_module` takes the bodies as `discard_bodies` does, resets to the mark and puts the three counts back. It clears the trap cache's module, the import order and the used marks' validity, and attaches the two name indexes again: a count that fell below what an index held would let a name find a row that now holds another name. `nir.reset` ignores the new fields, so the oracles keep references and strings as before. `lower_worker_module` calls `discard_module` after `write_hot_artifact` and restores `w.signatures.count`: the signatures are written by lowering and read by nothing but `nir.e`'s self-test.
+- **The writer's spans.** `update_spans` rescans a builder table only when the table has shrunk below what it scanned. A module lowering as many functions as the last would therefore have lost its first rows from its artifact. `em.span_clear_rows` zeroes the span pairs that the module's function and inlined rows name, before the rows go, and both tables are then scanned from row 0 again.
+  - The plan used `span_clear` on both tables instead. That clears four words for every module of the program for each module lowered, which is quadratic in the modules, as the used marks were until D930. Review found it.
+  - The narrower clear gives the same result. A fork's spans start at zero, because the program's writer never runs before the crew. Only `update_spans` sets a pair, and only for a row below the count, so the module's rows name every pair set since the last clear.
+- **The used marks.** `em.clear_used_marks` now holds the clearing of the last module's marks. `mark_module_references` calls it before its early return, which it takes for a module with no references and no inlined records.
+  - Once references restart at the mark for every module, that return left the previous module's marks set with `used_complete` true. The next module's walk then skipped every reference that landed on a marked index. Its artifact lost signature edges, and only a warm build could see it.
+  - Before this row the return ran only while no reference existed, so the move alone changed nothing.
+- **Three intended changes.**
+  - **The used-marks fix.** Described above.
+  - **`.em` bytes no longer depend on the partition.** A module's references, strings, inlined rows and trap names start at the mark. `find_nir_function` finds only the current module's headers. A no-source callee that the same worker lowered earlier now gives the body edge marker 0, as a callee lowered on another worker always did.
+  - **The capacity cliffs are gone.** The inlined table and the 1 MB trap text hold one module's rows, not those of every module a worker lowered.
+    - A worker that filled the inlined table was refused as Capacity (lower.e:2449).
+    - A worker that filled the trap text silently stopped sharing trap records (codegen_x64.e:2636), which changes an image.
+    - `record_inlined`'s scan of the table is now per module.
+    - None of the gate's workloads reached either limit.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1664`, stage 2 built by 013ec715's debug compiler):
+
+- **Lint.** 0 hard findings.
+- **Self-builds.** Stage 2 equals stage 3, and the release self-build is the same under `-j 3 --perturb`.
+- **Images.** `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases. The emit sweep covers 604 link fixtures, including the two below; 0 differ from HEAD's debug compiler.
+- **C bootstrap.** `neper.exe build src/main.e --arena 1g` exits 0 in 11 s. The compiler it builds builds `src/main.e` into stage 2's bytes.
+- **Static gate** (`sc500k`, 8 workers), arena high-water, debug / release:
+  - This: 2,236 / 2,959 MB, the same as D1663, as the plan expected.
+  - HEAD's calibration: 2,347 / 3,069 MB.
+  - Images: 1,936,791 B and 1,458,009 B, unchanged.
+  - `gate.py` against the pin: 0 breached.
+- **`.em` bytes.** Each compiler built two projects, the compiler's own source and `lower_reset`, with `--incremental` at `-j 1` and at `-j 3 --perturb`. The builds ran one after the other in the same directory, and the artifacts were compared file by file.
+
+  | compiler | compiler's source, debug | compiler's source, release | `lower_reset`, release |
+  |---|---|---|---|
+  | HEAD's debug compiler | 25 of 37 differ | 26 of 37 differ | 1 of 4 differs |
+  | stage 3 | 0 differ | 0 differ | 0 differ |
+- **The new fixtures**, in `run.ps1` and `run.sh`:
+  - `lower_reset` (cold) has four modules whose function counts each reach the previous module's. It is built at `-j 1` in both modes. The image must equal the `-j 3 --perturb` image and the one linked from `emit-em-all`'s artifacts, and the program must run.
+  - `incremental_reset` (hot, `-j 1`) changes `x`. `check_incremental.py` then asserts `c=rebuilt:edge-changed`, `x=rebuilt:source-changed`, `a=kept:edges-hold` and `b=kept:stable`, and the warm image must equal a clean build's, in both modes.
+  - The implementation's revert builds show each fixture failing without its fix:
+    - Without the used-marks move, `incremental_reset` keeps `c` stable, and the debug warm build differs from the clean one.
+    - Without the span clears, `lower_reset` stops with "cannot lower `check`" at `-j 1` and with `InvalidExecutable` at `-j 3 --perturb`, and `incremental_reset` stops with "no artifact defines `fixed`".
+    - Without the index re-attach, the self-test fails.
+  - Removing `span_clear_rows` is the same revert as removing the span clears. The blocks pass with stage 3. The `run.sh` blocks also pass in WSL with a Linux compiler cross-built by stage 3.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50): D1660's files → D1663 → this, from the gate's own runs. The last column is the `lower and codegen` phase, D1663 → this.
+
+| workload | workers | peak commit | peak working set | worker arenas reached | cold p50 | lowering p50 |
+|---|---|---|---|---|---|---|
+| sc1m | 4 | 1,292 → 1,118 → 1,086 MB | 1,035 → 867 → 826 MB | 3,458 → 3,279 → 3,279 MB | 3,447 → 3,549 → 3,526 ms | 1,792 → 1,781 ms |
+| sc1m | 8 | 1,675 → 1,492 → 1,468 MB | 1,233 → 1,059 → 1,019 MB | 4,841 → 4,654 → 4,654 MB | 3,143 → 2,975 → 2,916 ms | 1,441 → 1,416 ms |
+| sc500k | 4 | 812 → 720 → 707 MB | 567 → 480 → 461 MB | 2,055 → 1,963 → 1,963 MB | 1,690 → 1,769 → 1,763 ms | 873 → 859 ms |
+| sc500k | 8 | 1,123 → 1,009 → 1,013 MB | 711 → 605 → 585 MB | 3,069 → 2,959 → 2,959 MB | 1,353 → 1,482 → 1,489 ms | 711 → 707 ms |
+| compiler | 4 | 494 → 460 → 458 MB | 272 → 243 → 241 MB | 1,467 → 1,441 → 1,442 MB | 525 → 545 → 540 ms | 287 → 292 ms |
+| compiler | 8 | 795 → 761 → 759 MB | 356 → 316 → 315 MB | 2,866 → 2,826 → 2,826 MB | 553 → 532 → 526 ms | 288 → 295 ms |
+
+- **`sc1m`.** The peak falls 32 MB at `-j 4` and 24 at `-j 8`. `live.py` measured the crew arenas at the end of lowering with the same two release compilers: the four at `-j 4` go from 563 to 531 MB, and the eight at `-j 8` from 895 to 871. The plan expected −40 to −45 and −50 to −60. The plan counted bytes, but the runtime commits a worker's arena 1 MiB at a time as it is touched (D339). A table's dropped rows therefore save commit only past the chunks that one module's rows reach, and with more workers each worker holds fewer rows.
+- **Worker arenas reached.** Unchanged, as the plan says: the pools are sized before lowering.
+- **`sc500k` at `-j 8`.** The +4 MB is noise. Five alternating runs gave 1,003-1,015 MB (median 1,011) for D1663's release compiler and 1,008-1,014 MB (median 1,012) for this one. The peak falls inside lowering, not at the link, where `live.py` reads 965 MB for both. The eight crew arenas commit the same MB each in both; the peak working set falls 20 MB.
+- **Lowering time.** Lowering is the same or faster on `sc1m` and `sc500k`. The `compiler` workload is this worktree's source, which grew: its image is 6,914,205 → 6,922,587 B.
+
+**Deviations from the plan.**
+
+- **The number.** The plan's C1c is this D1664.
+- **The spans.** `span_clear_rows` replaces the plan's two `span_clear` calls, for the reason above.
+- **The self-test.** It interns `f` and `s` a second time before the rollback. The index fills lazily, so the plan's test never indexed the rows past the mark and could not see a missing re-attach. With the second intern, the test fails without the re-attach.
+- **`incremental_reset`.**
+  - The plan's `b=kept:edges-hold` is wrong: `b` has no edges, and its manifest says `kept:stable`.
+  - `main` is not asserted. It is `rebuilt:edge-changed` in release, because it inlines `c.run`, and `kept:edges-hold` in debug.
+  - The plan's `x.f` and `x.g` are `x.fixed` and `x.widened`. The long bodies have locals named `f` and `g`, and a local may not reuse a module-scope function's name (E-NAME-0003).
+- **`lower_reset`.** `m1`'s one function is the small inlinable callee, written with `+%` so that debug adds no trap functions, and `main` has no traps. The function counts are therefore equal or rising from module to module, which is what triggers the span hazard.
+- **Review fixes.** The review found two stale comments. The header of `mark_module_references` had moved onto `clear_used_marks`, and `lower_worker_module`'s comment said nothing read the rolled-back rows. Both are fixed.
+- **The plan's residual.** The plan's risk list names a call to an `@import` extern made outside `lower_call` (`emit_declared_cmp`, a type's format). Such a call took its library only from another module's call on the same worker, so it would now fail the link as `MissingSymbol`. It was real, it predates this row, and it is fixed here; see below.
+
+**The `@import` residual, found and fixed.** `emit_declared_cmp` and `emit_declared_hash` interned their callee with `nir.intern_function`, which attaches no library. Only `emit_call_results` and the inline copy call `intern_import`. A call from either emitter to an `@import` extern was therefore bound only if the same builder already held an entry for that name bound by `intern_import`, and codegen and the artifact writer read the library off that shared entry. The two emitters run in a generic instance's body, for `T.cmp` or `T.hash` over a sequence, or over a tagged union whose element or payload type's module declares an extern `cmp` or `hash`.
+
+- **Before this row** (HEAD's debug compiler), the result depended on the partition.
+  - A program in which nothing calls the extern by name failed to link in every configuration, with "no artifact defines `point_cmp`".
+  - A program in which another module also called it linked only when that module was lowered earlier on the same worker. That happened at debug `-j 1` when the calling module came first, and at release `-j 1` and `-j 2`, where `main` inlines the direct call. The same programs failed at debug `-j 2`, at `-j 3 --perturb` and under `--incremental`.
+- **With the rollback**, the stage 3 and release compilers failed those programs in every configuration.
+- **The fix.** `lower.intern_declared` binds an extern from its own declaration, as `emit_call_results` does, and interns anything else with `intern_function` as before. The four emitters that call a declared protocol function use it: `emit_declared_cmp`, `emit_declared_hash`, `emit_declared_eq` and a type's own `format`.
+  - The last two cannot reach an extern today. A declared `eq` returns `bool` and a `format` returns `err`, and the checker refuses both on an extern (E-SAFETY-0023 at check.e:4546-4565, and check.e:4432). They use the helper so that the four follow one rule.
+- **Paths not changed.**
+  - An extern as a function value is refused by the checker (check.e:8736, 13112, 13179).
+  - The inline copy (lower.e:2613) takes the library from the oracle's reference, and the oracle's emitters now bind it on every path.
+  - The runtime's fixed names are never `@import`s.
+- **The new fixture.** `import_protocol` has three modules. `direct` calls `key_hash` by name. `seq` and `tagged` reach `point_cmp` and `key_hash` only through `T.cmp` and `T.hash`, over `[1]plat.Point` and `[1]plat.Key` and over tagged unions. Nothing calls `point_cmp` by name.
+  - The foreign functions ignore their arguments. On Windows they are kernel32's `GetCurrentProcess` and `GetCurrentThread`, and on Linux libc's `getpagesize` and `pthread_self`. A structural `cmp` of two equal points is 0, and a structural `hash` tells -7 from 7. The foreign answers are a nonzero `cmp` and two equal hashes.
+  - The `run.ps1` and `run.sh` blocks build the fixture at `-j 1` and at `-j 3 --perturb` in both modes, run the program, and require the two images to be one.
+- **Evidence.**
+  - **The fixture on Windows.** HEAD's debug compiler, D1664's stage 3 and its release compiler each fail all 8 builds (debug and release, at `-j 1`, `-j 2`, `-j 3 --perturb` and `--incremental`) with "no artifact defines `point_cmp`". The fixed compiler builds all 8, each program exits 0, and the 4 images of each mode are identical. The `run.ps1` block passes with the fixed compiler and fails with the other two.
+  - **The fixture on Linux.** Two Linux compilers were cross-built, one from the fixed source by the fixed compiler and one from D1664's source by stage 3. The `run.sh` block, run in WSL, passes with the fixed compiler. The unfixed one stops at its first build with the same message.
+  - **The probe.** Eight of its fixtures failed before the fix: `cmp_only`, `hash_only` and `tu_only`, and the mixed `cmp_pd`, `cmp_dp`, `hash_pd`, `hash_dp` and `tu_dp`. With the fixed compiler they build and exit 0 in all 10 configurations (the four above plus a warm `--incremental`), 80 builds. Its 10 controls also still pass, 100 builds.
+  - **The gate** (`gate.ps1 -Tag d1664-fix`):
+    - Lint: 0 findings.
+    - Stage 2 equals stage 3, and the release self-build is the same under `-j 3 --perturb`.
+    - `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases.
+    - The emit sweep covers 605 link fixtures. Only `import_protocol` differs: HEAD's compiler fails it (exit 1) and stage 3 builds it (exit 0), as intended.
+    - The static gate: arena 2,236 / 2,959 MB and images 1,936,791 / 1,458,009 B, 0 of 4 measures breached.
+    - The plain measurements equal this row's table to within noise. The compiler's own image is 6,923,139 B, 552 B more.
+  - **The C bootstrap.** `neper.exe build src/main.e --arena 1g` exits 0 in 11 s. The compiler it builds builds `src/main.e` into the same bytes as the fixed compiler that stage 3 built.
+- **Found in passing, not fixed.** On Windows, a struct passed by value to an extern reaches the foreign function as its address. Section 5's table says "by value under the target's aggregate rules", and Win64 passes an 8-byte struct in the register. The test was `@import("msvcrt", "_abs64")` given `Key { k: -7i64 }`, which answered a value above 65,536, not 7. Linux was not checked. The fixture's foreign functions ignore their arguments for this reason.
+
+**Not done or not measured.**
+
+- The full suites (`tests/selfhost/run.ps1`, the Linux suite) were not run; only the new blocks were.
+- `-j 1`, Linux memory and the Linux static figure were not measured.
+
+---
