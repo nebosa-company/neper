@@ -214,6 +214,10 @@ if ($LASTEXITCODE -ne 134 -or ($arenaResetBounds -join "`n") -notmatch '6:5: tra
     throw 'arena reset bounds trap failed'
 }
 
+# `os.release`, and 300 releases and 300 whole commits that give their registry slots back (D1665).
+$osRelease = & $neper run (Join-Path $PSScriptRoot 'os-release.e') --output (Join-Path $testBuild 'os-release.exe')
+if ($LASTEXITCODE -ne 0 -or $osRelease -ne 'release ok') { throw 'OS release or the reservation registry failed' }
+
 $osHelper = Join-Path $testBuild 'os-spawn-helper.exe'
 & $neper build (Join-Path $PSScriptRoot 'os-spawn-helper.e') --output $osHelper | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'OS spawn helper build failed' }

@@ -610,8 +610,11 @@ void neper_os_peak_memory(void *result) {
 
 void neper_os_exit(int32_t code) { ExitProcess((UINT)code); }
 
-/* The regions `os.reserve` handed out, so an arena over one grows by commits (D1605). */
+/* The regions `os.reserve` handed out, so an arena over one grows by commits (D1605), and
+ * each one's size: a region its caller commits whole, or releases, grows by nothing and
+ * gives its slot back (D1665), so only arenas that grow a chunk at a time hold the 256. */
 static unsigned char *np_reserved_bases[256];
+static size_t np_reserved_sizes[256];
 static size_t np_reserved_count;
 
 static int np_is_reserved(const unsigned char *base) {
@@ -620,11 +623,34 @@ static int np_is_reserved(const unsigned char *base) {
     return 0;
 }
 
+/* (D1665) The slot of a region at `base`, given back once `covered` bytes of it need no growth. */
+static void np_forget_reserved(const unsigned char *base, size_t covered) {
+    size_t i;
+    for (i = 0; i < np_reserved_count; i++) if (np_reserved_bases[i] == base) {
+        if (covered < np_reserved_sizes[i]) return;
+        np_reserved_count--;
+        np_reserved_bases[i] = np_reserved_bases[np_reserved_count];
+        np_reserved_sizes[i] = np_reserved_sizes[np_reserved_count];
+        return;
+    }
+}
+
 void neper_os_reserve(void *result, size_t n) {
     unsigned char *out = (unsigned char *)result;
     void *p = VirtualAlloc(0, n, MEM_RESERVE, PAGE_NOACCESS);
-    if (p && np_reserved_count < 256) np_reserved_bases[np_reserved_count++] = (unsigned char *)p;
+    if (p && np_reserved_count < 256) {
+        np_reserved_sizes[np_reserved_count] = n;
+        np_reserved_bases[np_reserved_count++] = (unsigned char *)p;
+    }
     *(void **)out = p; *(uint32_t *)(out + 8) = p ? NP_OK : np_error(GetLastError());
+}
+
+/* `MEM_RELEASE` takes the whole reservation and refuses a size, as `os.windows.e`'s does (D1665). */
+uint32_t neper_os_release(unsigned char *p, size_t n) {
+    (void)n;
+    if (!VirtualFree(p, 0, MEM_RELEASE)) return np_error(GetLastError());
+    np_forget_reserved(p, SIZE_MAX);
+    return NP_OK;
 }
 
 static int np_root_grow(size_t need) {
@@ -638,7 +664,9 @@ static int np_root_grow(size_t need) {
 }
 
 uint32_t neper_os_commit(unsigned char *p, size_t n) {
-    return VirtualAlloc(p, n, MEM_COMMIT, PAGE_READWRITE) ? NP_OK : np_error(GetLastError());
+    if (!VirtualAlloc(p, n, MEM_COMMIT, PAGE_READWRITE)) return np_error(GetLastError());
+    np_forget_reserved(p, n);
+    return NP_OK;
 }
 
 /* A reserved arena of the root's capacity (D339): committed a chunk at a time as the root
@@ -944,6 +972,9 @@ void neper_os_reserve(void *result, size_t n) {
 }
 
 uint32_t neper_os_commit(unsigned char *p, size_t n) { return mprotect(p, n, PROT_READ | PROT_WRITE) == 0 ? NP_OK : np_error(errno); }
+
+/* (D1665) The length matters here, as in `os.linux.e`'s. */
+uint32_t neper_os_release(unsigned char *p, size_t n) { return munmap(p, n) == 0 ? NP_OK : np_error(errno); }
 
 
 /* A thread, run inline (D321): the bootstrap compiler need not be fast, only right, and

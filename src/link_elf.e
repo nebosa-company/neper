@@ -884,9 +884,9 @@ type TypeMemo = struct {
 
 // The DWARF writer's tables in a region reserved for this link, cleared here: what
 // `reserve` hands back is not promised to be zero.
-// ponytail: the region (about 300 KB) is not released -- `e.os` has no release the
-// bootstrap knows -- which a process that links once does not feel; a cached region
-// when something links many times in one process.
+// ponytail: the region (about 300 KB) is not released, which a process that links
+// once does not feel; `os.release` (D1665) or a cached region when something links
+// many times in one process.
 type DwarfScratch = struct { memo: *TypeMemo, paths: []str, path_heads: []usize, path_next: []usize }
 
 fn dwarf_scratch() -> (DwarfScratch, err) {
