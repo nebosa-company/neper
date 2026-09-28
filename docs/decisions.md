@@ -30423,3 +30423,36 @@ What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), in M
 - The pinned module at `sc500k` is named by inference, not by an instrumented run.
 
 ---
+
+## D1672 — An extern's `@import` is part of its signature
+
+**What was wrong.** A warm `--incremental` build ignored a changed `@import`. `em.write_function_signature_canonical` wrote an extern's name, its `external` flag, parameters, returns and borrow facts, but not its library or symbol. So the extern's signature hash was the same whatever it bound to, every caller's edge held, and the warm image kept the old binding: it differed from a clean build of the same source. Found while verifying D1664, whose protocol paths now bind from the declaration and so went stale the same way.
+
+**Decision.** The canonical signature ends with the library and the symbol (`canonical_text`, length-prefixed) when the function is extern and has a library. That is the condition lowering uses to emit an import reference (lower.e:1158, 2740), so the hash covers exactly the calls whose relocation carries a binding.
+
+- **Every other hash is unchanged.** A function that is not extern keeps its `@borrows` and `@noescape` spellings in the same two fields, and their positions are already in the signature; an extern with either is refused (check.e:4498, 4535). An instance copies the fields but not `external`. A seeded intrinsic is never extern.
+- **No format change.** The artifact's layout is the same, and only the hashed values of `@import` externs move. The Interface already carries the binding (em.e:1575), so a module declared from its Interface (D1511) hashes it as its source does. An artifact from another compiler is distrusted by the compiler's identity anyway: a cache written by master, warm-built by this compiler, rebuilt every module as `compiler-changed` and equalled the clean build. Emission identity (D1515) already hashed a callee's binding (em.e:3591-3595), and no golden stores a signature hash.
+
+**Test.** A new fixture, `import_rebind`: `direct` calls `plat.ident` by name, `seq` reaches `plat.key_hash` only through a sequence's supplied `hash` (D1664), and `plat` declares both per host. `run.ps1` and `run.sh` build it cold with `--incremental -j 1` in both modes, then apply two edits in turn. Each is followed by a warm build that must rebuild `direct` and `seq` as `edge-changed`, run, and equal a clean build of the edited tree.
+
+- **The library edit.** Windows: `kernel32` becomes `KERNELBASE`. Linux: `libc.so.6` becomes `libpthread.so.0`, which exports neither function but needs `libc.so.6`, and the loader finds an undefined global in any library it loaded.
+- **The symbol edit.** Each extern binds to another function that still answers the same way for every call.
+
+**Evidence.**
+
+- **Master's compiler** (D1668's stage 3): after either edit, `direct` and `seq` stay `kept:edges-hold`, and the warm image is not the clean one, in debug and in release.
+- **This compiler:** `direct` and `seq` are rebuilt as `edge-changed`, and the warm image is the clean one, at `-j 1` and at `-j 3 --perturb`, in both modes. In release `main` is rebuilt too: it inlined `direct.run`, so it holds its own edge to the extern.
+- **Self-builds.** Stage 2 equals stage 3. `lint_bootstrap.py`: 0 findings.
+- **Suites.** Both full suites pass: `tests/selfhost/run.ps1` in 16.1 minutes, and `scripts/run-linux-suite.sh` in 14 minutes, first with a symbol edit alone and again, 14 minutes, with the library edit the review asked for.
+- **Review.** Two reviewers found no defect. A module declared from its Interface, then edited elsewhere, keeps its callers kept; a binding changed after that rebuilds them. Cross-built for Linux, the new block fails on master's compiler and passes on this one.
+
+**Found, not fixed.** The same kind of gap, each already on master: something a dependent is compiled against sits outside the signature hash.
+
+- `@packed`, `@align(N)` and `@reorder` are not in the aggregate signature. A dependent keeps the old field offsets and size: a warm build exits 80 where the clean build exits 57.
+- A kernel's `@gpu` flag and workgroup size are not in the function signature, while the caller's `gpu.launch` launcher bakes the size in. The warm image launches the old shape.
+- An extern's `...` is not hashed. Removing it leaves a caller that passes extra arguments kept, and the warm build writes a program the clean build refuses. Images are not affected, since every import is called as a variadic call is.
+- A helper that becomes device-only leaves a host caller kept in debug.
+
+These are left to a decision of their own.
+
+---

@@ -4457,6 +4457,22 @@ for hot_mode in --release --time; do
     "$test_build/reset$hot_mode"
     [ "$("$test_build/neper-self" emit-executable "$reset_scratch/src/main.e" "$repo" x64 linux "$test_build/reset-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
     cmp "$test_build/reset$hot_mode" "$test_build/reset-clean$hot_mode"
+    # An extern's `@import` is in its signature (D1672): a warm build after the library,
+    # then the symbols, change rebuilds the module that calls one by name and the one that
+    # reaches the other through a supplied `hash`, and is the clean build of the edited tree.
+    rebind_scratch="$test_build/rebind-scratch"
+    rm -rf "$rebind_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/import_rebind" "$rebind_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$rebind_scratch/src/main.e" "$repo" x64 linux "$test_build/rebind$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+    "$test_build/rebind$hot_mode"
+    for rebind_edit in library symbol; do
+        cp "$rebind_scratch/edits/$rebind_edit.linux.e" "$rebind_scratch/src/plat.linux.e"
+        [ "$("$test_build/neper-self" emit-executable "$rebind_scratch/src/main.e" "$repo" x64 linux "$test_build/rebind$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+        python3 "$repo/scripts/check_incremental.py" "$rebind_scratch/.neper/$hot_manifest_mode/build-manifest.json" direct=rebuilt:edge-changed seq=rebuilt:edge-changed plat=rebuilt:source-changed
+        "$test_build/rebind$hot_mode"
+        [ "$("$test_build/neper-self" emit-executable "$rebind_scratch/src/main.e" "$repo" x64 linux "$test_build/rebind-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+        cmp "$test_build/rebind$hot_mode" "$test_build/rebind-clean$hot_mode"
+    done
     # A protocol function's absence is an edge (D494, H14): the instance's module is rebuilt.
     fallback_scratch="$test_build/fallback-scratch"
     rm -rf "$fallback_scratch"

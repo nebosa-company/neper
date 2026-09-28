@@ -582,6 +582,16 @@ fn write_function_signature_canonical(c: *check.Checker, g: *graph.Graph, functi
         try binary.little_u32(output, check.function_noescape_position_at(c, function, at))
         at += 1usize
     }
+    // An extern's `@import` is part of what a caller is compiled against (D1672): the
+    // call's relocation names the library and the symbol, so a changed binding has to
+    // change every caller's edge, or a warm build keeps the old one. Only an extern
+    // with a binding writes them: a function that is not extern keeps its `@borrows`
+    // and `@noescape` spellings in the same fields, whose positions are written above,
+    // and every other signature hashes as it did.
+    if function.external && function.import_library.len != 0usize {
+        try canonical_text(output, function.import_library)
+        try canonical_text(output, function.import_symbol)
+    }
     ret ok
 }
 
