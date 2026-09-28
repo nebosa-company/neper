@@ -760,6 +760,7 @@ fn self_test() -> err {
     try nir.self_test()
     try nir.verify_self_test()
     try nir.signature_self_test()
+    try nir.discard_module_self_test()
     try regalloc.self_test()
     try emit_x64.self_test()
     try codegen_x64.self_test()
@@ -10153,11 +10154,12 @@ fn second_worker_entry(w: *LowerWorker) {
 }
 
 // One module through the worker's builder, staging and writer, as the one-at-a-time
-// path did it (D314): lowered, selected, its artifact written, its bodies discarded.
+// path did it (D314): lowered, selected, its artifact written, and discarded (D1664).
 fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> err {
     w.checker.arena = a
     w.context.arena = a
     let mark = nir.mark(&w.builder)
+    let signature_mark = w.signatures.count
     let first = w.builder.function_count
     let lower_started = nptest_now()
     try lower.module(&w.checker, w.loaded, module_index, &w.builder, &w.signatures, w.bindings)
@@ -10184,7 +10186,17 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     let write_started = nptest_now()
     try write_hot_artifact(a, &w.checker, w.loaded, &w.builder, module_index, &w.context, w.stage_offsets, &w.hot, w.held)
     w.write_ns += nptest_now() - write_started
-    nir.discard_bodies(&w.builder, mark)
+    // (D1664) The module goes whole once its artifact is written: its functions,
+    // references, strings, inlined records, trap text and signatures, which the worker
+    // kept to the end of the build for every module it lowered. The writer's search for
+    // an inlined callee's NIR walked the earlier modules' functions too, and interning
+    // found their references; both now find only the module's own. The writer's spans
+    // over the builder's rows go first: `update_spans` sees a shrink only below what it
+    // scanned, and a module lowering as many functions as the last would have lost its
+    // first rows from its artifact.
+    em.span_clear_rows(&w.checker, &w.builder)
+    try nir.discard_module(&w.builder, mark)
+    w.signatures.count = signature_mark
     ret ok
 }
 

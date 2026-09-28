@@ -1747,7 +1747,8 @@ fn dominates(idom: []usize, d: usize, b: usize, none: usize) -> bool {
 // Where the builder stands, and back to it (D310): what an oracle lowered and cannot
 // inline is discarded rather than kept. References and strings interned meanwhile
 // stay -- they are names, and the indexes over them would otherwise point past the
-// table.
+// table. The reference, string and trap text counts are for `discard_module`, the
+// whole module's rollback, which attaches the indexes again (D1664).
 type Mark = struct {
     function_count: usize,
     block_count: usize,
@@ -1756,10 +1757,13 @@ type Mark = struct {
     inlined_count: usize,
     inline_origin_count: usize,
     debug_local_count: usize,
+    function_ref_count: usize,
+    string_count: usize,
+    trap_text_count: usize,
 }
 
 fn mark(builder: *Builder) -> Mark {
-    ret Mark { function_count: builder.function_count, block_count: builder.block_count, instruction_count: builder.instruction_count, operand_count: builder.operand_count, inlined_count: builder.inlined_count, inline_origin_count: builder.inline_origin_count, debug_local_count: builder.debug.local_count }
+    ret Mark { function_count: builder.function_count, block_count: builder.block_count, instruction_count: builder.instruction_count, operand_count: builder.operand_count, inlined_count: builder.inlined_count, inline_origin_count: builder.inline_origin_count, debug_local_count: builder.debug.local_count, function_ref_count: builder.function_ref_count, string_count: builder.string_count, trap_text_count: builder.trap_text_count }
 }
 
 fn reset(builder: *Builder, at: Mark) {
@@ -1776,8 +1780,8 @@ fn reset(builder: *Builder, at: Mark) {
 
 // A module's bodies, once its code is emitted, are not needed again (D314): the blocks,
 // instructions and operands since the mark go, and the functions, references, strings
-// and globals stay, since the link reads those. The function headers left behind
-// point into space the next module reuses, and nothing reads them.
+// and globals stay. The link read those until it read artifacts (D325); a lowering
+// worker now takes the rest with `discard_module` (D1664).
 fn discard_bodies(builder: *Builder, at: Mark) {
     let held = builder.instruction_count - at.instruction_count
     builder.instruction_total += held
@@ -1791,6 +1795,30 @@ fn discard_bodies(builder: *Builder, at: Mark) {
     builder.operand_count = at.operand_count
     builder.function_active = false
     builder.block_active = false
+}
+
+// A module whose artifact is written (D1664): its bodies go as `discard_bodies` takes
+// them, and so do its function headers, inlined records, references, strings and trap
+// text. The artifact carries every row the link reads (D325), and a worker kept them
+// all to the end of the build, every module's beside every other's. The name indexes
+// are attached again and index what is below the mark on their next use: a count
+// that fell under what they had indexed would leave a name finding a row that now
+// holds another. The crew's alone; the whole-program path links from its builder.
+fn discard_module(builder: *Builder, at: Mark) -> err {
+    discard_bodies(builder, at)
+    reset(builder, at)
+    builder.function_ref_count = at.function_ref_count
+    builder.string_count = at.string_count
+    builder.trap_text_count = at.trap_text_count
+    // The caches over those rows: the trap records are cleared by the next module's
+    // first site, the import order is made again when asked, and the used marks are
+    // the next artifact's to set.
+    builder.trap_data_module = 0usize
+    builder.imports_ordered = false
+    builder.used_marks_valid = false
+    if lookup.attached(&builder.ref_names) { try lookup.attach(&builder.ref_names, builder.ref_names.entries) }
+    if lookup.attached(&builder.string_names) { try lookup.attach(&builder.string_names, builder.string_names.entries) }
+    ret ok
 }
 
 // Where a token lies in the module being lowered, as the trap record and the line table
@@ -1976,5 +2004,48 @@ fn signature_self_test() -> err {
     try add_parameter_type(&builder, function_index, &signatures, integer)
     try add_return_type(&builder, function_index, &signatures, integer)
     if signatures.entries[0usize].first_parameter_type != 0usize || signatures.entries[0usize].parameter_count != 1usize || signatures.entries[0usize].first_return_type != 1usize || signatures.entries[0usize].return_count != 1usize || signatures.count != 2usize { ret InvalidValue }
+    ret ok
+}
+
+// A module's rollback (D1664): the counts return to the mark, a name interned before
+// it is still found, and a name interned after it is a fresh row -- the index does not
+// answer with the row it had before the rollback, which now holds another name.
+fn discard_module_self_test() -> err {
+    var functions: [1]Function = zero
+    var blocks: [1]Block = zero
+    var instructions: [1]Instruction = zero
+    var operands: [1]usize = zero
+    var function_refs: [4]FunctionRef = zero
+    var strings: [4]StringConstant = zero
+    var builder: Builder = zero
+    try init(&builder, functions[..], blocks[..], instructions[..], operands[..], function_refs[..], strings[..])
+    var ref_entries: [64]lookup.Entry = zero
+    var string_entries: [64]lookup.Entry = zero
+    try attach_indexes(&builder, ref_entries[..], string_entries[..])
+    let (kept, kept_error) = intern_function(&builder, 1usize, "k", 0usize)
+    if kept_error != ok { ret kept_error }
+    let base = mark(&builder)
+    let (f, f_error) = intern_function(&builder, 1usize, "f", 0usize)
+    if f_error != ok { ret f_error }
+    let (s, s_error) = intern_string(&builder, "s")
+    if s_error != ok { ret s_error }
+    // Asked again, both are found, and so indexed: the index is filled lazily, and a
+    // row it never held could not answer stale.
+    let (f_found, f_found_error) = intern_function(&builder, 1usize, "f", 0usize)
+    if f_found_error != ok || f_found != f { ret InvalidValue }
+    let (s_found, s_found_error) = intern_string(&builder, "s")
+    if s_found_error != ok || s_found != s { ret InvalidValue }
+    try discard_module(&builder, base)
+    if builder.function_ref_count != base.function_ref_count || builder.string_count != base.string_count { ret InvalidValue }
+    let (g, g_error) = intern_function(&builder, 1usize, "g", 0usize)
+    if g_error != ok || g != f { ret InvalidValue }
+    let (f_again, f_again_error) = intern_function(&builder, 1usize, "f", 0usize)
+    if f_again_error != ok || f_again != f + 1usize { ret InvalidValue }
+    let (k_again, k_again_error) = intern_function(&builder, 1usize, "k", 0usize)
+    if k_again_error != ok || k_again != kept { ret InvalidValue }
+    let (t, t_error) = intern_string(&builder, "t")
+    if t_error != ok || t != s { ret InvalidValue }
+    let (s_again, s_again_error) = intern_string(&builder, "s")
+    if s_again_error != ok || s_again != s + 1usize { ret InvalidValue }
     ret ok
 }

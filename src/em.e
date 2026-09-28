@@ -1028,6 +1028,36 @@ fn span_clear(c: *check.Checker, table: usize) {
     c.writer_scanned[table] = 0usize
 }
 
+// The spans a lowering worker's module set over the builder's functions and inlined
+// entries, cleared before its rows are discarded (D1664), and both tables scanned from
+// their first row again. `span_clear` over the two was four words for every module of
+// the program, for each module a worker lowered: quadratic in the modules, as the used
+// marks were until D930. A fork's spans start zero and only `update_spans` sets a
+// pair, for a row below the count, so the rows name every pair set since the last
+// clear.
+fn span_clear_rows(c: *check.Checker, builder: *nir.Builder) {
+    var at = 0usize
+    while at < builder.function_count {
+        span_zero(c, span_nir(), builder.functions[at].module_index)
+        at += 1usize
+    }
+    at = 0usize
+    while at < builder.inlined_count {
+        span_zero(c, span_inlined(), builder.inlined[at].caller_module)
+        at += 1usize
+    }
+    c.writer_scanned[span_nir()] = 0usize
+    c.writer_scanned[span_inlined()] = 0usize
+}
+
+fn span_zero(c: *check.Checker, table: usize, module_index: usize) {
+    let modules = span_modules(c)
+    if module_index >= modules { ret }
+    let at = (table * modules + module_index) * 2usize
+    c.writer_spans[at] = 0usize
+    c.writer_spans[at + 1usize] = 0usize
+}
+
 fn update_spans(c: *check.Checker, builder: *nir.Builder) -> err {
     if c.writer_spans.len == 0usize { ret InvalidArtifact }
     var at = c.writer_scanned[span_functions()]
@@ -1729,24 +1759,11 @@ fn write_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, mo
     ret binary.patch_little_u64(output, section_start, interface_hash)
 }
 
-// The module's references marked in one pass (D319), and its edges with them (D320): a
-// used reference to another module's declaration records a signature edge unless an
-// earlier reference resolves to the same declaration -- distinct generic instances
-// intern distinct references -- and an inlined entry stands for its body edge unless an
-// earlier entry of the module names the callee. The index dedupes both; the walks it
-// replaces compared every used reference against every earlier one, per module.
-fn mark_module_references(builder: *nir.Builder, c: *check.Checker, module_index: usize) -> err {
-    if builder.used_marks_valid && builder.used_marks_module == module_index { ret ok }
-    if builder.function_ref_count == 0usize && builder.inlined_count == 0usize {
-        builder.used_count = 0usize
-        builder.used_marks_module = module_index
-        builder.used_marks_valid = true
-        ret ok
-    }
-    if builder.used_marks.len < builder.function_ref_count || builder.edge_marks.len < builder.function_ref_count || builder.inlined_marks.len < builder.inlined_count { ret InvalidArtifact }
-    // The last module's marks are the only ones set when its list was whole (D930): a
-    // worker's builder holds every reference of every module it lowered, and clearing
-    // all of them for each module was quadratic in its modules.
+// The last module's marks are the only ones set when its list was whole (D930): a
+// worker's builder held every reference of every module it lowered, and clearing all
+// of them for each module was quadratic in its modules. None left, the empty list is
+// whole.
+fn clear_used_marks(builder: *nir.Builder) {
     var clear_at = 0usize
     if builder.used_complete {
         while clear_at < builder.used_count {
@@ -1768,6 +1785,28 @@ fn mark_module_references(builder: *nir.Builder, c: *check.Checker, module_index
         }
     }
     builder.used_count = 0usize
+    builder.used_complete = true
+}
+
+// The module's references marked in one pass (D319), and its edges with them (D320): a
+// used reference to another module's declaration records a signature edge unless an
+// earlier reference resolves to the same declaration -- distinct generic instances
+// intern distinct references -- and an inlined entry stands for its body edge unless an
+// earlier entry of the module names the callee. The index dedupes both; the walks it
+// replaces compared every used reference against every earlier one, per module.
+fn mark_module_references(builder: *nir.Builder, c: *check.Checker, module_index: usize) -> err {
+    if builder.used_marks_valid && builder.used_marks_module == module_index { ret ok }
+    // The last module's marks go first, whatever this one holds (D1664): a lowering
+    // worker's references start again at its mark for every module, so a module with
+    // none left the marks of the one before it set, and the next module's walk passed
+    // over every reference landing on a marked index -- an edge its artifact never had.
+    clear_used_marks(builder)
+    if builder.function_ref_count == 0usize && builder.inlined_count == 0usize {
+        builder.used_marks_module = module_index
+        builder.used_marks_valid = true
+        ret ok
+    }
+    if builder.used_marks.len < builder.function_ref_count || builder.edge_marks.len < builder.function_ref_count || builder.inlined_marks.len < builder.inlined_count { ret InvalidArtifact }
     builder.used_complete = false
     let (nir_first, nir_end) = span_of(c, span_nir(), module_index)
     var function_at = nir_first

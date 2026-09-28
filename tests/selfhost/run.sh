@@ -828,6 +828,37 @@ global_artifact_link_written=$($test_build/neper-self link-em "$test_build/globa
 chmod +x "$test_build/global-artifact-from-artifacts"
 cmp "$test_build/global-artifact-selfhost" "$test_build/global-artifact-from-artifacts"
 "$test_build/global-artifact-from-artifacts"
+# A lowering worker rolls its builder back once a module's artifact is written (D1664),
+# and the writer's spans over its rows with it: at `-j 1` one worker lowers four modules,
+# each with as many NIR functions as the last, and the image is the one `-j 3 --perturb`
+# makes and the one linked from `emit-em-all`'s artifacts, in both modes.
+lower_reset="$repo/tests/selfhost/fixtures/link/lower_reset/src/main.e"
+for lower_reset_mode in --release --time; do
+    [ "$($test_build/neper-self emit-executable "$lower_reset" "$repo" x64 linux "$test_build/lower-reset-j1$lower_reset_mode" $lower_reset_mode -j 1 2>/dev/null)" = 'executable written' ]
+    chmod +x "$test_build/lower-reset-j1$lower_reset_mode"
+    "$test_build/lower-reset-j1$lower_reset_mode"
+    [ "$($test_build/neper-self emit-executable "$lower_reset" "$repo" x64 linux "$test_build/lower-reset-j3$lower_reset_mode" $lower_reset_mode -j 3 --perturb 2>/dev/null)" = 'executable written' ]
+    cmp "$test_build/lower-reset-j1$lower_reset_mode" "$test_build/lower-reset-j3$lower_reset_mode"
+    lower_reset_artifacts="$test_build/lower-reset-artifacts$lower_reset_mode"
+    mkdir -p "$lower_reset_artifacts"
+    lower_reset_flag=
+    [ "$lower_reset_mode" = --release ] && lower_reset_flag=--release
+    [ "$($test_build/neper-self emit-em-all "$lower_reset" "$repo" x64 linux "$lower_reset_artifacts" $lower_reset_flag)" = 'compiled modules written' ]
+    [ "$($test_build/neper-self link-em "$test_build/lower-reset-from-artifacts$lower_reset_mode" "$lower_reset_artifacts/main.x64-linux.em" "$lower_reset_artifacts/m1.x64-linux.em" "$lower_reset_artifacts/m2.x64-linux.em" "$lower_reset_artifacts/m3.x64-linux.em")" = 'artifact executable written' ]
+    cmp "$test_build/lower-reset-j1$lower_reset_mode" "$test_build/lower-reset-from-artifacts$lower_reset_mode"
+done
+# An `@import` extern reached from a sequence's or tagged union's supplied `cmp` and
+# `hash` binds its library from its declaration in every module (D1664). Nothing calls
+# `point_cmp` by name, so an unbound call fails the link as "no artifact defines", and
+# the images at `-j 1` and `-j 3 --perturb` are one, in both modes.
+import_protocol="$repo/tests/selfhost/fixtures/link/import_protocol/src/main.e"
+for import_protocol_mode in --release --time; do
+    [ "$($test_build/neper-self emit-executable "$import_protocol" "$repo" x64 linux "$test_build/import-protocol-j1$import_protocol_mode" $import_protocol_mode -j 1 2>/dev/null)" = 'executable written' ]
+    chmod +x "$test_build/import-protocol-j1$import_protocol_mode"
+    "$test_build/import-protocol-j1$import_protocol_mode"
+    [ "$($test_build/neper-self emit-executable "$import_protocol" "$repo" x64 linux "$test_build/import-protocol-j3$import_protocol_mode" $import_protocol_mode -j 3 --perturb 2>/dev/null)" = 'executable written' ]
+    cmp "$test_build/import-protocol-j1$import_protocol_mode" "$test_build/import-protocol-j3$import_protocol_mode"
+done
 # `e.data.stack` and `e.data.queue` over their storage modules, and `e.algo.disjoint_set`
 # on caller storage: order, peek, non-mutating iteration, growth, and union-find with path
 # compression and union by rank.
@@ -4387,6 +4418,20 @@ for hot_mode in --release --time; do
     [ "$layout_status" -eq 7 ]
     [ "$("$test_build/neper-self" emit-executable "$layout_scratch/src/main.e" "$repo" x64 linux "$test_build/layout-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
     cmp "$test_build/layout$hot_mode" "$test_build/layout-clean$hot_mode"
+    # A lowering worker's references start again at its mark for every module (D1664): at
+    # `-j 1` a module naming no reference must not leave the used marks of the one before it
+    # to the next, whose edge to `x.widened` they would hide. The module is rebuilt.
+    reset_scratch="$test_build/reset-scratch"
+    rm -rf "$reset_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/incremental_reset" "$reset_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$reset_scratch/src/main.e" "$repo" x64 linux "$test_build/reset$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+    "$test_build/reset$hot_mode"
+    cp "$reset_scratch/edits/x.e" "$reset_scratch/src/x.e"
+    [ "$("$test_build/neper-self" emit-executable "$reset_scratch/src/main.e" "$repo" x64 linux "$test_build/reset$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$reset_scratch/.neper/$hot_manifest_mode/build-manifest.json" c=rebuilt:edge-changed x=rebuilt:source-changed a=kept:edges-hold b=kept:stable
+    "$test_build/reset$hot_mode"
+    [ "$("$test_build/neper-self" emit-executable "$reset_scratch/src/main.e" "$repo" x64 linux "$test_build/reset-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+    cmp "$test_build/reset$hot_mode" "$test_build/reset-clean$hot_mode"
     # A protocol function's absence is an edge (D494, H14): the instance's module is rebuilt.
     fallback_scratch="$test_build/fallback-scratch"
     rm -rf "$fallback_scratch"
