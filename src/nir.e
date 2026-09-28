@@ -171,8 +171,8 @@ type Site = struct {
 // The token a site was recorded from, with the fields nothing downstream reads zero.
 fn site_token(site: Site) -> lex.Token {
     var token: lex.Token = zero
-    token.start = site.start
-    token.end = site.end
+    token.start = u32(site.start)
+    token.end = u32(site.end)
     ret token
 }
 
@@ -1336,7 +1336,7 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         immediate: immediate,
         target: 0usize,
         target2: 0usize,
-        site: site_at(builder, token.start, token.end),
+        site: site_at(builder, usize(token.start), usize(token.end)),
         nocheck: builder.nocheck,
         inline_origin: 0u32,
         path: builder.current_path,
@@ -1797,7 +1797,7 @@ fn discard_bodies(builder: *Builder, at: Mark) {
 // name it. A copied instruction keeps its own site (`emit_at`): it came from another
 // module's text.
 fn site_of(builder: *Builder, token: lex.Token) -> Site {
-    ret site_at(builder, token.start, token.end)
+    ret site_at(builder, usize(token.start), usize(token.end))
 }
 
 // The site of a token's byte range (D933): what `emit` passes, where the token itself

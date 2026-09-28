@@ -118,7 +118,7 @@ fn record_failure(p: *Parser, token: lex.Token, reserved_name: bool) {
     }
     // The list keeps every failure recovery goes past, the primary included, once each:
     // one declaration's failure is recorded by the statement and again by the file.
-    if p.tree.failure_count < 64usize && (p.tree.failure_count == 0usize || p.tree.failures[p.tree.failure_count - 1usize].start != at.start || p.tree.failures[p.tree.failure_count - 1usize].kind != at.kind) {
+    if p.tree.failure_count < 64usize && (p.tree.failure_count == 0usize || usize(p.tree.failures[p.tree.failure_count - 1usize].start) != usize(at.start) || p.tree.failures[p.tree.failure_count - 1usize].kind != at.kind) {
         p.tree.failures[p.tree.failure_count] = at
         p.tree.failure_barriers[p.tree.failure_count] = p.barrier_pending
         p.tree.failure_keywords[p.tree.failure_count] = p.barrier_keyword
@@ -277,7 +277,7 @@ fn soft_barrier_follows(p: *Parser) -> bool {
     var following = lex.next(&look)
     while following.kind == .Newline { following = lex.next(&look) }
     if following.kind == .Eof || following.kind == .KwCase || following.kind == .KwDefault { ret true }
-    if lex.at_line_start(look.source, following.start) && is_top_barrier(following.kind) {
+    if lex.at_line_start(look.source, usize(following.start)) && is_top_barrier(following.kind) {
         p.soft_top_barrier = true
         p.barrier_pending = true
         p.barrier_keyword = following
@@ -359,7 +359,7 @@ fn parse_parameter_node(p: *Parser) -> err {
         try skip_soft(p)
         // `own` before the type (D345): the parameter takes ownership of a resource.
         // A contextual word, not a keyword: it is one only where a type follows it.
-        if p.current.kind == .Identifier && lex.text_is(p.scanner.source, p.current.start, p.current.end, "own") {
+        if p.current.kind == .Identifier && lex.text_is(p.scanner.source, usize(p.current.start), usize(p.current.end), "own") {
             try advance(p)
             try skip_soft(p)
         }
@@ -507,12 +507,12 @@ fn identifier_is_pascal(p: *Parser) -> bool {
 
 fn token_is_pascal(p: *Parser, token: lex.Token) -> bool {
     if token.kind != .Identifier { ret false }
-    let first = p.scanner.source[token.start]
+    let first = p.scanner.source[usize(token.start)]
     if first < 65u8 || first > 90u8 { ret false }
-    if token.end == token.start + 1usize { ret true }
+    if usize(token.end) == usize(token.start) + 1usize { ret true }
     var has_lower = false
-    var i = token.start + 1usize
-    while i < token.end {
+    var i = usize(token.start) + 1usize
+    while i < usize(token.end) {
         let byte = p.scanner.source[i]
         if byte == 95u8 { ret false }
         if byte >= 97u8 && byte <= 122u8 { has_lower = true }
@@ -1411,7 +1411,7 @@ fn parse_nocheck_statement(p: *Parser) -> err {
     let token_start = p.token_index
     var nested: [1]usize = zero
     try require(p, .PunctAt)
-    if p.current.kind != .Identifier || !lex.text_is(p.scanner.source, p.current.start, p.current.end, "nocheck") { ret InvalidSyntax }
+    if p.current.kind != .Identifier || !lex.text_is(p.scanner.source, usize(p.current.start), usize(p.current.end), "nocheck") { ret InvalidSyntax }
     try advance(p)
     try parse_block_node(p)
     nested[0usize] = p.last_node
@@ -1831,7 +1831,7 @@ fn parse_type_declaration(p: *Parser) -> err {
     // `resource` or `resource(cleanup)` before a type body (D348): the type is
     // affine, and obligated when it names its cleanup. A contextual word, one only
     // where `struct` or `union` follows.
-    if p.current.kind == .Identifier && lex.text_is(p.scanner.source, p.current.start, p.current.end, "resource") {
+    if p.current.kind == .Identifier && lex.text_is(p.scanner.source, usize(p.current.start), usize(p.current.end), "resource") {
         try advance(p)
         if p.current.kind == .PunctLParen {
             try advance(p)

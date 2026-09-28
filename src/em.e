@@ -916,15 +916,15 @@ fn write_declaration_tokens_canonical(text: str, tokens: []const lex.Token, star
     var high = tokens.len
     while low < high {
         let mid = (low + high) / 2usize
-        if tokens[mid].start < start { low = mid + 1usize } else { high = mid }
+        if usize(tokens[mid].start) < start { low = mid + 1usize } else { high = mid }
     }
     var at = low
-    while at < tokens.len && tokens[at].end <= end {
+    while at < tokens.len && usize(tokens[at].end) <= end {
         let token = tokens[at]
         if token.kind == .Invalid { ret InvalidArtifact }
         if token.kind != .Eof {
             if token.start > token.end { ret InvalidArtifact }
-            try canonical_text(output, text[token.start..token.end])
+            try canonical_text(output, lex.token_text(text, token))
         }
         at += 1usize
     }
@@ -1865,8 +1865,8 @@ fn mark_body_constant_uses(c: *check.Checker, g: *graph.Graph, module_index: usi
     var token_at = 0usize
     while token_at + 2usize < tokens.len {
         if tokens[token_at].kind == .Identifier && tokens[token_at + 1usize].kind == .PunctDot && tokens[token_at + 2usize].kind == .Identifier {
-            let qualifier = module.text[tokens[token_at].start..tokens[token_at].end]
-            let name = module.text[tokens[token_at + 2usize].start..tokens[token_at + 2usize].end]
+            let qualifier = lex.token_text(module.text, tokens[token_at])
+            let name = lex.token_text(module.text, tokens[token_at + 2usize])
             var import_at = module.first_import
             let import_end = module.first_import + module.import_count
             while import_at < import_end {
@@ -1940,8 +1940,8 @@ fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     var token_at = 0usize
     while token_at + 2usize < tokens.len {
         if tokens[token_at].kind == .Identifier && tokens[token_at + 1usize].kind == .PunctDot && tokens[token_at + 2usize].kind == .Identifier {
-            let qualifier = module.text[tokens[token_at].start..tokens[token_at].end]
-            let name = module.text[tokens[token_at + 2usize].start..tokens[token_at + 2usize].end]
+            let qualifier = lex.token_text(module.text, tokens[token_at])
+            let name = lex.token_text(module.text, tokens[token_at + 2usize])
             var import_at = module.first_import
             let import_end = module.first_import + module.import_count
             while import_at < import_end {

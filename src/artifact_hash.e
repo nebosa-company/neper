@@ -524,12 +524,12 @@ fn interface_cut(a: *mem.Arena, content: str, tokens: []const lex.Token) -> (str
                 if token.kind == .PunctLBrace && brackets == 0usize {
                     // Keep through the `{`; the body starts after it.
                     var from = copied_to
-                    while from < token.end {
+                    while from < usize(token.end) {
                         kept[written] = content[from]
                         written += 1usize
                         from += 1usize
                     }
-                    copied_to = token.end
+                    copied_to = usize(token.end)
                     state = 2usize
                     body_depth = 1usize
                 } else {
@@ -543,7 +543,7 @@ fn interface_cut(a: *mem.Arena, content: str, tokens: []const lex.Token) -> (str
                     body_depth = body_depth - 1usize
                     if body_depth == 0usize {
                         // The body is dropped; the `}` and what follows are kept.
-                        copied_to = token.start
+                        copied_to = usize(token.start)
                         state = 0usize
                     }
                 }
