@@ -13,6 +13,11 @@ mysql = { version = "28.0.3", default-features = false, features = ["minimal"] }
 odbc-api = { version = "29.1.1", default-features = false, features = ["odbc_version_3_80"] }
 postgres = "0.19.14"
 rusqlite = "0.40.2"
+# SQL Server: tiberius speaks TDS in Rust; it is async, so it runs on a current-thread tokio.
+tiberius = { version = "0.12.3", default-features = false, features = ["tds73", "rustls"] }
+tokio = { version = "1", features = ["rt", "net"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+futures-util = { version = "0.3", default-features = false }
 
 [profile.release]
 opt-level = 3

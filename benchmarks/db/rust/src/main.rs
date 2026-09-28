@@ -1,11 +1,13 @@
 //! The e.db benchmark's workload in Rust, with each database's standard synchronous crate:
 //! rusqlite (linked to the system SQLite, the library the Neper and C benchmarks use),
-//! postgres, mysql, and odbc-api over the host's driver manager.
+//! postgres, mysql, and odbc-api over the host's driver manager; for SQL Server, tiberius, which
+//! speaks TDS in Rust but has no TDS 8.0 strict mode, so it negotiates TLS inside PRELOGIN.
 //!
 //!     bench-rust sqlite <file> <rows> <lookups>
 //!     bench-rust postgresql <conninfo> <rows> <lookups>
 //!     bench-rust mysql <port> <rows> <lookups>
 //!     bench-rust odbc <connection string> <rows> <lookups>
+//!     bench-rust sqlserver <host;port;der;pem;user;password> <rows> <lookups>
 //!
 //! Same phases, table and output line as benchmarks/db/src/workload.e and c/bench.c.
 use std::time::Instant;
@@ -230,6 +232,69 @@ fn odbc(connection: &str, rows: i64, lookups: i64) -> Result<(u128, u128, u128)>
     Ok((insert_ns, scan_ns, lookup_ns))
 }
 
+fn sqlserver(location: &str, rows: i64, lookups: i64) -> Result<(u128, u128, u128)> {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_io().build()?;
+    runtime.block_on(sqlserver_async(location, rows, lookups))
+}
+
+async fn sqlserver_async(location: &str, rows: i64, lookups: i64) -> Result<(u128, u128, u128)> {
+    use futures_util::TryStreamExt;
+    use tiberius::{AuthMethod, Client, Config, EncryptionLevel};
+    use tokio_util::compat::TokioAsyncWriteCompatExt;
+    let f: Vec<&str> = location.split(';').collect();
+    let mut config = Config::new();
+    config.host("127.0.0.1");
+    config.port(f[1].parse()?);
+    config.database("neper");
+    config.authentication(AuthMethod::sql_server(f[4], f[5]));
+    config.encryption(EncryptionLevel::Required);
+    config.trust_cert_ca(f[3]);
+    let tcp = tokio::net::TcpStream::connect(config.get_addr()).await?;
+    tcp.set_nodelay(true)?;
+    let mut client = Client::connect(config, tcp.compat_write()).await?;
+    client.simple_query("DROP TABLE IF EXISTS bench").await?.into_results().await?;
+    client.simple_query(CREATE).await?.into_results().await?;
+
+    let t0 = Instant::now();
+    client.simple_query("BEGIN TRANSACTION").await?.into_results().await?;
+    for i in 0..rows {
+        let score = i as f64 * 0.5;
+        client.execute("INSERT INTO bench VALUES (@P1, @P2, @P3)", &[&i, &NAMES[(i % 16) as usize], &score]).await?;
+    }
+    client.simple_query("COMMIT TRANSACTION").await?.into_results().await?;
+    let insert_ns = t0.elapsed().as_nanos();
+
+    let t0 = Instant::now();
+    let (mut count, mut sum, mut bytes) = (0i64, 0i64, 0usize);
+    {
+        let mut stream = client.simple_query("SELECT id, name, score FROM bench").await?.into_row_stream();
+        while let Some(row) = stream.try_next().await? {
+            let id: i64 = row.get(0).ok_or("id")?;
+            let name: &str = row.get(1).ok_or("name")?;
+            let _score: f64 = row.get(2).ok_or("score")?;
+            sum += id;
+            bytes += name.len();
+            count += 1;
+        }
+    }
+    let scan_ns = t0.elapsed().as_nanos();
+
+    let t0 = Instant::now();
+    let mut found = 0i64;
+    for j in 0..lookups {
+        let key = j * 7919 % rows;
+        if let Some(row) = client.query("SELECT name, score FROM bench WHERE id = @P1", &[&key]).await?.into_row().await? {
+            let _name: &str = row.get(0).ok_or("name")?;
+            let _score: f64 = row.get(1).ok_or("score")?;
+            found += 1;
+        }
+    }
+    let lookup_ns = t0.elapsed().as_nanos();
+    let _ = bytes;
+    verify(count, sum, rows, found, lookups)?;
+    Ok((insert_ns, scan_ns, lookup_ns))
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 5 {
@@ -240,6 +305,7 @@ fn main() -> Result<()> {
         "sqlite" => sqlite(&args[2], rows, lookups)?,
         "postgresql" => postgresql(&args[2], rows, lookups)?,
         "odbc" => odbc(&args[2], rows, lookups)?,
+        "sqlserver" => sqlserver(&args[2], rows, lookups)?,
         _ => mysql(&args[2], rows, lookups)?,
     };
     println!("{} insert_ns={insert_ns} scan_ns={scan_ns} lookup_ns={lookup_ns}", args[1]);

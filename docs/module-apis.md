@@ -5190,7 +5190,8 @@ introduced. Release requires published independent vectors and boundary tests.
 
 ```neper
 type AesKey = struct { round_keys: [240]u8, rounds: usize }
-type Block128 = struct { high: u64, low: u64 }
+type CtKey = struct { skey: [120]u64, rounds: usize }
+type Ghash = struct { y1: u64, y0: u64, h1: u64, h0: u64, h1r: u64, h0r: u64, h2: u64, h2r: u64 }
 type Poly = struct { r: [5]u32, h: [5]u32, pad: [4]u32 }
 error InvalidKey
 error InvalidNonce
@@ -5202,12 +5203,27 @@ fn xtime(x: u8) -> u8
 fn expand_key(key: []const u8) -> AesKey
 fn add_round_key(state: []u8, k: *const AesKey, round: usize)
 fn aes_encrypt_block(k: *const AesKey, block: []u8)
-fn load_block(bytes: []const u8, at: usize, count: usize) -> Block128
-fn store_block(b: Block128, out: []u8)
-fn gf_multiply(x: Block128, y: Block128) -> Block128
-fn ghash_update(acc: Block128, h: Block128, bytes: []const u8) -> Block128
-fn gcm_tag(k: *const AesKey, nonce: [12]u8, aad: []const u8, cipher: []const u8) -> [16]u8
-fn gcm_crypt(k: *const AesKey, nonce: [12]u8, data: []u8)
+fn ct_sbox(q: []u64)
+fn ct_swap(q: []u64, i: usize, j: usize, low: u64, high: u64, s: u32)
+fn ct_ortho(q: []u64)
+fn ct_interleave_in(q: []u64, i0: usize, i1: usize, w: []const u32)
+fn ct_interleave_out(w: []u32, q0: u64, q1: u64)
+fn ct_shift_rows(q: []u64)
+fn rotr32_64(x: u64) -> u64
+fn ct_mix_columns(q: []u64)
+fn ct_add_round_key(q: []u64, k: *const CtKey, round: usize)
+fn ct_sub_word(x: u32) -> u32
+fn ct_spread(c: u64, bit: u64, shift: u32) -> u64
+fn ct_key(key: []const u8) -> CtKey
+fn ct_encrypt4(k: *const CtKey, blocks: []u8)
+fn bmul64(x: u64, y: u64) -> u64
+fn rev64(v: u64) -> u64
+fn be64_at(bytes: []const u8, at: usize, count: usize) -> u64
+fn ghash_init(h: []const u8) -> Ghash
+fn ghash_update(g: *Ghash, bytes: []const u8)
+fn gcm_start(k: *const CtKey, nonce: [12]u8, h: []u8, j0: []u8)
+fn gcm_tag(h: []const u8, j0: []const u8, aad: []const u8, cipher: []const u8) -> [16]u8
+fn gcm_crypt(k: *const CtKey, nonce: [12]u8, data: []u8)
 fn gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err)
 fn gcm_open(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err)
 fn aes128_gcm_seal(dst: []u8, key: [16]u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err)
@@ -5229,6 +5245,9 @@ fn aes_gcm_open(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, seal
 ```
 
 The sealed representation is ciphertext followed by the 16-byte authentication tag.
+AES-GCM runs a bitsliced AES four blocks at a time and a multiplication-based GHASH, both
+without secret-indexed tables or secret-dependent branches (D1645); `expand_key` and
+`aes_encrypt_block` remain the byte-oriented block function `e.crypto.cipher` uses.
 
 ### `e.crypto.secret`
 

@@ -55,8 +55,11 @@ setup)
     sudo -n /opt/mssql/bin/mssql-conf set network.ipaddress 127.0.0.1 > /dev/null
     sudo -n /opt/mssql/bin/mssql-conf set memory.memorylimitmb 2048 > /dev/null
     sudo -n mkdir -p "$CERT_DIR"
+    # An end-entity certificate (CA:FALSE): rustls, for one, refuses a CA certificate as the
+    # server's own, while every client here pins this one as its root.
     sudo -n openssl req -x509 -newkey rsa:2048 -sha256 -days 1825 -nodes -subj /CN=localhost \
         -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' -addext 'extendedKeyUsage=serverAuth' \
+        -addext 'basicConstraints=critical,CA:FALSE' -addext 'keyUsage=critical,digitalSignature,keyEncipherment' \
         -keyout "$CERT_DIR/tls.key" -out "$CERT_DIR/tls.pem" 2> /dev/null
     sudo -n openssl x509 -in "$CERT_DIR/tls.pem" -outform der -out "$CERT_DIR/tls.cer"
     sudo -n chmod 755 "$CERT_DIR"
@@ -71,6 +74,8 @@ setup)
     wait_ready
     sql "IF SUSER_ID('neper') IS NULL CREATE LOGIN neper WITH PASSWORD = '$NEPER_PASSWORD', CHECK_POLICY = OFF;
 IF DB_ID('neper') IS NULL CREATE DATABASE neper;"
+    # An existing database may still be recovering after the restart.
+    wait_ready "UID=sa;PWD=$SA_PASSWORD;Database=neper"
     sql "USE neper; IF USER_ID('neper') IS NULL CREATE USER neper FOR LOGIN neper; ALTER ROLE db_owner ADD MEMBER neper;"
     stop_server
     sudo -n systemctl disable mssql-server > /dev/null 2>&1 || true

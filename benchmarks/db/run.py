@@ -13,20 +13,49 @@ Servers must be running (tests/selfhost/db_servers.{ps1,sh} start <dir>); the cl
 must be on PATH (Windows) or installed (Linux). SQLite writes a file in --scratch. ODBC reaches
 the PostgreSQL server through psqlODBC: by the DSN `neper_psqlodbc` on Windows, whose driver
 manager wants one (run-windows-all.ps1 registers it), and by the driver's path on Linux.
+
+SQL Server (`--tds PORTS`, the file tests/selfhost/sqlserver.{ps1,sh} start writes) is reached
+over TDS 8.0 strict by Neper (x.microsoft.tds) and Go (go-mssqldb), by C through Microsoft's
+ODBC Driver 18 with Encrypt=Strict, and by Rust through tiberius, which has no strict mode and
+negotiates TLS inside PRELOGIN. Every one of them checks the server's certificate against the
+same pinned one. C runs its `odbc` path; the others take `host;port;der;pem;user;password`.
 """
-import argparse, json, os, platform, statistics, subprocess, sys
+import argparse, base64, json, os, platform, statistics, subprocess, sys
 
 WORK = {
     "sqlite": {"rows": 100000, "lookups": 20000},
     "postgresql": {"rows": 20000, "lookups": 5000},
     "mysql": {"rows": 20000, "lookups": 5000},
     "odbc": {"rows": 20000, "lookups": 5000},
+    "sqlserver": {"rows": 20000, "lookups": 5000},
 }
 PORTS = {"postgresql": 55432, "mysql": 53306}
 ODBC_LINUX_DRIVER = "/usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so"
+TDS = {}
+
+
+def read_tds(ports, scratch):
+    """The SQL Server connection from a ports file, with the certificate also written as PEM."""
+    for line in open(ports):
+        key, _, value = line.strip().partition("=")
+        if key.startswith("tds_"):
+            TDS[key[4:]] = value
+    der = open(TDS["root"], "rb").read()
+    if der.startswith(b"-----BEGIN"):
+        sys.exit("--tds: tds_root must be a DER certificate")
+    TDS["pem"] = os.path.join(scratch, "sqlserver.pem")
+    with open(TDS["pem"], "w") as f:
+        body = base64.b64encode(der).decode()
+        f.write("-----BEGIN CERTIFICATE-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + "\n-----END CERTIFICATE-----\n")
 
 
 def location(driver, scratch, label):
+    if driver == "sqlserver":
+        if label == "c":
+            name = "{ODBC Driver 18 for SQL Server}"
+            return (f"Driver={name};Server=tcp:127.0.0.1,{TDS['port']};Encrypt=Strict;ServerCertificate={TDS['pem']};"
+                    f"UID={TDS['user']};PWD={{{TDS['password']}}};Database=neper")
+        return ";".join(["localhost", TDS["port"], TDS["root"], TDS["pem"], TDS["user"], TDS["password"]])
     if driver == "sqlite":
         path = os.path.join(scratch, f"bench-{label}.sqlite")
         for suffix in ("", "-journal"):
@@ -63,12 +92,15 @@ def main():
     ap.add_argument("--drivers", default="sqlite,postgresql,mysql,odbc")
     ap.add_argument("--pg-port", type=int, default=PORTS["postgresql"])
     ap.add_argument("--mysql-port", type=int, default=PORTS["mysql"])
+    ap.add_argument("--tds", help="the ports file tests/selfhost/sqlserver.{ps1,sh} start wrote")
     args = ap.parse_args()
     PORTS["postgresql"], PORTS["mysql"] = args.pg_port, args.mysql_port
+    if args.tds:
+        read_tds(args.tds, args.scratch)
     results = {"host": platform.system().lower(), "runs": args.runs, "work": WORK, "drivers": {}}
     suffix = ".exe" if os.name == "nt" else ""
     for driver in args.drivers.split(","):
-        commands = {"neper": [f"{args.neper}-{driver}{suffix}"], "c": [args.c, driver]}
+        commands = {"neper": [f"{args.neper}-{driver}{suffix}"], "c": [args.c, "odbc" if driver == "sqlserver" else driver]}
         if args.go:
             commands["go"] = [args.go, driver]
         if args.rust:

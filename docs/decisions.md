@@ -30701,3 +30701,38 @@ A release build names no locals (section 13), and `add_debug_local` returns at o
 - Both pass on both hosts, and D1643's fixture completes TLS 1.3 against SQL Server 2025.
 
 ---
+
+## D1645 — AES-GCM is bitsliced, and GHASH multiplies
+
+**Why.** The first SQL Server benchmark had Neper at 1.4 ms a lookup, where C over ODBC took 0.18 ms, and at 15,000 rows a second for a scan that C read at 2.2 million. `e.crypto.aead`'s AES-GCM was the cause, measured on its own:
+
+- a 100-byte TLS record took 396 µs to seal;
+- a 16 KB record took 44 ms, or 372 KB/s.
+
+AES derived every S-box value from the GF(2⁸) inverse, 16 bytes a round, and expanded the key on every call. GHASH was a 128-step bit loop per block. The module's own header had named a bitsliced AES as the upgrade "if this algebraic form is ever measured as a bottleneck".
+
+**Decision.**
+
+- **AES.** GCM runs BearSSL's `aes_ct64` design: four blocks in eight 64-bit words, where word i holds bit i of all 64 bytes. SubBytes is Boyar and Peralta's 113-gate circuit over the eight words; ShiftRows and MixColumns are masks, shifts and rotations of whole words. The key schedule is FIPS 197's, run through the same circuit a word at a time, and each round key is stored already bitsliced.
+- **GHASH.** It is BearSSL's `ghash_ctmul64`. A carry-less 64-bit product is four integer products of operands whose set bits are four apart, with the carries masked off; the reduction works on bit-reversed halves.
+- **GCM.** H and E(K, J0) come out of one four-block pass, and CTR mode runs four counters a pass.
+- **Constant time.** Nothing indexes a table with secret data, and nothing branches on it, as before.
+- **What stays.** The byte-oriented `expand_key` and `aes_encrypt_block` remain: they are the block function `e.crypto.cipher` exposes, with its inverse cipher beside it.
+
+**Evidence.**
+
+- A differential run against the previous implementation, which is NIST-verified, agreed everywhere:
+  - all 256 S-box values;
+  - the block function under 200 random keys at 128 and 256 bits;
+  - seal at both key sizes for every length 0–300 and at 1000, 4095, 16384, 16385 and 19999 bytes, with random nonces and additional data up to 40 bytes;
+  - open of the old sealed output, and a flipped bit anywhere refused.
+- `link/crypto_aead` 65–66 adds OpenSSL's tags (through Python's `cryptography`) at both key sizes for lengths 1, 15, 16, 17, 63, 64, 65, 1000 and 16385. It passes on both hosts, as do `crypto_cipher`, `net_tls`, `crypto_x509` and `misc_gaps`.
+- Speed, measured the same way:
+  - a 100-byte record: 396 → 12.8 µs (31×);
+  - a 16 KB record: 44 → 0.70 ms (63×), about 23 MB/s.
+- The single-round SQL Server run on Linux:
+  - insert: 652 → 1,889 rows/s;
+  - scan: 15,000 → 514,000 rows/s;
+  - lookup: 1,420 → 332 µs.
+
+---
