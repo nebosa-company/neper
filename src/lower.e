@@ -2734,8 +2734,17 @@ fn windows_target(c: *check.Checker) -> bool {
     ret c.has_graph && check.same(c.graph.os, "windows")
 }
 
+// Called by the C convention: an `@import` extern, or a `@cc` function, which C calls and
+// so neper's own calls reach the same way (D1676).
 fn foreign_function(function: check.Function) -> bool {
-    ret function.external && function.import_library.len != 0usize
+    ret function.callback || (function.external && function.import_library.len != 0usize)
+}
+
+// A call made by the C convention: to such a function by name, or through a function
+// type that says so -- `extern fn(...)`, or an `extern` or `@cc` function's own (D1676).
+fn calls_c(call: check.CallInfo) -> bool {
+    if call.indirect { ret call.indirect_type.kind == .Function && call.indirect_type.foreign }
+    ret foreign_function(call.function)
 }
 
 // System V's classes for the eightbytes `ty` covers from `offset`: `classes[i]` when an
@@ -2937,6 +2946,81 @@ fn c_argument(c: *check.Checker, passing: *CArguments, ty: check.Type, value: us
     ret ok
 }
 
+// One parameter of a `@cc` function as C passed it (D1676), the mirror of `c_argument`:
+// a scalar as it is; an aggregate's bits or eightbytes -- in registers, or `c-stack` from
+// the caller's stack -- stored to a slot of its own, which the parameter then names; or,
+// Win64's other sizes, the caller's copy by the address it passed. `next` is the
+// physical parameter the next piece arrives as.
+fn c_parameter(c: *check.Checker, passing: *CArguments, ty: check.Type, builder: *nir.Builder, token: lex.Token, next: *usize) -> (usize, err) {
+    let (canonical, canonical_error) = check.canonical_type(c, ty)
+    if canonical_error != ok { ret (0usize, canonical_error) }
+    let module_index = ty.module_index
+    var crossing: Crossing = zero
+    if aggregate_value(c, canonical) {
+        let (classified, crossing_error) = c_crossing(c, canonical, passing.windows)
+        if crossing_error != ok { ret (0usize, crossing_error) }
+        crossing = classified
+    }
+    if crossing.count == 0usize && (!crossing.memory || passing.windows) {
+        let (whole_instruction, whole, whole_error) = nir.emit(builder, .Parameter, ty, true, *next, token)
+        if whole_error != ok { ret (0usize, whole_error) }
+        *next += 1usize
+        if !aggregate_value(c, canonical) {
+            if canonical.kind == .Float { passing.sse_used += 1usize } else { passing.integer_used += 1usize }
+        }
+        ret (whole, ok)
+    }
+    var pieces = crossing.count
+    var stacked = crossing.memory
+    if !passing.windows {
+        var sse = 0usize
+        if crossing.sse % 2usize == 1usize { sse += 1usize }
+        if crossing.sse / 2usize == 1usize { sse += 1usize }
+        let integers = crossing.count - sse
+        if passing.integer_used + integers > 6usize || passing.sse_used + sse > 8usize { stacked = true }
+        if stacked {
+            pieces = (crossing.size + 7usize) / 8usize
+        } else {
+            passing.integer_used += integers
+            passing.sse_used += sse
+        }
+    }
+    let (slots_aligned, slots_error) = layout.align_up(crossing.size, 8usize)
+    if slots_error != ok { ret (0usize, slots_error) }
+    let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, canonical, true, slots_aligned / 8usize, token)
+    if slot_error != ok { ret (0usize, slot_error) }
+    let u64_type = check.make_type(.Integer, "u64", module_index)
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    var piece = 0usize
+    while piece < pieces {
+        var piece_type = u64_type
+        if stacked { piece_type = check.make_type(.Other, "c-stack", module_index) }
+        if !stacked {
+            if piece == 0usize && crossing.sse % 2usize == 1usize { piece_type = check.make_type(.Float, "f64", module_index) }
+            if piece == 1usize && crossing.sse / 2usize == 1usize { piece_type = check.make_type(.Float, "f64", module_index) }
+        }
+        let (piece_instruction, received, piece_error) = nir.emit(builder, .Parameter, piece_type, true, *next, token)
+        if piece_error != ok { ret (0usize, piece_error) }
+        *next += 1usize
+        var address = slot
+        if piece != 0usize {
+            let (offset_instruction, offset_address, offset_error) = nir.emit(builder, .FieldAddress, pointer_type, true, piece * 8usize, token)
+            if offset_error != ok { ret (0usize, offset_error) }
+            let offset_operand_error = nir.add_operand(builder, offset_instruction, slot)
+            if offset_operand_error != ok { ret (0usize, offset_operand_error) }
+            address = offset_address
+        }
+        let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+        if store_error != ok { ret (0usize, store_error) }
+        let address_error = nir.add_operand(builder, store_instruction, address)
+        if address_error != ok { ret (0usize, address_error) }
+        let value_error = nir.add_operand(builder, store_instruction, received)
+        if value_error != ok { ret (0usize, value_error) }
+        piece += 1usize
+    }
+    ret (slot, ok)
+}
+
 // The type a call into C answers a register aggregate in: one eightbyte as `u64` or
 // `f64`, and two named for the back end by where System V left each half.
 fn c_result_type(crossing: Crossing, module_index: usize) -> check.Type {
@@ -3028,7 +3112,7 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
     // caller through a slot, stored there after the call instead of by the callee.
     var returned: Crossing = zero
     var returned_type = check.invalid_type()
-    if !call.indirect && foreign_function(call.function) && results.count == 1usize {
+    if calls_c(call) && results.count == 1usize {
         let (single_returned, single_returned_error) = check.call_return(c, call, 0usize)
         if single_returned_error != ok { ret single_returned_error }
         if aggregate_value(c, single_returned) {
@@ -3225,7 +3309,7 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     *argument_count = 0usize
     // A call into C passes each argument as the convention does (D1675), which can take
     // several values or none of the registers; `lowered` counts the source's arguments.
-    let into_c = !call.indirect && foreign_function(call.function)
+    let into_c = calls_c(call)
     var passing: CArguments = zero
     if into_c {
         let (initial, initial_error) = c_arguments_of(c, call)
@@ -4463,9 +4547,37 @@ fn emit_return_values(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         }
         try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
         let (instruction, ignored, emit_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
-        ret emit_error
+        if emit_error != ok { ret emit_error }
+        // C's caller reads the hidden result pointer back from rax (D1676).
+        if function.callback { try nir.add_operand(builder, instruction, return_slot.value) }
+        ret ok
+    }
+    // A struct or union a `@cc` function returns in registers (D1676): read out as its bits
+    // or eightbytes before the deferred calls run, as the slot path copies it first, and
+    // returned in the registers its classes name.
+    var pieces: [2]usize = zero
+    var piece_count = 0usize
+    var c_result = check.invalid_type()
+    if function.callback && count == 1usize && aggregate_value(c, c.return_types[function.first_return]) {
+        let returned_type = c.return_types[function.first_return]
+        var passing: CArguments = zero
+        passing.windows = windows_target(c)
+        let (crossing, crossing_error) = c_crossing(c, returned_type, passing.windows)
+        if crossing_error != ok { ret crossing_error }
+        try c_argument(c, &passing, returned_type, values[0usize], builder, token, pieces[..], &piece_count)
+        c_result = c_result_type(crossing, module_index)
     }
     try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
+    if piece_count != 0usize {
+        let (pieces_instruction, pieces_ignored, pieces_error) = nir.emit(builder, .Return, c_result, false, 0usize, token)
+        if pieces_error != ok { ret pieces_error }
+        var piece_at = 0usize
+        while piece_at < piece_count {
+            try nir.add_operand(builder, pieces_instruction, pieces[piece_at])
+            piece_at += 1usize
+        }
+        ret ok
+    }
     if builder.frame_mode { try emit_kernel_done(builder, token) }
     var return_type: check.Type = zero
     if function.return_count == 1usize { return_type = c.return_types[function.first_return] }
@@ -6921,6 +7033,16 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     var return_layout: ReturnLayout = zero
     let return_layout_error = call_return_layout(c, function_call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
+    // A `@cc` function takes its parameters as C passes them (D1676), and a struct or union
+    // it returns in registers needs no slot: C's caller passed none.
+    var passing: CArguments = zero
+    if function.callback {
+        let (initial, initial_error) = c_arguments_of(c, function_call)
+        if initial_error != ok { ret initial_error }
+        passing = initial
+        // `c_arguments_of` counts the hidden result pointer, which only a MEMORY one has.
+        if function.return_count == 1usize && aggregate_value(c, c.return_types[function.first_return]) && passing.integer_used == 0usize { return_layout.via_slot = false }
+    }
     if return_layout.via_slot && function.return_count != 0usize {
         let pointer_type = check.make_type(.Pointer, "", module_index)
         let (return_parameter, return_slot, return_parameter_error) = nir.emit(builder, .Parameter, pointer_type, true, 0usize, c.tokens[usize(node.token_start)])
@@ -6959,10 +7081,19 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         builder.frame_fault = fault_ref
     }
     var parameter_at = 0usize
+    var physical = hidden_parameters
     while parameter_at < function.parameter_count {
         let parameter = c.parameters[function.first_parameter + parameter_at]
-        let (instruction, result, parameter_error) = nir.emit(builder, .Parameter, parameter.ty, true, parameter_at + hidden_parameters, c.tokens[usize(node.token_start)])
-        if parameter_error != ok { ret parameter_error }
+        var result = 0usize
+        if function.callback {
+            let (received, received_error) = c_parameter(c, &passing, parameter.ty, builder, c.tokens[usize(node.token_start)], &physical)
+            if received_error != ok { ret received_error }
+            result = received
+        } else {
+            let (instruction, own_result, parameter_error) = nir.emit(builder, .Parameter, parameter.ty, true, parameter_at + hidden_parameters, c.tokens[usize(node.token_start)])
+            if parameter_error != ok { ret parameter_error }
+            result = own_result
+        }
         try add_binding(bindings, &binding_count, Binding { name: parameter.name, ty: parameter.ty, value: result, address: aggregate_value(c, parameter.ty) })
         if !function.gpu { nir.add_debug_local(builder, result, parameter.name, parameter.ty, parameter_at + 1usize, aggregate_value(c, parameter.ty)) }
         try check.add_local(c, parameter.name, parameter.ty, false)

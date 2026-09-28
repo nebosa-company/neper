@@ -5930,6 +5930,12 @@ fn function_type_text(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.T
     ret ok
 }
 
+// A function type spelled whole with its convention (D1676): `extern fn(...)` when C's.
+fn convention_type_text(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type) -> err {
+    if ty.foreign { try text(out, "extern ") }
+    ret function_type_text(out, c, g, ty)
+}
+
 // A type's name between backquotes inside a JSON string (D430): the spelling
 // `quoted_type` gives, without its quotes.
 fn quoted_type_inner(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type) -> err {

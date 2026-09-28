@@ -97,6 +97,62 @@ extern fn doubles_swap(s: Doubles) -> Doubles
 @import("nepercabi", "big_rotate")
 extern fn big_rotate(s: Big) -> Big
 
+// The callee side (D1676): C calls a neper `@cc` function through these types, and hands
+// out its own functions as them. The convention is the type's: `extern fn(...)`.
+type PairBack = extern fn(Pair) -> i64
+type ThreeBack = extern fn(ThreeFloats) -> f64
+type MixedBack = extern fn(DoubleInt, IntDouble) -> f64
+type BigBack = extern fn(Big, i64) -> i64
+type PackedBack = extern fn(Packed) -> i64
+type CrowdBack = extern fn(i64, i64, i64, i64, i64, Longs, i64) -> i64
+type CrowdSseBack = extern fn(f64, f64, f64, f64, f64, f64, f64, Doubles, f64) -> f64
+type ByteMaker = extern fn(u8) -> Byte
+type PairMaker = extern fn(i32, i32) -> Pair
+type LongsMaker = extern fn(i64, i64) -> Longs
+type DoubleIntMaker = extern fn(f64, i64) -> DoubleInt
+type IntDoubleMaker = extern fn(i64, f64) -> IntDouble
+type ThreeMaker = extern fn(f32, f32, f32) -> ThreeFloats
+type BigMaker = extern fn(i64, i64, i64) -> Big
+type DoublesMap = extern fn(Doubles) -> Doubles
+type BigMap = extern fn(Big) -> Big
+
+@import("nepercabi", "call_pair")
+extern fn call_pair(f: PairBack, x: i32, y: i32) -> i64
+@import("nepercabi", "call_three")
+extern fn call_three(f: ThreeBack, a: f32, b: f32, c: f32) -> f64
+@import("nepercabi", "call_mixed")
+extern fn call_mixed(f: MixedBack, d: f64, i: i64) -> f64
+@import("nepercabi", "call_big")
+extern fn call_big(f: BigBack, a: i64, b: i64, c: i64, x: i64) -> i64
+@import("nepercabi", "call_packed")
+extern fn call_packed(f: PackedBack, tag: u8, value: i32) -> i64
+@import("nepercabi", "call_crowd")
+extern fn call_crowd(f: CrowdBack) -> i64
+@import("nepercabi", "call_crowd_sse")
+extern fn call_crowd_sse(f: CrowdSseBack) -> f64
+@import("nepercabi", "take_byte")
+extern fn take_byte(f: ByteMaker, a: u8) -> i64
+@import("nepercabi", "take_pair")
+extern fn take_pair(f: PairMaker, x: i32, y: i32) -> i64
+@import("nepercabi", "take_longs")
+extern fn take_longs(f: LongsMaker, a: i64, b: i64) -> i64
+@import("nepercabi", "take_double_int")
+extern fn take_double_int(f: DoubleIntMaker, d: f64, i: i64) -> f64
+@import("nepercabi", "take_int_double")
+extern fn take_int_double(f: IntDoubleMaker, i: i64, d: f64) -> f64
+@import("nepercabi", "take_three")
+extern fn take_three(f: ThreeMaker, a: f32, b: f32, c: f32) -> f64
+@import("nepercabi", "take_big")
+extern fn take_big(f: BigMaker, a: i64, b: i64, c: i64) -> i64
+@import("nepercabi", "map_doubles")
+extern fn map_doubles(f: DoublesMap, s: Doubles) -> Doubles
+@import("nepercabi", "pair_in_pointer")
+extern fn pair_in_pointer() -> PairBack
+@import("nepercabi", "big_rotate_pointer")
+extern fn big_rotate_pointer() -> BigMap
+@import("nepercabi", "double_int_out_pointer")
+extern fn double_int_out_pointer() -> DoubleIntMaker
+
 // Found by name as the key's own `cmp` and `hash`, so a supplied protocol over `[N]Key`
 // calls them per element from lowering's protocol emitters, not from a call site.
 @import("nepercabi", "key_cmp")

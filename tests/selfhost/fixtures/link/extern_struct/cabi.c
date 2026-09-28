@@ -95,6 +95,39 @@ API Packed packed_out(uint8_t tag, int32_t value) { Packed s; s.tag = tag; s.val
 API Doubles doubles_swap(Doubles s) { Doubles t = { s.y, s.x }; return t; }
 API Big big_rotate(Big s) { Big t = { s.b, s.c, s.a }; return t; }
 
+/* The callee side (D1676): C calls a neper `@cc` function with aggregates by value,
+   and takes aggregates back from one. */
+API int64_t call_pair(int64_t (*f)(Pair), int32_t x, int32_t y) { Pair s = { x, y }; return f(s); }
+API double call_three(double (*f)(ThreeFloats), float a, float b, float c) { ThreeFloats s = { a, b, c }; return f(s); }
+API double call_mixed(double (*f)(DoubleInt, IntDouble), double d, int64_t i) {
+    DoubleInt first = { d, i };
+    IntDouble second = { i, d };
+    return f(first, second);
+}
+API int64_t call_big(int64_t (*f)(Big, int64_t), int64_t a, int64_t b, int64_t c, int64_t x) { Big s = { a, b, c }; return f(s, x); }
+API int64_t call_packed(int64_t (*f)(Packed), uint8_t tag, int32_t value) { Packed s; s.tag = tag; s.value = value; return f(s); }
+API int64_t call_crowd(int64_t (*f)(int64_t, int64_t, int64_t, int64_t, int64_t, Longs, int64_t)) {
+    Longs s = { 6, 7 };
+    return f(1, 2, 3, 4, 5, s, 8);
+}
+API double call_crowd_sse(double (*f)(double, double, double, double, double, double, double, Doubles, double)) {
+    Doubles s = { 8.0, 9.0 };
+    return f(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, s, 10.0);
+}
+API int64_t take_byte(Byte (*f)(uint8_t), uint8_t a) { return f(a).a; }
+API int64_t take_pair(Pair (*f)(int32_t, int32_t), int32_t x, int32_t y) { Pair s = f(x, y); return 1000 * (int64_t)s.x + s.y; }
+API int64_t take_longs(Longs (*f)(int64_t, int64_t), int64_t a, int64_t b) { Longs s = f(a, b); return 10 * s.a + s.b; }
+API double take_double_int(DoubleInt (*f)(double, int64_t), double d, int64_t i) { DoubleInt s = f(d, i); return 2.0 * s.d + (double)s.i; }
+API double take_int_double(IntDouble (*f)(int64_t, double), int64_t i, double d) { IntDouble s = f(i, d); return 2.0 * (double)s.i + s.d; }
+API double take_three(ThreeFloats (*f)(float, float, float), float a, float b, float c) { ThreeFloats s = f(a, b, c); return 100.0 * s.a + 10.0 * s.b + s.c; }
+API int64_t take_big(Big (*f)(int64_t, int64_t, int64_t), int64_t a, int64_t b, int64_t c) { Big s = f(a, b, c); return 100 * s.a + 10 * s.b + s.c; }
+API Doubles map_doubles(Doubles (*f)(Doubles), Doubles s) { return f(s); }
+
+/* C function pointers, which neper calls through an `extern fn` type. */
+API int64_t (*pair_in_pointer(void))(Pair) { return pair_in; }
+API Big (*big_rotate_pointer(void))(Big) { return big_rotate; }
+API DoubleInt (*double_int_out_pointer(void))(double, int64_t) { return double_int_out; }
+
 /* A key's declared `cmp` and `hash`, which a supplied protocol calls per element. */
 API int32_t key_cmp(Key a, Key b) { return (a.k > b.k) - (a.k < b.k); }
 API uint64_t key_hash(Key s) { return (uint64_t)s.k * 0x9E3779B97F4A7C15ull; }

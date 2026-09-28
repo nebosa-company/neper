@@ -1223,6 +1223,11 @@ extern fn c_printf(fmt: *const u8, ...) -> i32
   body takes that type, and becomes callable from C, when it carries a `@cc` line
   of its own — that is how a callback is handed to the OS. A `fn(...) -> R` pointer
   to a function without `@cc` uses the neper convention (§5) and does not cross.
+  The two conventions differ only where a struct or union is passed or returned by
+  value, so the compiler holds `fn(...)` and `extern fn(...)` apart only there: over
+  such a signature they are different types, and elsewhere one converts to the other
+  (D1676). A call through an `extern fn` type, and any call to a `@cc` function, passes
+  and returns aggregates by the C rules.
   A `@cc` function may be generic: each instantiation is a separate C-callable
   function, which is how `os.thread_create[Ctx]` (below) builds one trampoline per
   `Ctx` without a cast. The signature rule below — every type crosses, no `err`, no

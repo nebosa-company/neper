@@ -222,6 +222,8 @@ fn type_flags(ty: check.Type) -> usize {
     if ty.has_length { flags += 4usize }
     // (D1590) The shared address space of a slice or pointer (section 10).
     if ty.in_shared { flags += 8usize }
+    // (D1676) A function type called by the C convention.
+    if ty.foreign { flags += 16usize }
     ret flags
 }
 
@@ -522,6 +524,9 @@ fn function_flags(function: check.Function) -> usize {
     var flags = 0usize
     if function.generic { flags += 1usize }
     if function.external { flags += 2usize }
+    // (D1676) `@cc`: a caller passes an aggregate the C way, so it is the signature's.
+    // Not 4: the Interface's record adds that for an instance.
+    if function.callback { flags += 16usize }
     ret flags
 }
 
@@ -1564,13 +1569,14 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     }
     // (D1510) The attribute tail: what the checker keeps of a function beyond its
     // signature, so a kept module's declarations can come from here -- intrinsic 1,
-    // variadic 2, gpu 4; the packed workgroup size; the import library and symbol
+    // variadic 2, gpu 4, `@cc` 16 (D1676); the packed workgroup size; the import library and symbol
     // (for a non-extern function the `@borrows` name and `@noescape` spelling) as
     // string indexes plus one, zero for none; and each parameter's `own`.
     var attributes = 0usize
     if function.intrinsic { attributes += 1usize }
     if function.variadic { attributes += 2usize }
     if function.gpu { attributes += 4usize }
+    if function.callback { attributes += 16usize }
     try binary.byte(output, attributes)
     // (D1589) A kernel's inferred capabilities (`gpu.Cap`'s members as bits) and the
     // bytes of its `shared var`s, which `gpu.launch` checks against a device (spec
@@ -4550,7 +4556,7 @@ fn interface_type_end(bytes: []const u8, cursor: usize, end: usize, depth: usize
     if depth > 64usize || cursor > end || end > bytes.len || end - cursor < 20usize { ret (0usize, InvalidArtifact) }
     let kind = usize(bytes[cursor])
     let flags = usize(bytes[cursor + 1usize])
-    if kind == 0usize || kind > 16usize || flags > 15usize { ret (0usize, InvalidArtifact) }
+    if kind == 0usize || kind > 16usize || flags > 31usize { ret (0usize, InvalidArtifact) }
     var next = cursor + 20usize
     if (kind == 9usize || kind == 10usize || kind == 11usize) && (flags & 2usize) != 0usize {
         let (element_end, element_error) = interface_type_end(bytes, next, end, depth + 1usize)
@@ -4649,7 +4655,8 @@ fn interface_payload_end(bytes: []const u8, kind: usize, payload: usize, end: us
             at += 1usize
         }
         // (D1510) The attribute tail: 20 bytes (D1589) and one `own` byte a parameter.
-        if next > end || end - next < 20usize || usize(bytes[next]) > 7usize { ret (0usize, InvalidArtifact) }
+        // Its first byte's known bits are intrinsic 1, variadic 2, gpu 4 and `@cc` 16 (D1676).
+        if next > end || end - next < 20usize || (usize(bytes[next]) & 232usize) != 0usize { ret (0usize, InvalidArtifact) }
         next += 20usize
         if parameters > end - next { ret (0usize, InvalidArtifact) }
         at = 0usize
@@ -5008,6 +5015,7 @@ fn decode_type(c: *check.Checker, g: *graph.Graph, bytes: []const u8, cursor: us
     ty.is_const = (flags & 1usize) != 0usize
     ty.has_length = (flags & 4usize) != 0usize
     ty.in_shared = (flags & 8usize) != 0usize
+    ty.foreign = (flags & 16usize) != 0usize
     if ty.has_length { ty.array_length = length }
     var next = cursor + 20usize
     if (flags & 2usize) != 0usize && aggregate_type(kind) {
@@ -5273,6 +5281,7 @@ fn decode_function(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payloa
     item.intrinsic = (attributes & 1usize) != 0usize
     item.variadic = (attributes & 2usize) != 0usize
     item.gpu = (attributes & 4usize) != 0usize
+    item.callback = (attributes & 16usize) != 0usize
     let (gpu_size, gpu_error) = binary.read_u32(bytes, next + 4usize)
     let (library, library_error) = binary.read_u32(bytes, next + 12usize)
     let (symbol, symbol_error) = binary.read_u32(bytes, next + 16usize)
