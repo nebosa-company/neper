@@ -10,7 +10,9 @@ PREFIX-<driver> (plus `.exe` on Windows); C (c/bench.c), Go (go/) and Rust (rust
 executable taking the driver name first.
 
 Servers must be running (tests/selfhost/db_servers.{ps1,sh} start <dir>); the client libraries
-must be on PATH (Windows) or installed (Linux). SQLite writes a file in --scratch.
+must be on PATH (Windows) or installed (Linux). SQLite writes a file in --scratch. ODBC reaches
+the PostgreSQL server through psqlODBC: by the DSN `neper_psqlodbc` on Windows, whose driver
+manager wants one (run-windows-all.ps1 registers it), and by the driver's path on Linux.
 """
 import argparse, json, os, platform, statistics, subprocess, sys
 
@@ -18,8 +20,10 @@ WORK = {
     "sqlite": {"rows": 100000, "lookups": 20000},
     "postgresql": {"rows": 20000, "lookups": 5000},
     "mysql": {"rows": 20000, "lookups": 5000},
+    "odbc": {"rows": 20000, "lookups": 5000},
 }
 PORTS = {"postgresql": 55432, "mysql": 53306}
+ODBC_LINUX_DRIVER = "/usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so"
 
 
 def location(driver, scratch, label):
@@ -31,13 +35,19 @@ def location(driver, scratch, label):
         return path
     if driver == "postgresql":
         return f"host=127.0.0.1 port={PORTS['postgresql']} user=neper dbname=postgres options='-c client_min_messages=warning'"
+    if driver == "odbc":
+        via = "DSN=neper_psqlodbc" if os.name == "nt" else f"Driver={ODBC_LINUX_DRIVER}"
+        return f"{via};Server=127.0.0.1;Port={PORTS['postgresql']};Uid=neper;Database=postgres;BoolsAsChar=0"
     return str(PORTS["mysql"])
 
 
 def once(command, driver, scratch, label):
     work = WORK[driver]
-    out = subprocess.run(command + [location(driver, scratch, label), str(work["rows"]), str(work["lookups"])],
-                         capture_output=True, text=True, check=True).stdout.split()
+    p = subprocess.run(command + [location(driver, scratch, label), str(work["rows"]), str(work["lookups"])],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        sys.exit(f"{label} {driver} failed (exit {p.returncode}): {p.stderr.strip()[:500]}")
+    out = p.stdout.split()
     return {k: int(v) for k, v in (field.split("=") for field in out[1:])}
 
 
@@ -50,7 +60,7 @@ def main():
     ap.add_argument("--runs", type=int, default=7)
     ap.add_argument("--scratch", default=".")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--drivers", default="sqlite,postgresql,mysql")
+    ap.add_argument("--drivers", default="sqlite,postgresql,mysql,odbc")
     ap.add_argument("--pg-port", type=int, default=PORTS["postgresql"])
     ap.add_argument("--mysql-port", type=int, default=PORTS["mysql"])
     args = ap.parse_args()

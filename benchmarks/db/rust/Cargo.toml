@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 mysql = { version = "28.0.3", default-features = false, features = ["minimal"] }
+odbc-api = { version = "29.1.1", default-features = false, features = ["odbc_version_3_80"] }
 postgres = "0.19.14"
 rusqlite = "0.40.2"
 

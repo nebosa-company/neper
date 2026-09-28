@@ -1,11 +1,13 @@
 // The e.db benchmark's workload in Go, with each database's standard Go driver: pgx for
 // PostgreSQL, go-sql-driver/mysql, and for SQLite mattn/go-sqlite3 against the system library
 // where cgo is available (Linux) or modernc.org/sqlite, a translation of SQLite to Go, where it
-// is not (Windows without gcc).
+// is not (Windows without gcc); ODBC through alexbrainman/odbc, which calls odbc32.dll directly
+// on Windows and unixODBC through cgo on Linux.
 //
 //	bench-go sqlite <file> <rows> <lookups>
 //	bench-go postgresql <conninfo> <rows> <lookups>
 //	bench-go mysql <port> <rows> <lookups>
+//	bench-go odbc <connection string> <rows> <lookups>
 //
 // Same phases, table and output line as benchmarks/db/src/workload.e and c/bench.c.
 package main
@@ -18,6 +20,7 @@ import (
 	"strconv"
 	"time"
 
+	_ "github.com/alexbrainman/odbc"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
 )
@@ -34,7 +37,7 @@ func check(err error) {
 	}
 }
 
-// database/sql drivers: SQLite and MySQL.
+// database/sql drivers: SQLite, MySQL and ODBC.
 func runSQL(driver, dsn, placeholder string, rows, lookups int64) (int64, int64, int64) {
 	db, err := sql.Open(driver, dsn)
 	check(err)
@@ -72,6 +75,7 @@ func runSQL(driver, dsn, placeholder string, rows, lookups int64) (int64, int64,
 		count++
 	}
 	check(result.Err())
+	check(result.Close())
 	scanNs := time.Since(t0).Nanoseconds()
 	if count != rows || sum != rows*(rows-1)/2 {
 		check(fmt.Errorf("scan read %d rows", count))
@@ -159,7 +163,7 @@ func runPostgres(conninfo string, rows, lookups int64) (int64, int64, int64) {
 
 func main() {
 	if len(os.Args) < 5 {
-		check(fmt.Errorf("usage: bench-go sqlite|postgresql|mysql <location> <rows> <lookups>"))
+		check(fmt.Errorf("usage: bench-go sqlite|postgresql|mysql|odbc <location> <rows> <lookups>"))
 	}
 	driver, location := os.Args[1], os.Args[2]
 	rows, err := strconv.ParseInt(os.Args[3], 10, 64)
@@ -172,6 +176,8 @@ func main() {
 		insertNs, scanNs, lookupNs = runSQL(sqliteDriver, location, "?", rows, lookups)
 	case "postgresql":
 		insertNs, scanNs, lookupNs = runPostgres(location, rows, lookups)
+	case "odbc":
+		insertNs, scanNs, lookupNs = runSQL("odbc", location, "?", rows, lookups)
 	default:
 		insertNs, scanNs, lookupNs = runSQL("mysql", "root@tcp(127.0.0.1:"+location+")/neper", "?", rows, lookups)
 	}
