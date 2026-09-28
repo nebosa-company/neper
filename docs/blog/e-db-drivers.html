@@ -105,8 +105,7 @@
     .rank-1 { color: var(--success); font-weight: 600; }
     .rank-2 { color: var(--primary); }
     .rank-last { color: var(--error); }
-    tr.placed td { color: var(--on-surface-variant); }
-    tbody tr:not(.placed) + tr.placed td { border-top: 2px solid var(--outline-variant); }
+    tr.overall td { border-top: 2px solid var(--outline-variant); }
     .legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0 0 var(--space-4); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
     .legend .key { display: inline-flex; align-items: center; gap: var(--space-2); }
     .legend .key::before { content: ""; width: 12px; height: 12px; border-radius: var(--radius-full); background: currentColor; }
@@ -355,10 +354,7 @@
             <tr><td>ODBC scan</td><td>75%</td><td class="rank-1">100%</td><td class="rank-last">63%</td><td class="rank-2">94%</td></tr>
             <tr><td>ODBC lookup</td><td>74%</td><td class="rank-1">100%</td><td class="rank-last">44%</td><td class="rank-2">92%</td></tr>
             <tr><td><strong>Geometric mean</strong></td><td class="rank-2">77%</td><td class="rank-1">94%</td><td class="rank-last">64%</td><td><strong>75%</strong></td></tr>
-            <tr class="placed"><td>Placed 1st</td><td>1</td><td>7</td><td>3</td><td>1</td></tr>
-            <tr class="placed"><td>Placed 2nd</td><td>4</td><td>4</td><td>1</td><td>3</td></tr>
-            <tr class="placed"><td>Placed 3rd</td><td>6</td><td>1</td><td>2</td><td>3</td></tr>
-            <tr class="placed"><td>Placed 4th</td><td>1</td><td>0</td><td>6</td><td>5</td></tr>
+            <tr class="overall"><td><strong>Overall</strong></td><td class="rank-2"><strong>2nd</strong></td><td class="rank-1"><strong>1st</strong></td><td class="rank-last"><strong>4th</strong></td><td><strong>3rd</strong></td></tr>
           </tbody>
         </table>
       </div>
@@ -379,22 +375,7 @@
             <tr><td>ODBC scan</td><td>65%</td><td class="rank-1">100%</td><td class="rank-last">57%</td><td class="rank-2">96%</td></tr>
             <tr><td>ODBC lookup</td><td class="rank-last">84%</td><td class="rank-1">100%</td><td>90%</td><td class="rank-2">95%</td></tr>
             <tr><td><strong>Geometric mean</strong></td><td><strong>78%</strong></td><td class="rank-1">98%</td><td class="rank-last">67%</td><td class="rank-2">89%</td></tr>
-            <tr class="placed"><td>Placed 1st</td><td>0</td><td>9</td><td>0</td><td>3</td></tr>
-            <tr class="placed"><td>Placed 2nd</td><td>3</td><td>3</td><td>1</td><td>5</td></tr>
-            <tr class="placed"><td>Placed 3rd</td><td>5</td><td>0</td><td>4</td><td>3</td></tr>
-            <tr class="placed"><td>Placed 4th</td><td>4</td><td>0</td><td>7</td><td>1</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>Both hosts, 24 cells</th><th>Neper</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
-          <tbody>
-            <tr class="placed"><td>Placed 1st</td><td>1</td><td>16</td><td>3</td><td>4</td></tr>
-            <tr class="placed"><td>Placed 2nd</td><td>7</td><td>7</td><td>2</td><td>8</td></tr>
-            <tr class="placed"><td>Placed 3rd</td><td>11</td><td>1</td><td>6</td><td>6</td></tr>
-            <tr class="placed"><td>Placed 4th</td><td>5</td><td>0</td><td>13</td><td>6</td></tr>
-            <tr><td><strong>Geometric mean</strong></td><td>78%</td><td class="rank-1">96%</td><td class="rank-last">65%</td><td class="rank-2">82%</td></tr>
+            <tr class="overall"><td><strong>Overall</strong></td><td><strong>3rd</strong></td><td class="rank-1"><strong>1st</strong></td><td class="rank-last"><strong>4th</strong></td><td class="rank-2"><strong>2nd</strong></td></tr>
           </tbody>
         </table>
       </div>
