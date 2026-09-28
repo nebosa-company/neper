@@ -21,7 +21,7 @@
   <style>
     :root {
       color-scheme: light dark;
-      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --primary: #145db2; --success: #246b3a; --error: #b42431; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
       --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
       --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
       --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
@@ -37,7 +37,7 @@
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --primary: #b3c5ff; --success: #8fd79e; --error: #ffb3ad; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
         --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
         --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
         --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
@@ -46,14 +46,14 @@
     }
     @media (prefers-contrast: more) {
       :root {
-        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --primary: #003b76; --success: #00461d; --error: #7d0018; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
         --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
         --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
       }
     }
     @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
       :root {
-        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --primary: #dae2ff; --success: #abf3b9; --error: #ffdad6; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
         --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
         --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
       }
@@ -88,6 +88,11 @@
     code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
     pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
     pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
     figure { margin: var(--space-8) 0; }
     figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
     figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
@@ -97,7 +102,13 @@
     th:first-child, td:first-child { text-align: left; white-space: normal; }
     thead th { background: var(--surface-container); font-weight: 600; }
     tbody tr:last-child td { border-bottom: 0; }
-    td.win { color: var(--primary); font-weight: 600; }
+    .rank-1 { color: var(--success); font-weight: 600; }
+    .rank-2 { color: var(--primary); }
+    .rank-last { color: var(--error); }
+    .legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0 0 var(--space-4); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .legend .key { display: inline-flex; align-items: center; gap: var(--space-2); }
+    .legend .key::before { content: ""; width: 12px; height: 12px; border-radius: var(--radius-full); background: currentColor; }
+    .legend .key span { color: var(--on-surface-variant); }
     .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
     .callout p:last-child { margin-bottom: 0; }
     .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
@@ -138,22 +149,22 @@
 
       <h2>The contract</h2>
       <p><code>e.db</code> is deliberately small. It defines four handles, one table of functions, a value type and five errors:</p>
-      <pre><code>type Connection = struct { ctx: *void, driver: *const Driver }
-type Statement = struct { ctx: *void, driver: *const Driver }
-type Rows = struct { ctx: *void, driver: *const Driver }
-type Transaction = struct { ctx: *void, driver: *const Driver }
-type Value = union enum u8 { Null, Bool: bool, I64: i64, U64: u64, F64: f64, Text: str, Bytes: []const u8, Time: time.Instant }
-type Parameter = struct { name: str, value: Value }
-type Column = struct { name: str, kind: ValueKind, nullable: bool }
-type Driver = struct { close: fn(ctx: *void) -&gt; err, prepare: ..., execute: ..., query: ..., begin: ...,
+      <pre><code><span class="kw">type</span> Connection = <span class="kw">struct</span> { ctx: *void, driver: *<span class="kw">const</span> Driver }
+<span class="kw">type</span> Statement = <span class="kw">struct</span> { ctx: *void, driver: *<span class="kw">const</span> Driver }
+<span class="kw">type</span> Rows = <span class="kw">struct</span> { ctx: *void, driver: *<span class="kw">const</span> Driver }
+<span class="kw">type</span> Transaction = <span class="kw">struct</span> { ctx: *void, driver: *<span class="kw">const</span> Driver }
+<span class="kw">type</span> Value = <span class="kw">union</span> <span class="kw">enum</span> u8 { Null, Bool: bool, I64: i64, U64: u64, F64: f64, Text: str, Bytes: []<span class="kw">const</span> u8, Time: time.Instant }
+<span class="kw">type</span> Parameter = <span class="kw">struct</span> { name: str, value: Value }
+<span class="kw">type</span> Column = <span class="kw">struct</span> { name: str, kind: ValueKind, nullable: bool }
+<span class="kw">type</span> Driver = <span class="kw">struct</span> { close: <span class="kw">fn</span>(ctx: *void) -&gt; err, prepare: ..., execute: ..., query: ..., begin: ...,
                        statement_close: ..., statement_execute: ..., statement_query: ...,
-                       rows_columns: ..., rows_next: fn(ctx: *void, dst: []Value) -&gt; (bool, err), rows_next_borrowed: ..., rows_close: ...,
+                       rows_columns: ..., rows_next: <span class="kw">fn</span>(ctx: *void, dst: []Value) -&gt; (bool, err), rows_next_borrowed: ..., rows_close: ...,
                        transaction_execute: ..., transaction_query: ..., transaction_commit: ..., transaction_rollback: ... }
-error Closed
-error InvalidQuery
-error Constraint
-error Busy
-error Unsupported</code></pre>
+<span class="kw">error</span> Closed
+<span class="kw">error</span> InvalidQuery
+<span class="kw">error</span> Constraint
+<span class="kw">error</span> Busy
+<span class="kw">error</span> Unsupported</code></pre>
       <ul>
         <li><strong>A handle is a context plus a table.</strong> Every <code>e.db</code> call dispatches through the table. Closing, committing or rolling back sets the context to <code>nil</code>, and a <code>nil</code> handle answers <code>Closed</code> without reaching the driver. So a double close, or a query after commit, behaves the same under every driver, and no driver has to write that logic.</li>
         <li><strong>Values are one tagged union of eight kinds.</strong> Parameters are positional or named. Columns report a kind, and <code>rows_next</code> fills a caller-owned row, which is a slice of <code>Value</code>. Its text stays valid until the next row, even after the reader is closed; <code>rows_next_borrowed</code> hands back the library's own bytes, which are valid only until the next row or the close.</li>
@@ -163,87 +174,87 @@ error Unsupported</code></pre>
 
       <h2>Using it</h2>
       <p>This is <code>examples/db/quickstart</code>, in full:</p>
-      <pre><code>use e.io
-use e.mem
-use e.db
-use x.sqlite.sqlite
+      <pre><code><span class="kw">use</span> e.io
+<span class="kw">use</span> e.mem
+<span class="kw">use</span> e.db
+<span class="kw">use</span> x.sqlite.sqlite
 
-fn main(a: *mem.Arena) -&gt; err {
-    var c = try sqlite.open(a, ":memory:")
-    let created = try db.execute(&amp;c, "CREATE TABLE lang(name TEXT NOT NULL, year INTEGER)", zero)
+<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena) -&gt; err {
+    <span class="kw">var</span> c = <span class="kw">try</span> sqlite.open(a, <span class="str">":memory:"</span>)
+    <span class="kw">let</span> created = <span class="kw">try</span> db.execute(&amp;c, <span class="str">"CREATE TABLE lang(name TEXT NOT NULL, year INTEGER)"</span>, <span class="kw">zero</span>)
 
-    var tx = try db.begin(&amp;c)
-    var p: [2]db.Parameter = zero
-    p[0] = db.Parameter { name: "", value: db.Value{ Text: "Neper" } }
-    p[1] = db.Parameter { name: "", value: db.Value{ I64: 2026i64 } }
-    let inserted = try db.execute_transaction(&amp;tx, "INSERT INTO lang VALUES (?, ?)", p[0..])
-    try db.commit(&amp;tx)
+    <span class="kw">var</span> tx = <span class="kw">try</span> db.begin(&amp;c)
+    <span class="kw">var</span> p: [2]db.Parameter = <span class="kw">zero</span>
+    p[0] = db.Parameter { name: <span class="str">""</span>, value: db.Value{ Text: <span class="str">"Neper"</span> } }
+    p[1] = db.Parameter { name: <span class="str">""</span>, value: db.Value{ I64: 2026i64 } }
+    <span class="kw">let</span> inserted = <span class="kw">try</span> db.execute_transaction(&amp;tx, <span class="str">"INSERT INTO lang VALUES (?, ?)"</span>, p[0..])
+    <span class="kw">try</span> db.commit(&amp;tx)
 
-    var rows = try db.query(&amp;c, "SELECT name, year FROM lang", zero)
-    var row: [2]db.Value = zero
-    while true {
-        let more = try db.reader_next_err(&amp;rows, row[0..])
-        if !more { break }
-        switch row[0] {
-        case .Text as name:
-            try io.printf["{}\n"](name)
-        default:
-            ret db.InvalidQuery
+    <span class="kw">var</span> rows = <span class="kw">try</span> db.query(&amp;c, <span class="str">"SELECT name, year FROM lang"</span>, <span class="kw">zero</span>)
+    <span class="kw">var</span> row: [2]db.Value = <span class="kw">zero</span>
+    <span class="kw">while</span> <span class="kw">true</span> {
+        <span class="kw">let</span> more = <span class="kw">try</span> db.reader_next_err(&amp;rows, row[0..])
+        <span class="kw">if</span> !more { <span class="kw">break</span> }
+        <span class="kw">switch</span> row[0] {
+        <span class="kw">case</span> .Text <span class="kw">as</span> name:
+            <span class="kw">try</span> io.printf[<span class="str">"{}\n"</span>](name)
+        <span class="kw">default</span>:
+            <span class="kw">ret</span> db.InvalidQuery
         }
     }
-    try db.close_rows(&amp;rows)
-    ret db.close(&amp;c)
+    <span class="kw">try</span> db.close_rows(&amp;rows)
+    <span class="kw">ret</span> db.close(&amp;c)
 }</code></pre>
       <p>Replace the <code>open</code> line with <code>libpq.open(a, "host=… dbname=…")</code>, <code>mysql.open(a, options)</code> or <code>odbc.open(a, "DSN=…")</code> and the rest of the program is unchanged. The one exception is PostgreSQL's parameter spelling, <code>$1</code> rather than <code>?</code>.</p>
 
       <h2>Writing a driver</h2>
       <p>A driver is three things: a context struct, fifteen functions with the table's signatures, and an <code>open</code> that fills in the table. <code>examples/db/memory_driver</code> is a complete driver in about 170 lines that keeps its rows in memory. It is worth reading whole, and it comes down to four steps.</p>
       <p><strong>1. A context behind every handle.</strong> The driver decides what <code>ctx</code> points at. A real driver keeps its library handle there; this one keeps rows.</p>
-      <pre><code>type Store = struct { ids: [64]i64, names: [64]str, count: usize, committed: usize,
+      <pre><code><span class="kw">type</span> Store = <span class="kw">struct</span> { ids: [64]i64, names: [64]str, count: usize, committed: usize,
                       in_transaction: bool, cursor: usize, columns: [2]db.Column }
 
-fn store_of(ctx: *void) -&gt; *Store { ret mem.cast[*Store](ctx) }</code></pre>
+<span class="kw">fn</span> <span class="fn">store_of</span>(ctx: *void) -&gt; *Store { <span class="kw">ret</span> mem.cast[*Store](ctx) }</code></pre>
       <p><strong>2. The functions.</strong> Each receives the context and answers in <code>e.db</code>'s terms. The row reader is the interesting one:</p>
-      <pre><code>// Committed rows are visible outside a transaction; inside one, all of them.
-fn m_rows_next(ctx: *void, dst: []db.Value) -&gt; (bool, err) {
-    let s = store_of(ctx)
-    if dst.len &lt; 2usize { ret (false, db.InvalidQuery) }
-    var visible = s.committed
-    if s.in_transaction { visible = s.count }
-    if s.cursor &gt;= visible { ret (false, ok) }
+      <pre><code><span class="com">// Committed rows are visible outside a transaction; inside one, all of them.</span>
+<span class="kw">fn</span> <span class="fn">m_rows_next</span>(ctx: *void, dst: []db.Value) -&gt; (bool, err) {
+    <span class="kw">let</span> s = store_of(ctx)
+    <span class="kw">if</span> dst.len &lt; 2usize { <span class="kw">ret</span> (<span class="kw">false</span>, db.InvalidQuery) }
+    <span class="kw">var</span> visible = s.committed
+    <span class="kw">if</span> s.in_transaction { visible = s.count }
+    <span class="kw">if</span> s.cursor &gt;= visible { <span class="kw">ret</span> (<span class="kw">false</span>, <span class="kw">ok</span>) }
     dst[0] = db.Value{ I64: s.ids[s.cursor] }
     dst[1] = db.Value{ Text: s.names[s.cursor] }
     s.cursor += 1usize
-    ret (true, ok)
+    <span class="kw">ret</span> (<span class="kw">true</span>, <span class="kw">ok</span>)
 }</code></pre>
       <p><strong>3. Hand back only the context.</strong> A <code>Rows</code>, <code>Statement</code> or <code>Transaction</code> that a driver returns carries just its context. <code>e.db</code> copies in the table from the connection it came from, so a driver never passes its own table around.</p>
-      <pre><code>fn m_query(ctx: *void, sql: str, params: []const db.Parameter) -&gt; (db.Rows, err) {
-    var rows: db.Rows = zero
-    if !str.eq(sql, "SELECT id, name FROM t") { ret (rows, db.InvalidQuery) }
+      <pre><code><span class="kw">fn</span> <span class="fn">m_query</span>(ctx: *void, sql: str, params: []<span class="kw">const</span> db.Parameter) -&gt; (db.Rows, err) {
+    <span class="kw">var</span> rows: db.Rows = <span class="kw">zero</span>
+    <span class="kw">if</span> !str.eq(sql, <span class="str">"SELECT id, name FROM t"</span>) { <span class="kw">ret</span> (rows, db.InvalidQuery) }
     store_of(ctx).cursor = 0usize
     rows.ctx = ctx
-    ret (rows, ok)
+    <span class="kw">ret</span> (rows, <span class="kw">ok</span>)
 }</code></pre>
       <p><strong>4. Fill the table once and hand out the connection.</strong></p>
-      <pre><code>fn open(s: *Store, driver: *db.Driver) -&gt; db.Connection {
+      <pre><code><span class="kw">fn</span> <span class="fn">open</span>(s: *Store, driver: *db.Driver) -&gt; db.Connection {
     driver.close = m_close
     driver.execute = m_execute
     driver.query = m_query
     driver.rows_next = m_rows_next
-    driver.rows_next_borrowed = m_rows_next   // its rows are already its own
-    // ... the other eleven
-    ret db.Connection { ctx: mem.cast[*void](s), driver: driver }
+    driver.rows_next_borrowed = m_rows_next   <span class="com">// its rows are already its own</span>
+    <span class="com">// ... the other eleven</span>
+    <span class="kw">ret</span> db.Connection { ctx: mem.cast[*void](s), driver: driver }
 }</code></pre>
 
       <h3>Binding a C library</h3>
       <p>The four real drivers follow one layout. A small module holds nothing but the C declarations, one variant file per OS. The driver module next to it is portable Neper and never names a library.</p>
-      <pre><code>// lib/x/postgresql/capi.linux.e   (capi.windows.e is identical but for "libpq.dll")
-@import("libpq.so.5", "PQsendQueryParams")
-extern fn send_query_params(conn: usize, command: *const u8, count: i32, types: usize,
+      <pre><code><span class="com">// lib/x/postgresql/capi.linux.e   (capi.windows.e is identical but for "libpq.dll")</span>
+<span class="kw">@import</span>(<span class="str">"libpq.so.5"</span>, <span class="str">"PQsendQueryParams"</span>)
+<span class="kw">extern</span> <span class="kw">fn</span> <span class="fn">send_query_params</span>(conn: usize, command: *<span class="kw">const</span> u8, count: i32, types: usize,
                             values: usize, lengths: usize, formats: usize, result_format: i32) -&gt; i32
 
-@import("libpq.so.5", "PQgetvalue")
-extern fn getvalue(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
+<span class="kw">@import</span>(<span class="str">"libpq.so.5"</span>, <span class="str">"PQgetvalue"</span>)
+<span class="kw">extern</span> <span class="kw">fn</span> <span class="fn">getvalue</span>(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
       <ul>
         <li><strong>Handles are addresses.</strong> <code>PGconn*</code> and <code>sqlite3_stmt*</code> cross as <code>usize</code>. An array that may be null when empty also crosses as the <code>usize</code> address of its first element.</li>
         <li><strong>Foreign bytes are read through a view.</strong> <code>mem.view</code> over an arena header whose base is the C pointer names the bytes without copying them, and the driver copies what it keeps into its own buffer.</li>
@@ -324,23 +335,24 @@ extern fn getvalue(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
         <p>Scored against the fastest in each of the 24 cells (3 workloads × 4 databases × 2 hosts), the geometric means are <b>C 96%, Rust 82%, Neper 78%, Go 65%</b>. C wins 16 cells, Rust 4, Go 3 and Neper 1. Neper is level with Rust on Windows (77% against 75%) and well behind it on Linux (78% against 89%), and its largest gap is still in one workload: across both hosts it averages 87% of the fastest on inserts, 79% on lookups and 68% on scans.</p>
       </div>
 
+      <p class="legend" aria-label="Colour key"><span class="key rank-1"><span>1st</span></span><span class="key rank-2"><span>2nd</span></span><span class="key rank-last"><span>last</span></span><span>in each row; in the Neper · C tables, the faster of the two is green and the slower red</span></p>
       <div class="table-scroll">
         <table>
           <thead><tr><th>Windows 11</th><th>Neper</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
           <tbody>
-            <tr><td>SQLite insert</td><td>88%</td><td class="win">100%</td><td>26%</td><td>70%</td></tr>
-            <tr><td>SQLite scan</td><td>55%</td><td class="win">100%</td><td>24%</td><td>92%</td></tr>
-            <tr><td>SQLite lookup</td><td>86%</td><td>98%</td><td>66%</td><td class="win">100%</td></tr>
-            <tr><td>PostgreSQL insert</td><td>96%</td><td class="win">100%</td><td>79%</td><td>79%</td></tr>
-            <tr><td>PostgreSQL scan</td><td class="win">100%</td><td>93%</td><td>97%</td><td>57%</td></tr>
-            <tr><td>PostgreSQL lookup</td><td>88%</td><td class="win">100%</td><td>79%</td><td>72%</td></tr>
-            <tr><td>MySQL insert</td><td>65%</td><td>71%</td><td class="win">100%</td><td>48%</td></tr>
-            <tr><td>MySQL scan</td><td>62%</td><td>95%</td><td class="win">100%</td><td>92%</td></tr>
-            <tr><td>MySQL lookup</td><td>65%</td><td>74%</td><td class="win">100%</td><td>52%</td></tr>
-            <tr><td>ODBC insert</td><td>91%</td><td class="win">100%</td><td>67%</td><td>83%</td></tr>
-            <tr><td>ODBC scan</td><td>75%</td><td class="win">100%</td><td>63%</td><td>94%</td></tr>
-            <tr><td>ODBC lookup</td><td>74%</td><td class="win">100%</td><td>44%</td><td>92%</td></tr>
-            <tr><td><strong>Geometric mean</strong></td><td><strong>77%</strong></td><td class="win">94%</td><td><strong>64%</strong></td><td><strong>75%</strong></td></tr>
+            <tr><td>SQLite insert</td><td class="rank-2">88%</td><td class="rank-1">100%</td><td class="rank-last">26%</td><td>70%</td></tr>
+            <tr><td>SQLite scan</td><td>55%</td><td class="rank-1">100%</td><td class="rank-last">24%</td><td class="rank-2">92%</td></tr>
+            <tr><td>SQLite lookup</td><td>86%</td><td class="rank-2">98%</td><td class="rank-last">66%</td><td class="rank-1">100%</td></tr>
+            <tr><td>PostgreSQL insert</td><td class="rank-2">96%</td><td class="rank-1">100%</td><td>79%</td><td class="rank-last">79%</td></tr>
+            <tr><td>PostgreSQL scan</td><td class="rank-1">100%</td><td>93%</td><td class="rank-2">97%</td><td class="rank-last">57%</td></tr>
+            <tr><td>PostgreSQL lookup</td><td class="rank-2">88%</td><td class="rank-1">100%</td><td>79%</td><td class="rank-last">72%</td></tr>
+            <tr><td>MySQL insert</td><td>65%</td><td class="rank-2">71%</td><td class="rank-1">100%</td><td class="rank-last">48%</td></tr>
+            <tr><td>MySQL scan</td><td class="rank-last">62%</td><td class="rank-2">95%</td><td class="rank-1">100%</td><td>92%</td></tr>
+            <tr><td>MySQL lookup</td><td>65%</td><td class="rank-2">74%</td><td class="rank-1">100%</td><td class="rank-last">52%</td></tr>
+            <tr><td>ODBC insert</td><td class="rank-2">91%</td><td class="rank-1">100%</td><td class="rank-last">67%</td><td>83%</td></tr>
+            <tr><td>ODBC scan</td><td>75%</td><td class="rank-1">100%</td><td class="rank-last">63%</td><td class="rank-2">94%</td></tr>
+            <tr><td>ODBC lookup</td><td>74%</td><td class="rank-1">100%</td><td class="rank-last">44%</td><td class="rank-2">92%</td></tr>
+            <tr><td><strong>Geometric mean</strong></td><td class="rank-2">77%</td><td class="rank-1">94%</td><td class="rank-last">64%</td><td><strong>75%</strong></td></tr>
           </tbody>
         </table>
       </div>
@@ -348,31 +360,31 @@ extern fn getvalue(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
         <table>
           <thead><tr><th>Linux (WSL2)</th><th>Neper</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
           <tbody>
-            <tr><td>SQLite insert</td><td>86%</td><td>98%</td><td>57%</td><td class="win">100%</td></tr>
-            <tr><td>SQLite scan</td><td>56%</td><td class="win">100%</td><td>23%</td><td>76%</td></tr>
-            <tr><td>SQLite lookup</td><td>73%</td><td class="win">100%</td><td>64%</td><td>96%</td></tr>
-            <tr><td>PostgreSQL insert</td><td>98%</td><td class="win">100%</td><td>56%</td><td>93%</td></tr>
-            <tr><td>PostgreSQL scan</td><td>63%</td><td class="win">100%</td><td>87%</td><td>46%</td></tr>
-            <tr><td>PostgreSQL lookup</td><td>97%</td><td class="win">100%</td><td>59%</td><td>96%</td></tr>
-            <tr><td>MySQL insert</td><td>79%</td><td>95%</td><td>94%</td><td class="win">100%</td></tr>
-            <tr><td>MySQL scan</td><td>83%</td><td class="win">100%</td><td>94%</td><td>98%</td></tr>
-            <tr><td>MySQL lookup</td><td>70%</td><td>86%</td><td>77%</td><td class="win">100%</td></tr>
-            <tr><td>ODBC insert</td><td>98%</td><td class="win">100%</td><td>93%</td><td>95%</td></tr>
-            <tr><td>ODBC scan</td><td>65%</td><td class="win">100%</td><td>57%</td><td>96%</td></tr>
-            <tr><td>ODBC lookup</td><td>84%</td><td class="win">100%</td><td>90%</td><td>95%</td></tr>
-            <tr><td><strong>Geometric mean</strong></td><td><strong>78%</strong></td><td class="win">98%</td><td><strong>67%</strong></td><td><strong>89%</strong></td></tr>
+            <tr><td>SQLite insert</td><td>86%</td><td class="rank-2">98%</td><td class="rank-last">57%</td><td class="rank-1">100%</td></tr>
+            <tr><td>SQLite scan</td><td>56%</td><td class="rank-1">100%</td><td class="rank-last">23%</td><td class="rank-2">76%</td></tr>
+            <tr><td>SQLite lookup</td><td>73%</td><td class="rank-1">100%</td><td class="rank-last">64%</td><td class="rank-2">96%</td></tr>
+            <tr><td>PostgreSQL insert</td><td class="rank-2">98%</td><td class="rank-1">100%</td><td class="rank-last">56%</td><td>93%</td></tr>
+            <tr><td>PostgreSQL scan</td><td>63%</td><td class="rank-1">100%</td><td class="rank-2">87%</td><td class="rank-last">46%</td></tr>
+            <tr><td>PostgreSQL lookup</td><td class="rank-2">97%</td><td class="rank-1">100%</td><td class="rank-last">59%</td><td>96%</td></tr>
+            <tr><td>MySQL insert</td><td class="rank-last">79%</td><td class="rank-2">95%</td><td>94%</td><td class="rank-1">100%</td></tr>
+            <tr><td>MySQL scan</td><td class="rank-last">83%</td><td class="rank-1">100%</td><td>94%</td><td class="rank-2">98%</td></tr>
+            <tr><td>MySQL lookup</td><td class="rank-last">70%</td><td class="rank-2">86%</td><td>77%</td><td class="rank-1">100%</td></tr>
+            <tr><td>ODBC insert</td><td class="rank-2">98%</td><td class="rank-1">100%</td><td class="rank-last">93%</td><td>95%</td></tr>
+            <tr><td>ODBC scan</td><td>65%</td><td class="rank-1">100%</td><td class="rank-last">57%</td><td class="rank-2">96%</td></tr>
+            <tr><td>ODBC lookup</td><td class="rank-last">84%</td><td class="rank-1">100%</td><td>90%</td><td class="rank-2">95%</td></tr>
+            <tr><td><strong>Geometric mean</strong></td><td><strong>78%</strong></td><td class="rank-1">98%</td><td class="rank-last">67%</td><td class="rank-2">89%</td></tr>
           </tbody>
         </table>
       </div>
-      <p>The winner of each row is highlighted. The raw medians and every sample are in <code>benchmarks/db/results/</code>.</p>
+      <p>The raw medians and every sample are in <code>benchmarks/db/results/</code>.</p>
       <div class="table-scroll">
         <table>
           <thead><tr><th>Windows 11</th><th>Insert rows/s<br>Neper · C</th><th>Scan rows/s<br>Neper · C</th><th>Lookup µs<br>Neper · C</th></tr></thead>
           <tbody>
-            <tr><td>SQLite 3.51</td><td>1,109,527 · 1,254,231</td><td>4,168,438 · 7,642,339</td><td>23.3 · 20.3</td></tr>
-            <tr><td>PostgreSQL 18.6</td><td>26,567 · 27,759</td><td class="win">4,487,021 · 4,194,015</td><td>39.8 · 35.1</td></tr>
-            <tr><td>MySQL 8.4.9</td><td>9,427 · 10,240</td><td>1,645,468 · 2,496,723</td><td>102.6 · 90.2</td></tr>
-            <tr><td>psqlODBC 17.00</td><td>7,004 · 7,736</td><td>698,200 · 932,766</td><td>81.1 · 60.0</td></tr>
+            <tr><td>SQLite 3.51</td><td><span class="rank-last">1,109,527</span> · <span class="rank-1">1,254,231</span></td><td><span class="rank-last">4,168,438</span> · <span class="rank-1">7,642,339</span></td><td><span class="rank-last">23.3</span> · <span class="rank-1">20.3</span></td></tr>
+            <tr><td>PostgreSQL 18.6</td><td><span class="rank-last">26,567</span> · <span class="rank-1">27,759</span></td><td><span class="rank-1">4,487,021</span> · <span class="rank-last">4,194,015</span></td><td><span class="rank-last">39.8</span> · <span class="rank-1">35.1</span></td></tr>
+            <tr><td>MySQL 8.4.9</td><td><span class="rank-last">9,427</span> · <span class="rank-1">10,240</span></td><td><span class="rank-last">1,645,468</span> · <span class="rank-1">2,496,723</span></td><td><span class="rank-last">102.6</span> · <span class="rank-1">90.2</span></td></tr>
+            <tr><td>psqlODBC 17.00</td><td><span class="rank-last">7,004</span> · <span class="rank-1">7,736</span></td><td><span class="rank-last">698,200</span> · <span class="rank-1">932,766</span></td><td><span class="rank-last">81.1</span> · <span class="rank-1">60.0</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -380,10 +392,10 @@ extern fn getvalue(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
         <table>
           <thead><tr><th>Linux (WSL2)</th><th>Insert rows/s<br>Neper · C</th><th>Scan rows/s<br>Neper · C</th><th>Lookup µs<br>Neper · C</th></tr></thead>
           <tbody>
-            <tr><td>SQLite 3.45</td><td>1,228,694 · 1,389,145</td><td>5,230,692 · 9,280,378</td><td>5.8 · 4.2</td></tr>
-            <tr><td>PostgreSQL 16</td><td>21,233 · 21,718</td><td>3,962,307 · 6,337,511</td><td>48.5 · 47.1</td></tr>
-            <tr><td>MySQL 8.0.46</td><td>7,506 · 9,040</td><td>2,397,467 · 2,905,679</td><td>113.1 · 92.9</td></tr>
-            <tr><td>psqlODBC 16.00</td><td>8,850 · 9,033</td><td>1,023,769 · 1,584,467</td><td>71.1 · 59.7</td></tr>
+            <tr><td>SQLite 3.45</td><td><span class="rank-last">1,228,694</span> · <span class="rank-1">1,389,145</span></td><td><span class="rank-last">5,230,692</span> · <span class="rank-1">9,280,378</span></td><td><span class="rank-last">5.8</span> · <span class="rank-1">4.2</span></td></tr>
+            <tr><td>PostgreSQL 16</td><td><span class="rank-last">21,233</span> · <span class="rank-1">21,718</span></td><td><span class="rank-last">3,962,307</span> · <span class="rank-1">6,337,511</span></td><td><span class="rank-last">48.5</span> · <span class="rank-1">47.1</span></td></tr>
+            <tr><td>MySQL 8.0.46</td><td><span class="rank-last">7,506</span> · <span class="rank-1">9,040</span></td><td><span class="rank-last">2,397,467</span> · <span class="rank-1">2,905,679</span></td><td><span class="rank-last">113.1</span> · <span class="rank-1">92.9</span></td></tr>
+            <tr><td>psqlODBC 16.00</td><td><span class="rank-last">8,850</span> · <span class="rank-1">9,033</span></td><td><span class="rank-last">1,023,769</span> · <span class="rank-1">1,584,467</span></td><td><span class="rank-last">71.1</span> · <span class="rank-1">59.7</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -414,8 +426,8 @@ extern fn getvalue(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
         <li>it runs the alternated rounds and stops the servers.</li>
       </ul>
       <p>On Windows the client libraries and psqlODBC are unpacked under <code>D:\tools</code> (or <code>$env:NEPER_DB_TOOLS</code>), and the C program builds with MSVC. On Linux the Ubuntu packages are <code>libsqlite3-dev</code>, <code>libpq-dev</code>, <code>libmysqlclient-dev</code>, <code>unixodbc-dev</code> and <code>odbc-postgresql</code>. Both scripts source <code>benchmarks/db/tools-env</code>, which keeps the Go and Rust toolchains' caches in one directory:</p>
-      <pre><code>pwsh benchmarks/db/run-windows-all.ps1 build/bench/neper results-windows.json
-bash benchmarks/db/run-linux-all.sh build/linux/bench/neper results-linux.json</code></pre>
+      <pre><code><span class="prompt">$</span> pwsh benchmarks/db/run-windows-all.ps1 build/bench/neper results-windows.json
+<span class="prompt">$</span> bash benchmarks/db/run-linux-all.sh build/linux/bench/neper results-linux.json</code></pre>
       <p>The raw samples behind every number above are in <code>benchmarks/db/results/</code>, as <code>windows-2026-09-28-four-drivers.json</code> and <code>linux-2026-09-28-four-drivers.json</code>. If your numbers disagree with ours, we want to know.</p>
       <div class="try-cta">
         <a class="button nu-btn lg" href="../">Try Neper →</a>
