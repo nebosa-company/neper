@@ -29995,3 +29995,125 @@ What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), MB, 
 **Not done or not measured.** The full suites (`tests/selfhost/run.ps1`, the Linux suite) were not run; only the new blocks and the fixtures named above were. Linux commit per phase and the Linux static figure were not measured.
 
 ---
+
+## D1666 — Each module's tokens and tree get a reservation of their own
+
+**Why.** Increment F of D1660's plan, the second part of step 6 of its revised list. D1 and D2 will release a module's tokens and tree once nothing reads them. They cannot do that while the tokens and tree live in a front-end worker's arena beside every other module the worker parsed, because only a whole reservation can be released: a decommit comes back as zero pages through the D340 handler (D1660). This row moves each module's tokens and tree into a reservation of its own. It releases nothing.
+
+**Decision.**
+
+- **`graph.front_block`.** It takes the tokens, nodes and children the module will keep from the worker's arena, reads how far the arena moved, and resets to its mark. It then reserves that many bytes and commits them whole on both hosts, as `path_tables` does. If the commit fails, the reservation is released (D1665) before the error is returned.
+  - The measure is what the block needs. All three runtimes align an allocation's offset, not its address, and the token, the node and the child index are all 4-aligned. From the block's start, the three allocations therefore need no more than the scratch measured, and at most 3 bytes less.
+  - A release compiler's measuring allocations touch no page (D428). The bootstrap commits them a chunk at a time, and a debug compiler fills them (D217). Either way the cost is at most one module's front per worker.
+- **`graph.worker_module`.** When `Graph.module_blocks` is set, the tree is parsed straight from the worker's token scratch. The block is made next, and the tokens and the tree (through `keep_tree`) are copied into it. `Module.front` holds the block, and the worker's `kept_bytes` adds its size. Lines and text stay where they were. Without the flag, nothing changes.
+- **The fallbacks.** A block that cannot be made stops the worker. The main thread's `scan_and_parse` then does the module again in the program's arena, with no block. `declare_late` is unchanged. A hot build's header-only module has a block. After `declare_late` parses it again in full, the tree is in the program's arena, but the block still holds the tokens that tree reads, and the dead header tree. `front` stays set.
+- **The count.** After the join, `front_modules` adds each worker's `kept_bytes` to `g.worker_bytes` (D339). `--stats`' "worker arenas reached" and the static gate therefore count the blocks exactly, not in 1 MiB chunks.
+- **Which builds.** `dispatch` sets `loaded.module_blocks = writes_executable` after `load_overlays`. It is an assignment, not a new local, because `dispatch` is at the bootstrap's 256-local limit. `batch_check`, the tools and `emit-em-all` make no blocks.
+
+**Review.** Two reviewers read the first version, and every finding held. All are fixed in this commit:
+
+- **`Module.front`'s comment** said the block is empty for a module the main thread parsed. That is false for `declare_late`'s modules, as above, and the comment now says so. D1 and D2 must treat the block as owning the tokens of whatever tree the module holds. `drop_front` must empty the tokens and the tree together, and must never keep a tree whose tokens it releases.
+- **A failed commit leaked its reservation.** `front_block` kept a reservation whose commit failed, and under the bootstrap it also kept that reservation's registry slot, since D1665 gives a slot back only after a commit succeeds. It now releases the reservation. The path is not exercised: no test makes a commit fail.
+- **`front_block`'s comment** made two wrong claims:
+  - It said the measurement touches no page. That is true only for a release compiler.
+  - It said the 64 bytes of slack were room for the alignment a page-aligned base may add.
+
+  The comment now says what each runtime does, and the 64 bytes are gone, for the alignment reason above.
+- **The first commit was incomplete.** It had no row, no full gate and no measurements. This row provides all three.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1666`, full run, stage 2 built by 013ec715's debug compiler):
+
+- **Lint.** 0 hard findings.
+- **Self-builds.** Stage 2 equals stage 3, and the release self-build is the same under `-j 3 --perturb`.
+- **Images.** `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases.
+- **Emit sweep.** 605 link fixtures. Only `import_protocol` differs from 013ec715's compiler (exit 1 → 0). That is D1664's intended change, and the gate exits 1 on it, as D1665's did. All 600 images the sweep wrote equal D1665's byte for byte.
+- **Static gate** (`sc500k`, 8 workers), debug / release:
+  - Arena high-water: 2,236 / 2,959 → 2,235 / 2,958 MB.
+  - Images: 1,936,791 / 1,458,009 B, unchanged.
+  - 0 of 4 measures breached. The pin is not moved.
+
+The C bootstrap on Windows:
+
+- `build-bootstrap.ps1` rebuilt it, and `neper.exe build src/main.e --arena 1g` exits 0 in 14 s.
+- The compiler it builds builds `src/main.e` into stage 2's bytes (`d21305c5…`).
+- It also builds `sc500k` (release `--unchecked -j 4`) into the gate's `sc500k-rel-j4` image (`89d2a478…`), which prints 121495906.
+
+`run.ps1`'s blocks, cut by line range, all pass under stage 3 and under the bootstrap-built compiler:
+
+- `lower_reset`, including the link from `emit-em-all`'s artifacts, and `import_protocol`;
+- the hot suite in both modes, including `incremental_reset`;
+- the `--memory-budget` pair and the tiny-budget refusal;
+- the `--explain --json`, progress and stats-record checks.
+
+The first version also reported a syntax error under `emit-executable`, plain and `--json`, as D1665's compiler does.
+
+Linux (WSL, the worktree rsynced to WSL's own disk):
+
+- **Self-builds.** The rebuilt bootstrap builds stage 1 in 18.5 s, with the Windows gate running alongside. Stage 1 builds stage 2, stage 2 builds stage 3, and stage 2 equals stage 3 (`26d20065…`).
+- **Images.** `sc500k` gives one image at `-j 4`, at `-j 3 --perturb`, from stage 1 and from D1665's stage 3. The program prints 121495906.
+- **Memory** (release `sc500k -j 4 --stats`, D1665 → this):
+  - Debug stage 3: worker arenas reached 1,965 → 1,964 MB, and compiler peak working set 2,616 → 2,624 MB.
+  - Release compilers of both sources, built by this stage 3, in three alternating pairs: peak working set 453 → 454 MB each time, worker arenas reached 1,965 → 1,964 MB, and the same image. Load and parse took 223 / 210 / 220 → 225 / 209 / 214 ms.
+  - The +8 MB therefore comes from the debug compiler alone. The only debug-only step this row adds is the fill of `front_block`'s measuring allocations. That makes the fill the cause by elimination; it was not measured directly.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50), D1665 → this. D1665's figures are D1664's compiler measured again. The `-j 4` and `-j 8` rows are the gate's own runs; `-j 1` was measured after the gate.
+
+| workload | workers | peak commit | peak working set | worker arenas reached | load and parse | cold p50 |
+|---|---|---|---|---|---|---|
+| sc1m | 1 | 779 → 781 MB | 669 → 663 MB | 2,251 → 2,250 MB | 1,392 → 1,424 ms | 10,086 → 10,192 ms |
+| sc1m | 4 | 1,086 → 1,087 MB | 826 → 820 MB | 3,279 → 3,277 MB | 467 → 482 ms | 3,521 → 3,634 ms |
+| sc1m | 8 | 1,468 → 1,466 MB | 1,019 → 1,013 MB | 4,654 → 4,649 MB | 386 → 360 ms | 2,992 → 2,952 ms |
+| sc500k | 4 | 706 → 705 MB | 461 → 458 MB | 1,963 → 1,962 MB | 226 → 232 ms | 1,795 → 1,827 ms |
+| sc500k | 8 | 1,012 → 1,014 MB | 585 → 582 MB | 2,959 → 2,958 MB | 195 → 199 ms | 1,490 → 1,530 ms |
+| compiler | 4 | 459 → 459 MB | 241 → 241 MB | 1,442 → 1,440 MB | 69 → 69 ms | 533 → 535 ms |
+| compiler | 8 | 750 → 758 MB | 315 → 314 MB | 2,826 → 2,827 MB | 68 → 71 ms | 524 → 516 ms |
+
+- **Peak commit.** The same within the runs' spread, as the plan expected. The `compiler` `-j 8` runs went from 740-755 MB to 754-770 MB. That workload is this worktree's source, whose image grew from 6,923,139 to 6,927,826 B.
+- **Time at `-j 4` and `-j 8`.** Within the machine's spread: the `sc1m` `-j 4` load runs went from 456-467 to 469-547 ms. The `sc1m` `-j 4` cold +113 ms is mostly lowering (1,776 → 1,827 ms).
+- **Time at `-j 1`.** Here there is a small real cost. Three alternating pairs of the two release compilers gave:
+  - load and parse 1,395 / 1,395 / 1,402 → 1,435 / 1,436 / 1,431 ms, about +40 ms (2.8%) over about 1,005 modules;
+  - lower and codegen 5,495 / 5,511 / 5,496 → 5,524 / 5,536 / 5,526 ms.
+
+  The cause was not measured. Per module, the new work is two system calls, plus copying the tokens after the parse instead of before it.
+
+What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), in MB, D1665's release compiler → this. Both were taken in this session, two runs each; a range is the two runs. "Module blocks" is every private reservation under 64 MB, which before this row held 0-1 MB.
+
+| at the end of | root | front-end workers | module blocks | crew workers | link workers | process |
+|---|---|---|---|---|---|---|
+| load and parse | 46 → 50 | 275 → 24 | 0 → 252 | | | 321-322 → 323 |
+| resolve | 85-90 → 97 | 275 → 24 | 0 → 252 | | | 359-360 → 360 |
+| check declarations | 152-153 → 154 | 275 → 24 | 0-1 → 252 | 0-8 → 27 | | 429-430 → 430-431 |
+| check bodies | | | | | | 736 → 737 |
+| lower and codegen | 160 → 160 | 275 → 24 | 1 → 253 | 531 → 531 | | 974 → 974 |
+| link from artifacts | 219 → 223 | 275 → 24 | 1 → 253 | 531 → 531 | 44 → 44 | 1,077 → 1,078 |
+
+- **The front end.** Its 275 MB became 24 MB of lines in four worker arenas plus 252 MB of blocks; the plan expected about 250. The load-phase commit is unchanged.
+- **The walk is slower.** It now visits about 1,000 more reservations, so each line's reservation figures are read later into the next phase than before. That lag accounts for:
+  - the root's +4 MB at the load line and its +7-12 MB at resolve, since the resolver runs in the root;
+  - the first crew arena's 27 MB at check declarations.
+- **Rows left out.** From check bodies on, the lag reaches the next line:
+  - The check-bodies walk sums to 839 MB against the 737 MB read at the line (D1665: 750 against 736).
+  - The inline-oracles line arrives during that walk and reads 880-881 MB, against D1665's 771-788.
+
+  Neither row is comparable, so neither is given. The lowering-end and link-end walks come after the crew has stopped growing, and they are equal.
+
+**Deviations from the plan.**
+
+- **The number.** The plan's F is this D1666.
+- **The stored block.** The self-hosted compiler refuses the plan's `var block = made`. Storing `block` after `&block` was taken is E-SAFETY-0004, and using `made` after the move is E-SAFETY-0001. The block is therefore written into `modules[i].front` first, and the tokens and tree are allocated through `&modules[i].front`.
+- **`tree.child_count`.** It is a `usize`, so `front_block` does not widen it.
+- **The slack.** The plan adds 64 bytes, and argues that the measure suffices "because a page-aligned base only removes padding". The conclusion holds, but the base plays no part. What makes the measure enough is that alignment is taken from the offset and the three types share one alignment. The 64 bytes are dropped.
+- **Where blocks are made.** The brief says the main thread. The plan and the code make them on the worker threads, which is safe:
+  - The self-hosted `os.reserve` and `os.commit` are plain `VirtualAlloc`, or `mmap` and `mprotect`, calls with no shared state.
+  - The bootstrap runs threads inline, so its registry sees no race.
+- **`declare_late`.** The plan's F1 and its accepted corner say that a module `declare_late` re-parses has no block for that tree, and that such trees are never released. The tree is indeed in the root, but its tokens are in the block. That is the constraint on D1 and D2 stated under Review.
+- **Load time.** The plan expected the load phase within noise. It is at `-j 4` and `-j 8`, but at `-j 1` it is about 40 ms slower, as measured above.
+
+**Not done or not measured.**
+
+- The full suites (`tests/selfhost/run.ps1`, the Linux suite) were not run; only the blocks above were.
+- Linux commit per phase and the Linux static figure were not measured.
+- The release after a failed commit is not exercised.
+- The cause of the `-j 1` time was not measured.
+
+---

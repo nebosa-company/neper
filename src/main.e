@@ -12078,6 +12078,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try init_cli_graph(a, &loaded)
         // The overlays (D502): an editor's buffers in place of files, before the load.
         try load_overlays(a, args, &loaded)
+        // (D1666) A build that writes an executable keeps each module's front in a
+        // reservation of its own.
+        loaded.module_blocks = writes_executable
         // Every command that writes or reads artifacts knows which compiler it is (D398).
         if writes_em || writes_all_em || hot_build { learn_compiler_identity(a, &loaded, args[0usize], args) }
         if trailing_flags {

@@ -62,6 +62,12 @@ type Module = struct {
     // is parsed again in full before any pass reads its bodies (`declare_late`), and
     // the comptime interpreter parses a callee's module for itself.
     headers_only: bool,
+    // (D1666) The module's own reservation of its tokens and tree (`front_block`);
+    // empty for one the main thread's fallback scanned. Once `declare_late` parses a
+    // header tree again in full, the tree is in the program's arena and the block still
+    // holds the tokens it reads, and the dead header tree. Its lines stay in the
+    // worker's arena.
+    front: mem.Arena,
     first_import: usize,
     import_count: usize,
     visit_state: u8,
@@ -252,6 +258,9 @@ type Graph = struct {
     cpu_level: usize,
     // What every worker arena of every phase committed, summed (D339).
     worker_bytes: usize,
+    // (D1666) Whether each module's tokens and tree get a reservation of their own:
+    // a build that writes an executable, whose lowering can give them back.
+    module_blocks: bool,
 }
 
 // A worker's arena (D339): a reservation of its own, committed as it is touched --
@@ -306,6 +315,37 @@ fn reserved_arena_sized(a: *mem.Arena, wanted: usize) -> (mem.Arena, err) {
     arena.base = base
     arena.cap = capacity
     ret (arena, ok)
+}
+
+// (D1666) A module's own reservation, sized by the same three allocations taken from
+// the worker's arena and given back at once, then committed whole on either host. A
+// release compiler's allocation touches no page (D428); the bootstrap commits, and a
+// debug compiler fills (D217), what is measured, one module's front per worker at
+// most. The three types are 4-aligned and alignment is taken from the offset, so from
+// the block's start they need no more than was measured.
+fn front_block(scratch: *mem.Arena, token_count: usize, tree: *parse.Tree) -> (mem.Arena, err) {
+    var none: mem.Arena = zero
+    let mark = mem.mark(scratch)
+    let before = mem.stats(scratch).used
+    let (_, tokens_error) = mem.alloc[lex.Token](scratch, token_count)
+    if tokens_error != ok { ret (none, tokens_error) }
+    let (_, nodes_error) = mem.alloc[syntax.Node](scratch, tree.count + 1usize)
+    if nodes_error != ok { ret (none, nodes_error) }
+    let (_, children_error) = mem.alloc[u32](scratch, tree.child_count + 1usize)
+    if children_error != ok { ret (none, children_error) }
+    let bytes = mem.stats(scratch).used - before
+    mem.reset(scratch, mark)
+    let (base, reserve_error) = os.reserve(bytes)
+    if reserve_error != ok { ret (none, reserve_error) }
+    let commit_error = os.commit(base, bytes)
+    if commit_error != ok {
+        let abandoned = os.release(base, bytes)
+        ret (none, commit_error)
+    }
+    var block: mem.Arena = zero
+    block.base = base
+    block.cap = bytes
+    ret (block, ok)
 }
 
 fn worker_cap(g: *Graph, most: usize) -> usize {
@@ -629,7 +669,8 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     let (spelling, spelling_error) = spelling_of(a, g, path)
     if spelling_error != ok { ret (0usize, spelling_error) }
     var no_inventory: []const u8 = zero
-    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, artifact_sha256: "", artifact_sha256_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
+    var no_front: mem.Arena = zero
+    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, artifact_sha256: "", artifact_sha256_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, front: no_front, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }
@@ -670,6 +711,8 @@ type Worker = struct {
     failure: err,
     syntax_failure: bool,
     failure_tree: parse.Tree,
+    // (D1666) The bytes of the module reservations this worker made in its wave.
+    kept_bytes: usize,
 }
 
 fn worker_module(w: *Worker, module_index: usize) -> err {
@@ -688,12 +731,18 @@ fn worker_module(w: *Worker, module_index: usize) -> err {
         count += 1usize
         if token.kind == .Eof { break }
     }
-    let (tokens, tokens_error) = mem.alloc[lex.Token](&w.arena, count)
-    if tokens_error != ok { ret tokens_error }
-    var at = 0usize
-    while at < count {
-        tokens[at] = w.token_scratch[at]
-        at += 1usize
+    // (D1666) With a reservation per module the tree is parsed from the scratch, and
+    // the tokens are copied once the block's size is known.
+    var tokens = w.token_scratch[0usize..count]
+    if !w.g.module_blocks {
+        let (copied, copied_error) = mem.alloc[lex.Token](&w.arena, count)
+        if copied_error != ok { ret copied_error }
+        var at = 0usize
+        while at < count {
+            copied[at] = w.token_scratch[at]
+            at += 1usize
+        }
+        tokens = copied
     }
     w.g.modules[module_index].tokens = tokens
     w.g.modules[module_index].has_invalid = invalid
@@ -714,8 +763,28 @@ fn worker_module(w: *Worker, module_index: usize) -> err {
         }
         ret parse_error
     }
-    try keep_tree(&w.arena, w.g, module_index, &tree)
+    if !w.g.module_blocks {
+        try keep_tree(&w.arena, w.g, module_index, &tree)
+        w.g.modules[module_index].headers_only = headers
+        ret ok
+    }
+    // A block that cannot be made stops the worker, and the main thread parses the
+    // module again out of the program's arena, with no block (`scan_and_parse`).
+    let (made, made_error) = front_block(&w.arena, count, &tree)
+    if made_error != ok { ret made_error }
+    w.g.modules[module_index].front = made
+    let block = &w.g.modules[module_index].front
+    let (kept, kept_error) = mem.alloc[lex.Token](block, count)
+    if kept_error != ok { ret kept_error }
+    var copy_at = 0usize
+    while copy_at < count {
+        kept[copy_at] = tokens[copy_at]
+        copy_at += 1usize
+    }
+    w.g.modules[module_index].tokens = kept
+    try keep_tree(block, w.g, module_index, &tree)
     w.g.modules[module_index].headers_only = headers
+    w.kept_bytes += block.cap
     ret ok
 }
 
@@ -863,6 +932,13 @@ fn front_modules(a: *mem.Arena, g: *Graph, modules: []const usize) -> err {
         } else {
             worker_entry(&workers[worker_at])
         }
+        worker_at += 1usize
+    }
+    // (D1666) The module reservations count as the workers' memory (D339), exactly.
+    worker_at = 0usize
+    while worker_at < worker_count {
+        g.worker_bytes += workers[worker_at].kept_bytes
+        workers[worker_at].kept_bytes = 0usize
         worker_at += 1usize
     }
     // What the workers left: a syntax failure is the lowest such module's, reported as
