@@ -1462,8 +1462,8 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
 // The symbol table's path tables in a region reserved for this link, cleared here:
 // what `reserve` hands back is not promised to be zero. Cleared one element at a
 // time; the C bootstrap miscompiles a write through a nested element.
-// ponytail: the region (about 300 KB) is not released -- `e.os` has no release the
-// bootstrap knows -- which a process that links once does not feel.
+// ponytail: the region (about 300 KB) is not released, which a process that links
+// once does not feel; `os.release` could (D1665) when one links repeatedly.
 type PathTables = struct { paths: []str, offsets: []usize, heads: []usize, next: []usize }
 
 fn path_tables() -> (PathTables, err) {

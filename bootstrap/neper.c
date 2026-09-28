@@ -1127,6 +1127,9 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.create_new", "neper_os_create_new"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 2, file, error);
     OS_FN("os.reserve", "neper_os_reserve"); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 2, byte_pointer, error);
     OS_FN("os.commit", "neper_os_commit"); intrinsic_param(fn, token, "p", byte_pointer); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 1, error, error);
+    /* `os.release(p, n)` (D1665): the other half of `reserve`, in the bootstrap alone as
+       D287's `mkdir` is -- the self-hosted compiler has it as source in both host variants. */
+    OS_FN("os.release", "neper_os_release"); intrinsic_param(fn, token, "p", byte_pointer); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.clock", "neper_os_clock"); intrinsic_param(fn, token, "c", clock); intrinsic_returns(fn, 2, i64, error);
     /* `os.copy_bytes(dst, src)` (D329): the shorter length's worth of bytes, one `rep movsb`. */
     OS_FN("os.copy_bytes", "neper_os_copy_bytes"); intrinsic_param(fn, token, "dst", bytes); intrinsic_param(fn, token, "src", const_bytes); intrinsic_returns(fn, 0, error, error);
@@ -7418,7 +7421,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdin:PROC\nEXTERN neper_os_stdout:PROC\n"
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_replace:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\nEXTERN neper_os_env:PROC\n"
-        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\nEXTERN neper_os_random:PROC\nEXTERN neper_os_create_new:PROC\n"
+        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_release:PROC\nEXTERN neper_os_clock:PROC\nEXTERN neper_os_random:PROC\nEXTERN neper_os_create_new:PROC\n"
         "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\nEXTERN neper_os_seek:PROC\nEXTERN neper_os_copy_bytes:PROC\nEXTERN neper_os_sha256_blocks:PROC\nEXTERN neper_os_crc32c_bytes:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"
         "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"

@@ -29876,3 +29876,122 @@ Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50
 - `-j 1`, Linux memory and the Linux static figure were not measured.
 
 ---
+
+## D1665 — `os.release` joins the bootstrap's fixed surface
+
+**Why.** Increment B of D1660's plan, the first part of step 6 of its revised list. The later increments give each module's tokens and tree their own reservation and release it once nothing reads it. `src/` cannot call `os.release` while the C bootstrap builds it. The self-hosted compiler has the function as source in both host variants (D116), but the bootstrap's fixed surface lacked it (D287), so a stage-1 compiler would not build.
+
+The bootstrap's Windows runtime also keeps a registry of 256 reservations, so that an arena laid over one grows by commits (D1605). A slot was never given back. Stage 1 (`$compiler`, bootstrap-built) runs most of the suite, and one reservation per module would fill the registry before D1527's budget shares are reserved. Those shares would then go uncommitted, and the first write to one faults.
+
+**Decision.**
+
+- **The entry.** `os.release(p, n) -> err` is an `OS_FN` in `install_os_intrinsics` and an `EXTERN` in the Windows runtime's list. It lives in the bootstrap alone, as D287's `mkdir` does. It is not seeded in `resolve.e` or `check.e`, where it would be a DuplicateName against `os.windows.e` and `os.linux.e`.
+- **The bodies.** On Windows the body is `VirtualFree(p, 0, MEM_RELEASE)`, which ignores `n` as `os.windows.e`'s release does. On POSIX it is `munmap(p, n)`.
+- **The registry.** Each slot records its region's size. `np_forget_reserved(base, covered)` gives the slot back once `covered` reaches that size.
+  - `neper_os_commit` calls it after a successful commit from the base.
+  - `neper_os_release` calls it with `SIZE_MAX` after `VirtualFree` succeeds.
+  - A region committed whole never grows and a released one no longer exists, so only arenas that grow a chunk at a time hold the 256.
+- **`src/` behaves as before.** Two comments said the bootstrap has no release: `PathTables` in `codegen_x64.e` and `DwarfScratch` in `link_elf.e`. Both now name this row as the upgrade.
+- **The fixture.** `tests/neper0/os-release.e` prints `release ok` after four cases:
+  1. A page that is reserved, committed, written and released cannot be committed again.
+  2. 300 regions of two pages are each reserved, committed one page deep and released.
+  3. 300 one-page regions are reserved and committed whole.
+  4. An arena over a fresh 8 MiB reservation takes 2 MiB and writes its last byte.
+
+  The release loop comes first, so that the next loop's live regions, not the arena's reservation, take the addresses it freed. An arena landing on a base a stale slot names would pass by chance. The fixture runs from:
+  - `tests/neper0/run.ps1` and `run.sh`;
+  - both selfhost suites, as a hard check by the bootstrap next to `call-result-len`;
+  - both suites' bootstrap oracles.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1665`, full run):
+
+- **Lint.** 0 hard findings.
+- **Self-builds.** Stage 2 equals stage 3. The release self-build is the same under `-j 3 --perturb`.
+- **The compiler is D1664's, byte for byte.** Stage 2 (sha256 `88070808…`) and the release compiler (`9da77f2d…`) equal `d1664-fix`'s. Every figure below is that binary measured again.
+- **Images.** `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases.
+- **Emit sweep.** 605 link fixtures. Only `import_protocol` differs from 013ec715's compiler (exit 1 → 0). That is D1664's intended change, as in `d1664-fix`'s gate, and the gate exits 1 on it. All 600 images the sweep wrote equal `d1664-fix`'s byte for byte.
+- **Static gate** (`sc500k`, 8 workers), debug / release:
+  - Arena high-water: 2,236 / 2,959 MB.
+  - Images: 1,936,791 / 1,458,009 B.
+  - 0 of 4 measures breached.
+
+The C bootstrap on Windows:
+
+- `build-bootstrap.ps1` compiles the new runtime.
+- `neper.exe build src/main.e --arena 1g` exits 0 in 12 s.
+- The compiler it builds builds `src/main.e` into stage 2's bytes. It also builds `sc500k` (release `--unchecked -j 4`) into the gate's `sc500k-rel-j4` image byte for byte, and that program prints 121495906.
+
+The fixture on Windows:
+
+- **It passes.**
+  - The programs built by the rebuilt bootstrap and by stage 3 both print `release ok`.
+  - `bootstrap.py` over `os-release.e` and `os-intrinsics.e` reports 1 program agreeing, with `os-intrinsics` skipped (D636).
+  - Stage 3 builds `os_process`, which exits 0, and `os-intrinsics-own`, which prints `intrinsic ok` and writes `neper os!`.
+- **It fails without each half of the fix.**
+  - Without the release's `np_forget_reserved`, the bootstrap builds a program that exits 0xC0000005. The fixture's first version released only a page committed whole, and it passed with that bootstrap.
+  - Without the commit's `np_forget_reserved`, the program also exits 0xC0000005.
+
+Linux (WSL, with the worktree rsynced to WSL's own disk):
+
+- The rebuilt Linux bootstrap runs `os-release.e`.
+- Stage 1 (bootstrap, 10.8 s), stage 2 and stage 3 build in turn, and stage 2 equals stage 3. Built by stage 3, D1664's `codegen_x64.e` and `link_elf.e` give stage 3's own bytes.
+- Built by stage 3, `os-release`, `os_process` and `os-intrinsics-own` pass, and `bootstrap.py` agrees over `os-release`.
+- `sc500k` gives one image at `-j 4` and at `-j 3 --perturb`, and it prints 121495906.
+- `--stats` at `-j 4` (debug stage 3, release `sc500k`): the compiler's peak working set is 2,617 MB and the worker arenas reach 1,965 MB. There is no separate before figure, because the compiler is D1664's bytes on this host too.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50), D1664 → this. The `-j 4` and `-j 8` rows are the gate's own runs. `-j 1` was last measured at D1662, so its row runs from D1662 and carries D1663 and D1664.
+
+| workload | workers | peak commit | peak working set | worker arenas reached | cold p50 |
+|---|---|---|---|---|---|
+| sc1m | 1 | 913 → 779 MB | 807 → 669 MB | 2,356 → 2,251 MB | 10,186 → 10,086 ms |
+| sc1m | 4 | 1,086 → 1,086 MB | 826 → 826 MB | 3,279 → 3,279 MB | 3,526 → 3,521 ms |
+| sc1m | 8 | 1,468 → 1,468 MB | 1,019 → 1,019 MB | 4,654 → 4,654 MB | 2,916 → 2,992 ms |
+| sc500k | 4 | 707 → 706 MB | 461 → 461 MB | 1,963 → 1,963 MB | 1,763 → 1,795 ms |
+| sc500k | 8 | 1,013 → 1,012 MB | 585 → 585 MB | 2,959 → 2,959 MB | 1,489 → 1,490 ms |
+| compiler | 4 | 458 → 459 MB | 241 → 241 MB | 1,442 → 1,442 MB | 540 → 533 ms |
+| compiler | 8 | 759 → 750 MB | 315 → 315 MB | 2,826 → 2,826 MB | 526 → 524 ms |
+
+- **The differences are noise, since the binary is the same.** The `compiler` `-j 8` runs spread from 740 to 755 MB, and `d1664-fix`'s from 749 to 769.
+- **`sc1m` at `-j 1`.** The peak is 134 MB below D1662's, against the 94 MB that D1663 predicted from tokens alone.
+
+What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), MB, D1660 → this. The root and each worker's arena are separate reservations (D339). Two runs gave the same figures to within 1 MB.
+
+| at the end of | root | front-end workers | crew workers | link workers | process |
+|---|---|---|---|---|---|
+| load and parse | 54 → 46 | 369 → 275 | | | 422 → 322 |
+| check declarations | 160 → 153 | 369 → 275 | 11 → 7 | | 532 → 430 |
+| check bodies | 162 → 155 | 369 → 275 | 341 → 320 | | 878 → 736 |
+| inline oracles | 160 | 275 | 390 | | 772 |
+| lower and codegen | 167 → 160 | 369 → 275 | 636 → 531 | | 1,181 → 974 |
+| link from artifacts | 219 | 275 | 531 | 44 | 1,077 |
+
+- **The front end.** It falls 94 MB, D1663's tokens. The crew's 531 MB at the end of lowering is the figure D1664 measured.
+- **The link line.** At the `link` line the process commits 1,082-1,083 MB with a root of 226 MB. Both runs' walks raced the process's exit there: the crew arenas vanished part way through, and the later lines found nothing. So the link-end split is not given.
+
+**The first gate run.** The implementation's first quick gate reported "release self-build differs under `-j 3 --perturb`", and `rel-perturb.exe` had not been written. `gate.ps1` discarded that build's exit code and text, so the cause is unknown. It is recorded here as unexplained.
+
+- The rerun passed.
+- Five more `-j 3 --perturb` release self-builds by stage 3 all exited 0 with the release compiler's bytes. Two ran alone, and three ran while WSL built stages 1-3.
+- The full gate's own run passed.
+- `gate.ps1` now reports that build's text when it exits nonzero.
+
+**Deviations from the plan.**
+
+- **The number.** The plan's B is this D1665.
+- **A new fixture.** The plan puts the cases in `os-intrinsics.e`, which the bootstrap has refused since D636 (`os.file_handle` is not on its surface). `neper0/run.ps1` stops there, and `bootstrap.py` skips the file, so the cases live in `os-release.e`.
+- **Linux commits the arena's reservation.** Both Linux runtimes reserve with `PROT_NONE` and have no grow-on-use path, so the plan's case would fault there. The fixture tells the hosts apart by the current directory's first byte, as `graph.reserved_arena` does (D348). It commits on Linux only, and Windows leaves the region uncommitted, which keeps the regression test.
+- **The slot is forgotten only after a release succeeds.** The plan forgot it before `VirtualFree`, so a failed release would have dropped a live region's slot.
+- **One helper.** `np_forget_reserved(base, covered)` serves commit and release, and holds commit's "committed whole" test.
+- **Review.**
+  - The first fixture's only release was of a page committed whole, whose commit had already given its slot back. The release path's own give-back was therefore untested, and the release loop was added.
+  - `bootstrap.py` reports a program the bootstrap refuses as skipped and still exits 0, and no suite ran `tests/neper0/run.*`. Both selfhost suites now run the fixture with the bootstrap as a hard check.
+  - The oracle comment's count is now eighteen, and it names `os-intrinsics.e` as refused.
+- **Rejected in review: a length check in the bootstrap's Windows release.**
+  - The proposal was to walk `VirtualQuery` and refuse an `n` that is not the reservation's size, since Windows can never see a wrong length.
+  - The bootstrap mirrors `os.windows.e`, whose comment names the length as the one point where the hosts disagree. Stages 2 and 3 and the gate run that library.
+  - A bootstrap stricter than the library would make `bootstrap.py`'s two builds of such a program disagree.
+  - The length's correctness belongs to the caller. F records each block's size once, D1 and D2 release by that record, and each increment's Linux check runs `munmap` with the real length.
+
+**Not done or not measured.** The full suites (`tests/selfhost/run.ps1`, the Linux suite) were not run; only the new blocks and the fixtures named above were. Linux commit per phase and the Linux static figure were not measured.
+
+---

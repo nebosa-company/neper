@@ -264,6 +264,9 @@ set -e
 test "$arena_reset_bounds_status" -eq 134
 printf '%s' "$arena_reset_bounds" | grep -q '6:5: trap\[bounds\]: arena reset mark is ahead of the current cursor'
 
+# `os.release`, and 300 releases and 300 whole commits that give their registry slots back (D1665).
+test "$("$neper" run "$repo/tests/neper0/os-release.e" --output "$test_build/os-release")" = 'release ok'
+
 os_helper="$test_build/os-spawn-helper"
 "$neper" build "$repo/tests/neper0/os-spawn-helper.e" --output "$os_helper" >/dev/null
 os_output="$test_build/os-output.txt"

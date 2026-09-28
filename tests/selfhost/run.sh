@@ -63,6 +63,9 @@ call_len_path="$test_build/call-result-len-bootstrap"
 $neper build "$repo/tests/neper0/call-result-len.e" --output "$call_len_path" >/dev/null
 chmod +x "$call_len_path"
 "$call_len_path"
+# `os.release` and the reservation registry (D1665), run by the bootstrap itself: the
+# bootstrap oracle below reports a program the bootstrap refuses as skipped, not failed.
+[ "$($neper run "$repo/tests/neper0/os-release.e" --output "$test_build/os-release-bootstrap")" = 'release ok' ]
 lexer=$($test_build/neper-self self-test)
 [ "$lexer" = 'selfhost lexer ok' ]
 scan=$($test_build/neper-self scan 'fn main() -> err { ret ok }')
@@ -5354,7 +5357,7 @@ cmp -s "$deadline_actual" "$conformance_root/tools/deadline.expected.jsonl" || {
 # reversed behave the same.
 python3 "$repo/benchmarks/metamorphic/metamorphic.py" "$test_build/neper-self" "$repo" x64 linux "$test_build/metamorphic" "$repo/tests/selfhost/fixtures/link/algo_sort/src/main.e" "$repo/tests/selfhost/fixtures/link/algo_bitset/src/main.e" "$repo/tests/selfhost/fixtures/link/control/src/main.e" "$repo/tests/selfhost/fixtures/link/atomic_ops/src/main.e"
 # The bootstrap as the codegen's oracle (D456, H10).
-python3 "$repo/benchmarks/differential/bootstrap.py" "$test_build/neper-self" "$neper" "$repo" x64 linux "$test_build/bootstrap-oracle" "$repo/tests/neper0/arena-alloc.e" "$repo/tests/neper0/array.e" "$repo/tests/neper0/struct.e" "$repo/tests/neper0/slice.e" "$repo/tests/neper0/defer.e" "$repo/tests/neper0/range.e" "$repo/tests/neper0/unsigned-ops.e" "$repo/tests/neper0/multiple-return.e" "$repo/tests/neper0/constant-folding.e" "$repo/tests/neper0/enum-union-switch.e" "$repo/tests/neper0/generic-function.e" "$repo/tests/neper0/generic-aggregate.e" "$repo/tests/neper0/protocol-iteration.e" "$repo/tests/neper0/slice-iterate.e" "$repo/tests/neper0/slice-mutate.e" "$repo/tests/neper0/os-intrinsics.e" "$repo/tests/neper0/aggregate-abi.e"
+python3 "$repo/benchmarks/differential/bootstrap.py" "$test_build/neper-self" "$neper" "$repo" x64 linux "$test_build/bootstrap-oracle" "$repo/tests/neper0/arena-alloc.e" "$repo/tests/neper0/array.e" "$repo/tests/neper0/struct.e" "$repo/tests/neper0/slice.e" "$repo/tests/neper0/defer.e" "$repo/tests/neper0/range.e" "$repo/tests/neper0/unsigned-ops.e" "$repo/tests/neper0/multiple-return.e" "$repo/tests/neper0/constant-folding.e" "$repo/tests/neper0/enum-union-switch.e" "$repo/tests/neper0/generic-function.e" "$repo/tests/neper0/generic-aggregate.e" "$repo/tests/neper0/protocol-iteration.e" "$repo/tests/neper0/slice-iterate.e" "$repo/tests/neper0/slice-mutate.e" "$repo/tests/neper0/os-intrinsics.e" "$repo/tests/neper0/os-release.e" "$repo/tests/neper0/aggregate-abi.e"
 # Differential execution against an independent oracle (D449, H10).
 python3 "$repo/benchmarks/differential/differential.py" "$test_build/neper-self" "$repo" x64 linux "$test_build/differential" --cases 60 --seed 7
 # `--instances N` (D426, H06): a budget over the specializations a build makes.
