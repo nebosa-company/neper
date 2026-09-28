@@ -60,9 +60,14 @@ ANSI session options ODBC drivers use), and application name `neper`.
 ## Ownership and memory
 
 - The arena passed to `open` is retained and borrowed for the connection's lifetime.
-  Contexts, column names and buffers come from it. The request, packet, PLP and scratch buffers
-  grow geometrically and are reused, so a long-lived connection's arena stops growing once
-  its largest request and value have been seen.
+- The connection's own buffers, about 130 KB, are allocated there once by `open` and never
+  grow: a packet to write, a packet to read, a 64 KB buffer for a token or value that crosses a
+  packet boundary, and the error text. A request of any size is written a packet at a time,
+  with every length computed before the bytes it counts. A caller may therefore mark and reset
+  the arena around any call, as the `e.db` benchmark does around each lookup.
+- Statement, reader and transaction contexts, column names and a reader's buffers come from
+  the arena at the call that makes them. That includes a reader's room for a PLP or `text`
+  value longer than 64 KB.
 - A reader copies each value into its own buffer. The copy stays valid until the reader's next
   row. Packets are overwritten as the reply arrives, so there is no borrowed form, and
   `db.reader_next_borrowed` answers the same copies (D1599 allows this).
@@ -71,8 +76,8 @@ ANSI session options ODBC drivers use), and application name `neper`.
 
 ## Framing
 
-- Requests are split into packets of the size the server chose in LOGINACK's ENVCHANGE. Each
-  packet is written as a TLS record of its own. Under TDS 8.0, SQL Server caps the packet size
+- Requests are written into packets of the size the server chose in LOGINACK's ENVCHANGE, and
+  each packet is sent as soon as it fills, as a TLS record of its own. Under TDS 8.0, SQL Server caps the packet size
   at 16192, under TLS's 16384-byte record, and drops a connection whose packet spans two records.
 - Replies are read packet by packet. Tokens and values are parsed across packet boundaries, with
   a copy only for a value that straddles one.
@@ -189,7 +194,8 @@ licence.
   - error numbers onto `e.db`, with `detail`, and the driver's refusals;
   - prepared statements;
   - 1000 rows with the connection busy meanwhile, and a reader closed one row into a million;
-  - 100 KB of text and bytes each way, as `nvarchar(max)` and `varbinary(max)` over many packets;
+  - 100 KB of text and bytes each way, as `nvarchar(max)` and `varbinary(max)` over many packets,
+    then again three times inside a mark and reset of the arena whose freed memory is overwritten;
   - transactions committed, rolled back, refused when nested, surviving a failed statement,
     and ended by the server under `XACT_ABORT`;
   - a lock timeout as `Busy` across two connections;

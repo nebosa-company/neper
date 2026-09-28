@@ -10,8 +10,11 @@
 // `e.net.tls`'s error (`tls.InvalidCertificate`, ...); a login SQL Server refuses is
 // `CannotConnect`.
 //
-// Memory: the arena handed to `open` is retained and borrowed for the connection's life.
-// Contexts, column names and buffers come from it, and the buffers grow and are reused. A
+// Memory: the arena handed to `open` is retained and borrowed for the connection's life. The
+// connection's own buffers, about 130 KB, are allocated there once, by `open`, and never grow:
+// a request of any size is written a packet at a time, and a reply is read a packet at a time.
+// So a caller may mark and reset the arena around any call. Statement, reader and transaction
+// contexts, column names and a reader's row buffers come from the arena at the call. A
 // reader's values are copied into a buffer of the reader's that is valid until its next row
 // -- for `db.reader_next_borrowed` too, since the next packet overwrites the last.
 //
@@ -55,14 +58,21 @@ error Protocol
 // One column's TYPE_INFO: the type, its length (65535 for a `(max)` type), precision and
 // scale, whether its values are PLP-chunked, and the collation's five bytes, little-endian.
 type Col = struct { id: u8, size: u32, precision: u8, scale: u8, plp: bool, collation: u64 }
-type Conn = struct { socket: net.Socket, stream: tls.Stream, source: io.Reader, sink: io.Writer, arena: *mem.Arena, driver: *const db.Driver, packet_size: usize, body: []u8, used: usize, wire: []u8, pkt: []u8, at: usize, stop: usize, eom: bool, in_reply: bool, broken: bool, scratch: []u8, plp: []u8, types: []Col, bitmap: []u8, transaction: []u8, collation: u64, in_transaction: bool, server_transaction: bool, active: *Reader, login_ack: bool, failed: bool, note: str, number: i32, state: u8, severity: u8, message: []u8, message_len: usize }
+// Every buffer a connection keeps is allocated once, by `open`: the packet being written
+// (`body`, `used` bytes of it filled), the packet being read (`pkt`, from `at` to `stop`), a
+// token buffer for what crosses from one packet into the next, the error text and the
+// transaction descriptor.
+type Conn = struct { socket: net.Socket, stream: tls.Stream, source: io.Reader, sink: io.Writer, arena: *mem.Arena, driver: *const db.Driver, packet_size: usize, body: []u8, used: usize, kind: u8, packet_id: usize, pkt: []u8, at: usize, stop: usize, eom: bool, in_reply: bool, broken: bool, token: []u8, transaction: []u8, collation: u64, in_transaction: bool, server_transaction: bool, active: *Reader, login_ack: bool, failed: bool, note: str, number: i32, state: u8, severity: u8, message: []u8, message_len: usize }
 type Stmt = struct { conn: *Conn, sql: str, placeholders: usize, closed: bool }
-type Reader = struct { conn: *Conn, statement: *Stmt, done: bool, closed: bool, types: []Col, columns: []db.Column, bitmap: []u8, buffer: []u8, used: usize }
+// `long` holds a PLP or `text` value too long for the token buffer.
+type Reader = struct { conn: *Conn, statement: *Stmt, done: bool, closed: bool, types: []Col, columns: []db.Column, bitmap: []u8, buffer: []u8, used: usize, long: []u8 }
 type Tx = struct { conn: *Conn }
 
 // Asked for at login; the server may answer another size up to the TDS limit.
 const PACKET_SIZE: usize = 16384usize
 const PACKET_CAP: usize = 32768usize
+// A token's length field is two bytes.
+const TOKEN_CAP: usize = 65536usize
 // 0x74000004, TDS 7.4.
 const TDS_VERSION: u64 = 1946157060u64
 
@@ -122,16 +132,15 @@ fn open(a: *mem.Arena, options: Options) -> (db.Connection, err) {
     if connect_error != ok { ret (connection, CannotConnect) }
     let (conns, conn_error) = mem.alloc[Conn](a, 1usize)
     let (drivers, driver_error) = mem.alloc[db.Driver](a, 1usize)
-    let (fixed, fixed_error) = mem.alloc[u8](a, PACKET_CAP + MESSAGE_CAP + 72usize)
-    let (body, body_error) = mem.alloc[u8](a, 4096usize)
-    let (wire, wire_error) = mem.alloc[u8](a, PACKET_CAP)
+    let (pkt, pkt_error) = mem.alloc[u8](a, PACKET_CAP)
+    let (body, body_error) = mem.alloc[u8](a, PACKET_CAP)
+    let (token, token_error) = mem.alloc[u8](a, TOKEN_CAP)
+    let (fixed, fixed_error) = mem.alloc[u8](a, MESSAGE_CAP + 72usize)
     let (alpn, alpn_error) = mem.alloc[str](a, 1usize)
-    if conn_error != ok || driver_error != ok || fixed_error != ok || body_error != ok || wire_error != ok || alpn_error != ok {
+    if conn_error != ok || driver_error != ok || pkt_error != ok || body_error != ok || token_error != ok || fixed_error != ok || alpn_error != ok {
         let unused = net.close(opened)
         ret (connection, mem.Exhausted)
     }
-    var no_bytes: []u8 = zero
-    var no_types: []Col = zero
     drivers[0usize] = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_next_borrowed: d_rows_next, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
     // Arena memory is not cleared, so every field is written.
     let c = &conns[0usize]
@@ -140,20 +149,18 @@ fn open(a: *mem.Arena, options: Options) -> (db.Connection, err) {
     c.driver = &drivers[0usize]
     c.packet_size = 4096usize
     c.body = body
-    c.used = 0usize
-    c.wire = wire
-    c.pkt = fixed[0usize..PACKET_CAP]
+    c.used = 8usize
+    c.kind = 0u8
+    c.packet_id = 1usize
+    c.pkt = pkt
     c.at = 0usize
     c.stop = 0usize
     c.eom = false
     c.in_reply = false
     c.broken = false
-    c.scratch = no_bytes
-    c.plp = no_bytes
-    c.types = no_types
-    c.bitmap = no_bytes
-    c.message = fixed[PACKET_CAP..PACKET_CAP + MESSAGE_CAP]
-    c.transaction = fixed[PACKET_CAP + MESSAGE_CAP..PACKET_CAP + MESSAGE_CAP + 8usize]
+    c.token = token
+    c.message = fixed[0usize..MESSAGE_CAP]
+    c.transaction = fixed[MESSAGE_CAP..MESSAGE_CAP + 8usize]
     zero_bytes(c.transaction)
     c.collation = 0u64
     c.in_transaction = false
@@ -161,7 +168,7 @@ fn open(a: *mem.Arena, options: Options) -> (db.Connection, err) {
     c.active = nil
     c.login_ack = false
     clear(c)
-    let entropy = fixed[PACKET_CAP + MESSAGE_CAP + 8usize..PACKET_CAP + MESSAGE_CAP + 72usize]
+    let entropy = fixed[MESSAGE_CAP + 8usize..MESSAGE_CAP + 72usize]
     let random_error = os.random(entropy)
     let (now, now_error) = time.now()
     alpn[0usize] = "tds/8.0"
@@ -225,10 +232,10 @@ fn hang_up(c: *Conn) -> err {
 // LOGINACK, or an ERROR and no LOGINACK when it refuses.
 fn login(c: *Conn, options: Options) -> err {
     let prelogin: [18]u8 = [18]u8{ 0, 0, 11, 0, 6, 1, 0, 17, 0, 1, 255, 0, 0, 0, 0, 0, 0, 2 }
-    c.used = 0usize
+    begin_message(c, PRELOGIN)
     let prelogin_error = put_bytes(c, prelogin[0..])
     if prelogin_error != ok { ret prelogin_error }
-    let send_prelogin_error = send(c, PRELOGIN)
+    let send_prelogin_error = end_message(c)
     if send_prelogin_error != ok { ret send_prelogin_error }
     while !c.eom {
         let packet_error = next_packet(c)
@@ -237,21 +244,24 @@ fn login(c: *Conn, options: Options) -> err {
     c.in_reply = false
     let build_error = put_login(c, options)
     if build_error != ok { ret build_error }
-    let send_login_error = send(c, LOGIN7)
+    let send_login_error = end_message(c)
     if send_login_error != ok { ret send_login_error }
-    let (ignored, reply_error) = finish(c, c.types[0usize..0usize])
+    let (ignored, reply_error) = finish(c, zero)
     if !c.login_ack { ret CannotConnect }
     ret reply_error
 }
 
 // LOGIN7 (MS-TDS 2.2.6.4): a 94-byte header whose table from byte 36 gives each variable
-// field's offset and length in UTF-16 units, then the fields.
+// field's offset and length in UTF-16 units, then the fields. It fits one packet, so its
+// offsets are filled in within the packet as the fields are written.
 fn put_login(c: *Conn, options: Options) -> err {
-    c.used = 0usize
-    let room_error = ensure(c, 94usize)
-    if room_error != ok { ret room_error }
-    zero_bytes(c.body[0usize..94usize])
-    c.used = 94usize
+    if !utf8.validate(options.user) || !utf8.validate(options.password) || !utf8.validate(options.host) || !utf8.validate(options.database) { ret refuse(c, "the login's text is not UTF-8", CannotConnect) }
+    let fields = units_of(options.user) + units_of(options.password) + units_of(options.host) + units_of(options.database) + 10usize
+    if 94usize + fields * 2usize > c.packet_size - 8usize { ret refuse(c, "the login's text does not fit one packet", CannotConnect) }
+    begin_message(c, LOGIN7)
+    let base = c.used
+    zero_bytes(c.body[base..base + 94usize])
+    c.used = base + 94usize
     var i = 0usize
     while i < 9usize {
         var text = ""
@@ -262,7 +272,6 @@ fn put_login(c: *Conn, options: Options) -> err {
         if i == 8usize { text = options.database }
         let start = c.used
         let (written, text_error) = put_utf16(c, text)
-        if text_error == utf8.Invalid { ret refuse(c, "the login's text is not UTF-8", CannotConnect) }
         if text_error != ok { ret text_error }
         // The password is scrambled: each byte's nibbles swapped, then XOR 0xA5.
         if i == 2usize {
@@ -273,21 +282,22 @@ fn put_login(c: *Conn, options: Options) -> err {
                 k += 1usize
             }
         }
-        set_le(c.body, 36usize + i * 4usize, u64(start), 2usize)
-        set_le(c.body, 38usize + i * 4usize, u64(written / 2usize), 2usize)
+        set_le(c.body, base + 36usize + i * 4usize, u64(start - base), 2usize)
+        set_le(c.body, base + 38usize + i * 4usize, u64(written / 2usize), 2usize)
         i += 1usize
     }
     // SSPI, AtchDBFile and ChangePassword are empty but still point at the end of the data.
-    set_le(c.body, 78usize, u64(c.used), 2usize)
-    set_le(c.body, 82usize, u64(c.used), 2usize)
-    set_le(c.body, 86usize, u64(c.used), 2usize)
-    set_le(c.body, 0usize, u64(c.used), 4usize)
-    set_le(c.body, 4usize, TDS_VERSION, 4usize)
-    set_le(c.body, 8usize, u64(PACKET_SIZE), 4usize)
+    let length = c.used - base
+    set_le(c.body, base + 78usize, u64(length), 2usize)
+    set_le(c.body, base + 82usize, u64(length), 2usize)
+    set_le(c.body, base + 86usize, u64(length), 2usize)
+    set_le(c.body, base, u64(length), 4usize)
+    set_le(c.body, base + 4usize, TDS_VERSION, 4usize)
+    set_le(c.body, base + 8usize, u64(PACKET_SIZE), 4usize)
     // fUseDB | fDatabase | fSetLang; fLanguage | fODBC, which also turns the ANSI options on.
-    c.body[24usize] = 224u8
-    c.body[25usize] = 3u8
-    set_le(c.body, 32usize, 1033u64, 4usize)
+    c.body[base + 24usize] = 224u8
+    c.body[base + 25usize] = 3u8
+    set_le(c.body, base + 32usize, 1033u64, 4usize)
     ret ok
 }
 
@@ -435,61 +445,146 @@ fn units_of(s: str) -> usize {
 
 // --- building a request
 
-fn ensure(c: *Conn, n: usize) -> err {
-    if c.used + n <= c.body.len { ret ok }
-    let (bigger, grow_error) = grown(c.arena, c.body, c.used, c.used + n)
-    if grow_error != ok { ret grow_error }
-    c.body = bigger
+// A request is written straight into packets: `body` holds the packet being filled, its
+// eight-byte header included, and a full packet goes out before the next begins. Every length
+// is known before the bytes it counts, so nothing written is ever patched, and a request of
+// any size needs no buffer beyond one packet.
+fn begin_message(c: *Conn, kind: u8) {
+    c.kind = kind
+    c.packet_id = 1usize
+    c.used = 8usize
+}
+
+// Each packet is a TLS record of its own: SQL Server reads a TDS 8.0 packet from one record
+// (it caps the packet size at 16192, under TLS's 16384) and drops a connection whose packet
+// spans two.
+fn flush_packet(c: *Conn, last_one: bool) -> err {
+    let length = c.used
+    c.body[0usize] = c.kind
+    c.body[1usize] = 0u8
+    if last_one { c.body[1usize] = 1u8 }
+    c.body[2usize] = u8(length >> 8usize)
+    c.body[3usize] = u8(length & 255usize)
+    c.body[4usize] = 0u8
+    c.body[5usize] = 0u8
+    c.body[6usize] = u8(c.packet_id & 255usize)
+    c.body[7usize] = 0u8
+    let write_error = io.write_all(&c.sink, c.body[0usize..length])
+    if write_error != ok { ret lost(c) }
+    c.packet_id += 1usize
+    c.used = 8usize
+    ret ok
+}
+
+// Sends the last packet and leaves the reply to be read.
+fn end_message(c: *Conn) -> err {
+    let last_error = flush_packet(c, true)
+    if last_error != ok { ret last_error }
+    let flush_error = io.flush(&c.sink)
+    if flush_error != ok { ret lost(c) }
+    c.in_reply = true
+    c.eom = false
+    c.at = 0usize
+    c.stop = 0usize
     ret ok
 }
 
 fn put8(c: *Conn, v: u8) -> err {
-    let room_error = ensure(c, 1usize)
-    if room_error != ok { ret room_error }
+    if c.used == c.packet_size {
+        let flush_error = flush_packet(c, false)
+        if flush_error != ok { ret flush_error }
+    }
     c.body[c.used] = v
     c.used += 1usize
     ret ok
 }
 
 fn put_le(c: *Conn, value: u64, n: usize) -> err {
-    let room_error = ensure(c, n)
-    if room_error != ok { ret room_error }
-    set_le(c.body, c.used, value, n)
-    c.used += n
+    var i = 0usize
+    while i < n {
+        let byte_error = put8(c, u8((value >> u64(i * 8usize)) & 255u64))
+        if byte_error != ok { ret byte_error }
+        i += 1usize
+    }
     ret ok
 }
 
 fn put_bytes(c: *Conn, v: []const u8) -> err {
-    let room_error = ensure(c, v.len)
-    if room_error != ok { ret room_error }
-    if v.len != 0usize { mem.copy[u8](c.body[c.used..c.used + v.len], v) }
-    c.used += v.len
+    var at = 0usize
+    while at < v.len {
+        if c.used == c.packet_size {
+            let flush_error = flush_packet(c, false)
+            if flush_error != ok { ret flush_error }
+        }
+        var n = v.len - at
+        if n > c.packet_size - c.used { n = c.packet_size - c.used }
+        mem.copy[u8](c.body[c.used..c.used + n], v[at..at + n])
+        c.used += n
+        at += n
+    }
     ret ok
 }
 
-// `s` as UTF-16LE; answers the bytes written. A UTF-8 string never needs more than two bytes
-// of UTF-16 for each of its own.
+// `s`, already checked to be UTF-8, as UTF-16LE; answers the bytes written. Whole runs of
+// characters are encoded straight into the packet; the few at its end go one at a time,
+// across the boundary.
 fn put_utf16(c: *Conn, s: str) -> (usize, err) {
-    let room_error = ensure(c, s.len * 2usize)
-    if room_error != ok { ret (0usize, room_error) }
-    let (written, encode_error) = utf8.encode_utf16(s, false, c.body[c.used..c.used + s.len * 2usize])
-    if encode_error != ok { ret (0usize, encode_error) }
-    c.used += written
-    ret (written, ok)
+    var total = 0usize
+    var off = 0usize
+    while off < s.len {
+        if c.packet_size - c.used < 8usize {
+            let (d, d_error) = utf8.decode(s, off)
+            if d_error != ok { ret (total, utf8.Invalid) }
+            off += usize(d.width)
+            if d.scalar < 65536u32 {
+                let unit_error = put_le(c, u64(d.scalar), 2usize)
+                if unit_error != ok { ret (total, unit_error) }
+                total += 2usize
+            } else {
+                let v = d.scalar - 65536u32
+                let high_error = put_le(c, u64(55296u32 + (v >> 10u32)), 2usize)
+                if high_error != ok { ret (total, high_error) }
+                let low_error = put_le(c, u64(56320u32 + (v & 1023u32)), 2usize)
+                if low_error != ok { ret (total, low_error) }
+                total += 4usize
+            }
+        } else {
+            // At most half the room in UTF-8 bytes, cut back to a character's start: each byte
+            // is at most two bytes of UTF-16, and at least four bytes always hold a character.
+            var n = (c.packet_size - c.used) / 2usize
+            if n > s.len - off { n = s.len - off }
+            while off + n < s.len && (s[off + n] & 192u8) == 128u8 { n -= 1usize }
+            let (written, encode_error) = utf8.encode_utf16(s[off..off + n], false, c.body[c.used..c.used + n * 2usize])
+            if encode_error != ok { ret (total, encode_error) }
+            c.used += written
+            total += written
+            off += n
+        }
+    }
+    ret (total, ok)
 }
 
 // ASCII text as UTF-16LE.
 fn put_ascii(c: *Conn, s: str) -> err {
-    let room_error = ensure(c, s.len * 2usize)
-    if room_error != ok { ret room_error }
     var i = 0usize
     while i < s.len {
-        c.body[c.used] = s[i]
-        c.body[c.used + 1usize] = 0u8
-        c.used += 2usize
+        let high_error = put8(c, s[i])
+        if high_error != ok { ret high_error }
+        let low_error = put8(c, 0u8)
+        if low_error != ok { ret low_error }
         i += 1usize
     }
     ret ok
+}
+
+fn digit_count(n: usize) -> usize {
+    var count = 1usize
+    var v = n
+    while v >= 10usize {
+        v /= 10usize
+        count += 1usize
+    }
+    ret count
 }
 
 // A parameter's name, `@p<number>`, as UTF-16.
@@ -511,43 +606,6 @@ fn put_headers(c: *Conn) -> err {
     let transaction_error = put_bytes(c, c.transaction)
     if transaction_error != ok { ret transaction_error }
     ret put_le(c, 1u64, 4usize)
-}
-
-// Frames the request into packets of the negotiated size, each written as a TLS record of its
-// own: SQL Server reads a TDS 8.0 packet from one record (it caps the packet size at 16192,
-// under TLS's 16384), and drops a connection whose packet spans two.
-fn send(c: *Conn, kind: u8) -> err {
-    let room = c.packet_size - 8usize
-    var start = 0usize
-    var id = 1usize
-    while true {
-        var n = c.used - start
-        if n > room { n = room }
-        let last_one = start + n == c.used
-        let length = n + 8usize
-        c.wire[0usize] = kind
-        c.wire[1usize] = 0u8
-        if last_one { c.wire[1usize] = 1u8 }
-        c.wire[2usize] = u8(length >> 8usize)
-        c.wire[3usize] = u8(length & 255usize)
-        c.wire[4usize] = 0u8
-        c.wire[5usize] = 0u8
-        c.wire[6usize] = u8(id & 255usize)
-        c.wire[7usize] = 0u8
-        if n != 0usize { mem.copy[u8](c.wire[8usize..length], c.body[start..start + n]) }
-        let write_error = io.write_all(&c.sink, c.wire[0usize..length])
-        if write_error != ok { ret lost(c) }
-        start += n
-        id += 1usize
-        if last_one { break }
-    }
-    let flush_error = io.flush(&c.sink)
-    if flush_error != ok { ret lost(c) }
-    c.in_reply = true
-    c.eom = false
-    c.at = 0usize
-    c.stop = 0usize
-    ret ok
 }
 
 // --- reading a reply
@@ -615,20 +673,17 @@ fn skip(c: *Conn, count: usize) -> err {
 }
 
 // `n` bytes of the reply, valid until the next read: a view of the packet when they lie in it,
-// a copy in the connection's scratch buffer when they cross into the next.
+// a copy in the connection's token buffer when they cross into the next. Every caller asks for
+// at most a token's two-byte length, which the buffer holds.
 fn get(c: *Conn, n: usize) -> ([]const u8, err) {
     if c.stop - c.at >= n {
         let v = c.pkt[c.at..c.at + n]
         c.at += n
         ret (v, ok)
     }
-    if c.scratch.len < n {
-        let (bigger, grow_error) = grown(c.arena, c.scratch, 0usize, n)
-        if grow_error != ok { ret (c.scratch[0usize..0usize], grow_error) }
-        c.scratch = bigger
-    }
-    let take_error = take(c, c.scratch[0usize..n])
-    ret (c.scratch[0usize..n], take_error)
+    if n > c.token.len { ret (c.token[0usize..0usize], protocol(c, "SQL Server sent a token longer than its length field")) }
+    let take_error = take(c, c.token[0usize..n])
+    ret (c.token[0usize..n], take_error)
 }
 
 fn get_le(c: *Conn, n: usize) -> (u64, err) {
@@ -866,8 +921,11 @@ fn read_columns(c: *Conn, types: []Col, columns: []db.Column) -> err {
     ret ok
 }
 
-// One value's bytes, valid until the next read, and whether it is NULL.
-fn read_value(c: *Conn, col: Col) -> ([]const u8, bool, err) {
+// One value's bytes and whether it is NULL. With a reader, the bytes are valid until the next
+// read: a view of the packet, a copy in the token buffer when they cross into the next packet,
+// or -- for a PLP or `text` value too long for that -- the reader's own buffer. Without one
+// the value is read past and nothing is kept.
+fn read_value(c: *Conn, col: Col, r: *Reader) -> ([]const u8, bool, err) {
     let nothing = c.pkt[0usize..0usize]
     if col.plp {
         let (total, total_error) = get_le(c, 8usize)
@@ -879,66 +937,79 @@ fn read_value(c: *Conn, col: Col) -> ([]const u8, bool, err) {
             if chunk_error != ok { ret (nothing, false, chunk_error) }
             if chunk == 0u64 { break }
             let n = usize(chunk)
-            if c.plp.len < got + n {
-                let (bigger, grow_error) = grown(c.arena, c.plp, got, got + n)
-                if grow_error != ok { ret (nothing, false, grow_error) }
-                c.plp = bigger
+            if r == nil {
+                let chunk_skip_error = skip(c, n)
+                if chunk_skip_error != ok { ret (nothing, false, chunk_skip_error) }
+            } else {
+                if r.long.len < got + n {
+                    let (bigger, grow_error) = grown(c.arena, r.long, got, got + n)
+                    if grow_error != ok { ret (nothing, false, grow_error) }
+                    r.long = bigger
+                }
+                let take_error = take(c, r.long[got..got + n])
+                if take_error != ok { ret (nothing, false, take_error) }
+                got += n
             }
-            let take_error = take(c, c.plp[got..got + n])
-            if take_error != ok { ret (nothing, false, take_error) }
-            got += n
         }
-        ret (c.plp[0usize..got], false, ok)
+        if r == nil { ret (nothing, false, ok) }
+        ret (r.long[0usize..got], false, ok)
     }
-    var width = 1usize
-    var null_length = 0u64
+    var n = 0usize
     let (size, fixed) = fixed_size(col.id)
     if fixed {
         if col.id == 31u8 { ret (nothing, true, ok) }
-        let (v, v_error) = get(c, usize(size))
+        n = usize(size)
+    } else {
+        var width = 1usize
+        if is_long(col.id) {
+            let (pointer, pointer_error) = get8(c)
+            if pointer_error != ok { ret (nothing, false, pointer_error) }
+            if pointer == 0u8 { ret (nothing, true, ok) }
+            // The text pointer and its timestamp.
+            let pointer_skip_error = skip(c, usize(pointer) + 8usize)
+            if pointer_skip_error != ok { ret (nothing, false, pointer_skip_error) }
+            width = 4usize
+        } else if col.id == 98u8 {
+            width = 4usize
+        } else if short_length(col.id) {
+            width = 2usize
+        }
+        let (length, length_error) = get_le(c, width)
+        if length_error != ok { ret (nothing, false, length_error) }
+        if width == 2usize && length == 65535u64 { ret (nothing, true, ok) }
+        if length == 0u64 && (width == 1usize || col.id == 98u8) { ret (nothing, true, ok) }
+        n = usize(length)
+    }
+    if r == nil {
+        let value_skip_error = skip(c, n)
+        ret (nothing, false, value_skip_error)
+    }
+    if c.stop - c.at >= n || n <= c.token.len {
+        let (v, v_error) = get(c, n)
         ret (v, false, v_error)
     }
-    if is_long(col.id) {
-        let (pointer, pointer_error) = get8(c)
-        if pointer_error != ok { ret (nothing, false, pointer_error) }
-        if pointer == 0u8 { ret (nothing, true, ok) }
-        // The text pointer and its timestamp.
-        let pointer_skip_error = skip(c, usize(pointer) + 8usize)
-        if pointer_skip_error != ok { ret (nothing, false, pointer_skip_error) }
-        width = 4usize
-        null_length = PLP_NULL
-    } else if col.id == 98u8 {
-        width = 4usize
-    } else if short_length(col.id) {
-        width = 2usize
-        null_length = 65535u64
+    if r.long.len < n {
+        let (bigger, grow_error) = grown(c.arena, r.long, 0usize, n)
+        if grow_error != ok { ret (nothing, false, grow_error) }
+        r.long = bigger
     }
-    let (n, n_error) = get_le(c, width)
-    if n_error != ok { ret (nothing, false, n_error) }
-    if n == null_length || (n == 0u64 && width == 1usize) || (n == 0u64 && col.id == 98u8) { ret (nothing, true, ok) }
-    let (v, v_error) = get(c, usize(n))
-    ret (v, false, v_error)
+    let long_error = take(c, r.long[0usize..n])
+    ret (r.long[0usize..n], false, long_error)
 }
 
 fn is_null_bit(bitmap: []const u8, i: usize) -> bool { ret ((bitmap[i / 8usize] >> u8(i % 8usize)) & 1u8) != 0u8 }
 
-// A row read past, for a reply nobody reads.
-fn skip_row(c: *Conn, types: []const Col, nbc: bool) -> err {
+// A row read past, for a reply nobody reads; `bitmap` has room for an NBCROW's.
+fn skip_row(c: *Conn, types: []const Col, bitmap: []u8, nbc: bool) -> err {
     let n = types.len
     if nbc {
-        let bytes = (n + 7usize) / 8usize
-        if c.bitmap.len < bytes {
-            let (bigger, grow_error) = grown(c.arena, c.bitmap, 0usize, bytes)
-            if grow_error != ok { ret grow_error }
-            c.bitmap = bigger
-        }
-        let bitmap_error = take(c, c.bitmap[0usize..bytes])
+        let bitmap_error = take(c, bitmap[0usize..(n + 7usize) / 8usize])
         if bitmap_error != ok { ret bitmap_error }
     }
     var i = 0usize
     while i < n {
-        if !nbc || !is_null_bit(c.bitmap, i) {
-            let (v, is_null, value_error) = read_value(c, types[i])
+        if !nbc || !is_null_bit(bitmap, i) {
+            let (v, is_null, value_error) = read_value(c, types[i], nil)
             if value_error != ok { ret value_error }
         }
         i += 1usize
@@ -948,9 +1019,20 @@ fn skip_row(c: *Conn, types: []const Col, nbc: bool) -> err {
 
 // Reads the rest of the reply: result sets are read past, and the rows each DONE counts for a
 // statement other than a SELECT are summed. `current` is the metadata of rows still to come.
+// The metadata of result sets nobody reads lives only for this call.
 fn finish(c: *Conn, current: []const Col) -> (u64, err) {
+    let mark = mem.mark(c.arena)
+    let (affected, finish_error) = drain(c, current)
+    mem.reset(c.arena, mark)
+    ret (affected, finish_error)
+}
+
+fn drain(c: *Conn, current: []const Col) -> (u64, err) {
     var affected = 0u64
     var types = current
+    let (first_bitmap, first_bitmap_error) = mem.alloc[u8](c.arena, (current.len + 7usize) / 8usize)
+    if first_bitmap_error != ok { ret (affected, lost(c)) }
+    var bitmap = first_bitmap
     while !reply_over(c) {
         let (token, token_error) = get8(c)
         if token_error != ok { ret (affected, token_error) }
@@ -958,18 +1040,17 @@ fn finish(c: *Conn, current: []const Col) -> (u64, err) {
             let (n, absent, count_error) = read_count(c)
             if count_error != ok { ret (affected, count_error) }
             if !absent {
-                if c.types.len < n {
-                    let (bigger, grow_error) = mem.alloc[Col](c.arena, n * 2usize)
-                    if grow_error != ok { ret (affected, lost(c)) }
-                    c.types = bigger
-                }
+                let (fresh, fresh_error) = mem.alloc[Col](c.arena, n)
+                let (fresh_bitmap, fresh_bitmap_error) = mem.alloc[u8](c.arena, (n + 7usize) / 8usize)
+                if fresh_error != ok || fresh_bitmap_error != ok { ret (affected, lost(c)) }
                 var names: []db.Column = zero
-                let columns_error = read_columns(c, c.types[0usize..n], names)
+                let columns_error = read_columns(c, fresh, names)
                 if columns_error != ok { ret (affected, columns_error) }
-                types = c.types[0usize..n]
+                types = fresh
+                bitmap = fresh_bitmap
             }
         } else if token == ROW || token == NBCROW {
-            let row_error = skip_row(c, types, token == NBCROW)
+            let row_error = skip_row(c, types, bitmap, token == NBCROW)
             if row_error != ok { ret (affected, row_error) }
         } else if token == DONE || token == DONEINPROC || token == DONEPROC {
             let (v, done_error) = get(c, 12usize)
@@ -1096,36 +1177,31 @@ fn declaration(kind: u8) -> str {
     ret "nvarchar(4000)"
 }
 
-// A PLP value of known length, filled in by `end_plp` once written: its total and one chunk.
-fn begin_plp(c: *Conn) -> (usize, err) {
-    let total_error = put_le(c, 0u64, 8usize)
-    if total_error != ok { ret (0usize, total_error) }
-    let chunk_error = put_le(c, 0u64, 4usize)
-    ret (c.used, chunk_error)
+// A PLP value of `n` bytes, known before they are written: its total and one chunk of all of
+// them, which `end_plp` terminates. An empty value has no chunk at all, since a zero-length
+// chunk is the terminator.
+fn begin_plp(c: *Conn, n: usize) -> err {
+    let total_error = put_le(c, u64(n), 8usize)
+    if total_error != ok { ret total_error }
+    if n == 0usize { ret ok }
+    ret put_le(c, u64(n), 4usize)
 }
 
-fn end_plp(c: *Conn, data: usize) -> err {
-    let n = c.used - data
-    set_le(c.body, data - 12usize, u64(n), 8usize)
-    set_le(c.body, data - 4usize, u64(n), 4usize)
-    // No chunk at all for an empty value: a zero-length chunk is the terminator.
-    if n == 0usize { c.used -= 4usize }
-    ret put_le(c, 0u64, 4usize)
-}
+fn end_plp(c: *Conn) -> err { ret put_le(c, 0u64, 4usize) }
 
 fn put_collation(c: *Conn) -> err { ret put_le(c, c.collation, 5usize) }
 
-// An unnamed input parameter's name and status, then nvarchar(max)'s TYPE_INFO.
-fn begin_text_param(c: *Conn) -> (usize, err) {
+// An unnamed input parameter's name and status, then nvarchar(max)'s TYPE_INFO and the start
+// of a value of `n` bytes.
+fn begin_text_param(c: *Conn, n: usize) -> err {
     let flags_error = put_le(c, 0u64, 2usize)
-    if flags_error != ok { ret (0usize, flags_error) }
+    if flags_error != ok { ret flags_error }
     let head: [3]u8 = [3]u8{ 231, 255, 255 }
     let head_error = put_bytes(c, head[0..])
-    if head_error != ok { ret (0usize, head_error) }
+    if head_error != ok { ret head_error }
     let collation_error = put_collation(c)
-    if collation_error != ok { ret (0usize, collation_error) }
-    let (data, plp_error) = begin_plp(c)
-    ret (data, plp_error)
+    if collation_error != ok { ret collation_error }
+    ret begin_plp(c, n)
 }
 
 fn put_value(c: *Conn, value: db.Value, kind: u8) -> err {
@@ -1157,40 +1233,38 @@ fn put_value(c: *Conn, value: db.Value, kind: u8) -> err {
         if float_error != ok { ret float_error }
         ret put_le(c, mem.bitcast[u64](real), 8usize)
     case .Text as s:
+        let text_bytes = units_of(s) * 2usize
         if kind == 6u8 {
             let long_head: [3]u8 = [3]u8{ 231, 255, 255 }
             let long_error = put_bytes(c, long_head[0..])
             if long_error != ok { ret long_error }
             let long_collation_error = put_collation(c)
             if long_collation_error != ok { ret long_collation_error }
-            let (data, plp_error) = begin_plp(c)
+            let plp_error = begin_plp(c, text_bytes)
             if plp_error != ok { ret plp_error }
             let (long_written, long_text_error) = put_utf16(c, s)
             if long_text_error != ok { ret long_text_error }
-            ret end_plp(c, data)
+            ret end_plp(c)
         }
         let head: [3]u8 = [3]u8{ 231, 64, 31 }
         let text_head_error = put_bytes(c, head[0..])
         if text_head_error != ok { ret text_head_error }
         let text_collation_error = put_collation(c)
         if text_collation_error != ok { ret text_collation_error }
-        let length_at = c.used
-        let length_error = put_le(c, 0u64, 2usize)
+        let length_error = put_le(c, u64(text_bytes), 2usize)
         if length_error != ok { ret length_error }
         let (written, text_error) = put_utf16(c, s)
-        if text_error != ok { ret text_error }
-        set_le(c.body, length_at, u64(written), 2usize)
-        ret ok
+        ret text_error
     case .Bytes as bytes:
         if kind == 8u8 {
             let long_binary: [3]u8 = [3]u8{ 165, 255, 255 }
             let long_binary_error = put_bytes(c, long_binary[0..])
             if long_binary_error != ok { ret long_binary_error }
-            let (binary_data, binary_plp_error) = begin_plp(c)
+            let binary_plp_error = begin_plp(c, bytes.len)
             if binary_plp_error != ok { ret binary_plp_error }
             let long_bytes_error = put_bytes(c, bytes)
             if long_bytes_error != ok { ret long_bytes_error }
-            ret end_plp(c, binary_data)
+            ret end_plp(c)
         }
         let binary: [3]u8 = [3]u8{ 165, 64, 31 }
         let binary_error = put_bytes(c, binary[0..])
@@ -1219,25 +1293,36 @@ fn put_value(c: *Conn, value: db.Value, kind: u8) -> err {
     ret ok
 }
 
-// `sp_executesql` with the statement, its declarations and the values.
+// `sp_executesql` with the statement, its declarations and the values. The rewritten text is
+// the original less its `?`s plus each `@pN` or `NULL`; the declarations are ASCII.
 fn put_rpc(c: *Conn, sql: str, params: []const db.Parameter) -> err {
     let proc_error = put_le(c, 65535u64 | (SP_EXECUTESQL << 16u64), 6usize)
     if proc_error != ok { ret proc_error }
-    let (statement_data, statement_error) = begin_text_param(c)
-    if statement_error != ok { ret statement_error }
-    let (count, walk_error) = walk(sql, c, params)
-    if walk_error != ok { ret walk_error }
-    let statement_end_error = end_plp(c, statement_data)
-    if statement_end_error != ok { ret statement_end_error }
-    // NULLs are literals in the text, so they are neither declared nor sent.
+    var text_units = units_of(sql) - params.len
+    var declared_units = 0usize
     var typed = 0usize
     var k = 0usize
     while k < params.len {
-        if wire_kind(params[k].value) != 0u8 { typed += 1usize }
+        let kind = wire_kind(params[k].value)
+        if kind == 0u8 {
+            text_units += 4usize
+        } else {
+            text_units += 2usize + digit_count(k + 1usize)
+            if typed != 0usize { declared_units += 2usize }
+            declared_units += 3usize + digit_count(k + 1usize) + declaration(kind).len
+            typed += 1usize
+        }
         k += 1usize
     }
+    let statement_error = begin_text_param(c, text_units * 2usize)
+    if statement_error != ok { ret statement_error }
+    let (count, walk_error) = walk(sql, c, params)
+    if walk_error != ok { ret walk_error }
+    let statement_end_error = end_plp(c)
+    if statement_end_error != ok { ret statement_end_error }
+    // NULLs are literals in the text, so they are neither declared nor sent.
     if typed == 0usize { ret ok }
-    let (declared_data, declared_error) = begin_text_param(c)
+    let declared_error = begin_text_param(c, declared_units * 2usize)
     if declared_error != ok { ret declared_error }
     var i = 0usize
     var first = true
@@ -1259,7 +1344,7 @@ fn put_rpc(c: *Conn, sql: str, params: []const db.Parameter) -> err {
         if type_error != ok { ret type_error }
         i += 1usize
     }
-    let declared_end_error = end_plp(c, declared_data)
+    let declared_end_error = end_plp(c)
     if declared_end_error != ok { ret declared_end_error }
     i = 0usize
     while i < params.len {
@@ -1267,12 +1352,7 @@ fn put_rpc(c: *Conn, sql: str, params: []const db.Parameter) -> err {
             i += 1usize
             continue
         }
-        var digits = 1usize
-        if i + 1usize >= 10usize { digits = 2usize }
-        if i + 1usize >= 100usize { digits = 3usize }
-        if i + 1usize >= 1000usize { digits = 4usize }
-        if i + 1usize >= 10000usize { digits = 5usize }
-        let units_error = put8(c, u8(2usize + digits))
+        let units_error = put8(c, u8(2usize + digit_count(i + 1usize)))
         if units_error != ok { ret units_error }
         let name_error = put_name(c, i + 1usize)
         if name_error != ok { ret name_error }
@@ -1286,6 +1366,16 @@ fn put_rpc(c: *Conn, sql: str, params: []const db.Parameter) -> err {
     ret ok
 }
 
+fn text_valid(value: db.Value) -> bool {
+    switch value {
+    case .Text as s:
+        ret utf8.validate(s)
+    default:
+        ret true
+    }
+    ret true
+}
+
 // Sends `sql` -- as a batch without parameters, through `sp_executesql` with them -- leaving
 // the reply to be read.
 fn run(c: *Conn, sql: str, placeholders: usize, params: []const db.Parameter) -> err {
@@ -1293,37 +1383,40 @@ fn run(c: *Conn, sql: str, placeholders: usize, params: []const db.Parameter) ->
     if c.active != nil { ret refuse(c, "a row reader is still open on this connection", db.Busy) }
     if placeholders != params.len { ret refuse(c, "the statement's parameter count differs from the parameters given", db.InvalidQuery) }
     if params.len > 65535usize { ret refuse(c, "SQL Server takes at most 65535 parameters", db.InvalidQuery) }
+    // Packets go out as the request is written, so everything that could refuse it is checked
+    // before the first one.
+    if !utf8.validate(sql) { ret refuse(c, "the SQL text is not UTF-8", db.InvalidQuery) }
     var i = 0usize
     while i < params.len {
         if params[i].name.len != 0usize { ret refuse(c, "parameters are positional (`?`); a named one is refused", db.InvalidQuery) }
+        if !text_valid(params[i].value) { ret refuse(c, "a text value is not UTF-8", db.InvalidQuery) }
         i += 1usize
     }
     if c.in_reply {
-        let (ignored, drain_error) = finish(c, c.types[0usize..0usize])
+        let (ignored, drain_error) = finish(c, zero)
         if c.broken { ret drain_error }
     }
     clear(c)
-    c.used = 0usize
+    var kind = SQL_BATCH
+    if params.len != 0usize { kind = RPC }
+    begin_message(c, kind)
     let headers_error = put_headers(c)
     if headers_error != ok { ret headers_error }
-    var kind = SQL_BATCH
     var build_error = ok
     if params.len == 0usize {
         let (written, batch_error) = put_utf16(c, sql)
         build_error = batch_error
     } else {
-        kind = RPC
         build_error = put_rpc(c, sql, params)
     }
-    if build_error == utf8.Invalid { ret refuse(c, "the SQL text or a text value is not UTF-8", db.InvalidQuery) }
     if build_error != ok { ret build_error }
-    ret send(c, kind)
+    ret end_message(c)
 }
 
 fn execute_text(c: *Conn, sql: str, placeholders: usize, params: []const db.Parameter) -> (u64, err) {
     let run_error = run(c, sql, placeholders, params)
     if run_error != ok { ret (0u64, run_error) }
-    let (affected, finish_error) = finish(c, c.types[0usize..0usize])
+    let (affected, finish_error) = finish(c, zero)
     ret (affected, finish_error)
 }
 
@@ -1383,7 +1476,7 @@ fn new_reader(c: *Conn, statement: *Stmt, n: usize) -> (*Reader, err) {
     let (bitmap, bitmap_error) = mem.alloc[u8](c.arena, (n + 7usize) / 8usize)
     if reader_error != ok || types_error != ok || cols_error != ok || bitmap_error != ok { ret (nil, mem.Exhausted) }
     var no_bytes: []u8 = zero
-    readers[0usize] = Reader { conn: c, statement: statement, done: true, closed: false, types: types, columns: cols, bitmap: bitmap, buffer: no_bytes, used: 0usize }
+    readers[0usize] = Reader { conn: c, statement: statement, done: true, closed: false, types: types, columns: cols, bitmap: bitmap, buffer: no_bytes, used: 0usize, long: no_bytes }
     ret (&readers[0usize], ok)
 }
 
@@ -1424,7 +1517,7 @@ fn next_row(r: *Reader, dst: []db.Value) -> (bool, err) {
             end_reader(r)
             let done_error = skip(c, 12usize)
             if done_error != ok { ret (false, done_error) }
-            let (ignored, rest_error) = finish(c, c.types[0usize..0usize])
+            let (ignored, rest_error) = finish(c, zero)
             ret (false, rest_error)
         }
         if token == COLMETADATA {
@@ -1460,7 +1553,7 @@ fn fill(r: *Reader, dst: []db.Value, nbc: bool) -> err {
     while i < n {
         dst[i] = .Null
         if !nbc || !is_null_bit(r.bitmap, i) {
-            let (v, is_null, read_error) = read_value(c, r.types[i])
+            let (v, is_null, read_error) = read_value(c, r.types[i], r)
             if read_error != ok { ret read_error }
             if !is_null {
                 let decode_error = decode(r, r.types[i], v, dst, i)
