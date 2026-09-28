@@ -105,6 +105,8 @@
     .rank-1 { color: var(--success); font-weight: 600; }
     .rank-2 { color: var(--primary); }
     .rank-last { color: var(--error); }
+    tr.placed td { color: var(--on-surface-variant); }
+    tbody tr:not(.placed) + tr.placed td { border-top: 2px solid var(--outline-variant); }
     .legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0 0 var(--space-4); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
     .legend .key { display: inline-flex; align-items: center; gap: var(--space-2); }
     .legend .key::before { content: ""; width: 12px; height: 12px; border-radius: var(--radius-full); background: currentColor; }
@@ -332,7 +334,7 @@
 
       <div class="callout">
         <strong>The verdict: C, then Rust, then Neper, then Go.</strong>
-        <p>Scored against the fastest in each of the 24 cells (3 workloads × 4 databases × 2 hosts), the geometric means are <b>C 96%, Rust 82%, Neper 78%, Go 65%</b>. C wins 16 cells, Rust 4, Go 3 and Neper 1. Neper is level with Rust on Windows (77% against 75%) and well behind it on Linux (78% against 89%), and its largest gap is still in one workload: across both hosts it averages 87% of the fastest on inserts, 79% on lookups and 68% on scans.</p>
+        <p>Scored against the fastest in each of the 24 cells (3 workloads × 4 databases × 2 hosts), the geometric means are <b>C 96%, Rust 82%, Neper 78%, Go 65%</b>. C wins 16 cells, Rust 4, Go 3 and Neper 1. Counting places instead of percentages, Neper is most often third (11 of 24) and last in only 5, fewer than Rust (6) or Go (13). Neper is level with Rust on Windows (77% against 75%) and well behind it on Linux (78% against 89%), and its largest gap is still in one workload: across both hosts it averages 87% of the fastest on inserts, 79% on lookups and 68% on scans.</p>
       </div>
 
       <p class="legend" aria-label="Colour key"><span class="key rank-1"><span>1st</span></span><span class="key rank-2"><span>2nd</span></span><span class="key rank-last"><span>last</span></span><span>in each row; in the Neper · C tables, the faster of the two is green and the slower red</span></p>
@@ -353,6 +355,10 @@
             <tr><td>ODBC scan</td><td>75%</td><td class="rank-1">100%</td><td class="rank-last">63%</td><td class="rank-2">94%</td></tr>
             <tr><td>ODBC lookup</td><td>74%</td><td class="rank-1">100%</td><td class="rank-last">44%</td><td class="rank-2">92%</td></tr>
             <tr><td><strong>Geometric mean</strong></td><td class="rank-2">77%</td><td class="rank-1">94%</td><td class="rank-last">64%</td><td><strong>75%</strong></td></tr>
+            <tr class="placed"><td>Placed 1st</td><td>1</td><td>7</td><td>3</td><td>1</td></tr>
+            <tr class="placed"><td>Placed 2nd</td><td>4</td><td>4</td><td>1</td><td>3</td></tr>
+            <tr class="placed"><td>Placed 3rd</td><td>6</td><td>1</td><td>2</td><td>3</td></tr>
+            <tr class="placed"><td>Placed 4th</td><td>1</td><td>0</td><td>6</td><td>5</td></tr>
           </tbody>
         </table>
       </div>
@@ -373,6 +379,22 @@
             <tr><td>ODBC scan</td><td>65%</td><td class="rank-1">100%</td><td class="rank-last">57%</td><td class="rank-2">96%</td></tr>
             <tr><td>ODBC lookup</td><td class="rank-last">84%</td><td class="rank-1">100%</td><td>90%</td><td class="rank-2">95%</td></tr>
             <tr><td><strong>Geometric mean</strong></td><td><strong>78%</strong></td><td class="rank-1">98%</td><td class="rank-last">67%</td><td class="rank-2">89%</td></tr>
+            <tr class="placed"><td>Placed 1st</td><td>0</td><td>9</td><td>0</td><td>3</td></tr>
+            <tr class="placed"><td>Placed 2nd</td><td>3</td><td>3</td><td>1</td><td>5</td></tr>
+            <tr class="placed"><td>Placed 3rd</td><td>5</td><td>0</td><td>4</td><td>3</td></tr>
+            <tr class="placed"><td>Placed 4th</td><td>4</td><td>0</td><td>7</td><td>1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Both hosts, 24 cells</th><th>Neper</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
+          <tbody>
+            <tr class="placed"><td>Placed 1st</td><td>1</td><td>16</td><td>3</td><td>4</td></tr>
+            <tr class="placed"><td>Placed 2nd</td><td>7</td><td>7</td><td>2</td><td>8</td></tr>
+            <tr class="placed"><td>Placed 3rd</td><td>11</td><td>1</td><td>6</td><td>6</td></tr>
+            <tr class="placed"><td>Placed 4th</td><td>5</td><td>0</td><td>13</td><td>6</td></tr>
+            <tr><td><strong>Geometric mean</strong></td><td>78%</td><td class="rank-1">96%</td><td class="rank-last">65%</td><td class="rank-2">82%</td></tr>
           </tbody>
         </table>
       </div>
