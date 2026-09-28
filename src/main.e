@@ -3770,7 +3770,7 @@ fn body_bytes_of(loaded: *graph.Graph, per_module: bool) -> usize {
     ret loaded.total_bytes
 }
 
-fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph, report: *Sink, body_bytes: usize, scale: usize) -> err {
+fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph, report: *Sink, body_bytes: usize, scale: usize, debug: bool) -> err {
     // Every module carries its own copy of the generic instances it uses, so the
     // NIR function count scales with instantiation sites, not with declarations.
     //
@@ -3815,22 +3815,28 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     report.build.pools[stats.POOL_NIR_STRINGS] = strings.len
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
     // (D1582) The named locals lowering binds and selection places, and the descriptor
-    // text an artifact writer spells their types in; committed as they are touched.
-    let (debug_locals, debug_locals_error) = mem.alloc[nir.DebugLocal](a, instruction_capacity / 8usize + 256usize)
-    if debug_locals_error != ok { ret debug_locals_error }
-    builder.debug.locals = debug_locals
+    // text an artifact writer spells their types in; committed as they are touched. A
+    // release build names no locals (section 13), so it gets none of them (D1642): an
+    // allocation still moves the arena's reach, which the static gate holds. Both keep
+    // the vars: they hold the registers each function saves, which the unwind info is
+    // built from and section 13 requires in release too.
     let (debug_vars, debug_vars_error) = mem.alloc[nir.DebugVar](a, instruction_capacity / 8usize + 256usize)
     if debug_vars_error != ok { ret debug_vars_error }
     builder.debug.vars = debug_vars
-    let (debug_text, debug_text_error) = mem.alloc[u8](a, 1048576usize / scale + 4096usize)
-    if debug_text_error != ok { ret debug_text_error }
-    builder.debug.text = debug_text
-    let (debug_wanted, debug_wanted_error) = mem.alloc[check.Type](a, 4096usize)
-    if debug_wanted_error != ok { ret debug_wanted_error }
-    builder.debug.wanted = debug_wanted
-    let (debug_definitions, debug_definitions_error) = mem.alloc[str](a, 4096usize)
-    if debug_definitions_error != ok { ret debug_definitions_error }
-    builder.debug.definitions = debug_definitions
+    if debug {
+        let (debug_locals, debug_locals_error) = mem.alloc[nir.DebugLocal](a, instruction_capacity / 8usize + 256usize)
+        if debug_locals_error != ok { ret debug_locals_error }
+        builder.debug.locals = debug_locals
+        let (debug_text, debug_text_error) = mem.alloc[u8](a, 1048576usize / scale + 4096usize)
+        if debug_text_error != ok { ret debug_text_error }
+        builder.debug.text = debug_text
+        let (debug_wanted, debug_wanted_error) = mem.alloc[check.Type](a, 4096usize)
+        if debug_wanted_error != ok { ret debug_wanted_error }
+        builder.debug.wanted = debug_wanted
+        let (debug_definitions, debug_definitions_error) = mem.alloc[str](a, 4096usize)
+        if debug_definitions_error != ok { ret debug_definitions_error }
+        builder.debug.definitions = debug_definitions
+    }
     // The shared trap messages' bytes and names (D927), committed as they are written.
     let (trap_text, trap_text_error) = mem.alloc[u8](a, 4194304usize / scale)
     if trap_text_error != ok { ret trap_text_error }
@@ -9919,7 +9925,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
     // signature types by the worker's share (D326), where the program's count was
     // eight times what eight workers between them needed.
     let signature_types = sized(4096usize, w.share * 2usize + loaded.largest_bytes, 64usize)
-    try init_cli_nir(a, &w.builder, &w.signatures, signature_types, loaded, &w.report, loaded.largest_bytes, w.scale)
+    try init_cli_nir(a, &w.builder, &w.signatures, signature_types, loaded, &w.report, loaded.largest_bytes, w.scale, !release)
     // What the program's builder carries of the build: the mode, the arena, the oracle.
     w.builder.release = program.release
     w.builder.nocheck = program.nocheck
@@ -12494,7 +12500,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // which lowering synthesizes for `main`'s failure line (D199), has no declaration.
         var builder_scale = 1usize
         if writes_executable { builder_scale = 64usize }
-        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report, body_bytes_of(&loaded, writes_executable), builder_scale)
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report, body_bytes_of(&loaded, writes_executable), builder_scale, !release_build)
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, loaded.count + 1usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, builder.functions.len + 1usize)

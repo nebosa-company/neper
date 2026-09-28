@@ -30612,3 +30612,36 @@ D1675 covered neper calling an `@import` extern. The other direction still used 
 **Not covered.** A cleanup name that changes while `resource` stays set is probed but not pinned by a suite step.
 
 ---
+
+## D1642 — A release build allocates none of the debug tables it never writes
+
+**Why.** The static gate's sc500k arena high-water breached its +0% budget on both hosts from D1606 onward. Each commit that touches `src/` or `lib/` in the 86 before D1606 was measured with that commit's own `static.py`; the other 20 cannot move it. Five commits moved it (debug / release, Windows):
+
+| Commit | Debug | Release |
+|---|---|---|
+| `96df9023` ownership: owned resources split at a runtime bound | +15 MB | +15 MB |
+| `189a14ec` D1582: locals, types and frames for gdb on ELF | +49 MB | +49 MB |
+| `00ade36a` D1583: COFF symbols in Windows images | +8 MB | +0 MB |
+| `a2595ec3` D1593: `e.str` fast float text | +6 MB | +8 MB |
+| `af9e11f2` D1584: locals scoped to their blocks | +8 MB | +8 MB |
+
+A release build names no locals (section 13), and `add_debug_local` returns at once in release. Yet D1582 and D1584 cost release builds as much as debug ones. `init_cli_nir` allocated every builder's debug tables whatever the mode: the locals, the placed vars, the descriptor text, the wanted structs and the definitions. The gate measures how far each arena reached, and an allocation moves that whether or not a byte of it is ever written.
+
+**Decision.**
+
+- **The flag.** `init_cli_nir` takes `debug`, which both callers pass as the build's `!release`: a lowering worker from its own `release`, not the program builder's, which is not yet set when the workers are made.
+- **What release skips.** A release builder allocates no locals, no descriptor text, no wanted structs and no definitions. Every write to them is already guarded by capacity or by release.
+- **What release keeps.** The vars table, at the size it had. It also holds each function's saved callee registers (`kind` 4), from which `link_elf` builds the frame description entries: the unwind info section 13 requires in release too.
+
+**What was tried first.**
+
+- **Dropping the vars in release too.** It saved 56 MB, but release images lost 15 KB of unwind entries, and a comparison of the sc500k images caught it.
+- **Sizing the release vars for the saved registers alone** (`function_capacity × 5`). A worker's function pool is sized from the whole program, so this reached 3,693 MB.
+
+**Evidence.**
+
+- The sc500k images are byte-identical to 013ec715's: Windows release, Linux release and Windows debug.
+- Both suites pass on 5bee7799 with no failures: Windows in 19 minutes, Linux in 14.
+- The gate passes on both hosts. Against D1663's Windows pin, release goes from 2,959 to 2,933 MB (−26 MB) and debug from 2,236 to 2,235 MB. Linux is still held to D915's pin, and both modes are 2.1% under it, the memory work since D1660 included.
+
+---
