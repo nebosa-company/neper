@@ -29650,3 +29650,58 @@ Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50
 - The full suites (`tests/selfhost/run.ps1`, the Linux suite) were not run, and Linux memory was not measured.
 
 ---
+
+## D1662 — A fork's memo slots grow as its types do; comptime parameters are shared, and body hashes cut to the declarations
+
+**Why.** Step 2 of D1660's revised plan. `fork_checker` committed three things in every crew worker that the worker never uses:
+
+- **Memo slots.** Four for every type `memo_types` could hold, which is sized from the worker's share, rounded up to a power of two and cleared in full: 2^20 slots (8 MiB) per worker at `-j 4` over `sc1m`, 2^22 (32 MiB) at `-j 1`, 2^19 at `-j 8`. Since the slots were at least four times the types, the half-full refusal could never fire; a full `memo_types` was the only one that did.
+- **Comptime parameters.** A copy of the program's rows (two at `sc1m`) into a tail sized from the worker's share: a fresh chunk under D340 for rows nothing appends to.
+- **Body hashes.** A copy of the root's whole table, sized to the program's function capacity (194,942 rows at `sc1m`, 1.6 MB), where only a declaration's hash is ever kept.
+
+**Decision.**
+
+- **The memo grows.** `memo_hash` holds the hash lines `memo_intern` had. `memo_intern` still refuses first when `memo_types` is full; at half full it calls `memo_grow`, which takes twice the slots from the checker's arena, clears them, places ids 0 to the count again in their order, and the probe starts over in the new table. An id is the order of interning whatever the table's size, so every answer is the one it was. The old table stays where it lies, at most the final table's size again. A fork's slots start at 1,024 (8 KB), and every worker in the `sc1m` builds below grew its table at least once. A failed growth answers "not kept", today's refusal.
+- **Comptime parameters are shared.** The fork takes `from.comptime_parameters[0..count]`, and `copy_comptime_parameters` is deleted. Every writer runs on the program's checker at declaration time: `seed_intrinsic_aggregates`, and `collect_comptime_parameter` through `register_aggregate_declaration` and `collect_function`; `em.e`'s decode only reads the count. The three resets of the count (`check.init`, `collect_aggregates`, `begin_declarations`) run only where a program's checker is made (`init_cli_checker`) or declared (`run_declarations`, `begin_declarations`), never on a fork. A fork's slice ends at the count, so a writer that did run there would be refused as Capacity, not write into the program's rows.
+- **Body hashes stop at the declarations.** They are copied up to `signature_function_count`. `em.body_hash`'s three callers (em.e:1449, 2302, 2323) ask for declaration rows, and a row past the table is hashed without the memo (em.e:938), so the answer is the same either way.
+
+**The memo's size, measured first.** A temporary line at the crew's end printed each worker's `memo_type_count` and slot count (`sc1m`, release `--unchecked`); it was removed before the commit, and the three images it built were the baseline's.
+
+| workers | memo types per worker | slots after growth | slots before |
+|---|---|---|---|
+| 1 | 3,899 | 8,192 | 2^22 (32 MiB) |
+| 4 | 1,125-1,637 | 4,096 | 2^20 (8 MiB) |
+| 8 | 609-1,265 | 2,048-4,096 | 2^19 (4 MiB) |
+
+The plan's warning level was about 100k types, where doubling would give most of the saving back. The largest worker meets 3,899.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1662`, stage 2 built by 013ec715's debug compiler):
+
+- Lint: 0 hard findings. Stage 2 equals stage 3, and the release self-build is the same under `-j 3 --perturb`.
+- Images: `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases. The emit sweep gives 602 link fixtures, 0 different from HEAD's debug compiler. The `compiler` workload (this worktree's source) is 6,942,332 B from D1661's release compiler and from this one.
+- Static gate (`sc500k`, 8 workers), arena high-water against HEAD's calibration (`build/pools/head/static-windows.json`): debug 2,347 → 2,291 MB (D1661: 2,331), release 3,069 → 3,018 MB (D1661: 3,053); images 1,936,791 B and 1,458,009 B, unchanged. The plan expected about −20 from D1661; it is −40 and −35. `gate.py` against the pinned file still reports the breach D1641 left, now +0.2% debug (2,286 → 2,291) and +0.7% release (2,997 → 3,018). It is not re-pinned here.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50): D1660's files → D1661 → this. The `-j 4` and `-j 8` rows are the gate's; `-j 1` was measured after it with D1661's and this release compiler one after the other.
+
+| workload | workers | peak commit | peak working set | worker arenas reached | cold p50 |
+|---|---|---|---|---|---|
+| sc1m | 1 | 980 → 947 → 913 MB | 872 → 839 → 807 MB | 2,426 → 2,393 → 2,356 MB | 11,330 → 10,298 → 10,186 ms |
+| sc1m | 4 | 1,292 → 1,259 → 1,219 MB | 1,035 → 1,003 → 967 MB | 3,458 → 3,425 → 3,385 MB | 3,447 → 3,202 → 3,556 ms |
+| sc1m | 8 | 1,675 → 1,643 → 1,595 MB | 1,233 → 1,200 → 1,161 MB | 4,841 → 4,804 → 4,763 MB | 3,143 → 2,925 → 2,915 ms |
+| sc500k | 4 | 812 → 797 → 773 MB | 567 → 551 → 532 MB | 2,055 → 2,039 → 2,019 MB | 1,690 → 1,589 → 1,745 ms |
+| sc500k | 8 | 1,123 → 1,109 → 1,065 MB | 711 → 694 → 659 MB | 3,069 → 3,053 → 3,017 MB | 1,353 → 1,477 → 1,471 ms |
+| compiler | 4 | 494 → 489 → 477 MB | 272 → 268 → 259 MB | 1,467 → 1,462 → 1,453 MB | 525 → 497 → 547 ms |
+| compiler | 8 | 795 → 794 → 769 MB | 356 → 352 → 333 MB | 2,866 → 2,859 → 2,842 MB | 553 → 501 → 545 ms |
+
+- The `sc1m` peak falls 34 MB at `-j 1`, 40 at `-j 4` and 48 at `-j 8`, against the plan's about 35, 34-42 and 42-50. The peak is still at the link.
+- The `-j 4` cold figures are the machine, not the change. Measured again one after the other, D1661 then this, the three workloads gave 3,257 → 3,546 ms (`sc1m`), 1,575 → 1,617 and 506 → 499. Three alternating `sc1m` pairs then gave 3,183 / 3,458, 3,555 / 3,547 and 3,563 / 3,532 ms: the machine sits at about 3.2 or about 3.55 s whichever compiler runs, and the change only removes work.
+
+**Deviations from the plan.**
+
+- The number: the plan's D1661 is this D1662.
+- The plan's list of mark/reset windows (I9) was incomplete. It left out `artifact_hash.e:566` (D1661), `lex.e`, `source.e`, `project.e`, `assets.e`, `tool.e` and five in `main.e`. Three of those do run a checker over the reset arena: `check_file_declarations` (main.e:8489), the batch request (11176) and `batch_check`'s reset of its slot (11384). Each runs a program's checker, never a fork, and only `fork_checker` makes memo slots, so `memo_intern` answers before `memo_grow` there. No window on a worker's arena encloses a fork's checker call, so a grown table is never freed under the memo.
+- Review found two stale header comments, fixed in the same commit: `memo_intern`'s refusal now names a failed growth, and `fork_checker`'s says the comptime parameters are shared.
+
+**Not done or not measured.** The full suites (`tests/selfhost/run.ps1`, the Linux suite) and a stage-1 build with the C bootstrap were not run, Linux memory was not measured, and the static baseline is not re-pinned.
+
+---
