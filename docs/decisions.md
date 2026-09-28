@@ -30247,3 +30247,179 @@ What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), in M
 - `@nochecks` counts nothing any source writes, as above.
 
 ---
+
+## D1668 — A module's tokens and tree go back right after its own artifact
+
+**Why.** Increment D2 of D1660's plan, the last part of step 6 of its revised list. Since D1667 every lowered module's block goes back at the lowering join, so all of them were held through the lowering, and the peak had moved inside it: at `sc1m -j 4` the process reached 1,021 MB about 1.45 s into a lowering of 1.55 s, against 972 MB at its end. For most modules, the module's own lowering and artifact are the last readers of its tokens and tree. D1660's map found four readers that cross modules during lowering: the comptime interpreter, a worker lowering an instance of another module's generic template, a module's artifact hashing a callee it inlined, and the generous worker.
+
+**Decision.**
+
+- **The drop.** `lower_worker_module` calls `check.forget_front` and `graph.drop_front` after `nir.discard_module`, when `Graph.drops_on` is set and the module is `droppable`. That runs on the module's own lowering worker, or on the generous worker, which runs alone after the join. `release_fronts` (D1667) gives back what is left at the join.
+- **Settled before the threads start.** `begin_drops` runs on the main thread in `crew_emit`. It records each module's `crew_owner`, the fork its lowering worker's checker reads as, and whether it is `droppable`. A module is droppable when it has a block, is lowered this build (not hot-kept), and declares no generic function or aggregate, since any worker lowers an instance from its template. Neither field changes after that. `begin_drops` then takes the body hashes below, has every checker forget the fronts, and sets `drops_on`.
+- **One predicate.** `graph.front_readable(g, m, fork_id)`:
+  - After the join, it answers `!dropped`.
+  - Before the join, it answers true for a module that is not droppable, or while drops are off.
+  - Otherwise it answers true only for the owner, until the owner drops the module.
+
+  No other thread reads a droppable module's `dropped` before the join, so no read races the owner's release.
+- **The readers.**
+  - `interp_module` lexes the module again from its text (`graph.lex_private`: exact, in two passes, into the checker's arena) and parses it with the header path's pools, whenever the predicate is false or the module keeps no tree (Review, below). The tokens and the tree are the same, so the answers are the same.
+  - `em.body_hash_uncached` refuses with `graph.ModuleDropped` when the predicate is false.
+  - `lower_owned_instances` and `check_instance_body` refuse with `ModuleDropped` when the template's module is droppable.
+- **The body hashes.** `em.prefill_body_hash` memoizes, on the program's checker, the hash of every callee the lowering can copy in: `crew.second_all`'s entries and every second-oracle builder's inlined records. It hashes only callees that have source and are declared in a droppable module. `prefill_one` copies each hash into every fork, and a generous worker made later forks from the root. The inputs are the ones a worker reads, so the hash is the one the worker would take.
+- **`--fault-dry N`.** The first lowering worker (fork 1) stops before the Nth module of its run as `mem.Exhausted`. `crew_emit`'s dry path then has the generous worker check and lower the rest, after the fronts of the modules before it went. `docs/tooling.md` describes the flag. `--time` adds the row "of which settling the drops".
+- **Tests.** A new fixture, `drop_comptime`: q has comptime `flag()` and `code()` and a `when flag()` of its own; p (before q) and r (after it) each have `when q.flag()` and a `case q.code()`. In `run.ps1` and `run.sh`, in debug and release, it builds under `$compiler` at `-j 1`, at `-j 1 --perturb` and at `-j 1 --fault-dry 2`, and under `$ownCompilerPath` at `-j 3 --perturb`. All four images must be one, and the program must exit 0. `$ownCompilerPath` also builds `src/main.e` at `-j 2 --fault-dry 3`, which must equal the stable stage, and the nested-inlining release build at `-j 1 --fault-dry 2` must equal `$nestedRelease`.
+
+**Review.** Two reviewers read the first commit (3620fa3b). What each finding came to:
+
+- **No row, no full gate, no measurements, no suites** (serious). Held; this row and the evidence below.
+- **"Refused on every schedule" is false for the owner** (both reviewers). Held. For its owner the predicate is true until the owner's own drop, so whether a missed read is refused depends on the order of the owner's modules. It is still loud and race-free.
+  - Templates: the two template readers now refuse on `droppable` alone, which no schedule changes. A template's module is never droppable, so this refuses only a pinning miss, and now does so on every order.
+  - Body hashes: a callee the prefill missed is refused only when its module is another worker's, or its owner has already given it back. The comments now say so. Such a miss shows on `-j 1 --perturb` and `-j 3 --perturb` (the gate's release self-build, the `drop_comptime` and nested cases) where `-j 1` may pass. The plan's invariant D3, "fails the same way on every schedule", does not hold for body hashes.
+- **A module declared from its Interface went through shared state.** This predates the row (D1511) and is held.
+  - `interp_module` scanned such a module with `graph.scan_module`. That writes the graph's token scratch, which every worker's checker shares, and the module's token slot.
+  - A second checker then found tokens and parsed them with `graph.parse_module` into the shared node pool. The next such parse overwrote the tree it had cached.
+  - In a crew `--incremental` debug build with comptime calls into two kept modules, that could give wrong tokens or trees.
+
+  Every module without a kept tree now takes the private path, and `interp_module` no longer calls `scan_module`. The race was not reproduced. A copy of `drop_comptime` checks the new path. p is edited, so q is declared from its Interface (`--stats`: "modules decoded | 1"). The warm `--incremental` image equals a clean build's at `-j 1` and at `-j 3 --perturb`, and the program exits 0.
+- **`device_walk` and `callee_keeps` swallow a failed private parse.** Partly held.
+  - `device_walk` skipped the helper. Under exhaustion, a construct the device cannot run could pass there, and the kernel's inferred facts, which reach the Interface, could differ with no error. It now returns `mem.Exhausted`, and the build stops.
+  - `callee_keeps` answers "keeps". That part is rejected. Its answer reaches only `c.resources`, which lowering, the artifact writer and codegen never read. A wrong "keeps" can add a refusal but cannot change an image, so the plan's "conservative" is true of it. It was not true of `device_walk`.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1668`, full run, with the review fixes):
+
+- **Lint.** 0 hard findings.
+- **Self-builds.** Stage 2 equals stage 3 (`07308dcc…`), and the release self-build is the same under `-j 3 --perturb` (`6983bba5…`).
+- **Images.** `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases.
+- **Emit sweep.** 602 link fixtures. Only `import_protocol` differs from 013ec715's compiler (exit 1 → 0). That is D1664's intended change, and the gate exits 1 on it, as D1665-D1667's did. The other 601 images equal D1667's gate's byte for byte, and `drop_comptime` is new: 013ec715's compiler builds it into the same image.
+- **Static gate** (`sc500k`, 8 workers), debug / release:
+  - Arena high-water: 2,235 / 2,958 MB.
+  - Images: 1,936,791 / 1,458,009 B.
+  - 0 of 4 measures breached. The pin is not moved.
+
+The C bootstrap on Windows:
+
+- `build-bootstrap.ps1` rebuilt it, and `neper.exe build src/main.e --arena 1g` exits 0 in 16 s.
+- The compiler it builds builds `src/main.e` into stage 2's bytes (`07308dcc…`).
+- It also builds `sc500k` (release `--unchecked -j 4`) into the gate's `sc500k-rel-j4` image (`89d2a478…`), which prints 121495906.
+
+`run.ps1`'s blocks, cut by line range, all pass under stage 3 and under the bootstrap-built compiler:
+
+- `lower_reset`, `import_protocol`, `bounds_proof --stats` and `front_counts`;
+- the hot suite in both modes;
+- nested inlining, with the new `--fault-dry 2` case;
+- the `--memory-budget` pair and the stream records;
+- the dry fixed point and `drop_comptime`.
+
+The full suites pass: `tests/selfhost/run.ps1` in 13.9 minutes, once the fixture manifest below was brought up to date, and `scripts/run-linux-suite.sh` in 12 minutes.
+
+Before the review fixes, the implementation also checked:
+
+- **The fixture exercises the paths.** With the private parse disabled, every `-j 1` case of `drop_comptime` fails with "cannot lower `run`".
+- **Stale reads.** A poisoned compiler filled each block with 0xA5 where `drop_front` releases it, and kept the reservation. Its builds equal the gate's in 13 cases:
+  - the self-build at the default, `-j 1`, `-j 1 --perturb`, `-j 3 --perturb`, `-j 2 --fault-dry 3` and `-j 1 --fault-dry 2`;
+  - the release self-build at `-j 1 --perturb` and `-j 2 --fault-dry 3`;
+  - `sc500k` release at `-j 1`, `-j 4` and `-j 4 --fault-dry 40`, and `sc500k` debug at `-j 4`;
+  - `sc1m` release at `-j 8`.
+
+  This was not run again after the fixes, which only move more reads to the private path.
+- **What stays to the join.** A temporary instrumented build found that `sc500k` drops 504 of its 505 lowered modules during lowering, and the compiler's own build 36 of 37. The one kept at `sc500k` has a block of 64,876 B. That is `e.mem`, by inference, not by name: it is the only library these workloads import that declares generic functions (`copy[T]`, `eq[T]`), and its 2,174 tokens come to about 69 KB at the program's node and child rates, where `e.os`'s variant would be about 2 MB. The implementation's first reading, `e.os`, was wrong.
+
+Linux (WSL, the worktree rsynced to WSL's own disk):
+
+- **Self-builds.** The rebuilt bootstrap builds stage 1 in 10.1 s. Stage 2 equals stage 3 (`2af1f04b…`).
+- **Images.** `sc500k` gives one image at `-j 4`, at `-j 3 --perturb`, from stage 1, from D1667's stage 3, and from this release compiler at `--fault-dry 40`. The program prints 121495906.
+- **Tests.** `run.sh`'s `front_counts`, hot and nested blocks (with the new dry case) pass under stage 3 and under stage 1. The dry fixed point and `drop_comptime` pass, and each `drop_comptime` program runs.
+- **Memory** (release `sc500k -j 4 --stats`):
+  - Debug stage 3: compiler peak working set 2,499 MB (D1667: 2,498), with 125 MB released.
+  - Release compilers of D1667's source and this one, in three alternating pairs, gave the same image each time:
+    - peak working set 420 / 420 / 420 → 350 / 350 / 350 MB;
+    - lower and codegen 844 / 850 / 990 → 903 / 852 / 957 ms;
+    - link from artifacts 49 / 50 / 57 → 47 / 37 / 39 ms.
+
+    The Windows measurements ran beside these, so the times are loose.
+- A debug compiler at its default arena runs out on `sc500k --fault-dry 40`. A scratch compiler with the drops turned off fails the same way, so that case uses the release compiler.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50), D1667 → this. The `-j 4` and `-j 8` rows are the two gates' own runs. The `-j 1` row was measured after the gate, with both compilers one after the other on the scratch copy of `sc1m` that D1667 measured.
+
+| workload | workers | peak commit | peak working set | worker arenas reached | lower and codegen | link from artifacts | cold p50 |
+|---|---|---|---|---|---|---|---|
+| sc1m | 1 | 672 → 578 MB | 590 → 495 MB | 2,250 → 2,250 MB | 5,509 → 5,587 ms | 122 → 104 ms | 10,130 → 10,229 ms |
+| sc1m | 4 | 1,021 → 911 MB | 749 → 633 MB | 3,277 → 3,277 MB | 1,798 → 2,140 ms | 97 → 87 ms | 3,543 → 4,128 ms |
+| sc1m | 8 | 1,435 → 1,323 MB | 942 → 813 MB | 4,649 → 4,649 MB | 1,415 → 1,547 ms | 100 → 88 ms | 2,948 → 3,164 ms |
+| sc500k | 4 | 688 → 623 MB | 423 → 350 MB | 1,962 → 1,962 MB | 883 → 883 ms | 46 → 37 ms | 1,792 → 1,792 ms |
+| sc500k | 8 | 1,012 → 944 MB | 548 → 466 MB | 2,958 → 2,958 MB | 743 → 758 ms | 47 → 42 ms | 1,505 → 1,592 ms |
+| compiler | 4 | 460 → 452 MB | 218 → 218 MB | 1,441 → 1,443 MB | 285 → 308 ms | 15 → 16 ms | 534 → 574 ms |
+| compiler | 8 | 755 → 753 MB | 293 → 293 MB | 2,827 → 2,834 MB | 291 → 308 ms | 16 → 15 ms | 531 → 560 ms |
+
+- **Peak commit** against D1664's figures, the ones this series set out to beat: `sc1m` 1,086 → 911 MB at `-j 4` and 1,468 → 1,323 at `-j 8`; `sc500k` 707 → 623 and 1,013 → 944; `compiler` 458 → 452 and 759 → 753. At `-j 1`, `sc1m` went from D1662's 913 MB to 578. The plan expected about 948-971 MB at `sc1m -j 4`.
+- **The `compiler` workload** barely moves. Its peak comes at the start of lowering, which this row does not change, and its source grew: the image is 6,937,740 → 6,949,188 B.
+- **Time.** The gate's `sc1m -j 4` runs were 3,580, 4,128 and 4,138 ms, and the load phase, which this row does not touch, went 468 → 519 ms: the machine, not the change. Three alternating pairs at `sc1m -j 4` afterwards gave:
+  - lower and codegen 1,529 / 1,538 / 1,575 → 1,547 / 1,558 / 1,598 ms, about +20 ms;
+  - link from artifacts 95 / 91 / 99 → 77 / 76 / 76 ms;
+  - in all, +22 to +54 ms.
+
+  At `-j 1` the lowering is 78 ms (1.4%) longer, and the link from artifacts 18 ms shorter. The releases now run inside the lowering instead of at the join; the rest of the cost was not measured. "Settling the drops" (`begin_drops`, serial) takes 0-1 ms at `sc1m`.
+
+**Where the peak falls.** A sampler read the process's commit every 5 ms and stamped each progress record as it arrived (`sc1m`, release `--unchecked`). X is the highest commit between the `inline oracles` and `lower and codegen` records, less the commit at `inline oracles`. That base is the lowest reading over the runs, 535 / 737 / 999 MB at `-j 1` / 4 / 8, because a later reading already includes the lowering's first milliseconds.
+
+| workers | D1667: peak, when, X | this: peak, when, X |
+|---|---|---|
+| 1 | 670-671 MB, 5.4-5.5 s into a 5.5 s lowering, 135-136 MB | 577 MB, 90-100 ms in, 42 MB |
+| 4 | 1,021 MB, about 1.45 s into 1.55 s, 284 MB | 910-911 MB, 32-36 ms in, 173-174 MB |
+| 8 | 1,435-1,442 MB, 0.88-0.98 s into 1.06-1.1 s, 436-443 MB | 1,319-1,322 MB, 42-64 ms in, 320-323 MB |
+
+- **The peak now comes at the start of lowering.** It is the workers' first touch of their arenas: with either compiler, commit rises about 150 MB in the lowering's first 10 ms at `-j 4`. From there the drops outrun the growth. At `-j 4`, commit reads 905 MB 100 ms in, 878 MB at 400 ms, 848 MB at 800 ms, 801 MB at 1,200 ms, and 722-723 MB at the end.
+- **Against the plan.** The plan bounded X at 110-150 MB at `-j 4`. It is 174, but the level it starts from is 737 MB, not the plan's 821, since D1661, D1662 and D1664 lowered it. The next lever on this peak is the fork itself (step 5 of D1660's list), not the fronts.
+
+What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), in MB, D1667's release compiler → this. The two ran alternately, twice each, from the scratch copy of `sc1m`; a range is the two runs. "Module blocks" is every private reservation under 64 MB.
+
+| at the end of | root | front-end workers | module blocks | crew workers | link workers | process |
+|---|---|---|---|---|---|---|
+| load and parse | 50 → 51 | 24 → 24 | 252 → 252 | | | 322-323 → 323 |
+| check declarations | 154 → 154 | 24 → 24 | 252 → 252 | 28 → 22-29 | | 431 → 431 |
+| lower and codegen | 160 → 160 | 24 → 24 | 242-243 → 1 | 531 → 531 | | 972 → 722 |
+| link from artifacts | 219 → 219 | 24 → 24 | 1 → 1 | 531 → 531 | 44 → 44 | 825 → 825 |
+| link | 226 → 226 | 24 → 24 | 2 → 2 | 531 → 531 | 44 → 44 | 830-831 → 831 |
+
+- **The lowering end** falls 250 MB: the blocks are gone by then. The link now commits more than the lowering's end, at 825-831 MB, but less than the lowering's start.
+- **The inline-oracles walk** lags into the lowering, as in D1666, and is not given. Its line read 879-881 MB for both compilers.
+
+**The dry path** (`sc500k`, release `--unchecked -j 4`, this compiler), two runs of each:
+
+| | root arena at the lowering's end | peak commit | peak working set | image |
+|---|---|---|---|---|
+| without the flag | 469 MB | 623 MB | 350 MB | `89d2a478…` |
+| `--fault-dry 40` | 1,456 MB | 648-649 MB | 364 MB | `89d2a478…` |
+
+- The root arena is address space. It holds the generous worker's own arena and the private copies of the modules already dropped, and the two were not measured apart.
+- The commit is 26 MB higher, and the peak moves past the lowering, to the link from artifacts or the manifest.
+
+**Found by the full suite.** `docs/library-fixtures.json` was stale, and the Windows suite stopped at that check in 0.4 minutes. The cause is D1667's `front_counts`, a `@gpu` fixture that the manifest did not list. `python scripts/library_fixtures.py --write` adds it; this commit carries that one line.
+
+**Deviations from the plan.**
+
+- **The number.** The plan's D2 is this D1668.
+- **The refusal's name.** `body_hash_uncached` refuses with `graph.ModuleDropped`, not the plan's `InvalidArtifact`, keeping D1667's choice.
+- **Template readers refuse on `droppable`**, not on `front_readable`, so a pinning miss is refused on every order (Review).
+- **`prefill_body_hash`** tests `droppable` on the function's own module, which is the module whose tokens the hash reads, not on the record's module. It also skips a function without source.
+- **`begin_drops`** gives the prefill's scratch back with `mem.mark` and `mem.reset`.
+- **`interp_module`.**
+  - `tokens` starts empty and is set in each branch, so a thread that does not own a droppable module never reads that module's token slot.
+  - A module without a kept tree takes the private path too (Review), and the `unlexed` branch is gone.
+- **`device_walk`** returns `mem.Exhausted` from a failed parse (Review). The plan accepted a skip there.
+- **Additions.** The `--time` row, the `tooling.md` paragraph and the `library-fixtures.json` line.
+- **Where the blocks sit.** The `drop_comptime` block sits after the jobs block, not beside the nested-inlining case, since it needs `$ownCompilerPath`. Its debug mode is spelled `--time`, as `lower_reset`'s block does.
+- **What is pinned.** Pinning comes out smaller than the plan's P′ (`e.os`, `e.str`, `e.io`, `e.mem`): only `e.mem` declares a generic function, as above.
+- **Measuring.** `live.py` and the timeline ran from the session's scratch copy of `sc1m` (identical sources), not from the shared tree's.
+
+**Not done or not measured.**
+
+- Linux commit per phase, the Linux static figure, and Linux X were not measured.
+- The owner table at `-j 1` and `-j 8` was not taken.
+- The poisoned-compiler cases were not run again after the review fixes.
+- The cause of the `-j 1` lowering's 78 ms was not measured.
+- The Interface race that the review found was not reproduced before its fix.
+- The pinned module at `sc500k` is named by inference, not by an instrumented run.
+
+---

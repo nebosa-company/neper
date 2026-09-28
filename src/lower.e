@@ -8018,6 +8018,10 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
         if !found { ret ok }
         let template_module = c.functions[c.function_generics[first].template_index].module_index
         if template_module >= g.count { ret FunctionNotFound }
+        // (D1668) A template's module is never droppable (`begin_drops`); one that is
+        // was missed by the pinning, and is refused by name on every schedule, not only
+        // once its owner has given it back.
+        if g.modules[template_module].droppable { ret graph.ModuleDropped }
         var tree: parse.Tree = zero
         try graph.parse_module(g, template_module, &tree)
         try check.tokenize_module(c, g, template_module)

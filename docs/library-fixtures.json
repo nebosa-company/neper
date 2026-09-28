@@ -1182,6 +1182,7 @@
    "delivered": 120,
    "pending": [],
    "fixtures": [
+    "front_counts",
     "gfx_scene",
     "gpu_barrier",
     "gpu_cpu",

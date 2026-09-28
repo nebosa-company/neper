@@ -773,7 +773,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--overlay") || same(flag, "--cpu")
+    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--fault-dry") || same(flag, "--overlay") || same(flag, "--cpu")
 }
 
 // `--cpu LEVEL` (D765): section 13's x64 levels, `x64-v1` the SSE2 baseline the build
@@ -2069,6 +2069,12 @@ fn check_comptime_budget(report: *Sink, args: []str, checker: *check.Checker, cr
 fn note_fault_cancel(args: []str, checker: *check.Checker) {
     let (fault_cancel_ticks, fault_cancel_on) = decimal_flag(args, "--fault-cancel")
     if fault_cancel_on { checker.fault_cancel_ticks = fault_cancel_ticks }
+}
+
+// (D1668) `--fault-dry N` onto the graph, for the same reason.
+fn note_fault_dry(args: []str, loaded: *graph.Graph) {
+    let (fault_dry, fault_dry_on) = decimal_flag(args, "--fault-dry")
+    if fault_dry_on { loaded.fault_dry = fault_dry }
 }
 
 fn cancel_build(report: *Sink, phase: str) -> err {
@@ -10200,6 +10206,13 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     em.span_clear_rows(&w.checker, &w.builder)
     try nir.discard_module(&w.builder, mark)
     w.signatures.count = signature_mark
+    // (D1668) The module's own lowering and artifact were its tokens' and tree's last
+    // readers, and this worker is its owner, or the generous one running alone after
+    // the join. A template's module is not droppable and stays for the other workers.
+    if w.loaded.drops_on && w.loaded.modules[module_index].droppable {
+        check.forget_front(&w.checker, module_index)
+        try graph.drop_front(w.loaded, module_index)
+    }
     ret ok
 }
 
@@ -10219,6 +10232,13 @@ fn lower_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, fro
         // A checkpoint between modules (D422): as in the body sweep.
         if past_deadline(&w.report) {
             stop_worker(w, at, Cancelled, 3usize)
+            break
+        }
+        // (D1668) `--fault-dry N`: the first worker runs dry before the Nth module of
+        // its run, as though its arena had, and the generous worker takes the rest over
+        // after the fronts of the modules before it went.
+        if w.loaded.fault_dry != 0usize && w.fork_id == 1usize && at + 1usize == w.loaded.fault_dry {
+            stop_worker(w, at, mem.Exhausted, 3usize)
             break
         }
         if lower_wanted(w, w.modules[at]) {
@@ -10735,6 +10755,10 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         lowered[clear_at] = false
         clear_at += 1usize
     }
+    // (D1668) Before any lowering thread starts, timed for `--time`.
+    let drops_started = nptest_now()
+    if crew.drops { try begin_drops(a, crew, loaded, checker, builder, hot) }
+    let drops_ns = nptest_now() - drops_started
     var starts: [LOWER_WORKERS]BodyStart = zero
     var threads: [LOWER_WORKERS]os.Thread = zero
     var started: [LOWER_WORKERS]bool = zero
@@ -10842,6 +10866,10 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         try report_ms(report.regalloc_ns)
         try stderr_text("  of which codegen: ")
         try report_ms(report.codegen_ns)
+        if crew.drops {
+            try stderr_text("  of which settling the drops: ")
+            try report_ms(drops_ns)
+        }
         try report_count("nir instructions in all", builder.instruction_total)
         try report_count("nir instructions, largest module", builder.instruction_peak)
         // Each worker's wall time (D326): the phase is as long as its slowest worker.
@@ -10892,9 +10920,88 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
     ret ok
 }
 
+// (D1668) What the lowering may give back, settled on the main thread before a lowering
+// thread starts and never changed after: each module's lowering worker, by the fork its
+// checker reads as, and whether its block goes back once its artifact is written. A
+// module declaring a generic function or aggregate is kept to the join, since any worker
+// lowers an instance from its template. The inlined callees' body hashes are taken
+// first, for a writer whose callee's module another worker has given back by then, and
+// every checker lets go of what it held of the fronts.
+fn begin_drops(a: *mem.Arena, crew: *Crew, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, hot: *HotBuild) -> err {
+    var worker_at = 0usize
+    while worker_at < crew.count {
+        var at = 0usize
+        while at < crew.workers[worker_at].count {
+            let module_index = crew.workers[worker_at].modules[at]
+            loaded.modules[module_index].crew_owner = crew.workers[worker_at].fork_id
+            loaded.modules[module_index].droppable = loaded.modules[module_index].front.cap != 0usize && !(hot.on && hot.keep[module_index])
+            at += 1usize
+        }
+        worker_at += 1usize
+    }
+    var function_at = 0usize
+    while function_at < checker.function_count {
+        let declared_in = checker.functions[function_at].module_index
+        if checker.functions[function_at].generic && declared_in < loaded.count { loaded.modules[declared_in].droppable = false }
+        function_at += 1usize
+    }
+    var aggregate_at = 0usize
+    while aggregate_at < checker.aggregate_count {
+        let owning = checker.aggregates[aggregate_at].module_index
+        if checker.aggregates[aggregate_at].generic && owning < loaded.count { loaded.modules[owning].droppable = false }
+        aggregate_at += 1usize
+    }
+    // Every callee the lowering can copy in: the second oracle's entries, and what each
+    // entry's own body copied (`emit_inlined_call`). A canonical declaration is at most
+    // four bytes of length and one of text per byte of its module (`canonical_text`).
+    let mark = mem.mark(a)
+    let (storage, storage_error) = mem.alloc[u8](a, loaded.largest_bytes * 5usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var scratch: binary.Buffer = zero
+    try binary.init(&scratch, storage)
+    var entry_at = 0usize
+    while entry_at < crew.second_all_count {
+        try prefill_one(crew, checker, loaded, builder, crew.second_all[entry_at].module_index, crew.second_all[entry_at].name, &scratch)
+        entry_at += 1usize
+    }
+    worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) {
+            var record_at = 0usize
+            while record_at < crew.workers[worker_at].second.inlined_count {
+                let record = crew.workers[worker_at].second.inlined[record_at]
+                try prefill_one(crew, checker, loaded, builder, record.callee_module, record.name, &scratch)
+                record_at += 1usize
+            }
+            check.forget_fronts(&crew.workers[worker_at].checker)
+        }
+        worker_at += 1usize
+    }
+    mem.reset(a, mark)
+    check.forget_fronts(checker)
+    loaded.drops_on = true
+    ret ok
+}
+
+// (D1668) One callee's hash on the program's checker, copied into every worker's.
+fn prefill_one(crew: *Crew, checker: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, module_index: usize, name: str, scratch: *binary.Buffer) -> err {
+    let (index, filled, fill_error) = em.prefill_body_hash(checker, loaded, builder, module_index, name, scratch)
+    if fill_error != ok { ret fill_error }
+    if !filled { ret ok }
+    var worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) {
+            if index < crew.workers[worker_at].checker.body_hashes.len { crew.workers[worker_at].checker.body_hashes[index] = checker.body_hashes[index] }
+        }
+        worker_at += 1usize
+    }
+    ret ok
+}
+
 // (D1667) After the lowering nothing reads a lowered module's tokens or tree: the link
 // reads artifacts, the manifest the digests the writer stored, `--stats` the counts
 // `drop_front` took. Every checker and the resolver let go of what they held of them.
+// (D1668) What is left by then is what was kept to the join: the templates' modules.
 fn release_fronts(loaded: *graph.Graph, lowered: []bool, crew: *Crew, checker: *check.Checker, resolver: *resolve.Resolver) -> err {
     var module_at = 0usize
     while module_at < loaded.count {
@@ -12187,6 +12294,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         // `--fault-cancel N` (D540): the deadline passes at the Nth statement tick.
         if trailing_flags { note_fault_cancel(args, &checker) }
+        // `--fault-dry N` (D1668): the first lowering worker runs dry at its Nth module.
+        if trailing_flags { note_fault_dry(args, &loaded) }
         // The declarations first; then, incrementally, the edge rule decides the kept
         // modules from the Interfaces they give, and only the other bodies are checked
         // (D224). `keep` is what lowering skips below.

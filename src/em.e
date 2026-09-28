@@ -942,6 +942,22 @@ fn body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_
     ret (hash, hash_error)
 }
 
+// (D1668) An inlined callee's body hash memoized on the program's checker before the
+// lowering, when its declaration is in a module a worker may give back before a module
+// that inlined it is written (`write_dependencies`). The inputs are the ones a worker
+// reads -- the declaration rows, the text, the lines and the tokens -- so it is the hash
+// the worker would take. Answers the function's index and whether it was hashed.
+fn prefill_body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, name: str, scratch: *binary.Buffer) -> (usize, bool, err) {
+    if module_index >= g.count { ret (0usize, false, ok) }
+    let (checked_function, found) = find_checked_function(c, module_index, name)
+    if !found || checked_function >= c.body_hashes.len { ret (0usize, false, ok) }
+    let function = c.functions[checked_function]
+    if function.source_end <= function.source_start || function.module_index >= g.count || !g.modules[function.module_index].droppable { ret (0usize, false, ok) }
+    let (_, hash_error) = body_hash(c, g, builder, checked_function, 0usize, false, scratch)
+    if hash_error != ok { ret (0usize, false, hash_error) }
+    ret (checked_function, true, ok)
+}
+
 fn body_hash_uncached(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_function: usize, nir_function: usize, has_nir: bool, scratch: *binary.Buffer) -> (usize, err) {
     let (signature, signature_error) = signature_hash(c, g, checked_function, scratch)
     if signature_error != ok { ret (0usize, signature_error) }
@@ -955,8 +971,11 @@ fn body_hash_uncached(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     // NIR only for a function with no source of its own.
     if function.source_end > function.source_start && function.module_index < g.count {
         // (D1667) A released module's declaration has no tokens to hash, and hashing
-        // none would be a wrong body edge, not a failure.
-        if g.modules[function.module_index].dropped { ret (0usize, graph.ModuleDropped) }
+        // none would be a wrong body edge, not a failure. (D1668) Nor has one another
+        // worker may give back: an inlined callee's hash was taken before the lowering
+        // (`prefill_body_hash`), and any other is a miss, refused whenever the module is
+        // another worker's or its owner has given it back already (`front_readable`).
+        if !graph.front_readable(g, function.module_index, c.fork_id) { ret (0usize, graph.ModuleDropped) }
         let marker_error = binary.byte(scratch, 2usize)
         if marker_error != ok { ret (0usize, marker_error) }
         // The line the declaration starts on is part of the hash (D322): a copy of the

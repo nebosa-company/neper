@@ -993,6 +993,11 @@ without a clock: the body sweep and the lowering read the deadline every four
 thousand and ninety-six statements, and the result's `cancelled_after` names `the
 body sweep, inside a function` or `lowering, inside a function`.
 
+`--fault-dry N` (D1668) on a build that writes an executable makes the first
+lowering worker run dry before the Nth module of its run, as though its arena had,
+so a suite can see the generous worker take the rest over after the modules before
+it gave their tokens and trees back: its image is the build's without the flag.
+
 `--fault-collision` (D507, H15) on a hot build makes every artifact's key a hit
 whatever the text, so a suite can see that a hit is verified beyond the key: a
 body edit under it is still rebuilt as `source-changed`. The manifest's input
