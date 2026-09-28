@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>One SQL contract, four drivers — Neper blog</title>
-  <meta name="description" content="e.db, Neper's SQL contract, and its SQLite, PostgreSQL, MySQL and ODBC drivers: how the contract works, how to write a driver, what differs between the four, and the same workload measured against C, Go and Rust.">
+  <title>One SQL contract, five drivers — Neper blog</title>
+  <meta name="description" content="e.db, Neper's SQL contract, and its SQLite, PostgreSQL, MySQL, ODBC and SQL Server drivers: how the contract works, how to write a driver, what differs between the five, and the same workload measured against C, Go and Rust.">
   <link rel="canonical" href="https://neper.dev/blog/e-db-drivers.html">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
-  <meta property="og:title" content="One SQL contract, four drivers">
-  <meta property="og:description" content="e.db over SQLite, PostgreSQL, MySQL and ODBC, measured against C, Go and Rust: C 96%, Rust 82%, Neper 78%, Go 65% of the fastest, and scans are still where Neper loses.">
+  <meta property="og:title" content="One SQL contract, five drivers">
+  <meta property="og:description" content="e.db over SQLite, PostgreSQL, MySQL, ODBC and SQL Server, measured against C, Go and Rust: C 95%, Rust 85%, Neper 73%, Go 65% of the fastest, and scans are still where Neper loses.">
   <meta property="og:url" content="https://neper.dev/blog/e-db-drivers.html">
   <meta property="og:image" content="https://neper.dev/blog/img/e-db-drivers.svg">
   <meta property="article:published_time" content="2026-09-27">
@@ -141,12 +141,12 @@
 
     <article>
       <div class="eyebrow">&gt; blog // engineering</div>
-      <h1>One SQL contract, four drivers</h1>
+      <h1>One SQL contract, five drivers</h1>
       <p class="meta">September 27, 2026 · updated September 28, 2026 · <code>lib/e/db.e</code>, <code>lib/x/</code>, <code>benchmarks/db</code></p>
-      <img class="banner" src="img/e-db-drivers.svg" width="1200" height="630" alt="One SQL contract, four drivers. Median microseconds per primary-key lookup on Windows, Neper against C: SQLite 23.3 and 20.3, PostgreSQL 39.8 and 35.1, MySQL 102.6 and 90.2, ODBC 81.1 and 60.0.">
+      <img class="banner" src="img/e-db-drivers.svg" width="1200" height="630" alt="One SQL contract, five drivers. Median microseconds per primary-key lookup on Windows, Neper against C: SQLite 23.3 and 20.3, PostgreSQL 39.8 and 35.1, MySQL 102.6 and 90.2, ODBC 81.1 and 60.0, SQL Server 208.1 and 162.4.">
 
-      <p class="lede">Neper's standard library has had a database contract, <code>e.db</code>, for a while, with nothing behind it. Today it has four drivers: SQLite, PostgreSQL, MySQL and ODBC. Each binds a C library the vendor or the operating system provides, and each is tested against a live database on Windows and Linux. This post walks through the contract, shows how to write a driver, explains what differs between the four, and ends with numbers: the same workload in Neper, C, Go and Rust, and which one wins.</p>
-      <p>This post first appeared with three drivers. The fourth, <code>x.microsoft.odbc</code>, landed later the same day, and every number below is from a new run on September 28 that covers all four.</p>
+      <p class="lede">Neper's standard library has had a database contract, <code>e.db</code>, for a while, with nothing behind it. Today it has five drivers: SQLite, PostgreSQL, MySQL, ODBC and SQL Server. Four bind a C library the vendor or the operating system provides. The fifth speaks SQL Server's own protocol, TDS, inside TLS 1.3, in plain Neper. Each is tested against a live database on Windows and Linux. This post walks through the contract, shows how to write a driver, explains what differs between the five, and ends with numbers: the same workload in Neper, C, Go and Rust, and which one wins.</p>
+      <p>This post first appeared with three drivers. The fourth, <code>x.microsoft.odbc</code>, landed later the same day. The fifth, <code>x.microsoft.tds</code>, came the day after, and it needed Neper's AES-GCM made 30–60 times faster first. The first four databases' numbers are from the September 28 run; SQL Server's were measured later that day on the same machine.</p>
 
       <h2>The contract</h2>
       <p><code>e.db</code> is deliberately small. It defines four handles, one table of functions, a value type and five errors:</p>
@@ -248,7 +248,7 @@
 }</code></pre>
 
       <h3>Binding a C library</h3>
-      <p>The four real drivers follow one layout. A small module holds nothing but the C declarations, one variant file per OS. The driver module next to it is portable Neper and never names a library.</p>
+      <p>The four drivers that bind a C library follow one layout. A small module holds nothing but the C declarations, one variant file per OS. The driver module next to it is portable Neper and never names a library. (The SQL Server driver binds nothing; it is one portable module over <code>e.net</code>.)</p>
       <pre><code><span class="com">// lib/x/postgresql/capi.linux.e   (capi.windows.e is identical but for "libpq.dll")</span>
 <span class="kw">@import</span>(<span class="str">"libpq.so.5"</span>, <span class="str">"PQsendQueryParams"</span>)
 <span class="kw">extern</span> <span class="kw">fn</span> <span class="fn">send_query_params</span>(conn: usize, command: *<span class="kw">const</span> u8, count: i32, types: usize,
@@ -298,13 +298,24 @@
       </ul>
       <p>See the <a href="../packages/x.microsoft.odbc.md">package specification</a> for the full value and parameter rules.</p>
 
+      <h2>SQL Server: <code>x.microsoft.tds</code></h2>
+      <ul>
+        <li><strong>No client library.</strong> The driver speaks TDS, SQL Server's own wire protocol, over <code>e.net</code> and <code>e.net.tls</code>: one portable module of about 2,000 lines, with nothing to install on either host. It is named for the protocol, not the product, because Azure SQL and Fabric's SQL endpoints speak the same TDS (D1643).</li>
+        <li><strong>Strict encryption only.</strong> The TLS 1.3 handshake, with ALPN <code>tds/8.0</code>, comes before the first TDS byte, so the login never crosses the wire in the clear. The server's certificate must chain to a root the caller passes; there is no switch that skips the check. This is what SQL Server 2022 and later call strict encryption.</li>
+        <li><strong>Three fixes to TLS on the way in.</strong> SQL Server's certificates are RSA, and <code>e.net.tls</code> verified only Ed25519 and P-256 keys. It now checks RSA certificate signatures and RSA-PSS handshake signatures. The same work found two bugs no loopback test between two Neper ends could reach. An RSA key's bytes were views into a buffer the next handshake message overwrote. And a NewSessionTicket after the handshake was a protocol error (D1644).</li>
+        <li><strong>One TLS record per packet.</strong> SQL Server caps a TDS 8.0 packet at 16,192 bytes, which fits one TLS record, and it resets the connection when a packet spans two records, logging nothing. The first version wrote a whole request at once, so every request longer than one packet (about 16 KB) failed. Now every packet is its own record.</li>
+        <li><strong><code>?</code> becomes <code>@p1</code>, <code>@p2</code>, …</strong> and a statement with parameters goes through <code>sp_executesql</code>. A NULL is written into the text as the literal <code>NULL</code>, because a typed NULL parameter does not convert to every column: an <code>nvarchar</code> NULL into a <code>varbinary</code> column is error 257. <code>prepare</code> sends nothing, since <code>db.Parameter</code> has no type until it is bound.</li>
+        <li><strong>Memory that cannot move under the caller.</strong> The connection's buffers are allocated once, by <code>open</code>, and a request of any size is written a packet at a time. A caller may therefore mark and reset the arena around any call, as the benchmark does around each lookup.</li>
+      </ul>
+      <p>See the <a href="../packages/x.microsoft.tds.md">package specification</a> for the full value and parameter rules.</p>
+
       <h2>How they are tested</h2>
-      <p>There are five fixtures, each with one exit code per check:</p>
+      <p>There are six fixtures, each with one exit code per check:</p>
       <ul>
         <li><code>link/x_db_units</code> tests the drivers' codecs with no server and no library: numeric decoding from hand-built bytes, parameter encoding, the MySQL scanner and literal rendering, ODBC's SQLSTATE mapping, and error mapping. Its binaries reference no client library.</li>
-        <li><code>link/x_sqlite</code>, <code>link/x_postgresql</code>, <code>link/x_mysql</code> and <code>link/x_odbc</code> run 120 to 153 checks each against the real thing. They cover every value kind round-tripped, error codes and messages, streaming, a busy connection, prepared statements, commit and rollback, a 100 KB value, and a row lock that one connection holds and another is refused as <code>Busy</code>.</li>
+        <li><code>link/x_sqlite</code>, <code>link/x_postgresql</code>, <code>link/x_mysql</code>, <code>link/x_odbc</code> and <code>link/x_tds</code> run 120 to 157 checks each against the real thing. They cover every value kind round-tripped, error codes and messages, streaming, a busy connection, prepared statements, commit and rollback, a 100 KB value, and a row lock that one connection holds and another is refused as <code>Busy</code>. The SQL Server fixture adds <code>money</code>, <code>datetimeoffset</code>, <code>uniqueidentifier</code> and a Latin-1 <code>varchar</code>, a transaction the server ends under <code>XACT_ABORT</code>, and a refused login.</li>
       </ul>
-      <p>Each suite run starts throwaway servers with fresh data directories: PostgreSQL 18.6 and MySQL 8.4 on Windows, and the Ubuntu 24.04 packages (PostgreSQL 16, MySQL 8.0) on Linux. ODBC reaches the same PostgreSQL through psqlODBC 17.00 on Windows and psqlODBC 16.00 with unixODBC 2.3.12 on Linux. We also broke each driver on purpose to confirm the fixtures notice: a wrong numeric digit, a wrong SQLSTATE mapping, the busy guard, the statement splitter and the quote lexer were each caught with a distinct exit code.</p>
+      <p>Each suite run starts throwaway servers with fresh data directories: PostgreSQL 18.6 and MySQL 8.4 on Windows, and the Ubuntu 24.04 packages (PostgreSQL 16, MySQL 8.0) on Linux. ODBC reaches the same PostgreSQL through psqlODBC 17.00 on Windows and psqlODBC 16.00 with unixODBC 2.3.12 on Linux. SQL Server is 2025 Developer on both: a local instance on Windows, and Microsoft's <code>mssql-server</code> package in WSL, each with a self-signed certificate that the tests pin. We also broke each driver on purpose to confirm the fixtures notice: a wrong numeric digit, a wrong SQLSTATE mapping, the busy guard, the statement splitter and the quote lexer were each caught with a distinct exit code. In the SQL Server driver, so were three planted defects: a null bitmap read from the wrong end, a <code>?</code> inside a bracketed name taken for a placeholder, and a <code>SELECT</code>'s row count taken for affected rows.</p>
 
       <h2>Performance</h2>
       <p>Three phases run through <code>e.db</code> by <code>benchmarks/db</code>:</p>
@@ -315,25 +326,26 @@
       </ul>
       <p>The same work is written four times:</p>
       <ul>
-        <li><strong>Neper</strong>, through <code>e.db</code> and the four drivers above (<code>benchmarks/db/src</code>).</li>
-        <li><strong>C</strong>, directly against each C API (<code>benchmarks/db/c/bench.c</code>), using the strategy the matching Neper driver uses: prepared statements for SQLite; binary parameters and results for PostgreSQL, one row at a time; escaped text for MySQL; and for ODBC, the wide entry points with bound parameters and <code>SQLGetData</code> per column. It is the floor for that design.</li>
+        <li><strong>Neper</strong>, through <code>e.db</code> and the five drivers above (<code>benchmarks/db/src</code>).</li>
+        <li><strong>C</strong>, directly against each C API (<code>benchmarks/db/c/bench.c</code>), using the strategy the matching Neper driver uses: prepared statements for SQLite; binary parameters and results for PostgreSQL, one row at a time; escaped text for MySQL; and for ODBC, the wide entry points with bound parameters and <code>SQLGetData</code> per column. It is the floor for that design. For SQL Server, C runs the same ODBC code through Microsoft's ODBC Driver 18 with <code>Encrypt=Strict</code>: Microsoft's own client is the baseline there.</li>
         <li><strong>Go 1.27</strong>, with each database's standard Go driver (<code>benchmarks/db/go</code>):
           <ul>
             <li>PostgreSQL: <code>pgx</code>.</li>
             <li>MySQL: <code>go-sql-driver/mysql</code>.</li>
             <li>SQLite: <code>mattn/go-sqlite3</code> bound through cgo to the system library on Linux; <code>modernc.org/sqlite</code>, a Go translation of SQLite, on Windows, which has no gcc here.</li>
             <li>ODBC: <code>alexbrainman/odbc</code> through <code>database/sql</code>, calling <code>odbc32.dll</code> directly on Windows and unixODBC through cgo on Linux.</li>
+            <li>SQL Server: <code>microsoft/go-mssqldb</code> 1.11, which speaks TDS in Go, in its strict mode.</li>
           </ul>
         </li>
-        <li><strong>Rust 1.97</strong>, with the standard synchronous crates (<code>benchmarks/db/rust</code>): <code>rusqlite</code> on the system SQLite, <code>postgres</code>, <code>mysql</code>, and <code>odbc-api</code> reading row by row with <code>get_data</code>, as the Neper driver and the C baseline do.</li>
+        <li><strong>Rust 1.97</strong>, with the standard synchronous crates (<code>benchmarks/db/rust</code>): <code>rusqlite</code> on the system SQLite, <code>postgres</code>, <code>mysql</code>, and <code>odbc-api</code> reading row by row with <code>get_data</code>, as the Neper driver and the C baseline do. For SQL Server there is no synchronous crate, so it uses <code>tiberius</code> 0.12 on a single-threaded tokio runtime. tiberius speaks TDS in Rust but has no strict mode, so its TLS session is negotiated inside PRELOGIN, and every byte after that is still encrypted.</li>
       </ul>
-      <p>Go and Rust speak the PostgreSQL and MySQL wire protocols themselves rather than through libpq and libmysql, and for MySQL they use server-side prepared statements where Neper and C render text. All four languages reach ODBC through the same driver manager and the same psqlODBC, against the same PostgreSQL server the libpq rows use.</p>
-      <p>Each round ran every language once, alternated, 9 rounds after a warm-up, and the tables report medians. <em>N</em> is 100,000 rows and 20,000 lookups for SQLite, and 20,000 rows and 5,000 lookups for the servers and ODBC. Everything ran on one laptop, a Core i5-12500H, under Windows 11 and under WSL2 Ubuntu 24.04, with the Neper programs built by the compiler at <code>27b91ab0</code>. The servers were local and throwaway (PostgreSQL with <code>fsync=off</code>, MySQL at its defaults), and SQLite wrote a file with its default rollback journal.</p>
-      <p>Other work shared the machine, so the absolute speeds moved between runs, and Windows moved far more than Linux. On Linux the interquartile spread was 2–23% for scans and up to 55% for MySQL's lookups. On Windows it was 12–99% for almost every cell, and more for SQLite inserts. Each cell below is therefore each language's median as a percentage of the fastest median in the same round, where 100% means it won the cell; read the Windows cells as rough.</p>
+      <p>Go and Rust speak the PostgreSQL and MySQL wire protocols themselves rather than through libpq and libmysql, and for MySQL they use server-side prepared statements where Neper and C render text. All four languages reach ODBC through the same driver manager and the same psqlODBC, against the same PostgreSQL server the libpq rows use. For SQL Server, Neper, Go and Rust each speak TDS themselves and C goes through Microsoft's driver; all four encrypt the whole session and check the server's certificate against the same pinned one. Neper's AES runs in portable code, while OpenSSL, Go and rustls use the CPU's AES instructions.</p>
+      <p>Each round ran every language once, alternated, 9 rounds after a warm-up, and the tables report medians. <em>N</em> is 100,000 rows and 20,000 lookups for SQLite, and 20,000 rows and 5,000 lookups for the servers and ODBC. Everything ran on one laptop, a Core i5-12500H, under Windows 11 and under WSL2 Ubuntu 24.04, with the Neper programs built by the compiler at <code>27b91ab0</code> (the SQL Server one from the <code>x.microsoft.tds</code> branch, whose compiler is unchanged). The servers were local and throwaway (PostgreSQL with <code>fsync=off</code>, MySQL and SQL Server at their defaults), and SQLite wrote a file with its default rollback journal.</p>
+      <p>Other work shared the machine, so the absolute speeds moved between runs, and Windows moved far more than Linux. On Linux the interquartile spread was 2–23% for scans and up to 55% for MySQL's lookups, and 23–62% for SQL Server. On Windows it was 12–99% for almost every cell, and more for SQLite inserts and SQL Server's scans. Each cell below is therefore each language's median as a percentage of the fastest median in the same round, where 100% means it won the cell; read the Windows cells as rough.</p>
 
       <div class="callout">
         <strong>The verdict: C, then Rust, then Neper, then Go.</strong>
-        <p>Scored against the fastest in each of the 24 cells (3 workloads × 4 databases × 2 hosts), the geometric means are <b>C 96%, Rust 82%, Neper 78%, Go 65%</b>. C wins 16 cells, Rust 4, Go 3 and Neper 1. Counting places instead of percentages, Neper is most often third (11 of 24) and last in only 5, fewer than Rust (6) or Go (13). Neper is level with Rust on Windows (77% against 75%) and well behind it on Linux (78% against 89%), and its largest gap is still in one workload: across both hosts it averages 87% of the fastest on inserts, 79% on lookups and 68% on scans.</p>
+        <p>Scored against the fastest in each of the 30 cells (3 workloads × 5 databases × 2 hosts), the geometric means are <b>C 95%, Rust 85%, Neper 73%, Go 65%</b>. C wins 17 cells, Rust 9, Go 3 and Neper 1. Counting places instead of percentages, Neper is most often third (13 of 30) and last in 8, more than Rust (6) and half as often as Go (16). SQL Server moved Rust up and Neper down: Rust wins five of its six cells, and Neper's SQL Server scans, at 28–35% of the fastest, are its weakest cells anywhere. Neper's largest gap is still in one workload: across both hosts it averages 86% of the fastest on inserts, 78% on lookups and 58% on scans.</p>
       </div>
 
       <p class="legend" aria-label="Colour key"><span class="key rank-1"><span>1st</span></span><span class="key rank-2"><span>2nd</span></span><span class="key rank-last"><span>last</span></span><span>in each row; in the Neper · C tables, the faster of the two is green and the slower red</span></p>
@@ -353,8 +365,11 @@
             <tr><td>ODBC insert</td><td class="rank-2">91%</td><td class="rank-1">100%</td><td class="rank-last">67%</td><td>83%</td></tr>
             <tr><td>ODBC scan</td><td>75%</td><td class="rank-1">100%</td><td class="rank-last">63%</td><td class="rank-2">94%</td></tr>
             <tr><td>ODBC lookup</td><td>74%</td><td class="rank-1">100%</td><td class="rank-last">44%</td><td class="rank-2">92%</td></tr>
-            <tr><td><strong>Geometric mean</strong></td><td class="rank-2">77%</td><td class="rank-1">94%</td><td class="rank-last">64%</td><td><strong>75%</strong></td></tr>
-            <tr class="overall"><td><strong>Overall</strong></td><td class="rank-2"><strong>2nd</strong></td><td class="rank-1"><strong>1st</strong></td><td class="rank-last"><strong>4th</strong></td><td><strong>3rd</strong></td></tr>
+            <tr><td>SQL Server insert</td><td class="rank-last">74%</td><td class="rank-2">87%</td><td>75%</td><td class="rank-1">100%</td></tr>
+            <tr><td>SQL Server scan</td><td class="rank-last">35%</td><td class="rank-2">91%</td><td>44%</td><td class="rank-1">100%</td></tr>
+            <tr><td>SQL Server lookup</td><td>67%</td><td class="rank-2">86%</td><td class="rank-last">58%</td><td class="rank-1">100%</td></tr>
+            <tr><td><strong>Geometric mean</strong></td><td><strong>73%</strong></td><td class="rank-1">93%</td><td class="rank-last">63%</td><td class="rank-2">80%</td></tr>
+            <tr class="overall"><td><strong>Overall</strong></td><td><strong>3rd</strong></td><td class="rank-1"><strong>1st</strong></td><td class="rank-last"><strong>4th</strong></td><td class="rank-2"><strong>2nd</strong></td></tr>
           </tbody>
         </table>
       </div>
@@ -374,7 +389,10 @@
             <tr><td>ODBC insert</td><td class="rank-2">98%</td><td class="rank-1">100%</td><td class="rank-last">93%</td><td>95%</td></tr>
             <tr><td>ODBC scan</td><td>65%</td><td class="rank-1">100%</td><td class="rank-last">57%</td><td class="rank-2">96%</td></tr>
             <tr><td>ODBC lookup</td><td class="rank-last">84%</td><td class="rank-1">100%</td><td>90%</td><td class="rank-2">95%</td></tr>
-            <tr><td><strong>Geometric mean</strong></td><td><strong>78%</strong></td><td class="rank-1">98%</td><td class="rank-last">67%</td><td class="rank-2">89%</td></tr>
+            <tr><td>SQL Server insert</td><td class="rank-2">96%</td><td>94%</td><td class="rank-last">79%</td><td class="rank-1">100%</td></tr>
+            <tr><td>SQL Server scan</td><td class="rank-last">28%</td><td class="rank-1">100%</td><td>62%</td><td class="rank-2">97%</td></tr>
+            <tr><td>SQL Server lookup</td><td>86%</td><td class="rank-2">89%</td><td class="rank-last">71%</td><td class="rank-1">100%</td></tr>
+            <tr><td><strong>Geometric mean</strong></td><td><strong>74%</strong></td><td class="rank-1">97%</td><td class="rank-last">67%</td><td class="rank-2">91%</td></tr>
             <tr class="overall"><td><strong>Overall</strong></td><td><strong>3rd</strong></td><td class="rank-1"><strong>1st</strong></td><td class="rank-last"><strong>4th</strong></td><td class="rank-2"><strong>2nd</strong></td></tr>
           </tbody>
         </table>
@@ -388,6 +406,7 @@
             <tr><td>PostgreSQL 18.6</td><td><span class="rank-last">26,567</span> · <span class="rank-1">27,759</span></td><td><span class="rank-1">4,487,021</span> · <span class="rank-last">4,194,015</span></td><td><span class="rank-last">39.8</span> · <span class="rank-1">35.1</span></td></tr>
             <tr><td>MySQL 8.4.9</td><td><span class="rank-last">9,427</span> · <span class="rank-1">10,240</span></td><td><span class="rank-last">1,645,468</span> · <span class="rank-1">2,496,723</span></td><td><span class="rank-last">102.6</span> · <span class="rank-1">90.2</span></td></tr>
             <tr><td>psqlODBC 17.00</td><td><span class="rank-last">7,004</span> · <span class="rank-1">7,736</span></td><td><span class="rank-last">698,200</span> · <span class="rank-1">932,766</span></td><td><span class="rank-last">81.1</span> · <span class="rank-1">60.0</span></td></tr>
+            <tr><td>SQL Server 2025</td><td><span class="rank-last">5,062</span> · <span class="rank-1">5,913</span></td><td><span class="rank-last">584,735</span> · <span class="rank-1">1,532,121</span></td><td><span class="rank-last">208.1</span> · <span class="rank-1">162.4</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -399,10 +418,11 @@
             <tr><td>PostgreSQL 16</td><td><span class="rank-last">21,233</span> · <span class="rank-1">21,718</span></td><td><span class="rank-last">3,962,307</span> · <span class="rank-1">6,337,511</span></td><td><span class="rank-last">48.5</span> · <span class="rank-1">47.1</span></td></tr>
             <tr><td>MySQL 8.0.46</td><td><span class="rank-last">7,506</span> · <span class="rank-1">9,040</span></td><td><span class="rank-last">2,397,467</span> · <span class="rank-1">2,905,679</span></td><td><span class="rank-last">113.1</span> · <span class="rank-1">92.9</span></td></tr>
             <tr><td>psqlODBC 16.00</td><td><span class="rank-last">8,850</span> · <span class="rank-1">9,033</span></td><td><span class="rank-last">1,023,769</span> · <span class="rank-1">1,584,467</span></td><td><span class="rank-last">71.1</span> · <span class="rank-1">59.7</span></td></tr>
+            <tr><td>SQL Server 2025</td><td><span class="rank-1">3,947</span> · <span class="rank-last">3,870</span></td><td><span class="rank-last">556,809</span> · <span class="rank-1">1,976,768</span></td><td><span class="rank-last">270.9</span> · <span class="rank-1">259.8</span></td></tr>
           </tbody>
         </table>
       </div>
-      <p><strong>Scans are still where Neper loses.</strong> Neper reaches 55–83% of the fastest scan on seven of the eight database-host pairs; on Linux, where the scan spread is 2–23%, that gap is real. SQLite shows it plainest, at 55–56% of C on both hosts:</p>
+      <p><strong>Scans are still where Neper loses.</strong> Neper reaches 55–83% of the fastest scan on seven of the eight database-host pairs of the four C-library drivers; on Linux, where the scan spread is 2–23%, that gap is real. (SQL Server's scans, lower still, are a different story, told below.) SQLite shows it plainest, at 55–56% of C on both hosts:</p>
       <ul>
         <li>the C loop reads each value in place;</li>
         <li>Neper borrows the row's text too (<code>reader_next_borrowed</code>, D1599), but still builds a tagged <code>Value</code> per column and dispatches through <code>e.db</code>;</li>
@@ -411,8 +431,9 @@
       <p>The exception is PostgreSQL on Windows, where Neper wins the scan outright: 4.49 million rows per second against C's 4.19 million. That is the chunked reads (D1606). Windows has libpq 18.6, so the driver takes 256 rows per result. WSL has libpq 16, which has no chunked mode, so Neper falls back to a row at a time there and scans at 63% of C, while the C baseline still reads a row at a time on both hosts. ODBC has no borrowed form at all, so the driver copies every value, and its scans sit at 65–75%.</p>
       <p><strong>ODBC costs every language.</strong> Over the same PostgreSQL server, C's scan through psqlODBC is 4–4.5 times slower than C's scan through libpq, and its lookups are 27–71% slower. What ODBC buys is reach, not speed. Within ODBC, Neper's inserts are at 91–98% of C and its lookups at 74–84%.</p>
       <p><strong>Inserts and lookups are close contests, except on MySQL.</strong> Against a server each statement waits on a loopback round trip, and a lookup takes 35–135 µs, and the language mostly disappears into it: Neper is within 2–12% of C on PostgreSQL inserts and lookups on both hosts. MySQL is the wide one. Go wins all three MySQL cells on Windows and Rust two of three on Linux, while Neper and C trail. Rust and Go use server-side prepared statements over the binary protocol, where Neper and C render each statement as text. That protocol choice explains most of it, though not all: Rust's own MySQL lookups on Windows are the slowest of the four (129 µs). MySQL's insert and lookup cells also spread 26–82% between rounds, so they are the least settled of the lot.</p>
+      <p><strong>SQL Server is decided by encryption.</strong> Every language encrypts the whole session here, and the scan moves about 600 KB of TLS records. Neper decrypts them in portable code at about 23 MB/s, while OpenSSL, Go and rustls use the CPU's AES instructions. That is most of Neper's scan time, and why it reads 557,000–585,000 rows per second against C's 1.5–2.0 million and Rust's 1.7–1.9 million (28–35% of the fastest). Inserts and lookups send small records, so the cipher matters less there: Neper's Linux inserts beat C's, at 96% of Rust's, and its lookups are at 86% on Linux and 67% on Windows. Rust's tiberius wins five of the six SQL Server cells. Before D1645, Neper's AES-GCM ran at 372 KB/s, and this scan read 15,000 rows a second.</p>
       <p><strong>Go is last overall, mainly on SQLite.</strong> Its PostgreSQL scans are strong (87–97%) and it wins every MySQL cell on Windows, but its SQLite numbers (23–66%) and its Windows ODBC lookups (44%) pull its mean to 65%.</p>
-      <p><strong>C leads, Rust is second.</strong> C wins 16 of 24 cells and never falls below 71%. Rust has the second-best mean on Linux (89%), but on Windows its MySQL numbers (48–52%) and PostgreSQL scan (57%) pull it down to 75%, just behind Neper's 77%.</p>
+      <p><strong>C leads, Rust is second.</strong> C wins 17 of 30 cells and never falls below 71%. Rust has the second-best mean on both hosts, 91% on Linux and 80% on Windows, where its MySQL numbers (48–52%) and PostgreSQL scan (57%) pull it down. Neper is third on both, at 74% and 73%.</p>
       <p><strong>What changed since the first post.</strong> On the 18 cells both runs share, Neper rose from 69% to 77%. The changes behind it are the borrowed rows (D1599), a faster byte copy for the copying readers (D1600), the chunked PostgreSQL reads (D1606), and call-aware register allocation (D1607). The largest gains are the PostgreSQL scan on Windows (51% to 100%), the MySQL scans (52–66% to 62–83%), MySQL lookups on Linux (45% to 70%) and SQLite inserts (61–76% to 86–88%). SQLite's scan barely moved, from 52–53% to 55–56%, and a few server cells on Windows fell back within that host's noise. C rose over the same cells, from 86% to 95%, so part of every percentage's movement is the fastest implementation changing, not only Neper closing the gap.</p>
 
       <div class="callout">
@@ -421,17 +442,17 @@
       </div>
 
       <h2>Try it</h2>
-      <p>The drivers are in <code>lib/x/sqlite</code>, <code>lib/x/postgresql</code>, <code>lib/x/oracle</code> and <code>lib/x/microsoft</code>. Each has a specification under <code>docs/packages/</code> covering upstream version, targets, ownership and licensing. To reproduce the numbers, first build the four Neper programs in release mode from <code>benchmarks/db/src/{sqlite,postgresql,mysql,odbc}.e</code>, named <code>&lt;prefix&gt;-&lt;driver&gt;</code> (with <code>.exe</code> on Windows). Then one script per host does the rest:</p>
+      <p>The drivers are in <code>lib/x/sqlite</code>, <code>lib/x/postgresql</code>, <code>lib/x/oracle</code> and <code>lib/x/microsoft</code>. Each has a specification under <code>docs/packages/</code> covering upstream version, targets, ownership and licensing. To reproduce the numbers, first build the five Neper programs in release mode from <code>benchmarks/db/src/{sqlite,postgresql,mysql,odbc,sqlserver}.e</code>, named <code>&lt;prefix&gt;-&lt;driver&gt;</code> (with <code>.exe</code> on Windows). Then one script per host does the rest:</p>
       <ul>
         <li>it builds the C, Go and Rust programs;</li>
-        <li>it starts throwaway PostgreSQL and MySQL servers on free ports;</li>
+        <li>it starts throwaway PostgreSQL and MySQL servers on free ports, and the local SQL Server;</li>
         <li>it points ODBC at psqlODBC, through a per-user DSN that exists only for the run on Windows, and by the driver's path on Linux;</li>
         <li>it runs the alternated rounds and stops the servers.</li>
       </ul>
-      <p>On Windows the client libraries and psqlODBC are unpacked under <code>D:\tools</code> (or <code>$env:NEPER_DB_TOOLS</code>), and the C program builds with MSVC. On Linux the Ubuntu packages are <code>libsqlite3-dev</code>, <code>libpq-dev</code>, <code>libmysqlclient-dev</code>, <code>unixodbc-dev</code> and <code>odbc-postgresql</code>. Both scripts source <code>benchmarks/db/tools-env</code>, which keeps the Go and Rust toolchains' caches in one directory:</p>
+      <p>On Windows the client libraries and psqlODBC are unpacked under <code>D:\tools</code> (or <code>$env:NEPER_DB_TOOLS</code>), and the C program builds with MSVC. SQL Server is a local 2025 Developer instance, given the certificate strict connections need by <code>tests/selfhost/sqlserver_tls.ps1</code>, run once in an elevated PowerShell. On Linux the Ubuntu packages are <code>libsqlite3-dev</code>, <code>libpq-dev</code>, <code>libmysqlclient-dev</code>, <code>unixodbc-dev</code> and <code>odbc-postgresql</code>, plus Microsoft's <code>mssql-server</code> and <code>msodbcsql18</code>, set up once by <code>tests/selfhost/sqlserver.sh setup</code>. Both scripts source <code>benchmarks/db/tools-env</code>, which keeps the Go and Rust toolchains' caches in one directory:</p>
       <pre><code><span class="prompt">$</span> pwsh benchmarks/db/run-windows-all.ps1 build/bench/neper results-windows.json
 <span class="prompt">$</span> bash benchmarks/db/run-linux-all.sh build/linux/bench/neper results-linux.json</code></pre>
-      <p>The raw samples behind every number above are in <code>benchmarks/db/results/</code>, as <code>windows-2026-09-28-four-drivers.json</code> and <code>linux-2026-09-28-four-drivers.json</code>. If your numbers disagree with ours, we want to know.</p>
+      <p>The raw samples behind every number above are in <code>benchmarks/db/results/</code>, as <code>windows-2026-09-28-five-drivers.json</code> and <code>linux-2026-09-28-five-drivers.json</code>. If your numbers disagree with ours, we want to know.</p>
       <div class="try-cta">
         <a class="button nu-btn lg" href="../">Try Neper →</a>
       </div>
