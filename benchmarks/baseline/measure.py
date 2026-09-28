@@ -5,6 +5,7 @@
 #
 #   python benchmarks/baseline/measure.py --compiler PATH --repo ROOT --host windows|linux \
 #       [--out baseline.json] [--runs 5] [--fixtures DIR] [--workloads compiler,sc500k,sc1m,sc2m] [--jobs N]
+#       [--modes debug,release] [--extra "--unchecked"]
 #
 # `compiler` is a self-hosted release build of the revision under measurement (a
 # bootstrap-built one runs its workers inline and measures something else). The scale
@@ -27,6 +28,13 @@ parser.add_argument('--workloads', default='compiler,sc500k,sc1m,sc2m')
 parser.add_argument('--arena', default='14g')
 # `--jobs N` caps the workers (D331), for a cell a host cannot hold at eight: recorded.
 parser.add_argument('--jobs', type=int, default=0)
+# The modes to measure, and flags added to every build (`--unchecked`): recorded (D1660).
+parser.add_argument('--modes', default='debug,release')
+parser.add_argument('--extra', default='')
+# A plain build (D1660): no `--incremental`, so no artifacts on disk and no warm run --
+# the cold build a user types. Peak commit is then read from every cold run, since
+# `--stats` keeps every tree to the end of the build.
+parser.add_argument('--plain', action='store_true')
 args = parser.parse_args()
 
 repo = os.path.abspath(args.repo)
@@ -47,8 +55,33 @@ def workload_dir(name):
 
 def run(cwd, argv):
     start = time.perf_counter()
-    p = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, errors='replace')
-    return (time.perf_counter() - start) * 1000.0, p
+    p = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors='replace')
+    p.stdout, p.stderr = p.communicate()
+    ms = (time.perf_counter() - start) * 1000.0
+    p.peak_commit_mb = peak_commit_mb(p)
+    return ms, p
+
+# The process's peak commit charge (D1660): what a Windows build asks of the machine,
+# reserved pools included, where the peak working set counts only touched pages.
+def peak_commit_mb(p):
+    if os.name != 'nt':
+        return None
+    import ctypes
+    from ctypes import wintypes
+    class Counters(ctypes.Structure):
+        _fields_ = [('cb', wintypes.DWORD), ('faults', wintypes.DWORD)] + [(n, ctypes.c_size_t) for n in ('peak_ws', 'ws', 'qpp', 'qp', 'qpnp', 'qnp', 'pagefile', 'peak_pagefile')]
+    c = Counters()
+    c.cb = ctypes.sizeof(c)
+    if not ctypes.windll.kernel32.K32GetProcessMemoryInfo(wintypes.HANDLE(int(p._handle)), ctypes.byref(c), c.cb):
+        return None
+    return c.peak_pagefile // 1048576
+
+# The `--stats-full` pool table: capacity and use per pool (D1660).
+def pools(text):
+    out = {}
+    for m in re.finditer(r'^([a-z][a-z ,()]+) \| ([\d\']+) \| ([\d\']*)$', text, re.M):
+        out[m.group(1)] = [int(m.group(2).replace("'", '')), int(m.group(3).replace("'", '') or 0)]
+    return out
 
 def phases(text):
     out = {}
@@ -84,11 +117,12 @@ report = {
 for name in args.workloads.split(','):
     cwd, operand = workload_dir(name)
     lines = sum(1 for f in os.listdir(os.path.join(cwd, 'src')) if f.endswith('.e') for _ in open(os.path.join(cwd, 'src', f), encoding='utf-8', errors='replace'))
-    for mode in ('debug', 'release'):
+    for mode in args.modes.split(','):
         flag = ['--release'] if mode == 'release' else []
         out = os.path.join(cwd, f'baseline-{mode}{exe}')
-        base = [args.compiler, 'emit-executable', operand, repo, 'x64', args.host, out, '--arena', args.arena, '--incremental', '--time'] + flag + (['-j', str(args.jobs)] if args.jobs else [])
-        cell = {'workload': name, 'lines': lines, 'mode': mode, 'command': ' '.join(base), 'cold_ms': [], 'warm_ms': [], 'cold_phases': [], 'warm_phases': [], 'arena_mb': None, 'retries': 0}
+        incremental = [] if args.plain else ['--incremental']
+        base = [args.compiler, 'emit-executable', operand, repo, 'x64', args.host, out, '--arena', args.arena] + incremental + ['--time'] + flag + args.extra.split() + (['-j', str(args.jobs)] if args.jobs else [])
+        cell = {'workload': name, 'lines': lines, 'mode': mode, 'command': ' '.join(base), 'cold_ms': [], 'warm_ms': [], 'cold_phases': [], 'warm_phases': [], 'cold_commit_mb': [], 'arena_mb': None, 'retries': 0}
         failed = None
         i = 0
         while i < args.runs + 1:
@@ -96,7 +130,7 @@ for name in args.workloads.split(','):
             ms, p = run(cwd, base)
             text = p.stdout + p.stderr
             if p.returncode == 0:
-                ms2, p2 = run(cwd, base)
+                ms2, p2 = (ms, p) if args.plain else run(cwd, base)
                 text2 = p2.stdout + p2.stderr
             # A build that ran out of memory is the machine's commit charge, not the
             # workload (D306): tried again up to three times, and counted.
@@ -109,6 +143,7 @@ for name in args.workloads.split(','):
                 break
             if i:
                 cell['cold_ms'].append(ms); cell['cold_phases'].append(phases(text))
+                cell['cold_commit_mb'].append(p.peak_commit_mb or 0)
                 cell['warm_ms'].append(ms2); cell['warm_phases'].append(phases(text2))
                 cell['arena_mb'] = max(cell['arena_mb'] or 0, arena_mb(text) or 0)
             i += 1
@@ -121,20 +156,23 @@ for name in args.workloads.split(','):
         text = ''
         for attempt in range(4):
             shutil.rmtree(os.path.join(cwd, '.neper'), ignore_errors=True)
-            ms, p = run(cwd, base + ['--stats'])
+            ms, p = run(cwd, base + ['--stats-full'])
             text = p.stdout + p.stderr
             if p.returncode == 0: break
             cell['retries'] += 1
         cell['peak_mb'] = stat_row(text, 'compiler peak working set')
+        cell['peak_commit_mb'] = p.peak_commit_mb
+        cell['pools'] = pools(text)
         cell['image_bytes'] = stat_row(text, 'executable size')
         cell['functions'] = stat_row(text, 'functions')
         cell['worker_reached_mb'] = stat_row(text, 'worker arenas reached')
+        cell['cold_commit'] = percentiles(cell['cold_commit_mb'])
         cell['cold'] = percentiles(cell['cold_ms'])
         cell['warm'] = percentiles(cell['warm_ms'])
         cell['cold_phase_p50'] = {k: statistics.median(ph.get(k, 0) for ph in cell['cold_phases']) for k in cell['cold_phases'][0]}
         cell['warm_phase_p50'] = {k: statistics.median(ph.get(k, 0) for ph in cell['warm_phases']) for k in cell['warm_phases'][0]}
         report['cells'].append(cell)
-        print(f"{name:9} {mode:8} cold p50 {cell['cold']['p50']:8.0f} p95 {cell['cold']['p95']:8.0f} | warm p50 {cell['warm']['p50']:6.0f} p95 {cell['warm']['p95']:6.0f} | peak {cell['peak_mb']} MB | arena {cell['arena_mb']} MB | image {cell['image_bytes']} B | retries {cell['retries']}")
+        print(f"{name:9} {mode:8} cold p50 {cell['cold']['p50']:8.0f} p95 {cell['cold']['p95']:8.0f} | warm p50 {cell['warm']['p50']:6.0f} p95 {cell['warm']['p95']:6.0f} | peak {cell['peak_mb']} MB | commit p50 {cell['cold_commit']['p50']:.0f} MB (stats run {cell['peak_commit_mb']}) | arena {cell['arena_mb']} MB | image {cell['image_bytes']} B | retries {cell['retries']}")
         try:
             os.remove(out)
         except OSError:
