@@ -129,9 +129,9 @@ fn keep_failure(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: 
         if parse.child_is_node_at(tree, at) {
             let child = tree.nodes[parse.child_index_at(tree, at)]
             if child.kind == .Block && usize(child.token_start) < r.token_count && usize(child.token_end) > usize(child.token_start) && usize(child.token_end) <= r.token_count {
-                let block_start = r.tokens[usize(child.token_start)].start
-                let block_end = r.tokens[usize(child.token_end) - 1usize].end
-                if r.failure_token.start >= block_start && r.failure_token.start < block_end { interface = false }
+                let block_start = usize(r.tokens[usize(child.token_start)].start)
+                let block_end = usize(r.tokens[usize(child.token_end) - 1usize].end)
+                if usize(r.failure_token.start) >= block_start && usize(r.failure_token.start) < block_end { interface = false }
             }
         }
         at += 1usize
@@ -320,7 +320,7 @@ fn declaration_name(r: *Resolver, text: str, node: syntax.Node) -> (str, err) {
     if name_index >= usize(node.token_end) || name_index >= r.token_count { ret ("", parse.InvalidSyntax) }
     let token = r.tokens[name_index]
     if token.kind != .Identifier { ret ("", parse.InvalidSyntax) }
-    ret (text[token.start..token.end], ok)
+    ret (lex.token_text(text, token), ok)
 }
 
 fn collect_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
@@ -478,14 +478,14 @@ fn validate_field(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index
     if usize(receiver.token_start) >= r.token_count { ret parse.InvalidSyntax }
     let base_token = r.tokens[usize(receiver.token_start)]
     if base_token.kind != .Identifier { ret ok }
-    let base = g.modules[module_index].text[base_token.start..base_token.end]
+    let base = lex.token_text(g.modules[module_index].text, base_token)
     let (target_module, has_qualifier) = qualifier(r, module_index, base)
     if !has_qualifier { ret ok }
     var at = usize(node.token_end)
     while at > usize(node.token_start) {
         at = at - 1usize
         if r.tokens[at].kind == .Identifier {
-            let member = g.modules[module_index].text[r.tokens[at].start..r.tokens[at].end]
+            let member = lex.token_text(g.modules[module_index].text, r.tokens[at])
             if !exported(r, target_module, member, false) {
                 // The member, the module and the nearest export (D447, H09).
                 note_unknown_member(r, module_index, r.tokens[at], base, member, target_module)
@@ -501,7 +501,7 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
     if usize(node.token_start) >= r.token_count { ret parse.InvalidSyntax }
     let first = r.tokens[usize(node.token_start)]
     if first.kind != .Identifier { ret parse.InvalidSyntax }
-    let base = g.modules[module_index].text[first.start..first.end]
+    let base = lex.token_text(g.modules[module_index].text, first)
     if same(base, "mem") {
         var entry_at = usize(node.token_start) + 1usize
         var entry_state = 0usize
@@ -515,7 +515,7 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
                     entry_state = 1usize
                 } else {
                     if entry_state == 1usize && entry_token.kind == .Identifier {
-                        let entry_name = g.modules[module_index].text[entry_token.start..entry_token.end]
+                        let entry_name = lex.token_text(g.modules[module_index].text, entry_token)
                         if same(entry_name, "Arena") {
                             entry_state = 2usize
                         } else {
@@ -559,7 +559,7 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
                 let token = r.tokens[at]
                 if token.kind == .PunctLBracket { break }
                 if token.kind == .Identifier {
-                    let member = g.modules[module_index].text[token.start..token.end]
+                    let member = lex.token_text(g.modules[module_index].text, token)
                     if !exported(r, target_module, member, !names_a_value) {
                         note_unknown_member(r, module_index, token, base, member, target_module)
                         ret UnknownMember
@@ -657,7 +657,7 @@ fn validate_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: synta
     let token = r.tokens[usize(node.token_start)]
     if token.kind == .KwUnreachable { ret ok }
     if token.kind != .Identifier { ret parse.InvalidSyntax }
-    let name = g.modules[module_index].text[token.start..token.end]
+    let name = lex.token_text(g.modules[module_index].text, token)
     var local_index = r.local_count
     while local_index > 0usize {
         local_index = local_index - 1usize
@@ -793,7 +793,7 @@ fn record_local_failure(r: *Resolver, module_index: usize, token: lex.Token, nam
 // active scope. Every rejection here records the offending token so the caller can
 // report where the collision is.
 fn add_local(r: *Resolver, g: *graph.Graph, module_index: usize, token: lex.Token, space: Namespace) -> err {
-    let name = g.modules[module_index].text[token.start..token.end]
+    let name = lex.token_text(g.modules[module_index].text, token)
     if reserved(name) {
         record_local_failure(r, module_index, token, name, "")
         ret ReservedLocal
@@ -1039,7 +1039,7 @@ fn attribute_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: synt
     let text = g.modules[module_index].text
     var at = usize(node.token_start)
     while at < usize(node.token_end) {
-        if r.tokens[at].kind == .Identifier { ret text[r.tokens[at].start..r.tokens[at].end] }
+        if r.tokens[at].kind == .Identifier { ret lex.token_text(text, r.tokens[at]) }
         at += 1usize
     }
     ret ""
@@ -1054,7 +1054,7 @@ fn validate_attribute(r: *Resolver, g: *graph.Graph, module_index: usize, node: 
     while at < usize(node.token_end) {
         if r.tokens[at].kind == .Identifier {
             if seen_name {
-                let convention = text[r.tokens[at].start..r.tokens[at].end]
+                let convention = lex.token_text(text, r.tokens[at])
                 if !calling_convention(convention) {
                     record_local_failure(r, module_index, r.tokens[at], convention, "")
                     ret UnknownConvention
@@ -1079,9 +1079,9 @@ fn visit_scope_node(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_ind
     if node.kind == .NamedType {
         // `target.Arch` / `target.Os` (D223) name no module.
         let type_token = r.tokens[usize(node.token_start)]
-        if type_token.kind == .Identifier && same(g.modules[module_index].text[type_token.start..type_token.end], "target") && usize(node.token_end) >= usize(node.token_start) + 3usize {
+        if type_token.kind == .Identifier && same(lex.token_text(g.modules[module_index].text, type_token), "target") && usize(node.token_end) >= usize(node.token_start) + 3usize {
             let member_token = r.tokens[usize(node.token_end) - 1usize]
-            let member = g.modules[module_index].text[member_token.start..member_token.end]
+            let member = lex.token_text(g.modules[module_index].text, member_token)
             if member_token.kind == .Identifier && (same(member, "Arch") || same(member, "Os")) { ret ok }
         }
         try validate_named_type(r, g, module_index, node)
@@ -1092,7 +1092,7 @@ fn visit_scope_node(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_ind
         let (target_receiver, has_target_receiver) = first_node_child(tree, node)
         if has_target_receiver && tree.nodes[target_receiver].kind == .NameExpr {
             let target_token = r.tokens[usize(tree.nodes[target_receiver].token_start)]
-            if target_token.kind == .Identifier && same(g.modules[module_index].text[target_token.start..target_token.end], "target") { ret ok }
+            if target_token.kind == .Identifier && same(lex.token_text(g.modules[module_index].text, target_token), "target") { ret ok }
         }
         try validate_field(r, g, tree, module_index, node)
     }

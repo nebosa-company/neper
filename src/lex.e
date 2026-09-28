@@ -122,13 +122,18 @@ type Trivia = struct {
 // was 120 bytes with the end position, both UTF-16 columns and where its leading
 // trivia began -- read by diagnostics and tooling alone, so those are derived by
 // `span_of` and `leading_start` when asked for, from the source the token came from.
+// The offsets are 32-bit (D1663), 12 bytes where they were 24, the way a tree node's
+// indexes are (D318): a reader widens with `usize(...)` before any arithmetic, and a
+// slice of the token's bytes is `token_text`. Under 2 GiB an offset and the sum of
+// two never wrap, so a longer source scans as one `Invalid` token (`next`), and a
+// build refuses one as Capacity before it scans (`graph.wave_texts`).
 type Token = struct {
     kind: Kind,
     // Whether the trivia before this token continues a comment: what the formatter's
     // trivia scanner starts from, and one byte.
     leading_comment: bool,
-    start: usize,
-    end: usize,
+    start: u32,
+    end: u32,
 }
 
 // Where each line of a source begins (D315): line 1 at byte 0, the rest after each
@@ -293,33 +298,39 @@ fn column_utf16_at(source: str, lines: []const usize, offset: usize) -> usize {
 
 fn span_of(source: str, lines: []const usize, of: Token) -> Span {
     var span: Span = zero
-    span.start = of.start
-    span.end = of.end
-    if of.start <= source.len {
-        span.line = line_of(source, lines, of.start)
-        span.column = column_of(source, lines, of.start)
-        span.column_utf16 = column_utf16_at(source, lines, of.start)
+    span.start = usize(of.start)
+    span.end = usize(of.end)
+    if usize(of.start) <= source.len {
+        span.line = line_of(source, lines, usize(of.start))
+        span.column = column_of(source, lines, usize(of.start))
+        span.column_utf16 = column_utf16_at(source, lines, usize(of.start))
     }
-    if of.end <= source.len {
-        span.end_line = line_of(source, lines, of.end)
-        span.end_column = column_of(source, lines, of.end)
-        span.end_column_utf16 = column_utf16_at(source, lines, of.end)
+    if usize(of.end) <= source.len {
+        span.end_line = line_of(source, lines, usize(of.end))
+        span.end_column = column_of(source, lines, usize(of.end))
+        span.end_column_utf16 = column_utf16_at(source, lines, usize(of.end))
     }
     ret span
+}
+
+// A token's bytes (D1663): the one widening every slice of a token takes.
+fn token_text(source: str, of: Token) -> str {
+    ret source[usize(of.start)..usize(of.end)]
 }
 
 // Where the token at `at` of `tokens`'s leading trivia begins: the previous token's
 // end, or the file's first byte -- the byte-order mark is trivia of the first token.
 fn leading_start(tokens: []const Token, at: usize) -> usize {
     if at == 0usize { ret 0usize }
-    ret tokens[at - 1usize].end
+    ret usize(tokens[at - 1usize].end)
 }
 
 // Which of docs/diagnostics.md's lexical codes an `Invalid` token is: by the byte it
 // starts at, since the scanner rejects at the first byte it cannot take (D215).
 fn invalid_code(source: str, invalid: Token) -> str {
-    if invalid.start >= source.len { ret "E-LEX-9999" }
-    let first = source[invalid.start]
+    // A source too long for a token's offsets (D1663) is none of the byte classes.
+    if usize(invalid.start) >= source.len || source.len >= 2147483648usize { ret "E-LEX-9999" }
+    let first = source[usize(invalid.start)]
     if first >= 128u8 { ret "E-LEX-0001" }
     if first < 32u8 || first == 127u8 { ret "E-LEX-0002" }
     if first == 34u8 || first == 39u8 || first == 114u8 || (first >= 48u8 && first <= 57u8) || first == 46u8 { ret "E-LEX-0003" }
@@ -621,8 +632,8 @@ fn keyword(source: str, start: usize, end: usize) -> Kind {
 // `.Identifier`, so this stays in step with the keyword table by construction
 // rather than by a second list that has to be kept in sync.
 fn is_keyword(source: str, span: Token) -> bool {
-    if span.end <= span.start || span.end > source.len { ret false }
-    let kind = keyword(source, span.start, span.end)
+    if usize(span.end) <= usize(span.start) || usize(span.end) > source.len { ret false }
+    let kind = keyword(source, usize(span.start), usize(span.end))
     ret kind != .Identifier && kind != .PunctUnderscore
 }
 
@@ -630,8 +641,8 @@ fn token(s: *Scanner, kind: Kind, start: usize) -> Token {
     let result = Token{
         kind: kind,
         leading_comment: s.leading_comment,
-        start: start,
-        end: s.off,
+        start: u32(start),
+        end: u32(s.off),
     }
     s.leading_comment = s.in_comment
     ret result
@@ -697,7 +708,7 @@ fn trivia_kinds_of(source: str, tokens: []const Token, at: usize) -> TriviaScann
     ret TriviaScanner{
         source: source,
         off: leading_start(tokens, at),
-        end: owner.start,
+        end: usize(owner.start),
         line: 0usize,
         column: 0usize,
         column_utf16: 0usize,
@@ -709,7 +720,7 @@ fn trivia_init(source: str, lines: []const usize, leading: usize, owner: Token) 
     ret TriviaScanner{
         source: source,
         off: leading,
-        end: owner.start,
+        end: usize(owner.start),
         line: line_of(source, lines, leading),
         column: column_of(source, lines, leading),
         column_utf16: column_utf16_at(source, lines, leading),
@@ -774,6 +785,17 @@ fn next_trivia(t: *TriviaScanner) -> Trivia {
 }
 
 fn next(s: *Scanner) -> Token {
+    // A source of 2 GiB or more (D1663) is one `Invalid` token at its first byte and
+    // then its end, for every scanner over it: a tool's operand never passes through
+    // `graph.wave_texts`, and a token past 4 GiB would narrow to a wrong offset -- one
+    // `fmt` would write back over the file.
+    if s.source.len >= 2147483648usize {
+        var refused: Token = zero
+        refused.kind = .Eof
+        if s.off < s.source.len { refused.kind = .Invalid }
+        s.off = s.source.len
+        ret refused
+    }
     if s.replay {
         if s.at < s.tokens.len {
             let replayed = s.tokens[s.at]
@@ -782,8 +804,8 @@ fn next(s: *Scanner) -> Token {
         }
         var eof: Token = zero
         eof.kind = .Eof
-        eof.start = s.source.len
-        eof.end = s.source.len
+        eof.start = u32(s.source.len)
+        eof.end = u32(s.source.len)
         ret eof
     }
     while s.off < s.source.len {

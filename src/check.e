@@ -1455,7 +1455,7 @@ fn function_name(c: *Checker, text: str, node: syntax.Node) -> (str, err) {
         if token.kind == .KwFn {
             saw_fn = true
         } else {
-            if saw_fn && token.kind == .Identifier { ret (text[token.start..token.end], ok) }
+            if saw_fn && token.kind == .Identifier { ret (lex.token_text(text, token), ok) }
         }
         at += 1usize
     }
@@ -1466,7 +1466,7 @@ fn first_name(c: *Checker, text: str, node: syntax.Node) -> (str, bool) {
     var at = usize(node.token_start)
     while at < usize(node.token_end) {
         let token = c.tokens[at]
-        if token.kind == .Identifier { ret (text[token.start..token.end], true) }
+        if token.kind == .Identifier { ret (lex.token_text(text, token), true) }
         at += 1usize
     }
     ret ("", false)
@@ -1637,8 +1637,8 @@ fn integer_literal_value(c: *Checker, text: str, node: syntax.Node) -> (usize, T
     if node.kind != .LiteralExpr { ret (0usize, invalid_type(), Unsupported) }
     let token = c.tokens[usize(node.token_start)]
     if token.kind != .Integer { ret (0usize, invalid_type(), TypeMismatch) }
-    let parsed_type = numeric_literal_type(text[token.start..token.end], true)
-    let spelling = text[token.start..token.end]
+    let parsed_type = numeric_literal_type(lex.token_text(text, token), true)
+    let spelling = lex.token_text(text, token)
     var base = 10usize
     var at = 0usize
     if spelling.len >= 2usize && spelling[0usize] == 48u8 {
@@ -1716,7 +1716,7 @@ fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
     if node.kind == .NameExpr {
         let token = c.tokens[usize(node.token_start)]
         if token.kind != .Identifier { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
-        let name = text[token.start..token.end]
+        let name = lex.token_text(text, token)
         let (parameter_index, parameter_found) = active_comptime_parameter(c, name)
         if parameter_found {
             if c.comptime_parameters[parameter_index].kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
@@ -1918,8 +1918,8 @@ fn comptime_binding_type_path(c: *Checker, text: str, node: syntax.Node) -> (Typ
         let token = c.tokens[at]
         if token.kind == .PunctLBracket { break }
         if token.kind == .Identifier {
-            if seen == 0usize { base = text[token.start..token.end] }
-            if seen == 1usize { member = text[token.start..token.end] }
+            if seen == 0usize { base = lex.token_text(text, token) }
+            if seen == 1usize { member = lex.token_text(text, token) }
             seen += 1usize
         }
         at += 1usize
@@ -1958,7 +1958,7 @@ fn collect_generic_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
                 if value_node.kind != .NameExpr { ret (0usize, TypeMismatch) }
                 let value_token = c.tokens[usize(value_node.token_start)]
                 if value_token.kind != .Identifier { ret (0usize, TypeMismatch) }
-                let (bound, found_bound) = find_comptime_binding(c, g.modules[module_index].text[value_token.start..value_token.end])
+                let (bound, found_bound) = find_comptime_binding(c, lex.token_text(g.modules[module_index].text, value_token))
                 if !found_bound || bound.kind != parameter.kind { ret (0usize, TypeMismatch) }
                 argument = bound
                 argument.set = true
@@ -2082,7 +2082,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     }
     let first = c.tokens[usize(node.token_start)]
     if first.kind != .Identifier {
-        record_failure(c, module_index, node, .NotAType, g.modules[module_index].text[first.start..first.end], "")
+        record_failure(c, module_index, node, .NotAType, lex.token_text(g.modules[module_index].text, first), "")
         ret (make_type(.Other, "", module_index), Unsupported)
     }
     // A trailing `()` is the only shape a comptime call has here, and it is exactly the last two
@@ -2097,7 +2097,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         let (derived, derived_error) = named_type_derived(c, g, tree, module_index, node)
         ret (derived, derived_error)
     }
-    let base = g.modules[module_index].text[first.start..first.end]
+    let base = lex.token_text(g.modules[module_index].text, first)
     let scalar = scalar_type(base, module_index)
     if scalar.kind != .Invalid {
         let (scalar_module, scalar_qualified) = resolve.qualifier(r, module_index, base)
@@ -2121,7 +2121,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         while member_at < usize(node.token_end) {
             let member_token = c.tokens[member_at]
             if member_token.kind == .Identifier {
-                let member = g.modules[module_index].text[member_token.start..member_token.end]
+                let member = lex.token_text(g.modules[module_index].text, member_token)
                 if same(member, "Arch") { ret (target_enum_type("arch"), ok) }
                 if same(member, "Os") { ret (target_enum_type("os"), ok) }
                 break
@@ -2149,7 +2149,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
                     entry_state = 1usize
                 } else {
                     if entry_state == 1usize && entry_token.kind == .Identifier {
-                        let entry_name = g.modules[module_index].text[entry_token.start..entry_token.end]
+                        let entry_name = lex.token_text(g.modules[module_index].text, entry_token)
                         if same(entry_name, "Arena") {
                             name = entry_name
                             entry_state = 2usize
@@ -2181,7 +2181,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
             break
         }
         if token.kind == .Identifier {
-            let part = g.modules[module_index].text[token.start..token.end]
+            let part = lex.token_text(g.modules[module_index].text, token)
             if has_qualifier {
                 if path_identifiers == 0usize {
                     name = part
@@ -2212,7 +2212,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         var scan = usize(node.token_start)
         while scan < usize(node.token_end) && scan < c.token_count {
             let candidate = c.tokens[scan]
-            if candidate.kind == .Identifier && same(g.modules[module_index].text[candidate.start..candidate.end], name) { name_token = candidate }
+            if candidate.kind == .Identifier && same(lex.token_text(g.modules[module_index].text, candidate), name) { name_token = candidate }
             scan += 1usize
         }
         record_failure_token(c, module_index, name_token, .DeclarationFailed, name, "")
@@ -2288,7 +2288,7 @@ fn declaration_name(c: *Checker, text: str, node: syntax.Node) -> (str, err) {
     if name_index >= usize(node.token_end) || name_index >= c.token_count { ret ("", parse.InvalidSyntax) }
     let token = c.tokens[name_index]
     if token.kind != .Identifier { ret ("", parse.InvalidSyntax) }
-    ret (text[token.start..token.end], ok)
+    ret (lex.token_text(text, token), ok)
 }
 
 fn collect_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, allow_deferred: bool) -> err {
@@ -2414,8 +2414,8 @@ fn note_missing_field(c: *Checker, module_index: usize, node: syntax.Node, base:
     if best.len != 0usize {
         c.failure_fix_text = best
         c.failure_fix_kind = 4u8
-        c.failure_fix_at = member_token.start
-        c.failure_mismatch_end = member_token.end
+        c.failure_fix_at = usize(member_token.start)
+        c.failure_mismatch_end = usize(member_token.end)
     }
 }
 
@@ -2510,7 +2510,7 @@ fn field_expression_name(c: *Checker, text: str, tree: *parse.Tree, node: syntax
     var at = usize(base.token_end)
     while at < usize(node.token_end) {
         let token = c.tokens[at]
-        if token.kind == .Identifier { name = text[token.start..token.end] }
+        if token.kind == .Identifier { name = lex.token_text(text, token) }
         at += 1usize
     }
     ret (name, name.len != 0usize)
@@ -3363,7 +3363,7 @@ fn undef_written_before_read(c: *Checker, g: *graph.Graph, module_index: usize, 
             if depth == 0usize { break }
             depth = depth - 1usize
         }
-        if token.kind != .Identifier || !same(text[token.start..token.end], name) {
+        if token.kind != .Identifier || !same(lex.token_text(text, token), name) {
             at += 1usize
             continue
         }
@@ -3382,7 +3382,7 @@ fn undef_written_before_read(c: *Checker, g: *graph.Graph, module_index: usize, 
         // `x.f = ...`: that field written, and no other field read by it.
         if depth == 0usize && at + 3usize < c.tokens.len && c.tokens[at + 1usize].kind == .PunctDot && c.tokens[at + 2usize].kind == .Identifier && c.tokens[at + 3usize].kind == .PunctAssign {
             let field_token = c.tokens[at + 2usize]
-            let field_name = text[field_token.start..field_token.end]
+            let field_name = lex.token_text(text, field_token)
             var needed_at = 0usize
             while needed_at < needed_count {
                 if same(needed[needed_at], field_name) && !written[needed_at] {
@@ -3418,7 +3418,7 @@ fn cast_placed(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.N
     if binder != .KwLet && binder != .KwVar { ret false }
     let text = g.modules[module_index].text
     let name_token = c.tokens[start - 2usize]
-    let name = text[name_token.start..name_token.end]
+    let name = lex.token_text(text, name_token)
     var depth = 0usize
     var at = usize(node.token_end)
     while at < c.tokens.len {
@@ -3428,7 +3428,7 @@ fn cast_placed(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.N
             if depth == 0usize { ret false }
             depth = depth - 1usize
         }
-        if token.kind == .Identifier && same(text[token.start..token.end], name) && c.tokens[at - 1usize].kind != .PunctDot {
+        if token.kind == .Identifier && same(lex.token_text(text, token), name) && c.tokens[at - 1usize].kind != .PunctDot {
             ret depth == 0usize && c.tokens[at - 1usize].kind == .PunctStar && at + 1usize < c.tokens.len && c.tokens[at + 1usize].kind == .PunctAssign
         }
         at += 1usize
@@ -3786,7 +3786,7 @@ fn collect_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *
     var scan = usize(node.token_start)
     while scan < usize(tree.nodes[type_index].token_start) && scan < c.token_count {
         let token = c.tokens[scan]
-        if token.kind == .Identifier && same(g.modules[module_index].text[token.start..token.end], "own") && scan > usize(node.token_start) { own = true }
+        if token.kind == .Identifier && same(lex.token_text(g.modules[module_index].text, token), "own") && scan > usize(node.token_start) { own = true }
         scan += 1usize
     }
     c.parameters[c.parameter_count] = Parameter { name: name, ty: ty, own: own }
@@ -3876,7 +3876,7 @@ fn bind_array_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if node.kind == .NameExpr {
         let token = c.tokens[usize(node.token_start)]
         if token.kind != .Identifier { ret TypeMismatch }
-        let (outer_index, is_outer) = active_comptime_parameter(c, text[token.start..token.end])
+        let (outer_index, is_outer) = active_comptime_parameter(c, lex.token_text(text, token))
         if !is_outer || c.comptime_parameters[outer_index].kind != .Array { ret TypeMismatch }
         let (outer, has_outer) = active_argument(c, outer_index)
         if !has_outer {
@@ -3914,7 +3914,7 @@ fn bind_array_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         }
         at += 1usize
     }
-    ret bind_spelled_argument(c, function_index, first_argument, parameter_index, .Array, bound_array, text[c.tokens[usize(node.token_start)].start..c.tokens[usize(node.token_end) - 1usize].end])
+    ret bind_spelled_argument(c, function_index, first_argument, parameter_index, .Array, bound_array, text[usize(c.tokens[usize(node.token_start)].start)..usize(c.tokens[usize(node.token_end) - 1usize].end)])
 }
 
 fn bind_spelled_argument(c: *Checker, function_index: usize, first_argument: usize, parameter_index: usize, kind: ComptimeKind, ty: Type, spelling: str) -> err {
@@ -3975,7 +3975,7 @@ fn attribute_string(c: *Checker, text: str, at: usize) -> (str, bool) {
     if at >= c.token_count { ret ("", false) }
     let token = c.tokens[at]
     if token.kind != .String { ret ("", false) }
-    let spelling = text[token.start..token.end]
+    let spelling = lex.token_text(text, token)
     if spelling.len < 2usize || spelling[0usize] != 34u8 { ret ("", false) }
     ret (spelling[1usize..spelling.len - 1usize], true)
 }
@@ -3997,7 +3997,7 @@ fn declaration_import(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         var token_at = usize(node.token_start)
         while token_at < usize(node.token_end) && token_at < c.token_count {
             let token = c.tokens[token_at]
-            if token.kind == .Identifier && name.len == 0usize { name = text[token.start..token.end] }
+            if token.kind == .Identifier && name.len == 0usize { name = lex.token_text(text, token) }
             if token.kind == .String {
                 let (value, has_value) = attribute_string(c, text, token_at)
                 if has_value && argument_count < 2usize {
@@ -4032,7 +4032,7 @@ fn declaration_parameter_attributes(c: *Checker, g: *graph.Graph, tree: *parse.T
         while token_at < usize(node.token_end) && token_at < c.token_count {
             let token = c.tokens[token_at]
             if token.kind == .Identifier {
-                name = text[token.start..token.end]
+                name = lex.token_text(text, token)
                 break
             }
             token_at += 1usize
@@ -4050,8 +4050,8 @@ fn declaration_parameter_attributes(c: *Checker, g: *graph.Graph, tree: *parse.T
                 let (value, has_value) = attribute_string(c, text, argument_token)
                 if !has_value || value.len == 0usize { ret ("", 0usize, false, InvalidType) }
                 let token = c.tokens[argument_token]
-                if result_count == 0usize { first_start = token.start }
-                last_end = token.end
+                if result_count == 0usize { first_start = usize(token.start) }
+                last_end = usize(token.end)
                 result_count += 1usize
             }
             child_at += 1usize
@@ -4101,7 +4101,7 @@ fn declaration_has_attribute(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
     if before > 0usize && c.tokens[before - 1usize].kind == .PunctRBrace { ret false }
     if before > 1usize && c.tokens[before - 1usize].kind == .Identifier && c.tokens[before - 2usize].kind == .PunctAt {
         let named = c.tokens[before - 1usize]
-        if same(text[named.start..named.end], name) { ret true }
+        if same(lex.token_text(text, named), name) { ret true }
     }
     var at = node_index
     while at > 1usize {
@@ -4113,7 +4113,7 @@ fn declaration_has_attribute(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
         while token_at < usize(node.token_end) && token_at < c.token_count {
             let token = c.tokens[token_at]
             if token.kind == .Identifier {
-                if same(text[token.start..token.end], name) { ret true }
+                if same(lex.token_text(text, token), name) { ret true }
                 break
             }
             token_at += 1usize
@@ -4144,7 +4144,7 @@ fn declaration_align(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         while token_at < usize(node.token_end) && token_at < c.token_count {
             let token = c.tokens[token_at]
             if token.kind == .Identifier {
-                name = text[token.start..token.end]
+                name = lex.token_text(text, token)
                 break
             }
             token_at += 1usize
@@ -4161,8 +4161,8 @@ fn declaration_align(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
                 arguments += 1usize
                 let literal = c.tokens[usize(argument.token_start)]
                 if argument.kind != .LiteralExpr || literal.kind != .Integer { valid = false }
-                var digit_at = literal.start
-                while valid && digit_at < literal.end {
+                var digit_at = usize(literal.start)
+                while valid && digit_at < usize(literal.end) {
                     let digit = text[digit_at]
                     if digit < 48u8 || digit > 57u8 || value > 429496729usize {
                         valid = false
@@ -4213,7 +4213,7 @@ fn gpu_cap_name(bit: usize) -> str {
 fn gpu_option(c: *Checker, tree: *parse.Tree, text: str, argument: syntax.Node) -> (usize, usize, bool) {
     let first = c.tokens[usize(argument.token_start)]
     if first.kind != .Identifier { ret (0usize, 0usize, true) }
-    let word = text[first.start..first.end]
+    let word = lex.token_text(text, first)
     if argument.kind == .NameExpr && same(word, "ftz") { ret (2usize, 128usize, true) }
     if argument.kind != .CallExpr || !same(word, "caps") { ret (0usize, 0usize, true) }
     var bits = 0usize
@@ -4221,7 +4221,7 @@ fn gpu_option(c: *Checker, tree: *parse.Tree, text: str, argument: syntax.Node) 
     while at < usize(argument.token_end) && at < c.token_count {
         let token = c.tokens[at]
         if token.kind == .Identifier {
-            let bit = gpu_cap_bit(text[token.start..token.end])
+            let bit = gpu_cap_bit(lex.token_text(text, token))
             if bit == 0usize || (bits & bit) != 0usize { ret (1usize, bits, false) }
             bits = bits | bit
         }
@@ -4273,7 +4273,7 @@ fn declaration_gpu(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         while token_at < usize(node.token_end) && token_at < c.token_count {
             let token = c.tokens[token_at]
             if token.kind == .Identifier {
-                name = text[token.start..token.end]
+                name = lex.token_text(text, token)
                 break
             }
             token_at += 1usize
@@ -4304,8 +4304,8 @@ fn declaration_gpu(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                     let literal = c.tokens[usize(argument.token_start)]
                     if literal.kind == .Integer {
                         is_literal = true
-                        var digit_at = literal.start
-                        while digit_at < literal.end {
+                        var digit_at = usize(literal.start)
+                        while digit_at < usize(literal.end) {
                             let digit = text[digit_at]
                             if digit < 48u8 || digit > 57u8 {
                                 is_literal = false
@@ -4339,8 +4339,8 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     item.module_index = module_index
     item.owner_module_index = module_index
     if usize(node.token_start) < usize(node.token_end) && usize(node.token_end) <= c.token_count {
-        item.source_start = c.tokens[usize(node.token_start)].start
-        item.source_end = c.tokens[usize(node.token_end) - 1usize].end
+        item.source_start = usize(c.tokens[usize(node.token_start)].start)
+        item.source_end = usize(c.tokens[usize(node.token_end) - 1usize].end)
     }
     item.first_parameter = c.parameter_count
     item.first_return = c.return_type_count
@@ -5093,14 +5093,14 @@ fn qualified_member(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let base_token = c.tokens[usize(base_node.token_start)]
     if base_token.kind != .Identifier { ret (0usize, "", false) }
     let text = g.modules[module_index].text
-    let qualifier = text[base_token.start..base_token.end]
+    let qualifier = lex.token_text(text, base_token)
     let (target_module, imported) = imported_module(g, module_index, qualifier)
     if !imported { ret (0usize, "", false) }
     var member = ""
     var at = usize(base_node.token_end)
     while at < usize(node.token_end) {
         let token = c.tokens[at]
-        if token.kind == .Identifier { member = text[token.start..token.end] }
+        if token.kind == .Identifier { member = lex.token_text(text, token) }
         at += 1usize
     }
     if member.len == 0usize { ret (0usize, "", false) }
@@ -5116,7 +5116,7 @@ fn static_enum_member(c: *Checker, g: *graph.Graph, module_index: usize, node: s
         let token = c.tokens[at]
         if token.kind == .Identifier {
             if count == 4usize { ret (invalid_type(), false, false) }
-            identifiers[count] = text[token.start..token.end]
+            identifiers[count] = lex.token_text(text, token)
             count += 1usize
         }
         at += 1usize
@@ -5233,11 +5233,11 @@ fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         item.module_index = module_index
         item.site = node
         item.site_module = module_index
-        if usize(node.token_start) < c.token_count { item.site_offset = c.tokens[usize(node.token_start)].start }
+        if usize(node.token_start) < c.token_count { item.site_offset = usize(c.tokens[usize(node.token_start)].start) }
         if callee.kind == .NameExpr {
             let callee_token = c.tokens[usize(callee.token_start)]
             if callee_token.kind != .Identifier { ret (0usize, InvalidConstant) }
-            item.name = text[callee_token.start..callee_token.end]
+            item.name = lex.token_text(text, callee_token)
         } else {
             if callee.kind != .FieldExpr { ret (0usize, InvalidConstant) }
             let (target_module, member, found) = qualified_member(c, g, tree, module_index, callee)
@@ -5283,7 +5283,7 @@ fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         if token.kind != .Identifier { ret (0usize, InvalidConstant) }
         item.kind = .Name
         item.module_index = module_index
-        item.name = text[token.start..token.end]
+        item.name = lex.token_text(text, token)
         let (stored_index, store_error) = store_constant_expr(c, item)
         ret (stored_index, store_error)
     }
@@ -6700,7 +6700,7 @@ fn interp_place(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpF
     }
     if node.kind == .NameExpr {
         let token = c.tokens[usize(node.token_start)]
-        let (slot, found) = interp_lookup(frame, text[token.start..token.end])
+        let (slot, found) = interp_lookup(frame, lex.token_text(text, token))
         if !found { ret (0usize, invalid_type(), interp_fail(c, module_index, node, "a place that is no local")) }
         ret (frame.addresses[slot], frame.types[slot], ok)
     }
@@ -6912,7 +6912,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         if token.kind == .KwOk { ret (none, make_type(.Err, "err", module_index), ok) }
         // (D1569) A string: its bytes read-only, its header at the site.
         if token.kind == .String || token.kind == .RawString {
-            let (bytes, length, bytes_error) = interp_static_bytes(c, module_index, node, text[token.start..token.end])
+            let (bytes, length, bytes_error) = interp_static_bytes(c, module_index, node, lex.token_text(text, token))
             if bytes_error != ok { ret (none, invalid_type(), bytes_error) }
             let (header, header_error) = interp_allocate(c, module_index, node, frame, node_index + 1usize, 16usize, 8usize)
             if header_error != ok { ret (none, invalid_type(), header_error) }
@@ -6931,7 +6931,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
     }
     if node.kind == .NameExpr {
         let token = c.tokens[usize(node.token_start)]
-        let name = text[token.start..token.end]
+        let name = lex.token_text(text, token)
         let (slot, found_local) = interp_lookup(frame, name)
         if found_local {
             let (local_value, local_error) = interp_get(c, module_index, node, frame.addresses[slot], frame.types[slot])
@@ -6970,7 +6970,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         var receiver_is_value = has_receiver && tree.nodes[receiver_index].kind != .NameExpr
         if has_receiver && tree.nodes[receiver_index].kind == .NameExpr {
             let receiver_token = c.tokens[usize(tree.nodes[receiver_index].token_start)]
-            let (receiver_slot, found_receiver) = interp_lookup(frame, text[receiver_token.start..receiver_token.end])
+            let (receiver_slot, found_receiver) = interp_lookup(frame, lex.token_text(text, receiver_token))
             receiver_is_value = found_receiver
         }
         if receiver_is_value {
@@ -6980,7 +6980,7 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
             // its value, from the record the walk wrote.
             if tree.nodes[receiver_index].kind == .NameExpr {
                 let walked_token = c.tokens[usize(tree.nodes[receiver_index].token_start)]
-                let (walked_slot, walked_found) = interp_lookup(frame, text[walked_token.start..walked_token.end])
+                let (walked_slot, walked_found) = interp_lookup(frame, lex.token_text(text, walked_token))
                 if walked_found && interp_is_walked(frame.types[walked_slot]) {
                     let (walked_value, walked_type, walked_error) = interp_walked_member(c, module_index, node, frame.addresses[walked_slot], frame.types[walked_slot], member)
                     ret (walked_value, walked_type, walked_error)
@@ -7203,7 +7203,7 @@ fn interp_meta_walk(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
     if frame.mark_count == frame.marks.len { ret (0usize, Capacity) }
     frame.marks[frame.mark_count] = frame.count
     frame.mark_count += 1usize
-    let bind_error = interp_bind(frame, text[name_token.start..name_token.end], marker, record)
+    let bind_error = interp_bind(frame, lex.token_text(text, name_token), marker, record)
     if bind_error != ok { ret (0usize, bind_error) }
     let word = make_type(.Integer, "i64", module_index)
     var control = interp_control_next()
@@ -7312,7 +7312,7 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
     var name = ""
     if callee.kind == .NameExpr {
         let token = c.tokens[usize(callee.token_start)]
-        name = text[token.start..token.end]
+        name = lex.token_text(text, token)
         let cast_type = primitive_type(name, module_index)
         if cast_type.kind == .Integer || cast_type.kind == .Bool {
             if argument_count != 1usize { ret (none, invalid_type(), interp_fail(c, module_index, node, "a cast of other than one value")) }
@@ -7698,7 +7698,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
                         if result_slot_error != ok { ret (0usize, result_slot_error) }
                         let result_put_error = interp_put(c, module_index, node, result_slot, result_type, result_value)
                         if result_put_error != ok { ret (0usize, result_put_error) }
-                        let result_bind_error = interp_bind(frame, text[c.tokens[token_at].start..c.tokens[token_at].end], result_type, result_slot)
+                        let result_bind_error = interp_bind(frame, lex.token_text(text, c.tokens[token_at]), result_type, result_slot)
                         if result_bind_error != ok { ret (0usize, result_bind_error) }
                     }
                     bound_at += 1usize
@@ -7734,7 +7734,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         } else {
             interp_clear(c, slot, info.size)
         }
-        let bind_error = interp_bind(frame, text[binding_token.start..binding_token.end], bound_type, slot)
+        let bind_error = interp_bind(frame, lex.token_text(text, binding_token), bound_type, slot)
         if bind_error != ok { ret (0usize, bind_error) }
         ret (interp_control_next(), ok)
     }
@@ -7893,7 +7893,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         if counter_error != ok { ret (0usize, counter_error) }
         let first_error = interp_store(c, module_index, node, counter, counter_type, low)
         if first_error != ok { ret (0usize, first_error) }
-        let bind_error = interp_bind(frame, text[name_token.start..name_token.end], counter_type, counter)
+        let bind_error = interp_bind(frame, lex.token_text(text, name_token), counter_type, counter)
         if bind_error != ok { ret (0usize, bind_error) }
         var control = interp_control_next()
         while true {
@@ -8147,7 +8147,7 @@ fn numeric_literal_type(spelling: str, integer: bool) -> Type {
 fn literal_type(c: *Checker, text: str, node: syntax.Node) -> Type {
     let token_at = usize(node.token_start)
     let kind = c.tokens[token_at].kind
-    if kind == .Integer || kind == .Float { ret numeric_literal_type(text[c.tokens[token_at].start..c.tokens[token_at].end], kind == .Integer) }
+    if kind == .Integer || kind == .Float { ret numeric_literal_type(lex.token_text(text, c.tokens[token_at]), kind == .Integer) }
     if kind == .KwTrue || kind == .KwFalse { ret make_type(.Bool, "bool", 0usize) }
     if kind == .String || kind == .RawString { ret make_type(.String, "str", 0usize) }
     if kind == .Character { ret make_type(.Integer, "u8", 0usize) }
@@ -8640,7 +8640,7 @@ fn bracket_function(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let base = tree.nodes[base_index]
     if base.kind == .NameExpr {
         let token = c.tokens[usize(base.token_start)]
-        let name = g.modules[module_index].text[token.start..token.end]
+        let name = lex.token_text(g.modules[module_index].text, token)
         let (function_index, found) = find_function(c, module_index, name)
         if !found { ret (0usize, UnknownCallable) }
         ret (function_index, ok)
@@ -8676,7 +8676,7 @@ fn bind_bracket_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
                         if argument_node.kind != .NameExpr { ret TypeMismatch }
                         let argument_token = c.tokens[usize(argument_node.token_start)]
                         if argument_token.kind != .Identifier { ret TypeMismatch }
-                        let (bound, found_bound) = find_comptime_binding(c, g.modules[module_index].text[argument_token.start..argument_token.end])
+                        let (bound, found_bound) = find_comptime_binding(c, lex.token_text(g.modules[module_index].text, argument_token))
                         if !found_bound || bound.kind != parameter.kind { ret TypeMismatch }
                         let argument_index = first_argument + argument_position
                         c.generic_arguments[argument_index] = bound
@@ -8697,7 +8697,7 @@ fn bind_bracket_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
                         if argument_node.kind != .LiteralExpr { ret TypeMismatch }
                         let literal = c.tokens[usize(argument_node.token_start)]
                         if literal.kind != .String && literal.kind != .RawString { ret TypeMismatch }
-                        let spelling = g.modules[module_index].text[literal.start..literal.end]
+                        let spelling = lex.token_text(g.modules[module_index].text, literal)
                         let bind_error = bind_text_argument(c, template_index, first_argument, generic.first_comptime + argument_position, spelling)
                         if bind_error != ok { ret bind_error }
                     } else {
@@ -8706,7 +8706,7 @@ fn bind_bracket_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
                         var selected = c.function_count
                         if argument_node.kind == .NameExpr {
                             let argument_token = c.tokens[usize(argument_node.token_start)]
-                            let argument_name = g.modules[module_index].text[argument_token.start..argument_token.end]
+                            let argument_name = lex.token_text(g.modules[module_index].text, argument_token)
                             let (outer_index, has_outer) = active_comptime_parameter(c, argument_name)
                             if has_outer && c.comptime_parameters[outer_index].kind == .Function {
                                 let (outer, has_argument) = active_argument(c, outer_index)
@@ -9106,8 +9106,8 @@ fn named_type_derived(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         let token = c.tokens[at]
         if token.kind == .PunctLBracket { break }
         if token.kind == .Identifier {
-            if identifiers == 0usize { qualifier = text[token.start..token.end] }
-            if identifiers == 1usize { member = text[token.start..token.end] }
+            if identifiers == 0usize { qualifier = lex.token_text(text, token) }
+            if identifiers == 1usize { member = lex.token_text(text, token) }
             identifiers += 1usize
         }
         at += 1usize
@@ -9142,7 +9142,7 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     if node.kind == .NameExpr {
         let token = c.tokens[usize(node.token_start)]
         if token.kind != .Identifier { ret (invalid_type(), InvalidType) }
-        let name = text[token.start..token.end]
+        let name = lex.token_text(text, token)
         let scalar = scalar_type(name, module_index)
         if scalar.kind != .Invalid { ret (scalar, ok) }
         let (parameter_index, parameter_found) = active_comptime_parameter(c, name)
@@ -9202,7 +9202,7 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         if base.kind == .NameExpr {
             let base_token = c.tokens[usize(base.token_start)]
             if base_token.kind != .Identifier { ret (invalid_type(), InvalidType) }
-            name = text[base_token.start..base_token.end]
+            name = lex.token_text(text, base_token)
             let (qualified_module, has_qualifier) = resolve.qualifier(c.resolver, module_index, name)
             if has_qualifier { ret (invalid_type(), InvalidType) }
             if same(name, "Atomic") {
@@ -9408,7 +9408,7 @@ fn sqrt_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
         // `rsqrt` needs: a module cannot import itself.
         if base.kind != .NameExpr || !same(g.modules[module_index].name, "e.math") { ret (info, ok) }
         let base_token = c.tokens[usize(base.token_start)]
-        if base_token.kind != .Identifier || !same(g.modules[module_index].text[base_token.start..base_token.end], "sqrt") { ret (info, ok) }
+        if base_token.kind != .Identifier || !same(lex.token_text(g.modules[module_index].text, base_token), "sqrt") { ret (info, ok) }
     }
     info.matched = true
     if child_count != 2usize { ret (info, ArgumentCount) }
@@ -9980,7 +9980,7 @@ fn compared_constant(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         var at = usize(node.token_start)
         while at < usize(node.token_end) {
             let token = c.tokens[at]
-            if token.kind == .Identifier { member = g.modules[module_index].text[token.start..token.end] }
+            if token.kind == .Identifier { member = lex.token_text(g.modules[module_index].text, token) }
             at += 1usize
         }
         let (field_index, found_member) = aggregate_field_for_name(c, aggregate, member)
@@ -10254,7 +10254,7 @@ fn formatter_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     if format_node.kind != .LiteralExpr { ret (info, TypeMismatch) }
     let literal = c.tokens[usize(format_node.token_start)]
     if literal.kind != .String && literal.kind != .RawString { ret (info, TypeMismatch) }
-    let spelling = g.modules[module_index].text[literal.start..literal.end]
+    let spelling = lex.token_text(g.modules[module_index].text, literal)
     let (verbs, verbs_error) = format_verb_count(spelling)
     if verbs_error != ok { ret (info, verbs_error) }
     var function: Function = zero
@@ -10311,7 +10311,7 @@ fn launcher_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     var selected = c.function_count
     if kernel_node.kind == .NameExpr {
         let kernel_token = c.tokens[usize(kernel_node.token_start)]
-        let kernel_name = g.modules[module_index].text[kernel_token.start..kernel_token.end]
+        let kernel_name = lex.token_text(g.modules[module_index].text, kernel_token)
         let (found_index, found) = find_function(c, module_index, kernel_name)
         if found { selected = found_index }
     }
@@ -10873,7 +10873,7 @@ fn meta_access_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if field_node.kind != .NameExpr { ret (info, InvalidType) }
     let field_token = c.tokens[usize(field_node.token_start)]
     if field_token.kind != .Identifier { ret (info, InvalidType) }
-    let (argument, found_binding) = find_comptime_binding(c, text[field_token.start..field_token.end])
+    let (argument, found_binding) = find_comptime_binding(c, lex.token_text(text, field_token))
     if !found_binding || argument.kind != .Field { ret (info, InvalidType) }
     let (subject, subject_error) = comptime_type(c, g, tree, module_index, type_index)
     if subject_error != ok { ret (info, subject_error) }
@@ -10939,7 +10939,7 @@ fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if fresh_error == ok && c.explains.len != 0usize && !fresh.is_cast && !fresh.protocol_pending && !fresh.is_unreachable {
         if c.explain_count < c.explains.len {
             var offset = 0usize
-            if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+            if usize(node.token_start) < c.token_count { offset = usize(c.tokens[usize(node.token_start)].start) }
             let no_function = NO_FUNCTION
             var callee = no_function
             if !fresh.indirect { callee = explain_function_index(c, fresh.function) }
@@ -11009,7 +11009,7 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                 } else {
                 if receiver.kind == .NameExpr {
                     let token = c.tokens[usize(receiver.token_start)]
-                    let name = text[token.start..token.end]
+                    let name = lex.token_text(text, token)
                     let cast = scalar_type(name, module_index)
                     let (callee_local, callee_is_local) = find_local(c, name)
                     if callee_is_local && c.locals[callee_local].ty.kind == .Function {
@@ -11681,14 +11681,14 @@ fn protocol_receiver(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let base_token = c.tokens[usize(base_node.token_start)]
     if base_token.kind != .Identifier { ret (invalid_type(), "", false) }
     let text = g.modules[module_index].text
-    let base = text[base_token.start..base_token.end]
+    let base = lex.token_text(text, base_token)
     let (parameter_index, parameter_found) = active_comptime_parameter(c, base)
     if !parameter_found || c.comptime_parameters[parameter_index].kind != .Type { ret (invalid_type(), "", false) }
     var member = ""
     var at = usize(base_node.token_end)
     while at < usize(receiver.token_end) && at < c.token_count {
         let token = c.tokens[at]
-        if token.kind == .Identifier { member = text[token.start..token.end] }
+        if token.kind == .Identifier { member = lex.token_text(text, token) }
         at += 1usize
     }
     if member.len == 0usize { ret (invalid_type(), "", false) }
@@ -11756,7 +11756,7 @@ fn record_explain_value(c: *Checker, module_index: usize, node: syntax.Node, fun
         ret
     }
     var offset = 0usize
-    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    if usize(node.token_start) < c.token_count { offset = usize(c.tokens[usize(node.token_start)].start) }
     c.explains[c.explain_count] = Explain { kind: 5u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: function_index, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     c.explain_count += 1usize
 }
@@ -11819,7 +11819,7 @@ fn record_explain_dispatch(c: *Checker, module_index: usize, node: syntax.Node, 
         ret
     }
     var offset = 0usize
-    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    if usize(node.token_start) < c.token_count { offset = usize(c.tokens[usize(node.token_start)].start) }
     var owner_instance = c.function_count
     if c.active_owner_set { owner_instance = c.active_instance }
     c.explains[c.explain_count] = Explain { kind: 1u8, module_index: module_index, offset: offset, protocol: protocol, receiver: receiver, function_index: function_index, found: found, builtin: builtin, template_index: owner_instance, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
@@ -11860,7 +11860,7 @@ fn record_explain_fold(c: *Checker, module_index: usize, node: syntax.Node, cons
         ret
     }
     var offset = 0usize
-    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    if usize(node.token_start) < c.token_count { offset = usize(c.tokens[usize(node.token_start)].start) }
     c.explains[c.explain_count] = Explain { kind: 8u8, module_index: module_index, offset: offset, protocol: construct, receiver: invalid_type(), function_index: 0usize, found: taken, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     c.explain_count += 1usize
 }
@@ -11874,7 +11874,7 @@ fn record_explain_move(c: *Checker, module_index: usize, node: syntax.Node, name
         ret
     }
     var offset = 0usize
-    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    if usize(node.token_start) < c.token_count { offset = usize(c.tokens[usize(node.token_start)].start) }
     c.explains[c.explain_count] = Explain { kind: 9u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: name, reason_type: invalid_type() }
     c.explain_count += 1usize
 }
@@ -11888,7 +11888,7 @@ fn record_explain_borrow(c: *Checker, module_index: usize, node: syntax.Node, na
         ret
     }
     var offset = 0usize
-    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    if usize(node.token_start) < c.token_count { offset = usize(c.tokens[usize(node.token_start)].start) }
     c.explains[c.explain_count] = Explain { kind: 10u8, module_index: module_index, offset: offset, protocol: viewed, receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: name, reason_type: invalid_type() }
     c.explain_count += 1usize
 }
@@ -11903,7 +11903,7 @@ fn record_explain_view_end(c: *Checker, module_index: usize, node: syntax.Node, 
         ret
     }
     var offset = 0usize
-    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    if usize(node.token_start) < c.token_count { offset = usize(c.tokens[usize(node.token_start)].start) }
     c.explains[c.explain_count] = Explain { kind: 11u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: how, reason_name: name, reason_type: invalid_type() }
     c.explain_count += 1usize
 }
@@ -11918,7 +11918,7 @@ fn record_explain_origin(c: *Checker, module_index: usize, token: usize, name: s
         ret
     }
     var offset = 0usize
-    if token < c.token_count { offset = c.tokens[token].start }
+    if token < c.token_count { offset = usize(c.tokens[token].start) }
     c.explains[c.explain_count] = Explain { kind: 12u8, module_index: module_index, offset: offset, protocol: of, receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: how, reason_name: name, reason_type: invalid_type() }
     c.explain_count += 1usize
 }
@@ -11929,7 +11929,7 @@ fn note_instance_site(c: *Checker, instance_index: usize, module_index: usize, n
     if instance_index >= c.function_count || c.function_generics[instance_index].has_site { ret }
     if usize(node.token_start) >= c.token_count { ret }
     c.function_generics[instance_index].site_module = module_index
-    c.function_generics[instance_index].site_offset = c.tokens[usize(node.token_start)].start
+    c.function_generics[instance_index].site_offset = usize(c.tokens[usize(node.token_start)].start)
     c.function_generics[instance_index].site_function = 4294967295u32
     if c.active_owner_set && c.active_instance < c.function_count { c.function_generics[instance_index].site_function = u32(c.active_instance) }
     c.function_generics[instance_index].has_site = true
@@ -11942,7 +11942,7 @@ fn record_explain_instance(c: *Checker, module_index: usize, node: syntax.Node, 
         ret
     }
     var offset = 0usize
-    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    if usize(node.token_start) < c.token_count { offset = usize(c.tokens[usize(node.token_start)].start) }
     c.explains[c.explain_count] = Explain { kind: 2u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: instance_index, found: false, builtin: .None, template_index: template_index, first_argument: first_argument, argument_count: argument_count, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     c.explain_count += 1usize
 }
@@ -12418,7 +12418,7 @@ fn literal_item_name(c: *Checker, text: str, item: syntax.Node) -> (str, bool) {
     while at < usize(item.token_end) {
         let token = c.tokens[at]
         if token.kind == .PunctColon { break }
-        if token.kind == .Identifier { ret (text[token.start..token.end], true) }
+        if token.kind == .Identifier { ret (lex.token_text(text, token), true) }
         at += 1usize
     }
     ret ("", false)
@@ -12595,7 +12595,7 @@ fn check_named_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree
                 let (field_index, found_field) = aggregate_field_for_name(c, aggregate, name)
                 if !found_field { ret (invalid_type(), InvalidType) }
                 // The literal's naming of the field, for the uses query (D420).
-                if usize(item.token_start) < c.token_count { record_explain_field(c, module_index, c.tokens[usize(item.token_start)].start, field_index) }
+                if usize(item.token_start) < c.token_count { record_explain_field(c, module_index, usize(c.tokens[usize(item.token_start)].start), field_index) }
                 let field = c.aggregate_fields[field_index]
                 let (expression, has_expression) = literal_item_expression(tree, item)
                 let named = literal_item_named(c, tree, item)
@@ -12671,7 +12671,7 @@ fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
     if node.kind == .NameExpr {
         let token = c.tokens[usize(node.token_start)]
         if token.kind != .Identifier { ret (false, Unsupported) }
-        let name = g.modules[module_index].text[token.start..token.end]
+        let name = lex.token_text(g.modules[module_index].text, token)
         let (local_index, found) = find_local(c, name)
         if found { ret (c.locals[local_index].mutable, ok) }
         // A module-scope `var` is mutable by the keyword that declares it, so an element or a
@@ -13005,8 +13005,8 @@ fn note_mismatch_expression(c: *Checker, tree: *parse.Tree, node_index: usize) {
     let whole = node.kind == .CallExpr || node.kind == .FieldExpr || node.kind == .BracketPostfix || node.kind == .GroupExpr
     if last - first == 1usize || whole {
         c.failure_fix_kind = 3u8
-        c.failure_fix_at = c.tokens[first].start
-        c.failure_mismatch_end = c.tokens[last - 1usize].end
+        c.failure_fix_at = usize(c.tokens[first].start)
+        c.failure_mismatch_end = usize(c.tokens[last - 1usize].end)
     }
 }
 
@@ -13046,7 +13046,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if node.kind == .NameExpr {
         let token = c.tokens[usize(node.token_start)]
         if token.kind == .KwUnreachable { ret (make_type(.Void, "void", module_index), ok) }
-        let name = text[token.start..token.end]
+        let name = lex.token_text(text, token)
         let (local_index, found) = find_local(c, name)
         if found {
             let (local_type, context_error) = apply_context(c, c.locals[local_index].ty, expected)
@@ -13101,7 +13101,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         let (symbol_index, found_symbol) = resolve.find(c.resolver, module_index, name, .Value)
         let (intrinsic_function, has_intrinsic_function) = find_function(c, module_index, name)
         if found_symbol && (c.resolver.symbols[symbol_index].kind == .Error || (c.resolver.symbols[symbol_index].kind == .Intrinsic && !has_intrinsic_function)) {
-            if c.resolver.symbols[symbol_index].kind == .Error && usize(node.token_start) < c.token_count { record_explain_error(c, module_index, c.tokens[usize(node.token_start)].start, symbol_index) }
+            if c.resolver.symbols[symbol_index].kind == .Error && usize(node.token_start) < c.token_count { record_explain_error(c, module_index, usize(c.tokens[usize(node.token_start)].start), symbol_index) }
             let (error_type, context_error) = apply_context(c, make_type(.Err, "err", module_index), expected)
             ret (error_type, context_error)
         }
@@ -13129,7 +13129,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         var member_at = usize(node.token_start)
         while member_at < usize(node.token_end) {
             let member_token = c.tokens[member_at]
-            if member_token.kind == .Identifier { member = text[member_token.start..member_token.end] }
+            if member_token.kind == .Identifier { member = lex.token_text(text, member_token) }
             member_at += 1usize
         }
         let (field_index, found_member) = aggregate_field_for_name(c, aggregate, member)
@@ -13168,7 +13168,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             let (symbol_index, found_symbol) = resolve.find(c.resolver, target_module, member, .Value)
             let (intrinsic_function, has_intrinsic_function) = find_function(c, target_module, member)
             if found_symbol && (c.resolver.symbols[symbol_index].kind == .Error || (c.resolver.symbols[symbol_index].kind == .Intrinsic && !has_intrinsic_function)) {
-                if c.resolver.symbols[symbol_index].kind == .Error && usize(node.token_end) > 0usize && usize(node.token_end) <= c.token_count { record_explain_error(c, module_index, c.tokens[usize(node.token_end) - 1usize].start, symbol_index) }
+                if c.resolver.symbols[symbol_index].kind == .Error && usize(node.token_end) > 0usize && usize(node.token_end) <= c.token_count { record_explain_error(c, module_index, usize(c.tokens[usize(node.token_end) - 1usize].start), symbol_index) }
                 let (error_type, context_error) = apply_context(c, make_type(.Err, "err", target_module), expected)
                 ret (error_type, context_error)
             }
@@ -13234,7 +13234,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             ret (invalid_type(), InvalidType)
         }
         // The access, for the uses query (D420, H17): the member's own token.
-        if usize(node.token_end) > usize(node.token_start) && usize(node.token_end) - 1usize < c.token_count { record_explain_field(c, module_index, c.tokens[usize(node.token_end) - 1usize].start, field_index) }
+        if usize(node.token_end) > usize(node.token_start) && usize(node.token_end) - 1usize < c.token_count { record_explain_field(c, module_index, usize(c.tokens[usize(node.token_end) - 1usize].start), field_index) }
         let (field_type, context_error) = apply_context(c, c.aggregate_fields[field_index].ty, expected)
         ret (field_type, context_error)
     }
@@ -13269,7 +13269,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             var mutable = false
             if place.kind == .NameExpr {
                 let token = c.tokens[usize(place.token_start)]
-                let name = text[token.start..token.end]
+                let name = lex.token_text(text, token)
                 let (local_index, local_found) = find_local(c, name)
                 if !local_found { ret (invalid_type(), Unsupported) }
                 place_type = c.locals[local_index].ty
@@ -13497,14 +13497,14 @@ fn bind_return_types(c: *Checker, g: *graph.Graph, module_index: usize, statemen
             if result.kind == .Void { ret TypeMismatch }
             if result.kind == .Other { ret Unsupported }
             if token.kind == .Identifier {
-                let name = g.modules[module_index].text[token.start..token.end]
+                let name = lex.token_text(g.modules[module_index].text, token)
                 try add_local(c, name, result, mutable)
             }
             // An `err` bound to `_` is a discard (D360, H07): an explicit choice,
             // and one the explain stream lists, deferred or not.
             if token.kind == .PunctUnderscore && result.kind == .Err && c.explains.len != 0usize && c.explain_count < c.explains.len {
                 var offset = 0usize
-                if usize(statement.token_start) < c.token_count { offset = c.tokens[usize(statement.token_start)].start }
+                if usize(statement.token_start) < c.token_count { offset = usize(c.tokens[usize(statement.token_start)].start) }
                 var deferred = 0usize
                 if c.defer_depth != 0usize { deferred = 1usize }
                 c.explains[c.explain_count] = Explain { kind: 3u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: deferred != 0usize, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
@@ -13522,7 +13522,7 @@ fn record_generic_type_arity_diagnostics(c: *Checker, g: *graph.Graph, module_in
     if usize(named.token_start) >= c.token_count { ret }
     let name_token = c.tokens[usize(named.token_start)]
     if name_token.kind != .Identifier { ret }
-    let name = g.modules[module_index].text[name_token.start..name_token.end]
+    let name = lex.token_text(g.modules[module_index].text, name_token)
     let (aggregate_index, found) = find_aggregate(c, module_index, name)
     var reason = name
     if found {
@@ -13616,7 +13616,7 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
                 while item_at < usize(binding.token_end) {
                     let item_token = c.tokens[item_at]
                     if item_token.kind == .Identifier {
-                        let item_name = g.modules[module_index].text[item_token.start..item_token.end]
+                        let item_name = lex.token_text(g.modules[module_index].text, item_token)
                         try add_local(c, item_name, make_type(.TypeParameter, "", module_index), mutable)
                     }
                     item_at += 1usize
@@ -13727,7 +13727,7 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
     if has_initializer && result.kind == .Err && tree.nodes[initializer_index].kind == .NameExpr && c.resources_on {
         let source_token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
         if source_token.kind == .Identifier {
-            let (source, source_found) = find_local(c, g.modules[module_index].text[source_token.start..source_token.end])
+            let (source, source_found) = find_local(c, lex.token_text(g.modules[module_index].text, source_token))
             if source_found && c.locals[source].ty.kind == .Err {
                 var bound_at = 0usize
                 while bound_at < c.local_count - 1usize {
@@ -14418,11 +14418,11 @@ fn truncation_cast(c: *Checker, text: str, tree: *parse.Tree, module_index: usiz
     var at = usize(base_node.token_end)
     while at < usize(node.token_end) && at < c.token_count {
         let token = c.tokens[at]
-        if token.kind == .Identifier { member = text[token.start..token.end] }
+        if token.kind == .Identifier { member = lex.token_text(text, token) }
         at += 1usize
     }
     if !same(member, "trunc") { ret (invalid_type(), false) }
-    let name = text[base_token.start..base_token.end]
+    let name = lex.token_text(text, base_token)
     let scalar = scalar_type(name, module_index)
     if scalar.kind == .Integer { ret (scalar, true) }
     let (parameter_index, is_parameter) = active_comptime_parameter(c, name)
@@ -14446,13 +14446,13 @@ fn comptime_binding_base(c: *Checker, text: str, tree: *parse.Tree, node: syntax
     if base_node.kind != .NameExpr { ret (empty, "", false) }
     let base_token = c.tokens[usize(base_node.token_start)]
     if base_token.kind != .Identifier { ret (empty, "", false) }
-    let (argument, found) = find_comptime_binding(c, text[base_token.start..base_token.end])
+    let (argument, found) = find_comptime_binding(c, lex.token_text(text, base_token))
     if !found { ret (empty, "", false) }
     var member = ""
     var at = usize(base_node.token_end)
     while at < usize(node.token_end) && at < c.token_count {
         let token = c.tokens[at]
-        if token.kind == .Identifier { member = text[token.start..token.end] }
+        if token.kind == .Identifier { member = lex.token_text(text, token) }
         at += 1usize
     }
     if member.len == 0usize { ret (empty, "", false) }
@@ -14468,7 +14468,7 @@ fn check_for_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
         let token = c.tokens[token_at]
         if token.kind == .Identifier || token.kind == .PunctUnderscore {
             if name_count == 2usize { ret ArgumentCount }
-            if token.kind == .Identifier { names[name_count] = text[token.start..token.end] }
+            if token.kind == .Identifier { names[name_count] = lex.token_text(text, token) }
             name_count += 1usize
         }
         token_at += 1usize
@@ -14587,7 +14587,7 @@ fn switch_member_name(c: *Checker, text: str, node: syntax.Node) -> (str, bool) 
     var at = usize(node.token_start)
     while at < usize(node.token_end) {
         let token = c.tokens[at]
-        if token.kind == .Identifier { name = text[token.start..token.end] }
+        if token.kind == .Identifier { name = lex.token_text(text, token) }
         at += 1usize
     }
     ret (name, name.len != 0usize)
@@ -14656,7 +14656,7 @@ fn switch_case_key(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
             let token = c.tokens[usize(node.token_start)]
             if token.kind != .Identifier { ret (key, 0usize, false, InvalidConstant) }
             key.module_index = module_index
-            key.name = text[token.start..token.end]
+            key.name = lex.token_text(text, token)
             ret (key, 0usize, false, ok)
         }
         if node.kind == .FieldExpr {
@@ -14717,7 +14717,7 @@ fn switch_capture_name(c: *Checker, text: str, arm: syntax.Node) -> (str, bool) 
         if token.kind == .KwAs {
             saw_as = true
         } else {
-            if saw_as && token.kind == .Identifier { ret (text[token.start..token.end], true) }
+            if saw_as && token.kind == .Identifier { ret (lex.token_text(text, token), true) }
         }
         at += 1usize
     }
@@ -15018,7 +15018,7 @@ fn assignment_place_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
     let place = tree.nodes[node_index]
     if place.kind == .NameExpr {
         let token = c.tokens[usize(place.token_start)]
-        let name = g.modules[module_index].text[token.start..token.end]
+        let name = lex.token_text(g.modules[module_index].text, token)
         let (local_index, found) = find_local(c, name)
         if found {
             if !c.locals[local_index].mutable {
@@ -15158,7 +15158,7 @@ fn assignment_place_outlives_frame(c: *Checker, g: *graph.Graph, tree: *parse.Tr
     }
     let token = c.tokens[usize(tree.nodes[base_index].token_start)]
     if token.kind != .Identifier { ret true }
-    let (_, is_local) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    let (_, is_local) = find_local(c, lex.token_text(g.modules[module_index].text, token))
     ret !is_local
 }
 
@@ -15311,7 +15311,7 @@ fn place_shared(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         if node.kind == .NameExpr {
             let token = c.tokens[usize(node.token_start)]
             if token.kind != .Identifier { ret false }
-            let (local_index, is_local) = find_local(c, text[token.start..token.end])
+            let (local_index, is_local) = find_local(c, lex.token_text(text, token))
             ret is_local && c.locals[local_index].ty.in_shared
         }
         if node.kind != .BracketPostfix && node.kind != .FieldExpr && node.kind != .GroupExpr && node.kind != .UnaryExpr { ret false }
@@ -15330,7 +15330,7 @@ fn shared_var_name(c: *Checker, text: str, node: syntax.Node) -> (str, err) {
     while at < usize(node.token_end) && at < c.token_count {
         let token = c.tokens[at]
         if token.kind == .KwVar { saw_var = true }
-        if saw_var && token.kind == .Identifier { ret (text[token.start..token.end], ok) }
+        if saw_var && token.kind == .Identifier { ret (lex.token_text(text, token), ok) }
         at += 1usize
     }
     ret ("", parse.InvalidSyntax)
@@ -15515,11 +15515,11 @@ fn target_member(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     if !has_receiver || tree.nodes[receiver_index].kind != .NameExpr { ret ("", false) }
     let receiver = tree.nodes[receiver_index]
     let base = c.tokens[usize(receiver.token_start)]
-    if base.kind != .Identifier || !same(g.modules[module_index].text[base.start..base.end], "target") { ret ("", false) }
+    if base.kind != .Identifier || !same(lex.token_text(g.modules[module_index].text, base), "target") { ret ("", false) }
     var at = usize(node.token_end)
     while at > usize(receiver.token_end) {
         at = at - 1usize
-        if c.tokens[at].kind == .Identifier { ret (g.modules[module_index].text[c.tokens[at].start..c.tokens[at].end], true) }
+        if c.tokens[at].kind == .Identifier { ret (lex.token_text(g.modules[module_index].text, c.tokens[at]), true) }
     }
     ret ("", false)
 }
@@ -15529,7 +15529,7 @@ fn member_spelling(c: *Checker, g: *graph.Graph, tree: *parse.Tree, node_index: 
     if node.kind != .MemberExpr { ret ("", false) }
     var at = usize(node.token_start)
     while at < usize(node.token_end) {
-        if c.tokens[at].kind == .Identifier { ret (g.modules[module_index].text[c.tokens[at].start..c.tokens[at].end], true) }
+        if c.tokens[at].kind == .Identifier { ret (lex.token_text(g.modules[module_index].text, c.tokens[at]), true) }
         at += 1usize
     }
     ret ("", false)
@@ -16521,7 +16521,7 @@ fn call_argument_text(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     if usize(argument.token_end) > c.token_count || argument.token_end <= argument.token_start { ret "" }
     let first = c.tokens[usize(argument.token_start)]
     let last = c.tokens[usize(argument.token_end) - 1usize]
-    ret g.modules[module_index].text[first.start..last.end]
+    ret g.modules[module_index].text[usize(first.start)..usize(last.end)]
 }
 
 // The node of a call's `position`th argument: the node children after the callee.
@@ -16574,7 +16574,7 @@ fn place_base_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if base.kind != .NameExpr { ret (0usize, false) }
     let token = c.tokens[usize(base.token_start)]
     if token.kind != .Identifier { ret (0usize, false) }
-    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    let (local_index, found) = find_local(c, lex.token_text(g.modules[module_index].text, token))
     ret (local_index, found)
 }
 
@@ -16683,7 +16683,7 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         if !any_affine_local(c) { ret ok }
         let token = c.tokens[usize(source.token_start)]
         if token.kind != .Identifier { ret ok }
-        let (other, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+        let (other, found) = find_local(c, lex.token_text(g.modules[module_index].text, token))
         if !found || other == local_index { ret ok }
         c.resources[local_index].region = c.resources[other].region
         c.resources[local_index].view_of = c.resources[other].view_of
@@ -16814,7 +16814,7 @@ fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         let (mark_argument, has_mark) = call_argument_node(tree, node, 1usize)
         if !has_mark || tree.nodes[mark_argument].kind != .NameExpr { ret }
         let mark_token = c.tokens[usize(tree.nodes[mark_argument].token_start)]
-        var (mark_index, mark_found) = find_local(c, g.modules[module_index].text[mark_token.start..mark_token.end])
+        var (mark_index, mark_found) = find_local(c, lex.token_text(g.modules[module_index].text, mark_token))
         if !mark_found || c.resources[mark_index].mark_arena.len == 0usize { ret }
         if c.resources[mark_index].points_to != 0usize { mark_index = c.resources[mark_index].points_to - 1usize }
         // A deferred call runs at scope exit, not where it is registered (D675).
@@ -17109,9 +17109,9 @@ fn declaration_at(c: *Checker, tree: *parse.Tree, source_start: usize) -> (usize
     var high = c.token_count
     while low < high {
         let middle = low + (high - low) / 2usize
-        if c.tokens[middle].start < source_start { low = middle + 1usize } else { high = middle }
+        if usize(c.tokens[middle].start) < source_start { low = middle + 1usize } else { high = middle }
     }
-    if low >= c.token_count || c.tokens[low].start != source_start { ret (0usize, false) }
+    if low >= c.token_count || usize(c.tokens[low].start) != source_start { ret (0usize, false) }
     let token = low
     low = 0usize
     high = tree.count
@@ -17174,7 +17174,7 @@ fn kept_name_at(c: *Checker, text: str, tree: *parse.Tree, node_index: usize, ke
     if node.kind != .NameExpr { ret (0usize, false) }
     let token = c.tokens[usize(node.token_start)]
     if token.kind != .Identifier { ret (0usize, false) }
-    let name = text[token.start..token.end]
+    let name = lex.token_text(text, token)
     var at = 0usize
     while at < kept.count {
         if same(kept.names[at], name) { ret (at, true) }
@@ -17280,7 +17280,7 @@ fn kept_aliases(c: *Checker, tree: *parse.Tree, text: str, node_index: usize, ke
             if node.kind == .AssignmentStmt {
                 if count >= 2usize && tree.nodes[first_index].kind == .NameExpr {
                     let token = c.tokens[usize(tree.nodes[first_index].token_start)]
-                    kept_add(kept, text[token.start..token.end], scalar)
+                    kept_add(kept, lex.token_text(text, token), scalar)
                 }
             } else {
                 // `let x = v`, `var (a, b) = v`: the names before `=`, not the types
@@ -17291,7 +17291,7 @@ fn kept_aliases(c: *Checker, tree: *parse.Tree, text: str, node_index: usize, ke
                     let kind = c.tokens[token_at].kind
                     if kind == .PunctColon { in_type = true }
                     if kind == .PunctComma || kind == .PunctRParen { in_type = false }
-                    if kind == .Identifier && !in_type { kept_add(kept, text[c.tokens[token_at].start..c.tokens[token_at].end], scalar) }
+                    if kind == .Identifier && !in_type { kept_add(kept, lex.token_text(text, c.tokens[token_at]), scalar) }
                     token_at += 1usize
                 }
             }
@@ -17373,7 +17373,7 @@ fn kept_callee(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     if named.kind == .NameExpr {
         let token = c.tokens[usize(named.token_start)]
         if token.kind != .Identifier { ret (0usize, false) }
-        let name = text[token.start..token.end]
+        let name = lex.token_text(text, token)
         if is_integer_name(name) || is_float_name(name) || same(name, "bool") { ret (c.function_count, true) }
         let (function_index, found) = find_function(c, module_index, name)
         ret (function_index, found)
@@ -17566,7 +17566,7 @@ fn device_base_name(c: *Checker, tree: *parse.Tree, text: str, node_index: usize
         if node.kind == .NameExpr {
             let token = c.tokens[usize(node.token_start)]
             if token.kind != .Identifier { ret ("", false) }
-            ret (text[token.start..token.end], true)
+            ret (lex.token_text(text, token), true)
         }
         if node.kind != .BracketPostfix && node.kind != .FieldExpr && node.kind != .GroupExpr { ret ("", false) }
         let (inner, has_inner) = first_node_child(tree, node)
@@ -17610,7 +17610,7 @@ fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                 if child.kind == .Binding && !has_name {
                     let token = c.tokens[usize(child.token_start)]
                     if token.kind == .Identifier {
-                        name = text[token.start..token.end]
+                        name = lex.token_text(text, token)
                         has_name = true
                     }
                 } else {
@@ -17638,7 +17638,7 @@ fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     }
     if node.kind == .SharedVarStmt {
         let token_at = usize(node.token_start) + 2usize
-        if token_at < c.token_count && c.tokens[token_at].kind == .Identifier { device_add_name(names, text[c.tokens[token_at].start..c.tokens[token_at].end], true, true) }
+        if token_at < c.token_count && c.tokens[token_at].kind == .Identifier { device_add_name(names, lex.token_text(text, c.tokens[token_at]), true, true) }
     }
     if node.kind == .UnaryExpr && usize(node.token_start) < c.token_count && c.tokens[usize(node.token_start)].kind == .PunctAmp {
         let (operand, has_operand) = first_node_child(tree, node)
@@ -17657,7 +17657,7 @@ fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if node.kind == .NameExpr && usize(node.token_start) < c.token_count {
         let token = c.tokens[usize(node.token_start)]
         if token.kind == .Identifier {
-            let name = text[token.start..token.end]
+            let name = lex.token_text(text, token)
             let (local_at, is_local) = device_name_at(names, name)
             if !is_local {
                 let (global_index, is_global) = find_global(c, module_index, name)
@@ -17821,17 +17821,17 @@ fn device_body(c: *Checker, g: *graph.Graph, function: Function, walk: *DeviceWa
     while token_at < usize(node.token_end) && token_at < c.token_count {
         let token = c.tokens[token_at]
         if token.kind == .Identifier || token.kind == .Integer || token.kind == .Float {
-            let spelled = text[token.start..token.end]
+            let spelled = lex.token_text(text, token)
             caps = caps | name_caps(spelled)
             if same(spelled, "gpu") && token_at + 2usize < c.token_count {
                 let member_token = c.tokens[token_at + 2usize]
-                let member_name = text[member_token.start..member_token.end]
+                let member_name = lex.token_text(text, member_token)
                 if same(member_name, "sid") || device_word(member_name, 0usize, "subgroup") { caps = caps | 64usize }
                 if same(member_name, "subgroup_ballot") { caps = caps | 4usize }
             }
             if same(spelled, "Atomic") && token_at + 2usize < c.token_count {
                 let element_token = c.tokens[token_at + 2usize]
-                let element_name = text[element_token.start..element_token.end]
+                let element_name = lex.token_text(text, element_token)
                 if same(element_name, "i64") || same(element_name, "u64") { caps = caps | 32usize }
             }
         }
@@ -17993,7 +17993,7 @@ fn resource_pin(c: *Checker, local_index: usize, token: usize) {
 // the local may move or close though the pointer's block has not ended.
 fn pin_still_live(c: *Checker, g: *graph.Graph, module_index: usize, pinned: usize, node: syntax.Node) -> bool {
     if c.loop_depth != 0usize || usize(node.token_end) > c.token_count || usize(node.token_start) >= c.token_count { ret true }
-    let here = c.tokens[usize(node.token_start)].start
+    let here = usize(c.tokens[usize(node.token_start)].start)
     var body_end = 0usize
     var at = 0usize
     while at < c.function_count {
@@ -18015,9 +18015,9 @@ fn pin_still_live(c: *Checker, g: *graph.Graph, module_index: usize, pinned: usi
             holders += 1usize
             let name = c.locals[holder].name
             var token_at = usize(node.token_start)
-            while token_at < c.token_count && c.tokens[token_at].start < body_end {
+            while token_at < c.token_count && usize(c.tokens[token_at].start) < body_end {
                 let token = c.tokens[token_at]
-                if token.kind == .Identifier && same(g.modules[module_index].text[token.start..token.end], name) { ret true }
+                if token.kind == .Identifier && same(lex.token_text(g.modules[module_index].text, token), name) { ret true }
                 token_at += 1usize
             }
         }
@@ -18247,7 +18247,7 @@ fn resource_field_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if !is_resource || c.resources[local_index].fields.len == 0usize { ret (0usize, 0usize, false) }
     let member = c.tokens[usize(node.token_end) - 1usize]
     if member.kind != .Identifier { ret (0usize, 0usize, false) }
-    let name = g.modules[module_index].text[member.start..member.end]
+    let name = lex.token_text(g.modules[module_index].text, member)
     let (field_index, found) = find_aggregate_field(c, c.locals[local_index].ty, name)
     if !found { ret (0usize, 0usize, false) }
     let (aggregate_index, tracked) = resource_tracked_struct(c, c.locals[local_index].ty)
@@ -18326,7 +18326,7 @@ fn resource_loop_fact(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     if count != 2usize || tree.nodes[children[0usize]].kind != .NameExpr { ret ("", 0usize, 0usize, false) }
     let index_token = c.tokens[usize(tree.nodes[children[0usize]].token_start)]
     if index_token.kind != .Identifier { ret ("", 0usize, 0usize, false) }
-    let index_name = g.modules[module_index].text[index_token.start..index_token.end]
+    let index_name = lex.token_text(g.modules[module_index].text, index_token)
     let (bound_value, bound_constant) = resource_index_value(c, g, tree, module_index, children[1usize])
     var bound_local = 0usize
     if !bound_constant {
@@ -18343,14 +18343,14 @@ fn resource_loop_fact(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     var initialized_zero = false
     while token_at < loop_start {
         let prior_name = c.tokens[token_at]
-        if prior_name.kind == .Identifier && same(g.modules[module_index].text[prior_name.start..prior_name.end], index_name) {
+        if prior_name.kind == .Identifier && same(lex.token_text(g.modules[module_index].text, prior_name), index_name) {
             var assign_at = token_at + 1usize
             while assign_at < loop_start && c.tokens[assign_at].kind == .Newline { assign_at += 1usize }
             var value_at = assign_at + 1usize
             while value_at < loop_start && c.tokens[value_at].kind == .Newline { value_at += 1usize }
             if assign_at < loop_start && value_at < loop_start && c.tokens[assign_at].kind == .PunctAssign && c.tokens[value_at].kind == .Integer {
                 let prior_value = c.tokens[value_at]
-                let prior_spelling = g.modules[module_index].text[prior_value.start..prior_value.end]
+                let prior_spelling = lex.token_text(g.modules[module_index].text, prior_value)
                 if prior_spelling.len != 0usize && prior_spelling[0usize] == 48u8 { initialized_zero = true }
             }
         }
@@ -18363,12 +18363,12 @@ fn resource_loop_fact(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     let token_end = usize(body.token_end)
     while token_at + 1usize < token_end {
         let token = c.tokens[token_at]
-        if token.kind == .Identifier && same(g.modules[module_index].text[token.start..token.end], index_name) {
+        if token.kind == .Identifier && same(lex.token_text(g.modules[module_index].text, token), index_name) {
             let next = c.tokens[token_at + 1usize].kind
             if next == .PunctAddAssign {
                 if token_at + 2usize >= token_end { ret ("", 0usize, 0usize, false) }
                 let step = c.tokens[token_at + 2usize]
-                let step_spelling = g.modules[module_index].text[step.start..step.end]
+                let step_spelling = lex.token_text(g.modules[module_index].text, step)
                 if step.kind != .Integer || step_spelling.len == 0usize || step_spelling[0usize] != 49u8 { ret ("", 0usize, 0usize, false) }
                 increments += 1usize
             } else {
@@ -18390,7 +18390,7 @@ fn resource_element_is_swept(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
     let index = tree.nodes[bracket.first]
     if index.kind != .NameExpr { ret false }
     let token = c.tokens[usize(index.token_start)]
-    ret token.kind == .Identifier && same(g.modules[module_index].text[token.start..token.end], c.resource_loop_index[loop_at])
+    ret token.kind == .Identifier && same(lex.token_text(g.modules[module_index].text, token), c.resource_loop_index[loop_at])
 }
 
 fn resource_owned_slice_is_swept(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, local_index: usize) -> bool {
@@ -18403,7 +18403,7 @@ fn resource_owned_slice_is_swept(c: *Checker, g: *graph.Graph, tree: *parse.Tree
     let index = tree.nodes[bracket.first]
     if index.kind != .NameExpr { ret false }
     let token = c.tokens[usize(index.token_start)]
-    ret token.kind == .Identifier && same(g.modules[module_index].text[token.start..token.end], c.resource_loop_index[loop_at])
+    ret token.kind == .Identifier && same(lex.token_text(g.modules[module_index].text, token), c.resource_loop_index[loop_at])
 }
 
 // The possible slots of a fixed affine array element. A comptime index names one;
@@ -18418,7 +18418,7 @@ fn resource_element_candidates(c: *Checker, g: *graph.Graph, tree: *parse.Tree, 
     if base.kind != .NameExpr { ret (0usize, 0usize, 0usize, false) }
     let token = c.tokens[usize(base.token_start)]
     if token.kind != .Identifier { ret (0usize, 0usize, 0usize, false) }
-    let (base_local, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    let (base_local, found) = find_local(c, lex.token_text(g.modules[module_index].text, token))
     if !found { ret (0usize, 0usize, 0usize, false) }
     var local_index = base_local
     var offset = 0usize
@@ -18456,7 +18456,7 @@ fn resource_owned_slice_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modu
     if base.kind != .NameExpr { ret (0usize, false) }
     let token = c.tokens[usize(base.token_start)]
     if token.kind != .Identifier { ret (0usize, false) }
-    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    let (local_index, found) = find_local(c, lex.token_text(g.modules[module_index].text, token))
     if !found || c.locals[local_index].ty.kind != .Slice || c.resources[local_index].state == resource_plain || c.resources[local_index].borrowed { ret (0usize, false) }
     ret (local_index, affine_slice_kind(c, c.locals[local_index].ty) != 0u8)
 }
@@ -18471,7 +18471,7 @@ fn resource_declaration(c: *Checker, text: str, node: syntax.Node, body: syntax.
         let token = c.tokens[at]
         if token.kind == .PunctAssign { after_assign = true }
         if after_assign && token.kind == .Identifier {
-            let spelled = text[token.start..token.end]
+            let spelled = lex.token_text(text, token)
             if !is_resource && same(spelled, "resource") {
                 is_resource = true
             } else {
@@ -18807,7 +18807,7 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     }
     if (c.locals[local_index].ty.kind == .Named || c.locals[local_index].ty.kind == .Array) && tree.nodes[initializer_index].kind == .NameExpr {
         let token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
-        let (source, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+        let (source, found) = find_local(c, lex.token_text(g.modules[module_index].text, token))
         if found && (c.locals[source].ty.kind == .Named || c.locals[source].ty.kind == .Array) {
             if c.resources[source].points_to != 0usize {
                 c.resources[local_index].points_to = c.resources[source].points_to
@@ -18918,7 +18918,7 @@ fn local_field_path(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if base.kind != .NameExpr { ret (0usize, 0usize, false) }
     let token = c.tokens[usize(base.token_start)]
     if token.kind != .Identifier { ret (0usize, 0usize, false) }
-    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    let (local_index, found) = find_local(c, lex.token_text(g.modules[module_index].text, token))
     ret (local_index, member_count, found)
 }
 
@@ -18993,7 +18993,7 @@ fn literal_address_field_after(c: *Checker, g: *graph.Graph, tree: *parse.Tree, 
                 let name_token = c.tokens[usize(item.token_start)]
                 let (value_index, has_value) = first_node_child(tree, item)
                 if name_token.kind == .Identifier && has_value {
-                    let member = text[name_token.start..name_token.end]
+                    let member = lex.token_text(text, name_token)
                     if after.len == 0usize || !same(member, after) {
                         let (pointed, is_address) = address_argument_local(c, g, tree, module_index, value_index)
                         if is_address { ret (pointed, member, true) }
@@ -19034,7 +19034,7 @@ fn resource_local_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if node.kind != .NameExpr { ret (0usize, false) }
     let token = c.tokens[usize(node.token_start)]
     if token.kind != .Identifier { ret (0usize, false) }
-    let name = g.modules[module_index].text[token.start..token.end]
+    let name = lex.token_text(g.modules[module_index].text, token)
     let (local_index, found) = find_local(c, name)
     if !found || c.resources[local_index].state == resource_plain { ret (0usize, false) }
     ret (local_index, true)
@@ -19060,7 +19060,7 @@ fn any_affine_local(c: *Checker) -> bool {
 
 fn line_detail(c: *Checker, g: *graph.Graph, module_index: usize, token_index: usize) -> str {
     if token_index >= c.token_count { ret "" }
-    let line = lex.line_of(g.modules[module_index].text, g.modules[module_index].lines, c.tokens[token_index].start)
+    let line = lex.line_of(g.modules[module_index].text, g.modules[module_index].lines, usize(c.tokens[token_index].start))
     ret decimal_text(c, line)
 }
 
@@ -19168,7 +19168,7 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             let (base_local, base_is_resource) = resource_local_of(c, g, tree, module_index, base_index)
             if base_is_resource && c.resources[base_local].fields.len != 0usize { ret ok }
             let member = c.tokens[usize(node.token_end) - 1usize]
-            if base_is_resource && c.resources[base_local].dangling != 0u8 && same(g.modules[module_index].text[member.start..member.end], "len") { ret ok }
+            if base_is_resource && c.resources[base_local].dangling != 0u8 && same(lex.token_text(g.modules[module_index].text, member), "len") { ret ok }
         }
     }
     if node.kind == .NameExpr {
@@ -19353,7 +19353,7 @@ fn resource_range_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if base.kind != .NameExpr { ret range }
     let token = c.tokens[usize(base.token_start)]
     if token.kind != .Identifier { ret range }
-    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    let (local_index, found) = find_local(c, lex.token_text(g.modules[module_index].text, token))
     if !found { ret range }
     range.array = c.locals[local_index].ty.kind == .Array && c.resources[local_index].fields.len != 0usize
     let owned_slice = c.locals[local_index].ty.kind == .Slice && c.resources[local_index].state != resource_plain && !c.resources[local_index].borrowed && affine_slice_kind(c, c.locals[local_index].ty) != 0u8
@@ -19390,7 +19390,7 @@ fn resource_partition_bound(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mod
     if bound.kind != .NameExpr { ret (0usize, 0usize) }
     let token = c.tokens[usize(bound.token_start)]
     if token.kind != .Identifier { ret (0usize, 0usize) }
-    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    let (local_index, found) = find_local(c, lex.token_text(g.modules[module_index].text, token))
     if !found || c.locals[local_index].mutable { ret (0usize, 0usize) }
     ret (local_index + 1usize, 0usize)
 }
@@ -19542,7 +19542,7 @@ fn resource_consume_full_slice(c: *Checker, g: *graph.Graph, tree: *parse.Tree, 
     if base.kind != .NameExpr { ret (false, ok) }
     let token = c.tokens[usize(base.token_start)]
     if token.kind != .Identifier { ret (false, ok) }
-    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    let (local_index, found) = find_local(c, lex.token_text(g.modules[module_index].text, token))
     if !found || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (false, ok) }
     var first = 0usize
     if bracket.child_count == 2usize {
@@ -19641,7 +19641,7 @@ fn thread_global_use(c: *Checker, g: *graph.Graph, module_index: usize, node: sy
     if usize(node.token_start) >= c.token_count { ret ok }
     let token = c.tokens[usize(node.token_start)]
     if token.kind != .Identifier { ret ok }
-    let name = g.modules[module_index].text[token.start..token.end]
+    let name = lex.token_text(g.modules[module_index].text, token)
     let (_, is_local) = find_local(c, name)
     if is_local { ret ok }
     let (global_index, is_global) = find_global(c, module_index, name)
@@ -19675,8 +19675,8 @@ fn function_names_text(c: *Checker, g: *graph.Graph, function_index: usize, name
     var at = 0usize
     while at < c.token_count {
         let token = c.tokens[at]
-        if token.start >= function.source_start && token.end <= function.source_end && token.kind == .Identifier {
-            let spelled = text[token.start..token.end]
+        if usize(token.start) >= function.source_start && usize(token.end) <= function.source_end && token.kind == .Identifier {
+            let spelled = lex.token_text(text, token)
             if same(spelled, name) { ret true }
             let (callee, is_function) = find_function(c, function.module_index, spelled)
             if is_function && callee != function_index && function_names_text(c, g, callee, name, depth + 1usize) { ret true }
@@ -19740,7 +19740,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     try record_alias(c, g, tree, module_index, local_index, initializer_index, has_initializer)
     if has_initializer && tree.nodes[initializer_index].kind == .NameExpr {
         let source_token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
-        let (source_local, source_found) = find_local(c, g.modules[module_index].text[source_token.start..source_token.end])
+        let (source_local, source_found) = find_local(c, lex.token_text(g.modules[module_index].text, source_token))
         if source_found && c.resources[source_local].mark_arena.len != 0usize && !c.resources[source_local].slice_offset_known {
             c.resources[local_index].mark_arena = c.resources[source_local].mark_arena
             c.resources[local_index].points_to = source_local + 1usize
@@ -19779,7 +19779,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             let (entry_index, has_entry) = call_argument_node(tree, tree.nodes[initializer_index], 0usize)
             if has_entry && tree.nodes[entry_index].kind == .NameExpr {
                 let entry_token = c.tokens[usize(tree.nodes[entry_index].token_start)]
-                let (entry_function, found_entry) = find_function(c, module_index, g.modules[module_index].text[entry_token.start..entry_token.end])
+                let (entry_function, found_entry) = find_function(c, module_index, lex.token_text(g.modules[module_index].text, entry_token))
                 if found_entry {
                     c.resources[local_index].thread_entry = entry_function + 1usize
                     c.threads_started += 1usize
@@ -19934,7 +19934,7 @@ fn resource_literal_owed(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
                 let name_token = c.tokens[usize(item.token_start)]
                 let (value_index, has_value) = first_node_child(tree, item)
                 if name_token.kind == .Identifier && has_value {
-                    let (field_index, found) = find_aggregate_field(c, c.locals[local_index].ty, text[name_token.start..name_token.end])
+                    let (field_index, found) = find_aggregate_field(c, c.locals[local_index].ty, lex.token_text(text, name_token))
                     let first = resource_field_global(c, local_index, 0usize)
                     if found && field_index >= first && field_index - first < c.resources[local_index].fields.len {
                         let field_at = field_index - first
@@ -19946,7 +19946,7 @@ fn resource_literal_owed(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
                             if value.kind == .NameExpr {
                                 let value_token = c.tokens[usize(value.token_start)]
                                 if value_token.kind == .Identifier {
-                                    let (source, source_found) = find_local(c, text[value_token.start..value_token.end])
+                                    let (source, source_found) = find_local(c, lex.token_text(text, value_token))
                                     if source_found && c.resources[source].state != resource_plain && !c.resources[source].obligated { owed = false }
                                 }
                             }
@@ -20048,11 +20048,11 @@ fn resource_fix_defer(c: *Checker, g: *graph.Graph, module_index: usize, local_i
     // The acquiring line: its indentation, and the newline that ends it.
     let text = g.modules[module_index].text
     let acquired = c.tokens[c.resources[local_index].acquired]
-    var line_start = acquired.start
+    var line_start = usize(acquired.start)
     while line_start > 0usize && text[line_start - 1usize] != 10u8 { line_start = line_start - 1usize }
     var indent = 0usize
     while line_start + indent < text.len && (text[line_start + indent] == 32u8 || text[line_start + indent] == 9u8) { indent += 1usize }
-    var line_end = acquired.end
+    var line_end = usize(acquired.end)
     while line_end < text.len && text[line_end] != 10u8 { line_end += 1usize }
     var pieces: [8]str = zero
     pieces[0usize] = "defer "
@@ -20076,11 +20076,11 @@ fn resource_fix_test(c: *Checker, g: *graph.Graph, module_index: usize, local_in
     if err_local >= c.local_count || c.locals[err_local].ty.kind != .Err { ret }
     let text = g.modules[module_index].text
     let acquired = c.tokens[c.resources[local_index].acquired]
-    var line_start = acquired.start
+    var line_start = usize(acquired.start)
     while line_start > 0usize && text[line_start - 1usize] != 10u8 { line_start = line_start - 1usize }
     var indent = 0usize
     while line_start + indent < text.len && (text[line_start + indent] == 32u8 || text[line_start + indent] == 9u8) { indent += 1usize }
-    var line_end = acquired.end
+    var line_end = usize(acquired.end)
     while line_end < text.len && text[line_end] != 10u8 { line_end += 1usize }
     var pieces: [8]str = zero
     pieces[0usize] = "if "
@@ -20278,7 +20278,7 @@ fn resource_err_test(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     }
     if condition.kind == .NameExpr {
         let flag_token = c.tokens[usize(condition.token_start)]
-        let (flag_index, flag_found) = find_local(c, g.modules[module_index].text[flag_token.start..flag_token.end])
+        let (flag_index, flag_found) = find_local(c, lex.token_text(g.modules[module_index].text, flag_token))
         if !flag_found || c.locals[flag_index].ty.kind != .Bool { ret (0usize, 0usize) }
         ret (flag_which, flag_index)
     }
@@ -20301,7 +20301,7 @@ fn resource_err_test(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         if which == 2usize { which = 3usize } else { which = 4usize }
     }
     let token = c.tokens[usize(left.token_start)]
-    let name = g.modules[module_index].text[token.start..token.end]
+    let name = lex.token_text(g.modules[module_index].text, token)
     let (err_index, found) = find_local(c, name)
     if !found || c.locals[err_index].ty.kind != .Err { ret (0usize, 0usize) }
     ret (which, err_index)
@@ -20353,7 +20353,7 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     let place = tree.nodes[place_index]
     if place.kind == .NameExpr && c.tokens[usize(place.token_start)].kind == .Identifier {
         let place_token = c.tokens[usize(place.token_start)]
-        let (assigned_local, found_assigned) = find_local(c, g.modules[module_index].text[place_token.start..place_token.end])
+        let (assigned_local, found_assigned) = find_local(c, lex.token_text(g.modules[module_index].text, place_token))
         if found_assigned { try record_alias(c, g, tree, module_index, assigned_local, initializer_index, true) }
         // (D1555, H04) `x = p` with `p` a view: `x` names the same container from
         // here, so the consumption of the container ends it too (a guard's data
@@ -20416,7 +20416,7 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     if place_base != place_index && tree.nodes[place_base].kind == .NameExpr {
         let base_token = c.tokens[usize(tree.nodes[place_base].token_start)]
         if base_token.kind == .Identifier {
-            let (base_local, base_found) = find_local(c, g.modules[module_index].text[base_token.start..base_token.end])
+            let (base_local, base_found) = find_local(c, lex.token_text(g.modules[module_index].text, base_token))
             if base_found && c.locals[base_local].ty.kind != .Pointer { c.consuming_store = base_local + 1usize }
         }
     }
@@ -20638,8 +20638,8 @@ fn resource_err_copied(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     let place_token = c.tokens[usize(place.token_start)]
     let source_token = c.tokens[usize(initializer.token_start)]
     if place_token.kind != .Identifier || source_token.kind != .Identifier { ret }
-    let (dest, dest_found) = find_local(c, text[place_token.start..place_token.end])
-    let (source, source_found) = find_local(c, text[source_token.start..source_token.end])
+    let (dest, dest_found) = find_local(c, lex.token_text(text, place_token))
+    let (source, source_found) = find_local(c, lex.token_text(text, source_token))
     if !dest_found || !source_found || c.locals[dest].ty.kind != c.locals[source].ty.kind || (c.locals[dest].ty.kind != .Err && c.locals[dest].ty.kind != .Bool) { ret }
     var at = 0usize
     while at < c.local_count {
@@ -20690,7 +20690,7 @@ fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         // `os.exit(...)`: the qualifier and the member, as spelled.
         let first = c.tokens[usize(callee.token_start)]
         let member = c.tokens[usize(callee.token_end) - 1usize]
-        ret same(text[first.start..first.end], "os") && same(text[member.start..member.end], "exit")
+        ret same(lex.token_text(text, first), "os") && same(lex.token_text(text, member), "exit")
     }
     ret false
 }

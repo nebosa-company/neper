@@ -576,7 +576,7 @@ fn index_qualified(out: *Out, module_name: str, name: str) -> err {
 fn index_comment_start(source: str, tokens: []const lex.Token, index: usize) -> usize {
     let token = tokens[index]
     var at = lex.leading_start(tokens, index)
-    while at < token.start && (source[at] == 32u8 || source[at] == 9u8) { at += 1usize }
+    while at < usize(token.start) && (source[at] == 32u8 || source[at] == 9u8) { at += 1usize }
     ret at
 }
 
@@ -588,7 +588,7 @@ fn index_is_doc_line(source: str, tokens: []const lex.Token, at: usize) -> bool 
     if token.kind != .Newline { ret false }
     if at != 0usize && tokens[at - 1usize].kind != .Newline { ret false }
     let start = index_comment_start(source, tokens, at)
-    if token.start < start + 3usize { ret false }
+    if usize(token.start) < start + 3usize { ret false }
     if source[start] != 47u8 { ret false }
     if source[start + 1usize] != 47u8 { ret false }
     if source[start + 2usize] != 47u8 { ret false }
@@ -641,7 +641,7 @@ fn index_attributes(out: *Out, source: str, tokens: []const lex.Token, from: usi
         if tokens[at].kind == .PunctAt && at + 1usize < opener && tokens[at + 1usize].kind == .Identifier {
             if written != 0usize { try byte(out, 44u8) }
             let name = tokens[at + 1usize]
-            try quoted(out, source[name.start..name.end])
+            try quoted(out, lex.token_text(source, name))
             written += 1usize
         }
         at += 1usize
@@ -661,8 +661,8 @@ fn index_documentation(out: *Out, source: str, tokens: []const lex.Token, from: 
     while at < from {
         if at != first { try text(out, "\\n") }
         var start = index_comment_start(source, tokens, at) + 3usize
-        if start < tokens[at].start && source[start] == 32u8 { start += 1usize }
-        try quoted_body(out, source[start..tokens[at].start])
+        if start < usize(tokens[at].start) && source[start] == 32u8 { start += 1usize }
+        try quoted_body(out, source[start..usize(tokens[at].start)])
         at += 1usize
     }
     ret byte(out, 34u8)
@@ -685,7 +685,7 @@ fn index_signature(out: *Out, source: str, tokens: []const lex.Token, opener: us
         }
         at += 1usize
     }
-    ret quoted(out, source[tokens[opener].start..tokens[last].end])
+    ret quoted(out, source[usize(tokens[opener].start)..usize(tokens[last].end)])
 }
 
 // `index --json` (D232): a `symbol` record for the module and each of its module-scope
@@ -788,7 +788,7 @@ fn index_json_into(a: *mem.Arena, out: *Out, root: str, path: str, source: str, 
     while at < count {
         let symbol = symbols[at]
         if symbol.module_index == module_index && symbol.kind != .Qualifier && symbol.kind != .Intrinsic && usize(symbol.token_end) != 0usize {
-            let interleave_error = index_emit_references(&refs, out, root, path, source, module_name, &tree, tokens[0usize..token_count], tokens[usize(symbol.token_start)].start)
+            let interleave_error = index_emit_references(&refs, out, root, path, source, module_name, &tree, tokens[0usize..token_count], usize(tokens[usize(symbol.token_start)].start))
             if interleave_error != ok { ret (2usize, interleave_error) }
             if known_ids[known] != emitted { ret (2usize, parse.InvalidSyntax) }
             known += 1usize
@@ -1066,15 +1066,15 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
             }
             let kind = index_nested_kind(node.kind)
             if (node.kind == .Parameter || node.kind == .Binding || node.kind == .ForStmt) && refs.local_count < refs.local_names.len {
-                refs.local_names[refs.local_count] = source[name_token.start..name_token.end]
+                refs.local_names[refs.local_count] = lex.token_text(source, name_token)
                 refs.local_ids[refs.local_count] = next_id + written
                 refs.local_starts[refs.local_count] = name_index
                 refs.local_count += 1usize
             }
             // References inside the signature so far come before this symbol (D280).
-            let interleave_error = index_emit_references(refs, out, root, path, source, module_name, tree, tokens, name_token.start)
+            let interleave_error = index_emit_references(refs, out, root, path, source, module_name, tree, tokens, usize(name_token.start))
             if interleave_error != ok { ret (0usize, interleave_error) }
-            let nested_error = index_record(out, root, path, source, module_name, next_id + written, kind, source[name_token.start..name_token.end], owner, tokens, record_first, record_last, name_index, container_id)
+            let nested_error = index_record(out, root, path, source, module_name, next_id + written, kind, lex.token_text(source, name_token), owner, tokens, record_first, record_last, name_index, container_id)
             if nested_error != ok { ret (0usize, nested_error) }
             written += 1usize
             which += 1usize
@@ -1161,8 +1161,8 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
                 }
                 var qualifier = tokens[last]
                 if path_end + 2usize < usize(node.token_end) && tokens[path_end + 1usize].kind == .KwAs { qualifier = tokens[path_end + 2usize] }
-                qualifiers[imports] = source[qualifier.start..qualifier.end]
-                paths[imports] = source[tokens[usize(node.token_start) + 1usize].start..tokens[path_end].end]
+                qualifiers[imports] = lex.token_text(source, qualifier)
+                paths[imports] = source[usize(tokens[usize(node.token_start) + 1usize].start)..usize(tokens[path_end].end)]
                 imports += 1usize
             }
         }
@@ -1172,7 +1172,7 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
         if node.kind == .TypeDecl {
             var token_at = usize(node.token_start)
             while token_at + 3usize < usize(node.token_end) && token_at + 3usize < tokens.len {
-                if tokens[token_at].kind == .Identifier && graph.same(source[tokens[token_at].start..tokens[token_at].end], "resource") && tokens[token_at + 1usize].kind == .PunctLParen && tokens[token_at + 2usize].kind == .Identifier && tokens[token_at + 3usize].kind == .PunctRParen {
+                if tokens[token_at].kind == .Identifier && graph.same(lex.token_text(source, tokens[token_at]), "resource") && tokens[token_at + 1usize].kind == .PunctLParen && tokens[token_at + 2usize].kind == .Identifier && tokens[token_at + 3usize].kind == .PunctRParen {
                     role = 2usize
                     candidate_start = token_at + 2usize
                     token_at = usize(node.token_end)
@@ -1221,14 +1221,14 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
     let starts = state.starts
     let roles = state.roles
     var at = state.next
-    while at < state.picked && tokens[starts[at]].start < before {
+    while at < state.picked && usize(tokens[starts[at]].start) < before {
         let node = tree.nodes[nodes[at]]
         if roles[at] == 0usize {
             // The import: spelled as the path, its found the module.
             let path_start = tokens[usize(node.token_start) + 1usize]
             var path_end = usize(node.token_start) + 1usize
             while path_end + 1usize < usize(node.token_end) && tokens[path_end + 1usize].kind != .KwAs { path_end += 1usize }
-            let spelling = source[path_start.start..tokens[path_end].end]
+            let spelling = source[usize(path_start.start)..usize(tokens[path_end].end)]
             let import_error = reference_record(out, root, path, source, path_start, tokens[path_end], "import", spelling, 0usize, false, spelling)
             if import_error != ok { ret import_error }
             state.written += 1usize
@@ -1236,7 +1236,7 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
             var first = usize(node.token_start)
             if roles[at] == 2usize { first = starts[at] }
             let name_token = tokens[first]
-            let name = source[name_token.start..name_token.end]
+            let name = lex.token_text(source, name_token)
             var qualified_import = 256usize
             var last_index = first
             // `q.name` through a use qualifier.
@@ -1312,14 +1312,14 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
                     if parse.is_assignment_op(tokens[after].kind) { role_name = "write" }
                 }
                 if node.kind == .NameExpr && first > 0usize && tokens[first - 1usize].kind == .PunctAmp && !graph.same(role_name, "write") { role_name = "address" }
-                let spelling = source[name_token.start..tokens[last_index].end]
+                let spelling = source[usize(name_token.start)..usize(tokens[last_index].end)]
                 var qualified_name = spelling
                 var scratch: [512]u8 = zero
                 if qualified_import < 256usize {
                     var scratch_at = nptest_copy(scratch[..], 0usize, paths[qualified_import])
                     scratch[scratch_at] = 46u8
                     scratch_at += 1usize
-                    scratch_at = nptest_copy(scratch[..], scratch_at, source[tokens[first + 2usize].start..tokens[first + 2usize].end])
+                    scratch_at = nptest_copy(scratch[..], scratch_at, lex.token_text(source, tokens[first + 2usize]))
                     qualified_name = scratch[0usize..scratch_at]
                     let record_error = reference_record(out, root, path, source, name_token, tokens[last_index], role_name, spelling, 0usize, false, qualified_name)
                     if record_error != ok { ret record_error }
@@ -2031,7 +2031,7 @@ fn fmt_list_plan(a: *mem.Arena, source: str, tokens: []const lex.Token) -> ([]us
             // `Pair {`: an aggregate literal, a PascalCase name before the brace outside a
             // control header (D285) -- the parser's `named_aggregate_follows`.
             if before == .Identifier && !header_open && !opens {
-                let first = source[tokens[at - 1usize].start]
+                let first = source[usize(tokens[at - 1usize].start)]
                 if first >= 65u8 && first <= 90u8 && !(at >= 2usize && tokens[at - 2usize].kind == .KwEnum) { opens = true }
             }
             if kind == .PunctLBrace && opens { header_open = false }
@@ -2075,8 +2075,8 @@ fn fmt_inline_width(source: str, tokens: []const lex.Token, from: usize, to: usi
         let token = tokens[at]
         if token.kind != .Newline {
             if at != from && fmt_space_before(prev, prev_unary, token.kind) { width += 1usize }
-            var scan = token.start
-            while scan < token.end {
+            var scan = usize(token.start)
+            while scan < usize(token.end) {
                 if source[scan] < 128u8 || source[scan] >= 192u8 { width += 1usize }
                 scan += 1usize
             }
@@ -2196,8 +2196,8 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
                 column = owning
                 line_indent = owning
                 if token.kind == .PunctRBrace && depth > 0usize { depth = depth - 1usize }
-                try text(raw, source[token.start..token.end])
-                column += token.end - token.start
+                try text(raw, lex.token_text(source, token))
+                column += usize(token.end) - usize(token.start)
                 line_has_content = true
                 prev_unary = false
                 prev = token.kind
@@ -2216,8 +2216,8 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
                 try byte(raw, 32u8)
                 column += 1usize
             }
-            try text(raw, source[token.start..token.end])
-            column += token.end - token.start
+            try text(raw, lex.token_text(source, token))
+            column += usize(token.end) - usize(token.start)
             prev_unary = false
             prev = token.kind
             at += 1usize
@@ -2252,8 +2252,8 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
                 column += 1usize
             }
         }
-        try text(raw, source[token.start..token.end])
-        column += token.end - token.start
+        try text(raw, lex.token_text(source, token))
+        column += usize(token.end) - usize(token.start)
         if token.kind == .PunctLBrace { depth += 1usize }
         // A close brace mid-line (e.g. `{}` or `} else {`) still lowers the depth.
         if token.kind == .PunctRBrace && !at_line_start && depth > 0usize { depth = depth - 1usize }
@@ -2321,14 +2321,14 @@ fn fmt_refuse(a: *mem.Arena, out: *Out, source: str, path: str) -> (usize, err) 
         if token.kind == .Newline {
             // A newline whose line holds only a comment, right after an attribute line.
             let leading = lex.leading_start(tokens, at)
-            if after_attribute && line_first && leading < token.start {
+            if after_attribute && line_first && leading < usize(token.start) {
                 let comment_start = index_comment_start(source, tokens, at)
-                if comment_start + 1usize < token.start && source[comment_start] == 47u8 && source[comment_start + 1usize] == 47u8 {
+                if comment_start + 1usize < usize(token.start) && source[comment_start] == 47u8 && source[comment_start + 1usize] == 47u8 {
                     // The comment's line is where the previous token ended; the bytes before
                     // it on that line are indentation, one column each.
                     var comment: lex.Span = zero
                     comment.start = comment_start
-                    comment.end = token.start
+                    comment.end = usize(token.start)
                     comment.line = lex.line_of(source, out.lines, comment_start)
                     comment.column = lex.column_of(source, out.lines, comment_start)
                     comment.column_utf16 = comment.column
@@ -2489,9 +2489,9 @@ fn fmt_plain(a: *mem.Arena, source: str, path: str) -> (usize, err) {
 fn fmt_plain_line(out: *Out, path: str, source: str, token: lex.Token) -> err {
     try text(out, path)
     try byte(out, 58u8)
-    try decimal(out, lex.line_of(source, out.lines, token.start))
+    try decimal(out, lex.line_of(source, out.lines, usize(token.start)))
     try byte(out, 58u8)
-    try decimal(out, lex.column_of(source, out.lines, token.start))
+    try decimal(out, lex.column_of(source, out.lines, usize(token.start)))
     try text(out, ": error[")
     try text(out, lex.invalid_code(source, token))
     try text(out, "]: invalid token\n")
@@ -2641,8 +2641,8 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
         if path_error != ok { ret path_error }
         out.lines = module.lines
         var here: lex.Token = zero
-        here.start = e.offset
-        here.end = e.offset
+        here.start = u32(e.offset)
+        here.end = u32(e.offset)
         if e.kind == 1u8 {
             let write_error = text(&out, "{\"record\":\"dispatch\",\"protocol\":")
             if write_error != ok { ret write_error }
@@ -2765,7 +2765,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
     var constant_at = 0usize
     while constant_at < c.constant_count {
         let constant = c.constants[constant_at]
-        if constant.module_index == 0usize && constant.token.end != 0usize && constant.state == 2u8 {
+        if constant.module_index == 0usize && usize(constant.token.end) != 0usize && constant.state == 2u8 {
             try text(&out, "{\"record\":\"phase\",\"construct\":\"const\",\"phase\":\"comptime\",\"symbol\":")
             try byte(&out, 34u8)
             try text(&out, g.modules[0usize].name)
@@ -2800,7 +2800,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
     while aggregate_at < c.aggregate_count {
         let aggregate = c.aggregates[aggregate_at]
         // The seeded `target` enums have no token and are nobody's declaration.
-        if aggregate.module_index == 0usize && aggregate.token.end != 0usize && !(aggregate.generic && !aggregate.instance) {
+        if aggregate.module_index == 0usize && usize(aggregate.token.end) != 0usize && !(aggregate.generic && !aggregate.instance) {
             try layout_json(a, &out, c, g, aggregate_at)
             written += 1usize
         }
@@ -2955,19 +2955,19 @@ fn generic_signature(c: *check.Checker, g: *graph.Graph, function_index: usize) 
     if function.module_index >= g.count { ret ("", parse.InvalidSyntax) }
     let module = g.modules[function.module_index]
     var token_at = 0usize
-    while token_at < module.tokens.len && module.tokens[token_at].end <= function.source_start { token_at += 1usize }
+    while token_at < module.tokens.len && usize(module.tokens[token_at].end) <= function.source_start { token_at += 1usize }
     var start = function.source_start
     var found_fn = false
-    while token_at < module.tokens.len && module.tokens[token_at].start < function.source_end {
+    while token_at < module.tokens.len && usize(module.tokens[token_at].start) < function.source_end {
         let token = module.tokens[token_at]
         if !found_fn {
             if token.kind == .KwFn {
-                start = token.start
+                start = usize(token.start)
                 found_fn = true
             }
         } else {
             if token.kind == .PunctLBrace {
-                var end = token.start
+                var end = usize(token.start)
                 while end > start && (module.text[end - 1usize] == 32u8 || module.text[end - 1usize] == 9u8 || module.text[end - 1usize] == 10u8 || module.text[end - 1usize] == 13u8) { end = end - 1usize }
                 ret (module.text[start..end], ok)
             }
@@ -3498,8 +3498,8 @@ fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative:
     }
     try text(out, ",\"grammar_revision\":3,\"span\":")
     var declaration: lex.Token = zero
-    declaration.start = declared_at
-    declaration.end = declared_at
+    declaration.start = u32(declared_at)
+    declaration.end = u32(declared_at)
     try point_span(out, root, path, source, declaration)
     try byte(out, 125u8)
     ret flush(out)
@@ -3603,11 +3603,11 @@ fn plan_replace_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, span_tex
     try flush(&out)
     out.lines = module.lines
     var first: lex.Token = zero
-    first.start = byte_start
-    first.end = byte_start
+    first.start = u32(byte_start)
+    first.end = u32(byte_start)
     var last: lex.Token = zero
-    last.start = byte_end
-    last.end = byte_end
+    last.start = u32(byte_end)
+    last.end = u32(byte_end)
     try text(&out, "{\"record\":\"edit\",\"op\":\"replace-expression\",\"symbol\":")
     try quoted(&out, module.text[byte_start..byte_end])
     try text(&out, ",\"site\":\"use\",\"span\":")
@@ -3657,7 +3657,7 @@ fn expression_at(tokens: []const lex.Token, tree: *parse.Tree, byte_start: usize
         let kind = node.kind
         let expression = kind == .UnaryExpr || kind == .BinaryExpr || kind == .FieldExpr || kind == .BracketPostfix || kind == .CallExpr || kind == .NameExpr || kind == .MemberExpr || kind == .GroupExpr || kind == .AggregateLiteral || kind == .LiteralExpr
         if expression && usize(node.token_start) < tokens.len && usize(node.token_end) <= tokens.len && usize(node.token_end) > usize(node.token_start) {
-            if tokens[usize(node.token_start)].start == byte_start && tokens[usize(node.token_end) - 1usize].end == byte_end { ret (node_index, true) }
+            if usize(tokens[usize(node.token_start)].start) == byte_start && usize(tokens[usize(node.token_end) - 1usize].end) == byte_end { ret (node_index, true) }
         }
         node_index += 1usize
     }
@@ -3833,8 +3833,8 @@ fn impact_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, changed_text: 
             if path_error != ok { ret path_error }
             out.lines = module.lines
             var declaration: lex.Token = zero
-            declaration.start = function.source_start
-            declaration.end = function.source_start
+            declaration.start = u32(function.source_start)
+            declaration.end = u32(function.source_start)
             try text(&out, "{\"record\":\"impact\",\"test\":")
             try quoted_function(&out, c, g, function_at)
             try text(&out, ",\"affected\":")
@@ -4116,8 +4116,8 @@ fn context_json_with(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject:
             continue
         }
         var here: lex.Token = zero
-        here.start = e.offset
-        here.end = e.offset
+        here.start = u32(e.offset)
+        here.end = u32(e.offset)
         try text(&out, "{\"record\":\"fact\",\"kind\":")
         if e.kind == 4u8 {
             if e.found {
@@ -4319,8 +4319,8 @@ fn uses_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str) ->
         if path_error != ok { ret path_error }
         out.lines = module.lines
         var here: lex.Token = zero
-        here.start = e.offset
-        here.end = e.offset
+        here.start = u32(e.offset)
+        here.end = u32(e.offset)
         try text(&out, "{\"record\":\"use\",\"relation\":")
         if e.kind == 4u8 { try text(&out, "\"call\"") }
         if e.kind == 1u8 { try text(&out, "\"dispatch\"") }
@@ -4486,9 +4486,9 @@ fn list_close_offset(tokens: []const lex.Token, name_at: usize) -> (usize, bool,
     var high = tokens.len
     while low < high {
         let mid = low + (high - low) / 2usize
-        if tokens[mid].start < name_at { low = mid + 1usize } else { high = mid }
+        if usize(tokens[mid].start) < name_at { low = mid + 1usize } else { high = mid }
     }
-    if low >= tokens.len || tokens[low].start != name_at { ret (0usize, false, false) }
+    if low >= tokens.len || usize(tokens[low].start) != name_at { ret (0usize, false, false) }
     var at = low + 1usize
     if at < tokens.len && tokens[at].kind == .PunctLBracket {
         var bracket_depth = 0usize
@@ -4512,7 +4512,7 @@ fn list_close_offset(tokens: []const lex.Token, name_at: usize) -> (usize, bool,
         if tokens[at].kind == .PunctLParen { depth += 1usize }
         if tokens[at].kind == .PunctRParen {
             depth = depth - 1usize
-            if depth == 0usize { ret (tokens[at].start, empty, true) }
+            if depth == 0usize { ret (usize(tokens[at].start), empty, true) }
         }
         if at != open_at && tokens[at].kind != .Newline { empty = false }
         at += 1usize
@@ -4546,9 +4546,9 @@ fn list_items(tokens: []const lex.Token, name_at: usize) -> ListItems {
     var high = tokens.len
     while low < high {
         let mid = low + (high - low) / 2usize
-        if tokens[mid].start < name_at { low = mid + 1usize } else { high = mid }
+        if usize(tokens[mid].start) < name_at { low = mid + 1usize } else { high = mid }
     }
-    if low >= tokens.len || tokens[low].start != name_at { ret items }
+    if low >= tokens.len || usize(tokens[low].start) != name_at { ret items }
     var at = low + 1usize
     if at < tokens.len && tokens[at].kind == .PunctLBracket {
         var bracket_depth = 0usize
@@ -4565,7 +4565,7 @@ fn list_items(tokens: []const lex.Token, name_at: usize) -> ListItems {
         }
     }
     if at >= tokens.len || tokens[at].kind != .PunctLParen { ret items }
-    items.inner_start = tokens[at].end
+    items.inner_start = usize(tokens[at].end)
     at += 1usize
     var depth = 0usize
     var item_from = at
@@ -4577,11 +4577,11 @@ fn list_items(tokens: []const lex.Token, name_at: usize) -> ListItems {
             if depth == 0usize {
                 if has_item {
                     if items.count >= 16usize { ret items }
-                    items.item_start[items.count] = tokens[item_from].start
-                    items.item_end[items.count] = tokens[at - 1usize].end
+                    items.item_start[items.count] = usize(tokens[item_from].start)
+                    items.item_end[items.count] = usize(tokens[at - 1usize].end)
                     items.count += 1usize
                 }
-                items.inner_end = tokens[at].start
+                items.inner_end = usize(tokens[at].start)
                 items.found = true
                 ret items
             }
@@ -4590,8 +4590,8 @@ fn list_items(tokens: []const lex.Token, name_at: usize) -> ListItems {
         if kind == .PunctComma && depth == 0usize {
             if has_item {
                 if items.count >= 16usize { ret items }
-                items.item_start[items.count] = tokens[item_from].start
-                items.item_end[items.count] = tokens[at - 1usize].end
+                items.item_start[items.count] = usize(tokens[item_from].start)
+                items.item_end[items.count] = usize(tokens[at - 1usize].end)
                 items.count += 1usize
             }
             has_item = false
@@ -4623,7 +4623,7 @@ fn body_names(module: graph.Module, from: usize, to: usize, name: str) -> bool {
     var at = 0usize
     while at < module.tokens.len {
         let token = module.tokens[at]
-        if token.start >= from && token.end <= to && token.kind == .Identifier && graph.same(module.text[token.start..token.end], name) { ret true }
+        if usize(token.start) >= from && usize(token.end) <= to && token.kind == .Identifier && graph.same(lex.token_text(module.text, token), name) { ret true }
         at += 1usize
     }
     ret false
@@ -4743,8 +4743,8 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
             if as_value { try text(&out, " is named as a value here, and a value of a function type cannot change its signature: no change is planned") } else { try text(&out, " is chosen by a protocol here, whose signature is fixed: no change is planned") }
             try text(&out, "\",\"span\":")
             var here: lex.Token = zero
-            here.start = e.offset
-            here.end = e.offset
+            here.start = u32(e.offset)
+            here.end = u32(e.offset)
             try point_span(&out, root, path, module.text, here)
             try text(&out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
             try flush(&out)
@@ -4813,11 +4813,11 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
         out.lines = module.lines
         let items = list_items(module.tokens, sites.offsets[site])
         var first: lex.Token = zero
-        first.start = items.inner_start
-        first.end = items.inner_start
+        first.start = u32(items.inner_start)
+        first.end = u32(items.inner_start)
         var last: lex.Token = zero
-        last.start = items.inner_end
-        last.end = items.inner_end
+        last.start = u32(items.inner_end)
+        last.end = u32(items.inner_end)
         try text(&out, "{\"record\":\"edit\",\"op\":\"change-signature\",\"symbol\":")
         try quoted_function(&out, c, g, function_index)
         try text(&out, ",\"site\":")
@@ -4828,7 +4828,7 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
         var replacement_storage: [2048]u8 = zero
         let replacement_at = render_reordered(g, sites, site, order[0usize..order_count], replacement_storage[..], 0usize)
         try quoted(&out, replacement_storage[0usize..replacement_at])
-        try owned_note(&out, g, sites.modules[site], first.start)
+        try owned_note(&out, g, sites.modules[site], usize(first.start))
         try byte(&out, 125u8)
         try flush(&out)
         edits += 1usize
@@ -4930,8 +4930,8 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
             if as_value { try text(&out, " is named as a value here, and a value of a function type cannot take a new parameter: no signature change is planned") } else { try text(&out, " is chosen by a protocol here, whose signature is fixed: no signature change is planned") }
             try text(&out, "\",\"span\":")
             var here: lex.Token = zero
-            here.start = e.offset
-            here.end = e.offset
+            here.start = u32(e.offset)
+            here.end = u32(e.offset)
             try point_span(&out, root, path, module.text, here)
             try text(&out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
             try flush(&out)
@@ -4955,8 +4955,8 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
         let (close_at, empty, has_list) = list_close_offset(module.tokens, sites.offsets[site])
         if !has_list { ret InvalidPlan }
         var insert: lex.Token = zero
-        insert.start = close_at
-        insert.end = close_at
+        insert.start = u32(close_at)
+        insert.end = u32(close_at)
         try text(&out, "{\"record\":\"edit\",\"op\":\"add-parameter-and-migrate\",\"symbol\":")
         try quoted_function(&out, c, g, function_index)
         try text(&out, ",\"site\":")
@@ -4972,8 +4972,8 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
         } else {
             // The call's own argument (D455): by the call's line and column, else the default.
             var name_token: lex.Token = zero
-            name_token.start = sites.offsets[site]
-            name_token.end = sites.offsets[site]
+            name_token.start = u32(sites.offsets[site])
+            name_token.end = u32(sites.offsets[site])
             let name_at = lex.span_of(module.text, module.lines, name_token)
             let (site_text, has_site_text) = site_argument(overrides, name_at.line, name_at.column, argument)
             if !has_site_text {
@@ -4998,7 +4998,7 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
             replacement_at = nptest_copy(replacement_storage[..], replacement_at, site_text)
         }
         try quoted(&out, replacement_storage[0usize..replacement_at])
-        try owned_note(&out, g, sites.modules[site], insert.start)
+        try owned_note(&out, g, sites.modules[site], usize(insert.start))
         try byte(&out, 125u8)
         try flush(&out)
         site += 1usize
@@ -5040,8 +5040,8 @@ fn type_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, 
             if path_error != ok { ret path_error }
             out.lines = module.lines
             var here: lex.Token = zero
-            here.start = sites.offsets[site]
-            here.end = sites.offsets[site]
+            here.start = u32(sites.offsets[site])
+            here.end = u32(sites.offsets[site])
             try text(out, "{\"record\":\"use\",\"relation\":\"type\",\"provenance\":\"compiler-proved\",\"in\":")
             try quoted_function(out, c, g, enclosing_function(c, sites.modules[site], sites.offsets[site]))
             try text(out, ",\"span\":")
@@ -5309,8 +5309,8 @@ fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.
         var site_name = name
         if site_who[site] != 0usize { site_name = c.functions[followers[site_who[site] - 1usize]].name }
         var name_token: lex.Token = zero
-        name_token.start = site_offsets[site]
-        name_token.end = site_offsets[site] + site_name.len
+        name_token.start = u32(site_offsets[site])
+        name_token.end = u32(site_offsets[site] + site_name.len)
         try text(out, "{\"record\":\"edit\",\"op\":\"rename-symbol\",\"symbol\":")
         if site_who[site] == 0usize { try quoted(out, subject) } else { try quoted_function(out, c, g, followers[site_who[site] - 1usize]) }
         try text(out, ",\"site\":")
@@ -5376,8 +5376,8 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
         }
         var declared_at = 0usize
         var has_declaration = false
-        if c.aggregates[aggregate_index].module_index < g.count && field.token.end > field.token.start {
-            declared_at = field.token.start
+        if c.aggregates[aggregate_index].module_index < g.count && usize(field.token.end) > usize(field.token.start) {
+            declared_at = usize(field.token.start)
             has_declaration = true
         }
         ret plan_rename_sites_json(a, &out, c, g, subject, 6u8, field_index, field.name, c.aggregates[aggregate_index].module_index, declared_at, has_declaration, "field", to)
@@ -5389,7 +5389,7 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
         var declared_at = 0usize
         var has_declaration = false
         if symbol.module_index < g.count && symbol.token_start + 1usize < g.modules[symbol.module_index].tokens.len {
-            declared_at = g.modules[symbol.module_index].tokens[symbol.token_start + 1usize].start
+            declared_at = usize(g.modules[symbol.module_index].tokens[symbol.token_start + 1usize].start)
             has_declaration = true
         }
         ret plan_rename_sites_json(a, &out, c, g, subject, 7u8, error_symbol, symbol.name, symbol.module_index, declared_at, has_declaration, "error", to)
@@ -5440,8 +5440,8 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
         if path_error != ok { ret path_error }
         out.lines = module.lines
         var name_token: lex.Token = zero
-        name_token.start = site_offsets[site]
-        name_token.end = site_offsets[site] + function.name.len
+        name_token.start = u32(site_offsets[site])
+        name_token.end = u32(site_offsets[site] + function.name.len)
         try text(&out, "{\"record\":\"edit\",\"op\":\"rename-symbol\",\"symbol\":")
         try quoted_function(&out, c, g, function_index)
         try text(&out, ",\"site\":")
@@ -5535,8 +5535,8 @@ fn plan_rename_sites_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph
         if path_error != ok { ret path_error }
         out.lines = module.lines
         var name_token: lex.Token = zero
-        name_token.start = sites.offsets[site]
-        name_token.end = sites.offsets[site] + name.len
+        name_token.start = u32(sites.offsets[site])
+        name_token.end = u32(sites.offsets[site] + name.len)
         try text(out, "{\"record\":\"edit\",\"op\":\"rename-symbol\",\"symbol\":")
         try quoted(out, subject)
         try text(out, ",\"site\":")
@@ -5686,8 +5686,8 @@ fn sites_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph,
         if path_error != ok { ret path_error }
         out.lines = module.lines
         var here: lex.Token = zero
-        here.start = e.offset
-        here.end = e.offset
+        here.start = u32(e.offset)
+        here.end = u32(e.offset)
         try text(out, "{\"record\":\"use\",\"relation\":\"")
         try text(out, relation)
         try text(out, "\",\"provenance\":\"compiler-proved\",\"in\":")
@@ -7161,9 +7161,9 @@ fn token_record(out: *Out, root: str, path: str, source: str, tokens: []const le
     try quoted(out, kind_name(token.kind))
     try text(out, ",\"lexeme\":")
     if token.kind == .Invalid {
-        try base64_object(out, source[token.start..token.end])
+        try base64_object(out, lex.token_text(source, token))
     } else {
-        try quoted(out, source[token.start..token.end])
+        try quoted(out, lex.token_text(source, token))
     }
     try text(out, ",\"span\":")
     try token_span(out, root, path, source, token, token)
@@ -7386,15 +7386,15 @@ fn parse_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -
             if barrier {
                 let b1 = text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-SYNTAX-0012\",\"message\":\"`")
                 if b1 != ok { ret (2usize, b1) }
-                let b2 = text(&out, source[at.start..at.end])
+                let b2 = text(&out, lex.token_text(source, at))
                 if b2 != ok { ret (2usize, b2) }
                 let b3 = text(&out, "` opened here is still unclosed at `")
                 if b3 != ok { ret (2usize, b3) }
-                let b4 = text(&out, source[keyword.start..keyword.end])
+                let b4 = text(&out, lex.token_text(source, keyword))
                 if b4 != ok { ret (2usize, b4) }
                 let b5 = text(&out, "` on line ")
                 if b5 != ok { ret (2usize, b5) }
-                let b6 = decimal(&out, lex.line_of(source, out.lines, keyword.start))
+                let b6 = decimal(&out, lex.line_of(source, out.lines, usize(keyword.start)))
                 if b6 != ok { ret (2usize, b6) }
                 let b7 = text(&out, "\",\"span\":")
                 if b7 != ok { ret (2usize, b7) }

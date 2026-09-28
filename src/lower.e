@@ -119,7 +119,7 @@ fn bind_value(c: *check.Checker, g: *graph.Graph, module_index: usize, token: le
         address = true
     }
     }
-    let name = g.modules[module_index].text[token.start..token.end]
+    let name = lex.token_text(g.modules[module_index].text, token)
     try add_binding(bindings, binding_count, Binding { name: name, ty: ty, value: stored_value, address: address })
     nir.add_debug_local(builder, stored_value, name, ty, 0usize, address)
     ret check.add_local(c, name, ty, mutable)
@@ -148,7 +148,7 @@ fn declaration_name(c: *check.Checker, text: str, node: syntax.Node) -> (str, er
     if name_index >= usize(node.token_end) || name_index >= c.token_count { ret ("", parse.InvalidSyntax) }
     let token = c.tokens[name_index]
     if token.kind != .Identifier { ret ("", parse.InvalidSyntax) }
-    ret (text[token.start..token.end], ok)
+    ret (lex.token_text(text, token), ok)
 }
 
 fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type, builder: *nir.Builder) -> (usize, err) {
@@ -186,7 +186,7 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
             } else {
                 if token.kind == .String || token.kind == .RawString {
                     opcode = .ConstString
-                    let (string_index, string_error) = nir.intern_string(builder, text[token.start..token.end])
+                    let (string_index, string_error) = nir.intern_string(builder, lex.token_text(text, token))
                     if string_error != ok { ret (0usize, string_error) }
                     immediate = string_index
                 } else {
@@ -232,7 +232,7 @@ fn float_literal_bits(c: *check.Checker, text: str, node: syntax.Node, expected:
     let token = c.tokens[usize(node.token_start)]
     var ty = expected
     if ty.kind != .Float {
-        let literal_type = check.numeric_literal_type(text[token.start..token.end], token.kind == .Integer)
+        let literal_type = check.numeric_literal_type(lex.token_text(text, token), token.kind == .Integer)
         if literal_type.kind != .Float { ret (0usize, ty, check.MissingContext) }
         ty = literal_type
     }
@@ -240,7 +240,7 @@ fn float_literal_bits(c: *check.Checker, text: str, node: syntax.Node, expected:
     if check.same(ty.name, "f32") { width = 32usize }
     if check.same(ty.name, "f64") { width = 64usize }
     if width == 0usize { ret (0usize, ty, check.Unsupported) }
-    let (pattern, pattern_error) = decimal.literal_bits(text[token.start..token.end], width)
+    let (pattern, pattern_error) = decimal.literal_bits(lex.token_text(text, token), width)
     if pattern_error != ok { ret (0usize, ty, pattern_error) }
     ret (pattern, ty, ok)
 }
@@ -2863,7 +2863,7 @@ fn argument_can_change(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     while at + 1usize < builder.proof_function_end && at + 1usize < c.token_count {
         if c.tokens[at].kind == .PunctAmp && c.tokens[at + 1usize].kind == .Identifier {
             let pointed = c.tokens[at + 1usize]
-            if check.same(g.modules[module_index].text[pointed.start..pointed.end], name) { ret true }
+            if check.same(lex.token_text(g.modules[module_index].text, pointed), name) { ret true }
         }
         at += 1usize
     }
@@ -2965,7 +2965,7 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
                 if child_position == 1usize {
                     let message_node = tree.nodes[parse.child_index_at(tree, at)]
                     let literal_token = c.tokens[usize(message_node.token_start)]
-                    let (interned, intern_error) = nir.intern_string(builder, g.modules[module_index].text[literal_token.start..literal_token.end])
+                    let (interned, intern_error) = nir.intern_string(builder, lex.token_text(g.modules[module_index].text, literal_token))
                     if intern_error != ok { ret intern_error }
                     message = interned + 1usize
                 }
@@ -3231,7 +3231,7 @@ fn lower_place(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if node.kind == .NameExpr {
         let token = c.tokens[usize(node.token_start)]
         if token.kind != .Identifier { ret (0usize, zero, check.Unsupported) }
-        let name = g.modules[module_index].text[token.start..token.end]
+        let name = lex.token_text(g.modules[module_index].text, token)
         let (binding, found) = find_binding(bindings, binding_count, name)
         if found {
             if !binding.address { ret (0usize, zero, check.Unsupported) }
@@ -3299,7 +3299,7 @@ fn lower_member(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     var token_at = usize(node.token_start)
     while token_at < usize(node.token_end) {
         let token = c.tokens[token_at]
-        if token.kind == .Identifier { member_name = g.modules[module_index].text[token.start..token.end] }
+        if token.kind == .Identifier { member_name = lex.token_text(g.modules[module_index].text, token) }
         token_at += 1usize
     }
     var field_at = 0usize
@@ -3584,7 +3584,7 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     if node.kind == .NameExpr {
         let token = c.tokens[usize(node.token_start)]
         if token.kind != .Identifier { ret (0usize, zero, check.Unsupported) }
-        let name = g.modules[module_index].text[token.start..token.end]
+        let name = lex.token_text(g.modules[module_index].text, token)
         let (binding, found) = find_binding(bindings, binding_count, name)
         if !found {
             let (parameter_index, has_parameter) = check.active_comptime_parameter(c, name)
@@ -4604,7 +4604,7 @@ fn proof_constant(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
         if usize(node.token_start) >= c.token_count { ret (0usize, false) }
         let token = c.tokens[usize(node.token_start)]
         if token.kind != .Identifier { ret (0usize, false) }
-        name = g.modules[module_index].text[token.start..token.end]
+        name = lex.token_text(g.modules[module_index].text, token)
     } else {
         if node.kind != .FieldExpr { ret (0usize, false) }
         let (target_module, member, found) = check.qualified_member(c, g, tree, module_index, node)
@@ -4632,7 +4632,7 @@ fn proof_bound(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         let (callee_index, has_callee) = check.first_node_child(tree, node)
         if !has_callee || tree.nodes[callee_index].kind != .NameExpr { ret (0usize, false) }
         let callee_token = c.tokens[usize(tree.nodes[callee_index].token_start)]
-        let callee_name = text[callee_token.start..callee_token.end]
+        let callee_name = lex.token_text(text, callee_token)
         if !check.is_integer_name(callee_name) { ret (0usize, false) }
         var argument_index = 0usize
         var arguments = 0usize
@@ -4698,7 +4698,7 @@ fn proof_name(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if node.kind != .NameExpr { ret ("", false) }
     let token = c.tokens[usize(node.token_start)]
     if token.kind != .Identifier { ret ("", false) }
-    ret (g.modules[module_index].text[token.start..token.end], true)
+    ret (lex.token_text(g.modules[module_index].text, token), true)
 }
 
 // A base that is a name, or a field of one through any depth (D462, H03): `x`,
@@ -4719,16 +4719,16 @@ fn proof_path(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let (inner_path, root, has_path) = proof_path(c, g, tree, module_index, inner_index)
     if !has_path { ret ("", "", false) }
     let text = g.modules[module_index].text
-    let start = c.tokens[usize(node.token_start)].start
-    if start >= member.end || member.end > text.len { ret ("", "", false) }
+    let start = usize(c.tokens[usize(node.token_start)].start)
+    if start >= usize(member.end) || usize(member.end) > text.len { ret ("", "", false) }
     var at = start
-    while at < member.end {
+    while at < usize(member.end) {
         let ch = text[at]
         let is_word = (ch >= 97u8 && ch <= 122u8) || (ch >= 65u8 && ch <= 90u8) || (ch >= 48u8 && ch <= 57u8) || ch == 95u8 || ch == 46u8
         if !is_word { ret ("", "", false) }
         at += 1usize
     }
-    ret (text[start..member.end], root, true)
+    ret (text[start..usize(member.end)], root, true)
 }
 
 // Whether `word` is one of the path's dot-separated names: a write to any of them
@@ -4766,15 +4766,15 @@ fn proof_alias_base(c: *check.Checker, g: *graph.Graph, module_index: usize, bui
     var alias_at = 0usize
     while alias_at < builder.proof_alias_count {
         let name_token = c.tokens[builder.proof_alias_name[alias_at]]
-        if check.same(text[name_token.start..name_token.end], alias_name) {
+        if check.same(lex.token_text(text, name_token), alias_name) {
             let base_token = c.tokens[builder.proof_alias_base[alias_at]]
-            let base_name = text[base_token.start..base_token.end]
+            let base_name = lex.token_text(text, base_token)
             var scan = builder.proof_function_start
             while scan < builder.proof_function_end && scan < c.token_count {
                 let token = c.tokens[scan]
                 // A field spelled like the base -- `w.modules = ...` -- is not the local (D528).
                 let is_field = scan > 0usize && c.tokens[scan - 1usize].kind == .PunctDot
-                if token.kind == .Identifier && !is_field && check.same(text[token.start..token.end], base_name) && proof_token_writes(c, scan, builder.proof_function_end) { ret ("", false) }
+                if token.kind == .Identifier && !is_field && check.same(lex.token_text(text, token), base_name) && proof_token_writes(c, scan, builder.proof_function_end) { ret ("", false) }
                 scan += 1usize
             }
             ret (base_name, true)
@@ -4886,7 +4886,7 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     } else {
         if right.kind != .FieldExpr { ret false }
         let member = c.tokens[usize(right.token_end) - 1usize]
-        if member.kind != .Identifier || !check.same(g.modules[module_index].text[member.start..member.end], "len") { ret false }
+        if member.kind != .Identifier || !check.same(lex.token_text(g.modules[module_index].text, member), "len") { ret false }
         let (base_node_index, has_base) = check.first_node_child(tree, right)
         if !has_base { ret false }
         let (path, path_root, has_path) = proof_path(c, g, tree, module_index, base_node_index)
@@ -4940,7 +4940,7 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
             if depth < loop_marks.len && loop_marks[depth] { loop_depth = loop_depth - 1usize }
         }
         if token.kind == .Identifier {
-            let word = g.modules[module_index].text[token.start..token.end]
+            let word = lex.token_text(g.modules[module_index].text, token)
             let is_field = scan > 0usize && c.tokens[scan - 1usize].kind == .PunctDot
             if !is_field && check.same(word, index_name) && proof_token_writes(c, scan, body_end) {
                 if scan < first_assign { first_assign = scan }
@@ -4962,10 +4962,10 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     var addressed_at = 0usize
     while addressed_at < builder.proof_addressed_count {
         let pointed = c.tokens[builder.proof_addressed[addressed_at]]
-        if check.same(g.modules[module_index].text[pointed.start..pointed.end], index_name) { ret false }
+        if check.same(lex.token_text(g.modules[module_index].text, pointed), index_name) { ret false }
         // A pointer to the struct taken anywhere (D462) is a way for a call to
         // reach the field.
-        if field_base && check.same(g.modules[module_index].text[pointed.start..pointed.end], root_name) { ret false }
+        if field_base && check.same(lex.token_text(g.modules[module_index].text, pointed), root_name) { ret false }
         addressed_at += 1usize
     }
     builder.proof_index[builder.proof_count] = index_name
@@ -5053,7 +5053,7 @@ fn proof_equal_open(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     while scan < scan_end {
         let token = c.tokens[scan]
         if token.kind == .Identifier {
-            let word = g.modules[module_index].text[token.start..token.end]
+            let word = lex.token_text(g.modules[module_index].text, token)
             if (check.same(word, a_name) || check.same(word, b_name)) && proof_token_writes(c, scan, scan_end) { ret false }
         }
         scan += 1usize
@@ -5069,7 +5069,7 @@ fn proof_length_base(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     let node = tree.nodes[node_index]
     if node.kind != .FieldExpr { ret ("", false) }
     let member = c.tokens[usize(node.token_end) - 1usize]
-    if member.kind != .Identifier || !check.same(g.modules[module_index].text[member.start..member.end], "len") { ret ("", false) }
+    if member.kind != .Identifier || !check.same(lex.token_text(g.modules[module_index].text, member), "len") { ret ("", false) }
     let (base_index, has_base) = check.first_node_child(tree, node)
     if !has_base { ret ("", false) }
     let (base_name, has_name) = proof_name(c, g, tree, module_index, base_index)
@@ -5976,7 +5976,7 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         if sequence.kind != .None {
             if sequence.deferred { ret check.Unsupported }
             var binding_name = ""
-            if names[0usize].kind == .Identifier { binding_name = g.modules[module_index].text[names[0usize].start..names[0usize].end] }
+            if names[0usize].kind == .Identifier { binding_name = lex.token_text(g.modules[module_index].text, names[0usize]) }
             ret lower_unrolled_for(c, g, tree, module_index, function, sequence, binding_name, body_index, builder, bindings, binding_count, defers)
         }
         let (iterable_type, iterable_type_error) = check.check_expr(c, g, tree, module_index, expressions[0usize], check.invalid_type())
@@ -6227,7 +6227,7 @@ fn lower_switch_arm(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         var capture_token = token
         var token_at = usize(arm.token_start)
         while token_at < usize(arm.token_end) {
-            if c.tokens[token_at].kind == .Identifier && check.same(g.modules[module_index].text[c.tokens[token_at].start..c.tokens[token_at].end], capture) { capture_token = c.tokens[token_at] }
+            if c.tokens[token_at].kind == .Identifier && check.same(lex.token_text(g.modules[module_index].text, c.tokens[token_at]), capture) { capture_token = c.tokens[token_at] }
             token_at += 1usize
         }
         try bind_value(c, g, module_index, capture_token, field.ty, value, address_value, false, builder, bindings, binding_count)
@@ -6508,8 +6508,8 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             }
         }
         if kind == .KwLet && scan + 5usize < builder.proof_function_end && scan + 5usize < tokens.len && tokens[scan + 1usize].kind == .Identifier && tokens[scan + 2usize].kind == .PunctAssign && tokens[scan + 3usize].kind == .Identifier && tokens[scan + 4usize].kind == .PunctDot && tokens[scan + 5usize].kind == .Identifier {
-            let member_start = tokens[scan + 5usize].start
-            let member_end = tokens[scan + 5usize].end
+            let member_start = usize(tokens[scan + 5usize].start)
+            let member_end = usize(tokens[scan + 5usize].end)
             let ends = scan + 6usize >= tokens.len || tokens[scan + 6usize].kind == .Newline || tokens[scan + 6usize].kind == .PunctRBrace
             if ends && check.same(text[member_start..member_end], "len") && builder.proof_alias_count < builder.proof_alias_name.len {
                 builder.proof_alias_name[builder.proof_alias_count] = scan + 1usize

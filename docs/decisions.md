@@ -29705,3 +29705,61 @@ Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50
 **Not done or not measured.** The full suites (`tests/selfhost/run.ps1`, the Linux suite) and a stage-1 build with the C bootstrap were not run, Linux memory was not measured, and the static baseline is not re-pinned.
 
 ---
+
+## D1663 — A token is twelve bytes
+
+**Why.** Increment T of D1660's plan. The phases are barriers, so every module's tokens and tree are live when lowering starts, and nothing released before then can lower that level. `lex.Token` was 24 bytes: a kind, a flag and two `usize` offsets. The plan counts about 8.2M tokens at `sc1m`, so halving the offsets should take about 94 MB off every phase at every `-j`.
+
+**Decision.**
+
+- **The offsets are `u32`.** `start` and `end` are 32-bit, and a token is 12 bytes, the shape a tree node's indexes already have (D318). `lex.token` and the end-of-file token narrow with `u32(...)`.
+- **One slice, widened readers.** `lex.token_text(source, t)` is the one slice of a token's bytes. Every other reader widens with `usize(...)` before any arithmetic, and nothing computes in `u32`. The places that build a token from an offset narrow: `nir.site_token`, `main.e`'s `emit_diagnostic` and `relate_instance_site`, and `tool.e`'s stand-ins. The sweep covers 432 lines in eleven files. The self-hosted compiler refuses to mix `u32` and `usize`, so a missed site fails to compile rather than wrapping.
+- **Under 2 GiB.** Below 2^31 an offset and the sum of two never wrap. `graph.wave_texts` refuses a longer module as Capacity before it is scanned. `lex.next` also answers any source of 2 GiB or more with one `Invalid` token at byte 0 and then its end, whether it is scanning or replaying, and `invalid_code` calls that token `E-LEX-9999`. A tool's operand never passes through `wave_texts`: `fmt`, `fmt-file`, `tokens`, `parse` and `scan-file` load a file or stdin and lex it directly. Without this check, an operand of 4 GiB or more would trap `narrow` in a debug compiler. A release compiler would lex wrapped offsets, and `fmt` would write the wrong bytes back over the file.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1663`, stage 2 built by 013ec715's debug compiler, source 878fda7c):
+
+- Lint: 0 hard findings. Stage 2 equals stage 3, and the release self-build is the same under `-j 3 --perturb`.
+- Images: `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases. The emit sweep gives 602 link fixtures, 0 different from HEAD's debug compiler.
+- Arithmetic check: a grep for arithmetic on `.start` or `.end` without a widening finds only non-token ranges: `em.e`'s debug variables (`placed`), `lookup.e`'s `x.start`, and `main.e`'s mapped spans at 4096-4133.
+- C bootstrap: `D:\repos\neper\build\windows\neper.exe build src/main.e --arena 1g` exits 0 in 12 s, not the ten minutes expected. The compiler it builds then builds `src/main.e` into the same bytes as stages 2 and 3.
+- The 2 GiB check: on a file of 2^31 spaces, the release compiler's `tokens` prints `INVALID` and then `EOF`; the compiler before the check printed `EOF` alone. `fmt-file` ran out of its 8 GiB arena before it lexed, and wrote nothing.
+- Static gate (`sc500k`, 8 workers), arena high-water, debug / release:
+  - HEAD's calibration: 2,347 / 3,069 MB.
+  - D1661: 2,331 / 3,053 MB.
+  - D1662: 2,291 / 3,018 MB.
+  - The pinned file: 2,286 / 2,997 MB.
+  - This: 2,236 / 2,959 MB.
+  
+  The plan expected about −51 from T. Against D1662 it is −55 and −59; against the pin, −50 and −38. The images, 1,936,791 B and 1,458,009 B, are unchanged. `gate.py` against the pin reports 0 breached, the first time since D1641.
+- The re-pin: `benchmarks/baseline/results/static-windows.json` is re-pinned downward to this measurement, 2,236 / 2,959 MB, and so are its image figures. Those were 1b213934's (D915), and the images have shrunk since through changes before this one. Against the new pin, D1662's figures breach by +2.5% and +2.0%. `static-linux.json` is not re-pinned, because Linux was not measured.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50): D1660's files → D1662 → this, the gate's own runs.
+
+| workload | workers | peak commit | peak working set | worker arenas reached | cold p50 |
+|---|---|---|---|---|---|
+| sc1m | 4 | 1,292 → 1,219 → 1,118 MB | 1,035 → 967 → 867 MB | 3,458 → 3,385 → 3,279 MB | 3,447 → 3,556 → 3,549 ms |
+| sc1m | 8 | 1,675 → 1,595 → 1,492 MB | 1,233 → 1,161 → 1,059 MB | 4,841 → 4,763 → 4,654 MB | 3,143 → 2,915 → 2,975 ms |
+| sc500k | 4 | 812 → 773 → 720 MB | 567 → 532 → 480 MB | 2,055 → 2,019 → 1,963 MB | 1,690 → 1,745 → 1,769 ms |
+| sc500k | 8 | 1,123 → 1,065 → 1,009 MB | 711 → 659 → 605 MB | 3,069 → 3,017 → 2,959 MB | 1,353 → 1,471 → 1,482 ms |
+| compiler | 4 | 494 → 477 → 460 MB | 272 → 259 → 243 MB | 1,467 → 1,453 → 1,441 MB | 525 → 547 → 545 ms |
+| compiler | 8 | 795 → 769 → 761 MB | 356 → 333 → 316 MB | 2,866 → 2,842 → 2,826 MB | 553 → 545 → 532 ms |
+
+- The `sc1m` peak falls 101 MB at `-j 4` and 103 at `-j 8`, against the plan's about 94. `sc500k` falls 53 and 56.
+- The `compiler` workload is this worktree's source, which this change edits. Its image is 6,942,332 → 6,914,205 B.
+- The cold figures are within the machine's spread. The `sc1m` `-j 8` runs alone went from 2,899 to 3,060 ms.
+
+**Deviations from the plan.**
+
+- The number: the plan's T is this D1663.
+- The sweep: a scratch script reused the plan's classifier (`tokcount2.py`) and wrote the replacement lines into one `patch.exe` spec per file, because a spec takes at most 256 edits. `patch.exe` applied them. No site needed a hand fix afterwards.
+- Token-to-token comparisons: the plan leaves about three unwidened. Only `em.e`'s `token.start > token.end` stays as it was. The two in `parse.e` and the one in `lex.e`'s `is_keyword` widen both sides, which gives the same result.
+- The 2 GiB limit: the plan puts it only in `wave_texts` and accepts tools that read stdin as the uncovered corner. Review found the corner was every tool operand, including files, so `lex.next` carries the limit as well (above). Review also found two comments that said 2 GiB is what a `u32` holds. A `u32` holds offsets up to 4 GiB − 1; 2 GiB is the headroom that keeps the sum of two offsets from wrapping. Both comments now say so.
+
+**Not done or not measured.**
+
+- The full suites (`tests/selfhost/run.ps1`, the Linux suite) were not run.
+- Linux memory and the Linux static figure were not measured.
+- `-j 1` was not measured.
+- The commit at each phase end was not measured, so the plan's "−94 MB at every phase" is shown only through the process peak.
+
+---

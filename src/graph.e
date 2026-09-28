@@ -482,10 +482,10 @@ fn extract_import(a: *mem.Arena, text: str, tokens: []const lex.Token, node: syn
         } else {
             if token.kind == .Identifier {
                 if after_as {
-                    qualifier = text[token.start..token.end]
+                    qualifier = lex.token_text(text, token)
                 } else {
-                    module_length += token.end - token.start
-                    qualifier = text[token.start..token.end]
+                    module_length += usize(token.end) - usize(token.start)
+                    qualifier = lex.token_text(text, token)
                 }
             } else {
                 if token.kind == .PunctDot && !after_as { module_length += 1usize }
@@ -505,8 +505,8 @@ fn extract_import(a: *mem.Arena, text: str, tokens: []const lex.Token, node: syn
             after_as = true
         } else {
             if token.kind == .Identifier && !after_as {
-                var i = token.start
-                while i < token.end {
+                var i = usize(token.start)
+                while i < usize(token.end) {
                     name[written] = text[i]
                     written += 1usize
                     i += 1usize
@@ -1012,6 +1012,10 @@ fn wave_texts(a: *mem.Arena, g: *Graph, wave_start: usize, wave_end: usize) -> e
             }
         }
         g.modules[module_index].text = text
+        // A token's offsets are 32-bit (D1663): under 2 GiB an offset and the sum of two
+        // never wrap, so a longer module is refused here, before it is scanned, rather
+        // than as the lexer's one `Invalid` token.
+        if text.len >= 2147483648usize { ret Capacity }
         g.total_bytes += text.len
         if text.len > g.largest_bytes { g.largest_bytes = text.len }
         module_index += 1usize

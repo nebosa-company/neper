@@ -34,10 +34,10 @@ error DiagnosticWrite
 
 fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize, column: usize) -> err {
     let current = lex.next(s)
-    if current.kind != kind || current.start != start || current.end != end { ret lex.InvalidSource }
+    if current.kind != kind || usize(current.start) != start || usize(current.end) != end { ret lex.InvalidSource }
     // The line and column are derived from the offset (D315), here without a table.
     var no_lines: [1]usize = zero
-    if lex.line_of(s.source, no_lines[0usize..0usize], current.start) != line || lex.column_of(s.source, no_lines[0usize..0usize], current.start) != column {
+    if lex.line_of(s.source, no_lines[0usize..0usize], usize(current.start)) != line || lex.column_of(s.source, no_lines[0usize..0usize], usize(current.start)) != column {
         ret lex.InvalidSource
     }
     ret ok
@@ -54,9 +54,9 @@ fn validate_test_parse(text: str) -> err {
 fn self_test() -> err {
     var basic = lex.init("use e.io\r\nfn main() -> err { // note\n    ret ok\n}\n")
     let basic_use = lex.next(&basic)
-    if basic_use.kind != .KwUse || basic_use.start != 0usize || basic_use.end != 3usize { ret lex.InvalidSource }
+    if basic_use.kind != .KwUse || usize(basic_use.start) != 0usize || usize(basic_use.end) != 3usize { ret lex.InvalidSource }
     let basic_e = lex.next(&basic)
-    if basic_e.kind != .Identifier || basic_e.start != 4usize || basic_e.end != 5usize { ret lex.InvalidSource }
+    if basic_e.kind != .Identifier || usize(basic_e.start) != 4usize || usize(basic_e.end) != 5usize { ret lex.InvalidSource }
     var basic_pair: [2]lex.Token = zero
     basic_pair[0usize] = basic_use
     basic_pair[1usize] = basic_e
@@ -127,38 +127,38 @@ fn self_test() -> err {
     var no_lines: [1]usize = zero
     var positioned = lex.init("\xEF\xBB\xBF\"😀é\"\r\nx")
     let positioned_string = lex.next(&positioned)
-    if positioned_string.kind != .String || positioned_string.start != 3usize || positioned_string.end != 11usize { ret lex.InvalidSource }
+    if positioned_string.kind != .String || usize(positioned_string.start) != 3usize || usize(positioned_string.end) != 11usize { ret lex.InvalidSource }
     // The end position and the UTF-16 columns are derived from the source (D315).
     let positioned_string_span = lex.span_of(positioned.source, no_lines[0usize..0usize], positioned_string)
     if positioned_string_span.line != 1usize || positioned_string_span.column != 1usize || positioned_string_span.end_line != 1usize || positioned_string_span.end_column != 5usize { ret lex.InvalidSource }
     if positioned_string_span.column_utf16 != 1usize || positioned_string_span.end_column_utf16 != 6usize { ret lex.InvalidSource }
     let positioned_newline = lex.next(&positioned)
-    if positioned_newline.kind != .Newline || positioned_newline.start != 11usize || positioned_newline.end != 13usize { ret lex.InvalidSource }
+    if positioned_newline.kind != .Newline || usize(positioned_newline.start) != 11usize || usize(positioned_newline.end) != 13usize { ret lex.InvalidSource }
     let positioned_newline_span = lex.span_of(positioned.source, no_lines[0usize..0usize], positioned_newline)
     if positioned_newline_span.line != 1usize || positioned_newline_span.column != 5usize || positioned_newline_span.end_line != 2usize || positioned_newline_span.end_column != 1usize { ret lex.InvalidSource }
     if positioned_newline_span.column_utf16 != 6usize || positioned_newline_span.end_column_utf16 != 1usize { ret lex.InvalidSource }
     let positioned_name = lex.next(&positioned)
-    if positioned_name.kind != .Identifier || positioned_name.start != 13usize || positioned_name.end != 14usize { ret lex.InvalidSource }
+    if positioned_name.kind != .Identifier || usize(positioned_name.start) != 13usize || usize(positioned_name.end) != 14usize { ret lex.InvalidSource }
     let positioned_name_span = lex.span_of(positioned.source, no_lines[0usize..0usize], positioned_name)
     if positioned_name_span.line != 2usize || positioned_name_span.column != 1usize || positioned_name_span.end_line != 2usize || positioned_name_span.end_column != 2usize { ret lex.InvalidSource }
     if positioned_name_span.column_utf16 != 1usize || positioned_name_span.end_column_utf16 != 2usize { ret lex.InvalidSource }
     var invalid_scalar = lex.init("😀x")
     let invalid_scalar_token = lex.next(&invalid_scalar)
-    if invalid_scalar_token.kind != .Invalid || invalid_scalar_token.start != 0usize || invalid_scalar_token.end != 4usize { ret lex.InvalidSource }
+    if invalid_scalar_token.kind != .Invalid || usize(invalid_scalar_token.start) != 0usize || usize(invalid_scalar_token.end) != 4usize { ret lex.InvalidSource }
     let invalid_scalar_span = lex.span_of(invalid_scalar.source, no_lines[0usize..0usize], invalid_scalar_token)
     if invalid_scalar_span.column != 1usize || invalid_scalar_span.end_column != 2usize || invalid_scalar_span.column_utf16 != 1usize || invalid_scalar_span.end_column_utf16 != 3usize { ret lex.InvalidSource }
     let after_invalid_scalar = lex.next(&invalid_scalar)
-    if after_invalid_scalar.kind != .Identifier || after_invalid_scalar.start != 4usize || lex.column_of(invalid_scalar.source, no_lines[0usize..0usize], after_invalid_scalar.start) != 2usize || lex.span_of(invalid_scalar.source, no_lines[0usize..0usize], after_invalid_scalar).column_utf16 != 3usize { ret lex.InvalidSource }
+    if after_invalid_scalar.kind != .Identifier || usize(after_invalid_scalar.start) != 4usize || lex.column_of(invalid_scalar.source, no_lines[0usize..0usize], usize(after_invalid_scalar.start)) != 2usize || lex.span_of(invalid_scalar.source, no_lines[0usize..0usize], after_invalid_scalar).column_utf16 != 3usize { ret lex.InvalidSource }
     var invalid_sequence = lex.init("\xF0\x9F\x92x")
     let invalid_sequence_token = lex.next(&invalid_sequence)
-    if invalid_sequence_token.kind != .Invalid || invalid_sequence_token.start != 0usize || invalid_sequence_token.end != 3usize { ret lex.InvalidSource }
+    if invalid_sequence_token.kind != .Invalid || usize(invalid_sequence_token.start) != 0usize || usize(invalid_sequence_token.end) != 3usize { ret lex.InvalidSource }
     let invalid_sequence_span = lex.span_of(invalid_sequence.source, no_lines[0usize..0usize], invalid_sequence_token)
     if invalid_sequence_span.end_column != 2usize || invalid_sequence_span.end_column_utf16 != 2usize { ret lex.InvalidSource }
     let after_invalid_sequence = lex.next(&invalid_sequence)
-    if after_invalid_sequence.kind != .Identifier || after_invalid_sequence.start != 3usize || lex.column_of(invalid_sequence.source, no_lines[0usize..0usize], after_invalid_sequence.start) != 2usize || lex.span_of(invalid_sequence.source, no_lines[0usize..0usize], after_invalid_sequence).column_utf16 != 2usize { ret lex.InvalidSource }
+    if after_invalid_sequence.kind != .Identifier || usize(after_invalid_sequence.start) != 3usize || lex.column_of(invalid_sequence.source, no_lines[0usize..0usize], usize(after_invalid_sequence.start)) != 2usize || lex.span_of(invalid_sequence.source, no_lines[0usize..0usize], after_invalid_sequence).column_utf16 != 2usize { ret lex.InvalidSource }
     var trivia = lex.init("\xEF\xBB\xBF // c\r\nx ")
     let trivia_newline = lex.next(&trivia)
-    if trivia_newline.kind != .Newline || trivia_newline.start != 8usize || trivia_newline.end != 10usize { ret lex.InvalidSource }
+    if trivia_newline.kind != .Newline || usize(trivia_newline.start) != 8usize || usize(trivia_newline.end) != 10usize { ret lex.InvalidSource }
     var leading = lex.trivia_init(trivia.source, no_lines[0usize..0usize], 0usize, trivia_newline)
     let leading_bom = lex.next_trivia(&leading)
     if leading_bom.kind != .Bom || leading_bom.start != 0usize || leading_bom.end != 3usize || leading_bom.column != 1usize || leading_bom.end_column != 1usize { ret lex.InvalidSource }
@@ -168,10 +168,10 @@ fn self_test() -> err {
     if leading_comment.kind != .Comment || leading_comment.start != 4usize || leading_comment.end != 8usize || leading_comment.column != 2usize || leading_comment.end_column != 6usize { ret lex.InvalidSource }
     if lex.next_trivia(&leading).kind != .End { ret lex.InvalidSource }
     let trivia_name = lex.next(&trivia)
-    if trivia_name.kind != .Identifier || trivia_name.start != 10usize || trivia_name.end != 11usize { ret lex.InvalidSource }
+    if trivia_name.kind != .Identifier || usize(trivia_name.start) != 10usize || usize(trivia_name.end) != 11usize { ret lex.InvalidSource }
     let trivia_eof = lex.next(&trivia)
-    if trivia_eof.kind != .Eof || trivia_eof.start != 12usize || trivia_eof.end != 12usize { ret lex.InvalidSource }
-    var trailing = lex.trivia_init(trivia.source, no_lines[0usize..0usize], trivia_name.end, trivia_eof)
+    if trivia_eof.kind != .Eof || usize(trivia_eof.start) != 12usize || usize(trivia_eof.end) != 12usize { ret lex.InvalidSource }
+    var trailing = lex.trivia_init(trivia.source, no_lines[0usize..0usize], usize(trivia_name.end), trivia_eof)
     let trailing_space = lex.next_trivia(&trailing)
     if trailing_space.kind != .Space || trailing_space.start != 11usize || trailing_space.end != 12usize || trailing_space.column != 2usize || trailing_space.end_column != 3usize { ret lex.InvalidSource }
     var unicode_trivia = lex.init("// 😀\nx")
@@ -181,17 +181,17 @@ fn self_test() -> err {
     if unicode_comment.kind != .Comment || unicode_comment.start != 0usize || unicode_comment.end != 7usize || unicode_comment.end_column != 5usize || unicode_comment.end_column_utf16 != 6usize { ret lex.InvalidSource }
     var broken_comment = lex.init("// a\xF0\x9F\x92 rest\nerror Good")
     let broken_comment_byte = lex.next(&broken_comment)
-    if broken_comment_byte.kind != .Invalid || broken_comment_byte.start != 4usize || broken_comment_byte.end != 7usize { ret lex.InvalidSource }
+    if broken_comment_byte.kind != .Invalid || usize(broken_comment_byte.start) != 4usize || usize(broken_comment_byte.end) != 7usize { ret lex.InvalidSource }
     var broken_prefix = lex.trivia_init(broken_comment.source, no_lines[0usize..0usize], 0usize, broken_comment_byte)
     let broken_prefix_comment = lex.next_trivia(&broken_prefix)
     if broken_prefix_comment.kind != .Comment || broken_prefix_comment.start != 0usize || broken_prefix_comment.end != 4usize { ret lex.InvalidSource }
     let after_broken_comment = lex.next(&broken_comment)
-    if after_broken_comment.kind != .Newline || after_broken_comment.start != 12usize { ret lex.InvalidSource }
-    var broken_suffix = lex.trivia_init(broken_comment.source, no_lines[0usize..0usize], broken_comment_byte.end, after_broken_comment)
+    if after_broken_comment.kind != .Newline || usize(after_broken_comment.start) != 12usize { ret lex.InvalidSource }
+    var broken_suffix = lex.trivia_init(broken_comment.source, no_lines[0usize..0usize], usize(broken_comment_byte.end), after_broken_comment)
     let broken_suffix_comment = lex.next_trivia(&broken_suffix)
     if broken_suffix_comment.kind != .Comment || broken_suffix_comment.start != 7usize || broken_suffix_comment.end != 12usize { ret lex.InvalidSource }
     let after_broken_line = lex.next(&broken_comment)
-    if after_broken_line.kind != .KwError || after_broken_line.start != 13usize { ret lex.InvalidSource }
+    if after_broken_line.kind != .KwError || usize(after_broken_line.start) != 13usize { ret lex.InvalidSource }
     let valid_utf8 = lex.validate("\"héllo\" // π\nr\"λ\tvalue\"")
     if valid_utf8 != ok { ret lex.InvalidSource }
     let valid_comment_tab = lex.validate("//\tcomment\nerror Good\n")
@@ -207,21 +207,21 @@ fn self_test() -> err {
     if lex.validate("r\"\xFF\"") != lex.InvalidSource { ret lex.InvalidSource }
     var recovered_string = lex.init("\"a\\qz\" error Good")
     let invalid_string_token = lex.next(&recovered_string)
-    if invalid_string_token.kind != .Invalid || invalid_string_token.start != 0usize || invalid_string_token.end != 6usize { ret lex.InvalidSource }
+    if invalid_string_token.kind != .Invalid || usize(invalid_string_token.start) != 0usize || usize(invalid_string_token.end) != 6usize { ret lex.InvalidSource }
     let after_invalid_string = lex.next(&recovered_string)
-    if after_invalid_string.kind != .KwError || after_invalid_string.start != 7usize { ret lex.InvalidSource }
+    if after_invalid_string.kind != .KwError || usize(after_invalid_string.start) != 7usize { ret lex.InvalidSource }
     var recovered_raw = lex.init("r\"a\xF0\x9F\x92z\" error Good")
     let invalid_raw_token = lex.next(&recovered_raw)
-    if invalid_raw_token.kind != .Invalid || invalid_raw_token.start != 0usize || invalid_raw_token.end != 8usize { ret lex.InvalidSource }
+    if invalid_raw_token.kind != .Invalid || usize(invalid_raw_token.start) != 0usize || usize(invalid_raw_token.end) != 8usize { ret lex.InvalidSource }
     let after_invalid_raw = lex.next(&recovered_raw)
-    if after_invalid_raw.kind != .KwError || after_invalid_raw.start != 9usize { ret lex.InvalidSource }
+    if after_invalid_raw.kind != .KwError || usize(after_invalid_raw.start) != 9usize { ret lex.InvalidSource }
     var recovered_character = lex.init("'ab' error Good")
     let invalid_character_token = lex.next(&recovered_character)
-    if invalid_character_token.kind != .Invalid || invalid_character_token.start != 0usize || invalid_character_token.end != 4usize { ret lex.InvalidSource }
+    if invalid_character_token.kind != .Invalid || usize(invalid_character_token.start) != 0usize || usize(invalid_character_token.end) != 4usize { ret lex.InvalidSource }
     if lex.next(&recovered_character).kind != .KwError { ret lex.InvalidSource }
     var unterminated_string = lex.init("\"a\nerror Good")
     let unterminated_string_token = lex.next(&unterminated_string)
-    if unterminated_string_token.kind != .Invalid || unterminated_string_token.start != 0usize || unterminated_string_token.end != 2usize { ret lex.InvalidSource }
+    if unterminated_string_token.kind != .Invalid || usize(unterminated_string_token.start) != 0usize || usize(unterminated_string_token.end) != 2usize { ret lex.InvalidSource }
     if lex.next(&unterminated_string).kind != .Newline { ret lex.InvalidSource }
 
     let invalid = lex.validate("fn #")
@@ -1706,11 +1706,11 @@ fn nptest_signature_ok(tokens: []const lex.Token, text: str, first: usize, count
         if at + 4usize >= count { ret false }
         if tokens[at].kind != .Identifier { ret false }
     }
-    if !same(text[tokens[at].start..tokens[at].end], "Arena") { ret false }
+    if !same(lex.token_text(text, tokens[at]), "Arena") { ret false }
     if tokens[at + 1usize].kind != .PunctRParen { ret false }
     if tokens[at + 2usize].kind != .PunctArrow { ret false }
     if tokens[at + 3usize].kind != .Identifier { ret false }
-    if !same(text[tokens[at + 3usize].start..tokens[at + 3usize].end], "err") { ret false }
+    if !same(lex.token_text(text, tokens[at + 3usize]), "err") { ret false }
     ret tokens[at + 4usize].kind == .PunctLBrace
 }
 
@@ -1739,9 +1739,9 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *
         if node.top_level {
             if node.kind == .Attribute {
                 let name_token = tokens[usize(node.token_start) + 1usize]
-                pending = same(text[name_token.start..name_token.end], "test")
+                pending = same(lex.token_text(text, name_token), "test")
             } else {
-                if node.kind == .FnDecl && usize(node.token_start) + 1usize < token_count && same(text[tokens[usize(node.token_start) + 1usize].start..tokens[usize(node.token_start) + 1usize].end], "main") {
+                if node.kind == .FnDecl && usize(node.token_start) + 1usize < token_count && same(lex.token_text(text, tokens[usize(node.token_start) + 1usize]), "main") {
                     *main_name = tokens[usize(node.token_start) + 1usize]
                     *has_main = true
                 }
@@ -1752,8 +1752,8 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *
                         *bad = fn_name
                         *bad_kind = 2usize
                     }
-                    names[count] = text[fn_name.start..fn_name.end]
-                    lines[count] = lex.line_of(text, no_lines[0usize..0usize], tokens[usize(node.token_start)].start)
+                    names[count] = lex.token_text(text, fn_name)
+                    lines[count] = lex.line_of(text, no_lines[0usize..0usize], usize(tokens[usize(node.token_start)].start))
                     count += 1usize
                     pending = false
                 } else {
@@ -1788,9 +1788,9 @@ fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize, t
     // The operand's own `main` is renamed so the runner's is the program root (D281);
     // the source map carries the seam as a second mapping.
     if has_main {
-        written = nptest_append(buffer, written, text[0usize..main_name.start])
+        written = nptest_append(buffer, written, text[0usize..usize(main_name.start)])
         written = nptest_append(buffer, written, "nptest_operand_main")
-        written = nptest_append(buffer, written, text[main_name.end..text.len])
+        written = nptest_append(buffer, written, text[usize(main_name.end)..text.len])
     } else {
         written = nptest_append(buffer, written, text)
     }
@@ -2306,10 +2306,10 @@ fn write_runner_map(a: *mem.Arena, runner_path: str, runner: []u8, text: str, id
     let main_span = lex.span_of(text, no_lines[0usize..0usize], main_name)
     if has_main {
         // Up to the renamed `main`, then after it: the runner's name is 15 bytes longer.
-        try runner_mapping(&out, identity, prefix, 0usize, main_name.start, 1usize, 1usize, main_span.line, main_span.column, 3usize, 1usize)
+        try runner_mapping(&out, identity, prefix, 0usize, usize(main_name.start), 1usize, 1usize, main_span.line, main_span.column, 3usize, 1usize)
         try write_all(&out, ",")
-        let shifted = prefix + main_name.end + 15usize
-        try runner_mapping(&out, identity, shifted, main_name.end, text.len, main_span.end_line, main_span.end_column, lines, end_column, main_span.end_line + 2usize, main_span.end_column + 15usize)
+        let shifted = prefix + usize(main_name.end) + 15usize
+        try runner_mapping(&out, identity, shifted, usize(main_name.end), text.len, main_span.end_line, main_span.end_column, lines, end_column, main_span.end_line + 2usize, main_span.end_column + 15usize)
     } else {
         try runner_mapping(&out, identity, prefix, 0usize, text.len, 1usize, 1usize, lines, end_column, 3usize, 1usize)
     }
@@ -3436,7 +3436,7 @@ fn tool_command(a: *mem.Arena, args: []str) -> err {
         try io.print(tool.kind_name(token.kind))
         if token.kind != .Newline && token.kind != .Eof {
             try io.print(" ")
-            try io.print(text[token.start..token.end])
+            try io.print(lex.token_text(text, token))
         }
         try io.print("\n")
         if token.kind == .Eof { break }
@@ -4207,9 +4207,9 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
         // The fix (D381, H09): one insertion, `maybe` -- it changes what the program does.
         if report.fix_text.len != 0usize {
             var insert: lex.Token = zero
-            insert.start = report.fix_at
-            insert.end = report.fix_at
-            if report.fix_kind == 3u8 || report.fix_kind == 4u8 { insert.end = report.fix_end }
+            insert.start = u32(report.fix_at)
+            insert.end = u32(report.fix_at)
+            if report.fix_kind == 3u8 || report.fix_kind == 4u8 { insert.end = u32(report.fix_end) }
             let insert_at = lex.span_of(text, lines, insert)
             if report.fix_kind == 4u8 {
                 try write_all(report, "[{\"message\":\"use the nearest name in scope\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
@@ -6995,11 +6995,11 @@ fn print_barrier_failure(report: *Sink, path: str, text: str, opener: lex.Token,
     var message_storage: [256]u8 = zero
     var message = capture_sink(message_storage[..])
     try write_all(&message, "`")
-    try write_all(&message, text[opener.start..opener.end])
+    try write_all(&message, lex.token_text(text, opener))
     try write_all(&message, "` opened here is still unclosed at `")
-    try write_all(&message, text[keyword.start..keyword.end])
+    try write_all(&message, lex.token_text(text, keyword))
     try write_all(&message, "` on line ")
-    try write_usize(&message, lex.line_of(text, no_lines[0usize..0usize], keyword.start))
+    try write_usize(&message, lex.line_of(text, no_lines[0usize..0usize], usize(keyword.start)))
     ret emit_diagnostic(report, path, text, no_lines[0usize..0usize], opener, true, "E-SYNTAX-0012", message.capture[0usize..message.count])
 }
 
@@ -7015,7 +7015,7 @@ fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, re
     if reserved_name {
         code = "E-NAME-0003"
         try write_all(&message, "`")
-        try write_all(&message, text[token.start..token.end])
+        try write_all(&message, lex.token_text(text, token))
         try write_all(&message, "` is a keyword and cannot name a local or parameter")
     } else {
         // A token the scanner refused is a lexical error under its own code (D215).
@@ -7031,7 +7031,7 @@ fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, re
                     try write_all(&message, "end of line")
                 } else {
                     try write_all(&message, "`")
-                    try write_all(&message, text[token.start..token.end])
+                    try write_all(&message, lex.token_text(text, token))
                     try write_all(&message, "`")
                 }
             }
@@ -7840,8 +7840,8 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
         // The nearest name as a fix (D445, H09): named in the message and offered as
         // one `maybe` edit over the token.
         // The name as a fact (D514, H18): the token's text, and the candidate.
-        if resolver.failure_module < g.count && resolver.failure_token.end <= g.modules[resolver.failure_module].text.len {
-            report.symbol_text = g.modules[resolver.failure_module].text[resolver.failure_token.start..resolver.failure_token.end]
+        if resolver.failure_module < g.count && usize(resolver.failure_token.end) <= g.modules[resolver.failure_module].text.len {
+            report.symbol_text = lex.token_text(g.modules[resolver.failure_module].text, resolver.failure_token)
         }
         report.near_text = resolver.failure_near
         if resolver.failure_near.len != 0usize {
@@ -7850,8 +7850,8 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
             near_at = tool.nptest_copy(near_storage[..], near_at, resolver.failure_near)
             near_at = tool.nptest_copy(near_storage[..], near_at, "`?")
             report.fix_text = resolver.failure_near
-            report.fix_at = resolver.failure_token.start
-            report.fix_end = resolver.failure_token.end
+            report.fix_at = usize(resolver.failure_token.start)
+            report.fix_end = usize(resolver.failure_token.end)
             report.fix_kind = 4u8
             let near_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", near_storage[0usize..near_at])
             report.fix_text = ""
@@ -7874,8 +7874,8 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
             type_at = tool.nptest_copy(type_storage[..], type_at, resolver.failure_near)
             type_at = tool.nptest_copy(type_storage[..], type_at, "`?")
             report.fix_text = resolver.failure_near
-            report.fix_at = resolver.failure_token.start
-            report.fix_end = resolver.failure_token.end
+            report.fix_at = usize(resolver.failure_token.start)
+            report.fix_end = usize(resolver.failure_token.end)
             report.fix_kind = 4u8
         }
         report.symbol_text = resolver.failure_name
@@ -7913,8 +7913,8 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
             member_at = tool.nptest_copy(member_storage[..], member_at, resolver.failure_near)
             member_at = tool.nptest_copy(member_storage[..], member_at, "`?")
             report.fix_text = resolver.failure_near
-            report.fix_at = resolver.failure_token.start
-            report.fix_end = resolver.failure_token.end
+            report.fix_at = usize(resolver.failure_token.start)
+            report.fix_end = usize(resolver.failure_token.end)
             report.fix_kind = 4u8
         }
         report.symbol_text = resolver.failure_name
@@ -8229,8 +8229,8 @@ fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker)
         var link_note = ""
         try instance_request_note(g, checker, above, &link_note)
         var link_site: lex.Token = zero
-        link_site.start = link.site_offset
-        link_site.end = link.site_offset
+        link_site.start = u32(link.site_offset)
+        link_site.end = u32(link.site_offset)
         report.chain_notes[report.chain_count] = link_note
         report.chain_tokens[report.chain_count] = link_site
         report.chain_paths[report.chain_count] = g.modules[link.site_module].path
@@ -8240,8 +8240,8 @@ fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker)
         above = usize(link.site_function)
     }
     var site: lex.Token = zero
-    site.start = generic.site_offset
-    site.end = generic.site_offset
+    site.start = u32(generic.site_offset)
+    site.end = u32(generic.site_offset)
     report.related_token = site
     report.has_related = true
     report.related_foreign = true
@@ -8300,13 +8300,13 @@ fn install_poison(checker: *check.Checker, report: *Sink) {
 fn cascade_parent(g: *graph.Graph, report: *Sink, module_index: usize, token: lex.Token) -> (usize, bool) {
     if !report.cascade.on || module_index >= g.count { ret (0usize, false) }
     let text = g.modules[module_index].text
-    if token.end > text.len || token.end <= token.start { ret (0usize, false) }
-    let name = text[token.start..token.end]
+    if usize(token.end) > text.len || usize(token.end) <= usize(token.start) { ret (0usize, false) }
+    let name = lex.token_text(text, token)
     var owner = module_index
-    if token.start >= 2usize && text[token.start - 1usize] == 46u8 {
-        var qualifier_start = token.start - 1usize
+    if usize(token.start) >= 2usize && text[usize(token.start) - 1usize] == 46u8 {
+        var qualifier_start = usize(token.start) - 1usize
         while qualifier_start > 0usize && (lex.is_alnum(text[qualifier_start - 1usize]) || text[qualifier_start - 1usize] == 95u8) { qualifier_start = qualifier_start - 1usize }
-        let qualifier = text[qualifier_start..token.start - 1usize]
+        let qualifier = text[qualifier_start..usize(token.start) - 1usize]
         let import_end = g.modules[module_index].first_import + g.modules[module_index].import_count
         var import_at = g.modules[module_index].first_import
         while import_at < import_end {
@@ -8381,7 +8381,7 @@ fn print_module_syntax(report: *Sink, g: *graph.Graph, module_index: usize) -> e
         while node_at < tree.count {
             let candidate = tree.nodes[node_at]
             if candidate.top_level && usize(candidate.token_end) > usize(candidate.token_start) && usize(candidate.token_end) <= tokens.len {
-                if at.start >= tokens[usize(candidate.token_start)].start && at.start < tokens[usize(candidate.token_end) - 1usize].end { owner = node_at }
+                if usize(at.start) >= usize(tokens[usize(candidate.token_start)].start) && usize(at.start) < usize(tokens[usize(candidate.token_end) - 1usize].end) { owner = node_at }
             }
             node_at += 1usize
         }
@@ -8404,7 +8404,7 @@ fn print_module_syntax(report: *Sink, g: *graph.Graph, module_index: usize) -> e
             while node_scan < tree.count {
                 let candidate = tree.nodes[node_scan]
                 if candidate.top_level && candidate.kind != .ErrorNode && usize(candidate.token_end) > usize(candidate.token_start) && usize(candidate.token_end) <= tokens.len {
-                    if tokens[usize(candidate.token_start)].start > previous.start && tokens[usize(candidate.token_end) - 1usize].end <= at.start { between = true }
+                    if usize(tokens[usize(candidate.token_start)].start) > usize(previous.start) && usize(tokens[usize(candidate.token_end) - 1usize].end) <= usize(at.start) { between = true }
                 }
                 node_scan += 1usize
             }
@@ -8436,12 +8436,12 @@ fn print_module_syntax(report: *Sink, g: *graph.Graph, module_index: usize) -> e
         if node.top_level && usize(node.token_end) > usize(node.token_start) && usize(node.token_end) <= tokens.len {
             let (broken, in_body) = parse.declaration_broken(&tree, node)
             if broken {
-                let start = tokens[usize(node.token_start)].start
-                let end = tokens[usize(node.token_end) - 1usize].end
+                let start = usize(tokens[usize(node.token_start)].start)
+                let end = usize(tokens[usize(node.token_end) - 1usize].end)
                 var record = first_record
                 var scan = 0usize
                 while scan < tree.failure_count && scan < 64usize {
-                    if tree.failures[scan].start >= start && tree.failures[scan].start < end {
+                    if usize(tree.failures[scan].start) >= start && usize(tree.failures[scan].start) < end {
                         record = record_of[scan]
                         scan = tree.failure_count
                     } else {
@@ -8458,7 +8458,7 @@ fn print_module_syntax(report: *Sink, g: *graph.Graph, module_index: usize) -> e
                     named = lead == .KwFn || lead == .KwType || lead == .KwConst || lead == .KwVar
                 }
                 if named && name_at < usize(node.token_end) && tokens[name_at].kind == .Identifier {
-                    add_poison(report, module_index, text[tokens[name_at].start..tokens[name_at].end], !in_body, record)
+                    add_poison(report, module_index, lex.token_text(text, tokens[name_at]), !in_body, record)
                 }
             }
         }
