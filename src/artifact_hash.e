@@ -560,10 +560,19 @@ fn interface_cut(a: *mem.Arena, content: str, tokens: []const lex.Token) -> (str
 }
 
 fn interface_sha256_hex(a: *mem.Arena, content: str, tokens: []const lex.Token) -> (str, err) {
+    // (D1661) Only the digest outlives the cut, as canonical_digests keeps only its
+    // own (D930): the text-sized cut stayed in a lowering worker's arena for every
+    // module, the whole program's text by the end of the lowering.
+    let checkpoint = mem.mark(a)
     let (kept, cut_error) = interface_cut(a, content, tokens)
     if cut_error != ok { ret ("", cut_error) }
-    let (digest, digest_error) = sha256_hex(a, kept)
-    ret (digest, digest_error)
+    var hex: [64]u8 = zero
+    sha256_hex_into(kept, hex[..])
+    mem.reset(a, checkpoint)
+    let (digest, digest_error) = mem.alloc[u8](a, 64usize)
+    if digest_error != ok { ret ("", digest_error) }
+    os.copy_bytes(digest, hex[..])
+    ret (digest[..], ok)
 }
 
 // The same over a text with no token stream: scanned into a buffer of its own.
