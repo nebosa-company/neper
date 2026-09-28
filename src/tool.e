@@ -722,7 +722,8 @@ fn index_json_into(a: *mem.Arena, out: *Out, root: str, path: str, source: str, 
     out.lines = out_lines
     out.absolute = absolute
     // The boundaries each declaration holds (D513): the manifest's scan of the module.
-    let (inventory, inventory_count, inventory_error) = module_inventory(a, module_name, source, out_lines)
+    var no_scratch: []u8 = zero
+    let (inventory, inventory_count, inventory_error) = module_inventory(a, no_scratch, module_name, source, out_lines)
     if inventory_error != ok { ret (2usize, inventory_error) }
     out.inventory = inventory
     let header_error = header(out, "index")
@@ -6310,8 +6311,8 @@ fn manifest_nocheck_derefs(out: *Out, written: *usize, module_name: str, functio
 // The inventory of one module as its artifact carries it (D457): the records the
 // manifest would write for it, rendered once when the artifact is written, and
 // their count -- so a warm build copies bytes for every kept module and scans only
-// what it parsed.
-fn module_inventory(a: *mem.Arena, module_name: str, text_bytes: str, lines: []usize) -> ([]u8, usize, err) {
+// what it parsed. `scratch` is the caller's, free for the call; empty, there is none.
+fn module_inventory(a: *mem.Arena, scratch: []u8, module_name: str, text_bytes: str, lines: []usize) -> ([]u8, usize, err) {
     var none: []u8 = zero
     var openers: [256]u8 = zero
     openers[64usize] = 1u8
@@ -6324,6 +6325,25 @@ fn module_inventory(a: *mem.Arena, module_name: str, text_bytes: str, lines: []u
     // The buffer doubles until the records fit; an attempt that did not fit stays in the
     // arena, which bounds the waste by the final size.
     var size = 4096usize + text_bytes.len / 4usize
+    // (D1661) Into the caller's free scratch first, and only the records' bytes kept:
+    // the quarter-text buffer they were rendered into stayed in a lowering worker's
+    // arena for every module. Records the scratch cannot hold go the doubling way,
+    // from twice its size, so no attempt is one already known to be too small.
+    if scratch.len != 0usize {
+        var first: Out = zero
+        first.bytes = scratch
+        var first_written = 0usize
+        let first_error = manifest_module_sites(&first, &first_written, module_name, text_bytes, lines, openers[..])
+        if first_error == ok {
+            if first.count == 0usize { ret (none, first_written, ok) }
+            let (kept, kept_error) = mem.alloc[u8](a, first.count)
+            if kept_error != ok { ret (none, 0usize, kept_error) }
+            os.copy_bytes(kept, scratch[0usize..first.count])
+            ret (kept, first_written, ok)
+        }
+        if first_error != Capacity { ret (none, 0usize, first_error) }
+        if size < scratch.len * 2usize { size = scratch.len * 2usize }
+    }
     var attempts = 0usize
     while true {
         let (storage, storage_error) = mem.alloc[u8](a, size)

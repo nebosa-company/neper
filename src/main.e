@@ -9390,8 +9390,9 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     if hot.unchecked && !hot.release { mode = .DebugUnchecked }
     hot.artifact.count = 0usize
     // The module's unsafe inventory (D457), rendered here on the worker so a warm
-    // build copies it from the artifact instead of scanning every module's text.
-    let (inventory, inventory_count, inventory_error) = tool.module_inventory(a, loaded.modules[module_index].name, loaded.modules[module_index].text, loaded.modules[module_index].lines)
+    // build copies it from the artifact instead of scanning every module's text. Into
+    // the writer's scratch, free until em.write_module (D1661).
+    let (inventory, inventory_count, inventory_error) = tool.module_inventory(a, hot.scratch.bytes, loaded.modules[module_index].name, loaded.modules[module_index].text, loaded.modules[module_index].lines)
     if inventory_error != ok { ret inventory_error }
     loaded.modules[module_index].inventory = inventory
     loaded.modules[module_index].inventory_count = inventory_count
@@ -12514,7 +12515,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
                 if packed_error != ok { ret packed_error }
                 if writes_em {
-                    let (root_inventory, root_inventory_count, root_inventory_error) = tool.module_inventory(a, loaded.modules[0usize].name, loaded.modules[0usize].text, loaded.modules[0usize].lines)
+                    let (root_inventory, root_inventory_count, root_inventory_error) = tool.module_inventory(a, scratch_storage, loaded.modules[0usize].name, loaded.modules[0usize].text, loaded.modules[0usize].lines)
                     if root_inventory_error != ok { ret root_inventory_error }
                     loaded.modules[0usize].inventory = root_inventory
                     loaded.modules[0usize].inventory_count = root_inventory_count
@@ -12531,7 +12532,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 while module_at < loaded.count {
                     if !keep[module_at] {
                         artifact.count = 0usize
-                        let (each_inventory, each_inventory_count, each_inventory_error) = tool.module_inventory(a, loaded.modules[module_at].name, loaded.modules[module_at].text, loaded.modules[module_at].lines)
+                        let (each_inventory, each_inventory_count, each_inventory_error) = tool.module_inventory(a, scratch_storage, loaded.modules[module_at].name, loaded.modules[module_at].text, loaded.modules[module_at].lines)
                         if each_inventory_error != ok { ret each_inventory_error }
                         loaded.modules[module_at].inventory = each_inventory
                         loaded.modules[module_at].inventory_count = each_inventory_count

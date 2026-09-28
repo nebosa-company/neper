@@ -29607,3 +29607,46 @@ An `--incremental` cold build takes twice as long (7.2 s at `-j 4`), writing eve
 7. The crew's reservations are released at the lowering barrier, if the link is still the peak after 1-6.
 
 ---
+
+## D1661 — The artifact writer keeps the interface digest alone and the inventory's records, not the buffers they came from
+
+**Why.** D1660's map found two buffers that every module leaves in its lowering worker's arena until the build exits, though only a few bytes of each are read again:
+
+- `interface_sha256_hex` cut the module's interface into a text-sized buffer, hashed it, and kept the cut beside the 64-byte digest. Over `sc1m` that is the program's text, 26.6 MB, and the pages are committed because `canonical_digests` wrote its own text-sized copy at the same addresses a moment before.
+- `module_inventory` rendered the unsafe inventory into a buffer of 4,096 bytes plus a quarter of the text and kept the whole buffer, where the artifact and the manifest read only the records' bytes: about 10.7 MB over 1,005 modules on Windows, inside chunks the D340 handler had already committed.
+
+**Decision.** This is step 1 of D1660's revised plan.
+
+- **The interface digest.** `interface_sha256_hex` marks the arena, cuts, hashes into a 64-byte stack buffer with `sha256_hex_into`, resets to the mark, and copies the digest into a fresh 64 bytes: `canonical_digests`' pattern (D930), on the same arena in the same `em.write_debug`. `interface_sha256_hex_scanned` is unchanged; its token buffer sits below the mark.
+- **The inventory.** `module_inventory` takes the caller's scratch. It renders into it first and keeps a copy of exactly `out.count` bytes, and nothing when there are no records. Records the scratch cannot hold take the old doubling loop from twice the scratch's size. `write_hot_artifact` passes the writer's scratch, and both `emit-em` sites pass `scratch_storage`: each is free there, since `em.write_module`'s writers set the scratch's count to zero before they write, and each lowering worker has its own (`init_hot_writer`). `index_json_into` passes an empty slice and keeps today's buffer.
+- **No output changes.** Every reader of an inventory uses only its length and bytes, so an empty slice for no records reads as the zero-length tail of a buffer did.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1661`, stage 2 built by 013ec715's debug compiler):
+
+- Lint: 0 hard findings. Stage 2 equals stage 3, and the release self-build is the same under `-j 3 --perturb`.
+- Images: `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases (`-j 1`, `-j 4`, `-j 8`, `-j 3 --perturb`, debug and release). The emit sweep gives 602 link fixtures, 0 different from HEAD's debug compiler.
+- `.em` files and manifests: the gate compares only executables, and neither the digest nor the inventory reaches one, so a separate comparison ran. It covered the 11 link fixtures with `extern`, `@import` or `unsafe` sites, the 5 that run.ps1 links from `emit-em-all`, and the compiler's own source. Each was built four ways (plain, `--incremental`, `emit-em-all`, `emit-em` of the root) by HEAD's debug compiler and by stage 3, one after the other in the same directory. All 313 files agreed: 245 `.em`, 34 `build-manifest.json`. In each `.em`, the compiler's identity (D398) and the CRC at offset 28 that covers it were zeroed first. In the `--incremental` manifests, the `.em` files' `artifact_crc32c` and `artifact_sha256` and the cache tag were blanked. Those manifests carry the inventories: 330 unsafe records for `extern_many`, 260 for `x_sqlite`, 245 for the compiler. `sc500k` and `sc1m` have no such sites, so their modules all take the no-records return.
+- Static gate (`sc500k`, 8 workers), arena high-water against HEAD's calibration (`build/pools/head/static-windows.json`, a3703898): debug 2,347 → 2,331 MB, release 3,069 → 3,053 MB; images 1,936,791 B and 1,458,009 B, unchanged. The plan expected about −18. `gate.py` against the pinned file still reports the breach D1641 left, now +2.0% debug and +1.9% release, from +2.4-2.7%.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50) against `pools-windows-before-d1660-plain{,-j8}.json`. The gate's own measurement overlapped the `.em` comparison, so both files were measured again with nothing else running; these are the reruns:
+
+| workload | workers | peak commit | peak working set | worker arenas reached | cold p50 |
+|---|---|---|---|---|---|
+| sc1m | 4 | 1,292 → 1,259 MB | 1,035 → 1,003 MB | 3,458 → 3,425 MB | 3,447 → 3,202 ms |
+| sc1m | 8 | 1,675 → 1,643 MB | 1,233 → 1,200 MB | 4,841 → 4,804 MB | 3,143 → 2,925 ms |
+| sc500k | 4 | 812 → 797 MB | 567 → 551 MB | 2,055 → 2,039 MB | 1,690 → 1,589 ms |
+| sc500k | 8 | 1,123 → 1,109 MB | 711 → 694 MB | 3,069 → 3,053 MB | 1,353 → 1,477 ms |
+| compiler | 4 | 494 → 489 MB | 272 → 268 MB | 1,467 → 1,462 MB | 525 → 497 ms |
+| compiler | 8 | 795 → 794 MB | 356 → 352 MB | 2,866 → 2,859 MB | 553 → 501 ms |
+
+- The `sc1m` peak falls 33 MB at `-j 4` and 32 at `-j 8`, against the plan's 37.3 (26.6 + 10.7). The peak is still at the link.
+- The `sc500k` `-j 8` cold figure is noise on a shared machine: its runs spread from 1,374 to 1,507 ms, and a rerun of that cell alone gave 1,288 ms. The change only removes work.
+- The `compiler` workload is the compiler's own source, which this change lengthens. Its image is 3,072 B longer.
+
+**Not done or not measured.**
+
+- C1a and C1b landed as one change, so their separate shares were not measured.
+- The plan's per-reservation crew commit (`live.py`) was not run; the process peak and 'worker arenas reached' above stand in for it.
+- The full suites (`tests/selfhost/run.ps1`, the Linux suite) were not run, and Linux memory was not measured.
+
+---
