@@ -8251,10 +8251,11 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
     }
     var threads: [8]os.Thread = zero
     var started: [8]bool = zero
+    let stack_bytes = graph.thread_stack(a, 4194304usize)
     worker_at = 1usize
     while worker_at < worker_count {
         started[worker_at] = false
-        let (thread, spawn_error) = os.thread_create[ArtifactWorker](artifact_worker_entry, &workers[worker_at], 4194304usize)
+        let (thread, spawn_error) = os.thread_create[ArtifactWorker](artifact_worker_entry, &workers[worker_at], stack_bytes)
         if spawn_error == ok {
             threads[worker_at] = thread
             started[worker_at] = true
@@ -9792,10 +9793,11 @@ fn resolve_per_module(a: *mem.Arena, resolver: *resolve.Resolver, loaded: *graph
     }
     var threads: [LOWER_WORKERS]os.Thread = zero
     var started: [LOWER_WORKERS]bool = zero
+    let stack_bytes = graph.thread_stack(a, 16777216usize)
     worker_at = 1usize
     while worker_at < worker_count {
         started[worker_at] = false
-        let (thread, spawn_error) = os.thread_create[ResolveWorker](resolve_worker_entry, &workers[worker_at], 16777216usize)
+        let (thread, spawn_error) = os.thread_create[ResolveWorker](resolve_worker_entry, &workers[worker_at], stack_bytes)
         if spawn_error == ok {
             threads[worker_at] = thread
             started[worker_at] = true
@@ -11280,8 +11282,31 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
         if second_entries_error != ok { ret second_entries_error }
         w.second_entries = second_entries
         w.second_count = 0usize
+        // A crew worker's: the generous one runs its first oracle again between the
+        // modules it lowers.
+        let generous_fork = generous_slot() + 1usize
+        if w.fork_id != generous_fork { share_first_oracle(w) }
     }
     ret ok
+}
+
+// (D1669) The first oracle and the builder a worker lowers into share their pools, the
+// longer of each two holding both at the length each was given. Their lives do not
+// meet: the first oracle is read last by the second oracles, which every worker has
+// built before any lowers, and the lowering copies only the second's bodies
+// (`crew.second_all`). The lowering's first module then writes into pages the first
+// oracle committed with the bodies, where it touched a megabyte of each pool afresh the
+// moment the lowering began. Not the inlined records: the first oracle inlines nothing,
+// so it never wrote them.
+fn share_first_oracle(w: *LowerWorker) {
+    if w.oracle.functions.len < w.builder.functions.len { w.oracle.functions = w.builder.functions[0usize..w.oracle.functions.len] } else { w.builder.functions = w.oracle.functions[0usize..w.builder.functions.len] }
+    if w.oracle.blocks.len < w.builder.blocks.len { w.oracle.blocks = w.builder.blocks[0usize..w.oracle.blocks.len] } else { w.builder.blocks = w.oracle.blocks[0usize..w.builder.blocks.len] }
+    if w.oracle.instructions.len < w.builder.instructions.len { w.oracle.instructions = w.builder.instructions[0usize..w.oracle.instructions.len] } else { w.builder.instructions = w.oracle.instructions[0usize..w.builder.instructions.len] }
+    if w.oracle.operands.len < w.builder.operands.len { w.oracle.operands = w.builder.operands[0usize..w.oracle.operands.len] } else { w.builder.operands = w.oracle.operands[0usize..w.builder.operands.len] }
+    if w.oracle.function_refs.len < w.builder.function_refs.len { w.oracle.function_refs = w.builder.function_refs[0usize..w.oracle.function_refs.len] } else { w.builder.function_refs = w.oracle.function_refs[0usize..w.builder.function_refs.len] }
+    if w.oracle.strings.len < w.builder.strings.len { w.oracle.strings = w.builder.strings[0usize..w.oracle.strings.len] } else { w.builder.strings = w.oracle.strings[0usize..w.builder.strings.len] }
+    if w.oracle_signatures.entries.len < w.signatures.entries.len { w.oracle_signatures.entries = w.signatures.entries[0usize..w.oracle_signatures.entries.len] } else { w.signatures.entries = w.oracle_signatures.entries[0usize..w.signatures.entries.len] }
+    if w.oracle_signatures.types.len < w.signatures.types.len { w.oracle_signatures.types = w.signatures.types[0usize..w.oracle_signatures.types.len] } else { w.signatures.types = w.oracle_signatures.types[0usize..w.signatures.types.len] }
 }
 
 fn stop_worker(w: *LowerWorker, at: usize, failure: err, lowering: usize) {
@@ -11829,13 +11854,14 @@ fn crew_bodies(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, 
     var starts: [LOWER_WORKERS]BodyStart = zero
     var threads: [LOWER_WORKERS]os.Thread = zero
     var started: [LOWER_WORKERS]bool = zero
+    let stack_bytes = graph.thread_stack(a, 16777216usize)
     var worker_at = 1usize
     while worker_at < crew.count {
         starts[worker_at].worker = &crew.workers[worker_at]
         starts[worker_at].program = checker
         starts[worker_at].setup = &crew.setup
         started[worker_at] = false
-        let (thread, spawn_error) = os.thread_create[BodyStart](body_worker_entry, &starts[worker_at], 16777216usize)
+        let (thread, spawn_error) = os.thread_create[BodyStart](body_worker_entry, &starts[worker_at], stack_bytes)
         if spawn_error == ok {
             threads[worker_at] = thread
             started[worker_at] = true
@@ -11949,11 +11975,12 @@ fn crew_second_oracle(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.
     }
     var threads: [LOWER_WORKERS]os.Thread = zero
     var started: [LOWER_WORKERS]bool = zero
+    let stack_bytes = graph.thread_stack(a, 16777216usize)
     worker_at = 1usize
     while worker_at < crew.count {
         started[worker_at] = false
         if !crew.workers[worker_at].replaced {
-            let (thread, spawn_error) = os.thread_create[LowerWorker](second_worker_entry, &crew.workers[worker_at], 16777216usize)
+            let (thread, spawn_error) = os.thread_create[LowerWorker](second_worker_entry, &crew.workers[worker_at], stack_bytes)
             if spawn_error == ok {
                 threads[worker_at] = thread
                 started[worker_at] = true
@@ -12039,13 +12066,14 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
     var starts: [LOWER_WORKERS]BodyStart = zero
     var threads: [LOWER_WORKERS]os.Thread = zero
     var started: [LOWER_WORKERS]bool = zero
+    let stack_bytes = graph.thread_stack(a, 16777216usize)
     var worker_at = 1usize
     while worker_at < crew.count {
         started[worker_at] = false
         if !crew.workers[worker_at].replaced {
             starts[worker_at].worker = &crew.workers[worker_at]
             starts[worker_at].program = checker
-            let (thread, spawn_error) = os.thread_create[BodyStart](lower_worker_entry, &starts[worker_at], 16777216usize)
+            let (thread, spawn_error) = os.thread_create[BodyStart](lower_worker_entry, &starts[worker_at], stack_bytes)
             if spawn_error == ok {
                 threads[worker_at] = thread
                 started[worker_at] = true

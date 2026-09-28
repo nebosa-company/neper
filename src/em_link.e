@@ -460,10 +460,11 @@ fn link_run(a: *mem.Arena, workers: []LinkWorker, worker_count: usize, weights: 
     }
     var threads: [8]os.Thread = zero
     var started: [8]bool = zero
+    let stack_bytes = graph.thread_stack(a, 4194304usize)
     worker_at = 1usize
     while worker_at < worker_count {
         started[worker_at] = false
-        let (thread, spawn_error) = os.thread_create[LinkWorker](link_worker_entry, &workers[worker_at], 4194304usize)
+        let (thread, spawn_error) = os.thread_create[LinkWorker](link_worker_entry, &workers[worker_at], stack_bytes)
         if spawn_error == ok {
             threads[worker_at] = thread
             started[worker_at] = true

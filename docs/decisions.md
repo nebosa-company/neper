@@ -35262,3 +35262,154 @@ expected a `vulkan checksum` line saxpy rightly never printed. saxpy now prints
 `vulkan skipped: no device preserves denormals` in that case, and both runners
 accept that line, but only when the raw fixture found a device. The kernel's
 SPIR-V is unchanged.
+
+---
+
+## D1669 — The lowering starts without committing what its first module does not touch
+
+**Why.** Since D1668 the process peak falls 30-100 ms into the lowering, when every crew worker first touches its lowering pools while all 252 MB of module blocks are still held. D1668 measured X, the rise above the commit at `inline oracles`, at 42, 173-174 and 320-323 MB at `sc1m -j 1`, `-j 4` and `-j 8`. This row measures what X is made of, then cuts the parts the lowering's first module does not need.
+
+**What X is made of.** A probe compiler, built from a scratch copy of `src` in `build/pools/d1669-probe` and never committed, read by VirtualQuery the committed bytes of every lowering-time pool and buffer on each crew worker. It read them at the lowering's start, after each step of the first module, and at the end of modules 1, 2, 4, 8 and 32; and the same over the second oracle. `sc1m`, release `--unchecked -j 4`, D1668's source, MB summed over the four workers, largest first:
+
+| part of X | end of module 1 | end of module 32 |
+|---|---|---|
+| The lowering threads' stacks: three threads, 16 MB each, committed by `CreateThread` before they run. Worker 0 lowers on the main thread, whose stack is committed as touched (1.2 MB). | 48 | 48 |
+| `nir instructions` | 8.0 | 14.0 |
+| 17 pools at 4.0 each (3.9 for `regalloc ranges`), whatever the module uses: the runtime commits a megabyte per pool touched, on each worker. `nir inlined`, `blocks`, `operands`, `function refs`, `functions`, `signature entries`, `signature types`, `strings`, `verify scratch`, `debug vars`; `regalloc allocations` and `ranges`; `stage relocations`, `lines`, `storage` and `offsets`; `writer artifact`. | 67.9 | 67.9 |
+| `nir used list` 3.2, `trap text` 3.0 (4.0 by module 32), `stage fixups` 2.6, `stage block offsets` 1.4, `used marks` and `edge marks` 0.7 each, three more at 0.1 or less | 11.9 | 12.8 |
+| The arena's bump top: held artifacts, inventories, digests | 1.1 | 10.1 |
+| **The workers' arenas in all** | **88.9** | **104.9** |
+
+- **Before the lowering.** The second oracle commits 30 MB of arena on the three workers that had inline candidates, about 3 MB in most of its pools. Its own three threads' 48 MB of stack are gone again at its join.
+- **Already committed when the lowering starts**, so not part of X:
+  - the fork's function table (44 of its 103 MB);
+  - the call cache and the expr cache (16.5 and 9.5 MB, cleared whole at the fork);
+  - the writer's string index (4 MB, cleared whole at set-up, and again by `reset_strings` before each module's artifact, which touches no page it had not);
+  - one megabyte per worker of each lookup index head and of each of the first oracle's pools.
+- **No clear of fresh memory** is touched at the lowering's start.
+
+**Decision.**
+
+- **Thread stacks.** `graph.thread_stack(a, bytes)` gives every `os.thread_create` its size.
+  - On Linux it is the size asked: the stack is the mapping the thread runs on.
+  - On Windows it is 0: a thread asked for nothing takes the image's stack commit, and grows into its sixteen-megabyte reservation (link_pe) as it touches it, as the main thread does.
+  - The host is told by the current directory, as `reserved_arena` tells it (D348). A drive (`X:`) or `\\` at its front is Windows. Anything else, or no answer, keeps the size asked, since the ELF runtime raises a stack asked for nothing to 64 KB.
+  - All seven thread sites take it: `load_wave_artifacts`, `resolve_per_module`, `crew_bodies`, `crew_second_oracle` and `crew_emit` in `main.e`, `front_modules` in `graph.e`, and `link_run` in `em_link.e`.
+- **The first oracle's pools.** `share_first_oracle` (`main.e`) runs from `init_lower_worker` for a release crew worker. It makes eight pool pairs of the first oracle and the lowering builder one allocation each: functions, blocks, instructions, operands, function refs, strings, signature entries and signature types.
+  - The longer of each two holds both, and each keeps the length it was given, so no capacity changes.
+  - Their lives do not meet. The first oracle is last read by the second oracles, which every worker builds before any lowers, and the lowering reads only the second's bodies (`crew.second_all`).
+  - The lowering's first module then writes into pages the first oracle committed with the bodies.
+  - The generous worker keeps its own pools: it runs its first oracle again between the modules it lowers.
+
+**Review.** Two reviewers read the first commit (c0ec9884). What each finding came to:
+
+- **No row, no full gate, no measurements** (serious). Held; this row and the evidence below.
+- **`thread_stack`'s fallback was the reverse of its comment** (both reviewers). Held. The code returned 0 for any answer that did not start with `/`. A Linux `getcwd` answer such as `(unreachable)/…` would have given every thread a 64 KB stack with no guard below it. The code now returns 0 only for a drive or `\\`, and keeps the size asked otherwise, as the comment says.
+- **Sharing `inlined` saved nothing.** Held. The first oracle inlines nothing: its `has_oracle` is false, and `record_inlined` and `add_inline_origin` are reached only from `emit_inlined_call`. So it never touched that pool. The pair is gone: eight pairs, not nine.
+- **The "before" figures did not match D1668's row.** Held. They were the implementation's own alternating runs of a small `peak.py` (three each), not `measure.py`. The table below takes D1668's row as "before" and `measure.py` as "after".
+- **The Linux reason was wrong.** Held. The ELF runtime maps a thread's stack without populating it, so on Linux a stack charges what it touches, whatever size is asked. This row gives the Linux peak without a reason. Where it falls on Linux was not measured.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1669`, full run, with the review fixes):
+
+- **Lint.** 0 hard findings.
+- **Self-builds.** Stage 2 equals stage 3 (`933ab4fd…`), and the release self-build is the same under `-j 3 --perturb` (`43900162…`).
+- **Images.** `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases.
+- **Emit sweep.** 607 link fixtures, 602 of which write an image; none differs. `import_protocol` is judged against D1668's gate's image, as D1668 left it.
+- **Static gate** (`sc500k`, 8 workers), debug / release:
+  - Arena high-water: 2,235 / 2,958 MB.
+  - Images: 1,936,791 / 1,458,009 B.
+  - 0 of 4 measures breached. The pin is not moved.
+
+The C bootstrap on Windows:
+
+- `build/windows/neper.exe`, from the bootstrap source unchanged since b9f5fd20, builds `src/main.e --arena 1g` in 16 s.
+- The compiler it builds builds `src/main.e` into stage 2's bytes (`933ab4fd…`).
+- It also builds `sc500k` (release `--unchecked -j 4`) into the gate's `sc500k-rel-j4` image (`89d2a478…`), which prints 121495906.
+
+`run.ps1`'s blocks as D1668 cut them pass under stage 3 and under the bootstrap-built compiler:
+
+- `lower_reset`, `import_protocol`, `bounds_proof --stats` and `front_counts`;
+- the hot suite in both modes;
+- nested inlining, with its `--fault-dry 2` case;
+- the `--memory-budget` pair and the stream records;
+- the dry fixed point and `drop_comptime`.
+
+Before the review fixes, the implementation also checked that nothing reads the first oracle during lowering. A probe compiler overwrote the first oracle's used rows with 0xA5 as the lowering began, and its builds still equalled the baseline images:
+
+- `sc1m` at `-j 1`, `-j 4` and `-j 8`;
+- `sc500k` at `-j 4`, `-j 3 --perturb` and `-j 1 --perturb`;
+- the release self-build at `-j 1`, `-j 2` and `-j 3 --perturb`.
+
+Poisoning the second oracle instead made the build fail. This was not run again after the fixes, which only drop the `inlined` pair and change `thread_stack`'s fallback.
+
+Linux (WSL, the worktree rsynced to WSL's own disk):
+
+- **Self-builds.** The rebuilt bootstrap builds stage 1 in 10.3 s. Stage 2 equals stage 3 (`9e1403ac…`), and the release compiler's self-build is the same under `-j 2` and `-j 3 --perturb`.
+- **Images.** `sc500k` gives one image at `-j 4`, at `-j 3 --perturb`, from stage 1, from D1668's stage 3, from this release compiler at `--fault-dry 40`, and from D1668's release compiler. The program prints 121495906.
+- **Tests.** `run.sh`'s `front_counts`, hot and nested blocks (with the dry case) pass under stage 3 and under stage 1. The dry fixed point and `drop_comptime` pass, and each `drop_comptime` program runs.
+- **Memory** (release `sc500k -j 4 --stats`): D1668's release compiler and this one, in three alternating pairs, gave the same image each time.
+  - Peak working set: 349 / 349 / 349 → 349 / 349 / 349 MB.
+  - Lower and codegen: 822 / 797 / 814 → 783 / 790 / 818 ms.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50), D1668's row → this. The gate's own `measure.py` runs overlapped the `run.ps1` blocks. Their peak commits agree with the table within 1 MB (`sc500k` 552 and 806 MB), but their times do not, so the table is a second run with nothing else running. The `-j 1` row is `measure.py --jobs 1 --workloads sc1m`.
+
+| workload | workers | peak commit | peak working set | worker arenas reached | lower and codegen | link from artifacts | cold p50 |
+|---|---|---|---|---|---|---|---|
+| sc1m | 1 | 578 → 570 MB | 495 → 494 MB | 2,250 → 2,250 MB | 5,587 → 5,561 ms | 104 → 102 ms | 10,229 → 10,336 ms |
+| sc1m | 4 | 911 → 841 MB | 633 → 632 MB | 3,277 → 3,277 MB | 2,140 → 1,637 ms | 87 → 77 ms | 4,128 → 3,249 ms |
+| sc1m | 8 | 1,323 → 1,171 MB | 813 → 810 MB | 4,649 → 4,649 MB | 1,547 → 1,398 ms | 88 → 81 ms | 3,164 → 2,897 ms |
+| sc500k | 4 | 623 → 553 MB | 350 → 350 MB | 1,962 → 1,962 MB | 883 → 762 ms | 37 → 35 ms | 1,792 → 1,573 ms |
+| sc500k | 8 | 944 → 805 MB | 466 → 464 MB | 2,958 → 2,958 MB | 758 → 704 ms | 42 → 39 ms | 1,592 → 1,483 ms |
+| compiler | 4 | 452 → 408 MB | 218 → 215 MB | 1,443 → 1,443 MB | 308 → 271 ms | 16 → 14 ms | 574 → 511 ms |
+| compiler | 8 | 753 → 663 MB | 293 → 290 MB | 2,834 → 2,835 MB | 308 → 294 ms | 15 → 14 ms | 560 → 533 ms |
+
+- **Peak commit** falls 8 MB at `sc1m -j 1`, 70 at `-j 4` and 152 at `-j 8`; 70 and 139 MB at `sc500k`; 44 and 90 MB at `compiler`. This compiler's runs are each within 2 MB of their p50.
+- **Time.** The table's times are not a comparison: D1668's row found its gate's times slow for the machine. The two release compilers alternated below (`live.py`, two runs each, `sc1m`) give the lowering:
+  - 5,582-5,593 → 5,569-5,580 ms at `-j 1`, within the runs' spread;
+  - 1,576-1,637 → 1,609-1,651 ms at `-j 4`, and 1,381-1,442 → 1,424-1,467 ms at `-j 8`: 14-43 ms longer, for a cause not measured.
+- **The `compiler` image** is 6,949,188 → 6,955,411 B: its source grew.
+
+**Where the peak falls.** The 5 ms sampler of D1668 (`timeline_x.py`), D1668's release compiler and this one alternated, two runs each, from the session's scratch copy of `sc1m`. X is the highest commit in the lowering less the lowest reading at `inline oracles` over each compiler's runs.
+
+| workers | D1668: peak, when, X | this: peak, when, X |
+|---|---|---|
+| 1 | 577 MB, 93-96 ms in, 42 MB (base 535) | 569 MB, 90-91 ms in, 33 MB (base 536) |
+| 4 | 912 MB, 33 ms in, 174 MB (base 738) | 840 MB, 37 ms in, 99 MB (base 741) |
+| 8 | 1,318-1,319 MB, 67-78 ms in, 319-320 MB (base 999) | 1,170-1,172 MB, 70-75 ms in, 142-144 MB (base 1,028) |
+
+- **X falls** 42 → 33 MB at `-j 1`, 174 → 99 at `-j 4` and 320 → 142-144 at `-j 8`. The `-j 8` base is the higher of the two by 29 MB, from two samples each. Against D1668's base, X at `-j 8` is 171-173 MB. The peak itself falls 8, 72 and 146-149 MB.
+- **The peak is still at the start of the lowering.** At `-j 4` commit reads 811 MB 10 ms in, 834-838 at 30 ms, 840 at 40 ms, 835 at 100 ms, 810-813 at 400 ms, 779-781 at 800 ms, 737-738 at 1,200 ms and 696 at the end.
+- **The level before the lowering does not fall.** At the end of the body check, `live.py` reads 535 → 536, 738 → 741 and 999 → 1,008 MB at `-j 1 / 4 / 8`.
+
+What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), in MB, D1668's release compiler → this, two alternated runs each; a range is the two runs. The walk at `inline oracles` lags into the lowering, as in D1668, and is not given.
+
+| at the end of | root | front-end workers | module blocks | crew workers | link workers | process |
+|---|---|---|---|---|---|---|
+| load and parse | 50-51 → 50 | 24 → 24 | 252 → 252 | | | 323 → 324 |
+| check declarations | 155 → 154 | 24 → 24 | 252 → 252 | 29 → 28-29 | | 432 → 430 |
+| check bodies | 161 → 160 | 24 → 24 | 252 → 252 | 380 → 354 | | 738 → 741 |
+| lower and codegen | 161 → 160 | 24 → 24 | 1 → 1 | 531 → 505 | | 723 → 696 |
+| link from artifacts | 220-221 → 218-219 | 24 → 24 | 1 → 1 | 531 → 505 | 44 → 44 | 826 → 799 |
+| link | 227 → 225-226 | 24 → 24 | 2 → 2 | 531 → 505 | 44 → 44 | 831-832 → 805 |
+
+- **The crew's arenas** hold 26 MB less at the lowering's end, and to the link: each of the eight shared pools has one set of pages where it had two. Which pools make up the 26 MB was not taken apart.
+- **The walk at the end of the body check lags too.** Its owners sum to 817 → 790 MB against a process figure of 738 → 741 read as the line arrived, so its figures were read after the process had moved on, and its crew column is not the body check's.
+- **At `-j 1` and `-j 8`** (process commit only, both runs equal within 1 MB): the lowering's end 419 → 411 and 1,083 → 1,037 MB; the link from artifacts 520 → 513 and 1,192 → 1,146-1,147; the link 525-526 → 519 and 1,197 → 1,152-1,153.
+
+**Deviations** (D1669 had no plan):
+
+- **Stacks were the main lever,** and all seven thread sites take `thread_stack`, not only the lowering's.
+- **No pool was resized or made to grow.** Sizing the per-module builder tables from the largest module ran worker 0 dry on `sc1m`'s 71 KB root module: 1,010 function refs overflowed the edge index. The generous worker took over, and the peak rose 867 → 902 MB.
+- **No clear was removed:** none happens at the lowering's start.
+- **The first oracle is reused, not the second.** Every second-oracle builder is read through `InlineEntry` until the lowering's join, and a release after the join does not touch this peak. Nothing of the second oracle is released.
+- **Tighter sharing was not taken.** Cutting the builder's tables down to the first oracle's lengths would save about 14 MB more at `-j 4` and 25 MB at `-j 8` (the implementation's probe), but lowers capacities.
+
+**Not done or not measured.**
+
+- The full suites were not run.
+- The poisoned-compiler cases were not run again after the review fixes.
+- What makes up the crew's 26 MB, and the lowering's 14-43 ms at `-j 4` and `-j 8`, were not taken apart.
+- Linux commit per phase, where the Linux peak falls, the Linux static figure and Linux X were not measured.
+- The ranked table was taken at `-j 4` only, on D1668's source; the probe at `-j 1` and `-j 8` was read for X, not ranked.
+
+---

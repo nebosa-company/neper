@@ -363,6 +363,22 @@ fn reserved_arena_sized(a: *mem.Arena, wanted: usize) -> (mem.Arena, err) {
     ret (arena, ok)
 }
 
+// (D1669) The stack a worker thread is given. On Linux it is the mapping the thread runs
+// on, as large as asked. On Windows it is what CreateThread commits before the thread
+// runs, under the image's own reservation of sixteen megabytes (link_pe): at `-j 4` the
+// lowering's three threads committed forty-eight megabytes the moment it began, where
+// the main thread, lowering the first worker's modules beside them, commits its stack as
+// it touches it. Asked for nothing, a thread takes the image's commit and grows its stack
+// as the main thread does. A drive, or `\\`, at the front of the current directory is
+// Windows (D348); anything else, or no answer, keeps the size asked, since a Linux
+// thread asked for nothing runs on sixty-four kilobytes.
+fn thread_stack(a: *mem.Arena, bytes: usize) -> usize {
+    let (cwd, cwd_error) = os.current_dir(a)
+    if cwd_error != ok || cwd.len < 2usize { ret bytes }
+    if cwd[1usize] == 58u8 || (cwd[0usize] == 92u8 && cwd[1usize] == 92u8) { ret 0usize }
+    ret bytes
+}
+
 // (D1666) A module's own reservation, sized by the same three allocations taken from
 // the worker's arena and given back at once, then committed whole on either host. A
 // release compiler's allocation touches no page (D428); the bootstrap commits, and a
@@ -1055,10 +1071,11 @@ fn front_modules(a: *mem.Arena, g: *Graph, modules: []const usize) -> err {
     // thread that cannot be started runs here too, after the others.
     var threads: [64]os.Thread = zero
     var started: [64]bool = zero
+    let stack_bytes = thread_stack(a, 4194304usize)
     worker_at = 1usize
     while worker_at < worker_count {
         started[worker_at] = false
-        let (thread, spawn_error) = os.thread_create[Worker](worker_entry, &workers[worker_at], 4194304usize)
+        let (thread, spawn_error) = os.thread_create[Worker](worker_entry, &workers[worker_at], stack_bytes)
         if spawn_error == ok {
             threads[worker_at] = thread
             started[worker_at] = true
