@@ -29490,3 +29490,49 @@ The usage comment in `src/main.e` gives `build FILE [--target ARCH-OS]`, but the
 Cross-building a Linux executable on Windows needs no WSL. WSL is needed only to run the result.
 
 ---
+
+## D1655 — No general-purpose memory manager; what growth leaves in the arena, measured
+
+The question was whether Neper should have its own memory manager, as Delphi has FastMM: a heap of size classes, individual frees, per-thread arenas and debug fills. It should not, and D3 stands. Each problem such a manager solves is either solved already or cannot arise here:
+
+- **Allocation cost.** `mem.alloc` is a bump and a bounds compare, and `mem.reset` frees a whole phase in O(1). A heap's free-list allocation and per-block free are slower than both.
+- **Thread contention.** Every worker allocates from its own arena (D326, D339, D1527), so there is no lock to contend for.
+- **Fragmentation.** A bump arena has none.
+- **Memory that is never used.** The root arena and the worker arenas are reserved, and commit only the pages they touch (D133, D340).
+- **Debug fills.** Fresh memory is filled with `0xCD` and reset memory with `0xDD` (D35).
+- **Size classes, for a program that does need to free objects one at a time.** `e.mem` has `Pool`, `Slab` (nine classes) and `Buddy` over caller storage.
+
+A global heap would also break the promise D3 makes: that no function allocates in secret, which is what makes cross-module inlining cheap.
+
+What an arena costs that a heap does not is growth. A buffer that grows is copied into a bigger one, and the old one stays in the arena until the next `reset`. That cost was measured in the compiler, and it is small.
+
+**Evidence.** A throwaway build of HEAD `d0604711`, never committed, printed the size of the old buffer every time a growth replaced one. The compiler imports no `e.data` container, so its growth sites are its own. There are 13, found by searching for doubling and for copy loops into a new buffer:
+
+- `lookup.grow`;
+- `graph.ensure_tree_pool` and `graph.ensure_token_pool`;
+- the checker's interpreter memory and statics, and its resource aliases;
+- `source.load_stdin` and `source.read_all`;
+- `em_link`'s row scratch;
+- the emission scratch and the artifact scratch in `main.e`;
+- `tool.e`'s inventory and manifest retries.
+
+Each workload was built cold on eight workers, with `--stats` to report the peak:
+
+| workload | mode | left behind | peak working set | share |
+|---|---|---|---|---|
+| the compiler, 86,693 lines | debug | 3.2 MB | 2,819 MB | 0.11% |
+| the compiler | release | 3.1 MB | 3,342 MB | 0.09% |
+| sc500k, 469,247 lines | debug | 25.8 MB | 3,135 MB | 0.82% |
+| sc500k | release | 25.6 MB | 3,765 MB | 0.68% |
+
+Only two of the 13 sites ever grew. Nearly all of the waste is `lookup.Index`'s region doubling: 1,324 growths in sc500k debug, 25.83 MB in all. Resource aliases account for 2.3 KB. Every other site was sized up front, from the program (D306) or from its input, and never grew.
+
+`lookup.Index`'s waste is there by design. Its regions sit in one reserved slice and add up to less than twice the final region (the header of `lookup.e`). A region is cleared before use, so this waste is committed memory. That makes it the upper bound on what any reclaiming allocator could save in these builds.
+
+**Consequences.**
+
+- Neper gets no general-purpose manager. `e.mem` gets no reclaiming allocator for this.
+- In-place growth for `e.data.List`, extending a buffer that is at the arena's top as `str.Builder` does, was proposed with this decision. It is not done: the compiler uses no `List`, and no workload measures the waste in a user program. It is the change to make when one does.
+- The compiler's peak is made of what it keeps: module tokens and trees, and the workers' lowered state. Growth leaves behind less than 1% of it.
+
+---
