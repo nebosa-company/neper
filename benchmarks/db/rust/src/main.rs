@@ -1,10 +1,11 @@
 //! The e.db benchmark's workload in Rust, with each database's standard synchronous crate:
 //! rusqlite (linked to the system SQLite, the library the Neper and C benchmarks use),
-//! postgres, and mysql.
+//! postgres, mysql, and odbc-api over the host's driver manager.
 //!
 //!     bench-rust sqlite <file> <rows> <lookups>
 //!     bench-rust postgresql <conninfo> <rows> <lookups>
 //!     bench-rust mysql <port> <rows> <lookups>
+//!     bench-rust odbc <connection string> <rows> <lookups>
 //!
 //! Same phases, table and output line as benchmarks/db/src/workload.e and c/bench.c.
 use std::time::Instant;
@@ -171,15 +172,74 @@ fn mysql(port: &str, rows: i64, lookups: i64) -> Result<(u128, u128, u128)> {
     Ok((insert_ns, scan_ns, lookup_ns))
 }
 
+// Row by row with get_data, as the Neper driver and the C baseline read: no bound column buffers.
+fn odbc(connection: &str, rows: i64, lookups: i64) -> Result<(u128, u128, u128)> {
+    use odbc_api::{Connection, ConnectionOptions, Cursor, Environment, IntoParameter};
+    let env = Environment::new()?;
+    let conn: Connection = env.connect_with_connection_string(connection, ConnectionOptions::default())?;
+    conn.execute("DROP TABLE IF EXISTS bench", (), None)?;
+    conn.execute(CREATE, (), None)?;
+
+    let t0 = Instant::now();
+    conn.set_autocommit(false)?;
+    {
+        let mut insert = conn.prepare("INSERT INTO bench VALUES (?, ?, ?)")?;
+        for i in 0..rows {
+            insert.execute((&i, &NAMES[(i % 16) as usize].into_parameter(), &(i as f64 * 0.5)))?;
+        }
+    }
+    conn.commit()?;
+    conn.set_autocommit(true)?;
+    let insert_ns = t0.elapsed().as_nanos();
+
+    let t0 = Instant::now();
+    let (mut count, mut sum, mut bytes) = (0i64, 0i64, 0usize);
+    let mut name = Vec::new();
+    if let Some(mut cursor) = conn.execute("SELECT id, name, score FROM bench", (), None)? {
+        while let Some(mut row) = cursor.next_row()? {
+            let (mut id, mut score) = (0i64, 0f64);
+            row.get_data(1, &mut id)?;
+            row.get_text(2, &mut name)?;
+            row.get_data(3, &mut score)?;
+            sum += id;
+            bytes += name.len();
+            count += 1;
+        }
+    }
+    let scan_ns = t0.elapsed().as_nanos();
+
+    let t0 = Instant::now();
+    let mut found = 0i64;
+    {
+        let mut lookup = conn.prepare("SELECT name, score FROM bench WHERE id = ?")?;
+        for j in 0..lookups {
+            let key = j * 7919 % rows;
+            if let Some(mut cursor) = lookup.execute(&key)? {
+                if let Some(mut row) = cursor.next_row()? {
+                    let mut score = 0f64;
+                    row.get_text(1, &mut name)?;
+                    row.get_data(2, &mut score)?;
+                    found += 1;
+                }
+            }
+        }
+    }
+    let lookup_ns = t0.elapsed().as_nanos();
+    let _ = bytes;
+    verify(count, sum, rows, found, lookups)?;
+    Ok((insert_ns, scan_ns, lookup_ns))
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 5 {
-        return Err("usage: bench-rust sqlite|postgresql|mysql <location> <rows> <lookups>".into());
+        return Err("usage: bench-rust sqlite|postgresql|mysql|odbc <location> <rows> <lookups>".into());
     }
     let (rows, lookups): (i64, i64) = (args[3].parse()?, args[4].parse()?);
     let (insert_ns, scan_ns, lookup_ns) = match args[1].as_str() {
         "sqlite" => sqlite(&args[2], rows, lookups)?,
         "postgresql" => postgresql(&args[2], rows, lookups)?,
+        "odbc" => odbc(&args[2], rows, lookups)?,
         _ => mysql(&args[2], rows, lookups)?,
     };
     println!("{} insert_ns={insert_ns} scan_ns={scan_ns} lookup_ns={lookup_ns}", args[1]);

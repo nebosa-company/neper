@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>One SQL contract, four drivers — Neper blog</title>
+  <meta name="description" content="e.db, Neper's SQL contract, and its SQLite, PostgreSQL, MySQL and ODBC drivers: how the contract works, how to write a driver, what differs between the four, and the same workload measured against C, Go and Rust.">
+  <link rel="canonical" href="https://neper.dev/blog/e-db-four-drivers.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="One SQL contract, four drivers">
+  <meta property="og:description" content="e.db over SQLite, PostgreSQL, MySQL and ODBC, measured against C, Go and Rust: C 96%, Rust 82%, Neper 78%, Go 65% of the fastest, and scans are still where Neper loses.">
+  <meta property="og:url" content="https://neper.dev/blog/e-db-four-drivers.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/e-db-four-drivers.svg">
+  <meta property="article:published_time" content="2026-09-27">
+  <meta property="article:modified_time" content="2026-09-28">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 7 5, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    h3 { margin: var(--space-8) 0 var(--space-3); font: 400 22px/28px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; blog // engineering</div>
+      <h1>One SQL contract, four drivers</h1>
+      <p class="meta">September 27, 2026 · updated September 28, 2026 · <code>lib/e/db.e</code>, <code>lib/x/</code>, <code>benchmarks/db</code></p>
+      <img class="banner" src="img/e-db-four-drivers.svg" width="1200" height="630" alt="One SQL contract, four drivers. Median microseconds per primary-key lookup on Windows, Neper against C: SQLite 23.3 and 20.3, PostgreSQL 39.8 and 35.1, MySQL 102.6 and 90.2, ODBC 81.1 and 60.0.">
+
+      <p class="lede">Neper's standard library has had a database contract, <code>e.db</code>, for a while, with nothing behind it. Today it has four drivers: SQLite, PostgreSQL, MySQL and ODBC. Each binds a C library the vendor or the operating system provides, and each is tested against a live database on Windows and Linux. This post walks through the contract, shows how to write a driver, explains what differs between the four, and ends with numbers: the same workload in Neper, C, Go and Rust, and which one wins.</p>
+      <p>This post first appeared with three drivers. The fourth, <code>x.microsoft.odbc</code>, landed later the same day, and every number below is from a new run on September 28 that covers all four.</p>
+
+      <h2>The contract</h2>
+      <p><code>e.db</code> is deliberately small. It defines four handles, one table of functions, a value type and five errors:</p>
+      <pre><code>type Connection = struct { ctx: *void, driver: *const Driver }
+type Statement = struct { ctx: *void, driver: *const Driver }
+type Rows = struct { ctx: *void, driver: *const Driver }
+type Transaction = struct { ctx: *void, driver: *const Driver }
+type Value = union enum u8 { Null, Bool: bool, I64: i64, U64: u64, F64: f64, Text: str, Bytes: []const u8, Time: time.Instant }
+type Parameter = struct { name: str, value: Value }
+type Column = struct { name: str, kind: ValueKind, nullable: bool }
+type Driver = struct { close: fn(ctx: *void) -&gt; err, prepare: ..., execute: ..., query: ..., begin: ...,
+                       statement_close: ..., statement_execute: ..., statement_query: ...,
+                       rows_columns: ..., rows_next: fn(ctx: *void, dst: []Value) -&gt; (bool, err), rows_next_borrowed: ..., rows_close: ...,
+                       transaction_execute: ..., transaction_query: ..., transaction_commit: ..., transaction_rollback: ... }
+error Closed
+error InvalidQuery
+error Constraint
+error Busy
+error Unsupported</code></pre>
+      <ul>
+        <li><strong>A handle is a context plus a table.</strong> Every <code>e.db</code> call dispatches through the table. Closing, committing or rolling back sets the context to <code>nil</code>, and a <code>nil</code> handle answers <code>Closed</code> without reaching the driver. So a double close, or a query after commit, behaves the same under every driver, and no driver has to write that logic.</li>
+        <li><strong>Values are one tagged union of eight kinds.</strong> Parameters are positional or named. Columns report a kind, and <code>rows_next</code> fills a caller-owned row, which is a slice of <code>Value</code>. Its text stays valid until the next row, even after the reader is closed; <code>rows_next_borrowed</code> hands back the library's own bytes, which are valid only until the next row or the close.</li>
+        <li><strong>Five portable errors, and each driver adds its own.</strong> Code that only needs to know "was it a constraint" stays portable, and a driver's <code>detail</code> call returns the vendor's code and message when you need them.</li>
+        <li><strong>Nothing is hidden.</strong> There is no driver registry, no global pool and no hidden allocator. The arena you pass to a driver's <code>open</code> is the only memory it uses, and each driver documents what it keeps there. (<code>e.db.pool</code> exists as a pure state machine for when you do want pooling.)</li>
+      </ul>
+
+      <h2>Using it</h2>
+      <p>This is <code>examples/db/quickstart</code>, in full:</p>
+      <pre><code>use e.io
+use e.mem
+use e.db
+use x.sqlite.sqlite
+
+fn main(a: *mem.Arena) -&gt; err {
+    var c = try sqlite.open(a, ":memory:")
+    let created = try db.execute(&amp;c, "CREATE TABLE lang(name TEXT NOT NULL, year INTEGER)", zero)
+
+    var tx = try db.begin(&amp;c)
+    var p: [2]db.Parameter = zero
+    p[0] = db.Parameter { name: "", value: db.Value{ Text: "Neper" } }
+    p[1] = db.Parameter { name: "", value: db.Value{ I64: 2026i64 } }
+    let inserted = try db.execute_transaction(&amp;tx, "INSERT INTO lang VALUES (?, ?)", p[0..])
+    try db.commit(&amp;tx)
+
+    var rows = try db.query(&amp;c, "SELECT name, year FROM lang", zero)
+    var row: [2]db.Value = zero
+    while true {
+        let more = try db.reader_next_err(&amp;rows, row[0..])
+        if !more { break }
+        switch row[0] {
+        case .Text as name:
+            try io.printf["{}\n"](name)
+        default:
+            ret db.InvalidQuery
+        }
+    }
+    try db.close_rows(&amp;rows)
+    ret db.close(&amp;c)
+}</code></pre>
+      <p>Replace the <code>open</code> line with <code>libpq.open(a, "host=… dbname=…")</code>, <code>mysql.open(a, options)</code> or <code>odbc.open(a, "DSN=…")</code> and the rest of the program is unchanged. The one exception is PostgreSQL's parameter spelling, <code>$1</code> rather than <code>?</code>.</p>
+
+      <h2>Writing a driver</h2>
+      <p>A driver is three things: a context struct, fifteen functions with the table's signatures, and an <code>open</code> that fills in the table. <code>examples/db/memory_driver</code> is a complete driver in about 170 lines that keeps its rows in memory. It is worth reading whole, and it comes down to four steps.</p>
+      <p><strong>1. A context behind every handle.</strong> The driver decides what <code>ctx</code> points at. A real driver keeps its library handle there; this one keeps rows.</p>
+      <pre><code>type Store = struct { ids: [64]i64, names: [64]str, count: usize, committed: usize,
+                      in_transaction: bool, cursor: usize, columns: [2]db.Column }
+
+fn store_of(ctx: *void) -&gt; *Store { ret mem.cast[*Store](ctx) }</code></pre>
+      <p><strong>2. The functions.</strong> Each receives the context and answers in <code>e.db</code>'s terms. The row reader is the interesting one:</p>
+      <pre><code>// Committed rows are visible outside a transaction; inside one, all of them.
+fn m_rows_next(ctx: *void, dst: []db.Value) -&gt; (bool, err) {
+    let s = store_of(ctx)
+    if dst.len &lt; 2usize { ret (false, db.InvalidQuery) }
+    var visible = s.committed
+    if s.in_transaction { visible = s.count }
+    if s.cursor &gt;= visible { ret (false, ok) }
+    dst[0] = db.Value{ I64: s.ids[s.cursor] }
+    dst[1] = db.Value{ Text: s.names[s.cursor] }
+    s.cursor += 1usize
+    ret (true, ok)
+}</code></pre>
+      <p><strong>3. Hand back only the context.</strong> A <code>Rows</code>, <code>Statement</code> or <code>Transaction</code> that a driver returns carries just its context. <code>e.db</code> copies in the table from the connection it came from, so a driver never passes its own table around.</p>
+      <pre><code>fn m_query(ctx: *void, sql: str, params: []const db.Parameter) -&gt; (db.Rows, err) {
+    var rows: db.Rows = zero
+    if !str.eq(sql, "SELECT id, name FROM t") { ret (rows, db.InvalidQuery) }
+    store_of(ctx).cursor = 0usize
+    rows.ctx = ctx
+    ret (rows, ok)
+}</code></pre>
+      <p><strong>4. Fill the table once and hand out the connection.</strong></p>
+      <pre><code>fn open(s: *Store, driver: *db.Driver) -&gt; db.Connection {
+    driver.close = m_close
+    driver.execute = m_execute
+    driver.query = m_query
+    driver.rows_next = m_rows_next
+    driver.rows_next_borrowed = m_rows_next   // its rows are already its own
+    // ... the other eleven
+    ret db.Connection { ctx: mem.cast[*void](s), driver: driver }
+}</code></pre>
+
+      <h3>Binding a C library</h3>
+      <p>The four real drivers follow one layout. A small module holds nothing but the C declarations, one variant file per OS. The driver module next to it is portable Neper and never names a library.</p>
+      <pre><code>// lib/x/postgresql/capi.linux.e   (capi.windows.e is identical but for "libpq.dll")
+@import("libpq.so.5", "PQsendQueryParams")
+extern fn send_query_params(conn: usize, command: *const u8, count: i32, types: usize,
+                            values: usize, lengths: usize, formats: usize, result_format: i32) -&gt; i32
+
+@import("libpq.so.5", "PQgetvalue")
+extern fn getvalue(result: usize, row: i32, column: i32) -&gt; *u8</code></pre>
+      <ul>
+        <li><strong>Handles are addresses.</strong> <code>PGconn*</code> and <code>sqlite3_stmt*</code> cross as <code>usize</code>. An array that may be null when empty also crosses as the <code>usize</code> address of its first element.</li>
+        <li><strong>Foreign bytes are read through a view.</strong> <code>mem.view</code> over an arena header whose base is the C pointer names the bytes without copying them, and the driver copies what it keeps into its own buffer.</li>
+        <li><strong>An import costs nothing until it is called.</strong> A program that never opens a database has no dependency on the library.</li>
+        <li><strong>Two lessons cost us a debugging session each.</strong> Arena memory is not zeroed: a reader context written field by field left one slice as garbage, so every context is now assigned as one struct literal. And C's <code>unsigned long</code> is 32 bits on Windows but 64 on Linux, which is why MySQL's binding is the one pair of variants that differ in more than a library name.</li>
+      </ul>
+
+      <h2>SQLite: <code>x.sqlite.sqlite</code></h2>
+      <ul>
+        <li><strong>The library the OS already ships.</strong> The driver binds <code>winsqlite3.dll</code> (in System32 since Windows 10) and <code>libsqlite3.so.0</code>, so nothing needs installing. The floor is SQLite 3.7.14, the version that added <code>sqlite3_close_v2</code>.</li>
+        <li><strong>A query steps once before it returns.</strong> That way bad SQL fails at <code>query</code>, not at the first row, and an expression column like <code>count(*)</code> can take its kind from that first row.</li>
+        <li><strong>Affected rows come from <code>sqlite3_total_changes</code>.</strong> <code>sqlite3_changes</code> keeps reporting the previous statement's count after a <code>CREATE</code>, so the driver counts only when the total actually moved.</li>
+        <li><strong>Kinds follow SQLite's affinity rules</strong>, plus two that SQLite lacks: an integer in a <code>BOOL</code> column comes back as <code>Bool</code>, and one in a <code>DATE</code> or <code>TIME</code> column as <code>Time</code>.</li>
+      </ul>
+
+      <h2>PostgreSQL: <code>x.postgresql.libpq</code></h2>
+      <ul>
+        <li><strong>Binary results.</strong> Integers, floats, booleans, <code>bytea</code> and timestamps arrive exact, with no text to re-parse. <code>numeric</code> is rendered from its base-10000 digits to the exact decimal at its stored scale (<code>-0.000100</code> stays <code>-0.000100</code>), <code>uuid</code> in its canonical spelling, and a type the driver does not know as <code>Bytes</code> holding its binary representation.</li>
+        <li><strong>Rows in chunks of 256.</strong> A query streams, and nothing buffers the whole result. With libpq 17 or later the driver asks for chunked mode, 256 rows per result; with an older libpq it falls back to single-row mode, which costs three extra calls and a whole <code>PGresult</code> per row (D1606). The function is looked up at run time rather than imported, so one binary runs against either. libpq allows one command in flight per connection, and the driver states that plainly: any call made while a reader is open answers <code>db.Busy</code>.</li>
+        <li><strong>The server settles parameter types.</strong> An unprepared statement sends each value in its natural type, with <code>Text</code> as <code>unknown</code> so the server types it from context. A prepared statement is described once, and each execution encodes into the types the server chose. That is how an <code>I64</code> reaches an <code>int4</code> column in four bytes, with a range check.</li>
+        <li><strong>The silent rollback.</strong> <code>COMMIT</code> of a transaction in which a statement failed answers with a rollback and no error. The driver checks the transaction status first and returns <code>Aborted</code> rather than a success that never happened.</li>
+      </ul>
+
+      <h2>MySQL: <code>x.oracle.mysql</code></h2>
+      <ul>
+        <li><strong>The text protocol, not <code>MYSQL_BIND</code>.</strong> The prepared-statement API passes values in structs whose layout has changed between client versions and differs in MariaDB. Instead the driver renders parameters into the statement: text through <code>mysql_real_escape_string</code>, blobs as hex, times as UTC datetimes. <code>prepare</code> still has the server compile the text, so a bad statement fails there.</li>
+        <li><strong>A scanner that follows MySQL's lexer</strong> finds <code>?</code> and <code>;</code> outside strings, backquoted identifiers and the three comment styles. <code>SELECT CONCAT('?', ? /* ? */, "?") -- ?</code> has exactly one placeholder.</li>
+        <li><strong>A mutation test caught a double-literal bug.</strong> On its own, <code>0.1</code> is a <code>DECIMAL</code> literal in MySQL, so the driver appends <code>e0</code>. Our first test could not tell whether the suffix was added once, twice or always, because MySQL reads <code>SELECT 1e300e0</code> as <code>1e300</code> with a column alias named <code>e0</code>. The fixture now checks <code>SELECT ? + 0</code>, which catches it.</li>
+        <li><strong>Two errors arrive under the catch-all <code>HY000</code>.</strong> A CHECK violation (3819) and a <code>NOWAIT</code> lock (3572) are mapped by number. The live fixture is what found the first one.</li>
+      </ul>
+
+      <h2>ODBC: <code>x.microsoft.odbc</code></h2>
+      <ul>
+        <li><strong>Any database with an ODBC driver.</strong> The driver binds the host's driver manager: <code>odbc32.dll</code> in System32 on Windows, unixODBC's <code>libodbc.so.2</code> on Linux. The database's own ODBC driver is the user's to install. The two OS variants differ only in the library name.</li>
+        <li><strong>Named for the owner of the API.</strong> Microsoft defines ODBC, and unixODBC implements the same functions down to the same headers, so the package is <code>x.microsoft.odbc</code> on every host (D1650). The same rule gives <code>x.oracle.mysql</code>.</li>
+        <li><strong>Wide text only.</strong> Text crosses as UTF-16 through the <code>W</code> entry points. The narrow ones go through the process code page on Windows and the locale on Linux, while an <code>SQLWCHAR</code> is a UTF-16 unit on both.</li>
+        <li><strong>No borrowed rows.</strong> ODBC hands values out through <code>SQLGetData</code> into the caller's buffer, so there is nothing to lend. <code>reader_next_borrowed</code> answers the same copies as <code>rows_next</code>, and the scan numbers below show what that costs.</li>
+        <li><strong>A compiler bug on the way in.</strong> A named negative constant narrower than 64 bits, such as <code>const SQL_NTS: i32 = -3i32</code>, compared unequal to the same value computed at run time. The constant was lowered as its width's bit pattern, and a computed value as its sign extension. That is fixed (D1651).</li>
+        <li><strong>Tested through psqlODBC.</strong> The live fixture reaches the same throwaway PostgreSQL as the libpq driver. psqlODBC needs <code>BoolsAsChar=0</code> to report <code>boolean</code> as <code>SQL_BIT</code>, and a failed statement rolls back only itself, not the whole transaction, as PostgreSQL would. On Windows the driver manager reaches an unregistered driver only through a DSN, so the suite writes a per-user DSN that names the unpacked DLL and removes it afterwards; on Linux the connection string names the driver by path.</li>
+      </ul>
+      <p>See the <a href="../packages/x.microsoft.odbc.md">package specification</a> for the full value and parameter rules.</p>
+
+      <h2>How they are tested</h2>
+      <p>There are five fixtures, each with one exit code per check:</p>
+      <ul>
+        <li><code>link/x_db_units</code> tests the drivers' codecs with no server and no library: numeric decoding from hand-built bytes, parameter encoding, the MySQL scanner and literal rendering, ODBC's SQLSTATE mapping, and error mapping. Its binaries reference no client library.</li>
+        <li><code>link/x_sqlite</code>, <code>link/x_postgresql</code>, <code>link/x_mysql</code> and <code>link/x_odbc</code> run 120 to 153 checks each against the real thing. They cover every value kind round-tripped, error codes and messages, streaming, a busy connection, prepared statements, commit and rollback, a 100 KB value, and a row lock that one connection holds and another is refused as <code>Busy</code>.</li>
+      </ul>
+      <p>Each suite run starts throwaway servers with fresh data directories: PostgreSQL 18.6 and MySQL 8.4 on Windows, and the Ubuntu 24.04 packages (PostgreSQL 16, MySQL 8.0) on Linux. ODBC reaches the same PostgreSQL through psqlODBC 17.00 on Windows and psqlODBC 16.00 with unixODBC 2.3.12 on Linux. We also broke each driver on purpose to confirm the fixtures notice: a wrong numeric digit, a wrong SQLSTATE mapping, the busy guard, the statement splitter and the quote lexer were each caught with a distinct exit code.</p>
+
+      <h2>Performance</h2>
+      <p>Three phases run through <code>e.db</code> by <code>benchmarks/db</code>:</p>
+      <ul>
+        <li><strong>insert</strong>: <em>N</em> rows of (bigint, text, double) through one prepared statement, in one transaction;</li>
+        <li><strong>scan</strong>: every row back through one streaming reader;</li>
+        <li><strong>lookup</strong>: primary-key reads through one prepared statement.</li>
+      </ul>
+      <p>The same work is written four times:</p>
+      <ul>
+        <li><strong>Neper</strong>, through <code>e.db</code> and the four drivers above (<code>benchmarks/db/src</code>).</li>
+        <li><strong>C</strong>, directly against each C API (<code>benchmarks/db/c/bench.c</code>), using the strategy the matching Neper driver uses: prepared statements for SQLite; binary parameters and results for PostgreSQL, one row at a time; escaped text for MySQL; and for ODBC, the wide entry points with bound parameters and <code>SQLGetData</code> per column. It is the floor for that design.</li>
+        <li><strong>Go 1.27</strong>, with each database's standard Go driver (<code>benchmarks/db/go</code>):
+          <ul>
+            <li>PostgreSQL: <code>pgx</code>.</li>
+            <li>MySQL: <code>go-sql-driver/mysql</code>.</li>
+            <li>SQLite: <code>mattn/go-sqlite3</code> bound through cgo to the system library on Linux; <code>modernc.org/sqlite</code>, a Go translation of SQLite, on Windows, which has no gcc here.</li>
+            <li>ODBC: <code>alexbrainman/odbc</code> through <code>database/sql</code>, calling <code>odbc32.dll</code> directly on Windows and unixODBC through cgo on Linux.</li>
+          </ul>
+        </li>
+        <li><strong>Rust 1.97</strong>, with the standard synchronous crates (<code>benchmarks/db/rust</code>): <code>rusqlite</code> on the system SQLite, <code>postgres</code>, <code>mysql</code>, and <code>odbc-api</code> reading row by row with <code>get_data</code>, as the Neper driver and the C baseline do.</li>
+      </ul>
+      <p>Go and Rust speak the PostgreSQL and MySQL wire protocols themselves rather than through libpq and libmysql, and for MySQL they use server-side prepared statements where Neper and C render text. All four languages reach ODBC through the same driver manager and the same psqlODBC, against the same PostgreSQL server the libpq rows use.</p>
+      <p>Each round ran every language once, alternated, 9 rounds after a warm-up, and the tables report medians. <em>N</em> is 100,000 rows and 20,000 lookups for SQLite, and 20,000 rows and 5,000 lookups for the servers and ODBC. Everything ran on one laptop, a Core i5-12500H, under Windows 11 and under WSL2 Ubuntu 24.04, with the Neper programs built by the compiler at <code>27b91ab0</code>. The servers were local and throwaway (PostgreSQL with <code>fsync=off</code>, MySQL at its defaults), and SQLite wrote a file with its default rollback journal.</p>
+      <p>Other work shared the machine, so the absolute speeds moved between runs, and Windows moved far more than Linux. On Linux the interquartile spread was 2–23% for scans and up to 55% for MySQL's lookups. On Windows it was 12–99% for almost every cell, and more for SQLite inserts. Each cell below is therefore each language's median as a percentage of the fastest median in the same round, where 100% means it won the cell; read the Windows cells as rough.</p>
+
+      <div class="callout">
+        <strong>The verdict: C, then Rust, then Neper, then Go.</strong>
+        <p>Scored against the fastest in each of the 24 cells (3 workloads × 4 databases × 2 hosts), the geometric means are <b>C 96%, Rust 82%, Neper 78%, Go 65%</b>. C wins 16 cells, Rust 4, Go 3 and Neper 1. Neper is level with Rust on Windows (77% against 75%) and well behind it on Linux (78% against 89%), and its largest gap is still in one workload: across both hosts it averages 87% of the fastest on inserts, 79% on lookups and 68% on scans.</p>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Windows 11</th><th>Neper</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
+          <tbody>
+            <tr><td>SQLite insert</td><td>88%</td><td class="win">100%</td><td>26%</td><td>70%</td></tr>
+            <tr><td>SQLite scan</td><td>55%</td><td class="win">100%</td><td>24%</td><td>92%</td></tr>
+            <tr><td>SQLite lookup</td><td>86%</td><td>98%</td><td>66%</td><td class="win">100%</td></tr>
+            <tr><td>PostgreSQL insert</td><td>96%</td><td class="win">100%</td><td>79%</td><td>79%</td></tr>
+            <tr><td>PostgreSQL scan</td><td class="win">100%</td><td>93%</td><td>97%</td><td>57%</td></tr>
+            <tr><td>PostgreSQL lookup</td><td>88%</td><td class="win">100%</td><td>79%</td><td>72%</td></tr>
+            <tr><td>MySQL insert</td><td>65%</td><td>71%</td><td class="win">100%</td><td>48%</td></tr>
+            <tr><td>MySQL scan</td><td>62%</td><td>95%</td><td class="win">100%</td><td>92%</td></tr>
+            <tr><td>MySQL lookup</td><td>65%</td><td>74%</td><td class="win">100%</td><td>52%</td></tr>
+            <tr><td>ODBC insert</td><td>91%</td><td class="win">100%</td><td>67%</td><td>83%</td></tr>
+            <tr><td>ODBC scan</td><td>75%</td><td class="win">100%</td><td>63%</td><td>94%</td></tr>
+            <tr><td>ODBC lookup</td><td>74%</td><td class="win">100%</td><td>44%</td><td>92%</td></tr>
+            <tr><td><strong>Geometric mean</strong></td><td><strong>77%</strong></td><td class="win">94%</td><td><strong>64%</strong></td><td><strong>75%</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Linux (WSL2)</th><th>Neper</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
+          <tbody>
+            <tr><td>SQLite insert</td><td>86%</td><td>98%</td><td>57%</td><td class="win">100%</td></tr>
+            <tr><td>SQLite scan</td><td>56%</td><td class="win">100%</td><td>23%</td><td>76%</td></tr>
+            <tr><td>SQLite lookup</td><td>73%</td><td class="win">100%</td><td>64%</td><td>96%</td></tr>
+            <tr><td>PostgreSQL insert</td><td>98%</td><td class="win">100%</td><td>56%</td><td>93%</td></tr>
+            <tr><td>PostgreSQL scan</td><td>63%</td><td class="win">100%</td><td>87%</td><td>46%</td></tr>
+            <tr><td>PostgreSQL lookup</td><td>97%</td><td class="win">100%</td><td>59%</td><td>96%</td></tr>
+            <tr><td>MySQL insert</td><td>79%</td><td>95%</td><td>94%</td><td class="win">100%</td></tr>
+            <tr><td>MySQL scan</td><td>83%</td><td class="win">100%</td><td>94%</td><td>98%</td></tr>
+            <tr><td>MySQL lookup</td><td>70%</td><td>86%</td><td>77%</td><td class="win">100%</td></tr>
+            <tr><td>ODBC insert</td><td>98%</td><td class="win">100%</td><td>93%</td><td>95%</td></tr>
+            <tr><td>ODBC scan</td><td>65%</td><td class="win">100%</td><td>57%</td><td>96%</td></tr>
+            <tr><td>ODBC lookup</td><td>84%</td><td class="win">100%</td><td>90%</td><td>95%</td></tr>
+            <tr><td><strong>Geometric mean</strong></td><td><strong>78%</strong></td><td class="win">98%</td><td><strong>67%</strong></td><td><strong>89%</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The winner of each row is highlighted. The raw medians and every sample are in <code>benchmarks/db/results/</code>.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Windows 11</th><th>Insert rows/s<br>Neper · C</th><th>Scan rows/s<br>Neper · C</th><th>Lookup µs<br>Neper · C</th></tr></thead>
+          <tbody>
+            <tr><td>SQLite 3.51</td><td>1,109,527 · 1,254,231</td><td>4,168,438 · 7,642,339</td><td>23.3 · 20.3</td></tr>
+            <tr><td>PostgreSQL 18.6</td><td>26,567 · 27,759</td><td class="win">4,487,021 · 4,194,015</td><td>39.8 · 35.1</td></tr>
+            <tr><td>MySQL 8.4.9</td><td>9,427 · 10,240</td><td>1,645,468 · 2,496,723</td><td>102.6 · 90.2</td></tr>
+            <tr><td>psqlODBC 17.00</td><td>7,004 · 7,736</td><td>698,200 · 932,766</td><td>81.1 · 60.0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Linux (WSL2)</th><th>Insert rows/s<br>Neper · C</th><th>Scan rows/s<br>Neper · C</th><th>Lookup µs<br>Neper · C</th></tr></thead>
+          <tbody>
+            <tr><td>SQLite 3.45</td><td>1,228,694 · 1,389,145</td><td>5,230,692 · 9,280,378</td><td>5.8 · 4.2</td></tr>
+            <tr><td>PostgreSQL 16</td><td>21,233 · 21,718</td><td>3,962,307 · 6,337,511</td><td>48.5 · 47.1</td></tr>
+            <tr><td>MySQL 8.0.46</td><td>7,506 · 9,040</td><td>2,397,467 · 2,905,679</td><td>113.1 · 92.9</td></tr>
+            <tr><td>psqlODBC 16.00</td><td>8,850 · 9,033</td><td>1,023,769 · 1,584,467</td><td>71.1 · 59.7</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Scans are still where Neper loses.</strong> Neper reaches 55–83% of the fastest scan on seven of the eight database-host pairs; on Linux, where the scan spread is 2–23%, that gap is real. SQLite shows it plainest, at 55–56% of C on both hosts:</p>
+      <ul>
+        <li>the C loop reads each value in place;</li>
+        <li>Neper borrows the row's text too (<code>reader_next_borrowed</code>, D1599), but still builds a tagged <code>Value</code> per column and dispatches through <code>e.db</code>;</li>
+        <li>and the SQLite driver asks <code>sqlite3_column_type</code> for every column of every row, where the C loop knows its schema.</li>
+      </ul>
+      <p>The exception is PostgreSQL on Windows, where Neper wins the scan outright: 4.49 million rows per second against C's 4.19 million. That is the chunked reads (D1606). Windows has libpq 18.6, so the driver takes 256 rows per result. WSL has libpq 16, which has no chunked mode, so Neper falls back to a row at a time there and scans at 63% of C, while the C baseline still reads a row at a time on both hosts. ODBC has no borrowed form at all, so the driver copies every value, and its scans sit at 65–75%.</p>
+      <p><strong>ODBC costs every language.</strong> Over the same PostgreSQL server, C's scan through psqlODBC is 4–4.5 times slower than C's scan through libpq, and its lookups are 27–71% slower. What ODBC buys is reach, not speed. Within ODBC, Neper's inserts are at 91–98% of C and its lookups at 74–84%.</p>
+      <p><strong>Inserts and lookups are close contests, except on MySQL.</strong> Against a server each statement waits on a loopback round trip, and a lookup takes 35–135 µs, and the language mostly disappears into it: Neper is within 2–12% of C on PostgreSQL inserts and lookups on both hosts. MySQL is the wide one. Go wins all three MySQL cells on Windows and Rust two of three on Linux, while Neper and C trail. Rust and Go use server-side prepared statements over the binary protocol, where Neper and C render each statement as text. That protocol choice explains most of it, though not all: Rust's own MySQL lookups on Windows are the slowest of the four (129 µs). MySQL's insert and lookup cells also spread 26–82% between rounds, so they are the least settled of the lot.</p>
+      <p><strong>Go is last overall, mainly on SQLite.</strong> Its PostgreSQL scans are strong (87–97%) and it wins every MySQL cell on Windows, but its SQLite numbers (23–66%) and its Windows ODBC lookups (44%) pull its mean to 65%.</p>
+      <p><strong>C leads, Rust is second.</strong> C wins 16 of 24 cells and never falls below 71%. Rust has the second-best mean on Linux (89%), but on Windows its MySQL numbers (48–52%) and PostgreSQL scan (57%) pull it down to 75%, just behind Neper's 77%.</p>
+      <p><strong>What changed since the first post.</strong> On the 18 cells both runs share, Neper rose from 69% to 77%. The changes behind it are the borrowed rows (D1599), a faster byte copy for the copying readers (D1600), the chunked PostgreSQL reads (D1606), and call-aware register allocation (D1607). The largest gains are the PostgreSQL scan on Windows (51% to 100%), the MySQL scans (52–66% to 62–83%), MySQL lookups on Linux (45% to 70%) and SQLite inserts (61–76% to 86–88%). SQLite's scan barely moved, from 52–53% to 55–56%, and a few server cells on Windows fell back within that host's noise. C rose over the same cells, from 86% to 95%, so part of every percentage's movement is the fastest implementation changing, not only Neper closing the gap.</p>
+
+      <div class="callout">
+        <strong>Two bugs the first run found, both fixed.</strong>
+        <p>MySQL's scan first ran at 7–9% of C because <code>e.str.parse_f64</code> took about 4 µs a call. It now has Clinger's and Eisel-Lemire's fast paths, and <code>push_f64</code> uses Ryu, with every result unchanged (D1593); that scan now reaches 62–83% of the fastest. A Linux program importing more than about 48 C symbols failed to link, and one declaring more than about 58 externs failed to build on either target. Both limits are lifted (D1594), so one program can use several drivers at once.</p>
+      </div>
+
+      <h2>Try it</h2>
+      <p>The drivers are in <code>lib/x/sqlite</code>, <code>lib/x/postgresql</code>, <code>lib/x/oracle</code> and <code>lib/x/microsoft</code>. Each has a specification under <code>docs/packages/</code> covering upstream version, targets, ownership and licensing. To reproduce the numbers, first build the four Neper programs in release mode from <code>benchmarks/db/src/{sqlite,postgresql,mysql,odbc}.e</code>, named <code>&lt;prefix&gt;-&lt;driver&gt;</code> (with <code>.exe</code> on Windows). Then one script per host does the rest:</p>
+      <ul>
+        <li>it builds the C, Go and Rust programs;</li>
+        <li>it starts throwaway PostgreSQL and MySQL servers on free ports;</li>
+        <li>it points ODBC at psqlODBC, through a per-user DSN that exists only for the run on Windows, and by the driver's path on Linux;</li>
+        <li>it runs the alternated rounds and stops the servers.</li>
+      </ul>
+      <p>On Windows the client libraries and psqlODBC are unpacked under <code>D:\tools</code> (or <code>$env:NEPER_DB_TOOLS</code>), and the C program builds with MSVC. On Linux the Ubuntu packages are <code>libsqlite3-dev</code>, <code>libpq-dev</code>, <code>libmysqlclient-dev</code>, <code>unixodbc-dev</code> and <code>odbc-postgresql</code>. Both scripts source <code>benchmarks/db/tools-env</code>, which keeps the Go and Rust toolchains' caches in one directory:</p>
+      <pre><code>pwsh benchmarks/db/run-windows-all.ps1 build/bench/neper results-windows.json
+bash benchmarks/db/run-linux-all.sh build/linux/bench/neper results-linux.json</code></pre>
+      <p>The raw samples behind every number above are in <code>benchmarks/db/results/</code>, as <code>windows-2026-09-28-four-drivers.json</code> and <code>linux-2026-09-28-four-drivers.json</code>. If your numbers disagree with ours, we want to know.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>
