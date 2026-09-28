@@ -4,25 +4,7 @@ $repo = Split-Path -Parent $PSScriptRoot
 $build = Join-Path $repo 'build\windows'
 $source = Join-Path $repo 'bootstrap\neper.c'
 $runtimeSource = Join-Path $repo 'bootstrap\runtime.c'
-$vsDevCmd = $env:NEPER_VSDEVCMD
-
-if (-not $vsDevCmd) {
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (Test-Path -LiteralPath $vswhere) {
-        $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-        if ($installation) {
-            $vsDevCmd = Join-Path $installation 'Common7\Tools\VsDevCmd.bat'
-        }
-    }
-}
-
-if (-not $vsDevCmd -and (Test-Path -LiteralPath 'D:\VS\Community\Common7\Tools\VsDevCmd.bat')) {
-    $vsDevCmd = 'D:\VS\Community\Common7\Tools\VsDevCmd.bat'
-}
-
-if (-not $vsDevCmd -or -not (Test-Path -LiteralPath $vsDevCmd)) {
-    throw "Visual Studio C++ tools were not found. Set NEPER_VSDEVCMD to VsDevCmd.bat."
-}
+$vsDevCmd = & (Join-Path $PSScriptRoot 'vsdevcmd.ps1')
 
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 $command = 'call "{0}" -arch=x64 -host_arch=x64 >nul && cl /nologo /std:c11 /W4 /O2 /Oi- /GS- /Zl /c /Fo:"{1}" "{2}" && cl /nologo /std:c11 /W4 /O2 /Fo:"{3}" /Fe:"{4}" "{5}"' -f $vsDevCmd, (Join-Path $build 'neper_runtime.obj'), $runtimeSource, (Join-Path $build 'neper.obj'), (Join-Path $build 'neper.exe'), $source

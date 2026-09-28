@@ -1349,6 +1349,66 @@ fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, abi: 
     ret ok
 }
 
+// A two-eightbyte aggregate a call into C returned (D1675): System V leaves its INTEGER
+// halves in rax then rdx and its SSE halves in xmm0 then xmm1, and lowering names which
+// is which -- bit 0 when the first half is SSE, bit 1 when the second is. The first is
+// read into r10 with the other results; `second_result` reads the second into r11.
+fn result_pair_sse(ty: check.Type) -> usize {
+    if ty.kind != .Other { ret 0usize }
+    if check.same(ty.name, "return-sse-integer") { ret 1usize }
+    if check.same(ty.name, "return-integer-sse") { ret 2usize }
+    if check.same(ty.name, "return-sse-sse") { ret 3usize }
+    ret 0usize
+}
+
+fn second_result(output: *emit_x64.Buffer, ty: check.Type) -> err {
+    let pair = result_pair_sse(ty)
+    if pair == 1usize { ret emit_x64.mov_register(output, 11usize, 0usize) }
+    if pair == 2usize { ret emit_x64.move_from_float(output, 11usize, 0usize, true) }
+    if pair == 3usize { ret emit_x64.move_from_float(output, 11usize, 1usize, true) }
+    ret emit_x64.mov_register(output, 11usize, 2usize)
+}
+
+// An eightbyte of an aggregate System V passes on the stack whole (D1675): lowering
+// types each one `c-stack`, and it takes the next slot and no register, which leaves
+// the registers to the arguments after it.
+fn stacked_argument(ty: check.Type) -> bool {
+    ret ty.kind == .Other && check.same(ty.name, "c-stack")
+}
+
+// The call area covers the overflow slots the calls into C take once an aggregate may
+// go to the stack whole (D1675): the classification's count, which is at most the
+// arguments past the registers whenever nothing is stacked -- so no other frame changes.
+fn cover_foreign_stack(builder: *nir.Builder, current: nir.Function, abi: Abi, call_area: *usize) -> err {
+    let end = current.first_instruction + current.instruction_count
+    var at = current.first_instruction
+    while at < end {
+        let instruction = builder.instructions[at]
+        if instruction.opcode == .Call && instruction.immediate < builder.function_ref_count && builder.function_refs[instruction.immediate].library.len != 0usize {
+            var integer_used = 0usize
+            var float_used = 0usize
+            var stack_used = 0usize
+            var in_register = false
+            var register = 0usize
+            var stack_index = 0usize
+            var operand_at = 0usize
+            while operand_at < instruction.operand_count {
+                let (operand_type, operand_type_error) = value_type(builder, current, builder.operands[instruction.first_operand + operand_at])
+                if operand_type_error != ok { ret operand_type_error }
+                if stacked_argument(operand_type) {
+                    stack_used += 1usize
+                } else {
+                    try classify_argument(abi, float_width(operand_type) != 0usize, operand_at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+                }
+                operand_at += 1usize
+            }
+            if stack_used > *call_area { *call_area = stack_used }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 // Each argument goes where the convention names, straight from where its value lives
 // (D1607); until then each was stored to an outgoing slot and loaded back. Stack
 // arguments are written first, through r10 at most, before any register is. A register
@@ -1385,7 +1445,13 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
         if argument_type_error != ok { ret argument_type_error }
         let width = float_width(argument_type)
         if argument_type.kind == .Float && width == 0usize { ret Unsupported }
-        try classify_argument(abi, width != 0usize, at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+        if stacked_argument(argument_type) {
+            in_register = false
+            stack_index = stack_used
+            stack_used += 1usize
+        } else {
+            try classify_argument(abi, width != 0usize, at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+        }
         if in_register {
             if placed >= 16usize { ret Unsupported }
             positions[placed] = at
@@ -3015,6 +3081,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
         let register_count = parameter_register_count(abi)
         if abi == .Windows { call_area_count = 4usize }
         if outgoing > register_count { call_area_count += outgoing - register_count }
+        try cover_foreign_stack(builder, current, abi, &call_area_count)
     }
     // The callee-saved registers in use are kept in slots of their own, between the
     // preserve area and the call area, which has to stay at the bottom (D235).
@@ -3388,11 +3455,11 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                             try add_relocation(relocations, relocation_count, call_displacement, instruction.immediate)
                         }
                     }
-                    let multiple_results = instruction.has_result && (instruction.ty.kind == .Invalid || (instruction.ty.kind == .Other && check.same(instruction.ty.name, "return-values")))
+                    let multiple_results = instruction.has_result && (instruction.ty.kind == .Invalid || (instruction.ty.kind == .Other && check.same(instruction.ty.name, "return-values")) || result_pair_sse(instruction.ty) != 0usize)
                     if instruction.has_result {
                         let result_float = float_width(instruction.ty)
-                        if result_float != 0usize {
-                            try emit_x64.move_from_float(output, 10usize, 0usize, result_float == 64usize)
+                        if result_float != 0usize || result_pair_sse(instruction.ty) % 2usize == 1usize {
+                            try emit_x64.move_from_float(output, 10usize, 0usize, result_float != 32usize)
                         } else {
                             if instruction.ty.kind == .Float { ret Unsupported }
                             try emit_x64.mov_register(output, 10usize, 0usize)
@@ -3409,7 +3476,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                                 try emit_x64.normalize_integer(output, 10usize, 10usize, integer_width(instruction.ty), signed_integer(instruction.ty))
                             }
                         }
-                        if multiple_results { try emit_x64.mov_register(output, 11usize, 2usize) }
+                        if multiple_results { try second_result(output, instruction.ty) }
                     }
                     try restore_live_registers(output, live_mask, preserve_base, preserve_count, context)
                     if instruction.has_result && !multiple_results {

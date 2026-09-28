@@ -7,16 +7,7 @@ $build = Join-Path $repo 'build\windows\runtime-embed'
 $object = Join-Path $build 'runtime_pe_x64.obj'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 
-$vsDevCmd = $env:NEPER_VSDEVCMD
-if (-not $vsDevCmd) {
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (Test-Path -LiteralPath $vswhere) {
-        $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-        if ($installation) { $vsDevCmd = Join-Path $installation 'Common7\Tools\VsDevCmd.bat' }
-    }
-}
-if (-not $vsDevCmd -and (Test-Path -LiteralPath 'D:\VS\Community\Common7\Tools\VsDevCmd.bat')) { $vsDevCmd = 'D:\VS\Community\Common7\Tools\VsDevCmd.bat' }
-if (-not $vsDevCmd) { throw 'Visual Studio C++ tools were not found' }
+$vsDevCmd = & (Join-Path $PSScriptRoot 'vsdevcmd.ps1')
 $command = 'call "{0}" -arch=x64 -host_arch=x64 >nul && ml64 /nologo /c /Fo"{1}" "{2}"' -f $vsDevCmd, $object, $source
 cmd.exe /d /s /c $command
 if ($LASTEXITCODE -ne 0) { throw 'assembling the PE runtime failed' }

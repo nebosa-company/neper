@@ -59,6 +59,25 @@ type ReturnLayout = struct {
     via_slot: bool,
 }
 
+// How a struct or union crosses the C ABI by value (D1675): `count` eightbytes carried
+// in registers, `sse` bit 0 and bit 1 set for the ones that go in xmm registers, or
+// `memory` -- Win64's copy passed by address and System V's stack, and either one's
+// hidden result pointer.
+type Crossing = struct {
+    size: usize,
+    count: usize,
+    sse: usize,
+    memory: bool,
+}
+
+// Where a call into C has put its arguments so far (D1675): System V passes a small
+// aggregate in registers only when every eightbyte of it fits, so each asks what is left.
+type CArguments = struct {
+    windows: bool,
+    integer_used: usize,
+    sse_used: usize,
+}
+
 type LoopControl = struct {
     active: bool,
     continue_target: usize,
@@ -1163,19 +1182,48 @@ fn intern_declared(builder: *nir.Builder, function: check.Function) -> (usize, e
     ret (interned, intern_error)
 }
 
+// A declared `cmp`, `hash` or `eq` called with the one or two values a supplied one
+// holds: an aggregate by its address, or as C passes it when the declared one is an
+// `@import` extern (D1675), the way `lower_call_arguments` passes a call's.
+fn emit_declared_call(c: *check.Checker, function: check.Function, result_type: check.Type, left: usize, right: usize, operand_count: usize, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (function_ref, reference_error) = intern_declared(builder, function)
+    if reference_error != ok { ret (0usize, reference_error) }
+    var passing: CArguments = zero
+    passing.windows = windows_target(c)
+    var operands: [32]usize = zero
+    var passed = 0usize
+    var operand_at = 0usize
+    while operand_at < operand_count {
+        var value = left
+        if operand_at == 1usize { value = right }
+        if foreign_function(function) {
+            if function.first_parameter + operand_at >= c.parameter_count { ret (0usize, check.ArgumentCount) }
+            let argument_error = c_argument(c, &passing, c.parameters[function.first_parameter + operand_at].ty, value, builder, token, operands[..], &passed)
+            if argument_error != ok { ret (0usize, argument_error) }
+        } else {
+            operands[passed] = value
+            passed += 1usize
+        }
+        operand_at += 1usize
+    }
+    let (instruction, call_result, emit_error) = nir.emit(builder, .Call, result_type, true, function_ref, token)
+    if emit_error != ok { ret (0usize, emit_error) }
+    var added = 0usize
+    while added < passed {
+        let operand_error = nir.add_operand(builder, instruction, operands[added])
+        if operand_error != ok { ret (0usize, operand_error) }
+        added += 1usize
+    }
+    ret (call_result, ok)
+}
+
 // An element whose own module declares `fn <t>_cmp` is compared by calling it --
 // the same direct call an ordinary `T.cmp(a, b)` lowers to, and the same reference
 // that gives the artifact its dependency edge. Rule 3 passes the receiver by value,
 // which for an aggregate is its address, exactly as `element_operand` supplies it.
 fn emit_declared_cmp(c: *check.Checker, function: check.Function, slot: usize, result_type: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
-    let (function_ref, reference_error) = intern_declared(builder, function)
-    if reference_error != ok { ret reference_error }
-    let (instruction, call_result, emit_error) = nir.emit(builder, .Call, result_type, true, function_ref, token)
-    if emit_error != ok { ret emit_error }
-    let left_operand_error = nir.add_operand(builder, instruction, left)
-    if left_operand_error != ok { ret left_operand_error }
-    let right_operand_error = nir.add_operand(builder, instruction, right)
-    if right_operand_error != ok { ret right_operand_error }
+    let (call_result, call_error) = emit_declared_call(c, function, result_type, left, right, 2usize, builder, token)
+    if call_error != ok { ret call_error }
     let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, result_type, false, 0usize, token)
     if store_error != ok { ret store_error }
     let address_error = nir.add_operand(builder, store_instruction, slot)
@@ -1435,12 +1483,8 @@ fn emit_hash_seed(c: *check.Checker, module_index: usize, slot: usize, builder: 
 
 fn emit_declared_hash(c: *check.Checker, function: check.Function, slot: usize, module_index: usize, value: usize, builder: *nir.Builder, token: lex.Token) -> err {
     let u64_type = check.make_type(.Integer, "u64", module_index)
-    let (function_ref, reference_error) = intern_declared(builder, function)
-    if reference_error != ok { ret reference_error }
-    let (instruction, call_result, emit_error) = nir.emit(builder, .Call, u64_type, true, function_ref, token)
-    if emit_error != ok { ret emit_error }
-    let operand_error = nir.add_operand(builder, instruction, value)
-    if operand_error != ok { ret operand_error }
+    let (call_result, call_error) = emit_declared_call(c, function, u64_type, value, 0usize, 1usize, builder, token)
+    if call_error != ok { ret call_error }
     let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
     if store_error != ok { ret store_error }
     let address_error = nir.add_operand(builder, store_instruction, slot)
@@ -1691,14 +1735,8 @@ fn store_supplied_eq_result(builder: *nir.Builder, slot: usize, boolean: check.T
 // A component whose own module declares `fn <t>_eq` is compared by calling it, the
 // same direct call an ordinary `T.eq(a, b)` lowers to.
 fn emit_declared_eq(c: *check.Checker, function: check.Function, slot: usize, boolean: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
-    let (function_ref, reference_error) = intern_declared(builder, function)
-    if reference_error != ok { ret reference_error }
-    let (instruction, call_result, emit_error) = nir.emit(builder, .Call, boolean, true, function_ref, token)
-    if emit_error != ok { ret emit_error }
-    let left_operand_error = nir.add_operand(builder, instruction, left)
-    if left_operand_error != ok { ret left_operand_error }
-    let right_operand_error = nir.add_operand(builder, instruction, right)
-    if right_operand_error != ok { ret right_operand_error }
+    let (call_result, call_error) = emit_declared_call(c, function, boolean, left, right, 2usize, builder, token)
+    if call_error != ok { ret call_error }
     let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, boolean, false, 0usize, token)
     if store_error != ok { ret store_error }
     let address_error = nir.add_operand(builder, store_instruction, slot)
@@ -2682,6 +2720,276 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     ret ok
 }
 
+// Section 5's aggregates across the C ABI (D1675). neper's own convention passes a
+// struct by address and returns one through a slot; C's does neither. Win64 passes one
+// of 1, 2, 4 or 8 bytes as its bits in the next integer register or slot and any other
+// size as the address of a copy the caller made, and returns those four sizes in rax
+// and any other through a hidden pointer. System V splits one of at most sixteen bytes
+// into eightbytes, INTEGER or SSE by what lies in each, and passes them in the next
+// registers of their classes -- all of them, or else the whole aggregate goes to the
+// stack -- and returns them in rax and rdx or xmm0 and xmm1. A larger one, or one with
+// a field off its alignment, is MEMORY: on the stack by value, and returned through a
+// hidden pointer.
+fn windows_target(c: *check.Checker) -> bool {
+    ret c.has_graph && check.same(c.graph.os, "windows")
+}
+
+fn foreign_function(function: check.Function) -> bool {
+    ret function.external && function.import_library.len != 0usize
+}
+
+// System V's classes for the eightbytes `ty` covers from `offset`: `classes[i]` when an
+// integer, a pointer, a bool or an enum lies in eightbyte `i`, and `classes[2 + i]` when
+// a float does. False for a field off its own alignment, which only `@packed` makes and
+// which makes the whole aggregate MEMORY.
+fn sysv_classes(c: *check.Checker, ty: check.Type, offset: usize, classes: []bool, depth: usize) -> (bool, err) {
+    if depth > 16usize { ret (false, check.InvalidType) }
+    let (canonical, canonical_error) = check.canonical_type(c, ty)
+    if canonical_error != ok { ret (false, canonical_error) }
+    let (info, info_error) = layout.type_info(c, canonical)
+    if info_error != ok { ret (false, info_error) }
+    if info.alignment == 0usize || offset % info.alignment != 0usize { ret (false, ok) }
+    if canonical.kind == .Array {
+        if !canonical.has_element || canonical.element >= c.type_count { ret (false, check.InvalidType) }
+        let element = c.types[canonical.element]
+        let (element_info, element_info_error) = layout.type_info(c, element)
+        if element_info_error != ok { ret (false, element_info_error) }
+        var element_at = 0usize
+        while element_at < canonical.array_length {
+            let (element_aligned, element_error) = sysv_classes(c, element, offset + element_at * element_info.size, classes, depth + 1usize)
+            if element_error != ok || !element_aligned { ret (element_aligned, element_error) }
+            element_at += 1usize
+        }
+        ret (true, ok)
+    }
+    if aggregate_value(c, canonical) {
+        let (aggregate_index, found) = layout.aggregate_index(c, canonical)
+        if !found { ret (false, check.InvalidType) }
+        let aggregate = c.aggregates[aggregate_index]
+        var next = 0usize
+        var member_at = 0usize
+        while member_at < aggregate.field_count {
+            if aggregate.first_field + member_at >= c.aggregate_field_count { ret (false, check.InvalidType) }
+            let member = c.aggregate_fields[aggregate.first_field + member_at].ty
+            var member_offset = 0usize
+            if aggregate.kind == .Struct {
+                let (member_info, member_info_error) = layout.type_info(c, member)
+                if member_info_error != ok { ret (false, member_info_error) }
+                var member_alignment = member_info.alignment
+                if aggregate.packed { member_alignment = 1usize }
+                let (start, start_error) = layout.align_up(next, member_alignment)
+                if start_error != ok { ret (false, start_error) }
+                member_offset = start
+                next = start + member_info.size
+            }
+            let (member_aligned, member_error) = sysv_classes(c, member, offset + member_offset, classes, depth + 1usize)
+            if member_error != ok || !member_aligned { ret (member_aligned, member_error) }
+            member_at += 1usize
+        }
+        ret (true, ok)
+    }
+    let eightbyte = offset / 8usize
+    if eightbyte >= 2usize { ret (false, check.InvalidType) }
+    if canonical.kind == .Float { classes[2usize + eightbyte] = true } else { classes[eightbyte] = true }
+    ret (true, ok)
+}
+
+fn c_crossing(c: *check.Checker, ty: check.Type, windows: bool) -> (Crossing, err) {
+    var crossing: Crossing = zero
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (crossing, info_error) }
+    crossing.size = info.size
+    if windows {
+        if info.size == 1usize || info.size == 2usize || info.size == 4usize || info.size == 8usize {
+            crossing.count = 1usize
+        } else {
+            crossing.memory = true
+        }
+    } else {
+        var classes: [4]bool = zero
+        var aligned = false
+        if info.size <= 16usize {
+            let (classes_aligned, classes_error) = sysv_classes(c, ty, 0usize, classes[..], 0usize)
+            if classes_error != ok { ret (crossing, classes_error) }
+            aligned = classes_aligned
+        }
+        crossing.memory = !aligned
+        // An eightbyte only padding lies in -- the tail an `@align(16)` adds -- is
+        // NO_CLASS, and carried nowhere.
+        if aligned {
+            crossing.count = 1usize
+            if classes[1usize] || classes[3usize] { crossing.count = 2usize }
+            if classes[2usize] && !classes[0usize] { crossing.sse = 1usize }
+            if classes[3usize] && !classes[1usize] { crossing.sse = crossing.sse + 2usize }
+        }
+    }
+    // ponytail: a copy or a stack argument is eight-byte aligned, where an `@align(16)`
+    // aggregate that goes by memory needs sixteen; refused until one has to cross.
+    if crossing.memory && info.alignment > 8usize { ret (crossing, check.Unsupported) }
+    ret (crossing, ok)
+}
+
+// On System V a hidden result pointer takes the first integer register.
+fn c_arguments_of(c: *check.Checker, call: check.CallInfo) -> (CArguments, err) {
+    var passing: CArguments = zero
+    passing.windows = windows_target(c)
+    if call.function.return_count != 1usize { ret (passing, ok) }
+    let (returned, returned_error) = check.call_return(c, call, 0usize)
+    if returned_error != ok { ret (passing, returned_error) }
+    if !aggregate_value(c, returned) { ret (passing, ok) }
+    let (crossing, crossing_error) = c_crossing(c, returned, passing.windows)
+    if crossing_error != ok { ret (passing, crossing_error) }
+    if crossing.memory { passing.integer_used = 1usize }
+    ret (passing, ok)
+}
+
+// A copy of an aggregate in a stack object of whole slots.
+fn copy_to_stack(ty: check.Type, size: usize, value: usize, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (slots_aligned, slots_error) = layout.align_up(size, 8usize)
+    if slots_error != ok { ret (0usize, slots_error) }
+    var slots = slots_aligned / 8usize
+    if slots == 0usize { slots = 1usize }
+    let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, ty, true, slots, token)
+    if stack_error != ok { ret (0usize, stack_error) }
+    let (copy_instruction, ignored, copy_error) = nir.emit(builder, .Copy, ty, false, size, token)
+    if copy_error != ok { ret (0usize, copy_error) }
+    let destination_error = nir.add_operand(builder, copy_instruction, stack)
+    if destination_error != ok { ret (0usize, destination_error) }
+    let source_error = nir.add_operand(builder, copy_instruction, value)
+    ret (stack, source_error)
+}
+
+// One argument of a call into C, appended to `out` as the convention passes it: a
+// scalar as it is; an aggregate as its bits (Win64's four sizes), as a copy's address
+// (Win64's others), or as its eightbytes, `u64` or `f64` by class -- or every one typed
+// `c-stack` when it goes to the stack, which the back end places in order.
+fn c_argument(c: *check.Checker, passing: *CArguments, ty: check.Type, value: usize, builder: *nir.Builder, token: lex.Token, out: []usize, count: *usize) -> err {
+    let (canonical, canonical_error) = check.canonical_type(c, ty)
+    if canonical_error != ok { ret canonical_error }
+    let module_index = ty.module_index
+    if !aggregate_value(c, canonical) {
+        if *count >= out.len { ret check.Capacity }
+        out[*count] = value
+        *count += 1usize
+        if canonical.kind == .Float { passing.sse_used += 1usize } else { passing.integer_used += 1usize }
+        ret ok
+    }
+    let (crossing, crossing_error) = c_crossing(c, canonical, passing.windows)
+    if crossing_error != ok { ret crossing_error }
+    if crossing.memory && passing.windows {
+        let (copy, copy_error) = copy_to_stack(canonical, crossing.size, value, builder, token)
+        if copy_error != ok { ret copy_error }
+        if *count >= out.len { ret check.Capacity }
+        out[*count] = copy
+        *count += 1usize
+        ret ok
+    }
+    var source = value
+    var width = 8usize
+    var pieces = crossing.count
+    var stacked = crossing.memory
+    if passing.windows {
+        width = crossing.size
+    } else {
+        // Each eightbyte is read whole, and the bytes past an odd-sized aggregate are
+        // someone else's: those are read from a copy padded to the eightbyte.
+        if crossing.size % 8usize != 0usize {
+            let (padded, padded_error) = copy_to_stack(canonical, crossing.size, value, builder, token)
+            if padded_error != ok { ret padded_error }
+            source = padded
+        }
+        var sse = 0usize
+        if crossing.sse % 2usize == 1usize { sse += 1usize }
+        if crossing.sse / 2usize == 1usize { sse += 1usize }
+        let integers = crossing.count - sse
+        if passing.integer_used + integers > 6usize || passing.sse_used + sse > 8usize { stacked = true }
+        if stacked {
+            pieces = (crossing.size + 7usize) / 8usize
+        } else {
+            passing.integer_used += integers
+            passing.sse_used += sse
+        }
+    }
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    var piece = 0usize
+    while piece < pieces {
+        var piece_type = check.make_type(.Integer, "u64", module_index)
+        if stacked { piece_type = check.make_type(.Other, "c-stack", module_index) }
+        if !stacked {
+            if piece == 0usize && crossing.sse % 2usize == 1usize { piece_type = check.make_type(.Float, "f64", module_index) }
+            if piece == 1usize && crossing.sse / 2usize == 1usize { piece_type = check.make_type(.Float, "f64", module_index) }
+        }
+        var address = source
+        if piece != 0usize {
+            let (offset_instruction, offset_address, offset_error) = nir.emit(builder, .FieldAddress, pointer_type, true, piece * 8usize, token)
+            if offset_error != ok { ret offset_error }
+            try nir.add_operand(builder, offset_instruction, source)
+            address = offset_address
+        }
+        let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, piece_type, true, width, token)
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, address)
+        if *count >= out.len { ret check.Capacity }
+        out[*count] = loaded
+        *count += 1usize
+        piece += 1usize
+    }
+    ret ok
+}
+
+// The type a call into C answers a register aggregate in: one eightbyte as `u64` or
+// `f64`, and two named for the back end by where System V left each half.
+fn c_result_type(crossing: Crossing, module_index: usize) -> check.Type {
+    if crossing.count == 1usize {
+        if crossing.sse == 1usize { ret check.make_type(.Float, "f64", module_index) }
+        ret check.make_type(.Integer, "u64", module_index)
+    }
+    if crossing.sse == 1usize { ret check.make_type(.Other, "return-sse-integer", module_index) }
+    if crossing.sse == 2usize { ret check.make_type(.Other, "return-integer-sse", module_index) }
+    if crossing.sse == 3usize { ret check.make_type(.Other, "return-sse-sse", module_index) }
+    ret check.make_type(.Other, "return-values", module_index)
+}
+
+// A register aggregate a call into C returned, stored to the caller's slot: a pair's
+// `Extract`s come straight after the call, while the back end still holds both halves
+// in its scratch registers.
+fn store_c_result(returned_type: check.Type, crossing: Crossing, call_result: usize, slot: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    let module_index = returned_type.module_index
+    let u64_type = check.make_type(.Integer, "u64", module_index)
+    var low = call_result
+    var high = 0usize
+    if crossing.count == 2usize {
+        let (low_instruction, low_value, low_error) = nir.emit(builder, .Extract, u64_type, true, 0usize, token)
+        if low_error != ok { ret low_error }
+        try nir.add_operand(builder, low_instruction, call_result)
+        let (high_instruction, high_value, high_error) = nir.emit(builder, .Extract, u64_type, true, 1usize, token)
+        if high_error != ok { ret high_error }
+        try nir.add_operand(builder, high_instruction, call_result)
+        low = low_value
+        high = high_value
+    }
+    let (low_store, low_ignored, low_store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+    if low_store_error != ok { ret low_store_error }
+    try nir.add_operand(builder, low_store, slot)
+    try nir.add_operand(builder, low_store, low)
+    if crossing.count == 2usize {
+        let pointer_type = check.make_type(.Pointer, "", module_index)
+        let (high_address_instruction, high_address, high_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 8usize, token)
+        if high_address_error != ok { ret high_address_error }
+        try nir.add_operand(builder, high_address_instruction, slot)
+        let (high_store, high_ignored, high_store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+        if high_store_error != ok { ret high_store_error }
+        try nir.add_operand(builder, high_store, high_address)
+        try nir.add_operand(builder, high_store, high)
+    }
+    let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, returned_type, true, 0usize, token)
+    if address_error != ok { ret address_error }
+    try nir.add_operand(builder, address_instruction, slot)
+    results.values[0usize] = address
+    results.addresses[0usize] = true
+    ret ok
+}
+
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     if call.gpu_barrier {
         results.call = call
@@ -2716,6 +3024,23 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
             if inlinable { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
         }
     }
+    // A struct or union a call into C returns in registers (D1675) still reaches the
+    // caller through a slot, stored there after the call instead of by the callee.
+    var returned: Crossing = zero
+    var returned_type = check.invalid_type()
+    if !call.indirect && foreign_function(call.function) && results.count == 1usize {
+        let (single_returned, single_returned_error) = check.call_return(c, call, 0usize)
+        if single_returned_error != ok { ret single_returned_error }
+        if aggregate_value(c, single_returned) {
+            let (crossing, crossing_error) = c_crossing(c, single_returned, windows_target(c))
+            if crossing_error != ok { ret crossing_error }
+            if !crossing.memory {
+                returned = crossing
+                returned_type = single_returned
+                return_layout.via_slot = false
+            }
+        }
+    }
     var symbol = call.function.name
     var symbol_instance = call.function.instance_id
     if call.mem_alloc {
@@ -2748,7 +3073,7 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
         }
     }
     var slot = 0usize
-    if return_layout.via_slot && results.count != 0usize {
+    if (return_layout.via_slot || returned.count != 0usize) && results.count != 0usize {
         let (slots_aligned, slots_error) = layout.align_up(return_layout.size, 8usize)
         if slots_error != ok { ret slots_error }
         var slots = slots_aligned / 8usize
@@ -2784,6 +3109,7 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
             call_type = check.make_type(.Other, "return-values", call.function.module_index)
         }
     }
+    if returned.count != 0usize { call_type = c_result_type(returned, call.function.module_index) }
     var call_opcode: nir.Opcode = .Call
     if call.indirect { call_opcode = .IndirectCall }
     let (instruction, call_result, emit_error) = nir.emit(builder, call_opcode, call_type, call_has_result, function_ref, token)
@@ -2809,6 +3135,7 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
         if alignment_operand_error != ok { ret alignment_operand_error }
     }
     if results.count == 0usize { ret ok }
+    if returned.count != 0usize { ret store_c_result(returned_type, returned, call_result, slot, builder, token, results) }
     if !return_layout.via_slot {
         if results.count == 1usize {
             results.values[0usize] = call_result
@@ -2896,6 +3223,16 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if call.is_cast || call.function.generic { ret check.Unsupported }
     *callee_out = 0usize
     *argument_count = 0usize
+    // A call into C passes each argument as the convention does (D1675), which can take
+    // several values or none of the registers; `lowered` counts the source's arguments.
+    let into_c = !call.indirect && foreign_function(call.function)
+    var passing: CArguments = zero
+    if into_c {
+        let (initial, initial_error) = c_arguments_of(c, call)
+        if initial_error != ok { ret initial_error }
+        passing = initial
+    }
+    var lowered = 0usize
     let end = usize(node.first_child) + usize(node.child_count)
     var child_position = 0usize
     var at = usize(node.first_child)
@@ -2909,51 +3246,51 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             if child_position > 0usize {
                 if *argument_count == arguments.len { ret check.ArgumentCount }
                 var parameter_type = check.invalid_type()
-                if *argument_count >= call.function.parameter_count {
+                let variadic_extra = lowered >= call.function.parameter_count
+                if variadic_extra {
                     // Past the declared parameters of a C variadic the argument's own
                     // type is the type it crosses as; the checker has already refused
                     // one that does not.
                     if !call.function.variadic { ret check.ArgumentCount }
                 } else {
-                    let (declared_type, parameter_type_error) = call_parameter_type(c, call, *argument_count)
+                    let (declared_type, parameter_type_error) = call_parameter_type(c, call, lowered)
                     if parameter_type_error != ok { ret parameter_type_error }
                     parameter_type = declared_type
                 }
                 let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), parameter_type, builder, bindings, binding_count)
                 if value_error != ok { ret value_error }
-                var argument = value
-                // A by-value aggregate is what the callee sees at this point (D358,
-                // H05): the caller's storage goes by address only when nothing can
-                // write it during the call, else a copy does.
-                var snapshot = captured
-                if !captured && aggregate_value(c, parameter_type) {
-                    snapshot = argument_can_change(c, g, tree, module_index, parse.child_index_at(tree, at), builder, bindings, binding_count)
-                    if snapshot { builder.snapshots_copied += 1usize } else { builder.snapshots_elided += 1usize }
+                lowered += 1usize
+                if into_c {
+                    var crossing_type = parameter_type
+                    if variadic_extra { crossing_type = value_type }
+                    try c_argument(c, &passing, crossing_type, value, builder, c.tokens[usize(node.token_start)], arguments, argument_count)
+                } else {
+                    var argument = value
+                    // A by-value aggregate is what the callee sees at this point (D358,
+                    // H05): the caller's storage goes by address only when nothing can
+                    // write it during the call, else a copy does.
+                    var snapshot = captured
+                    if !captured && aggregate_value(c, parameter_type) {
+                        snapshot = argument_can_change(c, g, tree, module_index, parse.child_index_at(tree, at), builder, bindings, binding_count)
+                        if snapshot { builder.snapshots_copied += 1usize } else { builder.snapshots_elided += 1usize }
+                    }
+                    if snapshot && aggregate_value(c, parameter_type) {
+                        let (info, info_error) = layout.type_info(c, parameter_type)
+                        if info_error != ok { ret info_error }
+                        let (copy, copy_error) = copy_to_stack(parameter_type, info.size, value, builder, c.tokens[usize(node.token_start)])
+                        if copy_error != ok { ret copy_error }
+                        argument = copy
+                    }
+                    arguments[*argument_count] = argument
+                    *argument_count += 1usize
                 }
-                if snapshot && aggregate_value(c, parameter_type) {
-                    let (info, info_error) = layout.type_info(c, parameter_type)
-                    if info_error != ok { ret info_error }
-                    let (slots_aligned, slots_error) = layout.align_up(info.size, 8usize)
-                    if slots_error != ok { ret slots_error }
-                    var slots = slots_aligned / 8usize
-                    if slots == 0usize { slots = 1usize }
-                    let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, parameter_type, true, slots, c.tokens[usize(node.token_start)])
-                    if stack_error != ok { ret stack_error }
-                    let (copy_instruction, ignored, copy_error) = nir.emit(builder, .Copy, parameter_type, false, info.size, c.tokens[usize(node.token_start)])
-                    if copy_error != ok { ret copy_error }
-                    try nir.add_operand(builder, copy_instruction, stack)
-                    try nir.add_operand(builder, copy_instruction, value)
-                    argument = stack
-                }
-                arguments[*argument_count] = argument
-                *argument_count += 1usize
             }
             child_position += 1usize
         }
         at += 1usize
     }
-    if *argument_count < call.function.parameter_count { ret check.ArgumentCount }
-    if !call.function.variadic && *argument_count != call.function.parameter_count { ret check.ArgumentCount }
+    if lowered < call.function.parameter_count { ret check.ArgumentCount }
+    if !call.function.variadic && lowered != call.function.parameter_count { ret check.ArgumentCount }
     ret ok
 }
 
