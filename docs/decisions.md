@@ -29536,3 +29536,74 @@ Only two of the 13 sites ever grew. Nearly all of the waste is `lookup.Index`'s 
 - The compiler's peak is made of what it keeps: module tokens and trees, and the workers' lowered state. Growth leaves behind less than 1% of it.
 
 ---
+
+## D1660 — Memory is measured as commit, and a cold build is taken toward the Delphi model one phase at a time
+
+A cold `--release --unchecked` build of the million-line program failed at eight workers on a machine with 1-3 GB of commit free, with interleaved `fatal: access violation at 0x...` from the workers. That is D340's handler when a commit fails, not a named `Exhausted`. The `--time` lines showed the arena at 1,260 MB, with 420 MB of it added at check declarations. That turned out to be the wrong figure to reason from.
+
+- **The arena figure is address space.** `init_cli_checker` sizes about 24 pools from source bytes (D306), and at 920k lines they are about 8% used. But since D340 the root arena commits on touch. The pools add 398 MB to the arena and 3 MB to the commit charge, and an untouched 2 GB allocation adds 0 MB. Sizing the pools from the resolver's counts, the first plan, would have saved nothing, so it was not made.
+- **What a cold build commits** (`sc1m`, release `--unchecked`, `-j 4`, read from the process as each phase line arrives): load and parse 422 MB, resolve 459, check declarations 531, check bodies 878, inline oracles 913, lower and codegen 1,181, link 1,290. It never falls, so every phase's memory is held to the end of the build.
+- **`measure.py` records commit.** `peak_commit_mb` is the process's peak pagefile usage, the charge a Windows build asks of the machine; the pool table from `--stats-full` goes in beside it. `--modes` picks the modes and `--extra` adds flags to every build. The numbers before any change are `benchmarks/baseline/results/pools-windows-before-d1660.json` (`compiler`, `sc500k`, `sc1m`, release `--unchecked`, `-j 4`, three runs):
+
+| workload | cold p50 | warm p50 | peak commit | peak working set |
+|---|---|---|---|---|
+| compiler | 843 ms | 103 ms | 516 MB | 284 MB |
+| sc500k | 2,824 ms | 193 ms | 827 MB | 571 MB |
+| sc1m | 7,213 ms | 393 ms | 1,305 MB | 1,040 MB |
+
+**The plan, in order.** Each step is measured against that file.
+
+1. Break down what load and parse, check bodies and lowering hold at their ends.
+2. Release a phase's worker memory when the phase ends, if step 1 finds it is kept.
+3. Write each module's lowered output to its `.em` as it is lowered, and link from the artifacts.
+4. Make the cold build the Delphi pipeline: one pass per module, in dependency order, declared from its imports' Interfaces (D1511), with only the Interfaces resident.
+
+**Step 1: what each owner holds.** A scratch compiler printed a line at each phase end, and a reader summed the committed bytes of every reservation (`VirtualQueryEx`). The root arena and each worker's arena are separate reservations (D339). `sc1m`, `-j 4`, in MB:
+
+| at the end of | root | front-end workers | crew workers | link workers | process |
+|---|---|---|---|---|---|
+| load and parse | 54 | 369 | | | 422 |
+| check declarations | 160 | 369 | 11 | | 532 |
+| check bodies | 162 | 369 | 341 | | 878 |
+| lower and codegen | 167 | 369 | 636 | | 1,181 |
+| link | 233 | 369 | 636 | 44 | 1,290 |
+
+- **Front-end workers, 369 MB.** Every module's tokens, tree and line starts, kept for the rest of the build: 8.2M tokens of 24 bytes (188 MB), 5.4M nodes of 20 bytes (104 MB), children (52 MB) and line starts (7 MB), for 23 MB of text.
+- **Crew workers, 636 MB.** At `-j 1` the one worker holds 348 MB, and each further worker adds about 96 MB. Part of that is its forked copy of the program's tables, 31 MB each (125 MB over four), which `fork_checker` sizes from the counts. Lowering adds 180 MB at `-j 1`: state that grows with every module lowered, not with the largest. That includes each module's `.em` bytes, 81 MB, which `write_hot_artifact` allocates in the lowering worker's arena (main.e:9416); the root holds only the slice table.
+- **Root, 233 MB.** The program's tables as used (check declarations adds 72 MB), the resolver, the source text (23 MB) and the link's assembled program and image (+66 MB).
+- **Everything grows with the program.** At `sc500k` the front end is 187 MB, the held artifacts 41 MB, and each crew worker's lowering growth 50 MB against 73 MB, with a largest module of about the same size. Nothing is released before the process exits, and the peak is at link.
+
+So step 2 is worth little. The front-end and crew memory is read until lowering ends, and releasing it before link would lower the peak from 1,290 MB only to the 1,181 MB of lowering's end, 9%.
+
+**The map behind the plan.** Five readers traced every owner with file:line evidence, and five more tried to refute them. What held up:
+
+- **Front end.** Nothing is re-parsed in a cold build: every pass reads the kept tokens and tree (graph.parse_module, both tokenize_module). The phases are barriers, so every module's tree is live from load until the lowering phase begins. After that, a module's tree and tokens are read by its own lowering and artifact write, and by four cross-module readers: another owner lowering an instance of its generics, another module's artifact hashing a callee it inlined, the comptime interpreter, and the generous worker. `--stats` reads every tree after the link. Line starts must outlive every lowering that places a site in the module (nir.site_at silently keeps the first line without them).
+- **Releasing memory.** The D340 handler commits any reserved private page on touch, so a decommit would come back as zero pages without a fault; only a whole-reservation release faults. `os.release` exists in the library (D116), but the bootstrap's fixed surface lacks it (D287).
+- **Forked tables.** A worker copies the tables because its own rows must follow the program's in one slice, not because it rewrites them. About 905 sites index those tables with no accessor between. Sharing saves at most the copy (31 MB a worker) plus the fork's zeroed memo slots (8-32 MiB), not the 96 MB a worker costs in all.
+- **Lowering.** Besides the `.em` bytes, a worker keeps a text-sized interface cut per module (26.6 MB), an inventory buffer per module (about 11 MB), and the builder's function headers, references, strings and signatures, which `nir.discard_bodies` never resets (about 40 MB at `-j 4`).
+
+**Plain baselines.** `measure.py --plain` builds without `--incremental`, the build a user types, and reads the peak commit of every cold run, since `--stats` keeps every tree to the end. The compiler under test is the release self-build of 013ec715; the results are `pools-windows-before-d1660-plain{,-j1,-j8}.json`:
+
+| workload | workers | cold p50 | peak commit | peak working set |
+|---|---|---|---|---|
+| sc1m | 1 | 11.3 s | 980 MB | 872 MB |
+| sc1m | 4 | 3.45 s | 1,292 MB | 1,035 MB |
+| sc1m | 8 | 3.14 s | 1,675 MB | 1,233 MB |
+| sc500k | 4 | 1.69 s | 812 MB | 567 MB |
+| sc500k | 8 | 1.35 s | 1,123 MB | 711 MB |
+| compiler | 4 | 0.52 s | 494 MB | 272 MB |
+| compiler | 8 | 0.55 s | 795 MB | 356 MB |
+
+An `--incremental` cold build takes twice as long (7.2 s at `-j 4`), writing every artifact to disk.
+
+**The revised plan**, each increment its own decision, measured against those files and landed smallest-risk first:
+
+1. The artifact writer keeps only the digests and the inventory's records (interface cut, inventory buffer).
+2. The fork stops committing what it does not need (memo slots grown as used, comptime parameters shared, body hashes cut to the declarations).
+3. `lex.Token`'s offsets become `u32`: 24 bytes to 12, about 94 MB at every phase. Since the phases are barriers, this is the only lever on the start of lowering.
+4. A lowering worker rolls its builder back to its mark after each module's artifact is written (`nir.discard_module`).
+5. The crew shares the parameter and return-type tables through per-worker windows, then the function tables if the first measure as predicted.
+6. `os.release` joins the bootstrap's fixed surface; each module's tokens and tree get their own reservation; the reservations are released after the lowering join, then per module right after the module's own artifact write, with generic-declaring modules pinned and the interpreter re-parsing privately from the text.
+7. The crew's reservations are released at the lowering barrier, if the link is still the peak after 1-6.
+
+---

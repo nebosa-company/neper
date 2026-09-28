@@ -1,0 +1,306 @@
+{
+ "schema": "neper-baseline",
+ "version": 1,
+ "host": "windows",
+ "machine": "AMD64",
+ "platform": "Windows-11-10.0.26200-SP0",
+ "cpu": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+ "compiler": "D:\\repos\\neper-pools\\build\\pools\\before.exe",
+ "runs": 3,
+ "arena": "14g",
+ "jobs": 1,
+ "revision": "013ec7150ccef1a0a8778b6e39d57aa132ec6ffa",
+ "cells": [
+  {
+   "workload": "sc1m",
+   "lines": 920554,
+   "mode": "release",
+   "command": "build\\pools\\before.exe emit-executable src\\main.e D:\\repos\\neper-pools x64 windows D:\\repos\\neper\\build\\baseline-fixtures\\sc1m\\baseline-release.exe --arena 14g --time --release --unchecked -j 1",
+   "cold_ms": [
+    11329.585199942812,
+    11372.848199971486,
+    11244.565500004683
+   ],
+   "warm_ms": [
+    11329.585199942812,
+    11372.848199971486,
+    11244.565500004683
+   ],
+   "cold_phases": [
+    {
+     "load and parse": 1541,
+     "resolve": 309,
+     "check declarations": 201,
+     "check bodies": 2825,
+     "inline oracles": 5,
+     "lower and codegen": 6257,
+     "link from artifacts": 117,
+     "link": 16,
+     "write executable": 6,
+     "manifest": 4
+    },
+    {
+     "load and parse": 1557,
+     "resolve": 305,
+     "check declarations": 198,
+     "check bodies": 2832,
+     "inline oracles": 5,
+     "lower and codegen": 6283,
+     "link from artifacts": 117,
+     "link": 16,
+     "write executable": 6,
+     "manifest": 4
+    },
+    {
+     "load and parse": 1552,
+     "resolve": 308,
+     "check declarations": 201,
+     "check bodies": 2806,
+     "inline oracles": 6,
+     "lower and codegen": 6185,
+     "link from artifacts": 115,
+     "link": 16,
+     "write executable": 5,
+     "manifest": 4
+    }
+   ],
+   "warm_phases": [
+    {
+     "load and parse": 1541,
+     "resolve": 309,
+     "check declarations": 201,
+     "check bodies": 2825,
+     "inline oracles": 5,
+     "lower and codegen": 6257,
+     "link from artifacts": 117,
+     "link": 16,
+     "write executable": 6,
+     "manifest": 4
+    },
+    {
+     "load and parse": 1557,
+     "resolve": 305,
+     "check declarations": 198,
+     "check bodies": 2832,
+     "inline oracles": 5,
+     "lower and codegen": 6283,
+     "link from artifacts": 117,
+     "link": 16,
+     "write executable": 6,
+     "manifest": 4
+    },
+    {
+     "load and parse": 1552,
+     "resolve": 308,
+     "check declarations": 201,
+     "check bodies": 2806,
+     "inline oracles": 6,
+     "lower and codegen": 6185,
+     "link from artifacts": 115,
+     "link": 16,
+     "write executable": 5,
+     "manifest": 4
+    }
+   ],
+   "cold_commit_mb": [
+    980,
+    980,
+    980
+   ],
+   "arena_mb": 1153,
+   "retries": 0,
+   "peak_mb": 872,
+   "peak_commit_mb": 980,
+   "pools": {
+    "resolver symbols": [
+     385788,
+     88490
+    ],
+    "resolver tokens (per module)": [
+     153713,
+     0
+    ],
+    "resolver locals": [
+     44437,
+     0
+    ],
+    "resolver name index entries": [
+     1543152,
+     88490
+    ],
+    "checker functions": [
+     194942,
+     83138
+    ],
+    "checker parameters": [
+     389884,
+     83771
+    ],
+    "checker return types": [
+     447228,
+     83267
+    ],
+    "checker types": [
+     447228,
+     965
+    ],
+    "checker aggregates": [
+     99519,
+     1125
+    ],
+    "checker aggregate fields": [
+     199038,
+     2523
+    ],
+    "checker aliases": [
+     99519,
+     0
+    ],
+    "checker constants": [
+     99519,
+     172
+    ],
+    "checker constant exprs": [
+     128191,
+     181
+    ],
+    "checker globals": [
+     24111,
+     23
+    ],
+    "checker generic arguments": [
+     99519,
+     0
+    ],
+    "checker comptime parameters": [
+     24879,
+     2
+    ],
+    "checker checked switches": [
+     99519,
+     0
+    ],
+    "checker diagnostics": [
+     10059,
+     0
+    ],
+    "checker tokens (per module)": [
+     153713,
+     0
+    ],
+    "checker locals": [
+     44437,
+     0
+    ],
+    "checker declaration index entries": [
+     2070440,
+     84458
+    ],
+    "nir functions": [
+     191102,
+     8796
+    ],
+    "nir blocks": [
+     29077,
+     0
+    ],
+    "nir instructions": [
+     116309,
+     0
+    ],
+    "nir instructions, largest module": [
+     116309,
+     0
+    ],
+    "nir operands": [
+     128597,
+     0
+    ],
+    "nir function refs": [
+     190974,
+     27670
+    ],
+    "nir strings": [
+     95551,
+     0
+    ],
+    "nir globals": [
+     24111,
+     23
+    ],
+    "nir ref index entries": [
+     763896,
+     0
+    ],
+    "lowering bindings": [
+     398076,
+     0
+    ],
+    "machine code buffer bytes": [
+     0,
+     0
+    ],
+    "image buffer bytes": [
+     5853998,
+     2864811
+    ],
+    "line entries": [
+     0,
+     0
+    ],
+    "relocations": [
+     0,
+     0
+    ]
+   },
+   "image_bytes": 2864811,
+   "functions": 83138,
+   "worker_reached_mb": 2426,
+   "cold_commit": {
+    "p50": 980.0,
+    "p95": 980.0,
+    "min": 980,
+    "max": 980,
+    "runs": 3
+   },
+   "cold": {
+    "p50": 11329.6,
+    "p95": 11368.5,
+    "min": 11244.6,
+    "max": 11372.8,
+    "runs": 3
+   },
+   "warm": {
+    "p50": 11329.6,
+    "p95": 11368.5,
+    "min": 11244.6,
+    "max": 11372.8,
+    "runs": 3
+   },
+   "cold_phase_p50": {
+    "load and parse": 1552,
+    "resolve": 308,
+    "check declarations": 201,
+    "check bodies": 2825,
+    "inline oracles": 5,
+    "lower and codegen": 6257,
+    "link from artifacts": 117,
+    "link": 16,
+    "write executable": 6,
+    "manifest": 4
+   },
+   "warm_phase_p50": {
+    "load and parse": 1552,
+    "resolve": 308,
+    "check declarations": 201,
+    "check bodies": 2825,
+    "inline oracles": 5,
+    "lower and codegen": 6257,
+    "link from artifacts": 117,
+    "link": 16,
+    "write executable": 6,
+    "manifest": 4
+   }
+  }
+ ]
+}
