@@ -4498,6 +4498,30 @@ foreach ($hotMode in @('--release', '--time')) {
     $resetCleanWritten = & $compiler emit-executable (Join-Path $resetScratch 'src\main.e') $repo 'x64' 'windows' $resetClean $hotMode 2>$null
     if ($LASTEXITCODE -ne 0 -or $resetCleanWritten -ne 'executable written') { throw "the clean build of the edited reset fixture failed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $resetExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $resetClean).Hash) { throw "the warm build after a called signature's edit is not the clean build ($hotMode)" }
+    # An extern's `@import` is in its signature (D1672): a warm build after the library,
+    # then the symbols, change rebuilds the module that calls one by name and the one that
+    # reaches the other through a supplied `hash`, and is the clean build of the edited tree.
+    $rebindScratch = Join-Path $testBuild 'rebind-scratch'
+    if (Test-Path -LiteralPath $rebindScratch) { Remove-Item -LiteralPath $rebindScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\import_rebind') $rebindScratch
+    $rebindExe = Join-Path $testBuild "rebind$hotMode.exe"
+    $rebindFirst = & $compiler emit-executable (Join-Path $rebindScratch 'src\main.e') $repo 'x64' 'windows' $rebindExe $hotMode --incremental -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $rebindFirst -ne 'executable written') { throw "the cold build of the rebind fixture failed ($hotMode)" }
+    & $rebindExe
+    if ($LASTEXITCODE -ne 0) { throw "the rebind fixture did not exit 0 before the edits ($hotMode)" }
+    foreach ($rebindEdit in @('library', 'symbol')) {
+        Copy-Item (Join-Path $rebindScratch "edits\$rebindEdit.windows.e") (Join-Path $rebindScratch 'src\plat.windows.e') -Force
+        $rebindWarm = & $compiler emit-executable (Join-Path $rebindScratch 'src\main.e') $repo 'x64' 'windows' $rebindExe $hotMode --incremental -j 1 2>$null
+        if ($LASTEXITCODE -ne 0 -or $rebindWarm -ne 'executable written') { throw "the warm build after the $rebindEdit edit failed ($hotMode)" }
+        & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $rebindScratch ".neper\$hotManifestMode\build-manifest.json") 'direct=rebuilt:edge-changed' 'seq=rebuilt:edge-changed' 'plat=rebuilt:source-changed'
+        if ($LASTEXITCODE -ne 0) { throw "the manifest after the $rebindEdit edit does not rebuild the callers ($hotMode)" }
+        & $rebindExe
+        if ($LASTEXITCODE -ne 0) { throw "the rebind fixture did not exit 0 after the $rebindEdit edit ($hotMode)" }
+        $rebindClean = Join-Path $testBuild "rebind-clean$hotMode.exe"
+        $rebindCleanWritten = & $compiler emit-executable (Join-Path $rebindScratch 'src\main.e') $repo 'x64' 'windows' $rebindClean $hotMode 2>$null
+        if ($LASTEXITCODE -ne 0 -or $rebindCleanWritten -ne 'executable written') { throw "the clean build of the rebind fixture after the $rebindEdit edit failed ($hotMode)" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $rebindExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $rebindClean).Hash) { throw "the warm build after the $rebindEdit edit is not the clean build ($hotMode)" }
+    }
     # A protocol function's absence is an edge (D494, H14): a warm build after the module
     # declares the `eq` the supplied rule stood in for rebuilds the instance's module as
     # `edge-changed`, exits the other way, and is the clean build of the edited tree.
