@@ -2,12 +2,14 @@
 // PostgreSQL, go-sql-driver/mysql, and for SQLite mattn/go-sqlite3 against the system library
 // where cgo is available (Linux) or modernc.org/sqlite, a translation of SQLite to Go, where it
 // is not (Windows without gcc); ODBC through alexbrainman/odbc, which calls odbc32.dll directly
-// on Windows and unixODBC through cgo on Linux.
+// on Windows and unixODBC through cgo on Linux; SQL Server through microsoft/go-mssqldb, which
+// speaks TDS in Go, here in TDS 8.0 strict mode.
 //
 //	bench-go sqlite <file> <rows> <lookups>
 //	bench-go postgresql <conninfo> <rows> <lookups>
 //	bench-go mysql <port> <rows> <lookups>
 //	bench-go odbc <connection string> <rows> <lookups>
+//	bench-go sqlserver <host;port;der;pem;user;password> <rows> <lookups>
 //
 // Same phases, table and output line as benchmarks/db/src/workload.e and c/bench.c.
 package main
@@ -16,14 +18,30 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/alexbrainman/odbc"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
+	_ "github.com/microsoft/go-mssqldb"
 )
+
+// go-mssqldb's URL for TDS 8.0 strict, the server's certificate pinned by its PEM file. Its
+// `mssql` driver name takes `?` placeholders.
+func sqlServerDSN(location string) string {
+	f := strings.Split(location, ";")
+	q := url.Values{}
+	q.Set("database", "neper")
+	q.Set("encrypt", "strict")
+	q.Set("certificate", f[3])
+	q.Set("hostNameInCertificate", f[0])
+	u := url.URL{Scheme: "sqlserver", User: url.UserPassword(f[4], f[5]), Host: "127.0.0.1:" + f[1], RawQuery: q.Encode()}
+	return u.String()
+}
 
 var names = []string{"alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
 	"india", "juliett", "kilo", "lima", "mike", "november", "oscar", "papa"}
@@ -163,7 +181,7 @@ func runPostgres(conninfo string, rows, lookups int64) (int64, int64, int64) {
 
 func main() {
 	if len(os.Args) < 5 {
-		check(fmt.Errorf("usage: bench-go sqlite|postgresql|mysql|odbc <location> <rows> <lookups>"))
+		check(fmt.Errorf("usage: bench-go sqlite|postgresql|mysql|odbc|sqlserver <location> <rows> <lookups>"))
 	}
 	driver, location := os.Args[1], os.Args[2]
 	rows, err := strconv.ParseInt(os.Args[3], 10, 64)
@@ -178,6 +196,8 @@ func main() {
 		insertNs, scanNs, lookupNs = runPostgres(location, rows, lookups)
 	case "odbc":
 		insertNs, scanNs, lookupNs = runSQL("odbc", location, "?", rows, lookups)
+	case "sqlserver":
+		insertNs, scanNs, lookupNs = runSQL("mssql", sqlServerDSN(location), "?", rows, lookups)
 	default:
 		insertNs, scanNs, lookupNs = runSQL("mysql", "root@tcp(127.0.0.1:"+location+")/neper", "?", rows, lookups)
 	}

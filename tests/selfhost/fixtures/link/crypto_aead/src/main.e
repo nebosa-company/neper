@@ -1,7 +1,8 @@
 // `e.crypto.aead`: AES-128-GCM and AES-256-GCM against NIST GCM test cases 4 and 16,
 // ChaCha20-Poly1305 against RFC 8439 2.8.2, tampered ciphertext and aad refused, the
 // short buffer, and the empty message. The vectors and a from-scratch reference are
-// in vectors.py beside this fixture. Every check has its own exit code.
+// in vectors.py beside this fixture. AES-GCM tags at both key sizes over lengths from 1 to
+// 16385 bytes come from OpenSSL (D1645). Every check has its own exit code.
 use e.os
 use e.mem
 use e.crypto.aead as aead
@@ -16,7 +17,55 @@ fn same(a: []const u8, b: []const u8) -> bool {
     ret true
 }
 
+// Tags over lengths that cross every block and four-block boundary the bitsliced AES and the
+// GHASH walk (D1645), from OpenSSL through Python's `cryptography`: plaintext byte i is
+// 7i + 3, the key's is 29i + 1, the nonce's 11i + 5 and the 13-byte aad's 3i + 7.
+fn long_tags(a: *mem.Arena) -> i32 {
+    let lengths: [9]usize = [9]usize{ 1, 15, 16, 17, 63, 64, 65, 1000, 16385 }
+    let tags128: [144]u8 = [144]u8{ 62, 123, 227, 150, 160, 133, 0, 8, 162, 240, 74, 64, 40, 31, 122, 149, 59, 187, 105, 89, 79, 238, 128, 118, 162, 251, 103, 180, 188, 42, 108, 119, 89, 250, 83, 152, 171, 174, 19, 248, 211, 168, 79, 233, 230, 93, 5, 253, 144, 211, 186, 78, 65, 35, 117, 201, 77, 141, 129, 84, 189, 117, 233, 87, 105, 83, 60, 71, 238, 36, 132, 208, 254, 230, 165, 252, 123, 230, 218, 206, 151, 176, 187, 25, 216, 206, 117, 100, 28, 141, 31, 120, 242, 123, 221, 0, 142, 4, 45, 1, 32, 86, 14, 149, 114, 64, 130, 211, 89, 232, 235, 61, 14, 220, 60, 27, 12, 2, 228, 243, 196, 240, 186, 88, 165, 179, 202, 163, 184, 141, 34, 75, 6, 104, 211, 32, 0, 217, 22, 79, 216, 156, 241, 148 }
+    let tags256: [144]u8 = [144]u8{ 34, 157, 40, 125, 237, 1, 192, 184, 120, 146, 99, 172, 200, 203, 41, 65, 226, 244, 39, 167, 194, 15, 187, 55, 154, 216, 70, 106, 141, 179, 94, 65, 102, 56, 147, 102, 89, 81, 40, 128, 60, 160, 58, 7, 123, 71, 99, 158, 39, 153, 101, 4, 39, 208, 54, 45, 148, 164, 202, 70, 21, 159, 112, 67, 169, 80, 121, 158, 168, 241, 180, 196, 77, 47, 163, 64, 67, 33, 234, 226, 158, 114, 125, 133, 145, 168, 30, 16, 45, 86, 5, 7, 220, 63, 144, 104, 36, 120, 47, 95, 150, 116, 61, 204, 7, 28, 160, 170, 160, 133, 130, 5, 44, 112, 40, 175, 149, 11, 204, 202, 74, 25, 169, 160, 49, 188, 185, 128, 146, 83, 136, 59, 32, 89, 223, 198, 197, 196, 173, 251, 4, 230, 167, 12 }
+    var key: [32]u8 = zero
+    var nonce: [12]u8 = zero
+    var aad: [13]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        key[i] = u8((i * 29usize + 1usize) % 256usize)
+        if i < 12usize { nonce[i] = u8((i * 11usize + 5usize) % 256usize) }
+        if i < 13usize { aad[i] = u8((i * 3usize + 7usize) % 256usize) }
+        i += 1usize
+    }
+    let (plain, plain_error) = mem.alloc[u8](a, 16385usize)
+    let (sealed, sealed_error) = mem.alloc[u8](a, 16401usize)
+    let (back, back_error) = mem.alloc[u8](a, 16385usize)
+    if plain_error != ok || sealed_error != ok || back_error != ok { ret 65i32 }
+    i = 0usize
+    while i < plain.len {
+        plain[i] = u8((i * 7usize + 3usize) % 256usize)
+        i += 1usize
+    }
+    var key128: [16]u8 = zero
+    i = 0usize
+    while i < 16usize {
+        key128[i] = key[i]
+        i += 1usize
+    }
+    var c = 0usize
+    while c < 9usize {
+        let n = lengths[c]
+        let (s1, e1) = aead.aes128_gcm_seal(sealed, key128, nonce, aad[0..], plain[0..n])
+        if e1 != ok || s1 != n + 16usize || !same(sealed[n..n + 16usize], tags128[c * 16usize..c * 16usize + 16usize]) { ret 65i32 }
+        let (b1, f1) = aead.aes128_gcm_open(back, key128, nonce, aad[0..], sealed[0..s1])
+        if f1 != ok || b1 != n || !same(back[0..n], plain[0..n]) { ret 65i32 }
+        let (s2, e2) = aead.aes256_gcm_seal(sealed, key, nonce, aad[0..], plain[0..n])
+        if e2 != ok || s2 != n + 16usize || !same(sealed[n..n + 16usize], tags256[c * 16usize..c * 16usize + 16usize]) { ret 66i32 }
+        c += 1usize
+    }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    let long_code = long_tags(a)
+    if long_code != 0i32 { os.exit(long_code) }
     let gcm_key128: [16]u8 = [16]u8{ 254, 255, 233, 146, 134, 101, 115, 28, 109, 106, 143, 148, 103, 48, 131, 8 }
     let gcm_plain: [60]u8 = [60]u8{ 217, 49, 50, 37, 248, 132, 6, 229, 165, 89, 9, 197, 175, 245, 38, 154, 134, 167, 169, 83, 21, 52, 247, 218, 46, 76, 48, 61, 138, 49, 138, 114, 28, 60, 12, 149, 149, 104, 9, 83, 47, 207, 14, 36, 73, 166, 181, 37, 177, 106, 237, 245, 170, 13, 230, 87, 186, 99, 123, 57 }
     let gcm_aad: [20]u8 = [20]u8{ 254, 237, 250, 206, 222, 173, 190, 239, 254, 237, 250, 206, 222, 173, 190, 239, 171, 173, 218, 210 }
