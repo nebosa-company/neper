@@ -4300,6 +4300,25 @@ Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $in
 Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
 $incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalSignature -notmatch 'rebuilt main' -or $incrementalSignature -notmatch 'rebuilt dep' -or $incrementalSignature -notmatch 'kept e.os') { throw "a signature edit did not rebuild the dependent: $incrementalSignature" }
+# (D1667) The counts a cold build takes as each block goes back are a warm no-edit
+# build's, on a program whose `@gpus` and `@tests` rows are not zero.
+$frontScratch = Join-Path $testBuild 'front-counts'
+if (Test-Path -LiteralPath $frontScratch) { Remove-Item -LiteralPath $frontScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $frontScratch 'src') | Out-Null
+Copy-Item (Join-Path $PSScriptRoot 'fixtures\link\front_counts\src\main.e') (Join-Path $frontScratch 'src')
+$frontMain = Join-Path $frontScratch 'src\main.e'
+$frontExe = Join-Path $testBuild 'front-counts.exe'
+$frontCold = & $compiler emit-executable $frontMain $repo 'x64' 'windows' $frontExe --incremental --stats-full 2>&1
+if ($LASTEXITCODE -ne 0) { throw "--stats-full on the front_counts cold build failed" }
+$frontWarm = & $compiler emit-executable $frontMain $repo 'x64' 'windows' $frontExe --incremental --stats 2>&1
+if ($LASTEXITCODE -ne 0 -or ($frontWarm -join "`n") -notmatch 'bodies checked \| 0') { throw "the front_counts warm build failed or checked bodies" }
+foreach ($countRow in @('nodes', 'externs', '@tests', '@gpus', '@imports', '@nochecks')) {
+    $coldRow = @($frontCold | ForEach-Object { "$_" } | Where-Object { $_.StartsWith("$countRow | ") })
+    $warmRow = @($frontWarm | ForEach-Object { "$_" } | Where-Object { $_.StartsWith("$countRow | ") })
+    if ($coldRow.Count -ne 1 -or $warmRow.Count -ne 1 -or $coldRow[0] -ne $warmRow[0]) { throw "front_counts: the cold build's '$countRow' row is not the warm build's: $coldRow / $warmRow" }
+}
+$frontOutput = & $frontExe
+if ($LASTEXITCODE -ne 0 -or $frontOutput -ne 'front counts ok') { throw "the front_counts fixture failed: $frontOutput" }
 # A hot build (D319): `emit-executable --incremental` settles the keep set, writes each
 # fresh module's artifact under `.neper/<mode>/em/` and links the image from every
 # artifact; a warm one with nothing changed and one after a body edit are each the clean
@@ -4320,6 +4339,10 @@ foreach ($hotMode in @('--release', '--time')) {
     $hotCleanWritten = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotClean $hotMode 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotCleanWritten -ne 'executable written') { throw "the clean build failed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a cold hot build is not the clean build ($hotMode)" }
+    # (D1667) A cold build counts each lowered module's tree as its block goes back, and
+    # its counts are the warm build's below, which parses every kept module for them.
+    $hotColdStats = & $compiler emit-executable $hotMain $repo 'x64' 'windows' (Join-Path $testBuild "hot-cold-stats$hotMode.exe") $hotMode --stats-full 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "--stats-full on a cold build failed ($hotMode)" }
     $hotWarm = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotWarm -ne 'executable written') { throw "the warm hot build failed ($hotMode)" }
     # The manifest says what the warm build kept and why (D363, H14): everything, stable.
@@ -4358,6 +4381,11 @@ foreach ($hotMode in @('--release', '--time')) {
     # the work rows say nothing was done.
     $hotStats = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --stats 2>&1
     if ($LASTEXITCODE -ne 0 -or ($hotStats -join "`n") -notmatch 'bodies checked \| 0') { throw "--stats on a warm build failed or did not report zero bodies checked ($hotMode)" }
+    foreach ($countRow in @('nodes', 'externs', '@tests', '@gpus', '@imports', '@nochecks')) {
+        $coldRow = @($hotColdStats | ForEach-Object { "$_" } | Where-Object { $_.StartsWith("$countRow | ") })
+        $warmRow = @($hotStats | ForEach-Object { "$_" } | Where-Object { $_.StartsWith("$countRow | ") })
+        if ($coldRow.Count -ne 1 -or $warmRow.Count -ne 1 -or $coldRow[0] -ne $warmRow[0]) { throw "the cold build's '$countRow' row is not the warm build's ($hotMode): $coldRow / $warmRow" }
+    }
     # The compiler is an identity (D398, H15): a warm build by another compiler
     # executable -- this one with a byte appended -- rebuilds every module as
     # `compiler-changed` and is the clean build; the original then rebuilds them back.

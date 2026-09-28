@@ -1411,6 +1411,8 @@ fn apply_context(c: *Checker, actual: Type, expected: Type) -> (Type, err) {
 // module again pays nothing. Any other tokenize invalidates it.
 // The checker's token table is the module's own list (D316): no scan, a slice.
 fn tokenize_module(c: *Checker, g: *graph.Graph, module_index: usize) -> err {
+    // (D1667) Before the memo: a released module's tokens are nobody's.
+    if g.modules[module_index].dropped { ret graph.ModuleDropped }
     if c.has_tokens_module && c.tokens_module == module_index { ret ok }
     // Going on (D954) -- a poison list is installed -- the invalid bytes are inside
     // declarations already reported and left out.
@@ -1420,6 +1422,31 @@ fn tokenize_module(c: *Checker, g: *graph.Graph, module_index: usize) -> err {
     c.tokens_module = module_index
     c.has_tokens_module = true
     ret ok
+}
+
+// (D1667) What this checker holds of module fronts, let go: the token memo, emptied
+// with its count since `record_failure` trusts the count, and the interpreter's copy of
+// one module (`forget_front`) or of every module (`forget_fronts`).
+fn forget_front(c: *Checker, module_index: usize) {
+    var no_tree: parse.Tree = zero
+    c.has_tokens_module = false
+    c.tokens = c.tokens[0usize..0usize]
+    c.token_count = 0usize
+    if !c.interp_ready || module_index >= c.interp_parsed.len { ret }
+    c.interp_parsed[module_index] = false
+    c.interp_trees[module_index] = no_tree
+    c.interp_tokens[module_index] = c.tokens
+    c.interp_token_counts[module_index] = 0usize
+}
+
+fn forget_fronts(c: *Checker) {
+    forget_front(c, 0usize)
+    if !c.interp_ready { ret }
+    var at = 1usize
+    while at < c.interp_parsed.len {
+        forget_front(c, at)
+        at += 1usize
+    }
 }
 
 fn first_node_child(tree: *parse.Tree, node: syntax.Node) -> (usize, bool) {

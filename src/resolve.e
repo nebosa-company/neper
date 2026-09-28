@@ -201,6 +201,8 @@ fn last_segment(name: str) -> str {
 
 // The resolver's token table is the module's own list (D316): no scan, a slice.
 fn tokenize_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
+    // (D1667) Before the memo: a released module's tokens are nobody's.
+    if g.modules[module_index].dropped { ret graph.ModuleDropped }
     if r.has_tokens_module && r.tokens_module == module_index { ret ok }
     // Going on (D954), the invalid bytes are inside declarations already reported and
     // left out; the module's other tokens are whole.

@@ -4312,6 +4312,20 @@ incremental_signature=$($test_build/neper-self emit-em-all "$incremental_main" "
 case "$incremental_signature" in *'rebuilt main'*) ;; *) printf %s "a signature edit did not rebuild the dependent: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'rebuilt dep'*) ;; *) printf %s "a signature edit did not rebuild its module: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'kept e.os'*) ;; *) printf %s "an untouched module was rebuilt: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
+# (D1667) The counts a cold build takes as each block goes back are a warm no-edit
+# build's, on a program whose `@gpus` and `@tests` rows are not zero.
+front_scratch="$test_build/front-counts"
+rm -rf "$front_scratch"
+mkdir -p "$front_scratch/src"
+cp "$repo/tests/selfhost/fixtures/link/front_counts/src/main.e" "$front_scratch/src/"
+front_cold=$($test_build/neper-self emit-executable "$front_scratch/src/main.e" "$repo" x64 linux "$test_build/front-counts-built" --incremental --stats-full 2>&1)
+front_warm=$($test_build/neper-self emit-executable "$front_scratch/src/main.e" "$repo" x64 linux "$test_build/front-counts-built" --incremental --stats 2>&1)
+printf '%s\n' "$front_warm" | grep -q 'bodies checked | 0'
+for count_row in nodes externs @tests @gpus @imports @nochecks; do
+    cold_row=$(printf '%s\n' "$front_cold" | grep "^$count_row | ")
+    [ "$cold_row" = "$(printf '%s\n' "$front_warm" | grep "^$count_row | ")" ]
+done
+[ "$("$test_build/front-counts-built")" = 'front counts ok' ]
 # A hot build (D319): `emit-executable --incremental` settles the keep set, writes each
 # fresh module's artifact under `.neper/<mode>/em/` and links the image from every
 # artifact; a warm one and one after a body edit are each the clean build's image.
@@ -4331,6 +4345,9 @@ for hot_mode in --release --time; do
     hot_clean_written=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_clean" $hot_mode 2>/dev/null)
     [ "$hot_clean_written" = 'executable written' ]
     cmp "$hot_exe" "$hot_clean"
+    # (D1667) A cold build counts each lowered module's tree as its block goes back, and
+    # its counts are the warm build's below, which parses every kept module for them.
+    hot_cold_stats=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$test_build/hot-cold-stats$hot_mode" $hot_mode --stats-full 2>&1)
     hot_warm=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
     [ "$hot_warm" = 'executable written' ]
     # The manifest says what the warm build kept and why (D363, H14): everything, stable.
@@ -4358,7 +4375,12 @@ for hot_mode in --release --time; do
     [ "$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = 'executable written' ]
     cmp "$hot_exe" "$hot_clean"
     # `--stats` on a warm build (D412): the kept modules are parsed for the counts.
-    $test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --stats 2>&1 | grep -q 'bodies checked | 0'
+    hot_warm_stats=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --stats 2>&1)
+    printf '%s\n' "$hot_warm_stats" | grep -q 'bodies checked | 0'
+    for count_row in nodes externs @tests @gpus @imports @nochecks; do
+        cold_row=$(printf '%s\n' "$hot_cold_stats" | grep "^$count_row | ")
+        [ "$cold_row" = "$(printf '%s\n' "$hot_warm_stats" | grep "^$count_row | ")" ]
+    done
     # The compiler is an identity (D398, H15): a warm build by another compiler
     # executable -- this one with a byte appended -- rebuilds every module as
     # `compiler-changed` and is the clean build; the original then rebuilds them back.
