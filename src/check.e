@@ -272,8 +272,6 @@ type Function = struct {
     first_return: usize,
     return_count: usize,
     instance_id: usize,
-    generic: bool,
-    external: bool,
     // `@import(LIB, SYM)` on an `extern fn`: the library to bind against and the name
     // to bind to, which is not the neper-side name -- D11 keeps those independent.
     // External functions store their import library and symbol here. Non-extern
@@ -282,6 +280,11 @@ type Function = struct {
     // are positional.
     import_library: str,
     import_symbol: str,
+    // (D1677) The record's flags sit together, ahead of `gpu_size`: seven bytes and the
+    // `u32` fill sixteen, where `generic` and `external` ahead of the strings left six
+    // bytes of padding there and a fifth flag here grew every function by eight.
+    generic: bool,
+    external: bool,
     intrinsic: bool,
     // A trailing `...` on an `extern fn`: section 5's C variadic. The declared
     // parameters are the ones counted; every argument past them crosses as its own type.
@@ -295,6 +298,9 @@ type Function = struct {
     // (D1676) `@cc` on a plain `fn`: C calls it, so its parameters and result cross
     // by the C convention, and so do neper's calls to it. In the padding after `gpu`.
     callback: bool,
+    // (D1677) Device-only (D1589) as the Interface records it, for a function declared
+    // from one (D1511): it has no source for `device_only` to read.
+    device_only: bool,
     gpu_size: u32,
 }
 
@@ -17465,16 +17471,18 @@ fn kept_callee(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
 // (D1589) Whether a function is device-only (spec section 10, What runs where): its
 // source reads `gpu.gid`, `gpu.lid`, `gpu.wgid` or `gpu.sid`, meets `gpu.barrier()`, a
 // `gpu.atomic_*` or a subgroup builtin, or names a `shared` type. Read from the text
-// of its declaration, past comments and literals; a program without `e.gpu` has none.
+// of its declaration, past comments and literals. The answer is the module's own
+// (D1677): the builtins only in a module that imports `e.gpu`, `shared` in any.
 fn device_only(c: *Checker, g: *graph.Graph, function_index: usize) -> bool {
     if function_index >= c.function_count { ret false }
-    if c.device_program == 0u8 {
-        let (gpu_module, has_gpu) = graph.find_module(g, "e.gpu")
-        if has_gpu { c.device_program = 2u8 } else { c.device_program = 1u8 }
-    }
-    if c.device_program != 2u8 { ret false }
     let function = c.functions[function_index]
     if function.gpu || function.intrinsic || function.external || function.module_index >= g.count { ret false }
+    // A function declared from its Interface has no span; it answers the Interface's bit (D1677).
+    if function.source_end <= function.source_start { ret function.device_only }
+    // A fast path, not a rule: with no module that imports e.gpu and none that names
+    // `shared`, no function with a span can answer true.
+    if c.device_program == 0u8 { c.device_program = device_program_kind(g) }
+    if c.device_program != 2u8 { ret false }
     // e.gpu's own functions are the builtins' implementations, not callers of them.
     if same(g.modules[function.module_index].name, "e.gpu") { ret false }
     let slot = function_index % c.device_memo.len
@@ -17483,6 +17491,11 @@ fn device_only(c: *Checker, g: *graph.Graph, function_index: usize) -> bool {
     var answer = false
     var at = function.source_start
     let end = function.source_end
+    // (D1677) Only a module that imports e.gpu can name its builtins, and a field that
+    // happens to be spelled `x.gpu.barrier_count` elsewhere is not one. `shared` is a
+    // keyword, so a module whose tokens hold none has nothing to find.
+    let builtins = device_imports_gpu(g, function.module_index)
+    if !builtins && !g.modules[function.module_index].names_shared { at = end }
     while at < end && at < text.len && !answer {
         let byte = text[at]
         if byte == 47u8 && at + 1usize < text.len && text[at + 1usize] == 47u8 {
@@ -17499,7 +17512,7 @@ fn device_only(c: *Checker, g: *graph.Graph, function_index: usize) -> bool {
             continue
         }
         let boundary = at == 0usize || !device_identifier_byte(text[at - 1usize])
-        if boundary && device_word(text, at, "gpu.") {
+        if builtins && boundary && device_word(text, at, "gpu.") {
             let member = at + 4usize
             if device_word(text, member, "gid") || device_word(text, member, "lid") || device_word(text, member, "wgid") || device_word(text, member, "sid") || device_word(text, member, "barrier") || device_word(text, member, "atomic_") || device_word(text, member, "subgroup") { answer = true }
         }
@@ -17510,6 +17523,28 @@ fn device_only(c: *Checker, g: *graph.Graph, function_index: usize) -> bool {
     if answer { stored += 1usize }
     c.device_memo[slot] = stored
     ret answer
+}
+
+// (D1677) 2 when some module imports e.gpu or names `shared`, else 1: device_only's
+// fast path, which answers false only where every module's own answer is false.
+fn device_program_kind(g: *graph.Graph) -> u8 {
+    var at = 0usize
+    while at < g.count {
+        if g.modules[at].names_shared || same(g.modules[at].name, "e.gpu") { ret 2u8 }
+        at += 1usize
+    }
+    ret 1u8
+}
+
+fn device_imports_gpu(g: *graph.Graph, module_index: usize) -> bool {
+    let first = g.modules[module_index].first_import
+    var at = first
+    while at < first + g.modules[module_index].import_count && at < g.import_count {
+        let imported = g.imports[at].target
+        if imported < g.count && same(g.modules[imported].name, "e.gpu") { ret true }
+        at += 1usize
+    }
+    ret false
 }
 
 fn device_identifier_byte(byte: u8) -> bool {

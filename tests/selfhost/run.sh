@@ -2689,7 +2689,7 @@ done
 # (D1589) A device-only helper called from CPU code, a `gpu.Buf` of `usize`, a
 # capability outside `caps(...)` and a repeated `caps` member are refused; a kernel
 # within its `caps(...)` and `ftz` is not.
-for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-TYPE-9999]: `lane` is device-only' 'gpu_buf_element|main.e:5:5: error[E-TYPE-9999]: a `gpu.Buf[T]` holds device memory' 'gpu_caps_bound|main.e:14:1: error[E-TYPE-9999]: `fill` needs `.Float64` through fill -> scaled -> widen' 'gpu_caps_duplicate|main.e:5:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'; do
+for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-TYPE-9999]: `lane` is device-only' 'gpu_buf_element|main.e:5:5: error[E-TYPE-9999]: a `gpu.Buf[T]` holds device memory' 'gpu_caps_bound|main.e:14:1: error[E-TYPE-9999]: `fill` needs `.Float64` through fill -> scaled -> widen' 'gpu_caps_duplicate|main.e:5:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size' 'gpu_shared_elsewhere|main.e:6:8: error[E-TYPE-9999]: `plain` is device-only'; do
     gpu_rule_name=${gpu_rule_case%%|*}
     gpu_rule_expected=${gpu_rule_case#*|}
     gpu_rule=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$gpu_rule_name/src/main.e" "$repo" x64 linux 2>&1 || true)
@@ -2699,6 +2699,10 @@ for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-TYPE-9999]: `lane` is
     esac
 done
 [ "$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_caps_valid/src/main.e" "$repo" x64 linux)" = 'module check ok' ]
+# (D1677) Device-only is a module's own answer: the builtins count only in a module that
+# imports `e.gpu`, so a helper elsewhere whose fields are spelled like them is not
+# device-only, in a program with kernels; `shared` counts in any module (above).
+[ "$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_device_only_module/src/main.e" "$repo" x64 linux)" = 'module check ok' ]
 gpu_bare=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_bare_attribute/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_bare" in
     *'main.e:4:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'*) ;;
@@ -4490,6 +4494,169 @@ for hot_mode in --release --time; do
         "$test_build/rebind$hot_mode"
         [ "$("$test_build/neper-self" emit-executable "$rebind_scratch/src/main.e" "$repo" x64 linux "$test_build/rebind-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
         cmp "$test_build/rebind$hot_mode" "$test_build/rebind-clean$hot_mode"
+    done
+    # A record's layout attributes are in its signature (D1677): a warm build after
+    # `@packed`, `@align` or `@reorder` lands on the record a module reads rebuilds that
+    # module alone and is the clean build; a `@reorder` record at a C boundary is then
+    # refused as the clean build refuses it, while `dep` is declared from its Interface.
+    attr_scratch="$test_build/layoutattr-scratch"
+    rm -rf "$attr_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/layout_attributes" "$attr_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$attr_scratch/src/main.e" "$repo" x64 linux "$test_build/layoutattr$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+    attr_status=0
+    "$test_build/layoutattr$hot_mode" || attr_status=$?
+    [ "$attr_status" -eq 35 ]
+    for attr_step in 'packed p q 32' 'align p q 43' 'reorder q p 35'; do
+        set -- $attr_step
+        cp "$attr_scratch/edits/$1.e" "$attr_scratch/src/dep.e"
+        [ "$("$test_build/neper-self" emit-executable "$attr_scratch/src/main.e" "$repo" x64 linux "$test_build/layoutattr$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+        python3 "$repo/scripts/check_incremental.py" "$attr_scratch/.neper/$hot_manifest_mode/build-manifest.json" "$2=rebuilt:edge-changed" "$3=kept:edges-hold" dep=rebuilt:source-changed
+        attr_status=0
+        "$test_build/layoutattr$hot_mode" || attr_status=$?
+        [ "$attr_status" -eq "$4" ]
+        [ "$("$test_build/neper-self" emit-executable "$attr_scratch/src/main.e" "$repo" x64 linux "$test_build/layoutattr-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+        cmp "$test_build/layoutattr$hot_mode" "$test_build/layoutattr-clean$hot_mode"
+    done
+    # A body edit to `p` alone rebuilds it against `dep` declared from its Interface, whose
+    # `@packed` and `@align` it must read back as the source says.
+    cp "$attr_scratch/edits/p_body.e" "$attr_scratch/src/p.e"
+    [ "$("$test_build/neper-self" emit-executable "$attr_scratch/src/main.e" "$repo" x64 linux "$test_build/layoutattr$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$attr_scratch/.neper/$hot_manifest_mode/build-manifest.json" p=rebuilt:source-changed q=kept:stable dep=kept:stable
+    attr_status=0
+    "$test_build/layoutattr$hot_mode" || attr_status=$?
+    [ "$attr_status" -eq 35 ]
+    [ "$("$test_build/neper-self" emit-executable "$attr_scratch/src/main.e" "$repo" x64 linux "$test_build/layoutattr-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+    cmp "$test_build/layoutattr$hot_mode" "$test_build/layoutattr-clean$hot_mode"
+    cp "$attr_scratch/edits/cross.e" "$attr_scratch/src/q.e"
+    attr_status=0
+    attr_warm=$("$test_build/neper-self" emit-executable "$attr_scratch/src/main.e" "$repo" x64 linux "$test_build/layoutattr$hot_mode" $hot_mode --incremental -j 1 2>&1) || attr_status=$?
+    [ "$attr_status" -eq 1 ]
+    attr_status=0
+    attr_clean=$("$test_build/neper-self" emit-executable "$attr_scratch/src/main.e" "$repo" x64 linux "$test_build/layoutattr-clean$hot_mode" $hot_mode 2>&1) || attr_status=$?
+    [ "$attr_status" -eq 1 ]
+    [ "$(echo "$attr_warm" | grep 'error\[')" = "$(echo "$attr_clean" | grep 'error\[')" ]
+    echo "$attr_warm" | grep -q 'q\.e:13:1: error\[E-TYPE-9999\]: @reorder is legal' || { echo "the warm build with a reordered record at a C boundary is not the clean build's refusal: $attr_warm" >&2; exit 1; }
+    attr_status=0
+    "$test_build/layoutattr$hot_mode" || attr_status=$?
+    [ "$attr_status" -eq 35 ]
+    # `resource` is in the record's signature too: with `q` back as it was, a warm build
+    # after `dep.P` becomes a resource refuses `p`, which reads its field, as the clean
+    # build does.
+    cp "$repo/tests/selfhost/fixtures/link/layout_attributes/src/q.e" "$attr_scratch/src/q.e"
+    cp "$attr_scratch/edits/resource.e" "$attr_scratch/src/dep.e"
+    attr_status=0
+    attr_warm=$("$test_build/neper-self" emit-executable "$attr_scratch/src/main.e" "$repo" x64 linux "$test_build/layoutattr$hot_mode" $hot_mode --incremental -j 1 2>&1) || attr_status=$?
+    [ "$attr_status" -eq 1 ]
+    attr_status=0
+    attr_clean=$("$test_build/neper-self" emit-executable "$attr_scratch/src/main.e" "$repo" x64 linux "$test_build/layoutattr-clean$hot_mode" $hot_mode 2>&1) || attr_status=$?
+    [ "$attr_status" -eq 1 ]
+    [ "$(echo "$attr_warm" | grep 'error\[')" = "$(echo "$attr_clean" | grep 'error\[')" ]
+    echo "$attr_warm" | grep -q 'p\.e:8:9: error\[E-SAFETY-0010\]: `P` is a resource' || { echo "the warm build after dep.P became a resource is not the clean build's refusal: $attr_warm" >&2; exit 1; }
+    attr_status=0
+    "$test_build/layoutattr$hot_mode" || attr_status=$?
+    [ "$attr_status" -eq 35 ]
+    # A kernel's `@gpu` and workgroup size are in its signature (D1677): a warm build after
+    # the size changes rebuilds `main`, whose launcher bakes it in, and is the clean build;
+    # after `@gpu` leaves the launched function, or lands on the directly called one, it
+    # refuses as the clean build does. The `main` and `body` edits first show that the
+    # hash `main` records against `k` declared from its Interface is its source's.
+    shape_scratch="$test_build/gpushape-scratch"
+    rm -rf "$shape_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/gpu_reshape" "$shape_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$shape_scratch/src/main.e" "$repo" x64 linux "$test_build/gpushape$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+    shape_status=0
+    "$test_build/gpushape$hot_mode" || shape_status=$?
+    [ "$shape_status" -eq 50 ]
+    for shape_step in 'main main.e main=rebuilt:source-changed k=kept:stable 50' 'body k.e main=kept:edges-hold k=rebuilt:source-changed 50' 'size k.e main=rebuilt:edge-changed k=rebuilt:source-changed 82'; do
+        set -- $shape_step
+        cp "$shape_scratch/edits/$1.e" "$shape_scratch/src/$2"
+        [ "$("$test_build/neper-self" emit-executable "$shape_scratch/src/main.e" "$repo" x64 linux "$test_build/gpushape$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+        python3 "$repo/scripts/check_incremental.py" "$shape_scratch/.neper/$hot_manifest_mode/build-manifest.json" "$3" "$4"
+        shape_status=0
+        "$test_build/gpushape$hot_mode" || shape_status=$?
+        [ "$shape_status" -eq "$5" ]
+        [ "$("$test_build/neper-self" emit-executable "$shape_scratch/src/main.e" "$repo" x64 linux "$test_build/gpushape-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+        cmp "$test_build/gpushape$hot_mode" "$test_build/gpushape-clean$hot_mode"
+    done
+    for shape_edit in plain kernel; do
+        cp "$shape_scratch/edits/$shape_edit.e" "$shape_scratch/src/k.e"
+        shape_status=0
+        shape_warm=$("$test_build/neper-self" emit-executable "$shape_scratch/src/main.e" "$repo" x64 linux "$test_build/gpushape$hot_mode" $hot_mode --incremental -j 1 2>&1) || shape_status=$?
+        [ "$shape_status" -eq 1 ]
+        shape_status=0
+        shape_clean=$("$test_build/neper-self" emit-executable "$shape_scratch/src/main.e" "$repo" x64 linux "$test_build/gpushape-clean$hot_mode" $hot_mode 2>&1) || shape_status=$?
+        [ "$shape_status" -eq 1 ]
+        [ "$(echo "$shape_warm" | grep 'error\[')" = "$(echo "$shape_clean" | grep 'error\[')" ]
+        case "$shape_edit:$shape_warm" in
+            plain:*'main.e:20:8: error[E-TYPE-9999]: `fill` is not a kernel: `gpu.launch` takes an `@gpu` function'*) ;;
+            kernel:*'main.e:17:5: error[E-TYPE-9999]: `seed` is a kernel and can only be run through `gpu.launch`'*) ;;
+            *) echo "the warm build after the gpu_reshape $shape_edit edit is not the clean build's refusal: $shape_warm" >&2; exit 1 ;;
+        esac
+        shape_status=0
+        "$test_build/gpushape$hot_mode" || shape_status=$?
+        [ "$shape_status" -eq 82 ]
+    done
+    # An extern's `...` is in its signature (D1677): a warm build after it is removed refuses
+    # the caller with the clean build's diagnostic, and leaves the executable from before.
+    drop_scratch="$test_build/drop-scratch"
+    rm -rf "$drop_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/variadic_drop" "$drop_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$drop_scratch/src/main.e" "$repo" x64 linux "$test_build/drop$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+    "$test_build/drop$hot_mode"
+    # A body edit to `call` alone rebuilds it against `plat` declared from its Interface,
+    # whose `...` it must read back, or the extra argument is refused.
+    cp "$drop_scratch/edits/call_body.e" "$drop_scratch/src/call.e"
+    [ "$("$test_build/neper-self" emit-executable "$drop_scratch/src/main.e" "$repo" x64 linux "$test_build/drop$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$drop_scratch/.neper/$hot_manifest_mode/build-manifest.json" call=rebuilt:source-changed plat=kept:stable
+    "$test_build/drop$hot_mode"
+    [ "$("$test_build/neper-self" emit-executable "$drop_scratch/src/main.e" "$repo" x64 linux "$test_build/drop-body-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+    cmp "$test_build/drop$hot_mode" "$test_build/drop-body-clean$hot_mode"
+    cp "$drop_scratch/edits/plat.linux.e" "$drop_scratch/src/plat.linux.e"
+    drop_status=0
+    drop_warm=$("$test_build/neper-self" emit-executable "$drop_scratch/src/main.e" "$repo" x64 linux "$test_build/drop$hot_mode" $hot_mode --incremental -j 1 2>&1) || drop_status=$?
+    [ "$drop_status" -eq 1 ]
+    drop_status=0
+    drop_clean=$("$test_build/neper-self" emit-executable "$drop_scratch/src/main.e" "$repo" x64 linux "$test_build/drop-clean$hot_mode" $hot_mode 2>&1) || drop_status=$?
+    [ "$drop_status" -eq 1 ]
+    [ "$(echo "$drop_warm" | grep 'error\[')" = "$(echo "$drop_clean" | grep 'error\[')" ]
+    echo "$drop_warm" | grep -q 'call\.e:5:5: error\[E-TYPE-9999\]: type checking failed: check\.ArgumentCount' || { echo "the warm build after an extern lost its ... is not the clean build's refusal: $drop_warm" >&2; exit 1; }
+    "$test_build/drop$hot_mode"
+    # Whether a helper is device-only is in its signature (D1677): a warm build after
+    # `lane.helper` becomes device-only refuses its CPU caller as the clean build does,
+    # rebuilds the device-only `dev` that calls it, holds `dev` when `lane` is declared from
+    # its Interface and then edited, and refuses a new CPU call against it. `--inline-cap 0`
+    # keeps release's inlined body edges from standing in for the signature edge, and the
+    # clean build at `-j 1` is the schedule on which lowering once refused `dev.tap`.
+    device_scratch="$test_build/device-scratch"
+    rm -rf "$device_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/device_only_edge" "$device_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$device_scratch/src/main.e" "$repo" x64 linux "$test_build/device$hot_mode" $hot_mode --inline-cap 0 --incremental -j 1 2>/dev/null)" = "executable written" ]
+    "$test_build/device$hot_mode"
+    for device_step in lane_device:lane.e host_plain:host.e dev_body:dev.e lane_body:lane.e host_call:host.e; do
+        device_edit=${device_step%%:*}
+        cp "$device_scratch/edits/$device_edit.e" "$device_scratch/src/${device_step#*:}"
+        case "$device_edit" in
+            lane_device|host_call)
+                device_status=0
+                device_warm=$("$test_build/neper-self" emit-executable "$device_scratch/src/main.e" "$repo" x64 linux "$test_build/device$hot_mode" $hot_mode --inline-cap 0 --incremental -j 1 2>&1) || device_status=$?
+                [ "$device_status" -eq 1 ]
+                device_status=0
+                device_clean=$("$test_build/neper-self" emit-executable "$device_scratch/src/main.e" "$repo" x64 linux "$test_build/device-clean$hot_mode" $hot_mode --inline-cap 0 -j 1 2>&1) || device_status=$?
+                [ "$device_status" -eq 1 ]
+                [ "$(echo "$device_warm" | grep 'error\[')" = "$(echo "$device_clean" | grep 'error\[')" ]
+                echo "$device_warm" | grep -q 'host\.e:5:9: error\[E-TYPE-9999\]: `helper` is device-only' || { echo "the warm build after the device_only_edge $device_edit edit is not the clean build's refusal: $device_warm" >&2; exit 1; }
+                "$test_build/device$hot_mode"
+                continue
+                ;;
+            host_plain) device_expect="dev=rebuilt:edge-changed host=rebuilt:source-changed lane=rebuilt:source-changed main=kept:edges-hold" ;;
+            dev_body) device_expect="dev=rebuilt:source-changed lane=kept:stable host=kept:stable main=kept:stable" ;;
+            lane_body) device_expect="lane=rebuilt:source-changed dev=kept:edges-hold host=kept:stable main=kept:stable" ;;
+        esac
+        [ "$("$test_build/neper-self" emit-executable "$device_scratch/src/main.e" "$repo" x64 linux "$test_build/device$hot_mode" $hot_mode --inline-cap 0 --incremental -j 1 2>/dev/null)" = "executable written" ]
+        python3 "$repo/scripts/check_incremental.py" "$device_scratch/.neper/$hot_manifest_mode/build-manifest.json" $device_expect
+        "$test_build/device$hot_mode"
+        [ "$("$test_build/neper-self" emit-executable "$device_scratch/src/main.e" "$repo" x64 linux "$test_build/device-clean$hot_mode" $hot_mode --inline-cap 0 -j 1 2>/dev/null)" = "executable written" ]
+        cmp "$test_build/device$hot_mode" "$test_build/device-clean$hot_mode"
     done
     # A protocol function's absence is an edge (D494, H14): the instance's module is rebuilt.
     fallback_scratch="$test_build/fallback-scratch"

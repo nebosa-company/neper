@@ -3041,12 +3041,19 @@ foreach ($gpuRuleCase in @(
     @('gpu_device_only', 'main.e:15:9: error[E-TYPE-9999]: `lane` is device-only'),
     @('gpu_buf_element', 'main.e:5:5: error[E-TYPE-9999]: a `gpu.Buf[T]` holds device memory'),
     @('gpu_caps_bound', 'main.e:14:1: error[E-TYPE-9999]: `fill` needs `.Float64` through fill -> scaled -> widen'),
-    @('gpu_caps_duplicate', 'main.e:5:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'))) {
+    @('gpu_caps_duplicate', 'main.e:5:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'),
+    # (D1677) `shared` named in a module without e.gpu, in a program without it.
+    @('gpu_shared_elsewhere', 'main.e:6:8: error[E-TYPE-9999]: `plain` is device-only'))) {
     $gpuRule = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($gpuRuleCase[0])\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1 -or -not ($gpuRule -join "`n").Contains($gpuRuleCase[1])) { throw "$($gpuRuleCase[0]) was not refused: $($gpuRule -join "`n")" }
 }
 $gpuCapsValid = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_caps_valid\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 0 -or ($gpuCapsValid -join "`n") -ne 'module check ok') { throw "a kernel within its caps was refused: $($gpuCapsValid -join "`n")" }
+# (D1677) Device-only is a module's own answer: the builtins count only in a module that
+# imports `e.gpu`, so a helper elsewhere whose fields are spelled like them is not
+# device-only, in a program with kernels; `shared` counts in any module (above).
+$gpuDeviceModule = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_device_only_module\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 0 -or ($gpuDeviceModule -join "`n") -ne 'module check ok') { throw "a helper in a module without e.gpu was refused as device-only: $($gpuDeviceModule -join "`n")" }
 $gpuBare = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_bare_attribute\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuBare -join "`n") -notmatch 'main\.e:4:1: error\[E-TYPE-9999\]: `fill` carries `@gpu` without a usable workgroup size') { throw "a bare @gpu was not refused: $($gpuBare -join "`n")" }
 $gpuArgument = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_launch_argument\src\main.e') $repo 'x64' 'windows' 2>&1
@@ -4538,6 +4545,194 @@ foreach ($hotMode in @('--release', '--time')) {
         $rebindCleanWritten = & $compiler emit-executable (Join-Path $rebindScratch 'src\main.e') $repo 'x64' 'windows' $rebindClean $hotMode 2>$null
         if ($LASTEXITCODE -ne 0 -or $rebindCleanWritten -ne 'executable written') { throw "the clean build of the rebind fixture after the $rebindEdit edit failed ($hotMode)" }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $rebindExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $rebindClean).Hash) { throw "the warm build after the $rebindEdit edit is not the clean build ($hotMode)" }
+    }
+    # A record's layout attributes are in its signature (D1677): a warm build after
+    # `@packed`, `@align` or `@reorder` lands on the record a module reads rebuilds that
+    # module as `edge-changed`, keeps the one reading the other record, and is the clean
+    # build of the edited tree. A `@reorder` record at a C boundary is then refused as the
+    # clean build refuses it, while `dep` is declared from its Interface (D1511).
+    $attrScratch = Join-Path $testBuild 'layoutattr-scratch'
+    if (Test-Path -LiteralPath $attrScratch) { Remove-Item -LiteralPath $attrScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\layout_attributes') $attrScratch
+    $attrMain = Join-Path $attrScratch 'src\main.e'
+    $attrExe = Join-Path $testBuild "layoutattr$hotMode.exe"
+    $attrClean = Join-Path $testBuild "layoutattr-clean$hotMode.exe"
+    $attrFirst = & $compiler emit-executable $attrMain $repo 'x64' 'windows' $attrExe $hotMode --incremental -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $attrFirst -ne 'executable written') { throw "the cold build of the layout_attributes fixture failed ($hotMode)" }
+    & $attrExe
+    if ($LASTEXITCODE -ne 35) { throw "the layout_attributes fixture did not exit 35 before the edits ($hotMode)" }
+    foreach ($attrStep in @(@('packed', 'p', 'q', 32), @('align', 'p', 'q', 43), @('reorder', 'q', 'p', 35))) {
+        $attrEdit = $attrStep[0]
+        Copy-Item (Join-Path $attrScratch "edits\$attrEdit.e") (Join-Path $attrScratch 'src\dep.e') -Force
+        $attrWarm = & $compiler emit-executable $attrMain $repo 'x64' 'windows' $attrExe $hotMode --incremental -j 1 2>$null
+        if ($LASTEXITCODE -ne 0 -or $attrWarm -ne 'executable written') { throw "the warm build after the $attrEdit edit failed ($hotMode)" }
+        & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $attrScratch ".neper\$hotManifestMode\build-manifest.json") "$($attrStep[1])=rebuilt:edge-changed" "$($attrStep[2])=kept:edges-hold" 'dep=rebuilt:source-changed'
+        if ($LASTEXITCODE -ne 0) { throw "the manifest after the $attrEdit edit does not rebuild the reader alone ($hotMode)" }
+        & $attrExe
+        if ($LASTEXITCODE -ne $attrStep[3]) { throw "the layout_attributes fixture did not exit $($attrStep[3]) after the $attrEdit edit ($hotMode): $LASTEXITCODE" }
+        $attrCleanWritten = & $compiler emit-executable $attrMain $repo 'x64' 'windows' $attrClean $hotMode 2>$null
+        if ($LASTEXITCODE -ne 0 -or $attrCleanWritten -ne 'executable written') { throw "the clean build of the layout_attributes fixture after the $attrEdit edit failed ($hotMode)" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $attrExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $attrClean).Hash) { throw "the warm build after the $attrEdit edit is not the clean build ($hotMode)" }
+    }
+    # A body edit to `p` alone rebuilds it against `dep` declared from its Interface, whose
+    # `@packed` and `@align` it must read back as the source says (D1511).
+    Copy-Item (Join-Path $attrScratch 'edits\p_body.e') (Join-Path $attrScratch 'src\p.e') -Force
+    $attrWarm = & $compiler emit-executable $attrMain $repo 'x64' 'windows' $attrExe $hotMode --incremental -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $attrWarm -ne 'executable written') { throw "the warm build after the p body edit failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $attrScratch ".neper\$hotManifestMode\build-manifest.json") 'p=rebuilt:source-changed' 'q=kept:stable' 'dep=kept:stable'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after the p body edit does not rebuild p alone ($hotMode)" }
+    & $attrExe
+    if ($LASTEXITCODE -ne 35) { throw "the layout_attributes fixture did not exit 35 after the p body edit ($hotMode): $LASTEXITCODE" }
+    $attrCleanWritten = & $compiler emit-executable $attrMain $repo 'x64' 'windows' $attrClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $attrCleanWritten -ne 'executable written') { throw "the clean build of the layout_attributes fixture after the p body edit failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $attrExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $attrClean).Hash) { throw "the warm build after the p body edit is not the clean build ($hotMode)" }
+    Copy-Item (Join-Path $attrScratch 'edits\cross.e') (Join-Path $attrScratch 'src\q.e') -Force
+    $attrCross = & $compiler emit-executable $attrMain $repo 'x64' 'windows' $attrExe $hotMode --incremental -j 1 2>&1
+    if ($LASTEXITCODE -ne 1) { throw "the warm build with a reordered record at a C boundary did not exit 1 ($hotMode): $LASTEXITCODE" }
+    $attrCrossClean = & $compiler emit-executable $attrMain $repo 'x64' 'windows' $attrClean $hotMode 2>&1
+    if ($LASTEXITCODE -ne 1) { throw "the clean build with a reordered record at a C boundary did not exit 1 ($hotMode): $LASTEXITCODE" }
+    $attrCrossError = @($attrCross | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+    $attrCrossCleanError = @($attrCrossClean | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+    if ($attrCrossError -ne $attrCrossCleanError -or $attrCrossError -notmatch 'q\.e:13:1: error\[E-TYPE-9999\]: @reorder is legal') { throw "the warm build with a reordered record at a C boundary is not the clean build's refusal ($hotMode): $attrCrossError" }
+    & $attrExe
+    if ($LASTEXITCODE -ne 35) { throw "the executable from before the refused layout_attributes build was rewritten ($hotMode)" }
+    # `resource` is in the record's signature too: with `q` back as it was, a warm build
+    # after `dep.P` becomes a resource refuses `p`, which reads its field, as the clean
+    # build does.
+    Copy-Item (Join-Path $repo 'tests\selfhost\fixtures\link\layout_attributes\src\q.e') (Join-Path $attrScratch 'src\q.e') -Force
+    Copy-Item (Join-Path $attrScratch 'edits\resource.e') (Join-Path $attrScratch 'src\dep.e') -Force
+    $attrResource = & $compiler emit-executable $attrMain $repo 'x64' 'windows' $attrExe $hotMode --incremental -j 1 2>&1
+    if ($LASTEXITCODE -ne 1) { throw "the warm build after dep.P became a resource did not exit 1 ($hotMode): $LASTEXITCODE" }
+    $attrResourceClean = & $compiler emit-executable $attrMain $repo 'x64' 'windows' $attrClean $hotMode 2>&1
+    if ($LASTEXITCODE -ne 1) { throw "the clean build after dep.P became a resource did not exit 1 ($hotMode): $LASTEXITCODE" }
+    $attrResourceError = @($attrResource | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+    $attrResourceCleanError = @($attrResourceClean | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+    if ($attrResourceError -ne $attrResourceCleanError -or $attrResourceError -notmatch 'p\.e:8:9: error\[E-SAFETY-0010\]: `P` is a resource') { throw "the warm build after dep.P became a resource is not the clean build's refusal ($hotMode): $attrResourceError" }
+    & $attrExe
+    if ($LASTEXITCODE -ne 35) { throw "the executable from before the refused resource build was rewritten ($hotMode)" }
+    # A kernel's `@gpu` and workgroup size are in its signature (D1677): a warm build after
+    # the size changes rebuilds `main`, whose launcher bakes it in, and is the clean build;
+    # after `@gpu` leaves the launched function, or lands on the directly called one, it
+    # refuses as the clean build does. The `main` and `body` edits first show that the
+    # hash `main` records against `k` declared from its Interface (D1511) is its source's.
+    $shapeScratch = Join-Path $testBuild 'gpushape-scratch'
+    if (Test-Path -LiteralPath $shapeScratch) { Remove-Item -LiteralPath $shapeScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\gpu_reshape') $shapeScratch
+    $shapeMain = Join-Path $shapeScratch 'src\main.e'
+    $shapeExe = Join-Path $testBuild "gpushape$hotMode.exe"
+    $shapeClean = Join-Path $testBuild "gpushape-clean$hotMode.exe"
+    $shapeFirst = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeExe $hotMode --incremental -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $shapeFirst -ne 'executable written') { throw "the cold build of the gpu_reshape fixture failed ($hotMode)" }
+    & $shapeExe
+    if ($LASTEXITCODE -ne 50) { throw "the gpu_reshape fixture did not exit 50 before the edits ($hotMode): $LASTEXITCODE" }
+    foreach ($shapeStep in @(@('main', 'main.e', 'main=rebuilt:source-changed', 'k=kept:stable', 50), @('body', 'k.e', 'main=kept:edges-hold', 'k=rebuilt:source-changed', 50), @('size', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 82))) {
+        $shapeEdit = $shapeStep[0]
+        Copy-Item (Join-Path $shapeScratch "edits\$shapeEdit.e") (Join-Path $shapeScratch "src\$($shapeStep[1])") -Force
+        $shapeWarm = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeExe $hotMode --incremental -j 1 2>$null
+        if ($LASTEXITCODE -ne 0 -or $shapeWarm -ne 'executable written') { throw "the warm build after the gpu_reshape $shapeEdit edit failed ($hotMode)" }
+        & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $shapeScratch ".neper\$hotManifestMode\build-manifest.json") $shapeStep[2] $shapeStep[3]
+        if ($LASTEXITCODE -ne 0) { throw "the manifest after the gpu_reshape $shapeEdit edit is not the expected one ($hotMode)" }
+        & $shapeExe
+        if ($LASTEXITCODE -ne $shapeStep[4]) { throw "the gpu_reshape fixture did not exit $($shapeStep[4]) after the $shapeEdit edit ($hotMode): $LASTEXITCODE" }
+        $shapeCleanWritten = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeClean $hotMode 2>$null
+        if ($LASTEXITCODE -ne 0 -or $shapeCleanWritten -ne 'executable written') { throw "the clean build of the gpu_reshape fixture after the $shapeEdit edit failed ($hotMode)" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $shapeExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $shapeClean).Hash) { throw "the warm build after the gpu_reshape $shapeEdit edit is not the clean build ($hotMode)" }
+    }
+    foreach ($shapeRefusal in @(@('plain', 'main\.e:20:8: error\[E-TYPE-9999\]: `fill` is not a kernel: `gpu\.launch` takes an `@gpu` function'), @('kernel', 'main\.e:17:5: error\[E-TYPE-9999\]: `seed` is a kernel and can only be run through `gpu\.launch`'))) {
+        $shapeEdit = $shapeRefusal[0]
+        Copy-Item (Join-Path $shapeScratch "edits\$shapeEdit.e") (Join-Path $shapeScratch 'src\k.e') -Force
+        $shapeWarm = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeExe $hotMode --incremental -j 1 2>&1
+        if ($LASTEXITCODE -ne 1) { throw "the warm build after the gpu_reshape $shapeEdit edit did not exit 1 ($hotMode): $LASTEXITCODE" }
+        $shapeCleanRefused = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeClean $hotMode 2>&1
+        if ($LASTEXITCODE -ne 1) { throw "the clean build after the gpu_reshape $shapeEdit edit did not exit 1 ($hotMode): $LASTEXITCODE" }
+        $shapeWarmError = @($shapeWarm | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+        $shapeCleanError = @($shapeCleanRefused | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+        if ($shapeWarmError -ne $shapeCleanError -or $shapeWarmError -notmatch $shapeRefusal[1]) { throw "the warm build after the gpu_reshape $shapeEdit edit is not the clean build's refusal ($hotMode): $shapeWarmError" }
+        & $shapeExe
+        if ($LASTEXITCODE -ne 82) { throw "the executable from before the refused gpu_reshape $shapeEdit build was rewritten ($hotMode)" }
+    }
+    # An extern's `...` is in its signature (D1677): a warm build after it is removed
+    # refuses the module that passes `plat.ident` an argument past its declared one, with
+    # the clean build's diagnostic, and the executable from before is left as it was.
+    $dropScratch = Join-Path $testBuild 'drop-scratch'
+    if (Test-Path -LiteralPath $dropScratch) { Remove-Item -LiteralPath $dropScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\variadic_drop') $dropScratch
+    $dropMain = Join-Path $dropScratch 'src\main.e'
+    $dropExe = Join-Path $testBuild "drop$hotMode.exe"
+    $dropFirst = & $compiler emit-executable $dropMain $repo 'x64' 'windows' $dropExe $hotMode --incremental -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $dropFirst -ne 'executable written') { throw "the cold build of the variadic_drop fixture failed ($hotMode)" }
+    & $dropExe
+    if ($LASTEXITCODE -ne 0) { throw "the variadic_drop fixture did not exit 0 before the edit ($hotMode)" }
+    # A body edit to `call` alone rebuilds it against `plat` declared from its Interface,
+    # whose `...` it must read back, or the extra argument is refused (D1511).
+    Copy-Item (Join-Path $dropScratch 'edits\call_body.e') (Join-Path $dropScratch 'src\call.e') -Force
+    $dropBody = & $compiler emit-executable $dropMain $repo 'x64' 'windows' $dropExe $hotMode --incremental -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $dropBody -ne 'executable written') { throw "the warm build after the call body edit failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $dropScratch ".neper\$hotManifestMode\build-manifest.json") 'call=rebuilt:source-changed' 'plat=kept:stable'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after the call body edit does not rebuild call alone ($hotMode)" }
+    & $dropExe
+    if ($LASTEXITCODE -ne 0) { throw "the variadic_drop fixture did not exit 0 after the call body edit ($hotMode)" }
+    $dropBodyClean = Join-Path $testBuild "drop-body-clean$hotMode.exe"
+    $dropBodyCleanWritten = & $compiler emit-executable $dropMain $repo 'x64' 'windows' $dropBodyClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $dropBodyCleanWritten -ne 'executable written') { throw "the clean build of the variadic_drop fixture after the call body edit failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $dropExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $dropBodyClean).Hash) { throw "the warm build after the call body edit is not the clean build ($hotMode)" }
+    Copy-Item (Join-Path $dropScratch 'edits\plat.windows.e') (Join-Path $dropScratch 'src\plat.windows.e') -Force
+    $dropWarm = & $compiler emit-executable $dropMain $repo 'x64' 'windows' $dropExe $hotMode --incremental -j 1 2>&1
+    if ($LASTEXITCODE -ne 1) { throw "the warm build after an extern lost its ``...`` did not exit 1 ($hotMode): $LASTEXITCODE" }
+    $dropClean = & $compiler emit-executable $dropMain $repo 'x64' 'windows' (Join-Path $testBuild "drop-clean$hotMode.exe") $hotMode 2>&1
+    if ($LASTEXITCODE -ne 1) { throw "the clean build of the edited variadic_drop fixture did not exit 1 ($hotMode): $LASTEXITCODE" }
+    $dropWarmError = @($dropWarm | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+    $dropCleanError = @($dropClean | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+    if ($dropWarmError -ne $dropCleanError -or $dropWarmError -notmatch 'call\.e:5:5: error\[E-TYPE-9999\]: type checking failed: check\.ArgumentCount') { throw "the warm build after an extern lost its ``...`` is not the clean build's refusal ($hotMode): $dropWarmError" }
+    & $dropExe
+    if ($LASTEXITCODE -ne 0) { throw "the executable from before the variadic edit was rewritten ($hotMode)" }
+    # Whether a helper is device-only (D1589) is in its signature (D1677): a warm build
+    # after `lane.helper` becomes device-only refuses its CPU caller in `host` as the clean
+    # build does, rebuilds the device-only `dev` that calls it once `host` stops, and holds
+    # `dev` when `lane` is declared from its Interface (D1511) and then edited, refusing a
+    # new CPU call against it. `--inline-cap 0` keeps release's inlined body edges from
+    # standing in for the signature edge, and a clean build at `-j 1` is the schedule on
+    # which lowering once refused `dev.tap`'s device-only call.
+    $deviceScratch = Join-Path $testBuild 'device-scratch'
+    if (Test-Path -LiteralPath $deviceScratch) { Remove-Item -LiteralPath $deviceScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\device_only_edge') $deviceScratch
+    $deviceMain = Join-Path $deviceScratch 'src\main.e'
+    $deviceExe = Join-Path $testBuild "device$hotMode.exe"
+    $deviceClean = Join-Path $testBuild "device-clean$hotMode.exe"
+    $deviceFirst = & $compiler emit-executable $deviceMain $repo 'x64' 'windows' $deviceExe $hotMode --inline-cap 0 --incremental -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $deviceFirst -ne 'executable written') { throw "the cold build of the device_only_edge fixture failed ($hotMode)" }
+    & $deviceExe
+    if ($LASTEXITCODE -ne 0) { throw "the device_only_edge fixture did not exit 0 before the edits ($hotMode)" }
+    $deviceSteps = @(
+        @('lane_device', 'lane.e', @()),
+        @('host_plain', 'host.e', @('dev=rebuilt:edge-changed', 'host=rebuilt:source-changed', 'lane=rebuilt:source-changed', 'main=kept:edges-hold')),
+        @('dev_body', 'dev.e', @('dev=rebuilt:source-changed', 'lane=kept:stable', 'host=kept:stable', 'main=kept:stable')),
+        @('lane_body', 'lane.e', @('lane=rebuilt:source-changed', 'dev=kept:edges-hold', 'host=kept:stable', 'main=kept:stable')),
+        @('host_call', 'host.e', @()))
+    foreach ($deviceStep in $deviceSteps) {
+        $deviceEdit = $deviceStep[0]
+        Copy-Item (Join-Path $deviceScratch "edits\$deviceEdit.e") (Join-Path $deviceScratch "src\$($deviceStep[1])") -Force
+        if ($deviceStep[2].Count -eq 0) {
+            $deviceWarm = & $compiler emit-executable $deviceMain $repo 'x64' 'windows' $deviceExe $hotMode --inline-cap 0 --incremental -j 1 2>&1
+            if ($LASTEXITCODE -ne 1) { throw "the warm build after the device_only_edge $deviceEdit edit did not exit 1 ($hotMode): $LASTEXITCODE" }
+            $deviceRefused = & $compiler emit-executable $deviceMain $repo 'x64' 'windows' $deviceClean $hotMode --inline-cap 0 -j 1 2>&1
+            if ($LASTEXITCODE -ne 1) { throw "the clean build after the device_only_edge $deviceEdit edit did not exit 1 ($hotMode): $LASTEXITCODE" }
+            $deviceWarmError = @($deviceWarm | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+            $deviceCleanError = @($deviceRefused | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
+            if ($deviceWarmError -ne $deviceCleanError -or $deviceWarmError -notmatch 'host\.e:5:9: error\[E-TYPE-9999\]: `helper` is device-only') { throw "the warm build after the device_only_edge $deviceEdit edit is not the clean build's refusal ($hotMode): $deviceWarmError" }
+            & $deviceExe
+            if ($LASTEXITCODE -ne 0) { throw "the executable from before the refused device_only_edge $deviceEdit build was rewritten ($hotMode)" }
+            continue
+        }
+        $deviceWarm = & $compiler emit-executable $deviceMain $repo 'x64' 'windows' $deviceExe $hotMode --inline-cap 0 --incremental -j 1 2>$null
+        if ($LASTEXITCODE -ne 0 -or $deviceWarm -ne 'executable written') { throw "the warm build after the device_only_edge $deviceEdit edit failed ($hotMode)" }
+        & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $deviceScratch ".neper\$hotManifestMode\build-manifest.json") @($deviceStep[2])
+        if ($LASTEXITCODE -ne 0) { throw "the manifest after the device_only_edge $deviceEdit edit is not the expected one ($hotMode)" }
+        & $deviceExe
+        if ($LASTEXITCODE -ne 0) { throw "the device_only_edge fixture did not exit 0 after the $deviceEdit edit ($hotMode)" }
+        $deviceCleanWritten = & $compiler emit-executable $deviceMain $repo 'x64' 'windows' $deviceClean $hotMode --inline-cap 0 -j 1 2>$null
+        if ($LASTEXITCODE -ne 0 -or $deviceCleanWritten -ne 'executable written') { throw "the clean build of the device_only_edge fixture after the $deviceEdit edit failed ($hotMode)" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceClean).Hash) { throw "the warm build after the device_only_edge $deviceEdit edit is not the clean build ($hotMode)" }
     }
     # A protocol function's absence is an edge (D494, H14): a warm build after the module
     # declares the `eq` the supplied rule stood in for rebuilds the instance's module as
