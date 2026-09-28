@@ -10795,14 +10795,16 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
 // (D319), which every executable takes now. Since D326 the same workers check the
 // bodies first: a worker's checker is a copy that shares the declaration tables and
 // owns a tail of every table a body check or a lowering appends to -- the instances
-// its modules make, their types, signatures and generic arguments -- with its locals,
-// its caches and its diagnostics; its builder, staging, artifact writer and, in a
-// release build, its two inlining oracles are its own. A worker writes only its own
-// modules' artifact slots. The modules go to the workers largest first to the least
-// loaded, and a worker that cannot go on -- an error, or an arena run dry -- stops
-// where it is: the lowest failing module's error is the build's, reported as the
-// one-at-a-time loop reported it, and the modules of a dry worker are done again on
-// the main thread by a generous worker with the whole-program pools.
+// its modules make, their types, signatures and generic arguments, and their
+// parameters and returns, which since D1670 are a window in the crew's tables where
+// the crew made them -- with its locals, its caches and its diagnostics; its builder,
+// staging, artifact writer and, in a release build, its two inlining oracles are its
+// own. A worker writes only its own modules' artifact slots. The modules go to the
+// workers largest first to the least loaded, and a worker that cannot go on -- an
+// error, or an arena run dry -- stops where it is: the lowest failing module's error
+// is the build's, reported as the one-at-a-time loop reported it, and the modules of
+// a dry worker are done again on the main thread by a generous worker with the
+// whole-program pools.
 // The workers (D325, D326): eight, since twelve on the twelve-core machine this is
 // measured on lowered no faster; the arena caps how many are actually made.
 const LOWER_WORKERS: usize = 8usize
@@ -10866,6 +10868,8 @@ type LowerWorker = struct {
     // Made on the main thread, set up on its own (D402).
     setup_pending: bool,
     fork_id: usize,
+    // (D1670) Its window in the crew's parameter and return tables; zero is a copy.
+    window: TableWindow,
     // Handed to the generous worker: nothing of this one's is used any more.
     replaced: bool,
     // Which modules' bodies are checked: a kept module's are not in a debug build.
@@ -10920,14 +10924,38 @@ type Crew = struct {
     // (D1667) Whether the lowered modules' fronts go back once the crew has joined:
     // the build's crew, not the one `emit_per_module` makes for itself.
     drops: bool,
+    // (D1670) The program's parameter and return rows once, then a window of each
+    // worker's own, in a reservation of the crew's (`crew_windows`); `on` false where
+    // the workers copy.
+    window: TableWindow,
+    window_arena: mem.Arena,
+}
+
+// (D1670) A worker's slices of the crew's parameter and return tables: the program's
+// rows, the windows of the workers before it, which it never reads, then its own,
+// where the slices end. Its own rows are numbered from its window's start, not from the
+// program's end as a copy's were, so an instance's `first_parameter` and `first_return`
+// depend on its worker: every read goes through them or a `< count` guard, and nothing
+// may keep them past the build. A full window is refused after as many rows as a full
+// tail was. The program's counts it was cut from are kept, and a fork that finds other
+// counts copies. `on` false is the copy.
+type TableWindow = struct {
+    on: bool,
+    parameters: []check.Parameter,
+    parameter_program: usize,
+    parameter_base: usize,
+    return_types: []check.Type,
+    return_program: usize,
+    return_base: usize,
 }
 
 // The worker's checker forked from the program's (D326): the declaration tables
 // copied, with a tail of its own on each one a body check or a lowering appends to,
 // sized from the worker's share of the text; the comptime parameters, which nothing
-// appends to, are shared (D1662). The copies are made on the worker's thread, out of
-// its arena, so eight of them cost the time of one.
-fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share: usize, largest: usize, fork_id: usize) -> err {
+// appends to, are shared (D1662), and the parameters and returns are a window in the
+// crew's tables where the crew made them (D1670). The copies are made on the worker's
+// thread, out of its arena, so eight of them cost the time of one.
+fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share: usize, largest: usize, fork_id: usize, window: TableWindow) -> err {
     *into = *from
     into.fork_id = fork_id
     // A worker's steps are its own (D474): the sum over the workers is the build's.
@@ -10941,14 +10969,21 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
     if generics_error != ok { ret generics_error }
     try copy_generics(generics, from.function_generics[0usize..from.function_count])
     into.function_generics = generics
-    let (parameters, parameters_error) = mem.alloc[check.Parameter](a, from.parameter_count + sized(2048usize, bytes, 64usize))
-    if parameters_error != ok { ret parameters_error }
-    try copy_parameters(parameters, from.parameters[0usize..from.parameter_count])
-    into.parameters = parameters
-    let (return_types, return_types_error) = mem.alloc[check.Type](a, from.return_type_count + sized(4096usize, bytes, 64usize))
-    if return_types_error != ok { ret return_types_error }
-    try copy_types(return_types, from.return_types[0usize..from.return_type_count])
-    into.return_types = return_types
+    if window.on && from.parameter_count == window.parameter_program && from.return_type_count == window.return_program {
+        into.parameters = window.parameters
+        into.parameter_count = window.parameter_base
+        into.return_types = window.return_types
+        into.return_type_count = window.return_base
+    } else {
+        let (parameters, parameters_error) = mem.alloc[check.Parameter](a, from.parameter_count + parameter_tail(bytes))
+        if parameters_error != ok { ret parameters_error }
+        try copy_parameters(parameters, from.parameters[0usize..from.parameter_count])
+        into.parameters = parameters
+        let (return_types, return_types_error) = mem.alloc[check.Type](a, from.return_type_count + return_tail(bytes))
+        if return_types_error != ok { ret return_types_error }
+        try copy_types(return_types, from.return_types[0usize..from.return_type_count])
+        into.return_types = return_types
+    }
     // (D1662) Shared: nothing collects a comptime parameter after the declarations,
     // and the slice ends at the count, so one that did would be refused as Capacity.
     into.comptime_parameters = from.comptime_parameters[0usize..from.comptime_parameter_count]
@@ -11108,6 +11143,52 @@ fn copy_types(into: []check.Type, from: []check.Type) -> err {
         at += 1usize
     }
     ret ok
+}
+
+// A worker's own parameter and return rows, past the program's: a copy's tail and a
+// crew window alike (D1670), `bytes` being the worker's share twice and the largest
+// module.
+fn parameter_tail(bytes: usize) -> usize { ret sized(2048usize, bytes, 64usize) }
+
+fn return_tail(bytes: usize) -> usize { ret sized(4096usize, bytes, 64usize) }
+
+// (D1670) The crew's parameter and return tables: the program's rows copied once, on the
+// main thread, then a window of each worker's own, which is where it appends once the
+// declarations are done. Every worker copied the program's rows into its arena before:
+// 13 MB each over the million-line program. Only where there is a copy to save, with
+// nothing but declarations in the program's function table, and never under
+// `--memory-budget`, whose shares a table outside the workers' arenas would escape. A
+// reservation or an allocation that fails leaves the workers copying, and only address
+// is lost.
+fn crew_windows(a: *mem.Arena, crew: *Crew, loaded: *graph.Graph, checker: *check.Checker, worker_count: usize, bytes: usize) -> err {
+    if worker_count < 2usize || loaded.memory_budget != 0usize || checker.function_count != checker.signature_function_count { ret ok }
+    let (window_arena, window_arena_error) = graph.reserved_arena(a)
+    if window_arena_error != ok { ret ok }
+    crew.window_arena = window_arena
+    let (parameters, parameters_error) = mem.alloc[check.Parameter](&crew.window_arena, checker.parameter_count + worker_count * parameter_tail(bytes))
+    if parameters_error != ok { ret ok }
+    let (returns, returns_error) = mem.alloc[check.Type](&crew.window_arena, checker.return_type_count + worker_count * return_tail(bytes))
+    if returns_error != ok { ret ok }
+    try copy_parameters(parameters, checker.parameters[0usize..checker.parameter_count])
+    try copy_types(returns, checker.return_types[0usize..checker.return_type_count])
+    crew.window.on = true
+    crew.window.parameters = parameters
+    crew.window.parameter_program = checker.parameter_count
+    crew.window.return_types = returns
+    crew.window.return_program = checker.return_type_count
+    ret ok
+}
+
+// (D1670) Worker `at`'s window: its rows follow the program's and the windows of the
+// workers before it, and its slices end where its rows do.
+fn worker_window(crew: *Crew, at: usize, bytes: usize) -> TableWindow {
+    var window = crew.window
+    if !window.on { ret window }
+    window.parameter_base = window.parameter_program + at * parameter_tail(bytes)
+    window.parameters = crew.window.parameters[0usize..window.parameter_base + parameter_tail(bytes)]
+    window.return_base = window.return_program + at * return_tail(bytes)
+    window.return_types = crew.window.return_types[0usize..window.return_base + return_tail(bytes)]
+    ret window
 }
 
 fn copy_generic_arguments(into: []check.GenericArgument, from: []check.GenericArgument) -> err {
@@ -11322,7 +11403,7 @@ fn worker_forked(w: *LowerWorker, a: *mem.Arena, program: *check.Checker) -> err
         w.checker.arena = a
         ret ok
     }
-    try fork_checker(a, &w.checker, program, w.share, w.loaded.largest_bytes, w.fork_id)
+    try fork_checker(a, &w.checker, program, w.share, w.loaded.largest_bytes, w.fork_id, w.window)
     w.forked = true
     ret ok
 }
@@ -11662,6 +11743,9 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         if loads[share_at] > largest_share { largest_share = loads[share_at] }
         share_at += 1usize
     }
+    // The share sizes every worker's tails, and so its window (D1670).
+    let tail_bytes = largest_share * 2usize + loaded.largest_bytes
+    try crew_windows(a, crew, loaded, checker, worker_count, tail_bytes)
     let (runs, runs_error) = mem.alloc[usize](a, loaded.count + 1usize)
     if runs_error != ok { ret runs_error }
     let (workers, workers_error) = mem.alloc[LowerWorker](a, generous_slot() + 1usize)
@@ -11699,6 +11783,7 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         workers[worker_at].scale = 4usize
         workers[worker_at].share = largest_share
         workers[worker_at].fork_id = worker_at + 1usize
+        workers[worker_at].window = worker_window(crew, worker_at, tail_bytes)
         // The first worker is set up and forked here, on the main thread; the others
         // set up and fork on their own threads (D402), their bindings kept for it.
         if worker_at == 0usize {
@@ -12222,6 +12307,8 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         report.build.functions_spilling += crew.workers[touched_at].builder.functions_spilling
         touched_at += 1usize
     }
+    // The crew's windows once (D1670).
+    if crew.window.on { loaded.worker_bytes += graph.arena_touched(&crew.window_arena) }
     ret ok
 }
 

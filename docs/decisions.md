@@ -35413,3 +35413,138 @@ What each owner commits (`live.py`, `sc1m`, release `--unchecked`, `-j 4`), in M
 - The ranked table was taken at `-j 4` only, on D1668's source; the probe at `-j 1` and `-j 8` was read for X, not ranked.
 
 ---
+
+## D1670 — The crew shares the parameter and return tables through windows
+
+**Why.** Increment B of the fork plan, the first half of step 5 of D1660's revised list. Every crew worker's fork copied the program's parameter and return rows into its own arena, only so that the rows it appends would follow them in one slice: 83,771 parameters of 88 bytes and 83,267 return types of 64 bytes at `sc1m`, 12.7 MB a worker. A fork's tables are committed at the fork and held to the end, and since D1669 the peak is at the lowering's start, so every worker's copy is at the peak.
+
+**Decision.**
+
+- **One copy, then a window each.** `crew_windows` runs on the main thread in `crew_begin`, once the shares are known. It takes a reservation of the crew's own (`graph.reserved_arena`), copies the program's rows into it once, and gives each worker a window after them, as long as the tail its copy had. `parameter_tail` and `return_tail` hold the fork's old formulas over the same bytes (twice the largest share plus the largest module). The copy and the windows both take them, so their capacities are one by construction.
+- **A worker's slices.** `worker_window` cuts worker k's slices to end where its window does, at P + (k+1)·R, and starts its counts at P + k·R. The windows of the workers before it lie between, and nothing reads them: every read of a parameter or return row goes through a function's `first_parameter` or `first_return`, or a `< count` guard.
+  - A worker's own rows are numbered from its window's start, not from the program's end, so an instance's `first_parameter` and `first_return` depend on its worker. Nothing keeps them past the build: `em.e` writes the rows they index, never the indexes, and the images below are one at every `-j`.
+  - A full window is refused as `Capacity` after as many rows as a full tail was, so a worker runs dry where it did.
+- **When.** Windows are taken only when all of these hold:
+  - two workers or more;
+  - no `--memory-budget`, whose shares a table outside the workers' arenas would escape;
+  - nothing but declarations in the program's function table.
+
+  `fork_checker` takes the window only when the program's counts are the ones it was cut from, and copies otherwise. A reservation or an allocation that fails leaves the workers copying. The reservation is not given back, and only address is lost. The generous worker's `LowerWorker` is blank, so it copies, in the program's arena, as before. `emit_per_module`'s crew forks from a program whose bodies were checked on the main thread, so it copies whenever the program has an instance.
+- **Accounting.** `crew_emit` adds the window reservation's touched bytes to `worker_bytes` once, so `--stats`' "worker arenas reached" and the static gate count it.
+- **Tests.** A new fixture, `crew_windows`. Six modules each instantiate `tmpl.wrap` (which instantiates `tmpl.pick`) and `tmpl.pick` at `i64`, `u8` and a struct of their own. Each also has a `printf` of its own (a formatter and a sink) and a `str.push_err`. In `run.ps1` and `run.sh`, in debug and release:
+  - the images at `-j 1` (copies), `-j 3 --perturb`, `-j 8` and the default (windows) must be one;
+  - `link-em` over `emit-em-all`'s artifacts, which no crew makes, must give the same image;
+  - the program prints `sum 2352`.
+
+  A compiler that skipped the one-time copy of the return rows built the fixture at `-j 1` and faulted with an access violation at `-j 3 --perturb`, so the fixture reaches the windows.
+
+**Who appends, checked against D1662-D1669.** The plan's premises hold, with one appender the implementation's list missed (Review):
+
+- During the bodies and the lowering, rows are appended only for a worker's own instances: `instantiate_function`, `formatter_instance`, the sink, `launcher_instance` and `error_push_instance`.
+- The lowering appends too. `emit_kernel_size_call` (`lower.e`) stores one return row for each `K$frame()` or `K$shared()` call of a `gpu.launch` instance, on the worker's checker, during the lowering and the oracles.
+- Every one of them checks against the slice's `.len` and lands in the worker's own window, as it landed in its copy's tail.
+- `collect_parameter`, the seeded signatures' `add_seeded_parameter`, the declaration callers of `store_return_type`, and `em.decode_function` run at declaration time, on the program's checker.
+- `declare_globals` runs on a worker's checker before its fork, while it is still the program's struct. It stores types and leaves the program's counts as they were.
+- D1668's `interp_module` only parses.
+
+**Review.** Two reviewers read the first commit (931827de). What each finding came to:
+
+- **No full gate, no measurements, no row** (serious). Held; this row and the evidence below. The release self-build is now also compared at `-j 1` (copies) against `-j 2` and `-j 3 --perturb` (windows) on both hosts, and both full suites ran.
+- **Nothing fails if windows go quiet** (both reviewers). Held.
+  - The fixture's image checks pass whether or not windows are taken, since the copy gives the same image by design, and its `emit-em-all` leg makes no crew at all.
+  - `static-windows.json` is re-pinned to this row's figures (below). At its margin of 0, D1669's figures breach it by +43 / +40 MB, and a change that turned windows off for every program would breach it the same way.
+  - The runners' comment now says that the artifact leg makes no crew, and that whether windows are taken is the static gate's to see.
+  - The suggested counter of windowed forks was not added: the static gate already fails, and a counter would be a `--time` row kept for one test.
+- **`store_return_type` also runs during the lowering** (minor). Held; it is listed above, and it does no harm.
+- **The `TableWindow` comment said every index is the one its copy had** (minor). Held. The `count == len` refusal still comes after as many rows, but the indexes differ. The comment now says that a worker's own rows are numbered from its window's start, that every read goes through `first_parameter`, `first_return` or a `< count` guard, and that nothing may keep those indexes past the build.
+
+**Evidence.** The gate (`gate.ps1 -Tag d1670`, full run, with the review fixes):
+
+- **Lint.** 0 hard findings.
+- **Self-builds.** Stage 2 equals stage 3 (`6e297a2f…`). The release self-build is the same at `-j 2`, at `-j 3 --perturb` and at `-j 1` (`7e4a0875…`).
+- **Images.** `sc500k` and `sc1m` are the baseline compiler's byte for byte in all six cases.
+- **Emit sweep.** 608 link fixtures, D1669's 607 and `crew_windows`; none differs. 013ec715's compiler builds `crew_windows` into the same image.
+- **Static gate** (`sc500k`, 8 workers), debug / release:
+  - Arena high-water: 2,235 / 2,958 → 2,192 / 2,918 MB (−43 / −40). The plan expected about −110 from B and C together.
+  - Images: 1,936,791 / 1,458,009 B, unchanged.
+  - 0 of 4 measures breached against the old pin.
+- **The re-pin.** `benchmarks/baseline/results/static-windows.json` is re-pinned downward to 2,192 / 2,918 MB. `static-linux.json` is not, since the Linux static figure was not measured.
+- **Full suites.** `tests/selfhost/run.ps1` passes in 13.9 minutes against the re-pinned file. That includes the stable stage at `-j 1` against `-j 3 --perturb`, the nested-inlining and `--memory-budget` pairs (copies against windows), and `crew_windows`. `scripts/run-linux-suite.sh` passes in 12.7 minutes.
+
+The C bootstrap on Windows:
+
+- `build/windows/neper.exe`, from the bootstrap source unchanged since b9f5fd20, builds `src/main.e --arena 1g` in 11.7 s.
+- The compiler it builds builds `src/main.e` into stage 2's bytes (`6e297a2f…`).
+- It also builds `sc500k` (release `--unchecked -j 4`) into the gate's `sc500k-rel-j4` image (`89d2a478…`), which prints 121495906.
+
+Linux (WSL, the worktree rsynced to WSL's own disk; the Windows gate ran beside it, so its times are loose):
+
+- **Self-builds.** The bootstrap builds stage 1 in 14.6 s. Stage 2 equals stage 3 (`5dec4384…`). The release compiler's self-build is the same at `-j 1`, `-j 2` and `-j 3 --perturb` (`5686e1a7…`).
+- **Images.** `sc500k` gives one image at `-j 4` and at `-j 3 --perturb`, from stage 1, from D1669's stage 3 and from D1669's release compiler. The program prints 121495906.
+- **Tests.** `run.sh`'s `crew_windows` block and the `--memory-budget` pair pass under stage 3 and under stage 1.
+- **Memory** (release `sc500k --stats`). D1669's release compiler and this one ran in three alternating pairs, with the same image each time:
+
+  | workers | compiler peak working set | worker arenas reached |
+  |---|---|---|
+  | 4 | 348-349 → 331 MB | 1,964 → 1,947 MB |
+  | 8 | 461 → 419-420 MB | 2,963 → 2,920 MB |
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50), D1669's row → this. The `-j 4` and `-j 8` rows are the gate's own runs. The `-j 1` row is `measure.py --jobs 1 --workloads sc1m`, run after the gate with nothing else running.
+
+| workload | workers | peak commit | peak working set | worker arenas reached | check bodies | lower and codegen | link from artifacts | cold p50 |
+|---|---|---|---|---|---|---|---|---|
+| sc1m | 1 | 570 → 570 MB | 494 → 494 MB | 2,250 → 2,250 MB | 2,638 → 2,596 ms | 5,561 → 5,539 ms | 102 → 98 ms | 10,336 → 10,156 ms |
+| sc1m | 4 | 841 → 799 MB | 632 → 596 MB | 3,277 → 3,241 MB | 752 → 849 ms | 1,637 → 1,860 ms | 77 → 81 ms | 3,249 → 3,584 ms |
+| sc1m | 8 | 1,171 → 1,073 MB | 810 → 725 MB | 4,649 → 4,563 MB | 691 → 705 ms | 1,398 → 1,417 ms | 81 → 82 ms | 2,897 → 2,913 ms |
+| sc500k | 4 | 553 → 531 MB | 350 → 331 MB | 1,962 → 1,946 MB | 369 → 414 ms | 762 → 877 ms | 35 → 39 ms | 1,573 → 1,760 ms |
+| sc500k | 8 | 805 → 756 MB | 464 → 419 MB | 2,958 → 2,918 MB | 337 → 340 ms | 704 → 716 ms | 39 → 40 ms | 1,483 → 1,497 ms |
+| compiler | 4 | 408 → 401 MB | 215 → 212 MB | 1,443 → 1,441 MB | 58 → 59 ms | 271 → 296 ms | 14 → 14 ms | 511 → 543 ms |
+| compiler | 8 | 663 → 649 MB | 290 → 281 MB | 2,835 → 2,828 MB | 57 → 53 ms | 294 → 288 ms | 14 → 14 ms | 533 → 526 ms |
+
+- **Peak commit** falls 0 MB at `sc1m -j 1`, 42 at `-j 4` and 98 at `-j 8`, against the plan's ±0, 36-44 and 86-103. At `sc500k` it falls 22 and 49 MB. Every run of this compiler is within 2 MB of its p50.
+- **The `compiler` workload** falls 7 and 14 MB, where the plan allowed a cost of up to 4 MiB at `-j 8`. Its image is 6,955,411 → 6,961,628 B: its source grew.
+- **Time.** The gate's `-j 4` runs are slower in every phase, including the load, which this row does not touch (`sc1m` 434 → 457 ms, `sc500k` 217 → 226): the machine. The `live.py` runs below alternated the two compilers and give `check bodies` 727 / 743 → 726 / 747 ms and `lower and codegen` 1,544 / 1,539 → 1,546 / 1,573 ms. The one serial copy moved into `crew_begin` does not show.
+
+**Where the saving lands.** What each owner commits (`live.py`, `sc1m` from the shared fixture, release `--unchecked`, `-j 4`), in MB, D1669's release compiler → this, two alternated runs each; a range is the two runs. "Crew window" is the crew's new reservation.
+
+| at the end of | root | front-end workers | module blocks | crew window | crew workers | link workers | process |
+|---|---|---|---|---|---|---|---|
+| load and parse | 50-51 → 50-51 | 24 → 24 | 252 → 252 | | | | 323-324 → 324 |
+| check declarations | 155 → 155 | 24 → 24 | 252 → 252 | → 14 | 15-29 → 15-18 | | 430-432 → 432 |
+| check bodies | 161 → 161 | 24 → 24 | 252 → 252 | → 14 | 338-354 → 297-298 | | 742 → 700 |
+| inline oracles | 161 → 161 | 24 → 24 | 255 → 255 | → 14 | 366-369 → 313 | | 788-799 → 757 |
+| lower and codegen | 161 → 161 | 24 → 24 | 1 → 1 | → 14 | 505 → 449 | | 697 → 655 |
+| link from artifacts | 219 → 220 | 24 → 24 | 1 → 1 | → 14 | 505 → 449 | 44 → 44 | 800 → 758 |
+| link | 226 → 227 | 24 → 24 | 2 → 2 | → 14 | 505 → 449 | 44 → 44 | 806 → 764 |
+
+- **Each crew worker** holds 13-14 MB less from its fork on: worker 0 75-76 → 62 MB at the body check's end, the others 87-98 → 75-84. The crew window holds the one copy, 14 MB. At the lowering's end the crew is 505 → 449 + 14 = 463 MB, −42.
+- **The process** commits 42 MB less at every phase line from the body check on. The root holds 1 MB more from the link from artifacts on.
+- **The walks at the body check and the inline oracles lag,** as in D1669: their crew figures were read after the process had moved on.
+
+**Where the peak falls.** D1668's 5 ms sampler (`timeline_x.py`) ran D1669's release compiler and this one alternately, two runs each, from the session's scratch copy of `sc1m` (the shared fixture's sources):
+
+| workers | D1669: peak, when | this: peak, when | commit at the body check's end |
+|---|---|---|---|
+| 4 | 840 MB, 35-40 ms into the lowering | 798 MB, 34 ms in | 741 → 699 MB |
+| 8 | 1,169-1,171 MB, 62-73 ms in | 1,073-1,079 MB, 39-69 ms in | 1,009 → 911 MB |
+
+- **The peak is still at the start of the lowering,** and it falls by what the body check's end falls: 42 MB at `-j 4`, 92-98 at `-j 8`.
+- **The rise from the body check's end to the peak is unchanged:** 99 → 99 MB at `-j 4`, 160-162 → 162-168 at `-j 8`. The saving is all below the lowering, in the forks, and all of it lands at the peak.
+
+**Deviations from the plan.**
+
+- **The number.** The plan's B is this D1670.
+- **`TableWindow`** has B's fields only; the function fields are C's. `Checker.fork_id` is unchanged.
+- **`Crew`** holds `window: TableWindow`, with `on` for windows taken, instead of `windowed: bool`. The one-time copy is in `crew_windows` and the slicing in `worker_window`, not inline in `crew_begin`. The tail formulas moved into `parameter_tail` and `return_tail`, which the copy and the windows share.
+- **`fork_checker`'s guard** checks only the parameter and return counts. The `function_count == signature_function_count` test is made once, in `crew_windows`.
+- **A failed reservation** is not released (address only; no `os.release`).
+- **The fixture** carries B's image checks only; the `--instances` stream check is C's. Its artifact leg lists the artifacts in module order (main, `e.io`, `e.mem`, m1-m6, `e.os`, `e.str`, tmpl), the only order that links.
+- **No counter** of windowed forks; the re-pinned static gate is the detector (Review).
+
+**Not done or not measured.**
+
+- Linux commit per phase, where the Linux peak falls, and the Linux static figure were not measured, and `static-linux.json` is not re-pinned.
+- `live.py` was taken at `-j 4` only.
+- C (the function tables) is not started. By the plan's go/no-go, B measured inside its ranges and the `-j 8` peak is still at the lowering's start.
+
+---

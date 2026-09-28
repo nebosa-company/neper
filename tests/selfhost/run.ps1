@@ -884,6 +884,39 @@ foreach ($lowerResetMode in @('--release', '--time')) {
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $lowerResetPerturbed).Hash -ne $lowerResetHash) { throw "lower_reset at -j 1 is not the -j 3 --perturb image ($lowerResetMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $lowerResetLinked).Hash -ne $lowerResetHash) { throw "lower_reset at -j 1 is not the image linked from its artifacts ($lowerResetMode)" }
 }
+# A crew of two or more workers shares the program's parameter and return rows and
+# appends into a window of each worker's own (D1670), where `-j 1` copies them: six
+# modules append instances, a formatter, a sink and a `push_err` each, and the image
+# is one at `-j 1`, `-j 3 --perturb`, `-j 8` and the default, and linked from
+# `emit-em-all`'s artifacts, which no crew makes, in both modes. That windows are
+# taken at all is the static gate's to see: `sc500k` at eight workers falls by them.
+$crewWindows =Join-Path $PSScriptRoot 'fixtures\link\crew_windows\src\main.e'
+foreach ($crewWindowsMode in @('--release', '--time')) {
+    $crewWindowsOne = Join-Path $testBuild "crew-windows-j1$crewWindowsMode.exe"
+    $crewWindowsWritten = & $compiler emit-executable $crewWindows $repo 'x64' 'windows' $crewWindowsOne $crewWindowsMode -j 1 2>$null
+    if ($LASTEXITCODE -ne 0 -or $crewWindowsWritten -ne 'executable written') { throw "crew_windows at -j 1 failed ($crewWindowsMode)" }
+    $crewWindowsOutput = (& $crewWindowsOne) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $crewWindowsOutput -notmatch 'sum 2352') { throw "crew_windows at -j 1 exits $LASTEXITCODE ($crewWindowsMode): $crewWindowsOutput" }
+    $crewWindowsHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsOne).Hash
+    foreach ($crewWindowsJobs in @(@('-j', '3', '--perturb'), @('-j', '8'), @())) {
+        $crewWindowsImage = Join-Path $testBuild ("crew-windows" + ($crewWindowsJobs -join '') + "$crewWindowsMode.exe")
+        $crewWindowsBuilt = & $compiler emit-executable $crewWindows $repo 'x64' 'windows' $crewWindowsImage $crewWindowsMode @crewWindowsJobs 2>$null
+        if ($LASTEXITCODE -ne 0 -or $crewWindowsBuilt -ne 'executable written') { throw "crew_windows under '$crewWindowsJobs' failed ($crewWindowsMode)" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsImage).Hash -ne $crewWindowsHash) { throw "crew_windows under '$crewWindowsJobs' is not the -j 1 image ($crewWindowsMode)" }
+    }
+    $crewWindowsArtifacts = Join-Path $testBuild "crew-windows-artifacts$crewWindowsMode"
+    if (Test-Path -LiteralPath $crewWindowsArtifacts) { Remove-Item -LiteralPath $crewWindowsArtifacts -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $crewWindowsArtifacts | Out-Null
+    $crewWindowsFlags = @()
+    if ($crewWindowsMode -eq '--release') { $crewWindowsFlags = @('--release') }
+    $crewWindowsArtifactsWritten = & $compiler emit-em-all $crewWindows $repo 'x64' 'windows' $crewWindowsArtifacts @crewWindowsFlags
+    if ($LASTEXITCODE -ne 0 -or $crewWindowsArtifactsWritten -ne 'compiled modules written') { throw "crew_windows artifact emission failed ($crewWindowsMode)" }
+    $crewWindowsList = @('main', 'e.io', 'e.mem', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'e.os', 'e.str', 'tmpl') | ForEach-Object { Join-Path $crewWindowsArtifacts "$_.x64-windows.em" }
+    $crewWindowsLinked = Join-Path $testBuild "crew-windows-from-artifacts$crewWindowsMode.exe"
+    $crewWindowsLinkWritten = & $compiler link-em $crewWindowsLinked @crewWindowsList
+    if ($LASTEXITCODE -ne 0 -or $crewWindowsLinkWritten -ne 'artifact executable written') { throw "crew_windows compiled modules did not link ($crewWindowsMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsLinked).Hash -ne $crewWindowsHash) { throw "crew_windows at -j 1 is not the image linked from its artifacts ($crewWindowsMode)" }
+}
 # An `@import` extern reached from a sequence's or tagged union's supplied `cmp` and
 # `hash` binds its library from its declaration in every module (D1664). Nothing calls
 # `point_cmp` by name, so an unbound call fails the link as "no artifact defines", and

@@ -868,6 +868,34 @@ for lower_reset_mode in --release --time; do
     [ "$($test_build/neper-self link-em "$test_build/lower-reset-from-artifacts$lower_reset_mode" "$lower_reset_artifacts/main.x64-linux.em" "$lower_reset_artifacts/m1.x64-linux.em" "$lower_reset_artifacts/m2.x64-linux.em" "$lower_reset_artifacts/m3.x64-linux.em")" = 'artifact executable written' ]
     cmp "$test_build/lower-reset-j1$lower_reset_mode" "$test_build/lower-reset-from-artifacts$lower_reset_mode"
 done
+# A crew of two or more workers shares the program's parameter and return rows and
+# appends into a window of each worker's own (D1670), where `-j 1` copies them: six
+# modules append instances, a formatter, a sink and a `push_err` each, and the image
+# is one at `-j 1`, `-j 3 --perturb`, `-j 8` and the default, and linked from
+# `emit-em-all`'s artifacts, which no crew makes, in both modes. That windows are
+# taken at all is the static gate's to see: `sc500k` at eight workers falls by them.
+crew_windows="$repo/tests/selfhost/fixtures/link/crew_windows/src/main.e"
+for crew_windows_mode in --release --time; do
+    crew_windows_one="$test_build/crew-windows-j1$crew_windows_mode"
+    [ "$($test_build/neper-self emit-executable "$crew_windows" "$repo" x64 linux "$crew_windows_one" $crew_windows_mode -j 1 2>/dev/null)" = 'executable written' ]
+    chmod +x "$crew_windows_one"
+    "$crew_windows_one" | grep -q '^sum 2352$'
+    for crew_windows_jobs in '-j 3 --perturb' '-j 8' ''; do
+        crew_windows_image="$test_build/crew-windows$(echo "$crew_windows_jobs" | tr -d ' ')$crew_windows_mode"
+        [ "$($test_build/neper-self emit-executable "$crew_windows" "$repo" x64 linux "$crew_windows_image" $crew_windows_mode $crew_windows_jobs 2>/dev/null)" = 'executable written' ]
+        cmp "$crew_windows_one" "$crew_windows_image"
+    done
+    crew_windows_artifacts="$test_build/crew-windows-artifacts$crew_windows_mode"
+    rm -rf "$crew_windows_artifacts"
+    mkdir -p "$crew_windows_artifacts"
+    crew_windows_flag=
+    [ "$crew_windows_mode" = --release ] && crew_windows_flag=--release
+    [ "$($test_build/neper-self emit-em-all "$crew_windows" "$repo" x64 linux "$crew_windows_artifacts" $crew_windows_flag)" = 'compiled modules written' ]
+    crew_windows_list=
+    for crew_windows_module in main e.io e.mem m1 m2 m3 m4 m5 m6 e.os e.str tmpl; do crew_windows_list="$crew_windows_list $crew_windows_artifacts/$crew_windows_module.x64-linux.em"; done
+    [ "$($test_build/neper-self link-em "$test_build/crew-windows-from-artifacts$crew_windows_mode" $crew_windows_list)" = 'artifact executable written' ]
+    cmp "$crew_windows_one" "$test_build/crew-windows-from-artifacts$crew_windows_mode"
+done
 # An `@import` extern reached from a sequence's or tagged union's supplied `cmp` and
 # `hash` binds its library from its declaration in every module (D1664). Nothing calls
 # `point_cmp` by name, so an unbound call fails the link as "no artifact defines", and
