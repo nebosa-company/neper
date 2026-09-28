@@ -1876,7 +1876,8 @@
     "x_mysql",
     "x_odbc",
     "x_postgresql",
-    "x_sqlite"
+    "x_sqlite",
+    "x_tds"
    ]
   },
   {

@@ -297,7 +297,9 @@ fn fill_client_hello(config: ClientConfig, out: []u8, secret: *kx.X25519SecretKe
     try put_extension(out, &at, 43usize, versions[0..])
     let groups: [4]u8 = [4]u8{ 0, 2, 0, 29 }
     try put_extension(out, &at, 10usize, groups[0..])
-    let signatures: [6]u8 = [6]u8{ 0, 4, 8, 7, 4, 3 }
+    // ed25519, ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256 for CertificateVerify, and
+    // rsa_pkcs1_sha256 for an RSA certificate's own signature (RFC 8446 4.2.3).
+    let signatures: [10]u8 = [10]u8{ 0, 8, 8, 7, 4, 3, 8, 4, 4, 1 }
     try put_extension(out, &at, 13usize, signatures[0..])
     var share: [38]u8 = zero
     share[1] = 36u8
@@ -684,7 +686,8 @@ fn build_certificate_verify(secret: sign.Ed25519SecretKey, transcript_hash: [32]
     ret (72usize, ok)
 }
 
-fn verify_certificate_verify(leaf: x509.Certificate, transcript_hash: [32]u8, message: []const u8) -> err {
+// `a` holds an RSA check's big-number scratch; it is reset before returning.
+fn verify_certificate_verify(a: *mem.Arena, leaf: x509.Certificate, transcript_hash: [32]u8, message: []const u8) -> err {
     if message.len < 8usize || message[0] != 15u8 { ret Protocol }
     let body_len = (usize(message[1]) << 16usize) | (usize(message[2]) << 8usize) | usize(message[3])
     let signature_len = (usize(message[6]) << 8usize) | usize(message[7])
@@ -700,6 +703,14 @@ fn verify_certificate_verify(leaf: x509.Certificate, transcript_hash: [32]u8, me
     case .P256 as public:
         if message[4] != 4u8 || message[5] != 3u8 { ret Protocol }
         if sign.p256_verify(public, input[0..], message[8usize..]) { ret ok }
+        ret InvalidCertificate
+    case .Rsa as public:
+        // rsa_pss_rsae_sha256 (0x0804): TLS 1.3 signs with PSS even for an rsaEncryption key.
+        if message[4] != 8u8 || message[5] != 4u8 { ret Protocol }
+        let mark = mem.mark(a)
+        let valid = sign.rsa_pss_verify(a, public.modulus, public.exponent, input[0..], message[8usize..])
+        mem.reset(a, mark)
+        if valid { ret ok }
         ret InvalidCertificate
     default:
         ret Unsupported
@@ -1005,14 +1016,20 @@ fn client_handshake(state: *State) -> err {
     hash.sha256_update(&transcript, message[..extensions_len])
     let (certificate_len, certificate_error) = read_handshake_message(&server_messages, message[0..])
     if certificate_error != ok { ret certificate_error }
-    let (certificates, parse_certificate_error) = parse_certificate_message(state.arena, message[..certificate_len])
+    // The parsed chain holds views of these bytes (an RSA key is its certificate's own
+    // modulus and exponent), and `message` is reused for CertificateVerify, so the
+    // certificates are parsed from a copy that outlives it (D1644).
+    let (kept_certificate, kept_error) = mem.alloc[u8](state.arena, certificate_len)
+    if kept_error != ok { ret kept_error }
+    mem.copy[u8](kept_certificate, message[..certificate_len])
+    let (certificates, parse_certificate_error) = parse_certificate_message(state.arena, kept_certificate)
     if parse_certificate_error != ok { ret parse_certificate_error }
     let verify_chain_error = verify_certificate_set(state.arena, certificates, state.client_config)
     if verify_chain_error != ok { ret verify_chain_error }
     hash.sha256_update(&transcript, message[..certificate_len])
     let (certificate_verify_len, certificate_verify_error) = read_handshake_message(&server_messages, message[0..])
     if certificate_verify_error != ok { ret certificate_verify_error }
-    let verify_signature_error = verify_certificate_verify(certificates.leaf, transcript_digest(transcript), message[..certificate_verify_len])
+    let verify_signature_error = verify_certificate_verify(state.arena, certificates.leaf, transcript_digest(transcript), message[..certificate_verify_len])
     if verify_signature_error != ok { ret verify_signature_error }
     hash.sha256_update(&transcript, message[..certificate_verify_len])
     let (server_finished_len, server_finished_error) = read_handshake_message(&server_messages, message[0..])
@@ -1176,6 +1193,19 @@ fn handshake_with_control(stream: *Stream, control: cancel.Control) -> err {
     ret run_handshake(stream)
 }
 
+// Whether a handshake record holds only whole NewSessionTicket (4) messages.
+fn only_session_tickets(record: []const u8) -> bool {
+    if record.len == 0usize { ret false }
+    var at = 0usize
+    while at < record.len {
+        if at + 4usize > record.len || record[at] != 4u8 { ret false }
+        let body = (usize(record[at + 1usize]) << 16usize) | (usize(record[at + 2usize]) << 8usize) | usize(record[at + 3usize])
+        if at + 4usize + body > record.len { ret false }
+        at += 4usize + body
+    }
+    ret true
+}
+
 fn stream_read(ctx: *void, dst: []u8) -> (usize, err) {
     let state = mem.cast[*State](ctx)
     if state.closed || state.failed || !state.complete { ret (0usize, Closed) }
@@ -1194,6 +1224,10 @@ fn stream_read(ctx: *void, dst: []u8) -> (usize, err) {
             state.peer_closed = true
             ret (0usize, io.End)
         }
+        // A server may send NewSessionTicket messages after the handshake (RFC 8446 4.6.1).
+        // This client resumes nothing, so they are read past; any other post-handshake
+        // message (KeyUpdate included) is still a protocol error (D1644).
+        if content_type == 22u8 && only_session_tickets(state.read_buffer[..length]) { continue }
         if content_type != 23u8 {
             state.failed = true
             ret (0usize, Protocol)

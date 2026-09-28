@@ -5616,13 +5616,14 @@ sampling.
 ### `e.crypto.x509`
 
 ```neper
-type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey, P256: sign.P256PublicKey, Unsupported: []const u8 }
+type RsaPublicKey = struct { modulus: []const u8, exponent: []const u8 }
+type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey, P256: sign.P256PublicKey, Unsupported: []const u8, Rsa: RsaPublicKey }
 type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool }
 type Pool = struct { certificates: []const Certificate }
 type VerifyOptions = struct { roots: Pool, intermediates: Pool, dns_name: str, now: time.Instant, usage: KeyUsage, max_depth: u16 }
 type KeyUsage = enum u8 { ServerAuth, ClientAuth, CodeSigning, EmailProtection, Any }
 type Chain = struct { certificates: []const Certificate }
-type SignatureAlgorithm = enum u8 { Ed25519, EcdsaSha256, Unsupported }
+type SignatureAlgorithm = enum u8 { Ed25519, EcdsaSha256, Unsupported, RsaSha256 }
 type Sct = struct { version: u8, log_id: [32]u8, timestamp: u64, extensions: []const u8, hash_algorithm: u8, signature_algorithm: u8, signature: []const u8 }
 error InvalidCertificate
 error UnknownAuthority
@@ -5643,12 +5644,14 @@ fn render_name(a: *mem.Arena, name: asn1.Value) -> (str, err)
 fn two_digits(text: []const u8, at: usize) -> (i64, bool)
 fn parse_time(value: asn1.Value) -> (time.Instant, err)
 fn signature_algorithm(value: asn1.Value) -> (SignatureAlgorithm, err)
+fn rsa_public_key(der: []const u8) -> (RsaPublicKey, err)
+fn unsigned_integer(content: []const u8) -> []const u8
 fn signed_parts(der: []const u8) -> ([]const u8, []const u8, SignatureAlgorithm, []const u8, err)
 fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err)
 fn parse_dns_names(a: *mem.Arena, content: []const u8) -> ([]const str, err)
 fn parse_pem(a: *mem.Arena, source: str) -> ([]const Certificate, err)
 fn pool(a: *mem.Arena, certificates: []const Certificate) -> Pool
-fn verify_signature(certificate: Certificate, issuer: Certificate) -> err
+fn verify_signature(a: *mem.Arena, certificate: Certificate, issuer: Certificate) -> err
 fn same_der(a: []const u8, b: []const u8) -> bool
 fn dns_match(pattern: str, name: str) -> bool
 fn usage_oid(usage: KeyUsage) -> [8]u8
@@ -8351,22 +8354,23 @@ and tested against published protocol and malformed-peer vectors.
 The release contract must name its cipher suites, signature/certificate algorithms,
 key schedule and entropy requirements; reporting merely TLS 1.3 is insufficient.
 HKDF/HMAC come from reviewed e.crypto.kdf/e.crypto.mac surfaces. SHA-384-based suites
-cannot be advertised until SHA-384/HKDF-SHA384 exists. Ed25519 and P-256/SHA-256 do
-not establish compatibility with RSA, P-384 or other public-Web certificate chains;
-those profiles require explicit reviewed additions or remain unsupported.
+cannot be advertised until SHA-384/HKDF-SHA384 exists. Ed25519, P-256/SHA-256 and
+RSA/SHA-256 do not establish compatibility with P-384 or other public-Web certificate
+chains; those profiles require explicit reviewed additions or remain unsupported.
 Do not silently weaken certificate/hostname verification to improve connectivity.
 Entropy seeds require sufficient fresh caller entropy per independent handshake;
 copied/reused config bytes are not permission to repeat ephemeral randomness.
 
 The delivered profile is TLS 1.3 with `TLS_AES_128_GCM_SHA256`, X25519 key exchange,
-Ed25519 plus ECDSA P-256/SHA-256 verification, and X.509 chains supplied as concatenated
-DER (leaf first for a server, roots for a client). Server private keys remain Ed25519
-PKCS#8 under RFC 8410. The SHA-256 key
+Ed25519 plus ECDSA P-256/SHA-256 verification, RSA verification for a client (a server's
+`rsa_pss_rsae_sha256` CertificateVerify and `sha256WithRSAEncryption` certificate
+signatures, D1644), and X.509 chains supplied as concatenated DER (leaf first for a server,
+roots for a client). Server private keys remain Ed25519 PKCS#8 under RFC 8410. The SHA-256 key
 schedule composes `e.crypto.kdf`/`e.crypto.mac`; each independent handshake requires
 at least 64 fresh caller bytes, split into its random and ephemeral secret. Certificate
-messages are capped at 16 KiB and verified to depth eight. RSA, P-384, SHA-384 suites,
-client certificates, PSK, resumption, 0-RTT and post-handshake authentication are
-unsupported. Constructors remain inert; `reader` and `writer` expose no plaintext
+messages are capped at 16 KiB and verified to depth eight. RSA server keys, P-384,
+SHA-384 suites, client certificates, PSK, resumption, 0-RTT and post-handshake
+authentication are unsupported; a NewSessionTicket after the handshake is read past. Constructors remain inert; `reader` and `writer` expose no plaintext
 until `handshake` succeeds, and `close` exchanges an authenticated close notification.
 
 ### `e.net.http.auth`
@@ -8869,8 +8873,9 @@ fn rollback(transaction: *Transaction) -> err
 
 `e.db` defines the generic SQL connection, prepared-statement, transaction and
 streaming row-reader contract. Concrete database drivers are owner-qualified
-packages—`x.sqlite.sqlite`, `x.oracle.mysql`, `x.postgresql.libpq`, and `x.microsoft.odbc`
-for any database with an ODBC driver; queries, parameters and row buffers are always explicit, and the module
+packages—`x.sqlite.sqlite`, `x.oracle.mysql`, `x.postgresql.libpq`, `x.microsoft.odbc`
+for any database with an ODBC driver, and `x.microsoft.tds`, which speaks SQL Server's TDS
+itself inside TLS 1.3; queries, parameters and row buffers are always explicit, and the module
 does not discover drivers or allocate hidden connection pools.
 
 ---

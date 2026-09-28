@@ -343,6 +343,10 @@ because toolchain-owned facilities use the domain namespaces above:
   host's driver manager (`odbc32.dll`, unixODBC). It is named for the owner of the API it
   programs against, as `x.khronos.*` is, not for either host's library (D1650). Delivered:
   [`x.microsoft.odbc`](packages/x.microsoft.odbc.md) under `lib/x/microsoft/`.
+- `x.microsoft.tds`: the `e.db` driver for SQL Server, speaking Microsoft's Tabular Data
+  Stream itself inside TLS 1.3 (TDS 8.0 strict), with no client library. It is portable
+  source over `e.net` and `e.net.tls` (D1643). Delivered:
+  [`x.microsoft.tds`](packages/x.microsoft.tds.md) under `lib/x/microsoft/`.
 
 A package has no promised declarations until its own versioned specification pins its
 upstream ABI/data version and enumerates the complete surface. Compiler backends such

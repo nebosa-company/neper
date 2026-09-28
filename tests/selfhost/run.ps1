@@ -2805,6 +2805,24 @@ try {
     $env:PATH = $savedPath
     & (Join-Path $PSScriptRoot 'db_servers.ps1') stop $dbServers
 }
+# `x.microsoft.tds` against the CELVYX SQL Server 2025 instance over TDS 8.0 strict: sqlserver.ps1
+# starts it when it is stopped, creates the `neper` login and database, and stops it again (D1643).
+$tdsPath = Join-Path $testBuild 'x-tds-selfhost.exe'
+$tdsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_tds\src\main.e') $repo 'x64' 'windows' $tdsPath
+if ($LASTEXITCODE -ne 0 -or $tdsWritten -ne 'executable written') { throw 'x.microsoft.tds emission failed' }
+$sqlServer = Join-Path $testBuild 'sqlserver'
+try {
+    & (Join-Path $PSScriptRoot 'sqlserver.ps1') start $sqlServer
+    $tds = @{}
+    foreach ($line in Get-Content (Join-Path $sqlServer 'ports')) {
+        $key, $value = $line -split '=', 2
+        $tds[$key] = $value
+    }
+    & $tdsPath localhost $tds['tds_port'] $tds['tds_root'] $tds['tds_user'] $tds['tds_password']
+    if ($LASTEXITCODE -ne 0) { throw "the SQL Server driver answered wrongly: exit $LASTEXITCODE" }
+} finally {
+    & (Join-Path $PSScriptRoot 'sqlserver.ps1') stop $sqlServer
+}
 # D131's property: a program that uses `e.os` and opens no library needs no loader. It checks
 # itself -- it reads its own image and walks its own program headers -- so nothing here has to
 # have a dumper, and what is asserted is the file that was produced rather than what the compiler
