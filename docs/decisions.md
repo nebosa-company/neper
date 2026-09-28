@@ -30645,3 +30645,58 @@ A release build names no locals (section 13), and `add_debug_local` returns at o
 - The gate passes on both hosts. Against D1663's Windows pin, release goes from 2,959 to 2,933 MB (−26 MB) and debug from 2,236 to 2,235 MB. Linux is still held to D915's pin, and both modes are 2.1% under it, the memory work since D1660 included.
 
 ---
+
+## D1643 — `x.microsoft.tds`: SQL Server's own protocol, spoken inside TLS 1.3
+
+**Why.** The four `e.db` drivers reach SQL Server only through ODBC, and so only where Microsoft's ODBC driver is installed. SQL Server's wire protocol, TDS, is published ([MS-TDS]). Since 2022 it can run inside TLS from the first byte (TDS 8.0 "strict"), which `e.net.tls` already speaks. A driver in plain Neper needs no client library on either host.
+
+**Decision.**
+
+- **Name.** `x.microsoft.tds`, next to `x.microsoft.odbc`: Microsoft owns the protocol (D1650's rule). It is named for the protocol rather than the product, since Azure SQL and Fabric's SQL endpoints speak the same TDS.
+- **Encryption.** Strict only. TCP, then TLS 1.3 with ALPN `tds/8.0`, and only then PRELOGIN (ENCRYPTION `NOT_SUP`, because TLS is already the outer layer) and LOGIN7 with a SQL login. The server's certificate must chain to `Options.trust_roots` and name `host`.
+  - Empty roots are `CannotConnect` before anything is sent.
+  - A TLS failure is `e.net.tls`'s own error.
+  - A refused login (no LOGINACK) is `CannotConnect`.
+  - No path sends a login outside TLS, and nothing skips verification.
+- **Requests.**
+  - Text without parameters is a SQL batch.
+  - With parameters, `?` is rewritten to `@pN` and the text goes through `sp_executesql` (RPC 10). The walk skips strings, `"..."` and `[...]` identifiers, and comments, and `/* */` nests as T-SQL's does.
+  - Values travel as `bit`, `bigint`, `decimal(38,0)` (a `U64` past `i64`), `float`, `nvarchar(4000|max)`, `varbinary(8000|max)` and `datetime2(7)`.
+  - A NULL is written into the text as the literal `NULL`. A typed NULL parameter does not convert to every column: an `nvarchar` NULL into `varbinary` is error 257.
+- **Framing.** Each TDS packet is written as its own TLS record. SQL Server caps the TDS 8.0 packet size at 16192, under TLS's 16384-byte record, and drops a connection whose packet spans two records. The first version wrote a whole message at once, and every request past one packet (about 16 KB) failed with the connection reset and nothing in the error log.
+- **Replies.** Replies stream. Tokens and values are parsed across packet boundaries, with a copy only for a value that straddles one. A reader copies each value into its own buffer, valid until the next row, and serves `reader_next_borrowed` too (D1599). The connection is `Busy` while a reader is open. The end of the rows, or closing the reader, drains the reply.
+- **Affected rows.** The sum of DONE and DONEINPROC counts for commands other than `SELECT` (193).
+- **Transactions.** `BEGIN TRANSACTION` returns a descriptor in ENVCHANGE 8, and every request's ALL_HEADERS carries it. When SQL Server ends the transaction itself (ENVCHANGE 10 or 17: a deadlock victim, or `XACT_ABORT`), later calls answer `Aborted`.
+- **Errors.** Error numbers are mapped onto `e.db` (unique/FK/CHECK/NOT NULL → `Constraint`; 1205/1222 → `Busy`; syntax, missing objects, conversions → `InvalidQuery`). `detail` keeps the first ERROR token: number, state, severity, message.
+- **`prepare` sends nothing.** Compiling at prepare needs parameter types, and `db.Parameter` has none until execution. `sp_prepare` with guessed types (`nvarchar` for all) refuses valid text such as `TOP (?)`, so text that cannot run fails at its first execution.
+
+**Evidence.**
+
+- `link/x_tds` has about 150 checks, one exit code each. It passes on Linux against the `mssql-server` 2025 package in WSL (Developer, 127.0.0.1:14331, self-signed RSA certificate).
+- Three planted defects each failed at their own check: an NBCROW bitmap read MSB-first (45), a bracketed `?` taken for a placeholder (78), and a `SELECT` counted as affected rows (60).
+- Windows: the fixture compiles for Windows. The live run needs the CELVYX instance's strict-TLS certificate, which `tests/selfhost/sqlserver_tls.ps1` installs when run elevated.
+- The suites start and stop the servers with `tests/selfhost/sqlserver.{sh,ps1}`. On Linux, `stop` signals `sqlservr` itself, because systemd's stop waits 30 minutes in WSL. On Linux, `start` also waits until the `neper` login can open its database: the first run after a start hit the database while it was still recovering.
+
+---
+
+## D1644 — `e.net.tls` verifies RSA servers; a NewSessionTicket is read past
+
+**Why.** SQL Server's certificates are RSA: the self-signed one each instance makes, and any a CA issues. `e.net.tls` verified only Ed25519 and P-256, so D1643 could not reach a server. The handshake against the WSL server also found two faults that no loopback test between two Neper ends could reach.
+
+**Decision.**
+
+- **x509.**
+  - `x509` reads an `rsaEncryption` key (a NULL parameter, a positive modulus and exponent) as `PublicKey.Rsa`, appended last.
+  - It verifies `sha256WithRSAEncryption` signatures (a NULL parameter or none, RFC 4055) with `sign.rsa_pkcs1v15_verify`.
+  - `verify_signature` takes the arena, for the big-number scratch it marks and resets. `verify` passes its own.
+- **CertificateVerify.** An RSA leaf's CertificateVerify must be `rsa_pss_rsae_sha256` (0x0804), checked with `sign.rsa_pss_verify`. The PKCS#1 v1.5 codes are a `Protocol` error, as TLS 1.3 requires. The ClientHello now offers 0x0804 and 0x0401 after Ed25519 and P-256.
+- **The certificate message is copied into the arena before it is parsed.** Parsed certificates are views of their DER, and the handshake reads the next message into the same buffer. An RSA key's modulus and exponent are such views, so CertificateVerify checked against the bytes of the message that followed. The Ed25519 and P-256 keys had always been copied out whole, which is why no test saw it.
+- **NewSessionTicket.** After the handshake, a record holding only whole NewSessionTicket messages is read past, since nothing is resumed. Any other post-handshake message is still a protocol error. SQL Server sends tickets.
+
+**Evidence.**
+
+- `link/crypto_x509` (53–57): OpenSSL's self-signed RSA-2048 certificate parses and verifies itself, a flipped signature bit and cross-algorithm pairs are refused.
+- `link/net_tls` (50–54): OpenSSL's `rsa_pss_rsae_sha256` signature over a zero transcript verifies, a flipped bit is refused, the same signature under 0x0401 is `Protocol`, and the ticket filter accepts only whole tickets. Its offered signature list is pinned at the new ten bytes.
+- Both pass on both hosts, and D1643's fixture completes TLS 1.3 against SQL Server 2025.
+
+---

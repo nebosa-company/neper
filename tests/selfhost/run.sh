@@ -2464,6 +2464,22 @@ if [ "$db_status" -ne 0 ]; then
     echo "a database driver fixture failed: exit $db_status" >&2
     exit 1
 fi
+# `x.microsoft.tds` against SQL Server 2025 (the mssql-server package) over TDS 8.0 strict:
+# sqlserver.sh starts it on 127.0.0.1:14331 when it is stopped, and stops it again (D1643).
+tds_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_tds/src/main.e" "$repo" x64 linux "$test_build/x-tds-selfhost")
+[ "$tds_written" = 'executable written' ]
+chmod +x "$test_build/x-tds-selfhost"
+sql_server=/tmp/neper-sqlserver-$$
+bash "$repo/tests/selfhost/sqlserver.sh" start "$sql_server"
+. "$sql_server/ports"
+tds_status=0
+"$test_build/x-tds-selfhost" localhost "$tds_port" "$tds_root" "$tds_user" "$tds_password" || tds_status=$?
+bash "$repo/tests/selfhost/sqlserver.sh" stop "$sql_server"
+rm -rf "$sql_server"
+if [ "$tds_status" -ne 0 ]; then
+    echo "the SQL Server driver fixture failed: exit $tds_status" >&2
+    exit 1
+fi
 # D131's property: a program that uses `e.os` and opens no library needs no loader. It checks
 # itself -- it reads its own image and walks its own program headers -- so nothing here has to
 # have `readelf`, and what is asserted is the file that was produced rather than what the
