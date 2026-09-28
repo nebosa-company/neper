@@ -202,8 +202,8 @@
    "module": "e.crypto.aead",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 36,
-   "delivered": 36,
+   "catalogue": 52,
+   "delivered": 52,
    "pending": [],
    "fixtures": [
     "crypto_aead",
@@ -272,8 +272,8 @@
    "module": "e.crypto.x509",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 43,
-   "delivered": 43,
+   "catalogue": 46,
+   "delivered": 46,
    "pending": [],
    "fixtures": [
     "crypto_x509",
@@ -679,7 +679,8 @@
     "ui_selection3_v2",
     "ui_shell_ops",
     "ui_taskbar",
-    "x_sqlite"
+    "x_sqlite",
+    "x_tds"
    ]
   },
   {
