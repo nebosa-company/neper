@@ -1844,7 +1844,7 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *
 // dispatches to the @test named by its index in argv, returning that test's `err` -- so the
 // runtime prints `error: ...` and exits 1 for a failure, and a trap aborts for a crash.
 fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize, timeout_ns: usize, main_name: lex.Token, has_main: bool) -> ([]u8, err) {
-    var size = text.len + 4096usize
+    var size = text.len + 8192usize
     var at = 0usize
     while at < count {
         size += names[at].len + 128usize
@@ -1881,7 +1881,11 @@ fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize, t
     }
     // The dispatch chain lives in its own function and main has a single `ret`: an early
     // return plus the chain plus the watchdog put main past what lowering would take (D246).
-    written = nptest_append(buffer, written, "    ret ok\n}\nfn main(a: *mem.Arena, args: []str) -> err {\n    var nptest_result = ok\n    if args.len >= 2usize {\n        var nptest_guard: NptestGuard = zero\n        let (nptest_watch, nptest_watch_error) = nptest_os.thread_create[NptestGuard](nptest_watchdog, &nptest_guard, 1048576usize)\n        nptest_result = nptest_dispatch(a, args[1usize])\n        nptest_atomic.store(&nptest_guard.done, 1u32, .Release)\n        nptest_os.wake_one_u32(&nptest_guard.done)\n        if nptest_watch_error == ok {\n            let nptest_joined = nptest_os.thread_join(nptest_watch)\n        }\n    }\n    ret nptest_result\n}\n")
+    written = nptest_append(buffer, written, "    ret ok\n}\nfn main(a: *mem.Arena, args: []str) -> err {\n    var nptest_result = ok\n    if args.len >= 2usize {\n        var nptest_guard: NptestGuard = zero\n        let (nptest_watch, nptest_watch_error) = nptest_os.thread_create[NptestGuard](nptest_watchdog, &nptest_guard, 1048576usize)\n        nptest_result = nptest_dispatch(a, args[1usize])\n        nptest_report_message(nptest_result)\n        nptest_atomic.store(&nptest_guard.done, 1u32, .Release)\n        nptest_os.wake_one_u32(&nptest_guard.done)\n        if nptest_watch_error == ok {\n            let nptest_joined = nptest_os.thread_join(nptest_watch)\n        }\n    }\n    ret nptest_result\n}\n")
+    // A failed assertion's message (T005): `e.test` keeps it in its record, and the root
+    // hands it to `neper test` on stderr between two 0x1E bytes, which the parent lifts
+    // out into the record's `message`. The `use` is last so the operand stays two lines down.
+    written = nptest_append(buffer, written, "fn nptest_report_message(result: err) {\n    if result == ok || nptest_test.current.message.len == 0usize { ret }\n    let (nptest_head, nptest_head_error) = nptest_os.write(nptest_os.stderr(), \"\\x1enptest-message:\")\n    let (nptest_body, nptest_body_error) = nptest_os.write(nptest_os.stderr(), nptest_test.current.message)\n    let (nptest_tail, nptest_tail_error) = nptest_os.write(nptest_os.stderr(), \"\\x1e\\n\")\n}\nuse e.test as nptest_test\n")
     ret (buffer[0usize..written], ok)
 }
 
@@ -2551,7 +2555,9 @@ fn test_command(a: *mem.Arena, given: []str) -> err {
         var outcome = 0usize
         if status != 0i32 {
             outcome = 2usize
-            if child_err.len >= 7usize && same(child_err[0usize..7usize], "error: ") { outcome = 1usize }
+            // Read past the failed assertion's message the root wrote first (T005).
+            let (_, child_rest) = tool.test_message(a, child_err)
+            if child_rest.len >= 7usize && same(child_rest[0usize..7usize], "error: ") { outcome = 1usize }
             // The watchdog's own exit code, so a test still running at the deadline.
             if status == 124i32 { outcome = 3usize }
         }

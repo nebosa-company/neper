@@ -30947,3 +30947,18 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 - `link/asset_invalid`'s message is unchanged.
 - The conformance goldens are unchanged.
 - The code count is unchanged, so the LLM card is current.
+
+## D1684 — A failed assertion's message reaches the test record (T005)
+
+**Decision.** Spec section 13 has `e.test` hold a hidden record the synthesized root points it at, and the test's JSON carry the failed helper's `msg`.
+
+- **The record.** Each test is a process of its own (D240), so the record is one module slot: `type Record = struct { message: str }` and `var current: Record = zero`. `assert`, `eq`, `near` and `fail` set `current.message` when they return `Failed`. The fence in `docs/module-apis.md` names both declarations, and the surface check passes.
+- **The root.** The generated runner calls `nptest_report_message(result)` after the test. When the test failed and a message was set, it writes the message to stderr between two 0x1E bytes, marked `nptest-message:`. The runner's `use e.test as nptest_test` goes at its end, which the grammar allows, so the operand stays two lines down and every map and golden offset is unchanged.
+- **The parent.** `neper test` lifts the marked message out of the child's stderr before classifying the outcome. Otherwise a failed test whose stderr no longer began with `error: ` read as crashed. The record's `message` is the text, `null` otherwise, and `stderr` is what the test itself and the runtime wrote.
+
+**Evidence.**
+
+- `tools/test_message` pins `"outcome":"failed","error":"e.test.Failed","message":"one and one make two"` beside a passing `test.eq` with `"message":null`, in both suites.
+- The golden is byte-equal on Linux, and `tools/test`'s golden is unchanged on both hosts.
+
+**Not yet.** A test calling the operand's own `main` needs a seam per call site in the runner's map, beyond the eight mappings T015 lists.

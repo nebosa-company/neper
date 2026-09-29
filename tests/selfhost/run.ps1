@@ -6321,6 +6321,12 @@ if ($LASTEXITCODE -ne 1) { throw "test --json exited $LASTEXITCODE, expected 1" 
 # The crashed test's stderr spells the runner by WORKDIR (D253): normalise that too.
 [IO.File]::WriteAllText($testActual, ([IO.File]::ReadAllText($testActual) -replace '"duration_ms":\d+', '"duration_ms":0' -replace [regex]::Escape($testBuild.Replace('\', '/') + '/nptest-runner.e'), 'nptest-runner.e'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test.expected.jsonl')).Hash) { throw "test --json differs from the conformance corpus" }
+# A failed `test.assert`'s message is the record's `message` (T005).
+$testMessageActual = Join-Path $testBuild 'conformance-tools-test-message.jsonl'
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_message.e')`" `"$repo`" x64 windows `"$($testBuild.Replace('\', '/'))`" --json > `"$testMessageActual`""
+if ($LASTEXITCODE -ne 1) { throw "test --json on test_message.e exited $LASTEXITCODE, expected 1" }
+[IO.File]::WriteAllText($testMessageActual, ([IO.File]::ReadAllText($testMessageActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testMessageActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_message.expected.jsonl')).Hash) { throw "a failed assertion's message is not the test record's" }
 # `test --json --only n1,n2` (D424, H10): the named tests alone, the rest not run.
 $testOnlyActual = Join-Path $testBuild 'conformance-tools-test-only.jsonl'
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test.e')`" `"$repo`" x64 windows `"$($testBuild.Replace('\', '/'))`" --json --only arithmetic_holds,reports_a_failure > `"$testOnlyActual`""

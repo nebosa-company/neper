@@ -7268,6 +7268,10 @@ allocates a host arena implicitly.
 ```neper
 error Failed
 
+type Record = struct { message: str }
+
+var current: Record = zero
+
 fn assert(cond: bool, msg: str) -> err
 fn eq[T: type](a: T, b: T, msg: str) -> err
 fn near(a: f64, b: f64, abs: f64, rel: f64, msg: str) -> err
