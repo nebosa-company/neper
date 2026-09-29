@@ -4955,20 +4955,19 @@ fn json_str_after(line: str, key: str) -> str {
 
 // Section 8's source map beside the operand, `<file>.map.json`: absent is no map; present,
 // its hash must be the operand's bytes or the map is stale -- E-TOOL-0001, and the
-// command fails before analysis (D264). ponytail: a key scan over the one document shape
-// this compiler's own generator writes, not a JSON reader; e.fmt.json would cost the
-// bootstrap decls it has no room for.
+// command fails before analysis (D264). The map is read member by member (D1714), so
+// any generator's JSON serves -- spaced, indented, its keys in any order, its strings
+// escaped; e.fmt.json would cost the bootstrap decls it has no room for.
 // Whether a version 2 map's generator input is present and has the hash the map
 // recorded (D418): what tells a hand edit of the generated file from a stale map.
 fn map_input_unchanged(a: *mem.Arena, document: str, operand: str) -> bool {
-    let generator_at = json_key_at(document, "\"generator\":{")
-    if generator_at >= document.len { ret false }
-    let generator = document[generator_at..document.len]
-    let input_name = json_str_after(generator, "\"input\":\"")
-    let input_hash = json_str_after(generator, "\"input_sha256\":\"")
-    let inputs_key = "\"inputs\":["
+    let generator = json_member(document, "generator")
+    if generator.len == 0usize { ret false }
+    let (input_name, input_name_error) = json_unescaped_after(a, json_member(generator, "input"), "\"")
+    if input_name_error != ok { ret false }
+    let input_hash = json_str_after(json_member(generator, "input_sha256"), "\"")
     let has_single = input_name.len != 0usize
-    if !has_single && json_key_at(generator, inputs_key) >= generator.len { ret false }
+    if !has_single && json_member(generator, "inputs").len == 0usize { ret false }
     if has_single {
         if input_hash.len != 64usize { ret false }
         let (input_path, input_path_error) = with_suffix(a, dirname(operand), input_name)
@@ -4989,30 +4988,22 @@ fn map_input_unchanged(a: *mem.Arena, document: str, operand: str) -> bool {
 // every input is as recorded, 1 when one is missing, 2 when one changed or is
 // malformed, with the input's path; a map without `inputs` is 0.
 fn map_inputs_status(a: *mem.Arena, generator: str, operand: str) -> (usize, str) {
-    let inputs_key = "\"inputs\":["
-    let inputs_at = json_key_at(generator, inputs_key)
-    if inputs_at >= generator.len { ret (0usize, "") }
-    var end = inputs_at
-    while end < generator.len && generator[end] != 93u8 { end += 1usize }
-    let array = generator[inputs_at..end]
+    let array = json_member(generator, "inputs")
     var scan = 0usize
-    while scan < array.len {
-        if array[scan] == 123u8 {
-            var close = scan
-            while close < array.len && array[close] != 125u8 { close += 1usize }
-            let entry = array[scan..close]
-            let name = json_str_after(entry, "\"path\":\"")
-            let hash = json_str_after(entry, "\"sha256\":\"")
-            if name.len == 0usize || hash.len != 64usize { ret (2usize, name) }
+    while true {
+        let (start, close, found) = json_next_object(array, scan)
+        if !found { break }
+        let entry = array[start..close]
+        let (name, name_error) = json_unescaped_after(a, json_member(entry, "path"), "\"")
+        let hash = json_str_after(json_member(entry, "sha256"), "\"")
+        if name_error != ok || name.len == 0usize || hash.len != 64usize { ret (2usize, name) }
             let (input_path, input_path_error) = with_suffix(a, dirname(operand), name)
             if input_path_error != ok { ret (1usize, name) }
             let (input_text, input_error) = source.load(a, input_path)
             if input_error != ok { ret (1usize, name) }
-            let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
-            if input_digest_error != ok || !same(input_digest, hash) { ret (2usize, name) }
-            scan = close
-        }
-        scan += 1usize
+        let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
+        if input_digest_error != ok || !same(input_digest, hash) { ret (2usize, name) }
+        scan = close
     }
     ret (0usize, "")
 }
@@ -5033,10 +5024,10 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
     if map_path_error != ok { ret map_path_error }
     let (document, load_error) = source.load(a, map_path)
     if load_error != ok { ret ok }
-    var malformed = !same(json_str_after(document, "\"schema\":\""), "neper-source-map")
+    var malformed = !same(json_str_after(json_member(document, "schema"), "\""), "neper-source-map")
     let (digest, digest_error) = tool.manifest_sha256(a, text)
     if digest_error != ok { ret digest_error }
-    let stale = !same(json_str_after(document, "\"generated_sha256\":\""), digest)
+    let stale = !same(json_str_after(json_member(document, "generated_sha256"), "\""), digest)
     if malformed || stale {
         // Reported now, unmapped analysis after (D300): the caller ends the command.
         report.map_stale = true
@@ -5058,11 +5049,11 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
     // A version 2 map names its generator and the input it read (D373, H19): the
     // input's hash is checked, so a generated file whose input changed underneath it
     // is stale before its own hash says otherwise, and a missing input is named.
-    let generator_at = json_key_at(document, "\"generator\":{")
-    if generator_at < document.len {
-        let generator = document[generator_at..document.len]
-        let input_name = json_str_after(generator, "\"input\":\"")
-        let input_hash = json_str_after(generator, "\"input_sha256\":\"")
+    let generator = json_member(document, "generator")
+    if generator.len != 0usize {
+        let (input_name, input_name_error) = json_unescaped_after(a, json_member(generator, "input"), "\"")
+        if input_name_error != ok { ret input_name_error }
+        let input_hash = json_str_after(json_member(generator, "input_sha256"), "\"")
         if input_name.len != 0usize {
             let (input_path, input_path_error) = with_suffix(a, dirname(operand), input_name)
             if input_path_error != ok { ret input_path_error }
@@ -5090,7 +5081,9 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
         }
     }
     report.map_source = operand
-    report.map_count = read_mappings(report, document, 0usize, OPERAND_MAPPINGS)
+    let (map_count, map_count_error) = read_mappings(a, report, document, 0usize, OPERAND_MAPPINGS)
+    if map_count_error != ok { ret map_count_error }
+    report.map_count = map_count
     // The original's own map (D465, H19): followed one level, to the root original.
     if report.map_count != 0usize { try load_nested_map(a, report, operand) }
     ret ok
@@ -5114,17 +5107,19 @@ fn load_nested_map(a: *mem.Arena, report: *Sink, operand: str) -> err {
         let (nest_document, nest_load_error) = source.load(a, nest_map_path)
         if nest_load_error != ok { ret ok }
         let (nest_text, nest_text_error) = source.load(a, nest_file)
-        var nest_usable = nest_text_error == ok && same(json_str_after(nest_document, "\"schema\":\""), "neper-source-map")
+        var nest_usable = nest_text_error == ok && same(json_str_after(json_member(nest_document, "schema"), "\""), "neper-source-map")
         if nest_usable {
             let (nest_digest, nest_digest_error) = tool.manifest_sha256(a, nest_text)
             if nest_digest_error != ok { ret nest_digest_error }
-            nest_usable = same(json_str_after(nest_document, "\"generated_sha256\":\""), nest_digest)
+            nest_usable = same(json_str_after(json_member(nest_document, "generated_sha256"), "\""), nest_digest)
         }
         if !nest_usable {
             report.nest_stale[level] = true
             ret ok
         }
-        report.nest_counts[level] = read_mappings(report, nest_document, nest_base(level), 8usize)
+        let (nest_count, nest_count_error) = read_mappings(a, report, nest_document, nest_base(level), 8usize)
+        if nest_count_error != ok { ret nest_count_error }
+        report.nest_counts[level] = nest_count
         if report.nest_counts[level] == 0usize { ret ok }
         above = nest_base(level)
         level += 1usize
@@ -5165,46 +5160,99 @@ fn remap_span(report: *Sink, at: lex.Span, mapping: usize) -> lex.Span {
     ret moved
 }
 
-// A map's mappings into the tables from `base` (D264, D465): each `generated_span`'s
-// start, end and line, the `original_span`'s path, start and line, and the
-// mapping's `edit`; `limit` at most. The count read.
-fn read_mappings(report: *Sink, document: str, base: usize, limit: usize) -> usize {
+// A map's mappings into the tables from `base` (D264, D465, D1714): each
+// `generated_span`'s start, end, line and column, the `original_span`'s root, path,
+// start, line and column, and the mapping's `edit`; `limit` at most, a mapping with no
+// `generated_span` skipped. The count read.
+fn read_mappings(a: *mem.Arena, report: *Sink, document: str, base: usize, limit: usize) -> (usize, err) {
+    let mappings = json_member(document, "mappings")
     var count = 0usize
     var at = 0usize
-    let generated_key = "\"generated_span\":{"
-    while at + generated_key.len <= document.len && count < limit {
-        if same(document[at..at + generated_key.len], generated_key) {
-            let rest = document[at..document.len]
+    while count < limit {
+        let (start, end, found) = json_next_object(mappings, at)
+        if !found { break }
+        at = end
+        let mapping = mappings[start..end]
+        let generated = json_member(mapping, "generated_span")
+        if generated.len != 0usize {
+            let original = json_member(mapping, "original_span")
             let index = base + count
-            report.map_generated_start[index] = json_usize_after(rest, "\"byte_start\":")
-            report.map_generated_end[index] = json_usize_after(rest, "\"byte_end\":")
-            report.map_generated_line[index] = json_usize_after(rest, "\"line\":")
-            var original_at = 0usize
-            let original_key = "\"original_span\":{"
-            while original_at + original_key.len <= rest.len && !same(rest[original_at..original_at + original_key.len], original_key) { original_at += 1usize }
-            let original = rest[original_at..rest.len]
-            report.map_original_root[index] = json_str_after(original, "\"root\":\"")
-            report.map_original_path[index] = json_str_after(original, "\"path\":\"")
-            report.map_original_start[index] = json_usize_after(original, "\"byte_start\":")
-            report.map_original_line[index] = json_usize_after(original, "\"line\":")
-            report.map_generated_column[index] = json_usize_after(rest, "\"column\":")
-            report.map_generated_column_utf16[index] = json_usize_after(rest, "\"column_utf16\":")
-            report.map_original_column[index] = json_usize_after(original, "\"column\":")
-            report.map_original_column_utf16[index] = json_usize_after(original, "\"column_utf16\":")
-            // The mapping's `edit` (D373), read before the next mapping begins.
-            var object_end = json_key_at(rest[generated_key.len..rest.len], generated_key) + generated_key.len
-            if object_end > rest.len { object_end = rest.len }
-            let edit = json_str_after(rest[0usize..object_end], "\"edit\":\"")
+            report.map_generated_start[index] = nptest_parse_usize(json_member(generated, "byte_start"))
+            report.map_generated_end[index] = nptest_parse_usize(json_member(generated, "byte_end"))
+            report.map_generated_line[index] = nptest_parse_usize(json_member(generated, "line"))
+            report.map_generated_column[index] = nptest_parse_usize(json_member(generated, "column"))
+            report.map_generated_column_utf16[index] = nptest_parse_usize(json_member(generated, "column_utf16"))
+            let original_source = json_member(original, "source")
+            let (root, root_error) = json_unescaped_after(a, json_member(original_source, "root"), "\"")
+            if root_error != ok { ret (count, root_error) }
+            let (path, path_error) = json_unescaped_after(a, json_member(original_source, "path"), "\"")
+            if path_error != ok { ret (count, path_error) }
+            report.map_original_root[index] = root
+            report.map_original_path[index] = path
+            report.map_original_start[index] = nptest_parse_usize(json_member(original, "byte_start"))
+            report.map_original_line[index] = nptest_parse_usize(json_member(original, "line"))
+            report.map_original_column[index] = nptest_parse_usize(json_member(original, "column"))
+            report.map_original_column_utf16[index] = nptest_parse_usize(json_member(original, "column_utf16"))
+            let edit = json_str_after(json_member(mapping, "edit"), "\"")
             report.map_edit[index] = 0u8
             if same(edit, "direct") { report.map_edit[index] = 1u8 }
             if same(edit, "generator") { report.map_edit[index] = 2u8 }
             count += 1usize
-            at += generated_key.len
-        } else {
-            at += 1usize
         }
     }
-    ret count
+    ret (count, ok)
+}
+
+// The text of `object`'s own member `key` (D1714): whitespace between tokens allowed,
+// members in any order, a nested object's members not its own; "" when the object has
+// no such member or is not an object. ponytail: keys compare as written, so a key spelled
+// with escapes is not found; no source map key needs one.
+fn json_member(object: str, key: str) -> str {
+    var at = json_skip_space(object, 0usize)
+    if at >= object.len || object[at] != 123u8 { ret "" }
+    at += 1usize
+    while true {
+        at = json_skip_space(object, at)
+        if at >= object.len || object[at] != 34u8 { ret "" }
+        let name_end = json_value_end(object, at)
+        if name_end >= object.len { ret "" }
+        let name = object[at + 1usize..name_end - 1usize]
+        at = json_skip_space(object, name_end)
+        if at >= object.len || object[at] != 58u8 { ret "" }
+        let value_start = json_skip_space(object, at + 1usize)
+        let value_end = json_value_end(object, value_start)
+        if same(name, key) { ret object[value_start..value_end] }
+        at = json_skip_space(object, value_end)
+        if at >= object.len || object[at] != 44u8 { ret "" }
+        at += 1usize
+    }
+    ret ""
+}
+
+// Past JSON's whitespace from `at`.
+fn json_skip_space(text: str, at: usize) -> usize {
+    var here = at
+    while here < text.len && (text[here] == 32u8 || text[here] == 9u8 || text[here] == 10u8 || text[here] == 13u8) { here += 1usize }
+    ret here
+}
+
+// Just past the JSON value beginning at `at`: a string after its closing quote, an
+// object or array whole, a scalar at the next delimiter; `text.len` when it runs out.
+fn json_value_end(text: str, at: usize) -> usize {
+    if at >= text.len { ret text.len }
+    if text[at] == 123u8 || text[at] == 91u8 { ret json_object_end(text, at) }
+    var here = at
+    if text[at] == 34u8 {
+        here += 1usize
+        while here < text.len && text[here] != 34u8 {
+            if text[here] == 92u8 { here += 1usize }
+            here += 1usize
+        }
+        if here >= text.len { ret text.len }
+        ret here + 1usize
+    }
+    while here < text.len && json_skip_space(text, here) == here && text[here] != 44u8 && text[here] != 125u8 && text[here] != 93u8 { here += 1usize }
+    ret here
 }
 
 

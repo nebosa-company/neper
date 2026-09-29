@@ -31459,3 +31459,26 @@ The corpus goldens had recorded the wrong columns: `let` at column 5 of `generat
 - The goldens of `generated_map`, `combined_inputs`, `nested_map`, `nested_stale` and `nested_deep` change in their column fields and in nothing else: primary and intermediate spans move from column 5 to 1, the columns the input and the intermediate have.
 - `tools/test_main_line.e` pins an unknown type on the renamed `main`'s own line in both suites. It is now reported at column 40 of the operand, where the old compiler said 55, the runner's column.
 - `many_mappings`, `stale_generator`, `hand_edited`, `combined_stale` and `test_main_error` are unchanged.
+
+## D1714 — A source map is read member by member (T015)
+
+**Problem.** Source maps were read by a key scan, searching for `"schema":"` and `"byte_start":` as literal text. That only works on the one serialization the compiler's own generator writes.
+- A map written with a space after each colon has none of those substrings. Python's `json.dumps` does this by default, so the old compiler called such a map stale.
+- A mapping whose `original_span` came before its `generated_span` read as zeros.
+- An escaped path was taken as written, backslashes and all.
+
+Other generators are what section 8 is for, so any valid JSON map has to be read as its values say.
+
+**Decision.** Three helpers in `main.e`:
+- `json_member(object, key)` returns the text of an object's own member. It allows whitespace between tokens and members in any order, and it never answers from a nested object.
+- `json_value_end` and `json_skip_space` walk a value and the whitespace around it.
+
+Every map field is read through `json_member`: the schema, the hashes, the generator's input and `inputs`, each mapping's two spans and `edit`, and the nested maps' schema and hash. Strings that name files are unescaped with `json_unescaped_after`. A mapping with no `generated_span` is skipped.
+
+`e.fmt.json` stays out: the C bootstrap has no room for its declarations.
+
+Keys compare as written, so a key spelled with escapes is not found. No source map key needs one. This is marked `ponytail:` at `json_member`.
+
+**Evidence.**
+- `tools/pretty_map.e` has a map that is indented and spaced, with every object's keys reversed and the input's path written `pretty_map.input`. Its type error is reported at `pretty_map.input` 1:1 on both hosts. The old compiler reported the map as stale and the error unmapped.
+- All eleven earlier map fixtures and the four `test-file` map cases are byte-identical on both hosts.
