@@ -4039,6 +4039,9 @@ $externAltered = Join-Path $testBuild 'extern-manifest-altered.json'
 [IO.File]::WriteAllText($externAltered, ([IO.File]::ReadAllText($externManifestPath).Replace($externKernel[0].sha256, ('0' * 64))), (New-Object Text.UTF8Encoding($false)))
 $externCompared = & $compiler compare-manifests $externManifestPath $externAltered
 if ($LASTEXITCODE -ne 1 -or ($externCompared -join "`n") -notmatch 'library kernel32: ') { throw "compare-manifests did not hold kernel32 to its hash: $externCompared" }
+# Two errors whose qualified names hash alike refuse the build as E-LINK-9999 (T013).
+$collisionOutput = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\error_collision\src\main.e') $repo 'x64' 'windows' (Join-Path $testBuild 'error-collision.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($collisionOutput -join "`n") -notmatch 'error\[E-LINK-9999\]: error hash collision: `main\.Ea88a` and `main\.E16e68` have the same 32-bit FNV-1a value') { throw "an error hash collision was not refused as E-LINK-9999: $collisionOutput" }
 # 138 libc and libm imports (D1594): Linux-only to run, so here it is cross-emitted. Past about
 # 58 externs a module's unsafe inventory overflowed its buffer ("cannot lower `main`") on
 # either target, and the ELF linker refused anything past its one page of loader metadata.

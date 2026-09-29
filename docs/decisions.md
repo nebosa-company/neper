@@ -31248,3 +31248,13 @@ Everything else goes through the library's update, and its own slicing-by-8 tabl
 - Forty artifacts written by earlier compilers validate under the new code, so the checksum is the same.
 - The compiler's fixed point holds, and the C bootstrap's stage 1 builds a stage 2 byte-equal to it.
 - The suite's incremental-build section, about 600 lines of artifact reuse, passes.
+
+## D1702 — E-LINK-9999 is pinned by a real collision (T013)
+
+**Decision.** E-LINK-9999, an error hash collision, is pinned by a fixture.
+
+- Two errors whose qualified names share a 32-bit FNV-1a value refuse the build, naming both. It is the error table's check before lowering.
+- `link/error_collision` declares `main.Ea88a` and `main.E16e68`, both hashing to 1802975943. The pair was found by a birthday search over `main.E<hex>` names.
+- Both suites require exit 1 and the line naming both.
+
+**Evidence.** The same message comes out for the Windows and the Linux target.
