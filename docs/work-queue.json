@@ -273,10 +273,10 @@
       "group": "Tooling",
       "order": 22,
       "title": "Reproducible-build check",
-      "score": 0.85,
+      "score": 0.9,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Both suites check the compiler's fixed point -- stage 2 and stage 3 byte for byte -- and, since D261, that a program built twice is the same executable and that the second build's manifest carries the first's artifact SHA-256, so two builds can be compared by their manifests without the executables (D254 wrote the hash); `neper compare-manifests A B [--json]` (D482) is that comparison as a command -- identity, inputs, dependencies and artifacts by hash, not path -- and both suites hold two builds' manifests to agree and a debug one to differ from a release one by mode and artifact. Not yet: cross-host comparison (a Windows and a Linux build differ by design), and the dependency and library hashes the manifest does not yet carry"
+      "evidence": "Both suites check the compiler's fixed point -- stage 2 and stage 3 byte for byte -- and, since D261, that a program built twice is the same executable and that the second build's manifest carries the first's artifact SHA-256, so two builds can be compared by their manifests without the executables (D254 wrote the hash); `neper compare-manifests A B [--json]` (D482) is that comparison as a command -- identity, inputs, dependencies and artifacts by hash, not path -- and both suites hold two builds' manifests to agree and a debug one to differ from a release one by mode and artifact. The manifest carries every dependency's interface and body hash and, since D1685, every imported library's file hash; `compare-manifests` holds dependencies, libraries (requested name and SHA-256, not the resolved path) and assets to them (D1696), pinned by a zeroed kernel32 / libc.so.6 hash in both suites. Not yet: cross-host comparison (a Windows and a Linux build differ by design)"
     },
     {
       "id": "T023",

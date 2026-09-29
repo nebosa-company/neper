@@ -31137,3 +31137,20 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 **Fixed with it.** `ac3` (D856) started its ring queue's tail at `arcs`. A queue exactly `arcs` long passes the size check, and the first re-queued arc was then written one slot past the end (`trap[bounds]`). `ac2001` had copied the line. Both now wrap the tail to 0 when the queue starts full. The fixture had always passed a 64-entry queue; its check 11 now runs both with an exact 8-entry queue, trapping before the fix and passing after it on both hosts. The blog post's AC-2001 sample was what found it.
 
 ---
+
+## D1696 — `compare-manifests` holds libraries and assets to their hashes (T022)
+
+**Decision.** `compare-manifests` (D482) already held every input by path and hash, every dependency by module and both its interface and body hashes, and every artifact by kind, target and hash. It now also holds:
+
+- every library by its requested name and its file's SHA-256 (D1685);
+- every asset by its logical name and SHA-256.
+
+A library's `resolved` path is left out, as an artifact's is: it is where this machine found the file, not what the file is. A library neither side could resolve compares equal, both hashes being null.
+
+With this, T022's "dependency and library hashes the manifest does not yet carry" is answered: both are carried and compared.
+
+**Evidence.**
+
+- Two builds of `link/extern_import` agree.
+- A copy of the manifest with `kernel32`'s hash zeroed differs by `library kernel32: <hash> / 000…`, exit 1, on Windows. With `libc.so.6`'s zeroed, it differs the same way on Linux.
+- Pinned in both suites.
