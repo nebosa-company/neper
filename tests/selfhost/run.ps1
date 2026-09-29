@@ -5715,6 +5715,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainInstancesActual).Hash -
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index.expected.jsonl')).Hash) { throw "index --json differs from the conformance corpus" }
+# Comptime parameters are symbols, and `[N]T` names them (D1708, T009).
+$indexComptimeActual = Join-Path $testBuild 'conformance-tools-index-comptime.jsonl'
+cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index_comptime.e')`" `"$repo`" x64 windows --json > `"$indexComptimeActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexComptimeActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index_comptime.expected.jsonl')).Hash) { throw "index --json over comptime parameters differs from the conformance corpus" }
 # A resource closer is a semantic reference (D560, H17), though its contextual
 # `resource(close)` spelling is neither an expression nor an ordinary type use.
 $indexResource = & $compiler index-file (Join-Path $conformanceRoot 'tools/index_resource.e') $repo 'x64' 'windows' --json
