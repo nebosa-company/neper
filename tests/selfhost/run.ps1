@@ -3922,7 +3922,7 @@ foreach ($case in $protocolDiagnostics) {
 # to the rejection.
 $returnDiagnostics = @(
     @('return_type', 'main\.e:5:9: error\[E-TYPE-0002\]: the returned value does not have the declared return type'),
-    @('return_count', 'main\.e:4:5: error\[E-TYPE-0003\]: ret gives a different number of values than this function returns'),
+    @('return_count', 'main\.e:4:5: error\[E-TYPE-0003\]: ret gives 1 value and this function returns 2'),
     @('return_values_unexpected', 'main\.e:4:5: error\[E-TYPE-0003\]: this function returns nothing, so ret takes no value'),
     @('return_inside_defer', 'main\.e:5:9: error\[E-TYPE-9999\]: ret is not legal inside defer'),
     @('try_cast', 'main\.e:4:5: error\[E-ERROR-9999\]: try needs a call that can fail; a conversion cannot'),
@@ -3931,7 +3931,14 @@ $returnDiagnostics = @(
     @('try_inside_defer', 'main\.e:9:9: error\[E-ERROR-9999\]: try is not legal inside defer'),
     @('aggregate_field_count', 'main\.e:12:17: error\[E-TYPE-9999\]: this literal gives a different number of fields than `Bad` declares'),
     @('break_outside_loop', 'main\.e:5:5: error\[E-TYPE-9999\]: break requires an enclosing loop or switch'),
-    @('thread_create_context', 'main\.e:16:5: error\[E-TYPE-0002\]: type mismatch: expected `\*main\.Other`, found `\*main\.Ctx`')
+    @('thread_create_context', 'main\.e:16:5: error\[E-TYPE-0002\]: type mismatch: expected `\*main\.Other`, found `\*main\.Ctx`'),
+    # T028: what was an internal error name, now its subject under a code of its own.
+    @('argument_count', 'main\.e:4:5: error\[E-TYPE-0005\]: `take` takes 1 argument and this call gives 0'),
+    @('qualified_not_callable', 'main\.e:4:5: error\[E-NAME-0004\]: `d\.VALUE` is not a function, a conversion or a function value, so it cannot be called'),
+    @('invalid_operator', 'main\.e:2:22: error\[E-TYPE-0006\]: `\+` does not apply to the operands of `true \+ false`'),
+    @('call_result_ignored', 'main\.e:6:5: error\[E-TYPE-0007\]: the results of `value` are discarded'),
+    @('missing_context', 'main\.e:2:5: error\[E-TYPE-0001\]: a value in `let value = 1` has no type'),
+    @('tuple_annotation', 'main\.e:6:5: error\[E-TYPE-0008\]: a type, member or field in `let \(first, second\): i32 = pair\(\)` is not valid where it is written')
 )
 foreach ($case in $returnDiagnostics) {
     Require-Fixture ("check/" + $case[0])
@@ -4712,7 +4719,7 @@ foreach ($hotMode in @('--release', '--time')) {
     if ($LASTEXITCODE -ne 1) { throw "the clean build of the edited variadic_drop fixture did not exit 1 ($hotMode): $LASTEXITCODE" }
     $dropWarmError = @($dropWarm | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
     $dropCleanError = @($dropClean | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
-    if ($dropWarmError -ne $dropCleanError -or $dropWarmError -notmatch 'call\.e:5:5: error\[E-TYPE-9999\]: type checking failed: check\.ArgumentCount') { throw "the warm build after an extern lost its ``...`` is not the clean build's refusal ($hotMode): $dropWarmError" }
+    if ($dropWarmError -ne $dropCleanError -or $dropWarmError -notmatch 'call\.e:5:9: error\[E-TYPE-0005\]: `plat\.ident` takes 1 argument and this call gives 2') { throw "the warm build after an extern lost its ``...`` is not the clean build's refusal ($hotMode): $dropWarmError" }
     & $dropExe
     if ($LASTEXITCODE -ne 0) { throw "the executable from before the variadic edit was rewritten ($hotMode)" }
     # Whether a helper is device-only (D1589) is in its signature (D1677): a warm build
@@ -6531,9 +6538,9 @@ $atomicDiagnostics = @(
 $codeDiagnostics = @(
     @('module_missing', 'main\.e:1:1: error\[E-MODULE-0001\]: `use nowhere` names no module under the source root or the toolchain'),
     @('module_cycle', 'b\.e:1:1: error\[E-MODULE-0002\]: `use main` closes an import cycle'),
-    @('lex_literal', 'main\.e:3:13: error\[E-LEX-0003\]: invalid token'),
-    @('lex_tab', 'main\.e:3:1: error\[E-LEX-0002\]: invalid token'),
-    @('lex_utf8', 'main\.e:2:21: error\[E-LEX-0001\]: invalid token')
+    @('lex_literal', 'main\.e:3:13: error\[E-LEX-0003\]: string literal is not closed before the end of the line'),
+    @('lex_tab', 'main\.e:3:1: error\[E-LEX-0002\]: a tab; indent and separate with spaces'),
+    @('lex_utf8', 'main\.e:2:21: error\[E-LEX-0001\]: a byte that is not valid UTF-8')
 )
 foreach ($case in $codeDiagnostics) {
     Require-Fixture ("check/" + $case[0])

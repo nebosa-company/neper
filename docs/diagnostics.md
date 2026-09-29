@@ -26,11 +26,17 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-NAME-0001` | duplicate declaration in one namespace/scope | spec §§2, 5, 14 |
 | `E-NAME-0002` | qualifier collision or invalid alias | spec §2 |
 | `E-NAME-0003` | illegal shadowing of an active or reserved name | spec §§2, 5 |
+| `E-NAME-0004` | call of something that is not a function, a conversion or a function value; the message names the callee (T028) | spec §§5, 6 |
 | `E-NAME-9999` | other declaration or resolution violation | spec §§2, 5, 9, 14 |
 | `E-TYPE-0001` | expression has no typing context | spec §3 |
 | `E-TYPE-0002` | implicit conversion is not permitted; the message names both types and the record carries `expected` and `actual` (D401) | spec §§4, 6 |
 | `E-TYPE-0003` | argument type does not match its parameter | spec §§4–6 |
 | `E-TYPE-0004` | value is not representable in the required type | spec §4 |
+| `E-TYPE-0005` | call argument count differs from the callee's parameters; the message names the callee and both counts (T028) | spec §§5, 6 |
+| `E-TYPE-0006` | operator does not apply to its operand types; the message names the operator and its expression (T028) | spec §§4, 6 |
+| `E-TYPE-0007` | a call statement's results are discarded; the message names the callee (T028) | spec §§5, 6 |
+| `E-TYPE-0008` | a type, member or field not valid where it is written; the message quotes the statement (T028) | spec §§4, 5 |
+| `E-TYPE-0009` | a construct the checker does not support where it is written; the message quotes the statement (T028) | spec §§4–6 |
 | `E-TYPE-9999` | other typing, layout or operation violation | spec §§4–6, 8–10 |
 | `E-COMPTIME-0001` | the build made more instances of generic functions than `--instances N` allows (D426) | tooling §5 |
 | `E-COMPTIME-0002` | the build's compile-time evaluation took more interpreter steps than `--comptime-steps N` allows (D474) | tooling §5 |
