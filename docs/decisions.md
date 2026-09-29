@@ -31188,3 +31188,19 @@ With this, T022's "dependency and library hashes the manifest does not yet carry
 - The new case is pinned in both suites' map loops.
 
 **Not yet.** Columns across a mapping whose original is not a verbatim copy. The consumer maps an offset inside a span one to one, which is exact for a spliced copy, as here, and not for a rewritten line.
+
+## D1699 — `fmt --check --json` over a project (T006)
+
+**Decision.** `fmt-project DIR --check|--write --json`, and the short `neper fmt [--check] --json` with no operand, is a stream. It was refused before.
+
+- **`--check`** gives the header, then one diagnostic per `.e` under the project's `src` and `lib` that is not canonical, then a result counting the diagnostics and the modules.
+- **Each diagnostic** is E-FORMAT-0001 at the first byte where the canonical text differs, the position `fmt-file --check --json` reports for one file, under the file's project identity (`project-src` or `project-lib`, D1697). A module the formatter cannot lay out at all is E-SYNTAX-9999 at its first byte.
+- **`--write --json`** gives the header and the result.
+- The human `--check` lines on stderr are unchanged.
+
+**Evidence.**
+
+- `tools/fmt_project` pins the stream over a project of one non-canonical file: E-FORMAT-0001 at `layout.e` byte 85, line 2, column 5, under `project-src`, the byte `fmt-file` names.
+- It is byte-equal on Linux and validates against the schema.
+- It is pinned in both suites before that project is formatted in place.
+- A file that does not parse (`fn broken( {`) is reported at the byte the single-file form names, as that form reports it.

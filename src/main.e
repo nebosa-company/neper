@@ -1309,14 +1309,17 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
             if found_error != ok { ret (args, false, found_error) }
             dir = found
         }
-        // `fmt` over the project (D295): in place, or `--check`; no stream yet.
+        // `fmt` over the project (D295): in place, or `--check`; `--json` the stream (T006).
         if is_fmt {
-            if json { ret (args, false, ok) }
             long_form[count] = "fmt-project"
             long_form[count + 1usize] = dir
             long_form[count + 2usize] = "--write"
             if check_only { long_form[count + 2usize] = "--check" }
             count += 3usize
+            if json {
+                long_form[count] = "--json"
+                count += 1usize
+            }
             ret (long_form[0usize..count], true, ok)
         }
         var leaf = "check"
@@ -3401,10 +3404,16 @@ fn fmt_write(a: *mem.Arena, file: str, path: str) -> usize {
 // Every `.e` under the project's `src/` and `lib/`, in byte order (D295): `--write`
 // formats each in place; `--check` writes nothing and names each file that is not
 // canonical as an E-FORMAT-0001 line on stderr, exiting 1 when any is.
-// ponytail: `--check` here is the human lines only; the `--json` stream over a project
-// waits for a merged-stream shape like check-project's.
+// With `--json` (T006) the stream is the header, an E-FORMAT-0001 diagnostic for each file
+// `--check` finds not canonical -- at its first differing byte, under the file's project
+// identity -- or an E-SYNTAX-9999 for one that does not parse, and a result counting the
+// modules and the files found wanting; `--write --json` is the header and that result.
 fn fmt_project_command(a: *mem.Arena, args: []str) -> err {
     let checking = same(args[3usize], "--check")
+    let json = args.len == 5usize && same(args[4usize], "--json")
+    var stream = json_sink()
+    if json { try write_all(&stream, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"fmt\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n") }
+    var flagged = 0usize
     let (paths, paths_error) = mem.alloc[str](a, 4096usize)
     if paths_error != ok { ret paths_error }
     let (rels, rels_error) = mem.alloc[str](a, 4096usize)
@@ -3427,23 +3436,100 @@ fn fmt_project_command(a: *mem.Arena, args: []str) -> err {
         if checking {
             let (text, load_error) = source.load(a, paths[at])
             if load_error != ok { ret load_error }
-            let (formatted, exit_code, text_error) = tool.fmt_plain_text(a, text, rels[at])
-            if text_error != ok { ret text_error }
-            var verdict = exit_code
-            if verdict == 0usize && !same(formatted, text) {
-                try stderr_text(rels[at])
-                try stderr_text(": error[E-FORMAT-0001]: source is not in canonical layout\n")
-                verdict = 1usize
+            if json {
+                let verdict = fmt_project_check_record(a, &stream, text, rels[at])
+                if verdict != 0usize { flagged += 1usize }
+                if verdict > worst { worst = verdict }
+            } else {
+                let (formatted, exit_code, text_error) = tool.fmt_plain_text(a, text, rels[at])
+                if text_error != ok { ret text_error }
+                var verdict = exit_code
+                if verdict == 0usize && !same(formatted, text) {
+                    try stderr_text(rels[at])
+                    try stderr_text(": error[E-FORMAT-0001]: source is not in canonical layout\n")
+                    verdict = 1usize
+                }
+                if verdict > worst { worst = verdict }
             }
-            if verdict > worst { worst = verdict }
         } else {
             let verdict = fmt_write(a, paths[at], rels[at])
             if verdict > worst { worst = verdict }
         }
         at += 1usize
     }
+    if json {
+        if worst == 0usize { try write_all(&stream, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"diagnostics\":0,\"modules\":") } else {
+            try write_all(&stream, "{\"record\":\"result\",\"ok\":false,\"exit_code\":")
+            try write_usize(&stream, worst)
+            try write_all(&stream, ",\"data\":{\"diagnostics\":")
+            try write_usize(&stream, flagged)
+            try write_all(&stream, ",\"modules\":")
+        }
+        try write_usize(&stream, count)
+        try write_all(&stream, "}}\n")
+    }
     if worst != 0usize { os.exit(i32(worst)) }
     ret ok
+}
+
+// One project file under `fmt --check --json` (T006): nothing when it is canonical, else
+// its diagnostic, at the first byte the canonical text differs from it, or at its start
+// when it does not parse; the verdict is 0, 1 or 2 as `fmt-file`'s exit code.
+fn fmt_project_check_record(a: *mem.Arena, stream: *Sink, text: str, rel: str) -> usize {
+    let (root, relative) = project_identity(rel)
+    let (formatted, format_error) = tool.format_source(a, text)
+    var code = "E-FORMAT-0001"
+    var message = "source is not in canonical layout"
+    var first = 0usize
+    if format_error != ok {
+        code = "E-SYNTAX-9999"
+        message = "the module does not parse, so it has no canonical layout"
+    } else {
+        if same(formatted, text) { ret 0usize }
+        while first < text.len && first < formatted.len && text[first] == formatted[first] { first += 1usize }
+    }
+    var line = 1usize
+    var column = 1usize
+    var scan = 0usize
+    while scan < first {
+        if text[scan] == 10u8 {
+            line += 1usize
+            column = 1usize
+        } else {
+            column += 1usize
+        }
+        scan += 1usize
+    }
+    let written = fmt_project_diagnostic(stream, code, message, root, relative, first, line, column)
+    ret 1usize
+}
+
+fn fmt_project_diagnostic(stream: *Sink, code: str, message: str, root: str, relative: str, byte_at: usize, line: usize, column: usize) -> err {
+    try write_all(stream, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"")
+    try write_all(stream, code)
+    try write_all(stream, "\",\"message\":")
+    try write_json_string(stream, message)
+    try write_all(stream, ",\"span\":{\"source\":{\"root\":\"")
+    try write_all(stream, root)
+    try write_all(stream, "\",\"path\":")
+    try write_json_string(stream, relative)
+    try write_all(stream, "},\"byte_start\":")
+    try write_usize(stream, byte_at)
+    try write_all(stream, ",\"byte_end\":")
+    try write_usize(stream, byte_at)
+    try write_all(stream, ",\"line\":")
+    try write_usize(stream, line)
+    try write_all(stream, ",\"column\":")
+    try write_usize(stream, column)
+    try write_all(stream, ",\"end_line\":")
+    try write_usize(stream, line)
+    try write_all(stream, ",\"end_column\":")
+    try write_usize(stream, column)
+    try write_all(stream, ",\"column_utf16\":")
+    try write_usize(stream, column)
+    try write_all(stream, ",\"end_column_utf16\":")
+    try write_usize(stream, column)
+    ret write_all(stream, "},\"parent\":null,\"related\":[],\"fixes\":[]}\n")
 }
 
 fn fmt_check_command(a: *mem.Arena, args: []str) -> err {
@@ -12869,7 +12955,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `fmt-file PATH --write` (D295): the canonical text back into the file, when it differs.
     if fmt_args.len == 4usize && same(fmt_args[1usize], "fmt-file") && same(fmt_args[3usize], "--write") { ret fmt_write_command(a, args, args[2usize]) }
     // `fmt-project DIR --write|--check` (D295): every `.e` under DIR/src and DIR/lib.
-    if args.len == 4usize && same(args[1usize], "fmt-project") && (same(args[3usize], "--write") || same(args[3usize], "--check")) { ret fmt_project_command(a, args) }
+    if (args.len == 4usize || (args.len == 5usize && same(args[4usize], "--json"))) && same(args[1usize], "fmt-project") && (same(args[3usize], "--write") || same(args[3usize], "--check")) { ret fmt_project_command(a, args) }
     // `check-project DIR TOOLCHAIN_ROOT ARCH OS WORKDIR --json` (D262): every module under
     // DIR/src, one stream.
     if args.len == 8usize && same(args[1usize], "check-project") && same(args[7usize], "--json") { ret check_project_command(a, args) }
