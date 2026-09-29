@@ -44,6 +44,7 @@ use e.io
 use e.time
 use e.net
 use e.net.tls
+use e.net.auth
 use e.db
 use e.text.utf8
 use e.bytes as octets
@@ -62,7 +63,7 @@ type Col = struct { id: u8, size: u32, precision: u8, scale: u8, plp: bool, coll
 // (`body`, `used` bytes of it filled), the packet being read (`pkt`, from `at` to `stop`), a
 // token buffer for what crosses from one packet into the next, the error text and the
 // transaction descriptor.
-type Conn = struct { socket: net.Socket, stream: tls.Stream, source: io.Reader, sink: io.Writer, arena: *mem.Arena, driver: *const db.Driver, packet_size: usize, body: []u8, used: usize, kind: u8, packet_id: usize, pkt: []u8, at: usize, stop: usize, eom: bool, in_reply: bool, broken: bool, token: []u8, transaction: []u8, collation: u64, in_transaction: bool, server_transaction: bool, active: *Reader, login_ack: bool, failed: bool, note: str, number: i32, state: u8, severity: u8, message: []u8, message_len: usize }
+type Conn = struct { socket: net.Socket, stream: tls.Stream, source: io.Reader, sink: io.Writer, arena: *mem.Arena, driver: *const db.Driver, packet_size: usize, body: []u8, used: usize, kind: u8, packet_id: usize, pkt: []u8, at: usize, stop: usize, eom: bool, in_reply: bool, broken: bool, token: []u8, transaction: []u8, collation: u64, in_transaction: bool, server_transaction: bool, active: *Reader, login_ack: bool, failed: bool, note: str, number: i32, state: u8, severity: u8, message: []u8, message_len: usize, sspi: *auth.Context, sspi_out: []u8, sspi_len: usize, sspi_due: bool }
 type Stmt = struct { conn: *Conn, sql: str, placeholders: usize, closed: bool }
 // `long` holds a PLP or `text` value too long for the token buffer.
 type Reader = struct { conn: *Conn, statement: *Stmt, done: bool, closed: bool, types: []Col, columns: []db.Column, bitmap: []u8, buffer: []u8, used: usize, long: []u8 }
@@ -80,6 +81,7 @@ const SQL_BATCH: u8 = 1u8
 const RPC: u8 = 3u8
 const REPLY: u8 = 4u8
 const LOGIN7: u8 = 16u8
+const SSPI_MESSAGE: u8 = 17u8
 const PRELOGIN: u8 = 18u8
 // sp_executesql's well-known procedure id.
 const SP_EXECUTESQL: u64 = 10u64
@@ -100,6 +102,7 @@ const TABNAME: u8 = 164u8
 const COLINFO: u8 = 165u8
 const SESSIONSTATE: u8 = 228u8
 const FEATUREEXTACK: u8 = 174u8
+const SSPI_TOKEN: u8 = 237u8
 
 const DONE_COUNT: u64 = 16u64
 const SELECT_COMMAND: u64 = 193u64
@@ -180,6 +183,10 @@ fn connect(a: *mem.Arena, options: Options, cipher: *const tls.Aead) -> (db.Conn
     c.server_transaction = false
     c.active = nil
     c.login_ack = false
+    c.sspi = nil
+    c.sspi_out = c.token[0usize..0usize]
+    c.sspi_len = 0usize
+    c.sspi_due = false
     clear(c)
     let entropy = fixed[MESSAGE_CAP + 8usize..MESSAGE_CAP + 72usize]
     let random_error = os.random(entropy)
@@ -262,22 +269,99 @@ fn login(c: *Conn, options: Options) -> err {
         if packet_error != ok { ret packet_error }
     }
     c.in_reply = false
-    let build_error = put_login(c, options)
-    if build_error != ok { ret build_error }
+    // An integrated login's security context and token buffer live only for the login, so
+    // the connection keeps the arena it had with a SQL login.
+    let mark = mem.mark(c.arena)
+    let login_error = send_login(c, options)
+    mem.reset(c.arena, mark)
+    ret login_error
+}
+
+fn send_login(c: *Conn, options: Options) -> err {
+    var first = 0usize
+    if options.user.len == 0usize {
+        let (written, start_error) = start_integrated(c, options)
+        if start_error != ok { ret start_error }
+        first = written
+    }
+    let build_error = put_login(c, options, c.sspi_out[0usize..first])
+    if build_error != ok { ret end_integrated(c, build_error) }
     let send_login_error = end_message(c)
-    if send_login_error != ok { ret send_login_error }
-    let (ignored, reply_error) = finish(c, zero)
-    if !c.login_ack { ret CannotConnect }
-    ret reply_error
+    if send_login_error != ok { ret end_integrated(c, send_login_error) }
+    let (ignored, first_reply_error) = finish(c, zero)
+    var reply_error = first_reply_error
+    // Integrated login: each SSPI token the server answers with is stepped as it is read, and
+    // what that makes goes back as an SSPI message, until LOGINACK or a refusal. The server's
+    // last token (SPNEGO's accept-completed) ends a message of its own and LOGINACK follows in
+    // the next unasked, so when the provider has nothing to send the next message is just read:
+    // an empty SSPI message there makes SQL Server drop the connection after LOGINACK.
+    var rounds = 0usize
+    while reply_error == ok && !c.login_ack && c.sspi_due && rounds < 8usize {
+        c.sspi_due = false
+        if c.sspi_len != 0usize {
+            begin_message(c, SSPI_MESSAGE)
+            let sspi_error = put_bytes(c, c.sspi_out[0usize..c.sspi_len])
+            c.sspi_len = 0usize
+            if sspi_error != ok { ret end_integrated(c, sspi_error) }
+            let send_sspi_error = end_message(c)
+            if send_sspi_error != ok { ret end_integrated(c, send_sspi_error) }
+        } else {
+            c.in_reply = true
+            c.eom = false
+            c.at = 0usize
+            c.stop = 0usize
+        }
+        let (more, more_error) = finish(c, zero)
+        reply_error = more_error
+        rounds += 1usize
+    }
+    if !c.login_ack { ret end_integrated(c, CannotConnect) }
+    ret end_integrated(c, reply_error)
+}
+
+// Windows (SSPI) or Kerberos (GSSAPI) authentication as the user the program runs as, for the
+// service principal `MSSQLSvc/<host>:<port>`: writes the first token, for LOGIN7's SSPI field,
+// at the start of `sspi_out` and answers its length.
+fn start_integrated(c: *Conn, options: Options) -> (usize, err) {
+    let (spn, spn_error) = mem.alloc[u8](c.arena, options.host.len + 16usize)
+    let (out, out_error) = mem.alloc[u8](c.arena, auth.MAX_TOKEN)
+    if spn_error != ok || out_error != ok { ret (0usize, mem.Exhausted) }
+    let prefix = "MSSQLSvc/"
+    mem.copy[u8](spn[0usize..prefix.len], prefix)
+    mem.copy[u8](spn[prefix.len..prefix.len + options.host.len], options.host)
+    var n = prefix.len + options.host.len
+    spn[n] = 58u8
+    n = write_digits(spn, n + 1usize, u64(options.port), 1usize)
+    let (context, context_error) = auth.client(c.arena, .Negotiate, spn[0usize..n])
+    if context_error != ok { ret (0usize, refuse(c, "the host offers no integrated authentication", context_error)) }
+    c.sspi = context
+    c.sspi_out = out
+    let (written, done, step_error) = auth.step(c.sspi, c.sspi_out[0usize..0usize], c.sspi_out)
+    if step_error != ok { ret (0usize, end_integrated(c, refuse(c, "the host's security provider refused to begin the login", step_error))) }
+    ret (written, ok)
+}
+
+// Closes the integrated login's context, if there is one, and answers `e`.
+fn end_integrated(c: *Conn, e: err) -> err {
+    if c.sspi != nil {
+        let closed = auth.close(c.sspi)
+        c.sspi = nil
+        c.sspi_out = c.token[0usize..0usize]
+    }
+    ret e
 }
 
 // LOGIN7 (MS-TDS 2.2.6.4): a 94-byte header whose table from byte 36 gives each variable
 // field's offset and length in UTF-16 units, then the fields. It fits one packet, so its
 // offsets are filled in within the packet as the fields are written.
-fn put_login(c: *Conn, options: Options) -> err {
+// An integrated login leaves the user and password empty, sets fIntSecurity and carries the
+// security provider's first token in the SSPI field.
+// ponytail: LOGIN7 is one 4 KB packet, so a Kerberos ticket too big for it (a large PAC) is
+// refused; splitting LOGIN7 across packets lifts that.
+fn put_login(c: *Conn, options: Options, sspi: []const u8) -> err {
     if !utf8.validate(options.user) || !utf8.validate(options.password) || !utf8.validate(options.host) || !utf8.validate(options.database) { ret refuse(c, "the login's text is not UTF-8", CannotConnect) }
     let fields = units_of(options.user) + units_of(options.password) + units_of(options.host) + units_of(options.database) + 10usize
-    if 94usize + fields * 2usize > c.packet_size - 8usize { ret refuse(c, "the login's text does not fit one packet", CannotConnect) }
+    if 94usize + fields * 2usize + sspi.len > c.packet_size - 8usize { ret refuse(c, "the login's text does not fit one packet", CannotConnect) }
     begin_message(c, LOGIN7)
     let base = c.used
     zero_bytes(c.body[base..base + 94usize])
@@ -306,9 +390,13 @@ fn put_login(c: *Conn, options: Options) -> err {
         set_le(c.body, base + 38usize + i * 4usize, u64(written / 2usize), 2usize)
         i += 1usize
     }
-    // SSPI, AtchDBFile and ChangePassword are empty but still point at the end of the data.
+    // AtchDBFile and ChangePassword are empty but still point at the end of the data, as SSPI
+    // does when there is no token.
+    set_le(c.body, base + 78usize, u64(c.used - base), 2usize)
+    set_le(c.body, base + 80usize, u64(sspi.len), 2usize)
+    let sspi_error = put_bytes(c, sspi)
+    if sspi_error != ok { ret sspi_error }
     let length = c.used - base
-    set_le(c.body, base + 78usize, u64(length), 2usize)
     set_le(c.body, base + 82usize, u64(length), 2usize)
     set_le(c.body, base + 86usize, u64(length), 2usize)
     set_le(c.body, base, u64(length), 4usize)
@@ -317,6 +405,7 @@ fn put_login(c: *Conn, options: Options) -> err {
     // fUseDB | fDatabase | fSetLang; fLanguage | fODBC, which also turns the ANSI options on.
     c.body[base + 24usize] = 224u8
     c.body[base + 25usize] = 3u8
+    if c.sspi != nil { c.body[base + 25usize] = 131u8 }
     set_le(c.body, base + 32usize, 1033u64, 4usize)
     ret ok
 }
@@ -731,6 +820,20 @@ fn other_token(c: *Conn, token: u8) -> err {
         ret ok
     }
     if token == RETURNSTATUS { ret skip(c, 4usize) }
+    // SSPI: the server's next token of an integrated login, stepped now; what that answers is
+    // sent once the reply is read.
+    if token == SSPI_TOKEN {
+        let (n, length_error) = get_le(c, 2usize)
+        if length_error != ok { ret length_error }
+        let (body, body_error) = get(c, usize(n))
+        if body_error != ok { ret body_error }
+        if c.sspi == nil { ret protocol(c, "SQL Server answered a SQL login with an SSPI token") }
+        let (written, done, step_error) = auth.step(c.sspi, body, c.sspi_out)
+        if step_error != ok { ret refuse(c, "the host's security provider refused SQL Server's SSPI token", step_error) }
+        c.sspi_len = written
+        c.sspi_due = true
+        ret ok
+    }
     if token == LOGINACK || token == ORDER || token == TABNAME || token == COLINFO {
         if token == LOGINACK { c.login_ack = true }
         let (n, length_error) = get_le(c, 2usize)

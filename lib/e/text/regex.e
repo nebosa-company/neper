@@ -1,10 +1,27 @@
-// Regular expressions over UTF-8: a pattern compiles once into an arena and runs as a
-// Pike VM, so a match costs time linear in the text times the program, never the
-// exponential blow-up a backtracker pays. The accepted syntax is regular only:
-// literals, `.`, classes `[a-z]` `[^...]` with `\d \w \s` and their negations, the
-// anchors `^` `$` `\b` `\B`, the repeats `* + ? {m} {m,} {m,n}` each with a lazy `?`,
-// alternation `|`, capturing `(...)` and non-capturing `(?:...)` groups, and the
-// escapes `\n \t \r` and `\<punctuation>`. No backreferences, recursion or lookaround.
+// Regular expressions over UTF-8, with two engines behind one `Regex`. A pattern
+// compiles once into an arena. `compile` builds a Pike VM, so a match costs time linear
+// in the text times the program, never the exponential blow-up a backtracker pays. Its
+// syntax is regular only: literals, `.`, classes `[a-z]` `[^...]` with `\d \w \s` and
+// their negations, the anchors `^` `$` `\b` `\B`, the repeats `* + ? {m} {m,} {m,n}`
+// each with a lazy `?`, alternation `|`, capturing `(...)`, named `(?<name>...)` or
+// `(?P<name>...)` and non-capturing `(?:...)` groups, and the escapes `\n \t \r` and
+// `\<punctuation>`. A construct only a backtracker can run is refused with
+// `NeedsBacktracking` rather than `InvalidPattern`, so the caller knows to switch.
+//
+// `compile_backtracking` accepts all of that plus backreferences `\1`..`\9`, `\k<name>`
+// and `(?P=name)`; lookahead `(?=...)` `(?!...)`; lookbehind `(?<=...)` `(?<!...)` over
+// a fixed number of scalars (alternatives of equal width, as Python requires); atomic
+// groups `(?>...)`; and possessive repeats `*+ ++ ?+ {m,n}+`. It runs a backtracking VM
+// over the same instructions and answers what Python's `re` answers. A backreference to
+// a group that took no part fails; `case_insensitive` folds its comparison too. A repeat
+// whose body matched empty stops repeating, as in Python. The work is bounded: a search
+// may take `MIN_STEPS` plus `STEPS_PER_BYTE` per byte searched, past which it stops with
+// `TooManySteps`, and holds at most `MAX_TRACK` backtrack entries, past which it stops
+// with `TooDeep`; `is_match` and `find` then answer no match and `last_error` names the
+// cause, while `captures` and `replace_all` return it. The `is_match`, `find`,
+// `captures` and `replace_all` below serve both engines.
+// ponytail: no recursion `(?R)`, conditionals `(?(1)...)` or inline flags `(?i)`; they
+// would be new instructions over the same backtrack stack.
 //
 // Positions are byte offsets. Text is read scalar by scalar with `unicode.read_utf8`, a
 // malformed sequence standing as U+FFFD over one byte, so `.` never splits a character.
@@ -19,10 +36,11 @@
 // previous match is skipped, so `x*` over "xa" gives "-a-", not "--a-".
 //
 // Everything the VM needs -- two thread lists, their capture rows, the visit marks and
-// the closure stack -- is allocated by `compile`, so `is_match` and `find` allocate
-// nothing; that scratch is mutated behind the `*const`, which is why one `Regex` must not
-// be matched from two threads at once. `TooComplex` bounds the program at `MAX_INSTS`
-// instructions, a repeat count at `MAX_REPEAT` and group nesting at `MAX_DEPTH`.
+// the closure stack, or for the backtracker its stack and one capture row -- is
+// allocated by the compile, so `is_match` and `find` allocate nothing; that scratch is
+// mutated behind the `*const`, which is why one `Regex` must not be matched from two
+// threads at once. `TooComplex` bounds the program at `MAX_INSTS` instructions, a
+// repeat count at `MAX_REPEAT` and group nesting at `MAX_DEPTH`.
 
 use e.mem
 use e.text.utf8
@@ -34,34 +52,51 @@ type Captures = struct { whole: Match, groups: []const Match }
 type Options = struct { case_insensitive: bool, multiline: bool, dot_matches_newline: bool }
 error InvalidPattern
 error TooComplex
+error NeedsBacktracking
+error TooManySteps
+error TooDeep
 
 const NONE: usize = 18446744073709551615usize
 const NO_NODE: u32 = 4294967295u32
 const MAX_INSTS: usize = 16384usize
 const MAX_REPEAT: u32 = 1000u32
 const MAX_DEPTH: u32 = 64u32
+// ponytail: a fixed backtrack stack (768 KB per compiled pattern) caps a greedy `.*` at
+// about 16K scalars; a caller-sized stack is the upgrade when subjects grow past that.
+const MAX_TRACK: usize = 32768usize
+const MIN_STEPS: usize = 1000000usize
+const STEPS_PER_BYTE: usize = 1000usize
+const MAX_WIDTH: usize = 1048576usize
 
-type Op = enum u8 { Char, Any, Class, Split, Jmp, Save, Bol, Eol, WordB, NotWordB, Done }
+type Op = enum u8 { Char, Any, Class, Split, Jmp, Save, Bol, Eol, WordB, NotWordB, Done, Backref, Look, LookEnd, Atomic, AtomicEnd, RepStart, RepCheck }
 // Char: x is the scalar (folded when case-insensitive). Class: x is the first range, y
 // the range count doubled plus the negation bit. Split: x is preferred over y. Jmp: x.
-// Save: x is the capture slot.
+// Save: x is the capture slot. The rest are the backtracker's. Backref: x is the group.
+// Look: x is the instruction after its LookEnd, y bit 0 negative, bit 1 behind and the
+// width in scalars above them; LookEnd: y the same bits. RepStart: x is the slot that
+// keeps where an iteration began; RepCheck: loops to y unless the iteration was empty.
 type Inst = struct { op: Op, x: u32, y: u32 }
 
-type Kind = enum u8 { Empty, Char, Any, Class, Bol, Eol, WordB, NotWordB, Group, Concat, Alt, Repeat }
+type Kind = enum u8 { Empty, Char, Any, Class, Bol, Eol, WordB, NotWordB, Group, Concat, Alt, Repeat, Backref, Look, Atomic }
 // Char: value is the scalar. Class: value is the first range, min the range count, max
 // the negation. Group: value is the capture index or NO_NODE. Repeat: min..max with max
-// NO_NODE for unbounded.
+// NO_NODE for unbounded. Backref: value is the group. Look: value is the Look bits, min
+// the width. Atomic: first is the body.
 type Node = struct { kind: Kind, first: u32, second: u32, value: u32, min: u32, max: u32, lazy: bool }
 
-type Parser = struct { pattern: str, at: usize, nodes: []Node, node_count: usize, ranges: []u32, range_count: usize, groups: u32, depth: u32, options: Options }
+// `names` holds a (start, length) pair into the pattern per group, length 0 if unnamed.
+type Parser = struct { pattern: str, at: usize, nodes: []Node, node_count: usize, ranges: []u32, range_count: usize, groups: u32, depth: u32, options: Options, backtracking: bool, names: []u32 }
 
-type Emitter = struct { insts: []Inst, count: usize, writing: bool }
+// `loops` counts the unbounded repeats given an iteration slot, from `loop_base` on.
+type Emitter = struct { insts: []Inst, count: usize, writing: bool, backtracking: bool, loop_base: u32, loops: u32 }
 
 // One thread list of the VM: a program counter per thread and a capture row per thread;
 // `seen` marks the counters already in the list for this generation.
 type Threads = struct { pcs: []u32, caps: []usize, seen: []u32, gen: u32, count: usize }
 
-type Program = struct { insts: []Inst, ranges: []u32, groups: usize, slots: usize, options: Options, a: Threads, b: Threads, work: []usize, result: []usize, stack: []usize }
+// `work` is the backtracker's one capture row, iteration slots after the group slots;
+// `track` its stack of (kind, x, y) entries, `depth` deep.
+type Program = struct { insts: []Inst, ranges: []u32, groups: usize, slots: usize, options: Options, a: Threads, b: Threads, work: []usize, result: []usize, stack: []usize, backtracking: bool, source: str, names: []const u32, track: []usize, depth: usize, steps: usize, failure: err }
 
 fn node(p: *Parser, kind: Kind, first: u32, second: u32, value: u32) -> (u32, err) {
     if p.node_count >= p.nodes.len { ret (NO_NODE, TooComplex) }
@@ -191,9 +226,94 @@ fn parse_class(p: *Parser) -> (u32, err) {
     ret (made, made_error)
 }
 
+// A group name `[A-Za-z_][A-Za-z0-9_]*` followed by `close`, consumed; answers where
+// the name starts and its length.
+fn parse_name(p: *Parser, close: u32) -> (u32, u32, err) {
+    let start = p.at
+    while p.at < p.pattern.len && (is_word_byte(p.pattern, p.at)) { p.at += 1usize }
+    let length = p.at - start
+    if length == 0usize || (p.pattern[start] >= 48u8 && p.pattern[start] <= 57u8) { ret (0u32, 0u32, InvalidPattern) }
+    if peek(*p) != close { ret (0u32, 0u32, InvalidPattern) }
+    p.at += 1usize
+    ret (u32(start), u32(length), ok)
+}
+
+// The group named by the pattern bytes at `start`, or NO_NODE.
+fn find_name(p: *Parser, start: u32, length: u32) -> u32 {
+    let wanted = p.pattern[usize(start)..usize(start + length)]
+    var g = 0u32
+    while g < p.groups {
+        let at = usize(p.names[usize(g) * 2usize])
+        let size = p.names[usize(g) * 2usize + 1usize]
+        if size == length && mem.eq[u8](p.pattern[at..at + usize(size)], wanted) { ret g + 1u32 }
+        g += 1u32
+    }
+    ret NO_NODE
+}
+
+// A new capturing group, named by `length` pattern bytes at `start` unless 0.
+fn open_group(p: *Parser, start: u32, length: u32) -> (u32, err) {
+    if length > 0u32 && find_name(p, start, length) != NO_NODE { ret (NO_NODE, InvalidPattern) }
+    p.names[usize(p.groups) * 2usize] = start
+    p.names[usize(p.groups) * 2usize + 1usize] = length
+    p.groups += 1u32
+    ret (p.groups, ok)
+}
+
+fn named_backref(p: *Parser, start: u32, length: u32) -> (u32, err) {
+    let group = find_name(p, start, length)
+    if group == NO_NODE { ret (NO_NODE, InvalidPattern) }
+    let (made, made_error) = node(p, .Backref, NO_NODE, NO_NODE, group)
+    ret (made, made_error)
+}
+
+// The scalars every match of the subtree spans, and whether that is one fixed number.
+fn fixed_width(p: *Parser, at: u32) -> (usize, bool) {
+    let n = p.nodes[usize(at)]
+    if n.kind == .Char || n.kind == .Any || n.kind == .Class { ret (1usize, true) }
+    if n.kind == .Backref { ret (0usize, false) }
+    if n.kind == .Group || n.kind == .Atomic {
+        let (inner, inner_fixed) = fixed_width(p, n.first)
+        ret (inner, inner_fixed)
+    }
+    if n.kind == .Concat || n.kind == .Alt {
+        let (left, left_fixed) = fixed_width(p, n.first)
+        let (right, right_fixed) = fixed_width(p, n.second)
+        if !left_fixed || !right_fixed { ret (0usize, false) }
+        if n.kind == .Alt {
+            if left != right { ret (0usize, false) }
+            ret (left, true)
+        }
+        if left + right > MAX_WIDTH { ret (0usize, false) }
+        ret (left + right, true)
+    }
+    if n.kind == .Repeat {
+        if n.max != n.min { ret (0usize, false) }
+        let (inner, inner_fixed) = fixed_width(p, n.first)
+        if !inner_fixed || inner * usize(n.min) > MAX_WIDTH { ret (0usize, false) }
+        ret (inner * usize(n.min), true)
+    }
+    ret (0usize, true)
+}
+
 fn parse_escape(p: *Parser) -> (u32, err) {
     if p.at >= p.pattern.len { ret (NO_NODE, InvalidPattern) }
     let escaped = advance(p)
+    if escaped >= 49u32 && escaped <= 57u32 {
+        if !p.backtracking { ret (NO_NODE, NeedsBacktracking) }
+        if escaped - 48u32 > p.groups { ret (NO_NODE, InvalidPattern) }
+        let (made, made_error) = node(p, .Backref, NO_NODE, NO_NODE, escaped - 48u32)
+        ret (made, made_error)
+    }
+    if escaped == 107u32 {
+        if !p.backtracking { ret (NO_NODE, NeedsBacktracking) }
+        if peek(*p) != 60u32 { ret (NO_NODE, InvalidPattern) }
+        p.at += 1usize
+        let (start, length, name_error) = parse_name(p, 62u32)
+        if name_error != ok { ret (NO_NODE, name_error) }
+        let (made, made_error) = named_backref(p, start, length)
+        ret (made, made_error)
+    }
     if escaped == 98u32 {
         let (made, made_error) = node(p, .WordB, NO_NODE, NO_NODE, 0u32)
         ret (made, made_error)
@@ -222,13 +342,44 @@ fn parse_atom(p: *Parser) -> (u32, err) {
     let scalar = advance(p)
     if scalar == 40u32 {
         var capture = NO_NODE
+        var look = NO_NODE
+        var atomic = false
         if peek(*p) == 63u32 {
             p.at += 1usize
-            if peek(*p) != 58u32 { ret (NO_NODE, InvalidPattern) }
-            p.at += 1usize
+            if p.at >= p.pattern.len { ret (NO_NODE, InvalidPattern) }
+            let sort = advance(p)
+            if sort == 58u32 {
+                capture = NO_NODE
+            } else if sort == 61u32 || sort == 33u32 {
+                look = 0u32
+                if sort == 33u32 { look = 1u32 }
+            } else if sort == 62u32 {
+                atomic = true
+            } else if sort == 60u32 && (peek(*p) == 61u32 || peek(*p) == 33u32) {
+                look = 2u32
+                if advance(p) == 33u32 { look = 3u32 }
+            } else if sort == 60u32 || (sort == 80u32 && peek(*p) == 60u32) {
+                if sort == 80u32 { p.at += 1usize }
+                let (start, length, name_error) = parse_name(p, 62u32)
+                if name_error != ok { ret (NO_NODE, name_error) }
+                let (group, group_error) = open_group(p, start, length)
+                if group_error != ok { ret (NO_NODE, group_error) }
+                capture = group
+            } else if sort == 80u32 && peek(*p) == 61u32 {
+                p.at += 1usize
+                if !p.backtracking { ret (NO_NODE, NeedsBacktracking) }
+                let (start, length, name_error) = parse_name(p, 41u32)
+                if name_error != ok { ret (NO_NODE, name_error) }
+                let (made, made_error) = named_backref(p, start, length)
+                ret (made, made_error)
+            } else {
+                ret (NO_NODE, InvalidPattern)
+            }
+            if (look != NO_NODE || atomic) && !p.backtracking { ret (NO_NODE, NeedsBacktracking) }
         } else {
-            p.groups += 1u32
-            capture = p.groups
+            let (group, group_error) = open_group(p, 0u32, 0u32)
+            if group_error != ok { ret (NO_NODE, group_error) }
+            capture = group
         }
         if p.depth >= MAX_DEPTH { ret (NO_NODE, TooComplex) }
         p.depth += 1u32
@@ -237,6 +388,22 @@ fn parse_atom(p: *Parser) -> (u32, err) {
         p.depth -= 1u32
         if peek(*p) != 41u32 { ret (NO_NODE, InvalidPattern) }
         p.at += 1usize
+        if look != NO_NODE {
+            var width = 0usize
+            if look >= 2u32 {
+                let (spans, fixed) = fixed_width(p, inner)
+                if !fixed { ret (NO_NODE, InvalidPattern) }
+                width = spans
+            }
+            let (looked, looked_error) = node(p, .Look, inner, NO_NODE, look)
+            if looked_error != ok { ret (NO_NODE, looked_error) }
+            p.nodes[usize(looked)].min = u32(width)
+            ret (looked, ok)
+        }
+        if atomic {
+            let (sealed, sealed_error) = node(p, .Atomic, inner, NO_NODE, 0u32)
+            ret (sealed, sealed_error)
+        }
         let (made, made_error) = node(p, .Group, inner, NO_NODE, capture)
         ret (made, made_error)
     }
@@ -324,8 +491,13 @@ fn parse_repeat(p: *Parser) -> (u32, err) {
             break
         }
         var lazy = false
+        var possessive = false
         if peek(*p) == 63u32 {
             lazy = true
+            p.at += 1usize
+        } else if peek(*p) == 43u32 {
+            if !p.backtracking { ret (NO_NODE, NeedsBacktracking) }
+            possessive = true
             p.at += 1usize
         }
         let (wrapped, wrapped_error) = node(p, .Repeat, atom, NO_NODE, 0u32)
@@ -334,6 +506,11 @@ fn parse_repeat(p: *Parser) -> (u32, err) {
         p.nodes[usize(wrapped)].max = max
         p.nodes[usize(wrapped)].lazy = lazy
         atom = wrapped
+        if possessive {
+            let (sealed, sealed_error) = node(p, .Atomic, wrapped, NO_NODE, 0u32)
+            if sealed_error != ok { ret (NO_NODE, sealed_error) }
+            atom = sealed
+        }
     }
     ret (atom, ok)
 }
@@ -406,9 +583,20 @@ fn gen_repeat(e: *Emitter, p: *Parser, at: u32) -> err {
     let (split, split_error) = emit(e, .Split, 0u32, 0u32)
     if split_error != ok { ret split_error }
     patch(e, split, n.lazy, u32(e.count))
-    try gen_node(e, p, n.first)
-    let (_, jump_error) = emit(e, .Jmp, split, 0u32)
-    if jump_error != ok { ret jump_error }
+    if e.backtracking {
+        // An iteration that consumed nothing leaves the loop instead of spinning.
+        let slot = e.loop_base + e.loops
+        e.loops += 1u32
+        let (_, start_error) = emit(e, .RepStart, slot, 0u32)
+        if start_error != ok { ret start_error }
+        try gen_node(e, p, n.first)
+        let (_, check_error) = emit(e, .RepCheck, slot, split)
+        if check_error != ok { ret check_error }
+    } else {
+        try gen_node(e, p, n.first)
+        let (_, jump_error) = emit(e, .Jmp, split, 0u32)
+        if jump_error != ok { ret jump_error }
+    }
     patch(e, split, !n.lazy, u32(e.count))
     ret ok
 }
@@ -443,6 +631,26 @@ fn gen_node(e: *Emitter, p: *Parser, at: u32) -> err {
         try gen_node(e, p, n.first)
         let (_, close_error) = emit(e, .Save, n.value * 2u32 + 1u32, 0u32)
         ret close_error
+    }
+    if n.kind == .Backref {
+        let (_, backref_error) = emit(e, .Backref, n.value, 0u32)
+        ret backref_error
+    }
+    if n.kind == .Atomic {
+        let (_, atomic_error) = emit(e, .Atomic, 0u32, 0u32)
+        if atomic_error != ok { ret atomic_error }
+        try gen_node(e, p, n.first)
+        let (_, sealed_error) = emit(e, .AtomicEnd, 0u32, 0u32)
+        ret sealed_error
+    }
+    if n.kind == .Look {
+        let (look, look_error) = emit(e, .Look, 0u32, n.value | (n.min << 2u32))
+        if look_error != ok { ret look_error }
+        try gen_node(e, p, n.first)
+        let (_, end_error) = emit(e, .LookEnd, 0u32, n.value)
+        if end_error != ok { ret end_error }
+        patch(e, look, false, u32(e.count))
+        ret ok
     }
     if n.kind == .Concat {
         try gen_node(e, p, n.first)
@@ -489,14 +697,31 @@ fn threads(a: *mem.Arena, insts: usize, slots: usize) -> (Threads, err) {
     ret (Threads { pcs: pcs, caps: caps, seen: seen, gen: 0u32, count: 0usize }, ok)
 }
 
+// The Pike VM; a pattern only a backtracker runs is refused with `NeedsBacktracking`.
 fn compile(a: *mem.Arena, pattern: str, options: Options) -> (Regex, err) {
+    let (r, r_error) = build(a, pattern, options, false)
+    ret (r, r_error)
+}
+
+// The backtracking engine: the Pike VM's syntax plus backreferences, lookaround, atomic
+// groups and possessive repeats, at the cost of time exponential in the worst case,
+// which the step budget turns into `TooManySteps`.
+fn compile_backtracking(a: *mem.Arena, pattern: str, options: Options) -> (Regex, err) {
+    let (r, r_error) = build(a, pattern, options, true)
+    ret (r, r_error)
+}
+
+fn build(a: *mem.Arena, pattern: str, options: Options, backtracking: bool) -> (Regex, err) {
     if !utf8.validate(pattern) { ret (zero, InvalidPattern) }
     let checkpoint = a.off
     let (nodes, nodes_error) = mem.alloc[Node](a, pattern.len * 2usize + 2usize)
     if nodes_error != ok { ret (zero, nodes_error) }
     let (ranges, ranges_error) = mem.alloc[u32](a, pattern.len * 5usize + 8usize)
     if ranges_error != ok { ret (zero, ranges_error) }
-    var p = Parser { pattern: pattern, at: 0usize, nodes: nodes, node_count: 0usize, ranges: ranges, range_count: 0usize, groups: 0u32, depth: 0u32, options: options }
+    // Every group spends at least `(` and `)`, so a pair per two pattern bytes suffices.
+    let (names, names_error) = mem.alloc[u32](a, pattern.len + 2usize)
+    if names_error != ok { ret (zero, names_error) }
+    var p = Parser { pattern: pattern, at: 0usize, nodes: nodes, node_count: 0usize, ranges: ranges, range_count: 0usize, groups: 0u32, depth: 0u32, options: options, backtracking: backtracking, names: names }
     let (root, root_error) = parse_alt(&p)
     if root_error != ok {
         a.off = checkpoint
@@ -506,7 +731,8 @@ fn compile(a: *mem.Arena, pattern: str, options: Options) -> (Regex, err) {
         a.off = checkpoint
         ret (zero, InvalidPattern)
     }
-    var measure: Emitter = zero
+    let slots = (usize(p.groups) + 1usize) * 2usize
+    var measure = Emitter { insts: zero, count: 0usize, writing: false, backtracking: backtracking, loop_base: u32(slots), loops: 0u32 }
     let measure_error = gen_program(&measure, &p, root)
     if measure_error != ok {
         a.off = checkpoint
@@ -514,24 +740,61 @@ fn compile(a: *mem.Arena, pattern: str, options: Options) -> (Regex, err) {
     }
     let (insts, insts_error) = mem.alloc[Inst](a, measure.count)
     if insts_error != ok { ret (zero, insts_error) }
-    var writer = Emitter { insts: insts, count: 0usize, writing: true }
+    var writer = Emitter { insts: insts, count: 0usize, writing: true, backtracking: backtracking, loop_base: u32(slots), loops: 0u32 }
     let step_error = gen_program(&writer, &p, root)
     if step_error != ok { ret (zero, step_error) }
-    let slots = (usize(p.groups) + 1usize) * 2usize
+    let (source, source_error) = mem.alloc[u8](a, pattern.len)
+    if source_error != ok { ret (zero, source_error) }
+    mem.copy[u8](source, pattern)
     let (program, program_error) = mem.alloc[Program](a, 1usize)
     if program_error != ok { ret (zero, program_error) }
-    let (first, first_error) = threads(a, measure.count, slots)
-    if first_error != ok { ret (zero, first_error) }
-    let (second, second_error) = threads(a, measure.count, slots)
-    if second_error != ok { ret (zero, second_error) }
-    let (work, work_error) = mem.alloc[usize](a, slots)
+    var first: Threads = zero
+    var second: Threads = zero
+    if !backtracking {
+        let (made_first, first_error) = threads(a, measure.count, slots)
+        if first_error != ok { ret (zero, first_error) }
+        let (made_second, second_error) = threads(a, measure.count, slots)
+        if second_error != ok { ret (zero, second_error) }
+        first = made_first
+        second = made_second
+    }
+    let (work, work_error) = mem.alloc[usize](a, slots + usize(measure.loops))
     if work_error != ok { ret (zero, work_error) }
     let (result, result_error) = mem.alloc[usize](a, slots)
     if result_error != ok { ret (zero, result_error) }
-    let (stack, stack_error) = mem.alloc[usize](a, (measure.count * 2usize + 2usize) * 3usize)
-    if stack_error != ok { ret (zero, stack_error) }
-    program[0usize] = Program { insts: insts, ranges: ranges[..p.range_count], groups: usize(p.groups), slots: slots, options: options, a: first, b: second, work: work, result: result, stack: stack }
+    var stack: []usize = zero
+    var track: []usize = zero
+    if backtracking {
+        let (made_track, track_error) = mem.alloc[usize](a, MAX_TRACK * 3usize)
+        if track_error != ok { ret (zero, track_error) }
+        track = made_track
+    } else {
+        let (made_stack, stack_error) = mem.alloc[usize](a, (measure.count * 2usize + 2usize) * 3usize)
+        if stack_error != ok { ret (zero, stack_error) }
+        stack = made_stack
+    }
+    program[0usize] = Program { insts: insts, ranges: ranges[..p.range_count], groups: usize(p.groups), slots: slots, options: options, a: first, b: second, work: work, result: result, stack: stack, backtracking: backtracking, source: source, names: names[..usize(p.groups) * 2usize], track: track, depth: 0usize, steps: 0usize, failure: ok }
     ret (Regex { state: mem.cast[*void](&program[0usize]) }, ok)
+}
+
+// The group number (1-based, as `$1` and `\1` count) of the group called `name`.
+fn group_index(r: *const Regex, name: str) -> (usize, bool) {
+    let prog = mem.cast[*Program](r.state)
+    var g = 0usize
+    while g < prog.groups {
+        let at = usize(prog.names[g * 2usize])
+        let size = usize(prog.names[g * 2usize + 1usize])
+        if size > 0usize && mem.eq[u8](prog.source[at..at + size], name) { ret (g + 1usize, true) }
+        g += 1usize
+    }
+    ret (0usize, false)
+}
+
+// What stopped the last `is_match`, `find`, `captures` or `replace_all` on `r`:
+// `TooManySteps` or `TooDeep` from the backtracker, `ok` otherwise.
+fn last_error(r: *const Regex) -> err {
+    let prog = mem.cast[*Program](r.state)
+    ret prog.failure
 }
 
 fn is_word_byte(text: str, at: usize) -> bool {
@@ -641,6 +904,7 @@ fn add_thread(prog: *Program, t: *Threads, pc: u32, pos: usize, text: str) {
 // The Pike VM over `text` from `from`: the leftmost match, in `prog.result` when it
 // answers true. `first` stops at the first `Done` reached, enough for `is_match`.
 fn run(prog: *Program, text: str, from: usize, first: bool) -> bool {
+    if prog.backtracking { ret bt_search(prog, text, from) }
     let slots = prog.slots
     var cur = &prog.a
     var nxt = &prog.b
@@ -691,6 +955,223 @@ fn run(prog: *Program, text: str, from: usize, first: bool) -> bool {
     ret matched
 }
 
+// The backtracker's stack entries, (kind, x, y): an alternative to resume at pc x and
+// position y; a capture slot x to restore to y; the mark of an open atomic group; the
+// mark of an open lookahead or lookbehind, x the position it began at and, when
+// negative, y the instruction to resume at should its body fail.
+const T_ALT: usize = 0usize
+const T_CAP: usize = 1usize
+const T_ATOMIC: usize = 2usize
+const T_LOOK: usize = 3usize
+const T_NOTLOOK: usize = 4usize
+
+fn bt_push(prog: *Program, kind: usize, x: usize, y: usize) -> bool {
+    if prog.depth + 3usize > prog.track.len {
+        prog.failure = TooDeep
+        ret false
+    }
+    prog.track[prog.depth] = kind
+    prog.track[prog.depth + 1usize] = x
+    prog.track[prog.depth + 2usize] = y
+    prog.depth += 3usize
+    ret true
+}
+
+// The innermost open atomic or lookaround mark; every construct inside it has closed
+// and removed its own, so the topmost mark is the one being closed.
+fn bt_mark(prog: *Program) -> usize {
+    var at = prog.depth
+    while at > 0usize {
+        at -= 3usize
+        if prog.track[at] >= T_ATOMIC { ret at }
+    }
+    ret 0usize
+}
+
+// Commits past the mark at `m`: it and every alternative above it go, the capture
+// restores stay, so failing back past the construct still undoes its captures.
+fn bt_cut(prog: *Program, m: usize) {
+    var kept = m
+    var at = m + 3usize
+    while at < prog.depth {
+        if prog.track[at] == T_CAP {
+            prog.track[kept] = T_CAP
+            prog.track[kept + 1usize] = prog.track[at + 1usize]
+            prog.track[kept + 2usize] = prog.track[at + 2usize]
+            kept += 3usize
+        }
+        at += 3usize
+    }
+    prog.depth = kept
+}
+
+// Undoes everything down to and including the mark at `m`.
+fn bt_unwind(prog: *Program, m: usize) {
+    while prog.depth > m {
+        prog.depth -= 3usize
+        if prog.track[prog.depth] == T_CAP { prog.work[prog.track[prog.depth + 1usize]] = prog.track[prog.depth + 2usize] }
+    }
+}
+
+// The position `count` scalars before `pos`, and whether the text reaches back that far.
+fn step_back(text: str, pos: usize, count: u32) -> (usize, bool) {
+    var at = pos
+    var left = count
+    while left > 0u32 {
+        if at == 0usize { ret (0usize, false) }
+        at -= 1usize
+        while at > 0usize && (text[at] & 192u8) == 128u8 { at -= 1usize }
+        left -= 1u32
+    }
+    ret (at, true)
+}
+
+// Where the text at `pos` stops repeating group `group`, if it does.
+fn backref(prog: *Program, text: str, group: u32, pos: usize) -> (usize, bool) {
+    let from = prog.work[usize(group) * 2usize]
+    let upto = prog.work[usize(group) * 2usize + 1usize]
+    if from == NONE || upto == NONE { ret (0usize, false) }
+    var i = from
+    var j = pos
+    while i < upto {
+        if j >= text.len { ret (0usize, false) }
+        let (want, want_width) = unicode.read_utf8(text, i)
+        let (have, have_width) = unicode.read_utf8(text, j)
+        if want != have && !(prog.options.case_insensitive && unicode.to_lower_simple(want) == unicode.to_lower_simple(have)) { ret (0usize, false) }
+        i += want_width
+        j += have_width
+    }
+    ret (j, true)
+}
+
+// Pops to the next alternative and answers where it resumes; false when none is left
+// or the budget ran out.
+fn bt_fail(prog: *Program) -> (u32, usize, bool) {
+    while prog.depth > 0usize {
+        if prog.steps == 0usize {
+            prog.failure = TooManySteps
+            ret (0u32, 0usize, false)
+        }
+        prog.steps -= 1usize
+        prog.depth -= 3usize
+        let kind = prog.track[prog.depth]
+        let x = prog.track[prog.depth + 1usize]
+        let y = prog.track[prog.depth + 2usize]
+        if kind == T_ALT { ret (u32(x), y, true) }
+        if kind == T_CAP { prog.work[x] = y }
+        if kind == T_NOTLOOK { ret (u32(y), x, true) }
+    }
+    ret (0u32, 0usize, false)
+}
+
+// One attempt anchored at `start`: true with the match in `prog.result`; false with
+// `prog.failure` set when the budget or the stack ran out.
+fn bt_attempt(prog: *Program, text: str, start: usize) -> bool {
+    var s = 0usize
+    while s < prog.work.len {
+        prog.work[s] = NONE
+        s += 1usize
+    }
+    prog.depth = 0usize
+    var pc = 0u32
+    var pos = start
+    while true {
+        if prog.steps == 0usize {
+            prog.failure = TooManySteps
+            ret false
+        }
+        prog.steps -= 1usize
+        let inst = prog.insts[usize(pc)]
+        var failed = false
+        pc += 1u32
+        if inst.op == .Char || inst.op == .Any || inst.op == .Class {
+            failed = true
+            if pos < text.len {
+                let (scalar, width) = unicode.read_utf8(text, pos)
+                if consumes(prog, inst, scalar) {
+                    pos += width
+                    failed = false
+                }
+            }
+        } else if inst.op == .Split {
+            if !bt_push(prog, T_ALT, usize(inst.y), pos) { ret false }
+            pc = inst.x
+        } else if inst.op == .Jmp {
+            pc = inst.x
+        } else if inst.op == .Save || inst.op == .RepStart {
+            if !bt_push(prog, T_CAP, usize(inst.x), prog.work[usize(inst.x)]) { ret false }
+            prog.work[usize(inst.x)] = pos
+        } else if inst.op == .RepCheck {
+            if pos != prog.work[usize(inst.x)] { pc = inst.y }
+        } else if inst.op == .Bol || inst.op == .Eol || inst.op == .WordB || inst.op == .NotWordB {
+            failed = !holds(prog, inst.op, text, pos)
+        } else if inst.op == .Backref {
+            let (upto, repeated) = backref(prog, text, inst.x, pos)
+            if repeated { pos = upto }
+            failed = !repeated
+        } else if inst.op == .Atomic {
+            if !bt_push(prog, T_ATOMIC, 0usize, 0usize) { ret false }
+        } else if inst.op == .AtomicEnd {
+            bt_cut(prog, bt_mark(prog))
+        } else if inst.op == .Look {
+            let negative = (inst.y & 1u32) != 0u32
+            var begin = pos
+            var reachable = true
+            if (inst.y & 2u32) != 0u32 {
+                let (back_to, back_ok) = step_back(text, pos, inst.y >> 2u32)
+                begin = back_to
+                reachable = back_ok
+            }
+            if !reachable {
+                // A lookbehind reaching before the text holds only when negative.
+                failed = !negative
+                pc = inst.x
+            } else {
+                var kind = T_LOOK
+                if negative { kind = T_NOTLOOK }
+                if !bt_push(prog, kind, pos, usize(inst.x)) { ret false }
+                pos = begin
+            }
+        } else if inst.op == .LookEnd {
+            let m = bt_mark(prog)
+            let saved = prog.track[m + 1usize]
+            if (inst.y & 2u32) != 0u32 && pos != saved {
+                failed = true
+            } else if (inst.y & 1u32) != 0u32 {
+                bt_unwind(prog, m)
+                failed = true
+            } else {
+                bt_cut(prog, m)
+                pos = saved
+            }
+        } else {
+            mem.copy[usize](prog.result, prog.work[..prog.slots])
+            ret true
+        }
+        if failed {
+            let (resume_pc, resume_pos, resumed) = bt_fail(prog)
+            if !resumed { ret false }
+            pc = resume_pc
+            pos = resume_pos
+        }
+    }
+    ret false
+}
+
+// The leftmost match from `from`, trying each scalar boundary in turn under one budget.
+fn bt_search(prog: *Program, text: str, from: usize) -> bool {
+    prog.failure = ok
+    prog.steps = MIN_STEPS + STEPS_PER_BYTE * (text.len - from)
+    var start = from
+    while true {
+        if bt_attempt(prog, text, start) { ret true }
+        if prog.failure != ok || start >= text.len { break }
+        let (_, width) = unicode.read_utf8(text, start)
+        start += width
+    }
+    ret false
+}
+
 fn is_match(r: *const Regex, text: str) -> bool {
     let prog = mem.cast[*Program](r.state)
     ret run(prog, text, 0usize, true)
@@ -704,9 +1185,9 @@ fn find(r: *const Regex, text: str, from: usize) -> (Match, bool) {
 }
 
 fn captures(a: *mem.Arena, r: *const Regex, text: str, from: usize) -> (Captures, bool, err) {
-    let (whole, found) = find(r, text, from)
-    if !found { ret (zero, false, ok) }
     let prog = mem.cast[*Program](r.state)
+    let (whole, found) = find(r, text, from)
+    if !found { ret (zero, false, prog.failure) }
     let (groups, groups_error) = mem.alloc[Match](a, prog.groups)
     if groups_error != ok { ret (zero, false, groups_error) }
     var g = 0usize
@@ -799,6 +1280,7 @@ fn replace_all(a: *mem.Arena, r: *const Regex, text: str, replacement: str) -> (
     let prog = mem.cast[*Program](r.state)
     var none: []u8 = zero
     let needed = substitute(prog, none, false, text, replacement)
+    if prog.failure != ok { ret ("", prog.failure) }
     let (out, out_error) = mem.alloc[u8](a, needed)
     if out_error != ok { ret ("", out_error) }
     let written = substitute(prog, out, true, text, replacement)

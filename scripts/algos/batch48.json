@@ -1,0 +1,68 @@
+{
+ "decision": "D1690-D1695",
+ "modules": [
+  {
+   "name": "e.text.regex",
+   "refresh": true,
+   "fixture": "text_regex_backtrack",
+   "comment": "`e.text.regex.compile_backtracking`: backreferences, named groups, lookahead and lookbehind, atomic groups and possessive repeats against Python's `re`, the step budget stopping `(a+)+$`, the backtrack-stack refusal, and `compile` naming what needs the backtracker",
+   "decision": "D1690"
+  },
+  {
+   "name": "e.math.opt.milp",
+   "deps": [
+    "e.math"
+   ],
+   "fixture": "math_opt_milp",
+   "anchor": "### `e.ml.linear`\n",
+   "note": "Mixed-integer linear programming: minimise `c·x` over ranged rows and bounded\nvariables, some of them integer. A dense bounded-variable simplex (dual after a\nbranch or a cut, primal with a sum-of-infeasibilities phase one otherwise) under\nbest-bound branch and bound on the most fractional variable, with Gomory\nmixed-integer cuts from the root tableau (`cut_rounds = 0` turns them off).\n`solve` answers `Optimal`, `Infeasible`, `Unbounded` or `NodeLimit` with the\nobjective, the best bound, and the nodes and cuts used; all storage is the\ncaller's (`scratch_len`, `slot_len`).",
+   "comment": "`e.math.opt.milp`: knapsack, general and mixed integers, equality rows, assignment and set cover against HiGHS with cuts on and off, infeasible and unbounded instances, the node limit, Gomory cuts closing Gomory's example in fewer nodes, and twenty random instances within 1e-6 of HiGHS",
+   "decision": "D1691"
+  },
+  {
+   "name": "e.algo.check",
+   "deps": [
+    "e.algo.sat"
+   ],
+   "fixture": "algo_check",
+   "anchor": "### `e.algo.csp`\n",
+   "note": "Model checking over caller storage. `explore` is explicit-state checking:\nbreadth-first search over states of `width` u64 words with a visited set in\nthe caller's table and a parent link per state, so the first violation or\ndeadlock found is at the least depth and `trace` answers a shortest\ncounterexample. `bmc` unrolls a boolean transition system, given as\nclause-building callbacks over `e.algo.sat`, and asks whether a bad state is\nreachable at step exactly j for j = 0..k; `prove` adds k-induction so a safe\nproperty is proven rather than bounded. Safety only: liveness and state-space\nreductions are out.",
+   "comment": "`e.algo.check`: Peterson's mutual exclusion safe with Python's state count, a broken mutex caught with the shortest trace and the trace replayed, three dining philosophers deadlocked, a 4-bit counter reaching 11 at exactly step 11, and k-induction proving 13 unreachable",
+   "decision": "D1692"
+  },
+  {
+   "name": "e.algo.csp",
+   "refresh": true,
+   "decision": "D1695"
+  },
+  {
+   "name": "e.debug.dump",
+   "deps": [
+    "e.mem",
+    "e.text.utf8",
+    "e.debug.dump.host"
+   ],
+   "layer": 5,
+   "fixture": "debug_dump",
+   "anchor": "### `e.metrics`\n",
+   "note": "Post-mortem dumps. `parse` reads an x86-64 ELF core (NT_PRSTATUS, NT_PRPSINFO,\nNT_SIGINFO, NT_FILE and the PT_LOAD memory) or a Windows minidump (threads with\ntheir CONTEXT, modules, memory lists, the exception and system info) into one\nview: threads with registers, modules or mapped files, the crash, and\n`read_memory`, which refuses a read that leaves every region. `write_minidump`\n(dbghelp's MiniDumpWriteDump) and `write_core` (gdb's `gcore`) produce them\nthrough `e.debug.dump.host`. No stack unwinding.",
+   "comment": "`e.debug.dump`: a generated ELF core and minidump read field by field with every malformed-input refusal, then a real dump of the fixture's own process (dbghelp on Windows, gcore on Linux) whose module list, thread and a marked global read back",
+   "decision": "D1693"
+  },
+  {
+   "name": "e.net.auth",
+   "deps": [
+    "e.mem",
+    "e.bytes",
+    "e.os",
+    "e.text.utf8"
+   ],
+   "layer": 6,
+   "fixture": "net_auth",
+   "anchor": "### `e.net.balance`\n",
+   "decision": "D1694",
+   "note": "Integrated authentication through the host's security provider rather than a\nKerberos of its own: SSPI (secur32.dll) on Windows and GSSAPI on Linux, the\nlatter found at run time with `os.dlopen(\"libgssapi_krb5.so.2\")` so a host\nwithout it answers `NotFound`. `client` and `server` open a context for\nNegotiate (SPNEGO), Kerberos or NTLM, `step` trades one token each way until\nthe context is complete, and `user_name`/`peer_name` name the two sides.\n`negotiate_header` and `parse_negotiate` carry a token in HTTP's\n`Negotiate <base64>` form. `x.microsoft.tds` logs in with it when no user\nname is given.",
+   "comment": "`e.net.auth`: an in-process Negotiate and NTLM handshake with the current user on Windows naming the account `whoami` names, garbled and out-of-order tokens refused, the header round trip, and on Linux the GSSAPI path (Kerberos against kerberos.sh's throwaway KDC when one is installed)"
+  }
+ ]
+}

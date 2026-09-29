@@ -1628,7 +1628,7 @@ algo_sat_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$algo_sat_written" = 'executable written' ]
 chmod +x "$test_build/algo-sat-selfhost"
 "$test_build/algo-sat-selfhost"
-# `e.algo.csp`: AC-3 on a chain, MAC and limited discrepancy on 4-queens, all-different Hall pruning, element, table and cumulative (D856).
+# `e.algo.csp`: AC-3 on a chain, MAC and limited discrepancy on 4-queens, all-different Hall pruning, element, table and cumulative (D856); AC-2001 reaching AC-3's domains in no more constraint checks, counted exactly against Python (D1695).
 algo_csp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_csp/src/main.e" "$repo" x64 linux "$test_build/algo-csp-selfhost")
 [ "$algo_csp_written" = 'executable written' ]
 chmod +x "$test_build/algo-csp-selfhost"
@@ -2292,6 +2292,37 @@ fmt_opus_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_opus_written" = 'executable written' ]
 chmod +x "$test_build/fmt-opus-selfhost"
 "$test_build/fmt-opus-selfhost"
+# `e.text.regex.compile_backtracking`: backreferences, named groups, lookahead and lookbehind, atomic groups and possessive repeats against Python's `re`, the step budget stopping `(a+)+$`, the backtrack-stack refusal, and `compile` naming what needs the backtracker (D1690).
+text_regex_backtrack_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_regex_backtrack/src/main.e" "$repo" x64 linux "$test_build/text-regex-backtrack-selfhost")
+[ "$text_regex_backtrack_written" = 'executable written' ]
+chmod +x "$test_build/text-regex-backtrack-selfhost"
+"$test_build/text-regex-backtrack-selfhost"
+# `e.math.opt.milp`: knapsack, general and mixed integers, equality rows, assignment and set cover against HiGHS with cuts on and off, infeasible and unbounded instances, the node limit, Gomory cuts closing Gomory's example in fewer nodes, and twenty random instances within 1e-6 of HiGHS (D1691).
+math_opt_milp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_opt_milp/src/main.e" "$repo" x64 linux "$test_build/math-opt-milp-selfhost")
+[ "$math_opt_milp_written" = 'executable written' ]
+chmod +x "$test_build/math-opt-milp-selfhost"
+"$test_build/math-opt-milp-selfhost"
+# `e.algo.check`: Peterson's mutual exclusion safe with Python's state count, a broken mutex caught with the shortest trace and the trace replayed, three dining philosophers deadlocked, a 4-bit counter reaching 11 at exactly step 11, and k-induction proving 13 unreachable (D1692).
+algo_check_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_check/src/main.e" "$repo" x64 linux "$test_build/algo-check-selfhost")
+[ "$algo_check_written" = 'executable written' ]
+chmod +x "$test_build/algo-check-selfhost"
+"$test_build/algo-check-selfhost"
+# `e.debug.dump`: a generated ELF core and minidump read field by field with every malformed-input refusal, then a real dump of the fixture's own process (dbghelp on Windows, gcore on Linux) whose module list, thread and a marked global read back (D1693).
+debug_dump_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/debug_dump/src/main.e" "$repo" x64 linux "$test_build/debug-dump-selfhost")
+[ "$debug_dump_written" = 'executable written' ]
+chmod +x "$test_build/debug-dump-selfhost"
+"$test_build/debug-dump-selfhost"
+# `e.net.auth`: an in-process Negotiate and NTLM handshake with the current user on Windows naming the account `whoami` names, garbled and out-of-order tokens refused, the header round trip, and on Linux the GSSAPI path (Kerberos against kerberos.sh's throwaway KDC when one is installed) (D1694).
+net_auth_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_auth/src/main.e" "$repo" x64 linux "$test_build/net-auth-selfhost")
+[ "$net_auth_written" = 'executable written' ]
+chmod +x "$test_build/net-auth-selfhost"
+# With MIT's KDC installed the fixture also runs Kerberos end to end against a throwaway realm;
+# without it, the GSSAPI (or NotFound) path alone.
+if command -v krb5kdc >/dev/null 2>&1 || [ -x /usr/sbin/krb5kdc ]; then
+    bash "$repo/tests/selfhost/kerberos.sh" run "$test_build/net-auth-selfhost"
+else
+    "$test_build/net-auth-selfhost"
+fi
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

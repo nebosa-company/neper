@@ -667,6 +667,7 @@
    "delivered": 56,
    "pending": [],
    "fixtures": [
+    "debug_dump",
     "differential",
     "error_detail",
     "fs_basics",
@@ -681,7 +682,8 @@
     "ui_shell_ops",
     "ui_taskbar",
     "x_sqlite",
-    "x_tds"
+    "x_tds",
+    "x_tds_integrated"
    ]
   },
   {
@@ -1356,6 +1358,7 @@
     "math_mc",
     "math_ode",
     "math_opt_meta",
+    "math_opt_milp",
     "math_pow",
     "math_root",
     "math_trig",
@@ -1640,12 +1643,13 @@
    "module": "e.text.regex",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 74,
-   "delivered": 74,
+   "catalogue": 104,
+   "delivered": 104,
    "pending": [],
    "fixtures": [
     "text_gaps",
-    "text_regex"
+    "text_regex",
+    "text_regex_backtrack"
    ]
   },
   {
@@ -1789,6 +1793,7 @@
     "test_fuzz",
     "test_support",
     "text_locale",
+    "text_regex_backtrack",
     "time_calendar",
     "time_cron",
     "tz",

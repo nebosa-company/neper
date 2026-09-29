@@ -90,7 +90,7 @@ for m in batch['modules']:
     if not fixture:
         continue
     var, exe = camel(fixture), fixture.replace('_', '-')
-    comment = m['comment'] + f" ({batch['decision']})."
+    comment = m['comment'] + f" ({m.get('decision', batch['decision'])})."
     ps += (f"# {comment}\n"
            f"${var}Path = Join-Path $testBuild '{exe}-selfhost.exe'\n"
            f"${var}Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\\link\\{fixture}\\src\\main.e') $repo 'x64' 'windows' ${var}Path\n"

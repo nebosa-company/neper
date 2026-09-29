@@ -2,6 +2,7 @@
 // over the values `0..k`, domains as `n × k` bytes (1 = allowed), binary
 // constraints given by the caller as `allowed(ctx, x, y, a, b)` over
 // constrained pairs listed in `pairs`. `ac3` prunes to arc consistency,
+// `ac2001` reaches the same fixpoint without repeating a support check,
 // `solve` searches with maintained arc consistency (smallest domain
 // first) and `limited_discrepancy` searches by rising discrepancy count
 // against value order. The global filters `all_different` (Hall-style
@@ -86,6 +87,96 @@ fn ac3[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: 
                 if j % 2usize == 1usize {
                     from = zy
                     to = zx
+                }
+                if to == x && from != y && queued[j] == 0u8 {
+                    if live >= queue.len { ret TooSmall }
+                    queue[tail] = j
+                    tail = (tail + 1usize) % queue.len
+                    queued[j] = 1u8
+                    live += 1usize
+                }
+                j += 1usize
+            }
+        }
+    }
+    ret ok
+}
+
+// AC-2001 revise of x against y along arc index `arc`: `last[arc * k + a]`
+// holds the support last found for (x, a) in y (`k` = none yet). A support
+// still in y's domain is kept without a check; otherwise the search resumes
+// after it, since every value before it was already refuted or has gone.
+fn revise2001[Ctx: type](domains: []u8, k: usize, x: usize, y: usize, arc: usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, last: []usize) -> bool {
+    var changed = false
+    var a = 0usize
+    while a < k {
+        let slot = arc * k + a
+        let old = last[slot]
+        if domains[x * k + a] != 0u8 && (old == k || domains[y * k + old] == 0u8) {
+            var b = 0usize
+            if old < k { b = old + 1usize }
+            var found = k
+            while b < k && found == k {
+                if domains[y * k + b] != 0u8 && allowed(ctx, x, y, a, b) { found = b }
+                b += 1usize
+            }
+            if found == k {
+                domains[x * k + a] = 0u8
+                changed = true
+            } else {
+                last[slot] = found
+            }
+        }
+        a += 1usize
+    }
+    ret changed
+}
+
+// AC-2001 (AC-3.1, Bessière & Régin 2001): `ac3` with a last-support
+// pointer per directed arc and value, so a revisited arc never re-checks a
+// pair it already checked. AC-3 restarts every support search at the first
+// value and may repeat each check O(d) times, O(e·d³) in all; AC-2001 does
+// each at most once, the optimal O(e·d²), and prunes to the same domains.
+// Same arguments as `ac3` plus `last.len >= pairs.len * k`.
+fn ac2001[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, queue: []usize, queued: []u8, last: []usize) -> err {
+    let arcs = pairs.len
+    if domains.len < n * k || pairs.len % 2usize != 0usize || queue.len < arcs || queued.len < arcs || last.len < arcs * k { ret TooSmall }
+    var i = 0usize
+    while i < arcs * k {
+        last[i] = k
+        i += 1usize
+    }
+    i = 0usize
+    while i < arcs {
+        queue[i] = i
+        queued[i] = 1u8
+        i += 1usize
+    }
+    var head = 0usize
+    var tail = arcs
+    var live = arcs
+    while live > 0usize {
+        let arc = queue[head]
+        head = (head + 1usize) % queue.len
+        live -= 1usize
+        queued[arc] = 0u8
+        var x = pairs[(arc / 2usize) * 2usize]
+        var y = pairs[(arc / 2usize) * 2usize + 1usize]
+        if arc % 2usize == 1usize {
+            let t = x
+            x = y
+            y = t
+        }
+        if revise2001[Ctx](domains, k, x, y, arc, ctx, allowed, last) {
+            if count(domains, k, x) == 0usize { ret Unsatisfiable }
+            var j = 0usize
+            while j < arcs {
+                var from = pairs[(j / 2usize) * 2usize]
+                var to = pairs[(j / 2usize) * 2usize + 1usize]
+                if j % 2usize == 1usize {
+                    let t = from
+                    from = to
+                    to = t
                 }
                 if to == x && from != y && queued[j] == 0u8 {
                     if live >= queue.len { ret TooSmall }
