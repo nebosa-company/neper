@@ -28,6 +28,10 @@ error InvalidManifest
 error AssetMissing
 error AssetTooLarge
 
+// The path, as `project.yaml` spells it, of the asset `asset_load` could not read, for
+// the report to name (T013); empty until one fails.
+var missing: str = zero
+
 const MAX_ASSETS: usize = 256usize
 const MAX_ATTRIBUTES: usize = 16usize
 const MAX_TOTAL: usize = 4194304usize
@@ -527,7 +531,10 @@ fn asset_load(a: *mem.Arena, root: str, entries: []Entry, count: usize) -> err {
         let (path, path_error) = asset_join(a, root, entries[i].path)
         if path_error != ok { ret path_error }
         let (bytes, load_error) = source.load(a, path)
-        if load_error != ok { ret AssetMissing }
+        if load_error != ok {
+            missing = entries[i].path
+            ret AssetMissing
+        }
         total += bytes.len
         // Bound to a local: the bootstrap reads `> MAX_TOTAL {` as an aggregate literal.
         let limit = MAX_TOTAL

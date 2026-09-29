@@ -1,0 +1,9 @@
+schema: neper-project-1
+name: missing
+version: 0.1.0
+language: "0.1"
+
+# An entry whose file is not there: the report names it (T013).
+assets:
+  gone:
+    path: assets/gone.bin

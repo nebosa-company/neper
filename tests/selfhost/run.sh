@@ -2675,6 +2675,15 @@ case "$asset_invalid_output" in
     *'project.yaml:1:1: error[E-MODULE-9999]: `project.yaml` has an `assets:` entry the loader does not accept'*) ;;
     *) printf '%s\n' 'an asset manifest entry with an unknown key was not rejected at the manifest' >&2; exit 1 ;;
 esac
+# An asset whose file is missing is refused at the manifest, naming the file (T013).
+if asset_missing_output=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/asset_missing/src/main.e" "$repo" x64 linux "$test_build/asset-missing-selfhost" 2>&1); then
+    printf '%s\n' 'a project with a missing asset unexpectedly compiled' >&2
+    exit 1
+fi
+case "$asset_missing_output" in
+    *'project.yaml:1:1: error[E-MODULE-9999]: `project.yaml` declares an asset whose file cannot be read: `assets/gone.bin`'*) ;;
+    *) printf '%s\n' "a missing asset was not named at the manifest: $asset_missing_output" >&2; exit 1 ;;
+esac
 # `e.gpu` on the CPU backend (D778): the device, queues, buffers, `gpu.launch[K]` over
 # a 1-D and a 2-D kernel with the ids, tokens and every refusal; `examples/saxpy.e`
 # prints the CPU checksum; a kernel called directly, a bare `@gpu` and a host slice

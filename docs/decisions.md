@@ -30930,3 +30930,20 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 - An operand after a flag is refused as usage rather than guessed at.
 - Pinned in both suites: `fmt --path x.e -` in a non-canonical project exits non-zero and leaves its file as it was.
 - The `fmt -` that my first version of this change broke (T002's operand test swallowed `-`) reads stdin again; that is what failed the metamorphic stage.
+
+## D1683 — What reached "internal compiler failure" is named (T013)
+
+**Problem.** In 2026-09-20..27, five builds ended with E-TOOL-9999 "internal compiler failure". Their errors were `emit_x64.Capacity`, `check.Unsupported`, `assets.InvalidManifest` and `assets.AssetMissing`: a capacity, an unsupported form and two asset-manifest faults, none of them internal.
+
+**Decision.** `main`'s last resort tells these apart.
+
+- **A full table** says which one: `resource limit: the machine-code buffer is full; …`, with one name per table (the NIR tables, the module graph, the checker's, the resolver's, a symbol index, an artifact's, the register allocator's, the machine-code buffer). Before, all shared "a compiler table". It keeps E-TYPE-9999 and exit 1, and now covers `emit_x64.Capacity`, which was missing.
+- **`check.Unsupported`** reaching `main` with no site of its own is E-TYPE-0009 (D1679), exit 1.
+- **An asset-manifest fault** is E-MODULE-9999, exit 1, from any command, with the words the load already used at the manifest (D777). The load reports it at `project.yaml:1:1`; other commands have no location. A missing asset now names its file: `assets.missing` records the path `project.yaml` spells, and the message reads `` `project.yaml` declares an asset whose file cannot be read: `assets/gone.bin` ``.
+
+**Evidence.**
+
+- A new fixture, `link/asset_missing`, is pinned in both suites and gives the same line on both hosts.
+- `link/asset_invalid`'s message is unchanged.
+- The conformance goldens are unchanged.
+- The code count is unchanged, so the LLM card is current.
