@@ -5966,7 +5966,7 @@ fn manifest_assets(a: *mem.Arena, out: *Out, g: *graph.Graph) -> err {
     let (entries, entries_error) = mem.alloc[assets.Entry](a, 256usize)
     if entries_error != ok { ret entries_error }
     var manifest_len = 0usize
-    let (count, collect_error) = assets.asset_collect(a, g.project.root, entries, &manifest_len)
+    let (count, collect_error) = assets.asset_collect(a, g.project.root, entries, &manifest_len, &g.asset_missing)
     if collect_error != ok { ret collect_error }
     var at = 0usize
     while at < count {

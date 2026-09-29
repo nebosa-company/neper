@@ -30939,7 +30939,7 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 
 - **A full table** says which one: `resource limit: the machine-code buffer is full; …`, with one name per table (the NIR tables, the module graph, the checker's, the resolver's, a symbol index, an artifact's, the register allocator's, the machine-code buffer). Before, all shared "a compiler table". It keeps E-TYPE-9999 and exit 1, and now covers `emit_x64.Capacity`, which was missing.
 - **`check.Unsupported`** reaching `main` with no site of its own is E-TYPE-0009 (D1679), exit 1.
-- **An asset-manifest fault** is E-MODULE-9999, exit 1, from any command, with the words the load already used at the manifest (D777). The load reports it at `project.yaml:1:1`; other commands have no location. A missing asset now names its file: `assets.missing` records the path `project.yaml` spells, and the message reads `` `project.yaml` declares an asset whose file cannot be read: `assets/gone.bin` ``.
+- **An asset-manifest fault** is E-MODULE-9999, exit 1, from any command, with the words the load already used at the manifest (D777). The load reports it at `project.yaml:1:1`; other commands have no location. A missing asset now names its file: `asset_load` hands back the path `project.yaml` spells through an out-parameter the graph keeps (`asset_missing`; the C bootstrap takes no module-scope `var` in `src/`), and the message reads `` `project.yaml` declares an asset whose file cannot be read: `assets/gone.bin` ``.
 
 **Evidence.**
 
