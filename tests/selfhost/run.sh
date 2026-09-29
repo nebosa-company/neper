@@ -7254,7 +7254,7 @@ if collision_output=$($test_build/neper-self emit-executable "$repo/tests/selfho
     printf '%s\n' 'error hash collision unexpectedly linked' >&2
     exit 1
 fi
-case "$collision_output" in *'main.E49B7D00B'*'main.E9E692E7E'*) ;; *) printf '%s\n' 'error hash collision did not name both qualified errors' >&2; exit 1 ;; esac
+case "$collision_output" in *'main.Ea88a'*'main.E16e68'*) ;; *) printf '%s\n' 'error hash collision did not name both qualified errors' >&2; exit 1 ;; esac
 [ ! -e "$collision_executable_path" ]
 module_artifact_path="$test_build/modules.x64-linux.em"
 module_artifact_copy_path="$test_build/modules-copy.x64-linux.em"
