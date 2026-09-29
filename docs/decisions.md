@@ -31204,3 +31204,23 @@ With this, T022's "dependency and library hashes the manifest does not yet carry
 - It is byte-equal on Linux and validates against the schema.
 - It is pinned in both suites before that project is formatted in place.
 - A file that does not parse (`fn broken( {`) is reported at the byte the single-file form names, as that form reports it.
+
+## D1700 — `fmt` writes a raw string with the fewest `#` (T006)
+
+**Decision.** Spec section 3 says `neper fmt` chooses the smallest delimiter count that leaves a raw string's bytes unchanged. The formatter now does.
+
+- A raw string ends at the first `"` followed by its count of `#`. So the fewest that keep the body is the first count whose closer does not occur in it.
+- The formatter writes `r`, that many `#`, the body unchanged, and the closer. The column advances by the width written.
+- The list plan still measures the source width, so a shortened raw string can only make a line look longer than it is, never too long.
+- All three places in `format_into` that write a token go through one `fmt_token`.
+
+**Evidence.**
+
+- `format/raw_strings` pins five cases on both hosts, and its expected side passes `--check`:
+  - `r###"no quote here"###` → `r"…"`
+  - `r##"say "hi" twice"##` → `r#"…"#`
+  - `r###"a "# sign"###` → `r##"…"##`
+  - `r#"already "fewest""#` kept
+  - `r##""##` → `r""`
+- `layout` and `types` are unchanged.
+- One raw string in the tree could be shorter: `link/advanced`'s `r#"x\ny"#`, which exists to exercise the `#` form. Nothing formats it, so it stays.
