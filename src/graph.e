@@ -197,6 +197,9 @@ type Graph = struct {
     overlay_paths: []str,
     overlay_texts: []str,
     overlay_count: usize,
+    // The asset `project.yaml` declares whose file could not be read (T013), for the
+    // report to name; empty otherwise.
+    asset_missing: str,
     token_scratch: []lex.Token,
     nodes: []syntax.Node,
     children: []u32,
@@ -1154,7 +1157,7 @@ fn begin(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: st
     if name_error != ok { ret name_error }
     g.project = discovered
     // The project's declared assets become `e.asset`'s text (D777), as an overlay.
-    if discovered.has_sources { try assets.asset_overlay(a, discovered.root, g.overlay_paths, g.overlay_texts, &g.overlay_count) }
+    if discovered.has_sources { try assets.asset_overlay(a, discovered.root, g.overlay_paths, g.overlay_texts, &g.overlay_count, &g.asset_missing) }
     g.toolchain_root = toolchain_root
     g.arch = arch
     g.os = host_os

@@ -7974,7 +7974,7 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
     // loader cannot take is reported at the manifest under E-MODULE-9999.
     if load_error == assets.InvalidManifest || load_error == assets.AssetMissing || load_error == assets.AssetTooLarge {
         var message_storage: [512]u8 = zero
-        let message = asset_failure_message(message_storage[..], load_error)
+        let message = asset_failure_message(message_storage[..], load_error, loaded.asset_missing)
         let (manifest_path, manifest_path_error) = tool.manifest_join(a, loaded.project.root, "project.yaml")
         if manifest_path_error != ok { ret manifest_path_error }
         var no_token: lex.Token = zero
@@ -12245,10 +12245,11 @@ fn run_arguments(a: *mem.Arena, args: []str) -> err {
 }
 
 // What `project.yaml`'s assets did wrong (D777), the unreadable file named (T013).
-fn asset_failure_message(storage: []u8, failure: err) -> str {
+fn asset_failure_message(storage: []u8, failure: err, missing: str) -> str {
     if failure == assets.AssetMissing {
+        if missing.len == 0usize { ret "`project.yaml` declares an asset whose file cannot be read" }
         var at = tool.nptest_copy(storage, 0usize, "`project.yaml` declares an asset whose file cannot be read: `")
-        at = tool.nptest_copy(storage, at, assets.missing)
+        at = tool.nptest_copy(storage, at, missing)
         at = tool.nptest_copy(storage, at, "`")
         ret storage[0usize..at]
     }
@@ -12301,7 +12302,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // report them at the manifest: the input's failure under the load's own code (T013).
     if result == assets.InvalidManifest || result == assets.AssetMissing || result == assets.AssetTooLarge {
         code = "E-MODULE-9999"
-        message = asset_failure_message(detail_storage[..], result)
+        message = asset_failure_message(detail_storage[..], result, "")
         status = 1i32
     }
     // A corrupt artifact named on the command line is the input's failure, not the

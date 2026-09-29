@@ -28,10 +28,6 @@ error InvalidManifest
 error AssetMissing
 error AssetTooLarge
 
-// The path, as `project.yaml` spells it, of the asset `asset_load` could not read, for
-// the report to name (T013); empty until one fails.
-var missing: str = zero
-
 const MAX_ASSETS: usize = 256usize
 const MAX_ATTRIBUTES: usize = 16usize
 const MAX_TOTAL: usize = 4194304usize
@@ -476,7 +472,7 @@ fn asset_generate_into(o: *Out, entries: []Entry, count: usize, attributes: usiz
 // The project's declared assets, sorted by name, each file read and hashed; zero
 // entries when the project has no manifest or declares none. The build manifest
 // lists them from here too (D792), so one reading serves both.
-fn asset_collect(a: *mem.Arena, root: str, entries: []Entry, manifest_len: *usize) -> (usize, err) {
+fn asset_collect(a: *mem.Arena, root: str, entries: []Entry, manifest_len: *usize, missing: *str) -> (usize, err) {
     *manifest_len = 0usize
     if root.len == 0usize { ret (0usize, ok) }
     let (manifest_path, manifest_path_error) = asset_join(a, root, "project.yaml")
@@ -487,17 +483,17 @@ fn asset_collect(a: *mem.Arena, root: str, entries: []Entry, manifest_len: *usiz
     let (count, parse_error) = parse_manifest(a, manifest, entries)
     if parse_error != ok { ret (0usize, parse_error) }
     if count == 0usize { ret (0usize, ok) }
-    let load_error = asset_load(a, root, entries, count)
+    let load_error = asset_load(a, root, entries, count, missing)
     if load_error != ok { ret (0usize, load_error) }
     ret (count, ok)
 }
 
-fn asset_overlay(a: *mem.Arena, root: str, overlay_paths: []str, overlay_texts: []str, overlay_count: *usize) -> err {
+fn asset_overlay(a: *mem.Arena, root: str, overlay_paths: []str, overlay_texts: []str, overlay_count: *usize, missing: *str) -> err {
     let checkpoint = mem.mark(a)
     let (entries, entries_error) = mem.alloc[Entry](a, MAX_ASSETS)
     if entries_error != ok { ret entries_error }
     var manifest_len = 0usize
-    let (count, collect_error) = asset_collect(a, root, entries, &manifest_len)
+    let (count, collect_error) = asset_collect(a, root, entries, &manifest_len, missing)
     if collect_error != ok { ret collect_error }
     if count == 0usize {
         mem.reset(a, checkpoint)
@@ -512,7 +508,9 @@ fn asset_overlay(a: *mem.Arena, root: str, overlay_paths: []str, overlay_texts: 
     ret ok
 }
 
-fn asset_load(a: *mem.Arena, root: str, entries: []Entry, count: usize) -> err {
+// `missing` is set to the path, as `project.yaml` spells it, of an asset whose file cannot
+// be read, for the report to name (T013).
+fn asset_load(a: *mem.Arena, root: str, entries: []Entry, count: usize, missing: *str) -> err {
     // Sorted by logical name; then every file read and hashed.
     var i = 1usize
     while i < count {
@@ -532,7 +530,7 @@ fn asset_load(a: *mem.Arena, root: str, entries: []Entry, count: usize) -> err {
         if path_error != ok { ret path_error }
         let (bytes, load_error) = source.load(a, path)
         if load_error != ok {
-            missing = entries[i].path
+            *missing = entries[i].path
             ret AssetMissing
         }
         total += bytes.len
