@@ -42,8 +42,15 @@ error Aborted
 error Protocol
 
 fn open(a: *mem.Arena, options: Options) -> (db.Connection, err)
+fn open_with_cipher(a: *mem.Arena, options: Options, cipher: tls.Aead) -> (db.Connection, err)
 fn detail(a: *mem.Arena, connection: *const db.Connection) -> (Detail, err)
 ```
+
+`open_with_cipher` is `open` with the TLS records sealed and opened by `cipher` rather than
+`e.crypto.aead`'s portable AES-GCM. The cipher is typically `x.openssl.crypto`'s, which uses the
+host's OpenSSL when there is one (D1646). The handshake and the certificate checks are
+`e.net.tls`'s either way. On the benchmark's SQL Server scan on Linux, OpenSSL takes the scan
+from about 34 ms to 9–11 ms.
 
 `open` resolves `host` (IPv4 first), connects, and completes TLS. The server's certificate must
 chain to `trust_roots`, which is DER certificates as `e.net.tls` takes them, and must name

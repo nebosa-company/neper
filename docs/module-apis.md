@@ -8345,6 +8345,7 @@ type Version = enum u8 { Tls13 }
 type ClientConfig = struct { server_name: str, trust_roots: []const u8, alpn: []const str, entropy: []const u8, now: time.Timestamp }
 type ServerConfig = struct { certificate_chain: []const u8, private_key: []const u8, alpn: []const str, entropy: []const u8 }
 type Stream = struct { state: *void }
+type Aead = struct { ctx: *void, seal: fn(ctx: *void, dst: []u8, key: [16]u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err), open: fn(ctx: *void, dst: []u8, key: [16]u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err) }
 error InvalidCertificate
 error Handshake
 error Protocol
@@ -8353,6 +8354,7 @@ error Unsupported
 
 fn client(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ClientConfig) -> (Stream, err)
 fn server(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ServerConfig) -> (Stream, err)
+fn use_aead(stream: *Stream, cipher: Aead) -> err
 fn handshake(stream: *Stream) -> err
 fn reader(stream: *Stream) -> io.Reader
 fn writer(stream: *Stream) -> io.Writer
@@ -8389,7 +8391,10 @@ schedule composes `e.crypto.kdf`/`e.crypto.mac`; each independent handshake requ
 at least 64 fresh caller bytes, split into its random and ephemeral secret. Certificate
 messages are capped at 16 KiB and verified to depth eight. RSA server keys, P-384,
 SHA-384 suites, client certificates, PSK, resumption, 0-RTT and post-handshake
-authentication are unsupported; a NewSessionTicket after the handshake is read past. Constructors remain inert; `reader` and `writer` expose no plaintext
+authentication are unsupported; a NewSessionTicket after the handshake is read past.
+`use_aead`, before `handshake`, hands the record cipher to a caller-supplied AES-128-GCM
+such as `x.openssl.crypto`'s (D1646); the handshake, certificate checks and key schedule stay
+this module's. Constructors remain inert; `reader` and `writer` expose no plaintext
 until `handshake` succeeds, and `close` exchanges an authenticated close notification.
 
 ### `e.net.http.auth`

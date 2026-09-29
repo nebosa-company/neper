@@ -2810,8 +2810,18 @@ try {
 $tdsPath = Join-Path $testBuild 'x-tds-selfhost.exe'
 $tdsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_tds\src\main.e') $repo 'x64' 'windows' $tdsPath
 if ($LASTEXITCODE -ne 0 -or $tdsWritten -ne 'executable written') { throw 'x.microsoft.tds emission failed' }
+# `x.openssl.crypto` finds libcrypto on the DLL search path; nothing ships it, so the suite puts
+# <tools>\openssl (Git for Windows' libcrypto-3-x64.dll) first on PATH for these two runs (D1646).
+$opensslPath = Join-Path $testBuild 'x-openssl-selfhost.exe'
+$opensslWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_openssl\src\main.e') $repo 'x64' 'windows' $opensslPath
+if ($LASTEXITCODE -ne 0 -or $opensslWritten -ne 'executable written') { throw 'x.openssl.crypto emission failed' }
+$opensslTools = if ($env:NEPER_DB_TOOLS) { Join-Path $env:NEPER_DB_TOOLS 'openssl' } else { 'D:\tools\openssl' }
 $sqlServer = Join-Path $testBuild 'sqlserver'
+$pathBeforeOpenssl = $env:PATH
 try {
+    $env:PATH = $opensslTools + ';' + $pathBeforeOpenssl
+    & $opensslPath required
+    if ($LASTEXITCODE -ne 0) { throw "the OpenSSL record cipher answered wrongly: exit $LASTEXITCODE" }
     & (Join-Path $PSScriptRoot 'sqlserver.ps1') start $sqlServer
     $tds = @{}
     foreach ($line in Get-Content (Join-Path $sqlServer 'ports')) {
@@ -2821,6 +2831,7 @@ try {
     & $tdsPath localhost $tds['tds_port'] $tds['tds_root'] $tds['tds_user'] $tds['tds_password']
     if ($LASTEXITCODE -ne 0) { throw "the SQL Server driver answered wrongly: exit $LASTEXITCODE" }
 } finally {
+    $env:PATH = $pathBeforeOpenssl
     & (Join-Path $PSScriptRoot 'sqlserver.ps1') stop $sqlServer
 }
 # D131's property: a program that uses `e.os` and opens no library needs no loader. It checks

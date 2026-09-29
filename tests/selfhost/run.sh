@@ -2464,6 +2464,11 @@ if [ "$db_status" -ne 0 ]; then
     echo "a database driver fixture failed: exit $db_status" >&2
     exit 1
 fi
+# `x.openssl.crypto` with the distribution's libcrypto.so.3 as e.net.tls's record cipher (D1646).
+openssl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_openssl/src/main.e" "$repo" x64 linux "$test_build/x-openssl-selfhost")
+[ "$openssl_written" = 'executable written' ]
+chmod +x "$test_build/x-openssl-selfhost"
+"$test_build/x-openssl-selfhost" required
 # `x.microsoft.tds` against SQL Server 2025 (the mssql-server package) over TDS 8.0 strict:
 # sqlserver.sh starts it on 127.0.0.1:14331 when it is stopped, and stops it again (D1643).
 tds_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_tds/src/main.e" "$repo" x64 linux "$test_build/x-tds-selfhost")

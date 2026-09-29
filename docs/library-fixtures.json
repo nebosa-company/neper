@@ -209,7 +209,8 @@
     "crypto_aead",
     "crypto_cipher",
     "misc_gaps",
-    "net_tls"
+    "net_tls",
+    "x_openssl"
    ]
   },
   {
@@ -1443,11 +1444,12 @@
    "module": "e.net.tls",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 18,
-   "delivered": 18,
+   "catalogue": 20,
+   "delivered": 20,
    "pending": [],
    "fixtures": [
-    "net_tls"
+    "net_tls",
+    "x_openssl"
    ]
   },
   {
@@ -1876,6 +1878,7 @@
     "x_db_units",
     "x_mysql",
     "x_odbc",
+    "x_openssl",
     "x_postgresql",
     "x_sqlite",
     "x_tds"
