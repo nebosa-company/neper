@@ -30770,3 +30770,28 @@ AES derived every S-box value from the GF(2⁸) inverse, 16 bytes a round, and e
 - The published five-driver numbers remain the portable default.
 
 ---
+
+## D1678 — A local that collides is renamed by the compiler's own fix (T029)
+
+**Problem.** E-NAME-0003 ended 35 of the 134 builds in 2026-09-20..27 that failed on a compile code, more than any other code. A local or parameter reused a module function (`text`, `row`, `cell`), a `use` qualifier (`source`, `bytes`), a reserved name (`target`, `Vec`, `i8`), or a name already bound in scope. D66's no-shadowing rule stays. What was missing is a fix the repair loop (D948) can apply without a model turn.
+
+**Decision.** Fix kind 5, *rename the local and every use of it in its scope*, `maybe` like the other four, on `ModuleShadow`, `ReservedLocal` and `DuplicateLocal`.
+
+- **One fix, many edits.** The sink carries `fix_sites`, the start of the local's own token and of each use. The writer puts one edit per site into the fix's `edits`, all with the same replacement and the one SHA-256 precondition. `benchmarks/baseline/context.py` already applies edits from the last byte back.
+- **The scope, by tokens.** A `let` or `var` name runs to the close of its block. A parameter, a `for` name or a capture runs to the close of the body after it. The resolver has already stopped at the declaration, so the uses are not resolved yet, and the scan is lexical.
+- **Not a use:**
+  - a member or variant after `.`;
+  - a field label, `name:` after `{` or `,`;
+  - for a collision with a function, a call `name(`;
+  - for a collision with a qualifier, `name.member(`, `name.member[` or `name.Type`;
+  - for a builtin type, a type position (after `:`, `->`, `*`, `[`, `]`, `const`) or a conversion `i8(`.
+- **The new name** is `name_value`, then `name_value2` to `9`: the first that is not reserved, not a module-scope name, and not spelt by any identifier in the module. If there are more than 256 sites, or no name is free, there is no fix, so a rename is never partial.
+
+**Evidence.**
+
+- Four conformance fixtures, one per collision kind: `reject/rename_function`, `rename_qualifier`, `rename_builtin` and `rename_duplicate`. The reserved name is `reject/reserved_local`, whose golden now carries its fix.
+- The goldens are byte-equal under the bootstrap-built stage 1, stage 2, and the Linux compiler in WSL.
+- Applying each fix the way the D948 loop does gives a file that `check-file` accepts: 3, 3, 3, 2 and 1 edits.
+- The plain diagnostic is unchanged.
+
+**Not yet.** The second half of T029's bar: `lang-stats.py` showing E-NAME-0003 no longer the most repeated code needs transcripts written after this lands.
