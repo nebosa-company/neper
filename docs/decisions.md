@@ -30982,3 +30982,18 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 - The no-op build's `libraries` equals the linking build's.
 - `validate_stream.py` accepts the manifests.
 - Pinned after the `extern_import` run in both suites.
+
+## D1686 — `index --all` indexes the toolchain's library too (T009)
+
+**Decision.** `neper index --all`, or `index-project DIR ROOT ARCH OS WORKDIR --json --all`, walks the toolchain's `lib/` after the project's `src/` and `lib/`.
+
+- Each toolchain module goes through `index-file --json --toolchain-path REL`, so its records carry `{"root":"toolchain-lib","path":"e/mem.e"}`, the identity tooling section 1 already defines.
+- A module the project's own `lib/` defines is left out: the project's shadows the toolchain's (spec section 2). Every module is left out when the project is the toolchain itself, as the repository is.
+- The other target's variants are dropped as the project's are (D544).
+
+**Evidence.**
+
+- From `tools/index_project`, `index --all` indexes 360 modules on both hosts, the project's three and the toolchain's 357: 109,098 symbols and 366,706 references in about 20 s on Windows.
+- All 475,806 records validate against the v1 schema.
+- The operand-less `index` without `--all` is still byte-equal to its golden.
+- Pinned in both suites: the `e/mem.e` identity and more than three modules.

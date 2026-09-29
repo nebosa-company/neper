@@ -1334,6 +1334,16 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         long_form[count + 5usize] = project_workdir
         long_form[count + 6usize] = "--json"
         count += 7usize
+        // `index --all` (T009): the toolchain's library as well.
+        var all_at = 2usize
+        while is_index && all_at < args.len {
+            if same(args[all_at], "--all") {
+                long_form[count] = "--all"
+                count += 1usize
+                all_at = args.len
+            }
+            all_at += 1usize
+        }
         ret (long_form[0usize..count], true, ok)
     }
     if is_fmt {
@@ -2880,6 +2890,11 @@ fn index_project_command(a: *mem.Arena, args: []str) -> err {
     report.capture = capture
     report.capturing = true
     drop_other_variants(paths, rels, &count, args[4usize], args[5usize])
+    // `--all` (T009): the toolchain's `lib` after the project's roots, each module under
+    // `toolchain-lib`, less those the project defines itself (its own shadow the
+    // toolchain's, spec 2) -- which is every one when the project is the toolchain.
+    let project_count = count
+    if args.len == 9usize && same(args[8usize], "--all") { try walk_toolchain(a, args, paths, rels, &count, project_count) }
     var symbols = 0usize
     var references = 0usize
     var failed = false
@@ -2894,6 +2909,7 @@ fn index_project_command(a: *mem.Arena, args: []str) -> err {
         argv[5usize] = args[5usize]
         argv[6usize] = "--json"
         argv[7usize] = "--path"
+        if at >= project_count { argv[7usize] = "--toolchain-path" }
         argv[8usize] = rels[at]
         let (status, child_out, child_err, spawn_error) = nptest_spawn(a, argv[..], child_base)
         if spawn_error != ok { ret spawn_error }
@@ -2918,6 +2934,37 @@ fn index_project_command(a: *mem.Arena, args: []str) -> err {
     try write_usize(&report, count)
     try write_all(&report, "}}\n")
     if failed { os.exit(1i32) }
+    ret ok
+}
+
+// The toolchain's `lib` for `index --all` (T009), appended after the project's modules:
+// its paths relative to that `lib`, as `toolchain-lib` spells them, without the other
+// target's variants and without a module the project's own `lib` defines.
+fn walk_toolchain(a: *mem.Arena, args: []str, paths: []str, rels: []str, count: *usize, project_count: usize) -> err {
+    let (lib_dir, lib_error) = nptest_join(a, args[3usize], "lib")
+    if lib_error != ok { ret lib_error }
+    let (probe, probe_error) = os.readdir(a, lib_dir)
+    if probe_error != ok { ret ok }
+    let start = *count
+    try walk_sources(a, lib_dir, "", paths, rels, count)
+    var kept = start
+    var at = start
+    while at < *count {
+        var shadowed = variant_of_other_target(rels[at], args[4usize], args[5usize])
+        var project_at = 0usize
+        while !shadowed && project_at < project_count {
+            let own = rels[project_at]
+            if own.len == rels[at].len + 4usize && same(own[0usize..4usize], "lib/") && same(own[4usize..own.len], rels[at]) { shadowed = true }
+            project_at += 1usize
+        }
+        if !shadowed {
+            paths[kept] = paths[at]
+            rels[kept] = rels[at]
+            kept += 1usize
+        }
+        at += 1usize
+    }
+    *count = kept
     ret ok
 }
 
@@ -3436,9 +3483,12 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     }
     var identity = basename(args[2usize])
     if args.len == 9usize { identity = args[8usize] }
+    // A toolchain module indexed under `index --all` (T009) is under its own root.
+    var identity_root = "operand"
+    if args.len == 9usize && same(args[7usize], "--toolchain-path") { identity_root = "toolchain-lib" }
     // The index writes its own header: the held one is dropped.
     report.pending_header = ""
-    let (index_exit, index_error) = tool.index_json(a, "operand", identity, loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count, absolute_path)
+    let (index_exit, index_error) = tool.index_json(a, identity_root, identity, loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count, absolute_path)
     if index_error != ok { ret index_error }
     if index_exit != 0usize { os.exit(i32(index_exit)) }
     ret ok
@@ -12748,14 +12798,14 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
     if (args.len == 7usize || (args.len == 8usize && same(args[7usize], "--absolute-paths"))) && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
     // `... --json --path REL` (D298): the operand's identity under its project's src.
-    if args.len == 9usize && same(args[1usize], "index-file") && same(args[6usize], "--json") && same(args[7usize], "--path") { ret index_command(a, args) }
+    if args.len == 9usize && same(args[1usize], "index-file") && same(args[6usize], "--json") && (same(args[7usize], "--path") || same(args[7usize], "--toolchain-path")) { ret index_command(a, args) }
     // `apply-plan PLAN --root DIR [--project-src DIR] [--json]` (D481, H29): the plans applied by the compiler.
     if args.len >= 5usize && same(args[1usize], "apply-plan") && same(args[3usize], "--root") { ret apply_plan_command(a, args) }
     // `compare-manifests A B [--json]` (D482): two build manifests held against each other.
     if (args.len == 4usize || (args.len == 5usize && same(args[4usize], "--json"))) && same(args[1usize], "compare-manifests") { ret compare_manifests_command(a, args) }
     // `index-project DIR ROOT ARCH OS WORKDIR --json` (D298): every module under DIR/src
     // and DIR/lib, one stream.
-    if args.len == 8usize && same(args[1usize], "index-project") && same(args[7usize], "--json") { ret index_project_command(a, args) }
+    if (args.len == 8usize || (args.len == 9usize && same(args[8usize], "--all"))) && same(args[1usize], "index-project") && same(args[7usize], "--json") { ret index_project_command(a, args) }
     // `fmt-file PATH [--json]` (D234): the operand's canonical layout as one `formatted` record.
     // `-` reads stdin under a `--path` identity, on every form (D289).
     let fmt_args = fmt_form(args)
