@@ -14,7 +14,10 @@ patches, and so is the script's whole cost; a run of the script is one edit appl
 so an `assert count == 1` failure is an edit that did not apply. All other Python in a
 session (test oracles, analysis, doc patches) is tooling for that session's host
 language: it costs the host and lands no code. Python's own row is project scripts:
-.py files inside a repo, outside scratch and build folders. A scorecard and the four
+.py files inside a repo, outside scratch and build folders; a source file of any language
+written into one of those is a probe, whose cost is the host's and which lands nothing. A failed
+build that carries neither a compile code nor a test signature is the shell's (plumb%), not
+the language's (fail%). A scorecard and the four
 tables it scores follow; with --help each has its columns explained beneath it. A KB is 1000 bytes of
 source, never tokens.
 """
@@ -25,7 +28,7 @@ AXES = {  # every judged column, by what it measures
     'Cost (tokens / USD)': ['cost/B', '$/KB', 'direct $/KB', 'script $/KB', 'outK/KB', 'tok/B', 'thk/B', 'direct tok/B', 'script tok/B'],
     'Rework (iterations)': ['ed/fil', 'selfcor%', 'turns/ed', 'fix turns', '1-edit%'],
     'Correctness (right first time)': ['edit%', 'fail%', '1st-ok%', 'repeat%'],
-    'Time': ['bld ms', 'p90 ms', 'mdl s/KB', 'tool s/KB'],
+    'Time': ['bld ms', 'cmp ms', 'p90 ms', 'mdl s/KB', 'tool s/KB'],
     'Context load': ['ctx Ktk', 'read/KB', 'diag B', 'cache%'],
     'Style': ['prose K/KB', 'script%']}
 JUDGED = sum(map(len, AXES.values()))
@@ -65,6 +68,15 @@ ROWS = ['Neper', 'Dart', 'Rust', 'JS', 'TS', 'Python']
 BUILD = re.compile(r'\b(cargo|flutter|dart|(?<!-)(?<!repos[\\/])neper(?:-\w+)*(?:\.exe)?(?![\w\\/.-])|tsc|npm|pnpm|node|vitest|jest|pytest|run\.sh|suite|make|gcc|clang|bootstrap|go (build|test)|dotnet)\b')
 COMPILE = {'Neper': re.compile(r'\bE-[A-Z]+-\d{4}\b'), 'Rust': re.compile(r'error(\[E\d{4}\]|: )'), 'Dart': re.compile(r'\bError: |\berror •'),
            'JS': re.compile(r'\b(SyntaxError|TypeError|ReferenceError)\b'), 'TS': re.compile(r'\berror TS\d{4}\b'), 'Python': re.compile(r'Traceback|SyntaxError')}
+# A failure that is the program's rather than the shell's (T030): an assertion, a panic, a trap, a
+# timeout, a suite's own throw at one of its lines, the bootstrap lint. A failed build-shaped command
+# with neither this nor a compile code is plumbing -- a PowerShell parse, a blocked sleep, a denied
+# permission, an awk error, a missing file -- and is reported apart from fail% and 1st-ok%.
+TESTFAIL = re.compile(r'\bassert|Assertion|\bpanicked\b|\btrap(?:ped)?\b|timed out|\btimeout\b|\bFAIL|\bthrow\b|run\.(?:ps1|sh):\d+|lint_bootstrap|\bexit(?:ed)? [1-9]|test result: FAILED')
+# A command that compiles and does nothing else: one compiler invocation, after an optional `cd DIR &&`,
+# with nothing chained, piped or run after it. Its wall time is the compiler's, not a suite's.
+ONLY_COMPILE = re.compile(r'^\s*(?:cd\s+\S+\s*&&\s*)?\S*(?:neper(?:-\w+)*(?:\.exe)?\s+(?:build|check|emit-executable|emit-object|emit-em|check-file|build-file)'
+                          r'|cargo\s+(?:build|check)|tsc|dart\s+(?:analyze|compile)|flutter\s+analyze)\b[^;&|\n]*$')
 READS = ('Read', 'Grep', 'Glob')
 TARGET = re.compile(r"""['"]([^'"\n]{1,200}?\.(e|dart|rs|js|ts|md|json|jsonl|ps1|sh|html|txt|ebnf|py|c|h|toml|yaml|pas|dpr))['"]""")
 HEREDOC = re.compile(r"(?ms)^([^\n]*?<<-?\s*['\"]?(\w+)['\"]?[^\n]*)\n(.*?)\n\2[ \t]*$")
@@ -138,6 +150,7 @@ def landed(t, full):
         body = i.get('content', '') if n == 'Write' else i.get('new_string', '') if n == 'Edit' else ''.join(e.get('new_string', '') for e in i.get('edits', []))
         L = LANG.get(os.path.splitext(path)[1].lower())
         if L == 'Python': python(path, body or '')
+        elif L and SCRATCH.search(path): out.append((None, 'helper', 0, set()))  # a probe program: work, not landed code (T030)
         elif L: out.append((L, 'direct', len((body or '').encode()), {path}))
         elif n == 'Write' and SPEC.search(body or ''): out += spec_code(body)
     elif n == 'Bash':
@@ -150,6 +163,7 @@ def landed(t, full):
                 if not tgt: continue
                 L = LANG.get(os.path.splitext(tgt.group(1))[1].lower())
                 if L == 'Python': python(tgt.group(1), body)
+                elif L and SCRATCH.search(tgt.group(1)): out.append((None, 'helper', 0, set()))
                 elif L: out.append((L, 'direct', len(body.encode()), {tgt.group(1)}))
     return out
 
@@ -299,6 +313,7 @@ def deepseek():
 
 S = C.defaultdict(C.Counter)       # (lang, mode) -> counters
 build_s = C.defaultdict(list)      # host lang -> wall seconds of each build/test command
+compile_s = C.defaultdict(list)    # host lang -> wall seconds of each command that only compiled
 ctx_tok = C.defaultdict(list)      # lang -> context tokens at each turn that landed its code
 fix_t = C.defaultdict(list)        # host lang -> assistant turns from a compile failure to the next passing build
 diag_b = C.defaultdict(list)       # host lang -> bytes of each failed build/test output
@@ -370,9 +385,13 @@ for agent, msgs, order, results in itertools.chain(*(read() for name, read in zi
                 if PATCHER.search(cmd) and not es:  # a spec written earlier is applied now; its code was counted when written
                     S[(hk, 'direct')]['apply_err'] += failed
                     if not BUILD.search(cmd): continue
-                if not ks and (BUILD.search(cmd) or PYRUN.search(cmd)):  # a build or test run, or a script written outside these transcripts
-                    text = r.get('text', '')
+                text = r.get('text', '')
+                plumbing = failed and not (host in COMPILE and COMPILE[host].search(text)) and not TESTFAIL.search(text)
+                if not ks and plumbing and (BUILD.search(cmd) or PYRUN.search(cmd)):
+                    H['plumbing'] += 1  # the shell failed, not the language: no build, and the edits wait for one
+                elif not ks and (BUILD.search(cmd) or PYRUN.search(cmd)):  # a build or test run, or a script written outside these transcripts
                     H['builds'] += 1; H['build_fail'] += failed; build_s[hk].append(dur)
+                    if ONLY_COMPILE.match(cmd): compile_s[hk].append(dur)
                     H['fb_n'] += since_build; H['fb_ok'] += since_build * (not failed); since_build = 0
                     if failed:
                         diag_b[hk].append(len(text))
@@ -451,10 +470,11 @@ for L in ROWS:
     cost_b = t['cost'] / kb
     rows.append((L, (kb // KB, d['d_vis'] / max(d['d_bytes'], 1), d['d_think'] / max(d['d_bytes'], 1),
                      100 * (d['apply_err'] + s['apply_err']) / max(d['applied'] + s['applied'], 1), h['builds'],
-                     100 * h['build_fail'] / max(h['builds'], 1), (d['edits'] + s['edits']) / max(files, 1), 100 * s['bytes'] / kb, cost_b, cost_b * USD * KB)))
+                     100 * h['build_fail'] / max(h['builds'], 1), 100 * h['plumbing'] / max(h['builds'] + h['plumbing'], 1),
+                     (d['edits'] + s['edits']) / max(files, 1), 100 * s['bytes'] / kb, cost_b, cost_b * USD * KB)))
 table('COST  (KB is kilobytes, 1000 bytes, of source text landed in files; never tokens)',
       [('KB', 7, '%d', None), ('tok/B', 6, '%.3f', 'low'), ('thk/B', 6, '%.3f', 'low'), ('edit%', 6, '%.1f', 'low'), ('builds', 7, '%d', None),
-       ('fail%', 6, '%.1f', 'low'), ('ed/fil', 6, '%.1f', 'low'), ('script%', 7, '%.0f%%', 'low'), ('cost/B', 9, '%.1f', 'low'), ('$/KB', 8, '%.3f', 'low')], rows)
+       ('fail%', 6, '%.1f', 'low'), ('plumb%', 6, '%.1f', None), ('ed/fil', 6, '%.1f', 'low'), ('script%', 7, '%.0f%%', 'low'), ('cost/B', 9, '%.1f', 'low'), ('$/KB', 8, '%.3f', 'low')], rows)
 
 explain('''
 KB       kilobytes (1000 bytes) of UTF-8 source text that landed in files of this language: the
@@ -464,8 +484,12 @@ tok/B    visible output tokens the model emitted per byte of source landed, meas
          that were exactly one direct edit and nothing else (so the anchor text of an Edit counts)
 thk/B    thinking tokens per byte of source landed, from the same replies
 edit%    edit applications that failed: a Write/Edit tool error, or a patch-script run that failed
-builds   build and test commands run in sessions whose host language this is (python oracles included)
-fail%    those commands that returned an error
+builds   build and test commands run in sessions whose host language this is (python oracles included),
+         less those that failed as plumbing
+fail%    those commands that failed with a compile code or a test signature (an assertion, a panic, a
+         trap, a timeout, a suite's own throw): the language's failures, not the shell's
+plumb%   build-shaped commands that failed with neither -- a PowerShell parse, a blocked sleep, a denied
+         permission, a missing file -- as a share of all of them; not judged, not in fail% or 1st-ok%
 ed/fil   edit applications per distinct target file; higher means the same files were reworked more
 script%  share of the landed source bytes that arrived inside Python patch/generator scripts
 cost/B   input-token equivalents spent per byte of source landed, counting every token of the turns
@@ -479,11 +503,12 @@ for L in ROWS:
     bs = sorted(build_s[L]) or [0]
     rows.append((L, (t['out'] / kb, statistics.median(ctx_tok[L]) / 1000 if ctx_tok[L] else 0, t['read_b'] / kb,
                      t['turns'] / max(d['applied'] + s['applied'], 1), 100 * h['fb_ok'] / max(h['fb_n'], 1),
-                     statistics.median(bs) * 1000, (bs[int(len(bs) * 0.9)] if len(bs) > 1 else bs[0]) * 1000, 100 * h['compile_err'] / max(h['build_fail'], 1),
+                     statistics.median(bs) * 1000, statistics.median(compile_s[L]) * 1000 if compile_s[L] else None,
+                     (bs[int(len(bs) * 0.9)] if len(bs) > 1 else bs[0]) * 1000, 100 * h['compile_err'] / max(h['build_fail'], 1),
                      t['model_s'] / kb * KB, t['tool_s'] / kb * KB)))
 table('\nPROCESS  (how the code got written)',
       [('outK/KB', 8, '%.1f', 'low'), ('ctx Ktk', 8, '%.0f', 'low'), ('read/KB', 8, '%.1f', 'low'), ('turns/ed', 8, '%.1f', 'low'), ('1st-ok%', 8, '%.1f', 'high'),
-       ('bld ms', 8, '%.0f', 'low'), ('p90 ms', 8, '%.0f', 'low'), ('cmpl%', 6, '%.1f', None), ('mdl s/KB', 9, '%.0f', 'low'), ('tool s/KB', 9, '%.0f', 'low')], rows)
+       ('bld ms', 8, '%.0f', 'low'), ('cmp ms', 8, '%.0f', 'low'), ('p90 ms', 8, '%.0f', 'low'), ('cmpl%', 6, '%.1f', None), ('mdl s/KB', 9, '%.0f', 'low'), ('tool s/KB', 9, '%.0f', 'low')], rows)
 
 explain('''
 outK/KB   thousand output tokens (visible + thinking) generated per KB of source landed; the raw
@@ -495,7 +520,10 @@ read/KB   bytes of tool output the model pulled into context per byte of source 
 turns/ed  assistant replies per edit application: reading, thinking and testing turns between edits
 1st-ok%   edit applications whose first following build/test command passed
 bld ms    wall-clock milliseconds of a build/test command, median, from the tool call's timestamp to
-          its result's (foreground commands only, capped at 1800 s)
+          its result's (foreground commands only, capped at 1800 s): the whole command, including
+          the program or suite it runs and the 0.3-1.4 s every tool call pays
+cmp ms    the same median over commands that only compiled: one compiler invocation, nothing
+          chained, piped or run after it
 p90 ms    the same, 90th percentile
 cmpl%     share of the failed build/test commands whose output carries this language's compiler
           diagnostics (Neper E-XXXX-nnnn, Rust error[E], Dart Error:, TS error TS, JS/Python

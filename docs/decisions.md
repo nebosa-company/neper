@@ -30839,3 +30839,30 @@ AES derived every S-box value from the GF(2⁸) inverse, 16 bytes a round, and e
 
 - `lang-stats.py`'s repeat% and 1-edit% over transcripts written after this.
 - No fixture reaches E-TYPE-0009.
+
+## D1680 — `lang-stats.py` judges the compiler, not the shell (T030)
+
+**Problem.** Of 266 failed build-shaped commands in 2026-09-20..27, 116 failed on the shell or the harness, yet fail% and 1st-ok% counted every one against Neper. They included a PowerShell parse, a blocked sleep, a denied permission, an awk error and a missing file. bld ms also timed the whole Bash call, suite and program included.
+
+**Decision.**
+
+- **Plumbing.** A failed build-shaped command that carries neither a compile code nor a test signature is plumbing. A test signature is an assertion, a panic, a trap, a timeout, a suite's own throw at `run.ps1:N` or `run.sh:N`, `lint_bootstrap`, or `exit N`.
+  - Plumbing is not a build: it leaves builds, fail%, 1st-ok% and the repair window.
+  - The edits before it wait for the next real build.
+  - It is reported apart as `plumb%`, a share of all build-shaped failures, not judged.
+- **`cmp ms`.** A new column, judged under Time: the median over commands that only compiled. That is one compiler invocation after an optional `cd DIR &&`, with nothing chained, piped or run after it. It sits beside `bld ms`, the whole command.
+- **Probes.** A source file written under a scratch or build folder is a probe. It is the host's cost, a helper, and lands no code.
+
+**Evidence.** Over the last 7 days, Claude only:
+
+| | fail% | plumb% | bld ms | cmp ms | landed KB |
+|---|---|---|---|---|---|
+| Neper | 2.5 | 2.7 | 3,155 | 1,604 | 4,461 → 3,523 |
+| Dart | 0.4 | 7.1 | 902 | 5,438 | |
+
+Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truthful figure. A sample of the plumbing rows read as expected: `ls` of a missing file, a denied permission, a blocked sleep, a shell quoting EOF, a patch spec that matched twice. A fixture's bare non-zero exit with no text also lands there.
+
+**Not yet.** Two distortions T030 names:
+
+- A Python patch run in the same command as a build still counts the build's failure as an edit that did not apply.
+- `COMPILE['Dart']` still needs checking against a Dart transcript's failed build.
