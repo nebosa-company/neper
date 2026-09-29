@@ -4,12 +4,16 @@
 // refused before any dialog; a host without printing says so through the
 // predicates. No dialog is shown in the suite.
 
+use e.atomic
 use e.fs
 use e.io
 use e.mem
 use e.os
 use e.os.shell
 use e.ui.app
+
+// A flag nothing sets: waiting on it is the fixture's timed pause.
+type Spooler = struct { flag: Atomic[u32] }
 
 fn joined(a: *mem.Arena, x: str, y: str) -> str {
     let (bytes, allocation_error) = mem.alloc[u8](a, x.len + y.len)
@@ -65,10 +69,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if app.print_job_page(a, &job, page) != ok || job.pages != 1u32 { os.exit(8i32) }
     if app.print_job_end(a, &job) != ok { os.exit(9i32) }
     if app.print_job_page(a, &job, page) != shell.NotFound || app.print_job_end(a, &job) != shell.NotFound { os.exit(10i32) }
+    // The spooler can finish the file after the job ends: wait up to five seconds for it.
+    var spooler: Spooler = zero
+    var printed = 0u64
+    var tries = 0u32
+    while printed == 0u64 && tries < 100u32 {
+        let (info, stat_error) = fs.stat(a, output)
+        if stat_error == ok { printed = info.size }
+        if printed == 0u64 { let ignored = os.wait_u32(&spooler.flag, 0u32, 50000000i64) }
+        tries += 1u32
+    }
     let (written, exists_error) = fs.exists(a, output)
     if exists_error != ok || !written { os.exit(11i32) }
-    let (info, stat_error) = fs.stat(a, output)
-    if stat_error != ok || info.size == 0u64 { os.exit(12i32) }
+    if printed == 0u64 { os.exit(12i32) }
     let cleaned = fs.remove_file(a, output)
     // A second job, cancelled.
     let (second, second_error) = app.print_job_start(a, printer, "neper ui_print cancelled", output)
