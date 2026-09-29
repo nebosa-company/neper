@@ -2731,13 +2731,13 @@ saxpy_output=$("$test_build/saxpy-selfhost")
 [ "$saxpy_output" = 'cpu    checksum 16777216' ]
 gpu_direct=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_direct_call/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_direct" in
-    *'main.e:9:5: error[E-TYPE-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;
+    *'main.e:9:5: error[E-GPU-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;
     *) printf '%s\n' "a direct kernel call was not refused: $gpu_direct" >&2; exit 1 ;;
 esac
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
 # a private slice, a module-scope var behind a helper and a `usize` parameter are
 # refused at the kernel with the chain; slices of device and shared memory are not.
-for gpu_profile_case in 'recursion|main.e:14:1: error[E-TYPE-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth' 'private|main.e:9:1: error[E-TYPE-9999]: `fill` reaches a slice of the private variable `local` through fill' 'global|main.e:11:1: error[E-TYPE-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump' 'param|main.e:5:1: error[E-TYPE-9999]: `fill` takes `n`, which is neither a device storage type'; do
+for gpu_profile_case in 'recursion|main.e:14:1: error[E-GPU-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth' 'private|main.e:9:1: error[E-GPU-9999]: `fill` reaches a slice of the private variable `local` through fill' 'global|main.e:11:1: error[E-GPU-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump' 'param|main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type'; do
     gpu_profile_name=${gpu_profile_case%%|*}
     gpu_profile_expected=${gpu_profile_case#*|}
     gpu_profile=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_profile_$gpu_profile_name/src/main.e" "$repo" x64 linux 2>&1 || true)
@@ -2750,7 +2750,7 @@ done
 # (D1589) A device-only helper called from CPU code, a `gpu.Buf` of `usize`, a
 # capability outside `caps(...)` and a repeated `caps` member are refused; a kernel
 # within its `caps(...)` and `ftz` is not.
-for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-TYPE-9999]: `lane` is device-only' 'gpu_buf_element|main.e:5:5: error[E-TYPE-9999]: a `gpu.Buf[T]` holds device memory' 'gpu_caps_bound|main.e:14:1: error[E-TYPE-9999]: `fill` needs `.Float64` through fill -> scaled -> widen' 'gpu_caps_duplicate|main.e:5:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size' 'gpu_shared_elsewhere|main.e:6:8: error[E-TYPE-9999]: `plain` is device-only'; do
+for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-GPU-9999]: `lane` is device-only' 'gpu_buf_element|main.e:5:5: error[E-GPU-9999]: a `gpu.Buf[T]` holds device memory' 'gpu_caps_bound|main.e:14:1: error[E-GPU-9999]: `fill` needs `.Float64` through fill -> scaled -> widen' 'gpu_caps_duplicate|main.e:5:1: error[E-GPU-9999]: `fill` carries `@gpu` without a usable workgroup size' 'gpu_shared_elsewhere|main.e:6:8: error[E-GPU-9999]: `plain` is device-only'; do
     gpu_rule_name=${gpu_rule_case%%|*}
     gpu_rule_expected=${gpu_rule_case#*|}
     gpu_rule=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$gpu_rule_name/src/main.e" "$repo" x64 linux 2>&1 || true)
@@ -2766,12 +2766,12 @@ done
 [ "$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_device_only_module/src/main.e" "$repo" x64 linux)" = 'module check ok' ]
 gpu_bare=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_bare_attribute/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_bare" in
-    *'main.e:4:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'*) ;;
+    *'main.e:4:1: error[E-GPU-9999]: `fill` carries `@gpu` without a usable workgroup size'*) ;;
     *) printf '%s\n' "a bare @gpu was not refused: $gpu_bare" >&2; exit 1 ;;
 esac
 gpu_argument=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_launch_argument/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_argument" in
-    *'main.e:9:9: error[E-TYPE-9999]: `fill` takes a device slice at this position'*) ;;
+    *'main.e:9:9: error[E-GPU-9999]: `fill` takes a device slice at this position'*) ;;
     *) printf '%s\n' "a host slice in a launch pack was not refused: $gpu_argument" >&2; exit 1 ;;
 esac
 # `e.gpu.tensor` (D779): a strided host view uploaded contiguous, `add` and `matmul` as
@@ -2803,7 +2803,7 @@ case "$gpu_divergence_output" in
 esac
 gpu_outside=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_barrier_outside/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_outside" in
-    *'main.e:4:5: error[E-TYPE-9999]: `gpu.barrier()` is written outside a kernel'*) ;;
+    *'main.e:4:5: error[E-GPU-9999]: `gpu.barrier()` is written outside a kernel'*) ;;
     *) printf '%s\n' "a barrier outside a kernel was not refused: $gpu_outside" >&2; exit 1 ;;
 esac
 # `shared var` on the CPU backend (D781): the spec's block sum through workgroup memory
@@ -2827,12 +2827,12 @@ case "$gpu_space_mix" in
 esac
 gpu_shared_outside=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_shared_outside/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_shared_outside" in
-    *'main.e:4:5: error[E-TYPE-9999]: `shared var` is legal only directly in a kernel'*) ;;
+    *'main.e:4:5: error[E-GPU-9999]: `shared var` is legal only directly in a kernel'*) ;;
     *) printf '%s\n' "a shared var outside a kernel was not refused: $gpu_shared_outside" >&2; exit 1 ;;
 esac
 gpu_shared_init=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_shared_initializer/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_shared_init" in
-    *'main.e:5:5: error[E-TYPE-9999]: `tile` is a `shared var` with an initialiser'*) ;;
+    *'main.e:5:5: error[E-GPU-9999]: `tile` is a `shared var` with an initialiser'*) ;;
     *) printf '%s\n' "a shared var with an initialiser was not refused: $gpu_shared_init" >&2; exit 1 ;;
 esac
 # `meta.signed[T]()` (D782): folded like `meta.kind`, a bare or negated bool question
@@ -4678,8 +4678,8 @@ for hot_mode in --release --time; do
         [ "$shape_status" -eq 1 ]
         [ "$(echo "$shape_warm" | grep 'error\[')" = "$(echo "$shape_clean" | grep 'error\[')" ]
         case "$shape_edit:$shape_warm" in
-            plain:*'main.e:20:8: error[E-TYPE-9999]: `fill` is not a kernel: `gpu.launch` takes an `@gpu` function'*) ;;
-            kernel:*'main.e:17:5: error[E-TYPE-9999]: `seed` is a kernel and can only be run through `gpu.launch`'*) ;;
+            plain:*'main.e:20:8: error[E-GPU-9999]: `fill` is not a kernel: `gpu.launch` takes an `@gpu` function'*) ;;
+            kernel:*'main.e:17:5: error[E-GPU-9999]: `seed` is a kernel and can only be run through `gpu.launch`'*) ;;
             *) echo "the warm build after the gpu_reshape $shape_edit edit is not the clean build's refusal: $shape_warm" >&2; exit 1 ;;
         esac
         shape_status=0
@@ -4734,7 +4734,7 @@ for hot_mode in --release --time; do
                 device_clean=$("$test_build/neper-self" emit-executable "$device_scratch/src/main.e" "$repo" x64 linux "$test_build/device-clean$hot_mode" $hot_mode --inline-cap 0 -j 1 2>&1) || device_status=$?
                 [ "$device_status" -eq 1 ]
                 [ "$(echo "$device_warm" | grep 'error\[')" = "$(echo "$device_clean" | grep 'error\[')" ]
-                echo "$device_warm" | grep -q 'host\.e:5:9: error\[E-TYPE-9999\]: `helper` is device-only' || { echo "the warm build after the device_only_edge $device_edit edit is not the clean build's refusal: $device_warm" >&2; exit 1; }
+                echo "$device_warm" | grep -q 'host\.e:5:9: error\[E-GPU-9999\]: `helper` is device-only' || { echo "the warm build after the device_only_edge $device_edit edit is not the clean build's refusal: $device_warm" >&2; exit 1; }
                 "$test_build/device$hot_mode"
                 continue
                 ;;
@@ -5182,7 +5182,7 @@ cmp -s "$test_build/conformance-absolute-tokens.jsonl" "$conformance_root/tokens
 ' "--absolute-paths changed more than absolute_path on tokens" >&2; exit 1; }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1' 'reject module_missing 1' 'reject qualifier_collision 1' 'reject reserved_local 1' 'reject rename_function 1' 'reject rename_qualifier 1' 'reject rename_builtin 1' 'reject rename_duplicate 1' 'reject try_not_fallible 1' 'reject return_count 1' 'reject generic_inference 1' 'reject condition_type 1' 'reject atomic_ordering 1' 'reject nesting 1' 'accept safety 0' 'reject safety_use_after_move 1' 'reject safety_cleanup_forgotten 1' 'reject safety_overwrite 1' 'reject safety_undef 1' 'reject safety_unchecked 1' 'reject safety_deferred_consumed 1' 'reject safety_moved_in_loop 1' 'reject safety_partial_move 1' 'reject safety_cleanup_signature 1' 'reject safety_borrowed 1' 'reject safety_borrowed_return 1' 'reject safety_copy 1' 'reject safety_copy_elements 1' 'reject safety_copy_generic 1' 'reject safety_handle_leak 1' 'reject safety_moved_while_borrowed 1' 'reject safety_arena_moved 1' 'reject safety_pushed_twice 1' 'accept regions 0' 'reject regions_reset 1' 'reject regions_view 1' 'reject regions_pointer_mutation 1' 'reject regions_join 1' 'reject safety_detached_frame 1' 'reject safety_thread_shared 1' 'reject safety_guard_leak 1' 'reject safety_thread_alias 1' 'reject regions_alias 1' 'reject safety_thread_slice 1' 'reject type_mismatch 1' 'reject safety_thread_field 1' 'reject safety_thread_reassign 1' 'reject safety_copy_toolchain 1' 'reject safety_rwguard_leak 1' 'accept dataguard_scoped 0' 'reject safety_dataguard_held 1' 'reject safety_dataguard_carried 1' 'reject safety_dataguard_returned 1' 'reject safety_thread_param_slice 1' 'reject safety_thread_global 1' 'accept thread_global_joined 0' 'reject safety_thread_group_leak 1' 'reject type_mismatch_fix 1' 'reject name_near 1' 'reject member_near 1' 'reject field_near 1' 'reject instance_site 1' 'reject instance_chain 1' 'reject each_function 1' 'reject cascade 1' 'reject syntax_recovery 1' 'reject safety_undef_value 1' 'reject type_near 1' 'reject type_mismatch_call 1' 'accept safety_undef_written 0' 'reject safety_undef_reference 1' 'reject safety_undef_branch 1' 'accept safety_cast_representation 0' 'reject safety_cast_representation 1' 'reject safety_cast_placement 1' 'accept safety_foreign_representation 0' 'reject safety_foreign_representation 1' 'reject safety_foreign_callback 1' 'reject safety_union_representation 1' 'reject safety_union_generic 1' 'reject layout_attribute 1' 'reject safety_codec_decode_resource 1' 'reject safety_codec_encode_resource 1'; do
+for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1' 'reject module_missing 1' 'reject qualifier_collision 1' 'reject reserved_local 1' 'reject rename_function 1' 'reject rename_qualifier 1' 'reject rename_builtin 1' 'reject rename_duplicate 1' 'reject not_supported 1' 'reject continue_outside 1' 'reject try_not_fallible 1' 'reject return_count 1' 'reject generic_inference 1' 'reject condition_type 1' 'reject atomic_ordering 1' 'reject nesting 1' 'accept safety 0' 'reject safety_use_after_move 1' 'reject safety_cleanup_forgotten 1' 'reject safety_overwrite 1' 'reject safety_undef 1' 'reject safety_unchecked 1' 'reject safety_deferred_consumed 1' 'reject safety_moved_in_loop 1' 'reject safety_partial_move 1' 'reject safety_cleanup_signature 1' 'reject safety_borrowed 1' 'reject safety_borrowed_return 1' 'reject safety_copy 1' 'reject safety_copy_elements 1' 'reject safety_copy_generic 1' 'reject safety_handle_leak 1' 'reject safety_moved_while_borrowed 1' 'reject safety_arena_moved 1' 'reject safety_pushed_twice 1' 'accept regions 0' 'reject regions_reset 1' 'reject regions_view 1' 'reject regions_pointer_mutation 1' 'reject regions_join 1' 'reject safety_detached_frame 1' 'reject safety_thread_shared 1' 'reject safety_guard_leak 1' 'reject safety_thread_alias 1' 'reject regions_alias 1' 'reject safety_thread_slice 1' 'reject type_mismatch 1' 'reject safety_thread_field 1' 'reject safety_thread_reassign 1' 'reject safety_copy_toolchain 1' 'reject safety_rwguard_leak 1' 'accept dataguard_scoped 0' 'reject safety_dataguard_held 1' 'reject safety_dataguard_carried 1' 'reject safety_dataguard_returned 1' 'reject safety_thread_param_slice 1' 'reject safety_thread_global 1' 'accept thread_global_joined 0' 'reject safety_thread_group_leak 1' 'reject type_mismatch_fix 1' 'reject name_near 1' 'reject member_near 1' 'reject field_near 1' 'reject instance_site 1' 'reject instance_chain 1' 'reject each_function 1' 'reject cascade 1' 'reject syntax_recovery 1' 'reject safety_undef_value 1' 'reject type_near 1' 'reject type_mismatch_call 1' 'accept safety_undef_written 0' 'reject safety_undef_reference 1' 'reject safety_undef_branch 1' 'accept safety_cast_representation 0' 'reject safety_cast_representation 1' 'reject safety_cast_placement 1' 'accept safety_foreign_representation 0' 'reject safety_foreign_representation 1' 'reject safety_foreign_callback 1' 'reject safety_union_representation 1' 'reject safety_union_generic 1' 'reject layout_attribute 1' 'reject safety_codec_decode_resource 1' 'reject safety_codec_encode_resource 1'; do
     set -- $conformance_case
     conformance_actual="$test_build/conformance-$1-$2.jsonl"
     conformance_stderr="$test_build/conformance-$1-$2.stderr"
@@ -5935,6 +5935,11 @@ plan_again=0
 # The file named (D547, H29).
 grep -q '"code":"E-TOOL-0003","message":"`explain.e` changed since the plan was made; nothing applied","symbol":"explain.e"' "$test_build/plan-stale.jsonl"
 [ "$plan_again" -ne 0 ]
+# E-TOOL-9999 (D1706, T013): a precondition under a root apply-plan writes nothing to.
+plan_foreign=0
+"$test_build/neper-self" apply-plan "$conformance_root/tools/plan_foreign_root.jsonl" --root "$plan_scratch/src" --json > "$test_build/plan-foreign.jsonl" 2>/dev/null || plan_foreign=$?
+[ "$plan_foreign" -eq 2 ]
+grep -q '"code":"E-TOOL-9999","message":"a precondition names a source root apply-plan has no directory for"' "$test_build/plan-foreign.jsonl"
 # Uses and a rename through an alias, past a same-spelled function and local (D509, H17).
 alias_fixture="$conformance_root/tools/uses_alias"
 (cd "$alias_fixture" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol deep.pick > "$test_build/conformance-tools-uses-alias.jsonl")

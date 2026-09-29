@@ -31329,3 +31329,27 @@ Everything else goes through the library's update, and its own slicing-by-8 tabl
 - `tools/dis_vex.e` pins a thirty-two-byte add, multiply, shift and xor, in release, per host in both suites.
 - `dis`, `dis_att`, `dis_follow` and `dis_inlined` are unchanged on both hosts.
 - The Windows target was swept too: 611 of 622 link fixtures compile for it, and they give 25,882,717 reached instructions with no undecodable byte.
+
+## D1706 — Section 10's refusals are E-GPU-9999; the last unpinned codes are pinned (T013)
+
+**Decision.** Every code in `docs/diagnostics.md` is now raised and pinned.
+
+- **E-GPU-9999.** The two GPU failure kinds, `GpuAttribute` and `GpuLaunch`, now map to E-GPU-9999, which the table defines as "invalid GPU declaration, profile operation or capability". Until now they printed under E-TYPE-9999, and nothing raised E-GPU-9999. They cover:
+  - `@gpu` without a workgroup size;
+  - a kernel called directly;
+  - launch shapes and arguments;
+  - device-only reach;
+  - `caps(...)`;
+  - `shared var` placement;
+  - `gpu.barrier()` outside a kernel.
+- **`gpu.Buf[T]` elements.** A `gpu.Buf[T]` of a non-device element (D1589) reached the report as a generic failure. It now gets its own kind, `GpuElement`, through `default_failure_kind`, under the same code and the same message.
+- **The GPU pins.** The two suites' GPU refusal expectations pin the new code: 11 in `run.sh`, 17 in `run.ps1`. Positions and messages are unchanged.
+- **E-TYPE-0009.** It is pinned by `reject/not_supported`: an assignment to a range of an array, which the checker has no rule for, quoted by its first line.
+- **`continue` outside a loop.** It was the only other statement reaching E-TYPE-0009, but it is not an unsupported feature, so it gets its own kind, `ContinueOutsideLoop`. The message, "continue requires an enclosing loop", mirrors `break` (`reject/continue_outside`).
+- **E-TOOL-9999.** It is pinned by `tools/plan_foreign_root.jsonl`: an `apply-plan` precondition under `toolchain-lib`, a root apply-plan has no directory for, exits 2 with the E-TOOL-9999 record in both suites.
+- **E-SAFETY.** T013's evidence called it unpinned, but that was stale: all 25 codes already had reject fixtures.
+
+**Evidence.**
+- A cross-reference of the 66 codes in `docs/diagnostics.md` against `src/` and every golden and suite leaves none unraised or unpinned.
+- `render_card.py`'s audit lists every family as fully verified.
+- The Windows suite's GPU refusal block and the Linux suite's GPU section (lines 2732–2837) pass against the new compiler. So do the two reject goldens and the apply-plan pin, on both hosts.

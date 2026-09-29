@@ -3091,15 +3091,15 @@ if ($LASTEXITCODE -ne 0 -or $saxpyWritten -ne 'executable written') { throw 'exa
 $saxpyOutput = & $saxpyPath
 if ($LASTEXITCODE -ne 0 -or ($saxpyOutput -join "`n") -ne 'cpu    checksum 16777216') { throw "examples/saxpy.e answered wrongly: $($saxpyOutput -join "`n")" }
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-TYPE-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
+if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-GPU-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
 # a private slice, a module-scope var behind a helper and a `usize` parameter are
 # refused at the kernel with the chain; slices of device and shared memory are not.
 foreach ($gpuProfileCase in @(
-    @('recursion', 'main.e:14:1: error[E-TYPE-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth'),
-    @('private', 'main.e:9:1: error[E-TYPE-9999]: `fill` reaches a slice of the private variable `local` through fill'),
-    @('global', 'main.e:11:1: error[E-TYPE-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump'),
-    @('param', 'main.e:5:1: error[E-TYPE-9999]: `fill` takes `n`, which is neither a device storage type'))) {
+    @('recursion', 'main.e:14:1: error[E-GPU-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth'),
+    @('private', 'main.e:9:1: error[E-GPU-9999]: `fill` reaches a slice of the private variable `local` through fill'),
+    @('global', 'main.e:11:1: error[E-GPU-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump'),
+    @('param', 'main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type'))) {
     $gpuProfile = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\gpu_profile_$($gpuProfileCase[0])\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1 -or -not ($gpuProfile -join "`n").Contains($gpuProfileCase[1])) { throw "the device profile did not refuse $($gpuProfileCase[0]): $($gpuProfile -join "`n")" }
 }
@@ -3109,12 +3109,12 @@ if ($LASTEXITCODE -ne 0 -or ($gpuProfileValid -join "`n") -ne 'module check ok')
 # capability outside `caps(...)` and a repeated `caps` member are refused; a kernel
 # within its `caps(...)` and `ftz` is not.
 foreach ($gpuRuleCase in @(
-    @('gpu_device_only', 'main.e:15:9: error[E-TYPE-9999]: `lane` is device-only'),
-    @('gpu_buf_element', 'main.e:5:5: error[E-TYPE-9999]: a `gpu.Buf[T]` holds device memory'),
-    @('gpu_caps_bound', 'main.e:14:1: error[E-TYPE-9999]: `fill` needs `.Float64` through fill -> scaled -> widen'),
-    @('gpu_caps_duplicate', 'main.e:5:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'),
+    @('gpu_device_only', 'main.e:15:9: error[E-GPU-9999]: `lane` is device-only'),
+    @('gpu_buf_element', 'main.e:5:5: error[E-GPU-9999]: a `gpu.Buf[T]` holds device memory'),
+    @('gpu_caps_bound', 'main.e:14:1: error[E-GPU-9999]: `fill` needs `.Float64` through fill -> scaled -> widen'),
+    @('gpu_caps_duplicate', 'main.e:5:1: error[E-GPU-9999]: `fill` carries `@gpu` without a usable workgroup size'),
     # (D1677) `shared` named in a module without e.gpu, in a program without it.
-    @('gpu_shared_elsewhere', 'main.e:6:8: error[E-TYPE-9999]: `plain` is device-only'))) {
+    @('gpu_shared_elsewhere', 'main.e:6:8: error[E-GPU-9999]: `plain` is device-only'))) {
     $gpuRule = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($gpuRuleCase[0])\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1 -or -not ($gpuRule -join "`n").Contains($gpuRuleCase[1])) { throw "$($gpuRuleCase[0]) was not refused: $($gpuRule -join "`n")" }
 }
@@ -3126,9 +3126,9 @@ if ($LASTEXITCODE -ne 0 -or ($gpuCapsValid -join "`n") -ne 'module check ok') { 
 $gpuDeviceModule = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_device_only_module\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 0 -or ($gpuDeviceModule -join "`n") -ne 'module check ok') { throw "a helper in a module without e.gpu was refused as device-only: $($gpuDeviceModule -join "`n")" }
 $gpuBare = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_bare_attribute\src\main.e') $repo 'x64' 'windows' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($gpuBare -join "`n") -notmatch 'main\.e:4:1: error\[E-TYPE-9999\]: `fill` carries `@gpu` without a usable workgroup size') { throw "a bare @gpu was not refused: $($gpuBare -join "`n")" }
+if ($LASTEXITCODE -ne 1 -or ($gpuBare -join "`n") -notmatch 'main\.e:4:1: error\[E-GPU-9999\]: `fill` carries `@gpu` without a usable workgroup size') { throw "a bare @gpu was not refused: $($gpuBare -join "`n")" }
 $gpuArgument = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_launch_argument\src\main.e') $repo 'x64' 'windows' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($gpuArgument -join "`n") -notmatch 'main\.e:9:9: error\[E-TYPE-9999\]: `fill` takes a device slice at this position') { throw "a host slice in a launch pack was not refused: $($gpuArgument -join "`n")" }
+if ($LASTEXITCODE -ne 1 -or ($gpuArgument -join "`n") -notmatch 'main\.e:9:9: error\[E-GPU-9999\]: `fill` takes a device slice at this position') { throw "a host slice in a launch pack was not refused: $($gpuArgument -join "`n")" }
 # `e.gpu.tensor` (D779): a strided host view uploaded contiguous, `add` and `matmul` as
 # launches agreeing with the host tensor module and the plain formula, an i64 kernel,
 # every `Shape` refusal, a released tensor stale.
@@ -3152,7 +3152,7 @@ if ($LASTEXITCODE -ne 0 -or $gpuDivergenceWritten -ne 'executable written') { th
 $gpuDivergenceOutput = & $gpuDivergencePath 2>&1
 if ($LASTEXITCODE -ne 134 -or ($gpuDivergenceOutput -join "`n") -notmatch 'trap\[barrier\]: invocation \(2, 0, 0\) of workgroup \(0, 0, 0\) returned before barrier 1 that invocation \(0, 0, 0\)') { throw "a divergent workgroup did not trap as barrier: exit $LASTEXITCODE, $($gpuDivergenceOutput -join "`n")" }
 $gpuOutside = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_barrier_outside\src\main.e') $repo 'x64' 'windows' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($gpuOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-TYPE-9999\]: `gpu\.barrier\(\)` is written outside a kernel') { throw "a barrier outside a kernel was not refused: $($gpuOutside -join "`n")" }
+if ($LASTEXITCODE -ne 1 -or ($gpuOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-GPU-9999\]: `gpu\.barrier\(\)` is written outside a kernel') { throw "a barrier outside a kernel was not refused: $($gpuOutside -join "`n")" }
 # `shared var` on the CPU backend (D781): the spec's block sum through workgroup memory
 # over three workgroups, a struct-typed shared var, the 0xCD fill before the publishing
 # barrier; a shared var outside a kernel and one with an initialiser are refused.
@@ -3172,9 +3172,9 @@ if ($LASTEXITCODE -ne 0 -or $gpuSpacesOutput -ne 'gpu spaces ok') { throw "share
 $gpuSpaceMix = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_space_mix\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or -not ($gpuSpaceMix -join "`n").Contains('main.e:14:5: error[E-TYPE-0002]: type mismatch: expected `[]const u32`, found `[]shared u32`')) { throw "a shared slice crossed into device memory's space: $($gpuSpaceMix -join "`n")" }
 $gpuSharedOutside = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_shared_outside\src\main.e') $repo 'x64' 'windows' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($gpuSharedOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-TYPE-9999\]: `shared var` is legal only directly in a kernel') { throw "a shared var outside a kernel was not refused: $($gpuSharedOutside -join "`n")" }
+if ($LASTEXITCODE -ne 1 -or ($gpuSharedOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-GPU-9999\]: `shared var` is legal only directly in a kernel') { throw "a shared var outside a kernel was not refused: $($gpuSharedOutside -join "`n")" }
 $gpuSharedInit = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_shared_initializer\src\main.e') $repo 'x64' 'windows' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($gpuSharedInit -join "`n") -notmatch 'main\.e:5:5: error\[E-TYPE-9999\]: `tile` is a `shared var` with an initialiser') { throw "a shared var with an initialiser was not refused: $($gpuSharedInit -join "`n")" }
+if ($LASTEXITCODE -ne 1 -or ($gpuSharedInit -join "`n") -notmatch 'main\.e:5:5: error\[E-GPU-9999\]: `tile` is a `shared var` with an initialiser') { throw "a shared var with an initialiser was not refused: $($gpuSharedInit -join "`n")" }
 # `meta.signed[T]()` (D782): folded like `meta.kind`, a bare or negated bool question
 # settles an `if`; `link/gpu_tensor` reaches the unsigned kernels through it.
 $metaSignedPath = Join-Path $testBuild 'meta-signed-selfhost.exe'
@@ -4731,7 +4731,7 @@ foreach ($hotMode in @('--release', '--time')) {
         if ($LASTEXITCODE -ne 0 -or $shapeCleanWritten -ne 'executable written') { throw "the clean build of the gpu_reshape fixture after the $shapeEdit edit failed ($hotMode)" }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $shapeExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $shapeClean).Hash) { throw "the warm build after the gpu_reshape $shapeEdit edit is not the clean build ($hotMode)" }
     }
-    foreach ($shapeRefusal in @(@('plain', 'main\.e:20:8: error\[E-TYPE-9999\]: `fill` is not a kernel: `gpu\.launch` takes an `@gpu` function'), @('kernel', 'main\.e:17:5: error\[E-TYPE-9999\]: `seed` is a kernel and can only be run through `gpu\.launch`'))) {
+    foreach ($shapeRefusal in @(@('plain', 'main\.e:20:8: error\[E-GPU-9999\]: `fill` is not a kernel: `gpu\.launch` takes an `@gpu` function'), @('kernel', 'main\.e:17:5: error\[E-GPU-9999\]: `seed` is a kernel and can only be run through `gpu\.launch`'))) {
         $shapeEdit = $shapeRefusal[0]
         Copy-Item (Join-Path $shapeScratch "edits\$shapeEdit.e") (Join-Path $shapeScratch 'src\k.e') -Force
         $shapeWarm = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeExe $hotMode --incremental -j 1 2>&1
@@ -4812,7 +4812,7 @@ foreach ($hotMode in @('--release', '--time')) {
             if ($LASTEXITCODE -ne 1) { throw "the clean build after the device_only_edge $deviceEdit edit did not exit 1 ($hotMode): $LASTEXITCODE" }
             $deviceWarmError = @($deviceWarm | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
             $deviceCleanError = @($deviceRefused | ForEach-Object { "$_" } | Where-Object { $_ -match 'error\[' }) -join "`n"
-            if ($deviceWarmError -ne $deviceCleanError -or $deviceWarmError -notmatch 'host\.e:5:9: error\[E-TYPE-9999\]: `helper` is device-only') { throw "the warm build after the device_only_edge $deviceEdit edit is not the clean build's refusal ($hotMode): $deviceWarmError" }
+            if ($deviceWarmError -ne $deviceCleanError -or $deviceWarmError -notmatch 'host\.e:5:9: error\[E-GPU-9999\]: `helper` is device-only') { throw "the warm build after the device_only_edge $deviceEdit edit is not the clean build's refusal ($hotMode): $deviceWarmError" }
             & $deviceExe
             if ($LASTEXITCODE -ne 0) { throw "the executable from before the refused device_only_edge $deviceEdit build was rewritten ($hotMode)" }
             continue
@@ -5330,7 +5330,7 @@ $absoluteText = [IO.File]::ReadAllText($absoluteActual)
 if (-not $absoluteText.Contains($absoluteField)) { throw "--absolute-paths did not collapse the . and .. segments of the operand" }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1), @('reject', 'module_missing', 1), @('reject', 'qualifier_collision', 1), @('reject', 'reserved_local', 1), @('reject', 'rename_function', 1), @('reject', 'rename_qualifier', 1), @('reject', 'rename_builtin', 1), @('reject', 'rename_duplicate', 1),@('reject', 'try_not_fallible', 1), @('reject', 'return_count', 1), @('reject', 'generic_inference', 1), @('reject', 'condition_type', 1), @('reject', 'atomic_ordering', 1), @('reject', 'nesting', 1), @('accept', 'safety', 0), @('reject', 'safety_use_after_move', 1), @('reject', 'safety_cleanup_forgotten', 1), @('reject', 'safety_overwrite', 1), @('reject', 'safety_undef', 1), @('reject', 'safety_unchecked', 1), @('reject', 'safety_deferred_consumed', 1), @('reject', 'safety_moved_in_loop', 1), @('reject', 'safety_partial_move', 1), @('reject', 'safety_cleanup_signature', 1), @('reject', 'safety_borrowed', 1), @('reject', 'safety_borrowed_return', 1), @('reject', 'safety_copy', 1), @('reject', 'safety_copy_elements', 1), @('reject', 'safety_copy_generic', 1), @('reject', 'safety_handle_leak', 1), @('reject', 'safety_moved_while_borrowed', 1), @('reject', 'safety_arena_moved', 1), @('reject', 'safety_pushed_twice', 1), @('accept', 'regions', 0), @('reject', 'regions_reset', 1), @('reject', 'regions_view', 1), @('reject', 'regions_pointer_mutation', 1), @('reject', 'regions_join', 1), @('reject', 'safety_detached_frame', 1), @('reject', 'safety_thread_shared', 1), @('reject', 'safety_guard_leak', 1), @('reject', 'safety_thread_alias', 1), @('reject', 'regions_alias', 1), @('reject', 'safety_thread_slice', 1), @('reject', 'type_mismatch', 1), @('reject', 'safety_thread_field', 1), @('reject', 'safety_thread_reassign', 1), @('reject', 'safety_copy_toolchain', 1), @('reject', 'safety_rwguard_leak', 1), @('accept', 'dataguard_scoped', 0), @('reject', 'safety_dataguard_held', 1), @('reject', 'safety_dataguard_carried', 1), @('reject', 'safety_dataguard_returned', 1), @('reject', 'safety_thread_param_slice', 1), @('reject', 'safety_thread_global', 1), @('accept', 'thread_global_joined', 0), @('reject', 'safety_thread_group_leak', 1), @('reject', 'type_mismatch_fix', 1), @('reject', 'name_near', 1), @('reject', 'member_near', 1), @('reject', 'field_near', 1), @('reject', 'instance_site', 1), @('reject', 'instance_chain', 1), @('reject', 'each_function', 1), @('reject', 'cascade', 1), @('reject', 'syntax_recovery', 1), @('reject', 'safety_undef_value', 1), @('reject', 'type_near', 1), @('reject', 'type_mismatch_call', 1), @('accept', 'safety_undef_written', 0), @('reject', 'safety_undef_reference', 1), @('reject', 'safety_undef_branch', 1), @('accept', 'safety_cast_representation', 0), @('reject', 'safety_cast_representation', 1), @('reject', 'safety_cast_placement', 1), @('accept', 'safety_foreign_representation', 0), @('reject', 'safety_foreign_representation', 1), @('reject', 'safety_foreign_callback', 1), @('reject', 'safety_union_representation', 1), @('reject', 'safety_union_generic', 1), @('reject', 'layout_attribute', 1), @('reject', 'safety_codec_decode_resource', 1), @('reject', 'safety_codec_encode_resource', 1))) {
+foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1), @('reject', 'module_missing', 1), @('reject', 'qualifier_collision', 1), @('reject', 'reserved_local', 1), @('reject', 'rename_function', 1), @('reject', 'rename_qualifier', 1), @('reject', 'rename_builtin', 1), @('reject', 'rename_duplicate', 1), @('reject', 'not_supported', 1), @('reject', 'continue_outside', 1), @('reject', 'try_not_fallible', 1), @('reject', 'return_count', 1), @('reject', 'generic_inference', 1), @('reject', 'condition_type', 1), @('reject', 'atomic_ordering', 1), @('reject', 'nesting', 1), @('accept', 'safety', 0), @('reject', 'safety_use_after_move', 1), @('reject', 'safety_cleanup_forgotten', 1), @('reject', 'safety_overwrite', 1), @('reject', 'safety_undef', 1), @('reject', 'safety_unchecked', 1), @('reject', 'safety_deferred_consumed', 1), @('reject', 'safety_moved_in_loop', 1), @('reject', 'safety_partial_move', 1), @('reject', 'safety_cleanup_signature', 1), @('reject', 'safety_borrowed', 1), @('reject', 'safety_borrowed_return', 1), @('reject', 'safety_copy', 1), @('reject', 'safety_copy_elements', 1), @('reject', 'safety_copy_generic', 1), @('reject', 'safety_handle_leak', 1), @('reject', 'safety_moved_while_borrowed', 1), @('reject', 'safety_arena_moved', 1), @('reject', 'safety_pushed_twice', 1), @('accept', 'regions', 0), @('reject', 'regions_reset', 1), @('reject', 'regions_view', 1), @('reject', 'regions_pointer_mutation', 1), @('reject', 'regions_join', 1), @('reject', 'safety_detached_frame', 1), @('reject', 'safety_thread_shared', 1), @('reject', 'safety_guard_leak', 1), @('reject', 'safety_thread_alias', 1), @('reject', 'regions_alias', 1), @('reject', 'safety_thread_slice', 1), @('reject', 'type_mismatch', 1), @('reject', 'safety_thread_field', 1), @('reject', 'safety_thread_reassign', 1), @('reject', 'safety_copy_toolchain', 1), @('reject', 'safety_rwguard_leak', 1), @('accept', 'dataguard_scoped', 0), @('reject', 'safety_dataguard_held', 1), @('reject', 'safety_dataguard_carried', 1), @('reject', 'safety_dataguard_returned', 1), @('reject', 'safety_thread_param_slice', 1), @('reject', 'safety_thread_global', 1), @('accept', 'thread_global_joined', 0), @('reject', 'safety_thread_group_leak', 1), @('reject', 'type_mismatch_fix', 1), @('reject', 'name_near', 1), @('reject', 'member_near', 1), @('reject', 'field_near', 1), @('reject', 'instance_site', 1), @('reject', 'instance_chain', 1), @('reject', 'each_function', 1), @('reject', 'cascade', 1), @('reject', 'syntax_recovery', 1), @('reject', 'safety_undef_value', 1), @('reject', 'type_near', 1), @('reject', 'type_mismatch_call', 1), @('accept', 'safety_undef_written', 0), @('reject', 'safety_undef_reference', 1), @('reject', 'safety_undef_branch', 1), @('accept', 'safety_cast_representation', 0), @('reject', 'safety_cast_representation', 1), @('reject', 'safety_cast_placement', 1), @('accept', 'safety_foreign_representation', 0), @('reject', 'safety_foreign_representation', 1), @('reject', 'safety_foreign_callback', 1), @('reject', 'safety_union_representation', 1), @('reject', 'safety_union_generic', 1), @('reject', 'layout_attribute', 1), @('reject', 'safety_codec_decode_resource', 1), @('reject', 'safety_codec_encode_resource', 1))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
     $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
     $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
@@ -5741,6 +5741,9 @@ $planStale = & $compiler apply-plan $planActual --root (Join-Path $planScratch '
 if ($LASTEXITCODE -eq 0) { throw 'a plan over changed files was applied' }
 # The file named (D547, H29): the refusal says which precondition no longer holds.
 if (($planStale -join "`n") -notmatch '"code":"E-TOOL-0003","message":"`explain.e` changed since the plan was made; nothing applied","symbol":"explain.e"') { throw "the stale plan's refusal did not name the file: $planStale" }
+# E-TOOL-9999 (D1706, T013): a precondition under a root apply-plan writes nothing to.
+$planForeign = & $compiler apply-plan (Join-Path $conformanceRoot 'tools/plan_foreign_root.jsonl') --root (Join-Path $planScratch 'src') --json 2>$null
+if ($LASTEXITCODE -ne 2 -or ($planForeign -join "`n") -notmatch '"code":"E-TOOL-9999","message":"a precondition names a source root apply-plan has no directory for"') { throw "a plan under toolchain-lib was not refused as E-TOOL-9999: $planForeign" }
 # Uses and a rename through an alias, past a same-spelled function and local (D509,
 # H17): from inside the project with the operand as `src/main.e`, every module under
 # `project-src`; the plan applied to a copy checks and runs the same.
