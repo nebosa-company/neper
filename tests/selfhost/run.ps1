@@ -4405,11 +4405,12 @@ foreach ($hotMode in @('--release', '--time')) {
     if ($LASTEXITCODE -ne 0) { throw "--stats-full on a cold build failed ($hotMode)" }
     $hotWarm = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotWarm -ne 'executable written') { throw "the warm hot build failed ($hotMode)" }
-    # The manifest says what the warm build kept and why (D363, H14): everything, stable.
+    # The manifest says what the warm build kept and why (D363, H14): everything, stable --
+    # and, the image being the one at the output path, nothing checked (D1681).
     $hotManifestMode = 'debug'
     if ($hotMode -eq '--release') { $hotManifestMode = 'release' }
     $hotManifest = Join-Path $hotScratch ".neper\$hotManifestMode\build-manifest.json"
-    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable' 'e.os=kept:stable' 'work.bodies_checked=0' 'work.modules_lowered=0' 'work.functions_lowered=0' 'work.declarations_checked=28'
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable' 'e.os=kept:stable' 'work.bodies_checked=0' 'work.modules_lowered=0' 'work.functions_lowered=0' 'work.declarations_checked=0'
     if ($LASTEXITCODE -ne 0) { throw "the warm hot build's manifest does not say every module was kept stable and no work was done ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a warm hot build is not the clean build ($hotMode)" }
     # Trivia apart from identity (D504, H14): a comment's words changed on their own

@@ -9777,6 +9777,31 @@ fn image_key(a: *mem.Arena, directory: str, triple: str, loaded: *graph.Graph, h
     ret (key, stamp)
 }
 
+// The manifest of a build that linked nothing (C097): every module kept as the hot load
+// found it, no work done, the image the file at the output path already is.
+fn noop_manifest(a: *mem.Arena, loaded: *graph.Graph, held: [][]const u8, hot: *HotLoad, args: []str, release: bool, unchecked: bool) -> err {
+    let (image, image_error) = source.load(a, args[6usize])
+    if image_error != ok { ret image_error }
+    try fill_manifest_digests(a, loaded, held, hot.sha_now)
+    var module_at = 0usize
+    while module_at < loaded.count {
+        if !loaded.modules[module_at].has_tree && module_at < held.len && held[module_at].len != 0usize {
+            let (carried, carried_count, carried_found, carried_error) = em.artifact_inventory(held[module_at])
+            if carried_error == ok && carried_found {
+                loaded.modules[module_at].inventory = carried
+                loaded.modules[module_at].inventory_count = carried_count
+                loaded.modules[module_at].inventory_known = true
+            }
+        }
+        module_at += 1usize
+    }
+    loaded.work_bodies_checked = 0usize
+    loaded.work_modules_lowered = 0usize
+    loaded.work_functions_lowered = 0usize
+    loaded.work_declarations_checked = 0usize
+    ret tool.manifest_file(a, loaded, args[4usize], args[5usize], release, unchecked, args[6usize], image, hot.reason[0usize..loaded.count], true)
+}
+
 // The stamp `image_current` reads, after a build wrote `image` (C097); a stamp that
 // cannot be written costs the next build its shortcut and nothing else.
 fn record_image(a: *mem.Arena, hot: *HotBuild, loaded: *graph.Graph, held: [][]const u8, args: []str, image: []const u8) {
@@ -12719,6 +12744,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // reported (a stale source map fails the build), and the output the image this
         // command line last wrote. The stream and `--stats` builds go the whole way.
         if hot_build && load_error == ok && report.count == 0usize && !report.json && !report.build.on && image_current(a, &hot_load, &loaded, held_all, args) {
+            try noop_manifest(a, &loaded, held_all, &hot_load, args, release_build, unchecked_build)
             try io.print("executable written\n")
             ret ok
         }
