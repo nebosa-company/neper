@@ -3105,8 +3105,21 @@ fn check_project_command(a: *mem.Arena, args: []str) -> err {
         os.exit(2i32)
         ret ok
     }
+    // The work directory is made when it is missing (T003): a spawn into a directory
+    // that is not there was an internal compiler failure.
+    if ensure_dir(a, args[6usize]) != ok {
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the work directory cannot be made")
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1,\"modules\":0}}\n")
+        os.exit(2i32)
+        ret ok
+    }
     let (child_base, child_base_error) = nptest_join(a, args[6usize], "npcheck-child")
     if child_base_error != ok { ret child_base_error }
+    // A module outside `src` -- the project's `lib`, the toolchain's -- is walked by no
+    // child of its own, so its diagnostics come from whichever src module reached it,
+    // each once (T003: they were dropped, and a broken lib checked clean).
+    var foreign: [256]str = zero
+    var foreign_count = 0usize
     var diagnostics = 0usize
     var at = 0usize
     while at < count {
@@ -3128,6 +3141,9 @@ fn check_project_command(a: *mem.Arena, args: []str) -> err {
         let (forwarded, forward_error) = forward_diagnostics(&report, child_out, rels[at])
         if forward_error != ok { ret forward_error }
         diagnostics += forwarded
+        let (outside, outside_error) = forward_outside_src(&report, child_out, foreign[..], &foreign_count)
+        if outside_error != ok { ret outside_error }
+        diagnostics += outside
         at += 1usize
     }
     if diagnostics == 0usize {
@@ -3162,6 +3178,48 @@ fn forward_diagnostics(report: *Sink, stream: str, rel: str) -> (usize, err) {
         at = end + 1usize
     }
     ret (forwarded, ok)
+}
+
+// The diagnostic records of one child's stream whose span lies outside the project's
+// `src`, each written once across the walk: `seen` holds those already written.
+// ponytail: 256 distinct foreign diagnostics are remembered; past that one may repeat.
+fn forward_outside_src(report: *Sink, stream: str, seen: []str, seen_count: *usize) -> (usize, err) {
+    var forwarded = 0usize
+    var at = 0usize
+    while at < stream.len {
+        var end = at
+        while end < stream.len && stream[end] != 10u8 { end += 1usize }
+        let line = stream[at..end]
+        at = end + 1usize
+        if line.len <= 22usize || !same(line[0usize..22usize], "{\"record\":\"diagnostic\"") { continue }
+        if !contains_text(line, "\"span\":{\"source\":{\"root\":\"") || contains_text(line, "\"span\":{\"source\":{\"root\":\"project-src\"") || contains_text(line, "\"span\":{\"source\":{\"root\":\"operand\"") { continue }
+        var known = false
+        var check_at = 0usize
+        while check_at < *seen_count {
+            if same(seen[check_at], line) { known = true }
+            check_at += 1usize
+        }
+        if known { continue }
+        if *seen_count < seen.len {
+            seen[*seen_count] = line
+            *seen_count = *seen_count + 1usize
+        }
+        let write_error = write_all(report, line)
+        if write_error != ok { ret (0usize, write_error) }
+        let newline_error = write_all(report, "\n")
+        if newline_error != ok { ret (0usize, newline_error) }
+        forwarded += 1usize
+    }
+    ret (forwarded, ok)
+}
+
+fn contains_text(line: str, needle: str) -> bool {
+    var at = 0usize
+    while at + needle.len <= line.len {
+        if same(line[at..at + needle.len], needle) { ret true }
+        at += 1usize
+    }
+    ret false
 }
 
 // Whether a diagnostic line's span names `rel` as its operand path, or has no span at

@@ -5308,6 +5308,13 @@ $test_build/neper-self check-project "$conformance_root/tools/check_project" "$r
 [ "$check_project_status" -eq 1 ]
 cmp -s "$test_build/conformance-tools-check-project.jsonl" "$conformance_root/tools/check_project.expected.jsonl" || { printf '%s
 ' "check-project --json differs from the conformance corpus" >&2; exit 1; }
+# (D1709) A lib module's error, reached from two src modules, once; into a work
+# directory that is not there yet.
+rm -rf "$test_build/check-project-lib-work"
+check_lib_status=0
+$test_build/neper-self check-project "$conformance_root/tools/check_project_lib" "$repo" x64 linux "$test_build/check-project-lib-work" --json > "$test_build/conformance-tools-check-project-lib.jsonl" || check_lib_status=$?
+[ "$check_lib_status" -eq 1 ]
+cmp "$test_build/conformance-tools-check-project-lib.jsonl" "$conformance_root/tools/check_project_lib.expected.jsonl"
 # `--language-version` (D283): the advertised 0.1 is accepted on any command and taken
 # off the arguments; another is E-CLI-9999 before any source is read, as a stream under
 # `--json` whose header names the command.
