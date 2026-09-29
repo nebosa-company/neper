@@ -5455,6 +5455,14 @@ $checkProjectActual = Join-Path $testBuild 'conformance-tools-check-project.json
 cmd /c "`"$compiler`" check-project `"$(Join-Path $conformanceRoot 'tools/check_project')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$checkProjectActual`""
 if ($LASTEXITCODE -ne 1) { throw "check-project --json exited $LASTEXITCODE, not 1" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $checkProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/check_project.expected.jsonl')).Hash) { throw "check-project --json differs from the conformance corpus" }
+# (D1709) A lib module's error, reached from two src modules, once; into a work
+# directory that is not there yet.
+$checkLibWork = Join-Path $testBuild 'check-project-lib-work'
+if (Test-Path -LiteralPath $checkLibWork) { Remove-Item -LiteralPath $checkLibWork -Recurse -Force }
+$checkLibActual = Join-Path $testBuild 'conformance-tools-check-project-lib.jsonl'
+cmd /c "`"$compiler`" check-project `"$(Join-Path $conformanceRoot 'tools/check_project_lib')`" `"$repo`" x64 windows `"$checkLibWork`" --json > `"$checkLibActual`""
+if ($LASTEXITCODE -ne 1) { throw "check-project --json over a broken lib exited $LASTEXITCODE, not 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $checkLibActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/check_project_lib.expected.jsonl')).Hash) { throw "check-project --json over a broken lib differs from the conformance corpus" }
 # `--language-version` (D283): the advertised 0.1 is accepted on any command and taken
 # off the arguments; another is E-CLI-9999 before any source is read, as a stream under
 # `--json` whose header names the command.

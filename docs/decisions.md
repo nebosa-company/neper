@@ -31386,3 +31386,16 @@ Everything else goes through the library's update, and its own slicing-by-8 tabl
 - `tools/index_comptime.e` pins two comptime symbols and five references to them. The golden is identical for both targets, pinned in both suites and byte-equal on Linux.
 - The stream validates against the v1 schema.
 - `index`, `index_unsafe`, `index_syntax` and `index_project` are unchanged on both hosts: none of them declares a generic, so no symbol ids moved.
+
+## D1709 — `check-project` reports a lib module's errors, once (T003)
+
+**Problem.** `check-project` checks each module under `src` in a child of its own, and keeps from each child only the diagnostics that name that child's module. That de-duplicates `src`: a module's error comes from its own check, not again from every module that imports it. But no child is ever spawned for a module outside `src`, such as the project's `lib`. So a type error in `lib/helper.e` reached from `src/main.e` was dropped, and the project checked clean: `ok: true`, exit 0. `test-project` was not affected; it already reports the error.
+
+**Decision.**
+- **Diagnostics outside `src`.** A diagnostic whose span lies outside `project-src` and outside the operand, under `project-lib` or `toolchain-lib`, is forwarded from whichever child reaches it. It is written once across the walk; `forward_outside_src` remembers the records already written.
+- **The work directory.** `check-project`'s work directory is made when it is missing. A spawn into a directory that was not there had been a bare "internal compiler failure", E-TOOL-9999, with no word about the directory. If the directory cannot be made, the command refuses with E-CLI-9999.
+
+**Evidence.**
+- `tools/check_project_lib` pins the case in both suites: two `src` modules import one `lib` module holding a type error. The stream holds that error once, under `project-lib`, then `ok: false`, exit 1 and `modules: 2`. The work directory is deleted before the run.
+- The golden is identical for both targets and validates.
+- `tools/check_project` is unchanged.

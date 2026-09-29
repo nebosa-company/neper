@@ -1,3 +1,3 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"plan"}
-{"record":"precondition","root":"toolchain-lib","path":"e/os.e","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}
-{"record":"result","ok":true,"exit_code":0,"data":{}}
+{"schema":"neper-stream","version":1,"record":"header","command":"plan-rename","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"precondition","source":{"root":"toolchain-lib","path":"e/os.e"},"sha256":"0000000000000000000000000000000000000000000000000000000000000000"}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":0,"files":1,"complete":true,"snapshot":"0000000000000000"}}
