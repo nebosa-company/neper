@@ -347,6 +347,10 @@ because toolchain-owned facilities use the domain namespaces above:
   Stream itself inside TLS 1.3 (TDS 8.0 strict), with no client library. It is portable
   source over `e.net` and `e.net.tls` (D1643). Delivered:
   [`x.microsoft.tds`](packages/x.microsoft.tds.md) under `lib/x/microsoft/`.
+- `x.openssl.crypto`: AES-128-GCM from the host's OpenSSL libcrypto as an optional record
+  cipher for `e.net.tls` (`tls.use_aead`). Every function is looked up at run time, so nothing
+  is shipped or bound at load, and a host without OpenSSL keeps the portable cipher (D1646).
+  Delivered: [`x.openssl.crypto`](packages/x.openssl.crypto.md) under `lib/x/openssl/`.
 
 A package has no promised declarations until its own versioned specification pins its
 upstream ABI/data version and enumerates the complete surface. Compiler backends such

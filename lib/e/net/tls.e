@@ -24,6 +24,10 @@ type Cursor = struct { data: []const u8, off: usize }
 type ClientHelloInfo = struct { peer_key: kx.X25519PublicKey, selected_alpn: str }
 type CertificateSet = struct { leaf: x509.Certificate, intermediates: []const x509.Certificate }
 type HandshakeSecrets = struct { client: [32]u8, server: [32]u8, master: [32]u8 }
+// A record cipher a caller brings in place of `e.crypto.aead`'s AES-128-GCM, such as
+// `x.openssl.crypto`'s (D1646). It must seal and open exactly as `aead.aes128_gcm_seal` and
+// `aead.aes128_gcm_open` do: ciphertext then the 16-byte tag, `aead.Authentication` on a bad tag.
+type Aead = struct { ctx: *void, seal: fn(ctx: *void, dst: []u8, key: [16]u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err), open: fn(ctx: *void, dst: []u8, key: [16]u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err) }
 
 error InvalidCertificate
 error Handshake
@@ -51,6 +55,9 @@ type State = struct {
     read_len: usize,
     control: cancel.Control,
     controlled: bool,
+    // `cipher` is read only when `external` is set.
+    external: bool,
+    cipher: Aead,
 }
 
 type HandshakeReader = struct {
@@ -123,6 +130,17 @@ fn record_nonce(keys: *const TrafficKeys) -> [12]u8 {
 // One unpadded TLSCiphertext. The header is authenticated, and the sequence
 // advances only after a successful seal/open.
 fn seal_record(keys: *TrafficKeys, content_type: u8, content: []const u8, out: []u8) -> (usize, err) {
+    let (length, seal_error) = seal_record_via(nil, keys, content_type, content, out)
+    ret (length, seal_error)
+}
+
+fn open_record(keys: *TrafficKeys, record: []const u8, out: []u8) -> (usize, u8, err) {
+    let (length, content_type, open_error) = open_record_via(nil, keys, record, out)
+    ret (length, content_type, open_error)
+}
+
+// `seal_record` with `cipher`'s AES-128-GCM in place of `e.crypto.aead`'s when it is not nil.
+fn seal_record_via(cipher: *const Aead, keys: *TrafficKeys, content_type: u8, content: []const u8, out: []u8) -> (usize, err) {
     if content.len > 16384usize { ret (0usize, Protocol) }
     if content_type != 21u8 && content_type != 22u8 && content_type != 23u8 { ret (0usize, Protocol) }
     if content.len == 0usize && content_type != 23u8 { ret (0usize, Protocol) }
@@ -137,19 +155,40 @@ fn seal_record(keys: *TrafficKeys, content_type: u8, content: []const u8, out: [
     mem.copy[u8](inner[..content.len], content)
     inner[content.len] = content_type
     let nonce = record_nonce(keys)
-    let (written, seal_error) = aead.aes128_gcm_seal(out[5usize..], keys.key, nonce, out[..5usize], inner[..content.len + 1usize])
+    var written = 0usize
+    var seal_error = ok
+    if cipher == nil {
+        let (built_in, built_in_error) = aead.aes128_gcm_seal(out[5usize..], keys.key, nonce, out[..5usize], inner[..content.len + 1usize])
+        written = built_in
+        seal_error = built_in_error
+    } else {
+        let (brought, brought_error) = cipher.seal(cipher.ctx, out[5usize..], keys.key, nonce, out[..5usize], inner[..content.len + 1usize])
+        written = brought
+        seal_error = brought_error
+    }
     if seal_error != ok { ret (0usize, seal_error) }
     keys.sequence += 1u64
     ret (5usize + written, ok)
 }
 
-fn open_record(keys: *TrafficKeys, record: []const u8, out: []u8) -> (usize, u8, err) {
+// `open_record` with `cipher`'s AES-128-GCM in place of `e.crypto.aead`'s when it is not nil.
+fn open_record_via(cipher: *const Aead, keys: *TrafficKeys, record: []const u8, out: []u8) -> (usize, u8, err) {
     if record.len < 22usize || record[0] != 23u8 || record[1] != 3u8 || record[2] != 3u8 { ret (0usize, 0u8, Protocol) }
     let sealed_len = (usize(record[3]) << 8usize) | usize(record[4])
     if sealed_len > 16640usize || sealed_len + 5usize != record.len || keys.sequence == 18446744073709551615u64 { ret (0usize, 0u8, Protocol) }
     var inner: [16624]u8 = zero
     let nonce = record_nonce(keys)
-    let (plain_len, open_error) = aead.aes128_gcm_open(inner[0..], keys.key, nonce, record[..5usize], record[5usize..])
+    var plain_len = 0usize
+    var open_error = ok
+    if cipher == nil {
+        let (built_in, built_in_error) = aead.aes128_gcm_open(inner[0..], keys.key, nonce, record[..5usize], record[5usize..])
+        plain_len = built_in
+        open_error = built_in_error
+    } else {
+        let (brought, brought_error) = cipher.open(cipher.ctx, inner[0..], keys.key, nonce, record[..5usize], record[5usize..])
+        plain_len = brought
+        open_error = brought_error
+    }
     if open_error != ok { ret (0usize, 0u8, Protocol) }
     var end = plain_len
     while end > 0usize && inner[end - 1usize] == 0u8 { end -= 1usize }
@@ -907,7 +946,7 @@ fn send_protected(state: *State, keys: *TrafficKeys, content_type: u8, content: 
     let check_error = check_control(state)
     if check_error != ok { ret check_error }
     var record: [16406]u8 = zero
-    let (length, seal_error) = seal_record(keys, content_type, content, record[0..])
+    let (length, seal_error) = seal_record_via(record_cipher(state), keys, content_type, content, record[0..])
     if seal_error != ok { ret seal_error }
     let write_error = io.write_all(&state.sink, record[..length])
     if write_error != ok { ret Handshake }
@@ -937,7 +976,7 @@ fn read_protected_content(state: *State, keys: *TrafficKeys, out: []u8, allow_cc
         mem.copy[u8](record[..5usize], header[0..])
         let record_error = io.read_exact(&state.source, record[5usize..5usize + sealed_len])
         if record_error != ok { ret (0usize, 0u8, Handshake) }
-        let (length, content_type, open_error) = open_record(keys, record[..5usize + sealed_len], out)
+        let (length, content_type, open_error) = open_record_via(record_cipher(state), keys, record[..5usize + sealed_len], out)
         ret (length, content_type, open_error)
     }
 }
@@ -1126,6 +1165,7 @@ fn client(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ClientConfi
     state.read_at = 0usize
     state.read_len = 0usize
     state.controlled = false
+    state.external = false
     ret (Stream { state: mem.cast[*void](state) }, ok)
 }
 
@@ -1148,7 +1188,26 @@ fn server(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ServerConfi
     state.read_at = 0usize
     state.read_len = 0usize
     state.controlled = false
+    state.external = false
     ret (Stream { state: mem.cast[*void](state) }, ok)
+}
+
+// Seals and opens this stream's records with `cipher` from now on, in place of
+// `e.crypto.aead`'s AES-128-GCM (D1646). Call it before `handshake`: the handshake's own
+// encrypted records use it too. The handshake, the certificate checks and the key schedule
+// stay this module's.
+fn use_aead(stream: *Stream, cipher: Aead) -> err {
+    if stream.state == nil { ret Closed }
+    let state = mem.cast[*State](stream.state)
+    if state.complete || state.failed || state.closed { ret Protocol }
+    state.cipher = cipher
+    state.external = true
+    ret ok
+}
+
+fn record_cipher(state: *const State) -> *const Aead {
+    if state.external { ret &state.cipher }
+    ret nil
 }
 
 fn protocol(stream: *const Stream) -> Version { ret .Tls13 }

@@ -22,6 +22,7 @@ use e.fs
 use e.time
 use e.db
 use x.microsoft.tds
+use x.openssl.crypto
 
 fn same_bytes(x: []const u8, y: []const u8) -> bool {
     if x.len != y.len { ret false }
@@ -600,6 +601,48 @@ fn two_connections(a: *mem.Arena, options: tds.Options) -> i32 {
     ret 0i32
 }
 
+// With the host's OpenSSL, if it has one, sealing the records (D1646): 100 KB of text and bytes
+// through a connection whose TLS cipher is libcrypto's, read back by the portable one.
+fn openssl_cipher(a: *mem.Arena, options: tds.Options) -> i32 {
+    let (openssl, load_error) = crypto.load(a)
+    if load_error == crypto.NotFound { ret 0i32 }
+    if load_error != ok { ret 190i32 }
+    let (c0, open_error) = tds.open_with_cipher(a, options, crypto.aead_of(openssl))
+    if open_error != ok { ret 191i32 }
+    var c = c0
+    let (text, text_error) = mem.alloc[u8](a, 100000usize)
+    let (big, big_error) = mem.alloc[u8](a, 100000usize)
+    if text_error != ok || big_error != ok { ret 192i32 }
+    var i = 0usize
+    while i < 100000usize {
+        text[i] = u8(97usize + i % 26usize)
+        big[i] = u8(i % 253usize)
+        i += 1usize
+    }
+    let long_text: str = text
+    var p: [3]db.Parameter = zero
+    p[0] = positional(db.Value{ I64: 60i64 })
+    p[1] = positional(db.Value{ Text: long_text })
+    p[2] = positional(db.Value{ Bytes: big })
+    let (stored, store_error) = db.execute(&c, "INSERT INTO item(id, name, data) VALUES (?, ?, ?)", p[0..])
+    if store_error != ok || stored != 1u64 { ret 193i32 }
+    if db.close(&c) != ok { ret 194i32 }
+    if crypto.close(openssl) != ok { ret 195i32 }
+    let (plain0, plain_error) = tds.open(a, options)
+    if plain_error != ok { ret 196i32 }
+    var plain = plain0
+    let (back0, back_error) = db.query(&plain, "SELECT name, data FROM item WHERE id = 60", zero)
+    if back_error != ok { ret 197i32 }
+    var back = back0
+    var row: [2]db.Value = zero
+    let (more, next_error) = db.reader_next_err(&back, row[0..])
+    let (name, name_ok) = as_text(row[0])
+    let (data, data_ok) = as_bytes(row[1])
+    if next_error != ok || !more || !name_ok || !same_bytes(name, text) || !data_ok || !same_bytes(data, big) { ret 198i32 }
+    if db.close_rows(&back) != ok || db.close(&plain) != ok { ret 199i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len < 6usize { os.exit(1i32) }
     let (roots, roots_error) = fs.read_file(a, args[3], 65536usize)
@@ -616,6 +659,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if code == 0i32 { code = streaming(a, &c) }
     if code == 0i32 { code = transactions(a, &c) }
     if code == 0i32 { code = two_connections(a, options) }
+    if code == 0i32 { code = openssl_cipher(a, options) }
     if code == 0i32 && db.close(&c) != ok { code = 4i32 }
     if code != 0i32 { os.exit(code) }
     ret ok

@@ -30736,3 +30736,37 @@ AES derived every S-box value from the GF(2⁸) inverse, 16 bytes a round, and e
   - lookup: 1,420 → 332 µs.
 
 ---
+
+## D1646 — OpenSSL as an optional record cipher: `tls.use_aead` and `x.openssl.crypto`
+
+**Why.** Even bitsliced, Neper's AES-GCM seals a 16 KB record in 702 µs where OpenSSL, on the CPU's AES instructions, takes 3.2 µs (C098). SQL Server scans ran at 28–35% of the fastest language because of it. The user asked for OpenSSL as an option that Neper never ships.
+
+**Decision.**
+
+- **Only the record cipher.** `e.net.tls` gains `type Aead`, a context and a seal and an open function with `aead.aes128_gcm_seal`'s and `aead.aes128_gcm_open`'s contract, and `use_aead(stream, cipher)`, which a caller calls before `handshake`. Every protected record goes through it: the handshake's encrypted messages and the application data. The handshake, the certificate checks and the key schedule stay this module's, so certificate policy never moves to OpenSSL. Whole-TLS through libssl was the alternative, and the user chose the narrow hook.
+- **`seal_record_via` and `open_record_via`** take the cipher, nil for the built-in one. `seal_record` and `open_record` keep their signatures. A struct literal must name every field, so a new `ClientConfig` field would have broken every caller.
+- **`x.openssl.crypto`** adapts libcrypto's EVP AES-128-GCM to `tls.Aead`.
+  - It binds nothing at load time: `load` looks up each of its ten functions with `os.dlopen` and `os.dlsym`, and answers `NotFound` when the library or a function is missing.
+  - A program that imports the package therefore still starts on a host without OpenSSL.
+  - One `Crypto` holds one EVP context and re-keys it per record, so it serves one stream.
+  - A failed open zeroes what OpenSSL decrypted before the tag was checked, as the portable open never writes it.
+- **`x.microsoft.tds`** adds `open_with_cipher`.
+- **Nothing shipped.** On Linux the distribution's `libcrypto.so.3` is used. On Windows the suites put `D:\tools\openssl` on PATH, holding the `libcrypto-3-x64.dll` Git for Windows installs (OpenSSL 3.5.6). No `e.*` module uses OpenSSL unless a caller passes it in.
+
+**Evidence.**
+
+- `link/x_openssl` passes on both hosts: OpenSSL 3.0.13 on Linux and 3.5.6 on Windows. It checks:
+  - byte-for-byte agreement with `e.crypto.aead` over lengths 0–300 and up to 16,385;
+  - a flipped bit, which is refused with the output zeroed;
+  - a short buffer;
+  - a live TLS 1.3 exchange of 100 KB each way over pipes, with an OpenSSL client and a portable server;
+  - `use_aead` after the handshake, which is refused.
+- With PATH reduced to System32, `load` answers `NotFound`: the fixture fails when OpenSSL is required and passes when it is not.
+- `link/x_tds` stores 100 KB of text and bytes through an OpenSSL-sealed SQL Server connection and reads them back through a portable one, on both hosts.
+- On Linux the benchmark's SQL Server run, three runs each way, gave:
+  - scan: 34–36 → 9–11 ms, about 2 million rows/s, level with C and Rust;
+  - lookups: about 25% faster;
+  - inserts: 10–20% faster.
+- The published five-driver numbers remain the portable default.
+
+---

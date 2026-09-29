@@ -119,6 +119,19 @@ const LAST_DAY: i64 = 106750i64
 
 // Connects, completes TLS, then PRELOGIN and LOGIN7 inside it.
 fn open(a: *mem.Arena, options: Options) -> (db.Connection, err) {
+    let (connection, open_error) = connect(a, options, nil)
+    ret (connection, open_error)
+}
+
+// `open`, with the TLS records sealed and opened by `cipher` rather than `e.crypto.aead`'s
+// portable AES-GCM, such as `x.openssl.crypto`'s from the host's OpenSSL (D1646). The handshake
+// and the certificate checks are `e.net.tls`'s either way. `cipher` must outlive the connection.
+fn open_with_cipher(a: *mem.Arena, options: Options, cipher: tls.Aead) -> (db.Connection, err) {
+    let (connection, open_error) = connect(a, options, &cipher)
+    ret (connection, open_error)
+}
+
+fn connect(a: *mem.Arena, options: Options, cipher: *const tls.Aead) -> (db.Connection, err) {
     var connection: db.Connection = zero
     if options.trust_roots.len == 0usize { ret (connection, CannotConnect) }
     let (v4, v4_error) = net.resolve(a, options.host, options.port, .Ip4)
@@ -179,6 +192,13 @@ fn open(a: *mem.Arena, options: Options) -> (db.Connection, err) {
         ret (connection, CannotConnect)
     }
     c.stream = stream
+    if cipher != nil {
+        let cipher_error = tls.use_aead(&c.stream, *cipher)
+        if cipher_error != ok {
+            let unused_cipher = net.close(c.socket)
+            ret (connection, cipher_error)
+        }
+    }
     let handshake_error = tls.handshake(&c.stream)
     if handshake_error != ok {
         let unused_handshake = net.close(c.socket)
