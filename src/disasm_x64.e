@@ -283,6 +283,12 @@ fn operand_rm(c: *Cursor, modrm: usize, rex_r: bool, rex_x: bool, rex_b: bool, w
                 if value_error != ok { ret (reg, false) }
             }
         } else {
+            // No base: the absolute disp32, after the index when there is one (T010: it
+            // ran into it, `[rsi*40x89c0c31a]`).
+            if index < 16usize {
+                let plus_error = puts(c, " + ")
+                if plus_error != ok { ret (reg, false) }
+            }
             let value_error = put_number(c, displacement)
             if value_error != ok { ret (reg, false) }
         }
@@ -955,4 +961,256 @@ fn disassemble(code: []const usize, out: []u8) -> (usize, err) {
         if newline_error != ok { ret (0usize, newline_error) }
     }
     ret (c.written, ok)
+}
+
+// AT&T syntax (T010), GNU `as`'s: each line `disassemble` wrote, rewritten -- operands
+// reversed and joined by `,`, registers `%`, immediates `$`, memory `disp(base,index,scale)`,
+// an indirect `jmp`/`call` target `*`, a size suffix where no register gives the size, and
+// `movzx`/`movsx`/`movsxd`/`cdq`/`cqo` under their AT&T names. The offset, the bytes and the
+// `text`/`db` lines are kept as they are. Checked by assembling both spellings with GNU
+// `as` and comparing the bytes.
+fn att_listing(text: []const u8, out: []u8) -> (usize, err) {
+    var c: Cursor = zero
+    c.out = out
+    var at = 0usize
+    while at < text.len {
+        var end = at
+        while end < text.len && text[end] != 10u8 { end += 1usize }
+        let line_error = att_line(&c, text[at..end])
+        if line_error != ok { ret (0usize, line_error) }
+        if end < text.len {
+            let newline_error = put(&c, 10u8)
+            if newline_error != ok { ret (0usize, newline_error) }
+        }
+        at = end + 1usize
+    }
+    ret (c.written, ok)
+}
+
+// `OFFSET  instruction  ; bytes`: the instruction between the first two spaces and the
+// last `  ;`.
+fn att_line(c: *Cursor, line: str) -> err {
+    var open = 0usize
+    while open + 1usize < line.len && !(line[open] == 32u8 && line[open + 1usize] == 32u8) { open += 1usize }
+    var close = line.len
+    var probe = line.len
+    while probe >= 3usize && close == line.len {
+        if line[probe - 3usize] == 32u8 && line[probe - 2usize] == 32u8 && line[probe - 1usize] == 59u8 { close = probe - 3usize }
+        probe = probe - 1usize
+    }
+    if open + 2usize > close || close == line.len { ret puts(c, line) }
+    try puts(c, line[0usize..open + 2usize])
+    try att_instruction(c, line[open + 2usize..close])
+    ret puts(c, line[close..line.len])
+}
+
+fn att_starts(value: str, prefix: str) -> bool {
+    if value.len < prefix.len { ret false }
+    var at = 0usize
+    while at < prefix.len {
+        if value[at] != prefix[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn att_is(value: str, other: str) -> bool { ret value.len == other.len && att_starts(value, other) }
+
+// A general register's width in bytes, 16 for an `xmm` register, 0 for anything else.
+fn att_register_width(name: str) -> usize {
+    if name.len >= 4usize && att_starts(name, "xmm") { ret 16usize }
+    if att_listed("rax rcx rdx rbx rsp rbp rsi rdi rip", name) { ret 8usize }
+    if att_listed("eax ecx edx ebx esp ebp esi edi", name) { ret 4usize }
+    if att_listed("ax cx dx bx sp bp si di", name) { ret 2usize }
+    if att_listed("al cl dl bl ah ch dh bh spl bpl sil dil", name) { ret 1usize }
+    // r8..r15 and their d/w/b halves.
+    if name.len >= 2usize && name[0usize] == 114u8 && name[1usize] >= 48u8 && name[1usize] <= 57u8 {
+        let last = name[name.len - 1usize]
+        if last == 100u8 { ret 4usize }
+        if last == 119u8 { ret 2usize }
+        if last == 98u8 { ret 1usize }
+        if last >= 48u8 && last <= 57u8 { ret 8usize }
+    }
+    ret 0usize
+}
+
+// Whether `name` is one of the space-separated words of `list`.
+fn att_listed(list: str, name: str) -> bool {
+    var at = 0usize
+    while at < list.len {
+        var end = at
+        while end < list.len && list[end] != 32u8 { end += 1usize }
+        if att_is(list[at..end], name) { ret true }
+        at = end + 1usize
+    }
+    ret false
+}
+
+fn att_suffix(width: usize) -> u8 {
+    if width == 1usize { ret 98u8 }
+    if width == 2usize { ret 119u8 }
+    if width == 4usize { ret 108u8 }
+    ret 113u8
+}
+
+// A memory operand's size word, and the bracketed expression without it.
+fn att_memory_parts(operand: str) -> (usize, str) {
+    if att_starts(operand, "byte [") { ret (1usize, operand[5usize..operand.len]) }
+    if att_starts(operand, "word [") { ret (2usize, operand[5usize..operand.len]) }
+    if att_starts(operand, "dword [") { ret (4usize, operand[6usize..operand.len]) }
+    if att_starts(operand, "qword [") { ret (8usize, operand[6usize..operand.len]) }
+    ret (0usize, operand)
+}
+
+fn att_instruction(c: *Cursor, spelled: str) -> err {
+    if att_starts(spelled, "text ") || att_starts(spelled, "db ") { ret puts(c, spelled) }
+    var rest = spelled
+    while att_starts(rest, "lock ") || att_starts(rest, "rep ") {
+        var prefix_end = 0usize
+        while rest[prefix_end] != 32u8 { prefix_end += 1usize }
+        try puts(c, rest[0usize..prefix_end + 1usize])
+        rest = rest[prefix_end + 1usize..rest.len]
+    }
+    var space = 0usize
+    while space < rest.len && rest[space] != 32u8 { space += 1usize }
+    let mnemonic = rest[0usize..space]
+    var operands: [3]str = zero
+    var count = 0usize
+    if space < rest.len {
+        var from = space + 1usize
+        var at = from
+        while at <= rest.len {
+            if at == rest.len || (at + 1usize < rest.len && rest[at] == 44u8 && rest[at + 1usize] == 32u8) {
+                if count < 3usize {
+                    operands[count] = rest[from..at]
+                    count += 1usize
+                }
+                from = at + 2usize
+                at = from
+            } else {
+                at += 1usize
+            }
+        }
+    }
+    // What gives the size: a general register, else a memory operand's size word.
+    var register_width = 0usize
+    var memory_width = 0usize
+    var has_memory = false
+    // A shift's `cl` is its count, not its size.
+    let shift = att_listed("rol ror rcl rcr shl shr sal sar", mnemonic)
+    var index = 0usize
+    while index < count {
+        let width = att_register_width(operands[index])
+        if width != 0usize && register_width == 0usize && !(shift && index == 1usize) { register_width = width }
+        let (size, inner) = att_memory_parts(operands[index])
+        if inner.len != 0usize && inner[0usize] == 91u8 {
+            has_memory = true
+            memory_width = size
+        }
+        index += 1usize
+    }
+    let branch = mnemonic.len != 0usize && (mnemonic[0usize] == 106u8 || att_is(mnemonic, "call"))
+    if att_is(mnemonic, "cdq") { ret puts(c, "cltd") }
+    if att_is(mnemonic, "cqo") { ret puts(c, "cqto") }
+    if att_is(mnemonic, "cdqe") { ret puts(c, "cltq") }
+    // A string instruction's dword is `l`: `movsd` without operands is `movsl`.
+    if count == 0usize && att_listed("movsd stosd lodsd scasd cmpsd", mnemonic) {
+        try puts(c, mnemonic[0usize..mnemonic.len - 1usize])
+        ret put(c, 108u8)
+    }
+    if (att_is(mnemonic, "movzx") || att_is(mnemonic, "movsx") || att_is(mnemonic, "movsxd")) && count == 2usize {
+        var source_width = att_register_width(operands[1usize])
+        if source_width == 0usize { source_width = memory_width }
+        if att_is(mnemonic, "movzx") { try puts(c, "movz") } else { try puts(c, "movs") }
+        try put(c, att_suffix(source_width))
+        try put(c, att_suffix(att_register_width(operands[0usize])))
+    } else {
+        try puts(c, mnemonic)
+        // `cvtsi2sd` from memory names the integer's width; an xmm operand does not.
+        let converting = att_starts(mnemonic, "cvtsi2s")
+        if has_memory && memory_width != 0usize && !branch && !att_is(mnemonic, "lea") && (register_width == 0usize || (converting && register_width == 16usize)) {
+            try put(c, att_suffix(memory_width))
+        }
+    }
+    if count == 0usize { ret ok }
+    try put(c, 32u8)
+    // The operands, last first.
+    var written = 0usize
+    while written < count {
+        if written > 0usize { try put(c, 44u8) }
+        try att_operand(c, operands[count - 1usize - written], branch)
+        written += 1usize
+    }
+    ret ok
+}
+
+fn att_operand(c: *Cursor, operand: str, branch: bool) -> err {
+    let (size, inner) = att_memory_parts(operand)
+    if inner.len != 0usize && inner[0usize] == 91u8 {
+        if branch { try put(c, 42u8) }
+        ret att_memory(c, inner[1usize..inner.len - 1usize])
+    }
+    if att_register_width(operand) != 0usize {
+        if branch { try put(c, 42u8) }
+        try put(c, 37u8)
+        ret puts(c, operand)
+    }
+    // A branch target is an address, bare; any other number is an immediate.
+    if !branch { try put(c, 36u8) }
+    ret puts(c, operand)
+}
+
+// `base + index*scale +/- disp` as `disp(%base,%index,scale)`.
+fn att_memory(c: *Cursor, expression: str) -> err {
+    var base = ""
+    var index = ""
+    var scale = ""
+    var displacement = ""
+    var negative = false
+    var sign_negative = false
+    var at = 0usize
+    while at < expression.len {
+        var end = at
+        while end < expression.len && expression[end] != 32u8 { end += 1usize }
+        let term = expression[at..end]
+        if att_is(term, "+") {
+            sign_negative = false
+        } else {
+            if att_is(term, "-") {
+                sign_negative = true
+            } else {
+                var star = 0usize
+                while star < term.len && term[star] != 42u8 { star += 1usize }
+                if star < term.len {
+                    index = term[0usize..star]
+                    scale = term[star + 1usize..term.len]
+                } else {
+                    if att_register_width(term) != 0usize {
+                        if base.len == 0usize { base = term } else { index = term }
+                    } else {
+                        displacement = term
+                        negative = sign_negative
+                    }
+                }
+            }
+        }
+        at = end + 1usize
+    }
+    if displacement.len != 0usize {
+        if negative { try put(c, 45u8) }
+        try puts(c, displacement)
+    }
+    if base.len == 0usize && index.len == 0usize { ret ok }
+    try put(c, 40u8)
+    if base.len != 0usize {
+        try put(c, 37u8)
+        try puts(c, base)
+    }
+    if index.len != 0usize {
+        try puts(c, ",%")
+        try puts(c, index)
+        try put(c, 44u8)
+        if scale.len != 0usize { try puts(c, scale) } else { try put(c, 49u8) }
+    }
+    ret put(c, 41u8)
 }

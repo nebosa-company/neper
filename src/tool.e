@@ -1474,7 +1474,7 @@ fn quoted_listing(out: *Out, listing: []const u8, start: usize, builder: *nir.Bu
 // whose line entries fall in another function -- the copy of a callee's body in a
 // release build -- as `from`, `start` and `end` (function-relative, `end` exclusive)
 // and the callee's `line` the run begins at; empty in a debug build.
-fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const u8, machine_count: usize, relocations: []const codegen_x64.Relocation, relocation_count: usize, functions: []const check.Function, g: *graph.Graph, lines: []const codegen_x64.LineEntry, line_count: usize) -> err {
+fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const u8, machine_count: usize, relocations: []const codegen_x64.Relocation, relocation_count: usize, functions: []const check.Function, g: *graph.Graph, lines: []const codegen_x64.LineEntry, line_count: usize, att: bool) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, machine_count * 64usize + 8192usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
@@ -1503,7 +1503,7 @@ fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builde
         try text(&out, os_name)
         try text(&out, "\",\"text\":")
         let checkpoint = mem.mark(a)
-        let (listing, listing_error) = mem.alloc[u8](a, (stop - start) * 48usize + 64usize)
+        var (listing, listing_error) = mem.alloc[u8](a, (stop - start) * 48usize + 64usize)
         if listing_error != ok { ret listing_error }
         // The disassembler reads a byte per word (D307): widen the function's range.
         let (words, words_error) = mem.alloc[usize](a, stop - start + 1usize)
@@ -1513,8 +1513,17 @@ fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builde
             words[widen_at] = usize(machine[start + widen_at])
             widen_at += 1usize
         }
-        let (listed, decode_error) = disasm_x64.disassemble(words[0usize..stop - start], listing)
+        var (listed, decode_error) = disasm_x64.disassemble(words[0usize..stop - start], listing)
         if decode_error != ok { ret decode_error }
+        // `--att` (T010): the same lines in GNU `as`'s AT&T spelling.
+        if att {
+            let (spelled, spelled_error) = mem.alloc[u8](a, listed * 2usize + 64usize)
+            if spelled_error != ok { ret spelled_error }
+            let (spelled_count, att_error) = disasm_x64.att_listing(listing[0usize..listed], spelled)
+            if att_error != ok { ret att_error }
+            listing = spelled
+            listed = spelled_count
+        }
         // A `call` whose target is another function's start is named after its bytes
         // (D278): the displacements were resolved before this, so the target is known.
         try quoted_listing(&out, listing[0usize..listed], start, builder, offsets, relocations, relocation_count)

@@ -31258,3 +31258,21 @@ Everything else goes through the library's update, and its own slicing-by-8 tabl
 - Both suites require exit 1 and the line naming both.
 
 **Evidence.** The same message comes out for the Windows and the Linux target.
+
+## D1703 — `dis --att` spells the listing as GNU `as` does (T010)
+
+**Decision.** `dis-file ... --json --att` rewrites each listed instruction into AT&T syntax. The decoder is unchanged: `disasm_x64.att_listing` converts the Intel text it wrote.
+
+- The offset, the bytes and the `text`/`db` lines stay as they are.
+- Operands are reversed and joined by `,`. Registers take `%` and immediates `$`. Memory becomes `disp(%base,%index,scale)`.
+- A branch target stays a bare offset. An indirect `jmp` or `call` takes `*`.
+- A size suffix is added only when no general register gives the size; a shift's `cl` is its count, not its size. `cvtsi2s*` from memory names the integer's width.
+- The AT&T names replace `movzx`/`movsx`/`movsxd` (`movzbl`, `movslq`, ...), `cdq`/`cqo`/`cdqe` (`cltd`, `cqto`, `cltq`) and the operand-less string `movsd`/`stosd` (`movsl`, `stosl`).
+- Because the text is converted rather than decoded twice, `call ... -> module.function` naming works unchanged.
+- Converting the listing also found a display bug: a memory operand with an index and no base ran the index into the absolute displacement (`[rsi*40x89c0c31a]`). It now reads `[rsi*4 + 0x89c0c31a]`.
+
+**Evidence.**
+- Eleven link fixtures were listed both ways, 174,732 instructions (sort, atomics, AEAD, hashes, floats, both JSON codecs, math), and each spelling was assembled with GNU `as` in WSL. The object bytes are identical.
+- 31 lines of `fmt_json_schema` were dropped first, because GNU rejects even their Intel spelling. They are data that the linear sweep walks as code.
+- `tools/dis_att.x64-{windows,linux}.expected.jsonl` pin the listing in both suites.
+- The existing `dis` and `dis_inlined` goldens are byte-identical on both hosts.

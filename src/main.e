@@ -885,7 +885,7 @@ fn flags_known(args: []str) -> bool {
                     if !same(args[at], "-j") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
-                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") { ret false }
+                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") && !same(args[at], "--att") { ret false }
                 }
             }
         }
@@ -13532,7 +13532,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                     os.exit(1i32)
                 }
                 report.pending_header = ""
-                try tool.disassembly_json(a, args[4usize], args[5usize], &builder, code.function_offsets, code.machine.bytes, code.machine.count, code.relocations, code.relocation_count, checker.functions[0usize..checker.function_count], &loaded, code.lines, code.line_count)
+                try tool.disassembly_json(a, args[4usize], args[5usize], &builder, code.function_offsets, code.machine.bytes, code.machine.count, code.relocations, code.relocation_count, checker.functions[0usize..checker.function_count], &loaded, code.lines, code.line_count, has_flag(args, "--att"))
                 ret ok
             }
             if writes_executable {

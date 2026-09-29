@@ -5560,6 +5560,9 @@ $test_build/neper-self dis-file "$conformance_root/tools/dis.e" "$repo" x64 linu
 # `dis-file --json --release` (D542, D565, H19): inlined runs retain a nested copy's chain.
 $test_build/neper-self dis-file "$conformance_root/tools/dis_inlined.e" "$repo" x64 linux --json --release > "$test_build/conformance-tools-dis-inlined.jsonl"
 cmp "$test_build/conformance-tools-dis-inlined.jsonl" "$conformance_root/tools/dis_inlined.x64-linux.expected.jsonl"
+# `dis --att` (D1703): the same listing in GNU `as`'s AT&T spelling.
+$test_build/neper-self dis-file "$conformance_root/tools/dis.e" "$repo" x64 linux --json --att > "$test_build/conformance-tools-dis-att.jsonl"
+cmp "$test_build/conformance-tools-dis-att.jsonl" "$conformance_root/tools/dis_att.x64-linux.expected.jsonl"
 cmp -s "$dis_actual" "$conformance_root/tools/dis.x64-linux.expected.jsonl" || { printf '%s
 ' "dis --json differs from the conformance corpus" >&2; exit 1; }
 # `fmt --json` (D234): the operand's canonical layout, byte for byte (target-independent);
