@@ -5435,6 +5435,12 @@ cmp -s "$test_build/conformance-tools-index-project.jsonl" "$conformance_root/to
 (cd "$conformance_root/tools/index_project" && "$repo/build/linux/short/neper-self-short" index > "$test_build/conformance-tools-index-project.jsonl")
 cmp -s "$test_build/conformance-tools-index-project.jsonl" "$conformance_root/tools/index_project.expected.jsonl" || { printf '%s
 ' "the operand-less index differs from index-project" >&2; exit 1; }
+# `index --all` (T009): the toolchain's lib after the project's modules, each under
+# `toolchain-lib`, so `e.mem` is indexed beside the project's three.
+(cd "$conformance_root/tools/index_project" && "$repo/build/linux/short/neper-self-short" index --all > "$test_build/conformance-tools-index-all.jsonl")
+grep -q '"root":"toolchain-lib","path":"e/mem.e"' "$test_build/conformance-tools-index-all.jsonl" || { echo 'index --all did not index the toolchain lib' >&2; exit 1; }
+index_all_modules=$(grep -o '"modules":[0-9]*}}' "$test_build/conformance-tools-index-all.jsonl" | tr -dc 0-9)
+[ "$index_all_modules" -gt 3 ] || { echo "index --all indexed $index_all_modules modules" >&2; exit 1; }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 run_actual="$test_build/conformance-tools-run.jsonl"

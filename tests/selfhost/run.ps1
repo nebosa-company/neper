@@ -5578,6 +5578,13 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexProjectActual).Hash -ne (
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\index_project')`" && `"$shortCompiler`" index > `"$indexProjectActual`""
 if ($LASTEXITCODE -ne 0) { throw "the operand-less index exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\index_project.expected.jsonl')).Hash) { throw 'the operand-less index differs from index-project' }
+# `index --all` (T009): the toolchain's lib after the project's modules, each under
+# `toolchain-lib`, so `e.mem` is indexed beside the project's three.
+$indexAllActual = Join-Path $testBuild 'conformance-tools-index-all.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\index_project')`" && `"$shortCompiler`" index --all > `"$indexAllActual`""
+if ($LASTEXITCODE -ne 0) { throw "index --all exited $LASTEXITCODE" }
+$indexAllText = [IO.File]::ReadAllText($indexAllActual)
+if ($indexAllText -notmatch '"root":"toolchain-lib","path":"e/mem\.e"' -or $indexAllText -notmatch '"modules":(\d+)\}\}' -or [int]$Matches[1] -le 3) { throw 'index --all did not index the toolchain lib' }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'
