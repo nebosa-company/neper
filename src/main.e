@@ -1162,14 +1162,18 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     if !(is_build || is_run || is_check || is_fmt || is_index || is_dis || is_manifest || is_test) { ret (args, false, ok) }
     // `check` and `test` with no operand (D294): the project the current directory is in,
     // as `check-project` and `test-project`; a `--` flag first is no operand either.
-    let project_form = (is_check || is_test || is_fmt || is_index) && (args.len == 2usize || (args[2usize].len >= 2usize && args[2usize][0usize] == 45u8 && args[2usize][1usize] == 45u8))
-    // `build` and `run` of a project (T002): no operand, a flag first, or an operand that
-    // is not a `.e` file -- a directory -- builds the project's `src/main.e`.
-    let no_operand = args.len == 2usize || (args[2usize].len >= 1usize && args[2usize][0usize] == 45u8)
+    // Only a command with no operand anywhere is a project's (D1682): `fmt --path x.e -`
+    // is not `fmt` of the whole project, and an operand after a flag is refused.
+    let no_operand = !names_operand(args)
+    if !no_operand && args[2usize].len > 1usize && args[2usize][0usize] == 45u8 { ret (args, false, ok) }
+    let project_form = (is_check || is_test || is_fmt || is_index) && no_operand
+    // `build` and `run` of a project (T002): no operand, or an operand that is not a `.e`
+    // file -- a directory -- builds the project's `src/main.e`.
     let project_program = (is_build || is_run) && (no_operand || !(args[2usize].len > 2usize && args[2usize][args[2usize].len - 2usize] == 46u8 && args[2usize][args[2usize].len - 1usize] == 101u8))
     if args.len < 3usize && !project_form && !project_program { ret (args, false, ok) }
     var file = ""
-    if !project_form && !no_operand { file = args[2usize] }
+    // `-` is stdin to `fmt`, `tokens` and `parse`: only a project build reads no operand.
+    if !project_form && !(project_program && no_operand) { file = args[2usize] }
     let root = own_directory(args[0usize])
     // Flags after the operand.
     var triple = host_target(a)
@@ -1406,6 +1410,20 @@ fn test_workdir(a: *mem.Arena, file: str, project_dir: str) -> (str, err) {
 
 // The project the current directory is in (D294): `project.discover` from a name
 // beside it, so the walk starts at the directory itself.
+// Whether a short form names an operand after its command (D1682): an argument that is
+// neither a flag nor a flag's value, `-` (stdin) among them; `--` ends the search.
+fn names_operand(args: []str) -> bool {
+    var at = 2usize
+    while at < args.len {
+        let arg = args[at]
+        if same(arg, "--") { ret false }
+        if arg.len == 0usize || arg[0usize] != 45u8 || same(arg, "-") { ret true }
+        if same(arg, "--path") || same(arg, "--project") || same(arg, "-o") || same(arg, "-j") || same(arg, "--target") || same(arg, "--triple") { at += 1usize }
+        at += 1usize
+    }
+    ret false
+}
+
 // The program a project builds (T002): `src/main.e` under the project `directory` is
 // in, or the working directory's when it is empty, and the executable named after the
 // project's directory as a program root's is after its module.

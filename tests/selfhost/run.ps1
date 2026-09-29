@@ -5542,6 +5542,10 @@ $fmtProject = Join-Path $testBuild 'fmt_project'
 if (Test-Path -LiteralPath $fmtProject) { Remove-Item -Recurse -Force -LiteralPath $fmtProject }
 [void](New-Item -ItemType Directory -Force -Path (Join-Path $fmtProject 'src'))
 Copy-Item -LiteralPath (Join-Path $conformanceRoot 'format\layout.e') -Destination (Join-Path $fmtProject 'src\layout.e')
+# An operand after a flag is refused, not read as the project (D1682): `fmt --path x.e -`
+# once formatted every file of the project it ran in.
+cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt --path x.e - < nul > nul 2> nul"
+if ($LASTEXITCODE -eq 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $fmtProject 'src\layout.e')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'format\layout.e')).Hash) { throw 'fmt --path x.e - was read as fmt of the project' }
 cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt --check > nul 2> nul"
 if ($LASTEXITCODE -ne 1) { throw "fmt --check over a non-canonical project exited $LASTEXITCODE, not 1" }
 cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt"
