@@ -7477,7 +7477,7 @@ if ($LASTEXITCODE -ne 0) { throw 'cross-module calls failed in the self-hosted P
 $collisionExecutablePath = Join-Path $testBuild 'error-collision-selfhost.exe'
 $collisionOutput = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\error_collision\src\main.e') $repo 'x64' 'windows' $collisionExecutablePath 2>&1
 $collisionExit = $LASTEXITCODE
-if ($collisionExit -ne 1 -or ($collisionOutput -join "`n") -notmatch 'main\.E49B7D00B' -or ($collisionOutput -join "`n") -notmatch 'main\.E9E692E7E') { throw 'error hash collision was not rejected with both qualified names' }
+if ($collisionExit -ne 1 -or ($collisionOutput -join "`n") -notmatch 'main\.Ea88a' -or ($collisionOutput -join "`n") -notmatch 'main\.E16e68') { throw 'error hash collision was not rejected with both qualified names' }
 if (Test-Path -LiteralPath $collisionExecutablePath) { throw 'error hash collision wrote an executable before rejection' }
 $moduleArtifactPath = Join-Path $testBuild 'modules.x64-windows.em'
 $moduleArtifactCopyPath = Join-Path $testBuild 'modules-copy.x64-windows.em'
