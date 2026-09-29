@@ -2,8 +2,9 @@
 // 4-queens, limited discrepancy search finds it too, all-different applies
 // a Hall pruning, element, table and cumulative filter as expected, and the
 // unsatisfiable cases answer. AC-2001 reaches AC-3's domains and answers
-// with no more constraint checks (checks 5..10). Each check exits with its
-// own code.
+// with no more constraint checks (checks 5..10). Both accept a queue exactly
+// as long as the arc count and wrap in it when an arc is re-queued (check 11).
+// Each check exits with its own code.
 
 use e.algo.csp as csp
 use e.io
@@ -15,6 +16,12 @@ type Nothing = struct { unused: u8 }
 fn less(ctx: *Nothing, x: usize, y: usize, a: usize, b: usize) -> bool {
     if x < y { ret a < b }
     ret a > b
+}
+
+// The lower-numbered variable at least two values below the other.
+fn gap(ctx: *Nothing, x: usize, y: usize, a: usize, b: usize) -> bool {
+    if x < y { ret a + 2usize <= b }
+    ret b + 2usize <= a
 }
 
 fn queens(ctx: *Nothing, x: usize, y: usize, a: usize, b: usize) -> bool {
@@ -267,6 +274,27 @@ fn check_ac2001() -> i32 {
     var last: [15]usize = zero
     set_all(d[..], 3usize, 4usize)
     if csp.ac2001[Table](d[..], 3usize, 4usize, chain[..], &t, table_allowed, queue[..], queued[..], last[..]) != csp.TooSmall { ret 10i32 }
+
+    // 11: four variables over 0..7, two apart along 0-1-2-3 and 0-3, with a queue of
+    // exactly the 8 arcs: pruning re-queues arcs, which must wrap to slot 0. Both
+    // reach {0,1} {2,3} {4,5} {6,7}.
+    var nothing = Nothing { unused: 0u8 }
+    var talks = [8]usize{ 0usize, 1usize, 1usize, 2usize, 2usize, 3usize, 0usize, 3usize }
+    var exact_queue: [8]usize = zero
+    var exact_queued: [8]u8 = zero
+    var talk_last: [64]usize = zero
+    var d3: [32]u8 = zero
+    var d2: [32]u8 = zero
+    set_all(d3[..], 4usize, 8usize)
+    set_all(d2[..], 4usize, 8usize)
+    if csp.ac3[Nothing](d3[..], 4usize, 8usize, talks[..], &nothing, gap, exact_queue[..], exact_queued[..]) != ok { ret 11i32 }
+    if csp.ac2001[Nothing](d2[..], 4usize, 8usize, talks[..], &nothing, gap, exact_queue[..], exact_queued[..], talk_last[..]) != ok { ret 11i32 }
+    var v = 0usize
+    while v < 32usize {
+        let want = (v % 8usize) / 2usize == v / 8usize
+        if (d3[v] == 1u8) != want || (d2[v] == 1u8) != want { ret 11i32 }
+        v += 1usize
+    }
     ret 0i32
 }
 

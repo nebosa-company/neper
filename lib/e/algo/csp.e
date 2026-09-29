@@ -61,7 +61,9 @@ fn ac3[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: 
         i += 1usize
     }
     var head = 0usize
-    var tail = arcs
+    // A queue exactly `arcs` long is full: the next slot wraps to 0.
+    var tail = 0usize
+    if arcs < queue.len { tail = arcs }
     var live = arcs
     while live > 0usize {
         let arc = queue[head]
@@ -153,7 +155,9 @@ fn ac2001[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ct
         i += 1usize
     }
     var head = 0usize
-    var tail = arcs
+    // A queue exactly `arcs` long is full: the next slot wraps to 0.
+    var tail = 0usize
+    if arcs < queue.len { tail = arcs }
     var live = arcs
     while live > 0usize {
         let arc = queue[head]

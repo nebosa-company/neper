@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Six algorithms we first skipped — Neper blog</title>
+  <meta name="description" content="Neper's standard library gains a backtracking regex engine, mixed-integer programming, model checking, crash-dump parsing, Windows and Kerberos sign-on, and AC-2001 arc consistency: what each is for, and a complete program for each.">
+  <link rel="canonical" href="https://neper.dev/blog/six-algorithms.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Six algorithms we first skipped">
+  <meta property="og:description" content="A backtracking regex engine, mixed-integer programming, model checking, crash-dump parsing, Windows and Kerberos sign-on, and AC-2001: what each is for, and a complete program for each.">
+  <meta property="og:url" content="https://neper.dev/blog/six-algorithms.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/six-algorithms.svg">
+  <meta property="article:published_time" content="2026-09-29">
+  <meta property="article:modified_time" content="2026-09-29">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --success: #246b3a; --error: #b42431; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --success: #8fd79e; --error: #ffb3ad; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --success: #00461d; --error: #7d0018; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --success: #abf3b9; --error: #ffdad6; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 7 5, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    h3 { margin: var(--space-8) 0 var(--space-3); font: 400 22px/28px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .rank-1 { color: var(--success); font-weight: 600; }
+    .rank-2 { color: var(--primary); }
+    .rank-last { color: var(--error); }
+    tr.overall td { border-top: 2px solid var(--outline-variant); }
+    .legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0 0 var(--space-4); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .legend .key { display: inline-flex; align-items: center; gap: var(--space-2); }
+    .legend .key::before { content: ""; width: 12px; height: 12px; border-radius: var(--radius-full); background: currentColor; }
+    .legend .key span { color: var(--on-surface-variant); }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; blog // library</div>
+      <h1>Six algorithms we first skipped</h1>
+      <p class="meta">September 29, 2026 · <code>e.text.regex</code>, <code>e.math.opt.milp</code>, <code>e.algo.check</code>, <code>e.algo.csp</code>, <code>e.debug.dump</code>, <code>e.net.auth</code></p>
+      <img class="banner" src="img/six-algorithms.svg" width="1200" height="630" alt="Six algorithms we first skipped: backtracking regex, mixed-integer programming, model checking, AC-2001, crash dumps and integrated sign-on, each with its Neper module.">
+
+      <p class="lede">Neper's standard library was planned from a list of 2,250 algorithms. Each got a verdict: implement it, point it at a duplicate, or skip it. By the time the list was done, every entry marked "implement" existed. So we went back through the skips and asked which ones people actually reach for. Six came back. This post says what each one is for, and shows a complete program for each.</p>
+
+      <p>Every sample below is a whole program. We compiled and ran each one on Windows and on Linux, and the output shown is what it printed. The sources are in <a href="https://github.com/nebosa-company/neper/tree/master/docs/blog/code/six-algorithms"><code>docs/blog/code/six-algorithms/</code></a>.</p>
+
+      <h2>1. A regex engine that backtracks, when you ask it to</h2>
+      <p><strong>What it is for.</strong> Real patterns lean on features that are not strictly "regular":</p>
+      <ul>
+        <li>a backreference that finds a doubled word;</li>
+        <li>a lookbehind that matches a price only when no minus sign comes before it;</li>
+        <li>an atomic group that stops a parser from retrying.</li>
+      </ul>
+      <p>These are the patterns people paste in from PCRE, Python or JavaScript. Neper's regex was a Pike VM. That design is linear in the length of the text and can never blow up, and it refused all of these.</p>
+      <p><strong>What changed.</strong> <code>compile</code> is still the Pike VM. For a construct only a backtracker can run, it now answers <code>NeedsBacktracking</code> instead of a bare "invalid pattern". <code>compile_backtracking</code> accepts the following:</p>
+      <ul>
+        <li>backreferences, <code>\1</code> and <code>\k&lt;name&gt;</code>;</li>
+        <li>named groups;</li>
+        <li>lookahead and lookbehind;</li>
+        <li>atomic groups;</li>
+        <li>possessive repeats.</li>
+      </ul>
+      <p>It returns the same <code>Regex</code> type, so <code>find</code>, <code>captures</code> and <code>replace_all</code> work unchanged.</p>
+<pre><code><span class="kw">use</span> e.io
+<span class="kw">use</span> e.mem
+<span class="kw">use</span> e.text.regex
+
+<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+    <span class="kw">let</span> plain = regex.Options { case_insensitive: <span class="kw">false</span>, multiline: <span class="kw">false</span>, dot_matches_newline: <span class="kw">false</span> }
+
+    <span class="com">// A doubled word, "the the": a backreference, so only the backtracker takes it.</span>
+    <span class="kw">let</span> pattern = <span class="str">"\\b(\\w+) \\1\\b"</span>
+    <span class="kw">let</span> (_, refused) = regex.<span class="fn">compile</span>(a, pattern, plain)
+    <span class="kw">if</span> refused == regex.NeedsBacktracking {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["compile: {}\n"](<span class="str">"needs the backtracker"</span>)
+    }
+    <span class="kw">let</span> doubled = <span class="kw">try</span> regex.<span class="fn">compile_backtracking</span>(a, pattern, plain)
+    <span class="kw">let</span> text = <span class="str">"it was the the best of times"</span>
+    <span class="kw">let</span> (hit, found) = regex.<span class="fn">find</span>(&amp;doubled, text, 0usize)
+    <span class="kw">if</span> found {
+        <span class="kw">let</span> word: str = text[hit.start..hit.end]
+        <span class="kw">try</span> io.<span class="fn">printf</span>["doubled word at {}..{}: {}\n"](hit.start, hit.end, word)
+    }
+
+    <span class="com">// A price not preceded by "-": lookbehind, lookahead and a named group.</span>
+    <span class="kw">let</span> price = <span class="kw">try</span> regex.<span class="fn">compile_backtracking</span>(a, <span class="str">"(?&lt;!-)\\$(?&lt;amount&gt;\\d+)(?=\\.\\d\\d)"</span>, plain)
+    <span class="kw">let</span> line = <span class="str">"refund -$15.00, charge $42.50"</span>
+    <span class="kw">let</span> (c, matched, capture_error) = regex.<span class="fn">captures</span>(a, &amp;price, line, 0usize)
+    <span class="kw">if</span> capture_error != <span class="kw">ok</span> { <span class="kw">ret</span> capture_error }
+    <span class="kw">let</span> (amount, named) = regex.<span class="fn">group_index</span>(&amp;price, <span class="str">"amount"</span>)
+    <span class="kw">if</span> matched &amp;&amp; named {
+        <span class="kw">let</span> g = c.groups[amount - 1usize]
+        <span class="kw">let</span> digits: str = line[g.start..g.end]
+        <span class="kw">try</span> io.<span class="fn">printf</span>["charged amount: {}\n"](digits)
+    }
+
+    <span class="com">// Swap "last, first" with the ordinary replace_all; it works on either engine.</span>
+    <span class="kw">let</span> swap = <span class="kw">try</span> regex.<span class="fn">compile_backtracking</span>(a, <span class="str">"(\\w+), (\\w+)"</span>, plain)
+    <span class="kw">let</span> swapped = <span class="kw">try</span> regex.<span class="fn">replace_all</span>(a, &amp;swap, <span class="str">"Lovelace, Ada; Hopper, Grace"</span>, <span class="str">"$2 $1"</span>)
+    <span class="kw">try</span> io.<span class="fn">printf</span>["{}\n"](swapped)
+
+    <span class="com">// A pattern that backtracks exponentially stops on its step budget instead of hanging.</span>
+    <span class="kw">let</span> evil = <span class="kw">try</span> regex.<span class="fn">compile_backtracking</span>(a, <span class="str">"(a+)+$"</span>, plain)
+    <span class="kw">let</span> subject = <span class="str">"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"</span>
+    <span class="kw">if</span> !regex.<span class="fn">is_match</span>(&amp;evil, subject) &amp;&amp; regex.<span class="fn">last_error</span>(&amp;evil) == regex.TooManySteps {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["(a+)+$: gave up after its step budget\n"]()
+    }
+    <span class="kw">ret</span> <span class="kw">ok</span>
+}</code></pre>
+<pre><code>compile: needs the backtracker
+doubled word at 7..14: the the
+charged amount: 42
+Ada Lovelace; Grace Hopper
+(a+)+$: gave up after its step budget</code></pre>
+      <p><strong>The catch, handled.</strong> A backtracker can take exponential time: <code>(a+)+$</code> against forty <code>a</code>s and a <code>b</code> tries about a trillion paths. So every search has a step budget of a million steps plus a thousand per byte searched, and a backtrack stack whose size is fixed when the pattern compiles. Running out of either is an answer, <code>TooManySteps</code> or <code>TooDeep</code>, not a hang. <code>is_match</code> and <code>find</code> return no error, so after a "no match" <code>last_error</code> says whether the budget was the reason.</p>
+      <p><strong>Checked against:</strong> Python 3.12's <code>re</code>. The fixture compares every construct plus 40 random patterns, and a further 3,300 random patterns were compared outside it. The only disagreement was patterns like <code>(.?b){2}+</code>. There CPython does not do what its own documentation says: it defines <code>x{m,n}+</code> as <code>(?&gt;x{m,n})</code>. Written in that atomic form, Python gives our answer.</p>
+
+      <h2>2. Mixed-integer programming</h2>
+      <p><strong>What it is for.</strong> Linear programming finds the cheapest plan when every quantity can be a fraction. Real plans also contain counts and yes-or-no choices:</p>
+      <ul>
+        <li>three trucks, not 2.8;</li>
+        <li>open this warehouse or don't;</li>
+        <li>assign each nurse to exactly one shift.</li>
+      </ul>
+      <p>Scheduling, rostering, cutting stock, packing and routing all become a mixed-integer program (MILP): a linear program in which some variables must be whole numbers.</p>
+      <p><strong>How it works.</strong> <code>e.math.opt.milp</code> solves the linear relaxation with its own bounded-variable simplex. At the root it adds Gomory mixed-integer cuts, rows read off the optimal tableau that cut away the fractional corner without losing any integer point. Then it branches on the most fractional variable and searches the open node with the best bound first. That combination is called <em>branch and cut</em>.</p>
+<pre><code><span class="kw">use</span> e.io
+<span class="kw">use</span> e.mem
+<span class="kw">use</span> e.math.opt.milp
+
+<span class="com">// Move 43 pallets today at the least cost. A truck (70) takes 12 pallets and there</span>
+<span class="com">// are 3; a van (35) takes 5; overtime (9 an hour, at most 6) moves 1 pallet an hour.</span>
+<span class="com">// Trucks and vans come in whole numbers; overtime hours do not.</span>
+<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+    <span class="kw">let</span> inf = milp.<span class="fn">infinity</span>()
+    <span class="com">//                 trucks   vans     overtime</span>
+    <span class="kw">var</span> c = [3]f64{ 70.0f64, 35.0f64, 9.0f64 }
+    <span class="kw">var</span> row = [3]f64{ 12.0f64, 5.0f64, 1.0f64 }
+    <span class="kw">var</span> need_lo = [1]f64{ 43.0f64 }
+    <span class="kw">var</span> need_hi = [1]f64{ inf }
+    <span class="kw">var</span> lo = [3]f64{ 0.0f64, 0.0f64, 0.0f64 }
+    <span class="kw">var</span> hi = [3]f64{ 3.0f64, inf, 6.0f64 }
+    <span class="kw">var</span> whole = [3]bool{ <span class="kw">true</span>, <span class="kw">true</span>, <span class="kw">false</span> }
+    <span class="kw">let</span> p = milp.Problem { n: 3usize, m: 1usize, c: c[..], a: row[..], row_lower: need_lo[..], row_upper: need_hi[..], lower: lo[..], upper: hi[..], integer: whole[..] }
+
+    <span class="com">// All storage is the caller's: size it for the problem, the cuts and the open nodes.</span>
+    <span class="kw">let</span> o = milp.<span class="fn">defaults</span>()
+    <span class="kw">let</span> scratch = <span class="kw">try</span> mem.<span class="fn">alloc</span>[f64](a, milp.<span class="fn">scratch_len</span>(3usize, 1usize, o.max_cuts, 256usize))
+    <span class="kw">let</span> slots = <span class="kw">try</span> mem.<span class="fn">alloc</span>[usize](a, milp.<span class="fn">slot_len</span>(3usize, 1usize, o.max_cuts))
+    <span class="kw">var</span> x: [3]f64 = <span class="kw">zero</span>
+    <span class="kw">let</span> (r, failure) = milp.<span class="fn">solve</span>(&amp;p, o, x[..], scratch, slots)
+    <span class="kw">if</span> failure != <span class="kw">ok</span> { <span class="kw">ret</span> failure }
+    <span class="kw">if</span> r.status == .Optimal {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["cost {.2} with {.0} trucks, {.0} vans, {.1} overtime hours\n"](r.objective, x[0], x[1], x[2])
+        <span class="kw">try</span> io.<span class="fn">printf</span>["{} nodes, {} Gomory cuts\n"](r.nodes, r.cuts)
+    }
+    <span class="kw">ret</span> <span class="kw">ok</span>
+}</code></pre>
+<pre><code>cost 263.00 with 3 trucks, 1 vans, 2.0 overtime hours
+1 nodes, 1 Gomory cuts</code></pre>
+      <p>The linear relaxation's answer is 1.4 vans for 259, which you cannot hire. The single cut moves the relaxation straight to an integer point, so no branching was needed. <code>solve</code> answers <code>Optimal</code>, <code>Infeasible</code>, <code>Unbounded</code> or <code>NodeLimit</code>, together with the best bound, so a caller that stops early knows how far it can be from optimal. Setting <code>cut_rounds</code> to 0 turns the cuts off.</p>
+      <p><strong>Checked against:</strong> HiGHS through <code>scipy.optimize.milp</code>. The fixture covers knapsack, assignment, set cover, general and mixed integers, equality rows, infeasible and unbounded problems, and twenty random instances, all within 1e-6. On 2,000 further random instances the cuts took the total node count from 38,208 down to 29,585.</p>
+      <p><strong>Its limits.</strong> The matrix is dense, and there is no presolve and no heuristics. It is meant for problems with up to a few hundred rows, not for replacing a commercial solver.</p>
+
+      <h2>3. Model checking</h2>
+      <p><strong>What it is for.</strong> Tests show that a concurrent protocol worked in the interleavings you happened to run. A model checker tries every interleaving: it explores every state the protocol can reach and reports the first one that breaks your rule. That is how lock implementations, cache-coherence protocols, consensus algorithms and state machines are verified before they ship.</p>
+      <p><strong>Explicit state.</strong> You write the successor function, which says what each thread can do next, and the invariant. <code>check.explore</code> does a breadth-first search, so when the invariant fails, <code>check.trace</code> returns the <em>shortest</em> sequence of steps that gets there. Here it is on a lock that tests and then sets in two steps, the classic race:</p>
+<pre><code><span class="kw">use</span> e.io
+<span class="kw">use</span> e.mem
+<span class="kw">use</span> e.algo.check <span class="kw">as</span> check
+
+<span class="kw">type</span> Model = <span class="kw">struct</span> { unused: u8 }
+
+<span class="com">// Two threads share a lock taken by "test, then set" -- two steps, not one atomic swap.</span>
+<span class="com">// State: pc of thread 0, pc of thread 1, the lock. pc 0 waits until the lock looks free,</span>
+<span class="com">// pc 1 sets it, pc 2 is the critical section and frees the lock on the way out.</span>
+<span class="kw">fn</span> <span class="fn">step</span>(m: *Model, s: []const u64, out: []u64) -&gt; usize {
+    <span class="kw">var</span> count = 0usize
+    <span class="kw">var</span> t = 0usize
+    <span class="kw">while</span> t &lt; 2usize {
+        <span class="kw">if</span> s[t] != 0u64 || s[2usize] == 0u64 {
+            <span class="kw">let</span> n = out[count * 3usize..count * 3usize + 3usize]
+            n[0usize] = s[0usize]
+            n[1usize] = s[1usize]
+            n[2usize] = s[2usize]
+            <span class="kw">if</span> s[t] == 0u64 {
+                n[t] = 1u64
+            } <span class="kw">else</span> <span class="kw">if</span> s[t] == 1u64 {
+                n[2usize] = 1u64
+                n[t] = 2u64
+            } <span class="kw">else</span> {
+                n[2usize] = 0u64
+                n[t] = 0u64
+            }
+            count += 1usize
+        }
+        t += 1usize
+    }
+    <span class="kw">ret</span> count
+}
+
+<span class="com">// Mutual exclusion: never both threads in the critical section.</span>
+<span class="kw">fn</span> <span class="fn">exclusive</span>(m: *Model, s: []const u64) -&gt; bool { <span class="kw">ret</span> !(s[0usize] == 2u64 &amp;&amp; s[1usize] == 2u64) }
+
+<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+    <span class="kw">var</span> model = Model { unused: 0u8 }
+    <span class="kw">var</span> start: [3]u64 = <span class="kw">zero</span>
+    <span class="kw">var</span> store: [300]u64 = <span class="kw">zero</span>
+    <span class="kw">var</span> parent: [100]u32 = <span class="kw">zero</span>
+    <span class="kw">var</span> table: [256]u32 = <span class="kw">zero</span>
+    <span class="kw">var</span> scratch: [6]u64 = <span class="kw">zero</span>
+    <span class="kw">let</span> (r, e) = check.<span class="fn">explore</span>[Model](&amp;model, 3usize, start[..], step, exclusive, <span class="kw">true</span>, 0usize, store[..], parent[..], table[..], scratch[..])
+    <span class="kw">if</span> e != <span class="kw">ok</span> { <span class="kw">ret</span> e }
+    <span class="kw">try</span> io.<span class="fn">printf</span>["{} states, {} transitions\n"](r.states, r.transitions)
+    <span class="kw">if</span> r.verdict == .Violated {
+        <span class="kw">var</span> path: [16]u32 = <span class="kw">zero</span>
+        <span class="kw">let</span> (n, trace_error) = check.<span class="fn">trace</span>(parent[..], r.last, path[..])
+        <span class="kw">if</span> trace_error != <span class="kw">ok</span> { <span class="kw">ret</span> trace_error }
+        <span class="kw">var</span> i = 0usize
+        <span class="kw">while</span> i &lt; n {
+            <span class="kw">let</span> s = <span class="fn">usize</span>(path[i]) * 3usize
+            <span class="kw">try</span> io.<span class="fn">printf</span>["  step {}: t0 pc={} t1 pc={} lock={}\n"](i, store[s], store[s + 1usize], store[s + 2usize])
+            i += 1usize
+        }
+    }
+    <span class="kw">ret</span> <span class="kw">ok</span>
+}</code></pre>
+<pre><code>9 states, 12 transitions
+  step 0: t0 pc=0 t1 pc=0 lock=0
+  step 1: t0 pc=1 t1 pc=0 lock=0
+  step 2: t0 pc=1 t1 pc=1 lock=0
+  step 3: t0 pc=2 t1 pc=1 lock=1
+  step 4: t0 pc=2 t1 pc=2 lock=1</code></pre>
+      <p>Both threads see the lock free (steps 1–2) before either sets it, and both end up in the critical section. With the <code>deadlock</code> flag on, a state with no successors is reported too. The fixture finds three dining philosophers each holding one fork.</p>
+      <p><strong>Bounded model checking.</strong> The same question can be asked symbolically for systems given as boolean circuits. <code>check.bmc</code> unrolls the transition relation into CNF for <code>e.algo.sat</code>, one frame per step, and asks whether a bad state is reachable at step 0, 1, 2 and so on. <code>check.prove</code> adds k-induction, so a property can be <em>proven</em> safe rather than only checked to a depth. The fixture builds a 4-bit counter out of half-adders, finds it reaches 11 at exactly step 11, and proves it never reaches 13.</p>
+      <p><strong>Its limits.</strong> Only safety properties ("this never happens") are supported. There is no liveness ("this eventually happens"), and no symmetry or partial-order reduction, so the state count grows with every interleaving.</p>
+
+      <h2>4. AC-2001: arc consistency without repeated work</h2>
+      <p><strong>What it is for.</strong> Constraint solvers for timetabling, configuration and puzzles spend most of their time pruning. If talk 1 must come two slots after talk 0, then slot 7 is impossible for talk 0, and it can be crossed out before any search starts. Repeating that over every pair of variables until nothing changes is called <em>arc consistency</em>. <code>e.algo.csp</code> has done it with AC-3, the textbook algorithm.</p>
+      <p><strong>What AC-2001 changes.</strong> When AC-3 revisits a constraint, it looks for each value's support from the start of the domain again. AC-2001 (Bessière and Régin, 2001) remembers the last support it found for each value and resumes from there. That gives it the optimal worst case, O(e·d²) where AC-3 has O(e·d³), and it reaches exactly the same result. It takes the same arguments as <code>ac3</code>, plus the table of remembered supports.</p>
+<pre><code><span class="kw">use</span> e.io
+<span class="kw">use</span> e.mem
+<span class="kw">use</span> e.algo.csp
+
+<span class="com">// Four talks in hour slots 0..7; each pair listed below must be two slots apart.</span>
+<span class="kw">type</span> Talks = <span class="kw">struct</span> { checks: usize }
+
+<span class="kw">fn</span> <span class="fn">gap</span>(t: *Talks, x: usize, y: usize, a: usize, b: usize) -&gt; bool {
+    t.checks += 1usize
+    <span class="kw">if</span> x &lt; y { <span class="kw">ret</span> a + 2usize &lt;= b }
+    <span class="kw">ret</span> b + 2usize &lt;= a
+}
+
+<span class="kw">fn</span> <span class="fn">show</span>(domains: []const u8, n: usize, k: usize) -&gt; err {
+    <span class="kw">var</span> x = 0usize
+    <span class="kw">while</span> x &lt; n {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["  talk {}:"](x)
+        <span class="kw">var</span> v = 0usize
+        <span class="kw">while</span> v &lt; k {
+            <span class="kw">if</span> domains[x * k + v] == 1u8 { <span class="kw">try</span> io.<span class="fn">printf</span>[" {}"](v) }
+            v += 1usize
+        }
+        <span class="kw">try</span> io.<span class="fn">printf</span>["\n"]()
+        x += 1usize
+    }
+    <span class="kw">ret</span> <span class="kw">ok</span>
+}
+
+<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+    <span class="kw">let</span> n = 4usize
+    <span class="kw">let</span> k = 8usize
+    <span class="com">// Talk 0 before 1 before 2 before 3, and talk 0 at least two slots before 3.</span>
+    <span class="kw">var</span> pairs = [8]usize{ 0usize, 1usize, 1usize, 2usize, 2usize, 3usize, 0usize, 3usize }
+    <span class="kw">var</span> queue: [8]usize = <span class="kw">zero</span>
+    <span class="kw">var</span> queued: [8]u8 = <span class="kw">zero</span>
+    <span class="kw">var</span> last: [64]usize = <span class="kw">zero</span>
+
+    <span class="kw">var</span> d3: [32]u8 = <span class="kw">zero</span>
+    <span class="kw">var</span> d2: [32]u8 = <span class="kw">zero</span>
+    <span class="kw">var</span> i = 0usize
+    <span class="kw">while</span> i &lt; n * k {
+        d3[i] = 1u8
+        d2[i] = 1u8
+        i += 1usize
+    }
+    <span class="kw">var</span> by3 = Talks { checks: 0usize }
+    <span class="kw">try</span> csp.<span class="fn">ac3</span>[Talks](d3[..], n, k, pairs[..], &amp;by3, gap, queue[..], queued[..])
+    <span class="kw">var</span> by2001 = Talks { checks: 0usize }
+    <span class="kw">try</span> csp.<span class="fn">ac2001</span>[Talks](d2[..], n, k, pairs[..], &amp;by2001, gap, queue[..], queued[..], last[..])
+
+    <span class="kw">try</span> io.<span class="fn">printf</span>["slots left after arc consistency:\n"]()
+    <span class="kw">try</span> <span class="fn">show</span>(d2[..], n, k)
+    <span class="kw">try</span> io.<span class="fn">printf</span>["constraint checks: AC-3 {}, AC-2001 {}\n"](by3.checks, by2001.checks)
+    <span class="kw">ret</span> <span class="kw">ok</span>
+}</code></pre>
+<pre><code>slots left after arc consistency:
+  talk 0: 0 1
+  talk 1: 2 3
+  talk 2: 4 5
+  talk 3: 6 7
+constraint checks: AC-3 219, AC-2001 183</code></pre>
+      <p><strong>Checked against:</strong> a Python reference that runs both algorithms in the module's queue order. It matches the domains and the exact number of checks on 23 instances. AC-2001 is never worse, and 8% better overall there.</p>
+      <p><strong>Writing this sample found a bug.</strong> It gives the solver a queue exactly as long as the number of arcs, which <code>ac3</code> accepts. <code>ac3</code>, in the library since D856, then wrote one slot past the end the first time it put an arc back on the queue, and <code>ac2001</code> had copied the line. The fixture had always passed a larger queue. Both are fixed, and the fixture now uses an exact-size queue too.</p>
+
+      <h2>5. Reading crash dumps</h2>
+      <p><strong>What it is for.</strong> When a program crashes in the field, what you get back is a dump: a Linux ELF core file or a Windows minidump. A crash reporter, a support tool or a test harness needs to open that dump and answer a few questions:</p>
+      <ul>
+        <li>which thread died, and at what address;</li>
+        <li>what the registers held;</li>
+        <li>which modules were loaded where;</li>
+        <li>what a given address in memory contained.</li>
+      </ul>
+      <p><strong>How it works.</strong> <code>e.debug.dump.parse</code> reads either format into one view: threads with their registers, modules (or the files a core mapped), the crash, and <code>read_memory</code>, which refuses any read that leaves the captured regions. It can also write a dump of a running process: a minidump through Windows' <code>MiniDumpWriteDump</code>, or a core through gdb's <code>gcore</code> on Linux. This program dumps itself and summarizes the dump:</p>
+<pre><code><span class="kw">use</span> e.io
+<span class="kw">use</span> e.mem
+<span class="kw">use</span> e.os
+<span class="kw">use</span> e.fs.mmap <span class="kw">as</span> mmap
+<span class="kw">use</span> e.debug.dump
+
+<span class="com">// Print what a crash dump says: the process, the crash if there was one, each</span>
+<span class="com">// thread's instruction pointer and the first few modules.</span>
+<span class="kw">fn</span> <span class="fn">summarize</span>(a: *mem.Arena, path: str) -&gt; err {
+    <span class="kw">let</span> (info, stat_error) = os.<span class="fn">stat</span>(a, path)
+    <span class="kw">if</span> stat_error != <span class="kw">ok</span> { <span class="kw">ret</span> stat_error }
+    <span class="com">// Map it rather than read it: a Linux core holds every mapping, reservations included.</span>
+    <span class="kw">let</span> mapping = <span class="kw">try</span> mmap.<span class="fn">open</span>(a, path, <span class="kw">false</span>, 0u64, <span class="fn">usize</span>(info.size))
+    <span class="kw">let</span> (d, parse_error) = dump.<span class="fn">parse</span>(a, mmap.<span class="fn">bytes</span>(mapping))
+    <span class="kw">if</span> parse_error != <span class="kw">ok</span> { <span class="kw">ret</span> parse_error }
+    <span class="kw">if</span> d.kind == .Minidump {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["minidump of pid {}\n"](d.pid)
+    } <span class="kw">else</span> {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["core of pid {} ({})\n"](d.pid, d.process_name)
+    }
+    <span class="kw">if</span> d.has_crash {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["crashed in thread {} at {x}, code {x}\n"](d.crash_thread, d.crash_registers.rip, d.code)
+    }
+    <span class="kw">var</span> t = 0usize
+    <span class="kw">while</span> t &lt; d.threads.len {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["thread {}: rip {x} rsp {x}\n"](d.threads[t].id, d.threads[t].registers.rip, d.threads[t].registers.rsp)
+        t += 1usize
+    }
+    <span class="kw">var</span> m = 0usize
+    <span class="kw">while</span> m &lt; d.modules.len &amp;&amp; m &lt; 3usize {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["module {x} {}\n"](d.modules[m].base, d.modules[m].name)
+        m += 1usize
+    }
+    <span class="kw">try</span> mmap.<span class="fn">close</span>(mapping)
+    <span class="kw">ret</span> <span class="kw">ok</span>
+}
+
+<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+    <span class="kw">if</span> args.len &gt; 1usize { <span class="kw">ret</span> <span class="fn">summarize</span>(a, args[1usize]) }
+    <span class="com">// No argument: dump this very process -- a minidump on Windows, a core on Linux.</span>
+    <span class="kw">let</span> path = <span class="str">"self.dmp"</span>
+    <span class="kw">var</span> written = dump.<span class="fn">write_minidump</span>(a, 0u32, path, dump.DATA_SEGMENTS)
+    <span class="kw">if</span> written == dump.Unsupported { written = dump.<span class="fn">write_core</span>(a, 0u32, path) }
+    <span class="kw">if</span> written != <span class="kw">ok</span> { <span class="kw">ret</span> written }
+    <span class="kw">ret</span> <span class="fn">summarize</span>(a, path)
+}</code></pre>
+      <p>On Windows:</p>
+<pre><code>minidump of pid 27144
+thread 64588: rip 7ff95a082d14 rsp 13fdf98
+thread 69248: rip 7ff95a084a74 rsp 264fbf8
+thread 11864: rip 7ff95a084a74 rsp 364fbf8
+thread 54192: rip 7ff95a084a74 rsp 464fbf8
+module 140000000 D:\repos\neper-algos5\build\blog_dump.exe
+module 7ff959f20000 C:\Windows\System32\ntdll.dll
+module 7ff958970000 C:\Windows\System32\kernel32.dll</code></pre>
+      <p>On Linux:</p>
+<pre><code>core of pid 611 (blog-dump)
+thread 611: rip 4188f7 rsp 7ffdf1834050
+module 400000 /tmp/blog-dump
+module 41b000 /tmp/blog-dump</code></pre>
+      <p>The Windows process has four threads, because the loader starts worker threads of its own. The Linux one is a single static binary with no loader at all. A core of a Neper process is about a gigabyte, because it includes the arena's reserved (never touched) address space. That is why the sample maps the file with <code>e.fs.mmap</code> instead of reading it into memory.</p>
+      <p><strong>Its limits.</strong> Only x86-64 is supported, and there is no stack unwinding: you get each thread's registers, not a symbolized backtrace yet.</p>
+
+      <h2>6. Signing in as the user who is already signed in</h2>
+      <p><strong>What it is for.</strong> In an office network, nobody types a password to reach the intranet or the company's SQL Server. Windows and Kerberos have already established who they are, and the program proves it with a token from the operating system. This is what "Windows authentication", "integrated security", SPNEGO and HTTP <code>Negotiate</code> all mean. Without it, a program must store a password somewhere.</p>
+      <p><strong>How it works.</strong> Kerberos itself is a protocol of tickets, KDCs and key schedules that every host already implements. So <code>e.net.auth</code> does not reimplement it; it drives the host's own provider:</p>
+      <ul>
+        <li><strong>On Windows,</strong> SSPI in <code>secur32.dll</code>.</li>
+        <li><strong>On Linux,</strong> MIT Kerberos's GSSAPI, looked up at run time with <code>os.dlopen</code>. A machine without it gets <code>NotFound</code>, not a program that fails to start.</li>
+      </ul>
+      <p>The API is the same token exchange on both hosts: <code>client</code> or <code>server</code> opens a context, and <code>step</code> takes the peer's token and produces the next one, until the context is complete.</p>
+<pre><code><span class="kw">use</span> e.io
+<span class="kw">use</span> e.mem
+<span class="kw">use</span> e.net.auth
+
+<span class="com">// The first leg of HTTP Negotiate: the header an intranet request carries so the</span>
+<span class="com">// server knows who is asking, with no password in the program.</span>
+<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+    <span class="kw">let</span> (ctx, open_error) = auth.<span class="fn">client</span>(a, .Negotiate, <span class="str">"HTTP/intranet.example.com"</span>)
+    <span class="kw">if</span> open_error == auth.NotFound {
+        <span class="kw">try</span> io.<span class="fn">printf</span>["no security provider on this host\n"]()
+        <span class="kw">ret</span> <span class="kw">ok</span>
+    }
+    <span class="kw">if</span> open_error != <span class="kw">ok</span> { <span class="kw">ret</span> open_error }
+    <span class="kw">let</span> token = <span class="kw">try</span> mem.<span class="fn">alloc</span>[u8](a, auth.MAX_TOKEN)
+    <span class="kw">let</span> (n, complete, step_error) = auth.<span class="fn">step</span>(ctx, <span class="str">""</span>, token)
+    <span class="kw">if</span> step_error == auth.Failed {
+        <span class="com">// Linux: no Kerberos ticket for this user yet (kinit gets one).</span>
+        <span class="kw">try</span> io.<span class="fn">printf</span>["no credentials to offer\n"]()
+        <span class="kw">ret</span> <span class="kw">ok</span>
+    }
+    <span class="kw">if</span> step_error != <span class="kw">ok</span> { <span class="kw">ret</span> step_error }
+    <span class="kw">let</span> header = <span class="kw">try</span> mem.<span class="fn">alloc</span>[u8](a, 16usize + n * 2usize)
+    <span class="kw">let</span> value = <span class="kw">try</span> auth.<span class="fn">negotiate_header</span>(header, token[..n])
+    <span class="kw">let</span> start: str = value[..32usize]
+    <span class="kw">try</span> io.<span class="fn">printf</span>["Authorization: {}...\n"](start)
+    <span class="kw">try</span> io.<span class="fn">printf</span>["{} token bytes, complete after one leg: {}\n"](n, complete)
+    <span class="com">// Each "WWW-Authenticate: Negotiate &lt;token&gt;" the server answers goes back through</span>
+    <span class="com">// auth.parse_negotiate and auth.step until step reports the context complete.</span>
+    <span class="kw">try</span> auth.<span class="fn">close</span>(ctx)
+    <span class="kw">ret</span> <span class="kw">ok</span>
+}</code></pre>
+      <p>On Windows:</p>
+<pre><code>Authorization: Negotiate TlRMTVNTUAABAAAAl4II4g...
+40 token bytes, complete after one leg: false</code></pre>
+      <p>On Linux, before <code>kinit</code>:</p>
+<pre><code>no credentials to offer</code></pre>
+      <p>The Windows token begins <code>TlRMTVNT</code>, base64 for <code>NTLMSSP</code>. This laptop is not in a domain, so Negotiate fell back to NTLM. On a domain-joined machine the same call produces a Kerberos ticket, with no change to the program.</p>
+      <p><strong>SQL Server uses it.</strong> <code>x.microsoft.tds</code> now logs in this way whenever it is given no user name. The login packet carries the first token, and the driver answers each token the server sends back until the login completes:</p>
+<pre><code><span class="kw">use</span> e.io
+<span class="kw">use</span> e.mem
+<span class="kw">use</span> e.fs
+<span class="kw">use</span> e.db
+<span class="kw">use</span> x.microsoft.tds
+
+<span class="com">// Windows authentication to SQL Server: no user name and no password in the program.</span>
+<span class="com">// The driver logs in as whoever runs it. Arguments: the server's certificate (DER).</span>
+<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+    <span class="kw">let</span> roots = <span class="kw">try</span> fs.<span class="fn">read_file</span>(a, args[1], 65536usize)
+    <span class="kw">let</span> options = tds.Options { host: <span class="str">"localhost"</span>, port: 14330u16, user: <span class="str">""</span>, password: <span class="str">""</span>, database: <span class="str">""</span>, trust_roots: roots }
+    <span class="kw">var</span> c = <span class="kw">try</span> tds.<span class="fn">open</span>(a, options)
+    <span class="kw">var</span> rows = <span class="kw">try</span> db.<span class="fn">query</span>(&amp;c, <span class="str">"SELECT SUSER_SNAME()"</span>, <span class="kw">zero</span>)
+    <span class="kw">var</span> row: [1]db.Value = <span class="kw">zero</span>
+    <span class="kw">let</span> more = <span class="kw">try</span> db.<span class="fn">reader_next_err</span>(&amp;rows, row[..])
+    <span class="kw">if</span> more {
+        <span class="kw">switch</span> row[0] {
+        <span class="kw">case</span> .Text <span class="kw">as</span> name:
+            <span class="kw">try</span> io.<span class="fn">printf</span>["logged in as {}\n"](name)
+        <span class="kw">default</span>:
+            <span class="kw">try</span> io.<span class="fn">printf</span>["unexpected column type\n"]()
+        }
+    }
+    <span class="kw">try</span> db.<span class="fn">close_rows</span>(&amp;rows)
+    <span class="kw">try</span> db.<span class="fn">close</span>(&amp;c)
+    <span class="kw">ret</span> <span class="kw">ok</span>
+}</code></pre>
+<pre><code>logged in as ROG\gaddl</code></pre>
+      <p><strong>Checked on:</strong></p>
+      <ul>
+        <li>Windows: an in-process client and server that complete Negotiate and NTLM handshakes as the current user, with garbled and out-of-order tokens refused.</li>
+        <li>Linux: a throwaway MIT Kerberos realm (<code>tests/selfhost/kerberos.sh</code>) for a full Kerberos handshake.</li>
+        <li>SQL Server 2025: the integrated login above.</li>
+      </ul>
+      <p><strong>Not yet checked:</strong> Kerberos against a real Windows domain, and an integrated SQL Server login from Linux, which needs a Kerberos-enabled server we don't have.</p>
+
+      <h2>Where they live</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Algorithm</th><th>Module</th><th>Entry point</th><th>Decision</th></tr></thead>
+          <tbody>
+            <tr><td>Backtracking regex (#352)</td><td><code>e.text.regex</code></td><td><code>compile_backtracking</code></td><td>D1690</td></tr>
+            <tr><td>Branch and cut, Gomory cuts (#1987, #1988)</td><td><code>e.math.opt.milp</code></td><td><code>solve</code></td><td>D1691</td></tr>
+            <tr><td>Explicit-state and bounded model checking (#2224, #2225)</td><td><code>e.algo.check</code></td><td><code>explore</code>, <code>bmc</code>, <code>prove</code></td><td>D1692</td></tr>
+            <tr><td>Core dumps and minidumps (#1645)</td><td><code>e.debug.dump</code></td><td><code>parse</code>, <code>write_minidump</code>, <code>write_core</code></td><td>D1693</td></tr>
+            <tr><td>Integrated authentication (#1403)</td><td><code>e.net.auth</code></td><td><code>client</code>, <code>server</code>, <code>step</code></td><td>D1694</td></tr>
+            <tr><td>AC-2001 (in place of AC-4, #1972)</td><td><code>e.algo.csp</code></td><td><code>ac2001</code></td><td>D1695</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The numbers are entries in <code>docs/algos.md</code>, the list the library was planned from. With these six, 1,239 of its 2,250 entries map to a library function, 214 point at a duplicate, and 797 remain skipped. Most of those are whole systems, kernel internals, hardware, trained models or domain tools, not library functions. Each module has a fixture that runs on Windows and Linux under both of Neper's compilers, and its expected values come from an outside reference: Python's <code>re</code>, HiGHS, a Python state-space search, a Python arc-consistency reference, dumps from dbghelp and gdb, and the operating system's own security provider.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>
