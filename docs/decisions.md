@@ -31399,3 +31399,47 @@ Everything else goes through the library's update, and its own slicing-by-8 tabl
 - `tools/check_project_lib` pins the case in both suites: two `src` modules import one `lib` module holding a type error. The stream holds that error once, under `project-lib`, then `ok: false`, exit 1 and `modules: 2`. The work directory is deleted before the run.
 - The golden is identical for both targets and validates.
 - `tools/check_project` is unchanged.
+
+## D1710 — A merged project stream renumbers a note's `parent` (T003)
+
+**Problem.** A `note` names its error by `parent`, the zero-based index of that diagnostic record in the stream (tooling section 2, D950). `check-project` concatenates its children's streams, and each note kept the index it had in its own child. So in the merged stream it pointed at the wrong record.
+
+**Example.** Take `b.e`, whose `broken` fails in its declaration, and a use of `broken` in `b.e`'s own `user`. `a.e`'s error came first, so the note said `parent: 0`, which is `a.e`'s error, and not 1.
+
+**Decision.** `check-project` now remembers every record it writes, as the child wrote it, in a `ProjectStream`. A note's `parent` is looked up by its error's exact record and rewritten to that record's merged index.
+
+- **Errors walked later.** The note's error may come from a module walked after the note's own. In the fixture, `a_user.e` uses `b.broken`, and `a_user.e` is walked before `b.e`. Such a note waits and is written at the end of the walk, once its error is in the stream.
+- **Errors never written.** A note whose error lies in no module the walk keeps is left out.
+- **Foreign modules.** D1709's modules outside `src` go through the same path: a `lib` diagnostic is written once, found by its exact record.
+
+**Evidence.** `tools/check_project_notes` pins the merged stream in both suites:
+- two errors;
+- `b.e`'s note with `parent: 1`;
+- `a_user.e`'s note written last, also with `parent: 1`.
+
+The golden is identical for both targets and validates. `tools/check_project` and `check_project_lib` are unchanged.
+
+## D1711 — JSON output that cannot be written is one stderr line and exit 2 (T001)
+
+**Decision.** Tooling section 2 keeps stderr empty in JSON mode unless the process cannot initialise its JSON output. In that case stderr holds one ASCII line and the process exits 2. `main`'s failure path now does that when the output cannot be written at all:
+
+- stdout is closed;
+- a full device refuses every write.
+
+The failing command returns its write error to `main`. `main` then tries to write the E-TOOL-9999 record and result to the same stdout, and that fails too. That second failure used to go through `try`, out of `main`, and on to the runtime's own error line. Now `json_failure` reports whether that write failed. If it did, the line `error: the JSON output cannot be written` goes to stderr and the exit code is 2.
+
+**Evidence.**
+- The Linux suite runs `check-file --json > /dev/full`. It requires exit 2 and exactly that line on stderr.
+- A closed stdout (`>&-`) gives the same on Linux.
+- On Windows, piping `index-file --json` into `head -c 600` gave the same line once `head` closed the pipe.
+- Windows has no device that refuses writes as simply, so the pin is Linux's.
+
+## D1712 — The rename turn renames a comptime parameter's `type` uses
+
+`benchmarks/metamorphic/rename_locals.py` renames every `local` and `parameter` symbol together with the references that target it, but only in the roles `read`, `write`, `call` and `address`. Since D1708 a comptime parameter is a `parameter`, and its uses in type positions are `type` references. The Linux suite's `lib-renamed` turn therefore renamed `T` in `fn copy[T: type](dst: []T, …)` and left the `[]T`, so the compiler built against it failed with "unknown type `T`".
+
+**Decision.** The script now renames `type` references too.
+
+**Evidence.**
+- The whole `lib` was renamed on Windows: 85,972 names. The compiler built against it matches the stable image modulo the DWARF names, as `images.py` judges.
+- The `src` turn, 29,803 names, matches too.

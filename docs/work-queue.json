@@ -103,28 +103,6 @@
       "evidence": "bootstrap/neper.c still builds stage 0"
     },
     {
-      "id": "T001",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 1,
-      "title": "JSONL v1 stream envelope and version header",
-      "score": 0.97,
-      "model": "fable",
-      "thinking": "low",
-      "evidence": "The header, diagnostic, token, syntax and result records of section 1 (D227, D228), each a line, the result last with the exit status; emitted by `tokens`, `parse`, `check-file`, `info` (D229), `emit-executable` (D230), `run` (D231), `index` (D232), `dis` (D233), `fmt` (D234) and `test` (D240) -- every section 1 command now streams. An operand that cannot be read answers with the envelope on every one of them (D260): the header, one location-free E-CLI-9999, the result exiting 2 with the command's own zero counts, pinned in both suites for tokens, parse, fmt, fmt --check, dis and test; `check`, `build`, `run` and `index` had it since D228-D232. `-` reads the operand from stdin under the `--path` identity section 4 requires with it, on `tokens`, `parse` and `fmt` (D289: `os.stdin` joined the bootstrap's fixed surface the way `os.mkdir` did); both suites pipe a fixture in and compare against its own golden. `--absolute-paths` on `tokens`, `parse`, `check` and `index` adds `absolute_path` beside the operand's identity and changes nothing else (D290: an absolute operand as given, a relative one under the current directory, which `os.current_dir` joined the bootstrap's fixed surface for); both suites take the field out of a check and a tokens stream and require the golden. `-` on `index-file` under `--path` (D488) reads the module from stdin, the loader taking the text as the root's; both suites pipe the index fixture in and require its golden. `.` and `..` segments are collapsed in `absolute_path` (D489), never past a drive or the leading separator, so two spellings of one file compare equal; both suites spell the fixture roundabout and require the plain path. Not yet: a result record on a JSON output that cannot be initialised"
-    },
-    {
-      "id": "T003",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 3,
-      "title": "check",
-      "score": 0.93,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "`check-file PATH ROOT ARCH OS --json` (D228): the header, a `diagnostic` record for every error the front end reports -- lexical, syntax, module, resolution and checking, each with its registered code, message and span -- an unreadable operand as a location-free E-CLI-9999 with exit 2, the `result` with the exit status, and nothing on stderr; every diagnostic printer goes through one emitter that writes the human line or the record. tests/conformance/accept and reject pin five streams byte for byte on both platforms. `check-project DIR ROOT ARCH OS WORKDIR --json` checks every module under DIR/src (D262): the tree walked in byte order so the stream is the same on every filesystem, each module checked in its own `check-file --json --path REL` process so its identity is its path under src -- `nested/deep.e`, not a basename -- and the children's records merged into one stream with one header and one result carrying the diagnostic and module counts; tests/conformance/tools/check_project pins three modules, two with an error. `neper check FILE` is the short spelling (D276) and `neper check` with no operand checks the project the current directory is in as `check-project`, working under its `.neper/debug/check/` (D294), as does `neper test` as `test-project`; both suites run each from inside a corpus project and require the project form's golden. `check-file - ... --json --path REL` reads the module from stdin under the `--path` identity (D490), the reject corpus's golden byte for byte on both hosts. A project walk names each module under `project-src` (D1697): `check-project`, `index-project` and `test-project` pass `--project-path src/REL`, and every span, precondition and test `file` carries it, both hosts. A module outside src is walked by no child of its own, so its diagnostics come from the src modules that reach it, each written once (D1709): a lib type error had been dropped and the project checked clean; tools/check_project_lib pins it in both suites, and a missing work directory is made rather than an internal failure. Not yet: notes"
-    },
-    {
       "id": "T004",
       "category": "tooling",
       "group": "Tooling",

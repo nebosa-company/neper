@@ -3115,12 +3115,16 @@ fn check_project_command(a: *mem.Arena, args: []str) -> err {
     }
     let (child_base, child_base_error) = nptest_join(a, args[6usize], "npcheck-child")
     if child_base_error != ok { ret child_base_error }
-    // A module outside `src` -- the project's `lib`, the toolchain's -- is walked by no
-    // child of its own, so its diagnostics come from whichever src module reached it,
-    // each once (T003: they were dropped, and a broken lib checked clean).
-    var foreign: [256]str = zero
-    var foreign_count = 0usize
-    var diagnostics = 0usize
+    var merged: ProjectStream = zero
+    let (merged_lines, merged_lines_error) = mem.alloc[str](a, 1024usize)
+    if merged_lines_error != ok { ret merged_lines_error }
+    let (pending_notes, pending_notes_error) = mem.alloc[str](a, 256usize)
+    if pending_notes_error != ok { ret pending_notes_error }
+    let (pending_parents, pending_parents_error) = mem.alloc[str](a, 256usize)
+    if pending_parents_error != ok { ret pending_parents_error }
+    merged.lines = merged_lines
+    merged.pending_notes = pending_notes
+    merged.pending_parents = pending_parents
     var at = 0usize
     while at < count {
         var argv: [9]str = zero
@@ -3138,14 +3142,11 @@ fn check_project_command(a: *mem.Arena, args: []str) -> err {
         argv[8usize] = under_src
         let (status, child_out, child_err, spawn_error) = nptest_spawn(a, argv[..], child_base)
         if spawn_error != ok { ret spawn_error }
-        let (forwarded, forward_error) = forward_diagnostics(&report, child_out, rels[at])
-        if forward_error != ok { ret forward_error }
-        diagnostics += forwarded
-        let (outside, outside_error) = forward_outside_src(&report, child_out, foreign[..], &foreign_count)
-        if outside_error != ok { ret outside_error }
-        diagnostics += outside
+        try forward_project_child(a, &report, child_out, rels[at], &merged)
         at += 1usize
     }
+    try forward_pending_notes(a, &report, &merged)
+    let diagnostics = merged.count
     if diagnostics == 0usize {
         try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"diagnostics\":0,\"modules\":")
     } else {
@@ -3180,37 +3181,138 @@ fn forward_diagnostics(report: *Sink, stream: str, rel: str) -> (usize, err) {
     ret (forwarded, ok)
 }
 
-// The diagnostic records of one child's stream whose span lies outside the project's
-// `src`, each written once across the walk: `seen` holds those already written.
-// ponytail: 256 distinct foreign diagnostics are remembered; past that one may repeat.
-fn forward_outside_src(report: *Sink, stream: str, seen: []str, seen_count: *usize) -> (usize, err) {
-    var forwarded = 0usize
+// `check-project`'s one stream out of its children's (T003). `lines` is every record
+// written, as the child wrote it, so its position is the merged index a note's `parent`
+// names; a note whose error was not written yet waits in `pending_*`.
+type ProjectStream = struct {
+    lines: []str,
+    count: usize,
+    pending_notes: []str,
+    pending_parents: []str,
+    pending_count: usize,
+}
+
+// One child's diagnostics into the merged stream. Its own module's are kept (the
+// others' come from their own children). A module outside `src` -- the project's
+// `lib`, the toolchain's -- is walked by no child of its own, so its diagnostics come
+// from whichever child reached it, once (D1709). A note's `parent` counted the child's
+// records; it is renumbered to its error's place in the merged stream (T003).
+fn forward_project_child(a: *mem.Arena, report: *Sink, stream: str, rel: str, merged: *ProjectStream) -> err {
+    let (child, child_error) = mem.alloc[str](a, 1024usize)
+    if child_error != ok { ret child_error }
+    var child_count = 0usize
     var at = 0usize
     while at < stream.len {
         var end = at
         while end < stream.len && stream[end] != 10u8 { end += 1usize }
         let line = stream[at..end]
         at = end + 1usize
-        if line.len <= 22usize || !same(line[0usize..22usize], "{\"record\":\"diagnostic\"") { continue }
-        if !contains_text(line, "\"span\":{\"source\":{\"root\":\"") || contains_text(line, "\"span\":{\"source\":{\"root\":\"project-src\"") || contains_text(line, "\"span\":{\"source\":{\"root\":\"operand\"") { continue }
-        var known = false
-        var check_at = 0usize
-        while check_at < *seen_count {
-            if same(seen[check_at], line) { known = true }
-            check_at += 1usize
+        if line.len > 22usize && same(line[0usize..22usize], "{\"record\":\"diagnostic\"") && child_count < child.len {
+            child[child_count] = line
+            child_count += 1usize
         }
-        if known { continue }
-        if *seen_count < seen.len {
-            seen[*seen_count] = line
-            *seen_count = *seen_count + 1usize
-        }
-        let write_error = write_all(report, line)
-        if write_error != ok { ret (0usize, write_error) }
-        let newline_error = write_all(report, "\n")
-        if newline_error != ok { ret (0usize, newline_error) }
-        forwarded += 1usize
     }
-    ret (forwarded, ok)
+    var index = 0usize
+    while index < child_count {
+        let line = child[index]
+        index += 1usize
+        var keep = diagnostic_names(line, rel)
+        if !keep && contains_text(line, "\"span\":{\"source\":{\"root\":\"") && !contains_text(line, "\"span\":{\"source\":{\"root\":\"project-src\"") && !contains_text(line, "\"span\":{\"source\":{\"root\":\"operand\"") {
+            let (seen_at, seen) = merged_index(merged, line)
+            keep = !seen
+        }
+        if !keep { continue }
+        let (parent, has_parent) = diagnostic_parent(line)
+        if !has_parent || parent >= child_count {
+            try write_merged(report, merged, line, line)
+            continue
+        }
+        let (parent_at, parent_written) = merged_index(merged, child[parent])
+        if parent_written {
+            try write_note(a, report, merged, line, parent_at)
+        } else {
+            if merged.pending_count < merged.pending_notes.len {
+                merged.pending_notes[merged.pending_count] = line
+                merged.pending_parents[merged.pending_count] = child[parent]
+                merged.pending_count += 1usize
+            }
+        }
+    }
+    ret ok
+}
+
+// The notes whose error came from a module walked after theirs; one whose error was
+// never written -- it lies in no module the walk keeps -- is left out.
+fn forward_pending_notes(a: *mem.Arena, report: *Sink, merged: *ProjectStream) -> err {
+    var at = 0usize
+    while at < merged.pending_count {
+        let (parent_at, parent_written) = merged_index(merged, merged.pending_parents[at])
+        if parent_written { try write_note(a, report, merged, merged.pending_notes[at], parent_at) }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn merged_index(merged: *ProjectStream, line: str) -> (usize, bool) {
+    var at = 0usize
+    while at < merged.count {
+        if same(merged.lines[at], line) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn write_merged(report: *Sink, merged: *ProjectStream, original: str, text: str) -> err {
+    try write_all(report, text)
+    try write_all(report, "\n")
+    if merged.count < merged.lines.len {
+        merged.lines[merged.count] = original
+        merged.count += 1usize
+    }
+    ret ok
+}
+
+// A note with its `parent` renumbered to `parent_at`.
+fn write_note(a: *mem.Arena, report: *Sink, merged: *ProjectStream, line: str, parent_at: usize) -> err {
+    let key = "\"parent\":"
+    var start = 0usize
+    while start + key.len <= line.len && !same(line[start..start + key.len], key) { start += 1usize }
+    if start + key.len > line.len { ret write_merged(report, merged, line, line) }
+    var digits_end = start + key.len
+    while digits_end < line.len && line[digits_end] >= 48u8 && line[digits_end] <= 57u8 { digits_end += 1usize }
+    let (storage, storage_error) = mem.alloc[u8](a, line.len + 24usize)
+    if storage_error != ok { ret storage_error }
+    var n = nptest_append(storage, 0usize, line[0usize..start + key.len])
+    var digits: [24]u8 = zero
+    var digit_count = 0usize
+    var value = parent_at
+    while digit_count == 0usize || value != 0usize {
+        digits[digit_count] = u8(48usize + value % 10usize)
+        value = value / 10usize
+        digit_count += 1usize
+    }
+    while digit_count > 0usize {
+        digit_count = digit_count - 1usize
+        storage[n] = digits[digit_count]
+        n += 1usize
+    }
+    n = nptest_append(storage, n, line[digits_end..line.len])
+    ret write_merged(report, merged, line, storage[0usize..n])
+}
+
+// A diagnostic record's `parent`, when it is a number.
+fn diagnostic_parent(line: str) -> (usize, bool) {
+    let key = "\"parent\":"
+    var start = 0usize
+    while start + key.len <= line.len && !same(line[start..start + key.len], key) { start += 1usize }
+    var at = start + key.len
+    if at >= line.len || line[at] < 48u8 || line[at] > 57u8 { ret (0usize, false) }
+    var value = 0usize
+    while at < line.len && line[at] >= 48u8 && line[at] <= 57u8 {
+        value = value * 10usize + usize(line[at] - 48u8)
+        at += 1usize
+    }
+    ret (value, true)
 }
 
 fn contains_text(line: str, needle: str) -> bool {
@@ -12649,12 +12751,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret result
     }
     var report = json_sink()
-    try emit_command_diagnostic(&report, code, message)
-    try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":")
-    if status == 2i32 { try write_all(&report, "2") } else { try write_all(&report, "1") }
-    try write_all(&report, ",\"data\":{\"diagnostics\":1}}\n")
+    if json_failure(&report, code, message, status) != ok {
+        // The JSON output itself cannot be written -- stdout closed, a full device: the
+        // one ASCII line tooling section 2 allows on stderr, and exit 2 (T001).
+        var unwritable = stderr_sink()
+        let said = write_all(&unwritable, "error: the JSON output cannot be written\n")
+        os.exit(2i32)
+    }
     os.exit(status)
     ret ok
+}
+
+fn json_failure(report: *Sink, code: str, message: str, status: i32) -> err {
+    try emit_command_diagnostic(report, code, message)
+    try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":")
+    if status == 2i32 { try write_all(report, "2") } else { try write_all(report, "1") }
+    ret write_all(report, ",\"data\":{\"diagnostics\":1}}\n")
 }
 
 fn dispatch(a: *mem.Arena, args: []str) -> err {
