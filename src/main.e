@@ -4144,20 +4144,20 @@ type Sink = struct {
     // malformed one is not reported into its stream, only left unread.
     map_quiet: bool,
     map_source: str,
-    // The tables hold the operand's mappings in the first eight slots and, from
-    // `nest_base`, the nested map's (D465); the bootstrap mistypes a slice of a
+    // The tables hold the operand's mappings in the first thirty-two slots (T015) and,
+    // from `nest_base`, the nested maps', eight each (D465); the bootstrap mistypes a slice of a
     // struct's array field, so the two are one table indexed by a base.
     map_count: usize,
-    map_generated_start: [72]usize,
-    map_generated_end: [72]usize,
-    map_generated_line: [72]usize,
-    map_original_root: [72]str,
-    map_original_path: [72]str,
-    map_original_start: [72]usize,
-    map_original_line: [72]usize,
+    map_generated_start: [96]usize,
+    map_generated_end: [96]usize,
+    map_generated_line: [96]usize,
+    map_original_root: [96]str,
+    map_original_path: [96]str,
+    map_original_start: [96]usize,
+    map_original_line: [96]usize,
     // What may be edited (D373, H19): 0 unknown, 1 the generated output directly,
     // 2 the generator's input only -- the mapping's `edit`, absent in a version 1 map.
-    map_edit: [72]u8,
+    map_edit: [96]u8,
     // Nested maps (D465, D499, D564, H19): the original the mappings name may itself be
     // generated, with a map of its own beside it, and its original too; the chain
     // is followed to the root original, eight levels at most, each level's eight
@@ -4564,7 +4564,9 @@ fn note_owned_ranges(report: *Sink, loaded: *graph.Graph, module_index: usize) {
     if module_index >= loaded.count { ret }
     var module = &loaded.modules[module_index]
     var mapping = 0usize
-    while mapping < report.map_count && mapping < 8usize {
+    // Bound to a local: the bootstrap reads `< CONST {` as an aggregate literal.
+    let operand_mappings = OPERAND_MAPPINGS
+    while mapping < report.map_count && mapping < operand_mappings {
         if report.map_edit[mapping] == 2u8 && module.owned_count < 8usize {
             let slot = module.owned_count
             module.owned_starts[slot] = report.map_generated_start[mapping]
@@ -4845,7 +4847,7 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
         }
     }
     report.map_source = operand
-    report.map_count = read_mappings(report, document, 0usize)
+    report.map_count = read_mappings(report, document, 0usize, OPERAND_MAPPINGS)
     // The original's own map (D465, H19): followed one level, to the root original.
     if report.map_count != 0usize { try load_nested_map(a, report, operand) }
     ret ok
@@ -4879,7 +4881,7 @@ fn load_nested_map(a: *mem.Arena, report: *Sink, operand: str) -> err {
             report.nest_stale[level] = true
             ret ok
         }
-        report.nest_counts[level] = read_mappings(report, nest_document, nest_base(level))
+        report.nest_counts[level] = read_mappings(report, nest_document, nest_base(level), 8usize)
         if report.nest_counts[level] == 0usize { ret ok }
         above = nest_base(level)
         level += 1usize
@@ -4889,16 +4891,21 @@ fn load_nested_map(a: *mem.Arena, report: *Sink, operand: str) -> err {
 
 // Where a nested level's mappings begin in the tables (D465, D499): after the
 // operand's eight, eight per level.
-fn nest_base(level: usize) -> usize { ret 8usize + level * 8usize }
+fn nest_base(level: usize) -> usize { ret OPERAND_MAPPINGS + level * 8usize }
+
+// The operand's own map holds up to this many mappings (T015): a generator that splices
+// in more than a handful of pieces -- a runner renaming several seams -- needs more than
+// the eight a nested level keeps.
+const OPERAND_MAPPINGS: usize = 32usize
 
 // A map's mappings into the tables from `base` (D264, D465): each `generated_span`'s
 // start, end and line, the `original_span`'s path, start and line, and the
-// mapping's `edit`; eight at most. The count read.
-fn read_mappings(report: *Sink, document: str, base: usize) -> usize {
+// mapping's `edit`; `limit` at most. The count read.
+fn read_mappings(report: *Sink, document: str, base: usize, limit: usize) -> usize {
     var count = 0usize
     var at = 0usize
     let generated_key = "\"generated_span\":{"
-    while at + generated_key.len <= document.len && count < 8usize {
+    while at + generated_key.len <= document.len && count < limit {
         if same(document[at..at + generated_key.len], generated_key) {
             let rest = document[at..document.len]
             let index = base + count

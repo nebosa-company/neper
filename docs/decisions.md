@@ -31170,3 +31170,21 @@ With this, T022's "dependency and library hashes the manifest does not yet carry
 
 - `tools/check_project`, `index_project` and `test_project` change in their identities and nothing else, byte-equal on both hosts. The operand-less `check`, `index` and `test` forms compare against the same goldens.
 - The records validate against the v1 schema.
+
+## D1698 — The operand's source map holds 32 mappings (T015)
+
+**Problem.** A map's mappings went into one table of 72 slots: 8 for the operand's map, then 8 for each of 8 nested levels (D465). The reader stopped at 8. A diagnostic in a generator's ninth splice was therefore reported in the generated file, as if there were no map.
+
+**Decision.**
+
+- The operand's own map holds up to 32 mappings, `OPERAND_MAPPINGS`, and each nested level keeps 8, so the table is 96 slots. `read_mappings` takes its level's limit.
+- Regeneration ownership (D512) reads the same 32. A module still owns at most 8 ranges.
+- The table lives in the sink, which is copied by value, so only the operand's level grew.
+
+**Evidence.**
+
+- `tools/many_mappings` has twelve spliced functions, with the error in the twelfth. It reports `missing12` at byte 334 of `many_mappings.input`, exactly the word, with the generated span related. Before, it went unmapped.
+- All nine source-map cases match their goldens on both hosts, `nested_deep`'s eight levels included.
+- The new case is pinned in both suites' map loops.
+
+**Not yet.** Columns across a mapping whose original is not a verbatim copy. The consumer maps an offset inside a span one to one, which is exact for a spliced copy, as here, and not for a rewritten line.
