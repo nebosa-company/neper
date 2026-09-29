@@ -5601,6 +5601,11 @@ cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt --path x.e - < nul > nul
 if ($LASTEXITCODE -eq 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $fmtProject 'src\layout.e')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'format\layout.e')).Hash) { throw 'fmt --path x.e - was read as fmt of the project' }
 cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt --check > nul 2> nul"
 if ($LASTEXITCODE -ne 1) { throw "fmt --check over a non-canonical project exited $LASTEXITCODE, not 1" }
+# `fmt --check --json` over the project (T006): a diagnostic per file found wanting, under
+# its project identity, at its first differing byte.
+$fmtProjectJson = Join-Path $testBuild 'conformance-tools-fmt-project.jsonl'
+cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt --check --json > `"$fmtProjectJson`""
+if ($LASTEXITCODE -ne 1 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $fmtProjectJson).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\fmt_project.expected.jsonl')).Hash) { throw "fmt --check --json over the project differs from the conformance corpus" }
 cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt"
 if ($LASTEXITCODE -ne 0) { throw "fmt over the project exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $fmtProject 'src\layout.e')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'format\layout.expected.e')).Hash) { throw 'fmt over the project did not write the canonical text' }

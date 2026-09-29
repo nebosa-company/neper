@@ -5456,6 +5456,12 @@ cmp -s "$test_build/fmt_project/src/layout.e" "$conformance_root/format/layout.e
 fmt_check_status=0
 (cd "$test_build/fmt_project" && "$repo/build/linux/short/neper-self-short" fmt --check > /dev/null 2>&1) || fmt_check_status=$?
 [ "$fmt_check_status" -eq 1 ]
+# `fmt --check --json` over the project (T006): a diagnostic per file found wanting, under
+# its project identity, at its first differing byte.
+fmt_json_status=0
+(cd "$test_build/fmt_project" && "$repo/build/linux/short/neper-self-short" fmt --check --json > "$test_build/conformance-tools-fmt-project.jsonl") || fmt_json_status=$?
+[ "$fmt_json_status" -eq 1 ]
+cmp -s "$test_build/conformance-tools-fmt-project.jsonl" "$conformance_root/tools/fmt_project.expected.jsonl" || { echo "fmt --check --json over the project differs from the conformance corpus" >&2; exit 1; }
 (cd "$test_build/fmt_project" && "$repo/build/linux/short/neper-self-short" fmt)
 cmp -s "$test_build/fmt_project/src/layout.e" "$conformance_root/format/layout.expected.e" || { printf '%s
 ' "fmt over the project did not write the canonical text" >&2; exit 1; }
