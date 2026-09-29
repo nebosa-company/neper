@@ -4400,11 +4400,12 @@ for hot_mode in --release --time; do
     hot_cold_stats=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$test_build/hot-cold-stats$hot_mode" $hot_mode --stats-full 2>&1)
     hot_warm=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
     [ "$hot_warm" = 'executable written' ]
-    # The manifest says what the warm build kept and why (D363, H14): everything, stable.
+    # The manifest says what the warm build kept and why (D363, H14): everything, stable --
+    # and, the image being the one at the output path, nothing checked (D1681).
     hot_manifest_mode=debug
     [ "$hot_mode" = --release ] && hot_manifest_mode=release
     hot_manifest="$hot_scratch/.neper/$hot_manifest_mode/build-manifest.json"
-    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable e.os=kept:stable work.bodies_checked=0 work.modules_lowered=0 work.functions_lowered=0 work.declarations_checked=29
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable e.os=kept:stable work.bodies_checked=0 work.modules_lowered=0 work.functions_lowered=0 work.declarations_checked=0
     cmp "$hot_exe" "$hot_clean"
     # Trivia apart from identity (D504, H14): a comment edit on its own line keeps every module.
     cp "$hot_fixture/edits/dep_comment.e" "$hot_source/dep.e"
