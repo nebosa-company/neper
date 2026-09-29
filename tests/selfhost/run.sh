@@ -5580,7 +5580,7 @@ cmp -s "$fmt_actual" "$conformance_root/tools/fmt.expected.jsonl" || { printf '%
 # The format corpus (D255): each `format/<name>.e` is a non-canonical source and
 # `format/<name>.expected.e` what `fmt` makes of it, byte for byte; the canonical side
 # passes `--check`, which pins idempotence.
-for format_case in layout types raw_strings; do
+for format_case in layout types raw_strings ret_grouping; do
     "$test_build/neper-self" fmt-file "$conformance_root/format/$format_case.e" > "$test_build/conformance-format-$format_case.e"
     cmp -s "$test_build/conformance-format-$format_case.e" "$conformance_root/format/$format_case.expected.e" || { printf '%s
 ' "fmt on format/$format_case.e differs from the conformance corpus" >&2; exit 1; }
@@ -5593,6 +5593,11 @@ $test_build/neper-self fmt-file "$conformance_root/tools/fmt_reject.e" --json > 
 [ "$fmt_reject_status" -eq 1 ]
 cmp -s "$test_build/conformance-tools-fmt-reject.jsonl" "$conformance_root/tools/fmt_reject.expected.jsonl" || { printf '%s
 ' "fmt --json on a refused source differs from the conformance corpus" >&2; exit 1; }
+# (D1707) What does not parse has no layout: two statements on one line, exit 1.
+fmt_statements_status=0
+$test_build/neper-self fmt-file "$conformance_root/tools/fmt_statements.e" --json > "$test_build/conformance-tools-fmt-statements.jsonl" || fmt_statements_status=$?
+[ "$fmt_statements_status" -eq 1 ]
+cmp "$test_build/conformance-tools-fmt-statements.jsonl" "$conformance_root/tools/fmt_statements.expected.jsonl"
 # `fmt --check --json` (D244): a canonical source passes, a non-canonical one reports E-FORMAT-0001.
 "$test_build/neper-self" fmt-file "$conformance_root/tools/fmt.e" --check --json > /dev/null
 fmt_check_status=0

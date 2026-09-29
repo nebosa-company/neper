@@ -720,7 +720,11 @@ declarations, or rewrite ordinary strings as raw strings. Its complete v1 contra
 `neper fmt --check` writes nothing and exits 1 if output would differ. `neper fmt -`
 reads stdin and writes only formatted source to stdout; `--json` instead emits one
 `formatted` record whose `text` contains that source. On syntax failure no formatted
-output is produced. Idempotence and every rule above are fixed by golden fixtures in
+output is produced (D1707): a source whose canonical layout does not parse is refused
+with the parser's diagnostics. The layout itself is what is parsed, so an `else` on
+the line after its `}`, which the layout joins, is repaired rather than refused. Two
+statements on one line are refused, because the grammar ends a statement at its line;
+that is how a non-empty statement occupies its own line. Idempotence and every rule above are fixed by golden fixtures in
 the conformance corpus.
 
 ## 7. Test, build and command results
