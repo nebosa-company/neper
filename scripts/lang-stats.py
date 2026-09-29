@@ -377,19 +377,28 @@ for agent, msgs, order, results in itertools.chain(*(read() for name, read in zi
             if t.get('name') == 'Bash':
                 cmd = str((t.get('input') or {}).get('command', ''))
                 ks = runs(cmd)
+                text = r.get('text', '')
+                program_failed = failed and bool((host in COMPILE and COMPILE[host].search(text)) or TESTFAIL.search(text))
+                # A patch run and a build in one command (T030): a failure with a compile code or a
+                # test signature is the build's, not an edit that did not apply, and the build counts.
+                chained = bool(ks) and bool(BUILD.search(cmd))
                 for k in ks:  # a patch run is an edit application; any other python run is a test run
                     if k and k[1]:
-                        S[(tag(k[1]), 'script')]['applied'] += 1; S[(tag(k[1]), 'script')]['apply_err'] += failed; since_build += not failed
-                        if repair: repair[1] += not failed
+                        patch_failed = failed and not (chained and program_failed)
+                        S[(tag(k[1]), 'script')]['applied'] += 1; S[(tag(k[1]), 'script')]['apply_err'] += patch_failed; since_build += not patch_failed
+                        if repair: repair[1] += not patch_failed
                     else: ks = []
+                chained = chained and bool(ks)
                 if PATCHER.search(cmd) and not es:  # a spec written earlier is applied now; its code was counted when written
                     S[(hk, 'direct')]['apply_err'] += failed
                     if not BUILD.search(cmd): continue
-                text = r.get('text', '')
-                plumbing = failed and not (host in COMPILE and COMPILE[host].search(text)) and not TESTFAIL.search(text)
-                if not ks and plumbing and (BUILD.search(cmd) or PYRUN.search(cmd)):
+                plumbing = failed and not program_failed
+                building = (not ks or chained) and (BUILD.search(cmd) or PYRUN.search(cmd))
+                if chained and plumbing:
+                    pass  # the patch failed, counted above: no build ran
+                elif building and plumbing:
                     H['plumbing'] += 1  # the shell failed, not the language: no build, and the edits wait for one
-                elif not ks and (BUILD.search(cmd) or PYRUN.search(cmd)):  # a build or test run, or a script written outside these transcripts
+                elif building:  # a build or test run, or a script written outside these transcripts
                     H['builds'] += 1; H['build_fail'] += failed; build_s[hk].append(dur)
                     if ONLY_COMPILE.match(cmd): compile_s[hk].append(dur)
                     H['fb_n'] += since_build; H['fb_ok'] += since_build * (not failed); since_build = 0
