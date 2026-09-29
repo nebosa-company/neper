@@ -7181,7 +7181,7 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
     // `Generic` means nothing along the way recorded a reason, so the error value is
     // the only evidence of which check rejected the program. Naming it turns "type
     // checking failed" from a dead end into somewhere to start.
-    if checker.failure_kind == .Generic && check_error == check.DeviceElement {
+    if checker.failure_kind == .GpuElement || (checker.failure_kind == .Generic && check_error == check.DeviceElement) {
         ret write_all(file, "a `gpu.Buf[T]` holds device memory, so its element is a device storage type: a fixed-width integer, a float, an enum, `err`, or a struct or array of them -- not `usize`, `isize`, `bool`, a pointer, a slice or a union (spec section 10)")
     }
     if checker.failure_kind == .Generic {

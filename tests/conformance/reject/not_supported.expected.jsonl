@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-TYPE-0009","message":"`a[0usize..2usize] = b` uses something the checker does not support here","span":{"source":{"root":"operand","path":"not_supported.e"},"byte_start":197,"byte_end":198,"line":6,"column":5,"end_line":6,"end_column":6,"column_utf16":5,"end_column_utf16":6},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

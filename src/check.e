@@ -173,6 +173,10 @@ type DiagnosticKind = enum u8 {
     ContextMissing,
     TypeInvalid,
     NotSupported,
+    // `continue` with no loop around it (T013: it was E-TYPE-0009, "not supported").
+    ContinueOutsideLoop,
+    // A `gpu.Buf[T]` whose element is not device storage (D1589), under E-GPU-9999 (T013).
+    GpuElement,
 }
 
 type Kind = enum u8 {
@@ -969,6 +973,7 @@ fn default_failure_kind(failure: err, node: syntax.Node) -> DiagnosticKind {
     if failure == TypeMismatch { ret .InitializerType }
     if failure == ConstantCycle { ret .ConstantDependencyCycle }
     if failure == NonExhaustiveSwitch { ret .NonExhaustive }
+    if failure == DeviceElement { ret .GpuElement }
     if node.kind == .ReturnStmt && failure == InvalidReturn { ret .ReturnInsideDefer }
     if node.kind == .TryStmt && failure == InvalidTry { ret .TryInsideDefer }
     // These carry their own situation, so they need no help from the node kind --
@@ -15492,7 +15497,10 @@ fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tre
         ret ok
     }
     if node.kind == .ContinueStmt {
-        if c.loop_depth == 0usize { ret Unsupported }
+        if c.loop_depth == 0usize {
+            record_failure(c, module_index, node, .ContinueOutsideLoop, "", "")
+            ret Unsupported
+        }
         try resource_audit(c, g, module_index, node, c.loop_locals[c.loop_depth - 1usize], .ResourceCleanupForgotten)
         ret ok
     }
@@ -16540,6 +16548,8 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .IteratorMissing || kind == .ProtocolMissing { ret "E-NAME-9999" }
     if kind == .GenericInference { ret "E-TYPE-0001" }
     if kind == .WhenCondition || kind == .ComptimeEvaluation || kind == .ComptimeDeferredUse { ret "E-COMPTIME-9999" }
+    // Section 10's rules: a kernel's attribute, launch, device reach and capabilities (T013).
+    if kind == .GpuAttribute || kind == .GpuLaunch || kind == .GpuElement { ret "E-GPU-9999" }
     ret "E-TYPE-9999"
 }
 
@@ -16588,6 +16598,7 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .IndexedArrayImmutable { ret "indexed assignment requires a mutable array binding" }
     if kind == .IndexedElementsImmutable { ret "indexed assignment requires mutable elements" }
     if kind == .BreakOutsideControl { ret "break requires an enclosing loop or switch" }
+    if kind == .ContinueOutsideLoop { ret "continue requires an enclosing loop" }
     if kind == .ReturnInsideDefer { ret "ret is not legal inside defer" }
     if kind == .ReturnValuesUnexpected { ret "this function returns nothing, so ret takes no value" }
     if kind == .ReturnCount { ret "ret gives a different number of values than this function returns" }
