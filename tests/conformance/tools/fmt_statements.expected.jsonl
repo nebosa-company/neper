@@ -1,0 +1,4 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"fmt","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-SYNTAX-9999","message":"unexpected token","span":{"source":{"root":"operand","path":"fmt_statements.e"},"byte_start":273,"byte_end":274,"line":7,"column":16,"end_line":7,"end_column":17,"column_utf16":16,"end_column_utf16":17},"parent":null,"related":[],"fixes":[]}
+{"record":"diagnostic","severity":"error","code":"E-SYNTAX-9999","message":"unexpected token","span":{"source":{"root":"operand","path":"fmt_statements.e"},"byte_start":311,"byte_end":312,"line":8,"column":28,"end_line":8,"end_column":29,"column_utf16":28,"end_column_utf16":29},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":2}}

@@ -31353,3 +31353,20 @@ Everything else goes through the library's update, and its own slicing-by-8 tabl
 - A cross-reference of the 66 codes in `docs/diagnostics.md` against `src/` and every golden and suite leaves none unraised or unpinned.
 - `render_card.py`'s audit lists every family as fully verified.
 - The Windows suite's GPU refusal block and the Linux suite's GPU section (lines 2732–2837) pass against the new compiler. So do the two reject goldens and the apply-plan pin, on both hosts.
+
+## D1707 — `fmt` refuses a layout that does not parse; one statement per line is the grammar's (T006)
+
+**Decision.** `fmt` now parses the canonical layout it produces. When that text does not parse, it writes the parser's refusals instead of formatting.
+
+- **Where the refusals come from.** The refusals are the parser's diagnostics on the source, in the stream as records, or as human lines on stderr. The codes are E-SYNTAX-9999, and E-SYNTAX-0012 for a barrier.
+- **Why the result is parsed.** The input is not what gets parsed. `format/layout` puts an `else` on the line after its `}` on purpose: the parser refuses that input, and the layout that joins them parses. So a layout `fmt` repairs is still formatted.
+- **Where the check sits.** `format_source` parses its own result, so every form (`fmt-file`, `-`, `--write`, `--check`, the project form) holds to section 6's "on syntax failure no formatted output is produced". `fmt_syntax_failures` reports the failures only when the input fails and the layout does too.
+- **One statement per line.** T006's last gap turned out to be the grammar's rule: a statement ends at its line, so two statements on one line are a syntax error, with inline braces or without. `fmt` had laid such a source out unchanged, because it reads tokens and not a tree; it now refuses it. A block holding one statement on its line stays as D255 left it.
+- **A formatter bug the check found.** The check found a formatter bug on its first run over the tree. A `(` after `ret` was always treated as a list that may break. On a grouping, `ret (a - b) * c` too wide for its line, the break wrote `(x,)`, which does not parse: `lib/e/gfx/vision.e`'s `grad_x` came out that way. Now `ret (` breaks only as a tuple, when it holds a comma at its own depth, and otherwise joins as D277's other groupings do; the call inside it breaks instead.
+
+**Evidence.**
+- `fmt-project . --check` over the whole tree names the same 394 non-canonical files before and after. Every formatted result now parses; before the fix, `vision.e` stopped the run.
+- `format/ret_grouping` pins the repaired break. The old formatter's output of it does not parse, and the new one's does and is idempotent.
+- `tools/fmt_statements` pins the refusal: two diagnostics, exit 1.
+- On Windows and Linux, `layout`, `types`, `raw_strings`, `fmt` and `fmt_reject` are byte-equal, with the new pairs.
+- On Windows, so are `fmt_check`, and `fmt_project` with its write and in-place forms.

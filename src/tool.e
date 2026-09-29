@@ -1860,6 +1860,16 @@ fn format_source(a: *mem.Arena, source: str) -> (str, err) {
     if sort_error != ok { ret ("", sort_error) }
     let attribute_error = fmt_sort_attributes(a, clean_storage[0usize..clean_count])
     if attribute_error != ok { ret ("", attribute_error) }
+    // A layout that does not parse is no canonical layout (T006): the grammar ends a
+    // statement at its line, so two on one line stay refused whatever the spacing.
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, clean_count + 16usize)
+    if nodes_error != ok { ret ("", nodes_error) }
+    let (children, children_error) = mem.alloc[u32](a, clean_count * 2usize + 16usize)
+    if children_error != ok { ret ("", children_error) }
+    var tree: parse.Tree = zero
+    let init_error = parse.init_tree(&tree, nodes, children)
+    if init_error != ok { ret ("", init_error) }
+    if parse.parse(&tree, clean_storage[0usize..clean_count]) != ok { ret ("", parse.InvalidSyntax) }
     ret (clean_storage[0usize..clean_count], ok)
 }
 
@@ -2023,6 +2033,9 @@ fn fmt_list_plan(a: *mem.Arena, source: str, tokens: []const lex.Token) -> ([]us
     // A stack of open soft delimiters.
     var openers: [64]usize = zero
     var open_count = 0usize
+    // Whether each open delimiter holds a comma at its own depth: `ret (a, b)` is a tuple,
+    // `ret (a + b) * c` a grouping (T006).
+    var comma_inside: [64]bool = zero
     // Whether an `if`/`while`/`for`/`switch`/`when`/`else` header is open on this line:
     // its `{` is a block, however Pascal the name before it (the parser's own rule).
     var header_open = false
@@ -2046,8 +2059,10 @@ fn fmt_list_plan(a: *mem.Arena, source: str, tokens: []const lex.Token) -> ([]us
             if kind == .PunctLBrace && opens { header_open = false }
         }
         if kind == .PunctLBrace && open_count == 0usize { header_open = false }
+        if kind == .PunctComma && open_count != 0usize { comma_inside[open_count - 1usize] = true }
         if opens && open_count < 64usize {
             openers[open_count] = at
+            comma_inside[open_count] = false
             open_count += 1usize
         }
         let closes = kind == .PunctRParen || kind == .PunctRBracket || kind == .PunctRBrace
@@ -2063,7 +2078,9 @@ fn fmt_list_plan(a: *mem.Arena, source: str, tokens: []const lex.Token) -> ([]us
                 if opener_kind == .PunctLBrace { action = 1usize }
                 if opener_kind == .PunctLParen && opener != 0usize {
                     let lead = tokens[opener - 1usize].kind
-                    if fmt_value_end(lead) || lead == .KwRet || lead == .KwFn { action = 1usize }
+                    // After `ret`, only a tuple: a grouping broken with a trailing comma
+                    // is `(x,)`, which does not parse (vision.e's `grad_x`).
+                    if fmt_value_end(lead) || (lead == .KwRet && comma_inside[open_count]) || lead == .KwFn { action = 1usize }
                 }
                 plan[opener] = at * 4usize + action
             }
@@ -2412,7 +2429,102 @@ fn fmt_refuse(a: *mem.Arena, out: *Out, source: str, path: str) -> (usize, err) 
         }
         at += 1usize
     }
+    if written == 0usize {
+        let (refusals, syntax_error) = fmt_syntax_failures(a, out, path, source, tokens[0usize..count], false)
+        if syntax_error != ok { ret (0usize, syntax_error) }
+        written = refusals
+    }
     ret (written, ok)
+}
+
+// The parser's refusals (T006). The layout pass reads tokens, not a tree, so a source
+// the parser refuses was laid out anyway -- two statements on one line among them,
+// which is what section 6's "a non-empty statement occupies its own line" rests on:
+// the grammar ends a statement at its line. Each failure recovery went past is written
+// as `parse` finds it, a record or, `plain`, a human line on stderr; zero means it parses.
+fn fmt_syntax_failures(a: *mem.Arena, out: *Out, path: str, source: str, tokens: []const lex.Token, plain: bool) -> (usize, err) {
+    if tokens.len == 0usize { ret (0usize, ok) }
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, tokens.len + 16usize)
+    if nodes_error != ok { ret (0usize, nodes_error) }
+    let (children, children_error) = mem.alloc[u32](a, tokens.len * 2usize + 16usize)
+    if children_error != ok { ret (0usize, children_error) }
+    var tree: parse.Tree = zero
+    let init_error = parse.init_tree(&tree, nodes, children)
+    if init_error != ok { ret (0usize, init_error) }
+    if parse.parse(&tree, source) == ok { ret (0usize, ok) }
+    // A layout the formatter repairs is not a refusal: `else` on the line after its `}`
+    // does not parse, and the canonical text that joins them does (format/layout).
+    let (repaired, repair_error) = format_source(a, source)
+    if repair_error == ok && repaired.len != 0usize { ret (0usize, ok) }
+    var failure = 0usize
+    while failure < tree.failure_count || (failure == 0usize && tree.failure_count == 0usize) {
+        var at = tokens[tokens.len - 1usize]
+        var barrier = false
+        var keyword = at
+        if failure < tree.failure_count {
+            at = tree.failures[failure]
+            barrier = tree.failure_barriers[failure]
+            keyword = tree.failure_keywords[failure]
+        }
+        let record_error = fmt_syntax_record(out, path, source, at, barrier, keyword, plain)
+        if record_error != ok { ret (0usize, record_error) }
+        failure += 1usize
+    }
+    if tree.failure_count == 0usize { ret (1usize, ok) }
+    ret (tree.failure_count, ok)
+}
+
+fn fmt_syntax_record(out: *Out, path: str, source: str, at: lex.Token, barrier: bool, keyword: lex.Token, plain: bool) -> err {
+    var code = "E-SYNTAX-9999"
+    if barrier { code = "E-SYNTAX-0012" }
+    if plain {
+        try text(out, path)
+        try byte(out, 58u8)
+        try decimal(out, lex.line_of(source, out.lines, usize(at.start)))
+        try byte(out, 58u8)
+        try decimal(out, lex.column_of(source, out.lines, usize(at.start)))
+        try text(out, ": error[")
+        try text(out, code)
+        try text(out, "]: ")
+    } else {
+        try text(out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"")
+        try text(out, code)
+        try text(out, "\",\"message\":\"")
+    }
+    if barrier {
+        try text(out, "`")
+        try text(out, lex.token_text(source, at))
+        try text(out, "` opened here is still unclosed at `")
+        try text(out, lex.token_text(source, keyword))
+        try text(out, "` on line ")
+        try decimal(out, lex.line_of(source, out.lines, usize(keyword.start)))
+    } else {
+        try text(out, "unexpected token")
+    }
+    if plain {
+        try text(out, "\n")
+        try fmt_stderr(out)
+    } else {
+        try text(out, "\",\"span\":")
+        try token_span(out, "operand", path, source, at, at)
+        try text(out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try flush(out)
+    }
+    ret ok
+}
+
+// What `out` holds, onto stderr.
+fn fmt_stderr(out: *Out) -> err {
+    let stderr = os.stderr()
+    var from = 0usize
+    while from < out.count {
+        let (put, write_error) = os.write(stderr, out.bytes[from..out.count])
+        if write_error != ok { ret write_error }
+        if put == 0usize { ret Capacity }
+        from += put
+    }
+    out.count = 0usize
+    ret ok
 }
 
 fn fmt_refused_result(out: *Out, diagnostics: usize) -> err {
@@ -2576,6 +2688,11 @@ fn fmt_refuse_plain(a: *mem.Arena, out: *Out, source: str, path: str) -> (usize,
             written += 1usize
         }
         at += 1usize
+    }
+    if written == 0usize {
+        let (refusals, syntax_error) = fmt_syntax_failures(a, out, path, source, tokens[0usize..count], true)
+        if syntax_error != ok { ret (0usize, syntax_error) }
+        written = refusals
     }
     ret (written, ok)
 }
