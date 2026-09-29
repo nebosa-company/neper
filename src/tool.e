@@ -971,7 +971,9 @@ fn index_nested_count(tree: *parse.Tree, tokens: []const lex.Token, first: usize
 
 // The section 7 kind of a nested declaration node, or "" for a node that is not one.
 fn index_nested_kind(kind: syntax.Kind) -> str {
-    if kind == .Parameter { ret "parameter" }
+    // A comptime parameter `[T: type, N: usize]` is a parameter too (T009), its
+    // signature saying which: `T: type`.
+    if kind == .Parameter || kind == .ComptimeParam { ret "parameter" }
     if kind == .FieldDecl { ret "field" }
     if kind == .EnumMember || kind == .UnionMember { ret "member" }
     // A `let`/`var` binding and a `for` variable are `local` symbols (D483, H17).
@@ -1065,10 +1067,11 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
                 record_last = name_index
             }
             let kind = index_nested_kind(node.kind)
-            if (node.kind == .Parameter || node.kind == .Binding || node.kind == .ForStmt) && refs.local_count < refs.local_names.len {
+            if (node.kind == .Parameter || node.kind == .ComptimeParam || node.kind == .Binding || node.kind == .ForStmt) && refs.local_count < refs.local_names.len {
                 refs.local_names[refs.local_count] = lex.token_text(source, name_token)
                 refs.local_ids[refs.local_count] = next_id + written
                 refs.local_starts[refs.local_count] = name_index
+                refs.local_comptime[refs.local_count] = node.kind == .ComptimeParam
                 refs.local_count += 1usize
             }
             // References inside the signature so far come before this symbol (D280).
@@ -1111,6 +1114,8 @@ type IndexRefs = struct {
     local_names: []str,
     local_ids: []usize,
     local_starts: []usize,
+    // Whether each is a comptime parameter (T009), which a type position names too.
+    local_comptime: []bool,
     local_count: usize,
     local_first: usize,
     local_last: usize,
@@ -1140,9 +1145,12 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
     if local_ids_error != ok { ret (state, local_ids_error) }
     let (local_starts, local_starts_error) = mem.alloc[usize](a, 4096usize)
     if local_starts_error != ok { ret (state, local_starts_error) }
+    let (local_comptime, local_comptime_error) = mem.alloc[bool](a, 4096usize)
+    if local_comptime_error != ok { ret (state, local_comptime_error) }
     state.local_names = local_names
     state.local_ids = local_ids
     state.local_starts = local_starts
+    state.local_comptime = local_comptime
     var picked = 0usize
     var node_index = 1usize
     while node_index < tree.count {
@@ -1276,21 +1284,23 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
             // declared before this use, inside the declaration; spec section 5 lets
             // no local shadow a module-scope name, so a known name is never one.
             var local_found = state.local_count
-            if qualified_import == 256usize && found == known_ids.len && node.kind == .NameExpr && first >= state.local_first && first <= state.local_last {
+            // A comptime parameter is named in a type position too: `[N]T` (T009).
+            if qualified_import == 256usize && found == known_ids.len && (node.kind == .NameExpr || node.kind == .NamedType) && first >= state.local_first && first <= state.local_last {
                 var local_at = 0usize
                 while local_at < state.local_count {
-                    if state.local_starts[local_at] < first && graph.same(state.local_names[local_at], name) { local_found = local_at }
+                    if state.local_starts[local_at] < first && graph.same(state.local_names[local_at], name) && (node.kind == .NameExpr || state.local_comptime[local_at]) { local_found = local_at }
                     local_at += 1usize
                 }
             }
             if roles[at] != 2usize && local_found < state.local_count {
                 var local_role = "read"
+                if node.kind == .NamedType { local_role = "type" }
                 let after = first + 1usize
-                if after < tokens.len {
+                if after < tokens.len && node.kind == .NameExpr {
                     if tokens[after].kind == .PunctLParen { local_role = "call" }
                     if parse.is_assignment_op(tokens[after].kind) { local_role = "write" }
                 }
-                if first > 0usize && tokens[first - 1usize].kind == .PunctAmp && !graph.same(local_role, "write") { local_role = "address" }
+                if first > 0usize && node.kind == .NameExpr && tokens[first - 1usize].kind == .PunctAmp && !graph.same(local_role, "write") { local_role = "address" }
                 var local_scratch: [512]u8 = zero
                 var local_scratch_at = nptest_copy(local_scratch[..], 0usize, state.owner)
                 local_scratch[local_scratch_at] = 46u8

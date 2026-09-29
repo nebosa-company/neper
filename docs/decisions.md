@@ -31370,3 +31370,19 @@ Everything else goes through the library's update, and its own slicing-by-8 tabl
 - `tools/fmt_statements` pins the refusal: two diagnostics, exit 1.
 - On Windows and Linux, `layout`, `types`, `raw_strings`, `fmt` and `fmt_reject` are byte-equal, with the new pairs.
 - On Windows, so are `fmt_check`, and `fmt_project` with its write and in-place forms.
+
+## D1708 — A comptime parameter is an indexed `parameter`, and `[N]T` references it (T009)
+
+**Decision.** The index now reports comptime parameters. In `fn pick[T: type, N: usize](xs: [N]T, …)`, `T` and `N` are `parameter` symbols under `pick`. Their signatures, `T: type` and `N: usize`, are what say they are comptime.
+
+- **Why `parameter`.** The closed v1 schema has no other kind that fits, and a comptime parameter is a parameter the brackets bind. So `ComptimeParam` nodes join `index_nested_kind`.
+- **Uses.** They also join the declaration's locals (D483). A use then resolves the way a local's does: the latest of its name declared before the use, inside the declaration.
+- **Type positions.** A comptime parameter is named in type positions, which a local never is. So a `NamedType` resolves too, but only to a comptime parameter, and its role is `type`.
+- **Value positions.** `N` in `[N]T` is an expression and reads as `read`.
+- **Role guesses.** The call, write and address guesses from the next and previous tokens now apply only to an expression. `var copy: [N]T = xs` had made `T` a `write`, because of the `=` after it.
+- **What is not done.** Compiler-origin `protocol` and iterator references still are not reported. Their targets are what the checker resolves (the `dispatch` relation of `uses-file`, D362), and `index-file` reads the tree, not the checker.
+
+**Evidence.**
+- `tools/index_comptime.e` pins two comptime symbols and five references to them. The golden is identical for both targets, pinned in both suites and byte-equal on Linux.
+- The stream validates against the v1 schema.
+- `index`, `index_unsafe`, `index_syntax` and `index_project` are unchanged on both hosts: none of them declares a generic, so no symbol ids moved.
