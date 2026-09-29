@@ -3471,7 +3471,7 @@ fn validate_cli_parse(a: *mem.Arena, report: *Sink, path: str, text: str) -> err
     try parse.init_tree(&tree, nodes, children)
     let parse_error = parse.parse(&tree, text)
     if parse_error != ok && tree.has_failure {
-        try print_parse_failure(report, path, text, tree.failure_token, tree.failure_reserved_name, tree.failure_too_deep)
+        try print_parse_failure(report, path, text, tree.failure_token, tree.failure_reserved_name, tree.failure_too_deep, tree.failure_expected)
         os.exit(1i32)
     }
     ret parse_error
@@ -6849,6 +6849,65 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail)
         ret write_all(file, "`")
     }
+    // A call or an operator named (T028).
+    if checker.failure_kind == .CallUnknown && checker.failure_detail.len != 0usize {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` is not a function, a conversion or a function value, so it cannot be called")
+    }
+    if checker.failure_kind == .CallArity && checker.failure_detail.len != 0usize {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        if checker.failure_detail2.len == 0usize { ret write_all(file, "` is given a number of arguments, or of compile-time arguments in `[...]`, that it does not take") }
+        try write_all(file, "` ")
+        ret write_all(file, checker.failure_detail2)
+    }
+    if checker.failure_kind == .OperatorOperands && checker.failure_detail.len != 0usize {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        // A unary expression starts with its operator.
+        let detail2 = checker.failure_detail2
+        let detail = checker.failure_detail
+        if detail2.len >= detail.len && same(detail2[0usize..detail.len], detail) {
+            try write_all(file, "` does not apply to the operand of `")
+        } else {
+            try write_all(file, "` does not apply to the operands of `")
+        }
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "`")
+    }
+    if checker.failure_kind == .CallDiscarded && checker.failure_detail.len != 0usize {
+        try write_all(file, "the results of `")
+        try write_all(file, checker.failure_detail)
+        if checker.failure_detail2.len != 0usize {
+            try write_all(file, "` besides its err are discarded (")
+            try write_all(file, checker.failure_detail2)
+            ret write_all(file, " left after `try`): bind them with `let`, or `let _ =` what is not needed")
+        }
+        ret write_all(file, "` are discarded: bind them with `let`, or `let _ =` what is not needed")
+    }
+    if checker.failure_kind == .ContextMissing && checker.failure_detail.len != 0usize {
+        try write_all(file, "a value in `")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` has no type: give the literal a suffix, as in `3u32` or `1.5f64`, or the binding a type")
+    }
+    if checker.failure_kind == .TypeInvalid && checker.failure_detail.len != 0usize {
+        try write_all(file, "a type, member or field in `")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` is not valid where it is written")
+    }
+    if checker.failure_kind == .NotSupported && checker.failure_detail.len != 0usize {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` uses something the checker does not support here")
+    }
+    if checker.failure_kind == .ReturnCount && checker.failure_detail.len != 0usize {
+        try write_all(file, "ret gives ")
+        try write_all(file, checker.failure_detail)
+        if same(checker.failure_detail, "1") { try write_all(file, " value") } else { try write_all(file, " values") }
+        try write_all(file, " and this function returns ")
+        ret write_all(file, checker.failure_detail2)
+    }
     if checker.failure_kind == .NonExhaustive {
         try write_all(file, "non-exhaustive switch; missing member `")
         try write_all(file, checker.failure_detail)
@@ -7047,7 +7106,7 @@ fn print_barrier_failure(report: *Sink, path: str, text: str, opener: lex.Token,
     ret emit_diagnostic(report, path, text, no_lines[0usize..0usize], opener, true, "E-SYNTAX-0012", message.capture[0usize..message.count])
 }
 
-fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, reserved_name: bool, too_deep: bool) -> err {
+fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, reserved_name: bool, too_deep: bool, expected: str) -> err {
     var no_lines: [1]usize = zero
     var message_storage: [1024]u8 = zero
     var message = capture_sink(message_storage[..])
@@ -7065,7 +7124,7 @@ fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, re
         // A token the scanner refused is a lexical error under its own code (D215).
         if token.kind == .Invalid {
             code = lex.invalid_code(text, token)
-            try write_all(&message, "invalid token")
+            try write_invalid_literal(&message, text, token)
         } else {
             try write_all(&message, "unexpected ")
             if token.kind == .Eof {
@@ -7079,9 +7138,64 @@ fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, re
                     try write_all(&message, "`")
                 }
             }
+            if expected.len != 0usize {
+                try write_all(&message, "; expected ")
+                try write_all(&message, expected)
+            }
         }
     }
     ret emit_diagnostic(report, path, text, no_lines[0usize..0usize], token, true, code, message_storage[..message.count])
+}
+
+// What is wrong with a token the scanner refused (T028): for a quoted literal, the
+// escape it does not know with the ones it does, a missing closing quote, a control
+// byte, or a character literal that is not one character; otherwise `invalid token`.
+fn write_invalid_literal(message: *Sink, text: str, token: lex.Token) -> err {
+    let start = usize(token.start)
+    var end = usize(token.end)
+    if end > text.len { end = text.len }
+    if start < text.len && text[start] >= 128u8 { ret write_all(message, "a byte that is not valid UTF-8, or a non-ASCII character outside a string, character literal or comment") }
+    if start < text.len && text[start] == 9u8 { ret write_all(message, "a tab; indent and separate with spaces") }
+    if start < text.len && (text[start] < 32u8 || text[start] == 127u8) { ret write_all(message, "a control byte outside a string or character literal") }
+    if start >= end || (text[start] != 34u8 && text[start] != 39u8) { ret write_all(message, "invalid token") }
+    let quote = text[start]
+    var noun = "string literal"
+    if quote == 39u8 { noun = "character literal" }
+    var at = start + 1usize
+    while at < end && text[at] != quote {
+        let byte = text[at]
+        if byte == 92u8 && at + 1usize < end {
+            let escaped = text[at + 1usize]
+            var legal = escaped == 110u8 || escaped == 116u8 || escaped == 114u8 || escaped == 92u8 || escaped == 34u8 || escaped == 39u8 || escaped == 48u8
+            var width = 2usize
+            if escaped == 120u8 {
+                legal = at + 3usize < end && lex.is_hex(text[at + 2usize]) && lex.is_hex(text[at + 3usize])
+                width = 4usize
+                if at + width > end { width = end - at }
+            }
+            if !legal {
+                try write_all(message, "invalid escape `")
+                try write_all(message, text[at..at + width])
+                try write_all(message, "` in a ")
+                try write_all(message, noun)
+                ret write_all(message, "; the escapes are \\n \\t \\r \\\\ \\\" \\' \\0 and \\xHH")
+            }
+            at += width
+            continue
+        }
+        if byte < 32u8 && byte != 10u8 && byte != 13u8 {
+            try write_all(message, "a control byte inside a ")
+            try write_all(message, noun)
+            ret write_all(message, "; write it as an escape")
+        }
+        at += 1usize
+    }
+    if at >= end {
+        try write_all(message, noun)
+        ret write_all(message, " is not closed before the end of the line")
+    }
+    if quote == 39u8 { ret write_all(message, "a character literal holds exactly one character") }
+    ret write_all(message, "invalid token")
 }
 
 // Every module is parsed while the graph is loaded, so a syntax error anywhere in
@@ -7782,7 +7896,7 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
         if loaded.failure_barrier {
             try print_barrier_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_keyword)
         } else {
-            try print_parse_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_reserved_name, loaded.failure_too_deep)
+            try print_parse_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_reserved_name, loaded.failure_too_deep, loaded.failure_expected)
         }
         try finish_report(report)
         os.exit(1i32)
@@ -8024,21 +8138,23 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
             report.symbol_text = lex.token_text(g.modules[resolver.failure_module].text, resolver.failure_token)
         }
         report.near_text = resolver.failure_near
+        // The name itself in the message (T028), so a second site reads apart from an
+        // unfixed first one.
+        var near_storage: [512]u8 = zero
+        var near_at = tool.nptest_copy(near_storage[..], 0usize, "unknown value name `")
+        near_at = tool.nptest_copy(near_storage[..], near_at, report.symbol_text)
+        near_at = tool.nptest_copy(near_storage[..], near_at, "`")
         if resolver.failure_near.len != 0usize {
-            var near_storage: [256]u8 = zero
-            var near_at = tool.nptest_copy(near_storage[..], 0usize, "unknown value name; did you mean `")
+            near_at = tool.nptest_copy(near_storage[..], near_at, "; did you mean `")
             near_at = tool.nptest_copy(near_storage[..], near_at, resolver.failure_near)
             near_at = tool.nptest_copy(near_storage[..], near_at, "`?")
             report.fix_text = resolver.failure_near
             report.fix_at = usize(resolver.failure_token.start)
             report.fix_end = usize(resolver.failure_token.end)
             report.fix_kind = 4u8
-            let near_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", near_storage[0usize..near_at])
-            report.fix_text = ""
-            clear_name_facts(report)
-            ret near_emitted
         }
-        let unknown_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
+        let unknown_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", near_storage[0usize..near_at])
+        report.fix_text = ""
         clear_name_facts(report)
         ret unknown_emitted
     }
@@ -8605,7 +8721,9 @@ fn print_module_syntax(report: *Sink, g: *graph.Graph, module_index: usize) -> e
         } else {
             // The reserved name and the nesting bound are the first failure's flags.
             let first = failure == 0usize
-            try print_parse_failure(report, path, text, at, first && tree.failure_reserved_name, first && tree.failure_too_deep)
+            var wanted = ""
+            if first { wanted = tree.failure_expected }
+            try print_parse_failure(report, path, text, at, first && tree.failure_reserved_name, first && tree.failure_too_deep, wanted)
         }
         report.as_note = false
         failure += 1usize

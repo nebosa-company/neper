@@ -14,6 +14,9 @@ type Tree = struct {
     child_count: usize,
     errors: usize,
     failure_token: lex.Token,
+    // What the parser wanted at `failure_token` (T028): `a name`, `` `)` ``, `an
+    // expression`; empty when it cannot say.
+    failure_expected: str,
     failure_reserved_name: bool,
     // The failure is section 3's nesting bound (D341): the token is where the
     // 128th level opened.
@@ -56,6 +59,7 @@ fn init_tree(tree: *Tree, nodes: []syntax.Node, children: []u32) -> err {
     tree.errors = 0usize
     var no_token: lex.Token = zero
     tree.failure_token = no_token
+    tree.failure_expected = ""
     tree.failure_reserved_name = false
     tree.failure_too_deep = false
     tree.has_failure = false
@@ -102,6 +106,9 @@ type Parser = struct {
     barrier_pending: bool,
     barrier_keyword: lex.Token,
     barrier_opener: lex.Token,
+    // The last thing the parser wanted and did not get, and where (T028).
+    expected: str,
+    expected_start: usize,
 }
 
 // Spec section 3: a syntax error reports where it is. The first declaration to
@@ -113,6 +120,8 @@ fn record_failure(p: *Parser, token: lex.Token, reserved_name: bool) {
     if p.barrier_pending { at = p.barrier_opener }
     if !p.failure_frozen && !p.tree.has_failure {
         p.tree.failure_token = at
+        p.tree.failure_expected = ""
+        if p.expected.len != 0usize && p.expected_start == usize(at.start) { p.tree.failure_expected = p.expected }
         p.tree.failure_reserved_name = reserved_name
         p.tree.has_failure = true
     }
@@ -149,6 +158,7 @@ fn init(tree: *Tree, source: str) -> Parser {
     p.tree.errors = 0usize
     var no_token: lex.Token = zero
     p.tree.failure_token = no_token
+    p.tree.failure_expected = ""
     p.tree.failure_reserved_name = false
     p.tree.failure_too_deep = false
     p.tree.has_failure = false
@@ -263,9 +273,32 @@ fn add_top_parent_since(p: *Parser, kind: syntax.Kind, token_start: usize, token
 }
 
 fn require(p: *Parser, expected: lex.Kind) -> err {
-    if p.current.kind != expected { ret InvalidSyntax }
+    if p.current.kind != expected { ret expect_failed(p, expected_text(expected)) }
     try advance(p)
     ret ok
+}
+
+// What the parser wanted where it stopped (T028), kept with the token's offset so the
+// report says it only when that token is the one the failure names.
+fn expect_failed(p: *Parser, wanted: str) -> err {
+    p.expected = wanted
+    p.expected_start = usize(p.current.start)
+    ret InvalidSyntax
+}
+
+// A kind `require` can miss, as the report spells it; empty for the keywords a caller
+// consumes only after seeing them.
+fn expected_text(kind: lex.Kind) -> str {
+    if kind == .Identifier { ret "a name" }
+    if kind == .PunctLParen { ret "`(`" }
+    if kind == .PunctRParen { ret "`)`" }
+    if kind == .PunctLBrace { ret "`{`" }
+    if kind == .PunctLBracket { ret "`[`" }
+    if kind == .PunctRBracket { ret "`]`" }
+    if kind == .PunctColon { ret "`:`" }
+    if kind == .PunctAssign { ret "`=`" }
+    if kind == .KwIn { ret "`in`" }
+    ret ""
 }
 
 fn is_top_barrier(kind: lex.Kind) -> bool {
@@ -620,7 +653,7 @@ fn parse_primary_node(p: *Parser) -> err {
         try add_parent_node(p, .GroupExpr, token_start, p.token_index, nested[..])
         ret ok
     }
-    ret InvalidSyntax
+    ret expect_failed(p, "an expression")
 }
 
 fn parse_call_postfix(p: *Parser, receiver: usize) -> err {
@@ -636,7 +669,7 @@ fn parse_call_postfix(p: *Parser, receiver: usize) -> err {
             try advance(p)
             try skip_separators(p)
         } else {
-            if p.current.kind != .PunctRParen { ret InvalidSyntax }
+            if p.current.kind != .PunctRParen { ret expect_failed(p, "`,` or `)`") }
         }
     }
     try leave_soft(p)
@@ -1103,7 +1136,8 @@ fn parse_binding_node(p: *Parser) -> err {
         try advance(p)
     } else {
         if lex.is_keyword(p.scanner.source, p.current) { record_failure(p, p.current, true) }
-        try require(p, .PunctLParen)
+        if p.current.kind != .PunctLParen { ret expect_failed(p, "a name or `(`") }
+        try advance(p)
         enter_soft(p)
         try skip_separators(p)
         var items = 0usize

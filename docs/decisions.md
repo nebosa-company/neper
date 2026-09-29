@@ -30795,3 +30795,47 @@ AES derived every S-box value from the GF(2⁸) inverse, 16 bytes a round, and e
 - The plain diagnostic is unchanged.
 
 **Not yet.** The second half of T029's bar: `lang-stats.py` showing E-NAME-0003 no longer the most repeated code needs transcripts written after this lands.
+
+## D1679 — A diagnostic names its subject: the callee, the operator, the counts, the escape, the name (T028)
+
+**Problem.** In 2026-09-20..27, 24 of 42 consecutive failed builds repeated the error code of the build before. Many repeated messages named no subject, so a second site read the same as an unfixed first one:
+
+- E-TYPE-9999 printed an internal error name: `type checking failed: check.ArgumentCount`, `.UnknownCallable`, `.InvalidOperator`, `.MissingContext`, `.InvalidType`, `.Unsupported`.
+- E-LEX-0003 said `invalid token`.
+- E-NAME-9999 said `unknown value name`.
+- E-TYPE-0003 said `ret gives a different number of values`.
+- E-SYNTAX-9999 said `unexpected ==`.
+
+**Decision.** Each message names what it is about. The internal names become codes of their own in `docs/diagnostics.md`.
+
+| was | now |
+|---|---|
+| `check.ArgumentCount`, at the call | E-TYPE-0005: `` `take` takes 1 argument and this call gives 0 ``. A wrong count of compile-time arguments names the callee as written, `` `mem.alloc[u8, i32]` `` |
+| `check.ArgumentCount`, at a discarded result | E-TYPE-0007: `` the results of `value` are discarded ``. Under `try` it also counts what is left. Under `defer`, D950's wording stays |
+| `check.UnknownCallable` | E-NAME-0004: `` `d.VALUE` is not a function, a conversion or a function value `` |
+| `check.InvalidOperator` | E-TYPE-0006: `` `+` does not apply to the operands of `true + false` ``, at the operator's token, for the innermost unary or binary expression it passes |
+| `check.MissingContext` | E-TYPE-0001 (already documented, never emitted): `` a value in `let value = 1` has no type `` |
+| `check.InvalidType`, `check.Unsupported` | E-TYPE-0008, E-TYPE-0009: the statement's first line quoted |
+| `unknown value name` | `` unknown value name `totl`; did you mean `total`? `` |
+| `ret gives a different number of values…` | `ret gives 1 value and this function returns 2` |
+| `invalid token` (quoted literal) | the escape and the legal set (`` invalid escape `\q`; the escapes are \n \t \r \ \" \' \0 and \xHH ``), an unclosed literal, a control byte, a character literal of more than one character |
+| `invalid token` (E-LEX-0001, -0002) | a non-UTF-8 or non-ASCII byte outside a literal or comment; a tab |
+| `unexpected X` | `unexpected X; expected Y`, where the parser knows Y: a `require` that failed, an expression, `,` or `)` in a call, a name or `(` after `let` |
+
+**How.**
+
+- The checker records the subject where it is known: the call wrapper for callee and arity, `check_expr` for an operator, the statement fallback for the three kinds with no site of their own. The first record wins, so it is the innermost.
+- The parser keeps what it wanted with the offset it wanted it at. The report says it only when that offset is the failure's token.
+- The C bootstrap says the same two messages its neper-0 fixtures pin (unknown name, `ret` count), so the self-host parity check stays byte-equal.
+
+**Evidence.**
+
+- 286 check and scope fixtures were compared old against new. The 45 whose message changed were read one by one. Seven are now pinned by text in both suites; `variadic_drop`'s warm-build refusal moves to the call, at 5:9.
+- The conformance goldens change only in their messages: `cascade`, `name_near`, `return_count`, `scope`, `syntax_recovery` and `lexical`, and six tools goldens that now carry `expected an expression`.
+- They are byte-equal on Linux.
+- neper-0 parity with the rebuilt bootstrap: 0 differences on both hosts.
+
+**Not yet.**
+
+- `lang-stats.py`'s repeat% and 1-edit% over transcripts written after this.
+- No fixture reaches E-TYPE-0009.

@@ -3578,7 +3578,7 @@ check_protocol_diagnostic protocol_no_fallback 'main.e:6:9: error[E-NAME-9999]: 
 # Each situation now has its own text, and each is pinned to the message and not merely
 # to the rejection.
 check_protocol_diagnostic return_type 'main.e:5:9: error[E-TYPE-0002]: the returned value does not have the declared return type'
-check_protocol_diagnostic return_count 'main.e:4:5: error[E-TYPE-0003]: ret gives a different number of values than this function returns'
+check_protocol_diagnostic return_count 'main.e:4:5: error[E-TYPE-0003]: ret gives 1 value and this function returns 2'
 check_protocol_diagnostic return_values_unexpected 'main.e:4:5: error[E-TYPE-0003]: this function returns nothing, so ret takes no value'
 check_protocol_diagnostic return_inside_defer 'main.e:5:9: error[E-TYPE-9999]: ret is not legal inside defer'
 check_protocol_diagnostic try_cast 'main.e:4:5: error[E-ERROR-9999]: try needs a call that can fail; a conversion cannot'
@@ -3587,6 +3587,13 @@ check_protocol_diagnostic try_no_propagate 'main.e:8:5: error[E-ERROR-9999]: try
 check_protocol_diagnostic try_inside_defer 'main.e:9:9: error[E-ERROR-9999]: try is not legal inside defer'
 check_protocol_diagnostic aggregate_field_count 'main.e:12:17: error[E-TYPE-9999]: this literal gives a different number of fields than `Bad` declares'
 check_protocol_diagnostic break_outside_loop 'main.e:5:5: error[E-TYPE-9999]: break requires an enclosing loop or switch'
+# T028: what was an internal error name, now its subject under a code of its own.
+check_protocol_diagnostic argument_count 'main.e:4:5: error[E-TYPE-0005]: `take` takes 1 argument and this call gives 0'
+check_protocol_diagnostic qualified_not_callable 'main.e:4:5: error[E-NAME-0004]: `d.VALUE` is not a function, a conversion or a function value, so it cannot be called'
+check_protocol_diagnostic invalid_operator 'main.e:2:22: error[E-TYPE-0006]: `+` does not apply to the operands of `true + false`'
+check_protocol_diagnostic call_result_ignored 'main.e:6:5: error[E-TYPE-0007]: the results of `value` are discarded'
+check_protocol_diagnostic missing_context 'main.e:2:5: error[E-TYPE-0001]: a value in `let value = 1` has no type'
+check_protocol_diagnostic tuple_annotation 'main.e:6:5: error[E-TYPE-0008]: a type, member or field in `let (first, second): i32 = pair()` is not valid where it is written'
 # `os.thread_create[Ctx]` binds a context type at the call and checks the entry point
 # against it. The checker half only -- the runtime has no `neper_os_thread_create` yet.
 thread_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/thread_create_accepted/src/main.e" "$repo" x64 linux)
@@ -4640,7 +4647,7 @@ for hot_mode in --release --time; do
     drop_clean=$("$test_build/neper-self" emit-executable "$drop_scratch/src/main.e" "$repo" x64 linux "$test_build/drop-clean$hot_mode" $hot_mode 2>&1) || drop_status=$?
     [ "$drop_status" -eq 1 ]
     [ "$(echo "$drop_warm" | grep 'error\[')" = "$(echo "$drop_clean" | grep 'error\[')" ]
-    echo "$drop_warm" | grep -q 'call\.e:5:5: error\[E-TYPE-9999\]: type checking failed: check\.ArgumentCount' || { echo "the warm build after an extern lost its ... is not the clean build's refusal: $drop_warm" >&2; exit 1; }
+    echo "$drop_warm" | grep -q 'call\.e:5:9: error\[E-TYPE-0005\]: `plat\.ident` takes 1 argument and this call gives 2' || { echo "the warm build after an extern lost its ... is not the clean build's refusal: $drop_warm" >&2; exit 1; }
     "$test_build/drop$hot_mode"
     # Whether a helper is device-only is in its signature (D1677): a warm build after
     # `lane.helper` becomes device-only refuses its CPU caller as the clean build does,
@@ -6246,9 +6253,9 @@ chmod +x "$futex_path"
 # the usage line, under its registered code.
 check_protocol_diagnostic module_missing 'main.e:1:1: error[E-MODULE-0001]: `use nowhere` names no module under the source root or the toolchain'
 check_protocol_diagnostic module_cycle 'b.e:1:1: error[E-MODULE-0002]: `use main` closes an import cycle'
-check_protocol_diagnostic lex_literal 'main.e:3:13: error[E-LEX-0003]: invalid token'
-check_protocol_diagnostic lex_tab 'main.e:3:1: error[E-LEX-0002]: invalid token'
-check_protocol_diagnostic lex_utf8 'main.e:2:21: error[E-LEX-0001]: invalid token'
+check_protocol_diagnostic lex_literal 'main.e:3:13: error[E-LEX-0003]: string literal is not closed before the end of the line'
+check_protocol_diagnostic lex_tab 'main.e:3:1: error[E-LEX-0002]: a tab; indent and separate with spaces'
+check_protocol_diagnostic lex_utf8 'main.e:2:21: error[E-LEX-0001]: a byte that is not valid UTF-8'
 cli_status=0
 cli_output=$($test_build/neper-self 2>&1) || cli_status=$?
 [ "$cli_status" -eq 1 ]

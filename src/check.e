@@ -159,6 +159,20 @@ type DiagnosticKind = enum u8 {
     // A use of a declaration whose own failure is reported already (D950): the detail
     // is its name. The report puts it under that failure, as a note.
     DeclarationFailed,
+    // A call of something that is not a function, a call with the wrong number of
+    // arguments, and an operator its operands do not support (T028): the detail is
+    // the callee or the operator as written, the second detail says the rest.
+    CallUnknown,
+    CallArity,
+    OperatorOperands,
+    // A call statement whose results nothing takes; the second detail, under `try`,
+    // is how many are left once the err is taken.
+    CallDiscarded,
+    // A statement that failed as MissingContext, InvalidType or Unsupported with no
+    // nearer site recorded (T028): the detail is its first line.
+    ContextMissing,
+    TypeInvalid,
+    NotSupported,
 }
 
 type Kind = enum u8 {
@@ -10996,6 +11010,10 @@ fn meta_access_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
 
 fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
     let (info, call_error) = check_call_cached(c, g, tree, module_index, node)
+    // The call named (T028) where no site nearer the cause recorded more; an inner
+    // call's failure is recorded before its caller's, so this is the innermost call.
+    if call_error == UnknownCallable { record_failure(c, module_index, node, .CallUnknown, callee_source(c, g, tree, module_index, node), "") }
+    if call_error == ArgumentCount { record_failure(c, module_index, node, .CallArity, callee_source(c, g, tree, module_index, node), "") }
     if call_error != ok { ret (info, call_error) }
     let resource_error = resource_call(c, g, tree, module_index, node, info)
     ret (info, resource_error)
@@ -11432,7 +11450,10 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                     }
                     let function = info.function
                     if child_position > function.parameter_count {
-                        if !function.variadic { ret (info, ArgumentCount) }
+                        if !function.variadic {
+                            record_call_arity(c, g, tree, module_index, node, function.parameter_count, false, call_argument_count(tree, node))
+                            ret (info, ArgumentCount)
+                        }
                         // A C variadic argument crosses as its own type, with no default
                         // promotion: what C would widen is refused, and the caller writes
                         // the conversion (section 5).
@@ -11692,8 +11713,10 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if !has_function { ret (info, UnknownCallable) }
     if info.protocol_pending { ret (info, ok) }
     let function = info.function
-    if child_position == 0usize || child_position - 1usize < function.parameter_count { ret (info, ArgumentCount) }
-    if !function.variadic && child_position - 1usize != function.parameter_count { ret (info, ArgumentCount) }
+    if child_position == 0usize || child_position - 1usize < function.parameter_count || (!function.variadic && child_position - 1usize != function.parameter_count) {
+        record_call_arity(c, g, tree, module_index, node, function.parameter_count, function.variadic, call_argument_count(tree, node))
+        ret (info, ArgumentCount)
+    }
     if function.intrinsic && same(function.name, "push_err") && function.module_index < g.count && same(g.modules[function.module_index].name, "e.str") {
         let (instance_index, instance_error) = error_push_instance(c, module_index, function.module_index)
         if instance_error != ok { ret (info, instance_error) }
@@ -13049,6 +13072,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             if result_known { c.memo_tables[module_index][node_index] = (expected_key << 32usize) | (result_id + 1usize) }
         }
         if fresh_error == TypeMismatch { note_mismatch_expression(c, tree, node_index) }
+        if fresh_error == InvalidOperator { note_operator(c, g, tree, module_index, node_index) }
         ret (fresh, fresh_error)
     }
     var slot = 0usize
@@ -13066,7 +13090,26 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         c.expr_cache[slot] = ExprCacheEntry { generation: c.call_generation, token_start: start, token_end: end, expected: expected, result: fresh }
     }
     if fresh_error == TypeMismatch { note_mismatch_expression(c, tree, node_index) }
+    if fresh_error == InvalidOperator { note_operator(c, g, tree, module_index, node_index) }
     ret (fresh, fresh_error)
+}
+
+// An operator its operands do not support (T028), named with the expression it is
+// in: the innermost unary or binary expression the failure passes through, since the
+// first record wins.
+fn note_operator(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) {
+    let node = tree.nodes[node_index]
+    if node.kind != .UnaryExpr && node.kind != .BinaryExpr { ret }
+    var operator_at = usize(node.token_start)
+    if node.kind == .BinaryExpr {
+        let first = usize(node.first_child)
+        if usize(node.child_count) == 0usize || !parse.child_is_node_at(tree, first) { ret }
+        operator_at = usize(tree.nodes[parse.child_index_at(tree, first)].token_end)
+        while operator_at < c.token_count && c.tokens[operator_at].kind == .Newline { operator_at += 1usize }
+    }
+    if operator_at >= c.token_count || module_index >= g.count { ret }
+    let operator = lex.token_text(g.modules[module_index].text, c.tokens[operator_at])
+    record_failure_token(c, module_index, c.tokens[operator_at], .OperatorOperands, operator, node_source(c, g, module_index, node))
 }
 
 // The expression a mismatch surfaced at (D444): every frame the error passes
@@ -13834,7 +13877,11 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         if count != 0usize { ret ReturnValuesUnexpected }
         ret ok
     }
-    if count != function.return_count { ret ReturnCount }
+    if count != function.return_count {
+        // Both counts in the message (T028).
+        record_failure(c, module_index, node, .ReturnCount, decimal_text(c, count), decimal_text(c, function.return_count))
+        ret ReturnCount
+    }
     var return_index = 0usize
     at = usize(node.first_child)
     while at < end {
@@ -14187,8 +14234,11 @@ fn check_call_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
     if !found { ret parse.InvalidSyntax }
     let (call, call_error) = check_call(c, g, tree, module_index, tree.nodes[child_index])
     if call_error != ok { ret call_error }
-    if call.is_cast { ret ArgumentCount }
-    if call.function.return_count != 0usize { ret ArgumentCount }
+    if call.is_cast || call.function.return_count != 0usize {
+        // Named (T028); under `defer` the statement's own wording says it (D950).
+        if c.defer_depth == 0usize { record_failure(c, module_index, tree.nodes[child_index], .CallDiscarded, callee_source(c, g, tree, module_index, tree.nodes[child_index]), "") }
+        ret ArgumentCount
+    }
     ret ok
 }
 
@@ -14202,7 +14252,10 @@ fn check_try_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if call.is_cast { ret TryCast }
     let (remaining, try_error) = check_try_results(c, call, function)
     if try_error != ok { ret try_error }
-    if remaining != 0usize { ret ArgumentCount }
+    if remaining != 0usize {
+        record_failure(c, module_index, call_node, .CallDiscarded, callee_source(c, g, tree, module_index, call_node), decimal_text(c, remaining))
+        ret ArgumentCount
+    }
     ret resource_audit(c, g, module_index, node, 0usize, .ResourceCleanupForgotten)
 }
 
@@ -15464,7 +15517,15 @@ fn check_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pa
     let locals_before = c.local_count
     let statement_error = check_statement_inner(c, r, g, tree, module_index, node_index, function)
     if statement_error != ok && !c.failure_has_token {
-        record_failure(c, module_index, node, default_failure_kind(statement_error, node), "", "")
+        // Three failures with no site of their own name the statement's first line
+        // (T028), under codes of their own.
+        var kind = default_failure_kind(statement_error, node)
+        if kind == .Generic && statement_error == MissingContext { kind = .ContextMissing }
+        if kind == .Generic && statement_error == InvalidType { kind = .TypeInvalid }
+        if kind == .Generic && statement_error == Unsupported { kind = .NotSupported }
+        var detail = ""
+        if kind == .ContextMissing || kind == .TypeInvalid || kind == .NotSupported { detail = first_line(node_source(c, g, module_index, node)) }
+        record_failure(c, module_index, node, kind, detail, "")
     }
     // The pointers this statement took (D351): kept by a binding whose type can hold
     // one, by a store of the pointer or a literal, or by a `ret`; dropped otherwise.
@@ -16468,6 +16529,13 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ArrayLengthType || kind == .InitializerType { ret "E-TYPE-0002" }
     if kind == .GenericTypeArity || kind == .IteratorSignature || kind == .ProtocolSignature { ret "E-TYPE-0003" }
     if kind == .EnumValueRange { ret "E-TYPE-0004" }
+    if kind == .CallUnknown { ret "E-NAME-0004" }
+    if kind == .CallArity { ret "E-TYPE-0005" }
+    if kind == .OperatorOperands { ret "E-TYPE-0006" }
+    if kind == .CallDiscarded { ret "E-TYPE-0007" }
+    if kind == .ContextMissing { ret "E-TYPE-0001" }
+    if kind == .TypeInvalid { ret "E-TYPE-0008" }
+    if kind == .NotSupported { ret "E-TYPE-0009" }
     if kind == .DuplicateEnumValue { ret "E-NAME-0001" }
     if kind == .IteratorMissing || kind == .ProtocolMissing { ret "E-NAME-9999" }
     if kind == .GenericInference { ret "E-TYPE-0001" }
@@ -16548,6 +16616,13 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .ReorderBoundary { ret "@reorder is legal on a struct or a union that crosses no FFI boundary: its layout is neper's, not C's" }
     if kind == .LayoutAttribute { ret "@packed is legal on a struct holding no Atomic, and @align(N) once on a struct or a union with N a power of two; neither combines with @reorder" }
     if kind == .DeclarationFailed { ret "a use of a declaration that failed" }
+    if kind == .CallUnknown { ret "this call's callee is not a function, a conversion or a function value" }
+    if kind == .CallArity { ret "this call gives a different number of arguments than its callee takes" }
+    if kind == .OperatorOperands { ret "this operator does not apply to its operands" }
+    if kind == .CallDiscarded { ret "this call's results are discarded" }
+    if kind == .ContextMissing { ret "a value here has no type: give the literal a suffix or the binding a type" }
+    if kind == .TypeInvalid { ret "a type here is not one this position accepts" }
+    if kind == .NotSupported { ret "this statement uses something the checker does not support" }
     ret "type checking failed"
 }
 
@@ -19178,6 +19253,79 @@ fn line_detail(c: *Checker, g: *graph.Graph, module_index: usize, token_index: u
     if token_index >= c.token_count { ret "" }
     let line = lex.line_of(g.modules[module_index].text, g.modules[module_index].lines, usize(c.tokens[token_index].start))
     ret decimal_text(c, line)
+}
+
+// A node as written (T028), for a message to name what failed; empty when its tokens
+// are not the module's the checker holds.
+fn node_source(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node) -> str {
+    if module_index >= g.count || usize(node.token_end) <= usize(node.token_start) || usize(node.token_end) > c.token_count { ret "" }
+    let text = g.modules[module_index].text
+    let start = usize(c.tokens[usize(node.token_start)].start)
+    let end = usize(c.tokens[usize(node.token_end) - 1usize].end)
+    if start >= end || end > text.len { ret "" }
+    ret text[start..end]
+}
+
+// Four texts as one, in the checker's arena, for a failure's detail; empty when the
+// arena is full.
+fn joined_text(c: *Checker, first: str, second: str, third: str, fourth: str) -> str {
+    let (text, text_error) = mem.alloc[u8](c.arena, first.len + second.len + third.len + fourth.len)
+    if text_error != ok { ret "" }
+    var at = copy_text(text, 0usize, first)
+    at = copy_text(text, at, second)
+    at = copy_text(text, at, third)
+    at = copy_text(text, at, fourth)
+    ret text[0usize..at]
+}
+
+fn copy_text(into: []u8, at: usize, from: str) -> usize {
+    var to = at
+    var index = 0usize
+    while index < from.len && to < into.len {
+        into[to] = from[index]
+        to += 1usize
+        index += 1usize
+    }
+    ret to
+}
+
+// A statement's first line, without the block it opens: what a message can quote.
+fn first_line(text: str) -> str {
+    var end = 0usize
+    while end < text.len && text[end] != 10u8 && text[end] != 13u8 { end += 1usize }
+    var cut = end
+    while cut > 0usize && (text[cut - 1usize] == 32u8 || text[cut - 1usize] == 123u8) { cut = cut - 1usize }
+    if cut > 120usize { cut = 120usize }
+    ret text[0usize..cut]
+}
+
+// A call's callee as written, its first child (T028).
+fn callee_source(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> str {
+    let first = usize(node.first_child)
+    if usize(node.child_count) == 0usize || !parse.child_is_node_at(tree, first) { ret "" }
+    ret node_source(c, g, module_index, tree.nodes[parse.child_index_at(tree, first)])
+}
+
+// A call's argument count: its children that are nodes, less the callee.
+fn call_argument_count(tree: *parse.Tree, node: syntax.Node) -> usize {
+    var count = 0usize
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) { count += 1usize }
+        at += 1usize
+    }
+    if count == 0usize { ret 0usize }
+    ret count - 1usize
+}
+
+// `f` takes N argument(s) and this call gives M, as the second detail (T028).
+fn record_call_arity(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, parameters: usize, variadic: bool, given: usize) {
+    var takes = "takes "
+    if variadic { takes = "takes at least " }
+    var noun = " arguments and this call gives "
+    if parameters == 1usize { noun = " argument and this call gives " }
+    record_failure(c, module_index, node, .CallArity, callee_source(c, g, tree, module_index, node), joined_text(c, takes, decimal_text(c, parameters), noun, decimal_text(c, given)))
 }
 
 fn decimal_text(c: *Checker, value: usize) -> str {

@@ -3710,8 +3710,11 @@ static Type check_expr_inner(Compiler *c, Function *fn, Expr *e) {
             }
             e->type = resolve_name_place(c, fn, e);
             if (e->type.kind == TY_INVALID) {
-                if (e->local_index < 0)
-                    diagnostic_at(c, &e->token, "E-NAME-9999", "unknown value name");
+                if (e->local_index < 0) {
+                    char unknown[192];
+                    snprintf(unknown, sizeof(unknown), "unknown value name `%s`", e->as.name);
+                    diagnostic_at(c, &e->token, "E-NAME-9999", unknown);
+                }
                 return type_make(TY_INVALID, 0);
             }
             return e->type;
@@ -4238,8 +4241,11 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 if (s->as.ret.value_count != fn->return_count) {
                     if (fn->return_count == 0)
                         diagnostic_at(c, &s->token, "E-TYPE-0003", "this function returns nothing, so ret takes no value");
-                    else
-                        diagnostic_at(c, &s->token, "E-TYPE-0003", "ret gives a different number of values than this function returns");
+                    else {
+                        char counts[128];
+                        snprintf(counts, sizeof(counts), "ret gives %d value%s and this function returns %d", s->as.ret.value_count, s->as.ret.value_count == 1 ? "" : "s", fn->return_count);
+                        diagnostic_at(c, &s->token, "E-TYPE-0003", counts);
+                    }
                 }
                 for (return_index = 0; return_index < s->as.ret.value_count && return_index < fn->return_count; ++return_index) {
                     Expr *value = s->as.ret.values[return_index];
