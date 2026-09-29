@@ -30905,10 +30905,9 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 - The short `build --json` stream is unchanged against its golden.
 - Pinned in both suites: the second `--incremental` build reports no check or link phase, and a tampered output is relinked to the first image, which runs.
 
-**Limits.**
+**The manifest.** A build that links nothing still writes its manifest: every module kept as the hot load found it, zero work (no declaration checked either), and the image the file at the output path already is. The incremental suite's warm build now expects `declarations_checked=0` (it was 28 on Windows, 29 on Linux). The other ~600 lines of that suite section pass unchanged.
 
-- The build manifest is the last linking build's; a no-op does not rewrite it.
-- The stamp holds one output path per mode.
+**Limits.** The stamp holds one output path per mode.
 
 ## D1682 — `neper build` and `neper run` of a project (T002)
 
