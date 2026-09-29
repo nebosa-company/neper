@@ -3034,6 +3034,11 @@ $assetInvalidOutput = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 1 -or ($assetInvalidOutput -join "`n") -notmatch 'project\.yaml:1:1: error\[E-MODULE-9999\]: `project\.yaml` has an `assets:` entry the loader does not accept') {
     throw 'an asset manifest entry with an unknown key was not rejected at the manifest'
 }
+# An asset whose file is missing is refused at the manifest, naming the file (T013).
+$assetMissingOutput = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\asset_missing\src\main.e') $repo 'x64' 'windows' (Join-Path $testBuild 'asset-missing-selfhost.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($assetMissingOutput -join "`n") -notmatch 'project\.yaml:1:1: error\[E-MODULE-9999\]: `project\.yaml` declares an asset whose file cannot be read: `assets/gone\.bin`') {
+    throw "a missing asset was not named at the manifest: $assetMissingOutput"
+}
 # `e.gpu` on the CPU backend (D778): the device, queues, buffers, `gpu.launch[K]` over
 # a 1-D and a 2-D kernel with the ids, tokens and every refusal; `examples/saxpy.e`
 # prints the CPU checksum; a kernel called directly, a bare `@gpu` and a host slice

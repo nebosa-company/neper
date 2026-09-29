@@ -7973,9 +7973,8 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
     // The project's asset manifest (D777): what `project.yaml` declares that the
     // loader cannot take is reported at the manifest under E-MODULE-9999.
     if load_error == assets.InvalidManifest || load_error == assets.AssetMissing || load_error == assets.AssetTooLarge {
-        var message = "`project.yaml` has an `assets:` entry the loader does not accept: a name, `path`, `media_type` and `attributes` are what an entry may carry"
-        if load_error == assets.AssetMissing { message = "`project.yaml` declares an asset whose file cannot be read" }
-        if load_error == assets.AssetTooLarge { message = "`project.yaml` declares more assets, attributes or bytes than the registry holds" }
+        var message_storage: [512]u8 = zero
+        let message = asset_failure_message(message_storage[..], load_error)
         let (manifest_path, manifest_path_error) = tool.manifest_join(a, loaded.project.root, "project.yaml")
         if manifest_path_error != ok { ret manifest_path_error }
         var no_token: lex.Token = zero
@@ -12245,6 +12244,31 @@ fn run_arguments(a: *mem.Arena, args: []str) -> err {
     ret dispatch(a, args)
 }
 
+// What `project.yaml`'s assets did wrong (D777), the unreadable file named (T013).
+fn asset_failure_message(storage: []u8, failure: err) -> str {
+    if failure == assets.AssetMissing {
+        var at = tool.nptest_copy(storage, 0usize, "`project.yaml` declares an asset whose file cannot be read: `")
+        at = tool.nptest_copy(storage, at, assets.missing)
+        at = tool.nptest_copy(storage, at, "`")
+        ret storage[0usize..at]
+    }
+    if failure == assets.AssetTooLarge { ret "`project.yaml` declares more assets, attributes or bytes than the registry holds" }
+    ret "`project.yaml` has an `assets:` entry the loader does not accept: a name, `path`, `media_type` and `attributes` are what an entry may carry"
+}
+
+// Which of the compiler's fixed tables a Capacity error is (T013); empty for any other.
+fn capacity_name(result: err) -> str {
+    if result == nir.Capacity { ret "the NIR tables" }
+    if result == graph.Capacity { ret "the module graph" }
+    if result == check.Capacity { ret "the checker's tables" }
+    if result == resolve.Capacity { ret "the resolver's tables" }
+    if result == lookup.Capacity { ret "a symbol index" }
+    if result == em.Capacity { ret "an artifact's tables" }
+    if result == regalloc.Capacity { ret "the register allocator's tables" }
+    if result == emit_x64.Capacity { ret "the machine-code buffer" }
+    ret ""
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let result = run_arguments(a, args)
     if result == ok { ret ok }
@@ -12256,9 +12280,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
         message = "resource limit: the compiler's arena is exhausted; the program is larger than this compiler was built to hold"
         status = 1i32
     }
-    if result == nir.Capacity || result == graph.Capacity || result == check.Capacity || result == resolve.Capacity || result == lookup.Capacity || result == em.Capacity || result == regalloc.Capacity {
+    // A full table named (T013): which one, not an internal failure.
+    var detail_storage: [512]u8 = zero
+    let limit = capacity_name(result)
+    if limit.len != 0usize {
         code = "E-TYPE-9999"
-        message = "resource limit: a compiler table is full; the program is larger than this compiler was built to hold"
+        var at = tool.nptest_copy(detail_storage[..], 0usize, "resource limit: ")
+        at = tool.nptest_copy(detail_storage[..], at, limit)
+        at = tool.nptest_copy(detail_storage[..], at, " is full; the program is larger than this compiler was built to hold")
+        message = detail_storage[0usize..at]
+        status = 1i32
+    }
+    // A form the checker has no rule for, reaching here without a site of its own.
+    if result == check.Unsupported {
+        code = "E-TYPE-0009"
+        message = "the program uses a construct the checker does not support yet"
+        status = 1i32
+    }
+    // The project's `project.yaml` assets (D777, D792), from a command whose load does not
+    // report them at the manifest: the input's failure under the load's own code (T013).
+    if result == assets.InvalidManifest || result == assets.AssetMissing || result == assets.AssetTooLarge {
+        code = "E-MODULE-9999"
+        message = asset_failure_message(detail_storage[..], result)
         status = 1i32
     }
     // A corrupt artifact named on the command line is the input's failure, not the
