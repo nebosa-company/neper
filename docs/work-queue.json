@@ -180,17 +180,6 @@
       "evidence": "`python scripts/validate_stream.py` validates every committed golden against docs/schemas/neper-v1.schema.json, and both suites run it (D250): the 23 `.jsonl` streams under tests/conformance -- one record per line, 895 of them -- and docs/modules.json as a whole document, so the three shapes anything currently emits are covered (`streamRecord`, `buildManifest`, `modulePlan`). The goldens are what the commands emit byte for byte, so validating them validates the emitters. A self-check rejects a header carrying an unregistered command before the corpus runs, so a validator that accepted everything could not pass; a machine without the `jsonschema` package prints a skip rather than failing the suite. The runner's source map (D264) is validated by both suites as a fourth shape; `packageManifest` is in the schema with nothing producing it yet"
     },
     {
-      "id": "T015",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 15,
-      "title": "Generated source maps",
-      "score": 0.9,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Section 8, both halves (D264). The generator: `test` writes `nptest-runner.e.map.json` beside the runner it generates -- `neper-source-map`, the runner's SHA-256, one mapping from the operand's text at its place in the runner to the operand -- validated against the schema by both suites. The consumer: `emit-executable`, `run`, `dis` and `check-file` read `<operand>.map.json` when one lies beside the operand; a diagnostic inside a mapped range is reported at the original span as primary with the generated span related, so a test that does not compile is reported at the test's own line (tests/conformance/tools/test_compile_error.e); a map whose hash is not the operand's, or that is not a source map, is E-TOOL-0001 and the command fails with no artifact written (tests/conformance/tools/stale_map.e). The runner's map has two mappings when the operand's `main` was renamed (D281), the second beginning mid-line. A stale or malformed map is E-TOOL-0001 up front and the analysis still runs unmapped, so the operand's own diagnostics follow it; `check` and `build` then fail with no artifact, as section 8 says (D300, tests/conformance/tools/stale_map_error). The project walks' modules are under `project-src` (D1697). The operand's map holds 32 mappings (D1698, tools/many_mappings maps an error in the twelfth splice to its input on both hosts). A mapping moves the columns of its first line by where each side begins (D1713): an indented splice and the renamed `main`'s own line report the original's column (tools/test_main_line, and five corpus goldens that had recorded the generated column). Not yet: a reader beyond the key scan this one document shape needs"
-    },
-    {
       "id": "T016",
       "category": "tooling",
       "group": "Tooling",
