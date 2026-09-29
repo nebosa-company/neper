@@ -30962,3 +30962,23 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 - The golden is byte-equal on Linux, and `tools/test`'s golden is unchanged on both hosts.
 
 **Not yet.** A test calling the operand's own `main` needs a seam per call site in the runner's map, beyond the eight mappings T015 lists.
+
+## D1685 — The build manifest lists the libraries the image imports (T014)
+
+**Decision.** `libraries` in `.neper/<mode>/build-manifest.json` was always empty. It now has one entry per library the image imports by name, in the builder's import order. Each entry is `requested` as written, the ordered `search_roots`, and the `resolved` path with its `sha256`.
+
+- **Resolution.** An imported library is bound by the target's loader when the program starts, so the manifest resolves the way that loader will:
+  - Windows: the executable's directory, then `%SystemRoot%\System32`, with `.dll` added to a name without an extension, as the loader does.
+  - Linux: `/lib/x86_64-linux-gnu`, `/usr/lib/x86_64-linux-gnu`, `/lib64`, `/usr/lib64`, `/lib`, `/usr/lib`, with the `DT_NEEDED` name as written.
+  - A name with a separator is its own path.
+- **When nothing is found.** A build for a target that is not this machine's lists no roots and resolves nothing, and so does a library not found. The schema admits `null` for `resolved` and `sha256`.
+- **A build that links nothing** (D1681) has no builder. The stamp carries the library names after its first line, so the no-op's manifest lists what the linking build's listed.
+
+**Evidence.**
+
+- `link/extern_import` resolves `kernel32` to `C:\WINDOWS/System32/kernel32.dll` and `msvcrt` likewise. Its hash equals `certutil`'s.
+- On Linux, `libc.so.6` resolves to `/lib/x86_64-linux-gnu/libc.so.6` with `hashlib`'s digest.
+- A Windows build for Linux lists `libc.so.6` with no roots and `null`s.
+- The no-op build's `libraries` equals the linking build's.
+- `validate_stream.py` accepts the manifests.
+- Pinned after the `extern_import` run in both suites.

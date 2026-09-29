@@ -767,7 +767,12 @@ object with `schema:"neper-build-manifest"`, `version:1`, `tool_version`,
 `language_version`, `grammar_revision`, `target`, `mode`, `root_module`, `inputs`,
 `dependencies`, `libraries`, `assets`, `artifacts`, `unsafe`, and `options`. Inputs and dependencies carry
 source identifiers and SHA-256 hashes; libraries carry the requested name, ordered
-search roots, resolved source identifier or absolute external path, and SHA-256;
+search roots, resolved source identifier or absolute external path, and SHA-256 --
+one per library the image imports by name, in import order, resolved as the target's
+loader will (D1685): the executable's directory then `System32` on Windows, `.dll`
+added to a name without an extension; the multiarch and plain library directories on
+Linux, the name as written; a name with a separator is its own path; built on another
+machine than the target's, or not found, `resolved` and `sha256` are `null`;
 assets carry logical name, source identifier, media type, sorted attributes, byte
 size and SHA-256;
 artifacts carry project-relative paths, kind, target and SHA-256; the operand's

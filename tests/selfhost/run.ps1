@@ -3991,6 +3991,11 @@ $externWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $externWritten -ne 'executable written') { throw 'imported extern executable emission failed' }
 & $externPath
 if ($LASTEXITCODE -ne 0) { throw 'an imported extern call reached the wrong symbol' }
+# The manifest lists each imported library where the loader finds it, with that file's
+# SHA-256 (T014): `kernel32` is `System32\kernel32.dll`.
+$externManifest = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'fixtures\link\extern_import\.neper\debug\build-manifest.json') | ConvertFrom-Json
+$externKernel = @($externManifest.libraries | Where-Object { $_.requested -eq 'kernel32' })
+if ($externKernel.Count -ne 1 -or $externKernel[0].resolved -notmatch 'System32.kernel32\.dll$' -or $externKernel[0].sha256 -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $externKernel[0].resolved).Hash.ToLower()) { throw "the manifest does not resolve kernel32: $($externManifest.libraries | ConvertTo-Json -Compress)" }
 # 138 libc and libm imports (D1594): Linux-only to run, so here it is cross-emitted. Past about
 # 58 externs a module's unsafe inventory overflowed its buffer ("cannot lower `main`") on
 # either target, and the ELF linker refused anything past its one page of loader metadata.

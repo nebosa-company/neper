@@ -3636,6 +3636,15 @@ extern_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$extern_written" = 'executable written' ]
 chmod +x "$extern_path"
 "$extern_path"
+# The manifest lists each imported library where the loader finds it, with that file's
+# SHA-256 (T014): `libc.so.6` under one of the library directories.
+python3 - "$repo/tests/selfhost/fixtures/link/extern_import/.neper/debug/build-manifest.json" <<'PYEOF'
+import hashlib, json, sys
+libraries = json.load(open(sys.argv[1]))['libraries']
+libc = [l for l in libraries if l['requested'] == 'libc.so.6']
+assert len(libc) == 1 and libc[0]['resolved'], libraries
+assert libc[0]['sha256'] == hashlib.sha256(open(libc[0]['resolved'], 'rb').read()).hexdigest(), libc
+PYEOF
 # A C variadic through the same dynamic slots: `snprintf` with an `f64` in a `...`
 # position, which System V wants counted in `al`.
 variadic_path="$test_build/extern-variadic-selfhost"
