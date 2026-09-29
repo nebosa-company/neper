@@ -31224,3 +31224,27 @@ With this, T022's "dependency and library hashes the manifest does not yet carry
   - `r##""##` → `r""`
 - `layout` and `types` are unchanged.
 - One raw string in the tree could be shorter: `link/advanced`'s `r#"x\ny"#`, which exists to exercise the `#` form. Nothing formats it, so it stays.
+
+## D1701 — The compiler's CRC-32C comes from `e.algo.hash` (T021)
+
+**Decision.** `e.algo.hash` has CRC-32C:
+
+- `type Crc32c`, and `crc32c`, `crc32c_init`, `crc32c_update` and `crc32c_done`, beside CRC-32 and in its shape;
+- Castagnoli, the reflected polynomial 0x82F63B78;
+- the update takes short input a bit at a time, and input past 256 bytes eight bytes at a time against eight tables it builds on the spot. A module has no state to keep them in.
+
+The fence lists the five declarations, and the surface check passes.
+
+The compiler's `artifact_hash.crc32c` keeps two things of its own:
+
+- the CRC32 instruction for what it takes (D332);
+- the zeroed checksum field (D320), fed as zeros.
+
+Everything else goes through the library's update, and its own slicing-by-8 tables (D224, D320) are gone. This is the half of T021 D333 planned. SHA-256 still waits on the bootstrap's deletion (D208), which refuses `e.crypto.hash`.
+
+**Evidence.**
+
+- `link/algo_hash` pins the check value `crc32c("123456789") = 3808858755`, a split update, and a thousand-byte input on the table path, equal to a bitwise reference, split or whole. Pinned on both hosts.
+- Forty artifacts written by earlier compilers validate under the new code, so the checksum is the same.
+- The compiler's fixed point holds, and the C bootstrap's stage 1 builds a stage 2 byte-equal to it.
+- The suite's incremental-build section, about 600 lines of artifact reuse, passes.

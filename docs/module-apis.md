@@ -2787,6 +2787,7 @@ GJK leaving its simplex) and `epa`; `barnes_hut_build/force` over an octree of m
 ```neper
 type XxHash64 = struct { seed: u64, total: u64, v1: u64, v2: u64, v3: u64, v4: u64, buffer: [32]u8, buffered: u8 }
 type Crc32 = struct { value: u32 }
+type Crc32c = struct { value: u32 }
 
 fn fnv1a32(data: []const u8) -> u32
 fn fnv1a64(data: []const u8) -> u64
@@ -2798,6 +2799,10 @@ fn crc32(data: []const u8) -> u32
 fn crc32_init() -> Crc32
 fn crc32_update(h: *Crc32, data: []const u8)
 fn crc32_done(h: *const Crc32) -> u32
+fn crc32c(data: []const u8) -> u32
+fn crc32c_init() -> Crc32c
+fn crc32c_update(h: *Crc32c, data: []const u8)
+fn crc32c_done(h: *const Crc32c) -> u32
 fn adler32(data: []const u8) -> u32
 fn fletcher16(data: []const u8) -> u16
 fn fletcher32(data: []const u8) -> u32

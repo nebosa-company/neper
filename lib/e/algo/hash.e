@@ -3,6 +3,7 @@
 type XxHash64 = struct { seed: u64, total: u64, v1: u64, v2: u64, v3: u64, v4: u64, buffer: [32]u8, buffered: u8 }
 
 type Crc32 = struct { value: u32 }
+type Crc32c = struct { value: u32 }
 
 fn fnv1a32(data: []const u8) -> u32 {
     var hash = 2166136261u32
@@ -313,6 +314,79 @@ fn crc32_update(h: *Crc32, data: []const u8) {
 }
 
 fn crc32_done(h: *const Crc32) -> u32 { ret h.value ^ 4294967295u32 }
+
+// CRC-32C (Castagnoli, the reflected polynomial 0x82F63B78): iSCSI's, ext4's and the
+// compiler's artifacts' checksum (T021). `crc32c_update` takes short input a bit at a time
+// and long input eight bytes at a time against eight tables it builds on the spot -- the
+// k-th the first applied to the (k-1)-th's entries -- since a module has no state to keep
+// them in.
+fn crc32c(data: []const u8) -> u32 {
+    var state = crc32c_init()
+    crc32c_update(&state, data)
+    ret crc32c_done(&state)
+}
+
+fn crc32c_init() -> Crc32c { ret Crc32c { value: 4294967295u32 } }
+
+fn crc32c_update(h: *Crc32c, data: []const u8) {
+    var crc = h.value
+    var at = 0usize
+    if data.len < 256usize {
+        while at < data.len {
+            crc = crc ^ u32(data[at])
+            var bit = 0usize
+            while bit < 8usize {
+                if crc & 1u32 != 0u32 {
+                    crc = (crc >> 1u32) ^ 2197175160u32
+                } else {
+                    crc = crc >> 1u32
+                }
+                bit += 1usize
+            }
+            at += 1usize
+        }
+        h.value = crc
+        ret
+    }
+    var table: [2048]u32 = zero
+    var entry = 0usize
+    while entry < 256usize {
+        var value = u32(entry)
+        var bit = 0usize
+        while bit < 8usize {
+            if value & 1u32 != 0u32 {
+                value = (value >> 1u32) ^ 2197175160u32
+            } else {
+                value = value >> 1u32
+            }
+            bit += 1usize
+        }
+        table[entry] = value
+        entry += 1usize
+    }
+    var slice = 1usize
+    while slice < 8usize {
+        entry = 0usize
+        while entry < 256usize {
+            let prior = table[(slice - 1usize) * 256usize + entry]
+            table[slice * 256usize + entry] = (prior >> 8u32) ^ table[usize(prior & 255u32)]
+            entry += 1usize
+        }
+        slice += 1usize
+    }
+    while at + 8usize <= data.len {
+        let low = crc ^ (u32(data[at]) | (u32(data[at + 1usize]) << 8u32) | (u32(data[at + 2usize]) << 16u32) | (u32(data[at + 3usize]) << 24u32))
+        crc = table[1792usize + usize(low & 255u32)] ^ table[1536usize + usize((low >> 8u32) & 255u32)] ^ table[1280usize + usize((low >> 16u32) & 255u32)] ^ table[1024usize + usize(low >> 24u32)] ^ table[768usize + usize(data[at + 4usize])] ^ table[512usize + usize(data[at + 5usize])] ^ table[256usize + usize(data[at + 6usize])] ^ table[usize(data[at + 7usize])]
+        at += 8usize
+    }
+    while at < data.len {
+        crc = table[usize((crc ^ u32(data[at])) & 255u32)] ^ (crc >> 8u32)
+        at += 1usize
+    }
+    h.value = crc
+}
+
+fn crc32c_done(h: *const Crc32c) -> u32 { ret h.value ^ 4294967295u32 }
 
 fn adler32(data: []const u8) -> u32 {
     var a = 1u32

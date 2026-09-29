@@ -27,6 +27,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     hash.crc32_update(&crc, "1234")
     hash.crc32_update(&crc, "56789")
     if hash.crc32_done(&crc) != 3421780262u32 { ret Failed }
+
+    // CRC-32C (T021): the check value, a split update, and a thousand bytes -- past the
+    // 256 at which the update switches to its tables -- against a bitwise reference.
+    if hash.crc32c("") != 0u32 { ret Failed }
+    if hash.crc32c("123456789") != 3808858755u32 { ret Failed }
+    var castagnoli = hash.crc32c_init()
+    hash.crc32c_update(&castagnoli, "12345")
+    hash.crc32c_update(&castagnoli, "6789")
+    if hash.crc32c_done(&castagnoli) != 3808858755u32 { ret Failed }
+    var long: [1000]u8 = zero
+    var at = 0usize
+    while at < 1000usize {
+        long[at] = u8((at * 7usize + 3usize) & 255usize)
+        at += 1usize
+    }
+    if hash.crc32c(long[..]) != 3710836727u32 { ret Failed }
+    var halves = hash.crc32c_init()
+    hash.crc32c_update(&halves, long[0usize..300usize])
+    hash.crc32c_update(&halves, long[300usize..])
+    if hash.crc32c_done(&halves) != 3710836727u32 { ret Failed }
     try io.print("algo hash ok\n")
     ret ok
 }

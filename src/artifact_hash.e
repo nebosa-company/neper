@@ -33,68 +33,35 @@ fn xxhash64(bytes: []const u8) -> (usize, err) {
     ret (usize(algo_hash.xxhash64(bytes, 0u64)), ok)
 }
 
-// Table-driven (D224): the table is built per call, two thousand steps, against a
-// byte loop that ran eight per byte over every artifact loaded.
-// CRC-32C eight bytes at a time (D320): the byte loop, with its branch for the zeroed
-// field, walked every artifact byte a load takes, and a two-million-line program's
-// artifacts are hundreds of megabytes. Slicing-by-eight: eight tables, the k-th the
-// first applied to the (k-1)-th's entries, and one lookup per byte with no dependence
-// between the eight of a word. The bytes before the zeroed field's end and the tail
-// go a byte at a time.
+// CRC-32C from `e.algo.hash` (T021): the CRC32 instruction takes what it can when the CPU
+// has it (D332), and the library's update -- slicing-by-eight past 256 bytes, the loop
+// this file carried (D224, D320) -- takes the rest, every byte on a CPU without. The
+// zeroed field (D320), the artifact's own checksum slot, is fed as zeros.
 fn crc32c(bytes: []const u8, zero_at: usize, zero_count: usize) -> (usize, err) {
-    var table: [2048]usize = zero
-    var entry = 0usize
-    while entry < 256usize {
-        var crc = entry
-        var bit = 0usize
-        while bit < 8usize {
-            if crc % 2usize == 1usize {
-                crc = (crc >> 1usize) ^ 2197175160usize
-            } else {
-                crc = crc >> 1usize
-            }
-            bit += 1usize
-        }
-        table[entry] = crc
-        entry += 1usize
-    }
-    var slice = 1usize
-    while slice < 8usize {
-        entry = 0usize
-        while entry < 256usize {
-            let prior = table[(slice - 1usize) * 256usize + entry]
-            table[slice * 256usize + entry] = (prior >> 8usize) ^ table[prior & 255usize]
-            entry += 1usize
-        }
-        slice += 1usize
-    }
-    var crc = 4294967295usize
+    var state = algo_hash.crc32c_init()
     var at = 0usize
-    var head = zero_at + zero_count
-    if zero_count == 0usize { head = 0usize }
-    if head > bytes.len { head = bytes.len }
-    while at < head {
-        var value = usize(bytes[at])
-        if at >= zero_at && at - zero_at < zero_count { value = 0usize }
-        crc = table[(crc ^ value) & 255usize] ^ (crc >> 8usize)
-        at += 1usize
+    if zero_count != 0usize {
+        var head = zero_at + zero_count
+        if head > bytes.len { head = bytes.len }
+        var before = zero_at
+        if before > head { before = head }
+        algo_hash.crc32c_update(&state, bytes[0usize..before])
+        var zeros: [16]u8 = zero
+        var left = head - before
+        while left > 0usize {
+            var chunk = left
+            if chunk > 16usize { chunk = 16usize }
+            algo_hash.crc32c_update(&state, zeros[0usize..chunk])
+            left = left - chunk
+        }
+        at = head
     }
-    // The rest with the CRC32 instruction when the CPU has it (D332); the loops below
-    // then see nothing left, and do every byte on a CPU without.
     var crc_slot: [1]usize = zero
-    crc_slot[0usize] = crc
+    crc_slot[0usize] = usize(state.value)
     at += os.crc32c_bytes(crc_slot[..], bytes[at..bytes.len])
-    crc = crc_slot[0usize]
-    while at + 8usize <= bytes.len {
-        let low = crc ^ (usize(bytes[at]) | (usize(bytes[at + 1usize]) << 8usize) | (usize(bytes[at + 2usize]) << 16usize) | (usize(bytes[at + 3usize]) << 24usize))
-        crc = table[1792usize + (low & 255usize)] ^ table[1536usize + ((low >> 8usize) & 255usize)] ^ table[1280usize + ((low >> 16usize) & 255usize)] ^ table[1024usize + ((low >> 24usize) & 255usize)] ^ table[768usize + usize(bytes[at + 4usize])] ^ table[512usize + usize(bytes[at + 5usize])] ^ table[256usize + usize(bytes[at + 6usize])] ^ table[usize(bytes[at + 7usize])]
-        at += 8usize
-    }
-    while at < bytes.len {
-        crc = table[(crc ^ usize(bytes[at])) & 255usize] ^ (crc >> 8usize)
-        at += 1usize
-    }
-    ret (crc ^ 4294967295usize, ok)
+    state.value = u32(crc_slot[0usize])
+    algo_hash.crc32c_update(&state, bytes[at..bytes.len])
+    ret (usize(algo_hash.crc32c_done(&state)), ok)
 }
 
 fn fnv1a32_step(hash: usize, value: usize) -> (usize, err) {
