@@ -5393,6 +5393,10 @@ cmp -s "$test_build/conformance-tools-test-project-short.jsonl" "$conformance_ro
 rm -rf "$test_build/fmt_project"
 mkdir -p "$test_build/fmt_project/src"
 cp "$conformance_root/format/layout.e" "$test_build/fmt_project/src/layout.e"
+# An operand after a flag is refused, not read as the project (D1682): `fmt --path x.e -`
+# once formatted every file of the project it ran in.
+if (cd "$test_build/fmt_project" && "$repo/build/linux/short/neper-self-short" fmt --path x.e - < /dev/null > /dev/null 2>&1); then printf '%s\n' 'fmt --path x.e - was accepted' >&2; exit 1; fi
+cmp -s "$test_build/fmt_project/src/layout.e" "$conformance_root/format/layout.e" || { printf '%s\n' 'fmt --path x.e - was read as fmt of the project' >&2; exit 1; }
 fmt_check_status=0
 (cd "$test_build/fmt_project" && "$repo/build/linux/short/neper-self-short" fmt --check > /dev/null 2>&1) || fmt_check_status=$?
 [ "$fmt_check_status" -eq 1 ]

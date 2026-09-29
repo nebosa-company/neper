@@ -30923,3 +30923,10 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 - A scratch project builds by `neper build` inside it, and from its `src/` (the project is discovered upward) as `myproj.exe`.
 - `neper build myproj -o built.exe` and `neper run myproj` work from the parent.
 - Pinned in both suites: `shortproj/` builds with no operand to `shortproj(.exe)`, and `build shortproj -o …` from its parent, which runs.
+
+**The operand rule, tightened.** D294 read any short form whose first argument was a `--` flag as the project form. Running `neper fmt --path x.e -` from the repository root therefore formatted all 383 tracked `.e` files under `lib/` and `src/` in place. The file edits were undone by proof: each file was restored only where formatting HEAD's text (or HEAD plus the known uncommitted edits, or a replay of the session that wrote an untracked file) gave exactly the file on disk.
+
+- A command is now a project's only when it names no operand anywhere after the command, where `-` (stdin) counts as an operand and `--path`, `--project`, `-o`, `-j` and `--target` take a value.
+- An operand after a flag is refused as usage rather than guessed at.
+- Pinned in both suites: `fmt --path x.e -` in a non-canonical project exits non-zero and leaves its file as it was.
+- The `fmt -` that my first version of this change broke (T002's operand test swallowed `-`) reads stdin again; that is what failed the metamorphic stage.
