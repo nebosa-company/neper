@@ -2119,6 +2119,57 @@ fn fmt_indent(raw: *Out, columns: usize) -> err {
 // comma before the closer dropped -- and one that does not is broken, one element per
 // line four columns in from the line the opener is on, each with a trailing comma, the
 // closer back on the opener's line indent.
+// A token as the canonical layout writes it, the column advanced by its width: a raw
+// string with the fewest `#` that keep its bytes (spec section 3, T006) -- the first count
+// whose closer, `"` and that many `#`, does not occur in the body -- and any other token
+// as it is spelled.
+fn fmt_token(raw: *Out, source: str, token: lex.Token, column: *usize) -> err {
+    let spelled = lex.token_text(source, token)
+    if token.kind != .RawString || spelled.len < 3usize {
+        *column += spelled.len
+        ret text(raw, spelled)
+    }
+    var hashes = 0usize
+    while 1usize + hashes < spelled.len && spelled[1usize + hashes] == 35u8 { hashes += 1usize }
+    if spelled.len < 3usize + 2usize * hashes {
+        *column += spelled.len
+        ret text(raw, spelled)
+    }
+    let body = spelled[2usize + hashes..spelled.len - 1usize - hashes]
+    var fewest = 0usize
+    while fewest < hashes && raw_closer_in(body, fewest) { fewest += 1usize }
+    try byte(raw, 114u8)
+    var mark = 0usize
+    while mark < fewest {
+        try byte(raw, 35u8)
+        mark += 1usize
+    }
+    try byte(raw, 34u8)
+    try text(raw, body)
+    try byte(raw, 34u8)
+    mark = 0usize
+    while mark < fewest {
+        try byte(raw, 35u8)
+        mark += 1usize
+    }
+    *column += 3usize + 2usize * fewest + body.len
+    ret ok
+}
+
+// Whether `body` holds `"` followed by `count` `#`: where a raw string of that many would end.
+fn raw_closer_in(body: str, count: usize) -> bool {
+    var at = 0usize
+    while at < body.len {
+        if body[at] == 34u8 {
+            var run = 0usize
+            while run < count && at + 1usize + run < body.len && body[at + 1usize + run] == 35u8 { run += 1usize }
+            if run == count { ret true }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
 fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const usize) -> err {
     var depth = 0usize
     var line_has_content = false
@@ -2196,8 +2247,7 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
                 column = owning
                 line_indent = owning
                 if token.kind == .PunctRBrace && depth > 0usize { depth = depth - 1usize }
-                try text(raw, lex.token_text(source, token))
-                column += usize(token.end) - usize(token.start)
+                try fmt_token(raw, source, token, &column)
                 line_has_content = true
                 prev_unary = false
                 prev = token.kind
@@ -2216,8 +2266,7 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
                 try byte(raw, 32u8)
                 column += 1usize
             }
-            try text(raw, lex.token_text(source, token))
-            column += usize(token.end) - usize(token.start)
+            try fmt_token(raw, source, token, &column)
             prev_unary = false
             prev = token.kind
             at += 1usize
@@ -2252,8 +2301,7 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
                 column += 1usize
             }
         }
-        try text(raw, lex.token_text(source, token))
-        column += usize(token.end) - usize(token.start)
+        try fmt_token(raw, source, token, &column)
         if token.kind == .PunctLBrace { depth += 1usize }
         // A close brace mid-line (e.g. `{}` or `} else {`) still lowers the depth.
         if token.kind == .PunctRBrace && !at_line_start && depth > 0usize { depth = depth - 1usize }

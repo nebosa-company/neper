@@ -6334,7 +6334,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtActual).Hash -ne (Get-FileH
 # The format corpus (D255): each `format/<name>.e` is a non-canonical source and
 # `format/<name>.expected.e` what `fmt` makes of it, byte for byte; the canonical side
 # passes `--check`, which pins idempotence.
-foreach ($formatCase in @('layout', 'types')) {
+foreach ($formatCase in @('layout', 'types', 'raw_strings')) {
     $formatActual = Join-Path $testBuild "conformance-format-$formatCase.e"
     cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot "format/$formatCase.e")`" > `"$formatActual`""
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $formatActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "format/$formatCase.expected.e")).Hash) { throw "fmt on format/$formatCase.e differs from the conformance corpus" }
