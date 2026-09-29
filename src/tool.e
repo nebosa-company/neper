@@ -6940,7 +6940,8 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, source: str,
                 if outcomes[at] == 2usize { crashed += 1usize } else { timedout += 1usize }
             }
         }
-        try test_record(&out, module_name, root, path, source, spelled, names[at], lines[at], outcomes[at], statuses[at], durations[at], timeout_s, stdouts[at], stderrs[at])
+        let (message, rest) = test_message(a, stderrs[at])
+        try test_record(&out, module_name, root, path, source, spelled, names[at], lines[at], outcomes[at], statuses[at], durations[at], timeout_s, stdouts[at], rest, message)
         at += 1usize
     }
     try text(&out, "{\"record\":\"test_summary\",\"passed\":")
@@ -6964,9 +6965,38 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, source: str,
     ret flush(&out)
 }
 
+// A failed assertion's message the runner wrote to stderr between two 0x1E bytes (T005),
+// and the stderr without it; an empty message when there is none.
+fn test_message(a: *mem.Arena, stderr_bytes: str) -> (str, str) {
+    let marker = "\x1enptest-message:"
+    var start = 0usize
+    while start + marker.len <= stderr_bytes.len && !graph.same(stderr_bytes[start..start + marker.len], marker) { start += 1usize }
+    if start + marker.len > stderr_bytes.len { ret ("", stderr_bytes) }
+    var end = start + marker.len
+    while end < stderr_bytes.len && stderr_bytes[end] != 30u8 { end += 1usize }
+    if end == stderr_bytes.len { ret ("", stderr_bytes) }
+    let message = stderr_bytes[start + marker.len..end]
+    var after = end + 1usize
+    if after < stderr_bytes.len && stderr_bytes[after] == 10u8 { after += 1usize }
+    let (rest, rest_error) = mem.alloc[u8](a, stderr_bytes.len - (after - start))
+    if rest_error != ok { ret (message, stderr_bytes) }
+    var at = 0usize
+    while at < start {
+        rest[at] = stderr_bytes[at]
+        at += 1usize
+    }
+    var from = after
+    while from < stderr_bytes.len {
+        rest[at] = stderr_bytes[from]
+        at += 1usize
+        from += 1usize
+    }
+    ret (message, rest[0usize..at])
+}
+
 // The runner is the operand's text two `use` lines down (D240), and `spelled` is its
 // path as the child prints it; a trap or an error name in it maps back onto the operand.
-fn test_record(out: *Out, module_name: str, root: str, path: str, source: str, spelled: str, name: str, line: usize, outcome: usize, status: i32, duration_ms: usize, timeout_s: usize, stdout_bytes: str, stderr_bytes: str) -> err {
+fn test_record(out: *Out, module_name: str, root: str, path: str, source: str, spelled: str, name: str, line: usize, outcome: usize, status: i32, duration_ms: usize, timeout_s: usize, stdout_bytes: str, stderr_bytes: str, message: str) -> err {
     try text(out, "{\"record\":\"test\",\"name\":")
     try quoted(out, name)
     try text(out, ",\"module\":")
@@ -6985,7 +7015,9 @@ fn test_record(out: *Out, module_name: str, root: str, path: str, source: str, s
     } else {
         if outcome == 1usize { try test_error_name(out, stderr_bytes, module_name, "nptest-runner.e") } else { try text(out, "null") }
     }
-    try text(out, ",\"message\":null,\"duration_ms\":")
+    try text(out, ",\"message\":")
+    if message.len != 0usize { try quoted(out, message) } else { try text(out, "null") }
+    try text(out, ",\"duration_ms\":")
     try decimal(out, duration_ms)
     try text(out, ",\"timeout_s\":")
     try decimal(out, timeout_s)

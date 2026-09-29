@@ -5797,6 +5797,12 @@ sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_actual"
 sed -i "s#$test_build/nptest-runner.e#nptest-runner.e#g" "$test_actual"
 cmp -s "$test_actual" "$conformance_root/tools/test.expected.jsonl" || { printf '%s
 ' "test --json differs from the conformance corpus" >&2; exit 1; }
+# A failed `test.assert`'s message is the record's `message` (T005).
+test_message_status=0
+$test_build/neper-self test-file "$conformance_root/tools/test_message.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-message.jsonl" || test_message_status=$?
+[ "$test_message_status" -eq 1 ]
+sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_build/conformance-tools-test-message.jsonl"
+cmp -s "$test_build/conformance-tools-test-message.jsonl" "$conformance_root/tools/test_message.expected.jsonl" || { echo "a failed assertion's message is not the test record's" >&2; exit 1; }
 # `test --json` on a `@test` that is not a test (D256): E-TEST-9999 at the declaration,
 # exit 2, nothing compiled or run.
 reject_status=0
