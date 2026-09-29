@@ -31134,4 +31134,6 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 - Across 23 instances (the existing examples and 20 random ones), `ac2001` matches `ac3` and a Python reference on domains and on wipe-outs.
 - Constraint checks match the reference exactly. `ac2001` is never higher and is lower on 9 instances (967 against 1,051 in total), and a table one entry short is refused.
 
+**Fixed with it.** `ac3` (D856) started its ring queue's tail at `arcs`. A queue exactly `arcs` long passes the size check, and the first re-queued arc was then written one slot past the end (`trap[bounds]`). `ac2001` had copied the line. Both now wrap the tail to 0 when the queue starts full. The fixture had always passed a 64-entry queue; its check 11 now runs both with an exact 8-entry queue, trapping before the fix and passing after it on both hosts. The blog post's AC-2001 sample was what found it.
+
 ---
