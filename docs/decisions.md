@@ -30862,10 +30862,10 @@ AES derived every S-box value from the GF(2⁸) inverse, 16 bytes a round, and e
 
 Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truthful figure. A sample of the plumbing rows read as expected: `ls` of a missing file, a denied permission, a blocked sleep, a shell quoting EOF, a patch spec that matched twice. A fixture's bare non-zero exit with no text also lands there.
 
-**Not yet.** Two distortions T030 names:
+**The two distortions left, closed.**
 
-- A Python patch run in the same command as a build still counts the build's failure as an edit that did not apply.
-- `COMPILE['Dart']` still needs checking against a Dart transcript's failed build.
+- **A patch and a build in one command.** A Python patch run chained with a build no longer charges the build's failure to the edit. A failure with a compile code or a test signature is the build's, and the command counts as a build. A failure with neither is the patch's, and no build is counted. Over the same 7 days, Neper's edit% went from 3.2 to 2.8, and its builds from 1,561 to 1,766.
+- **`COMPILE['Dart']`.** Checked against real transcripts: in the last 600, 32 `dart`/`flutter` build or test commands failed. Every one reached the transcript piped through `grep` or condensed by RTK, with no analyzer line left, like `00:00 +13: All tests passed!` from a pipeline whose grep found nothing. The regex matches the analyzer's `error •` and the front end's `Error: ` forms. Dart's cmpl% is near zero because the text never arrives, which the REPAIR table's note already says. It is not the pattern.
 
 ## D1681 — A repeated build is incremental, and an unchanged one stops after the load (C097)
 
