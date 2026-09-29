@@ -5483,6 +5483,24 @@ Copy-Item -LiteralPath $compiler -Destination $shortCompiler -Force
 $buildShortActual = Join-Path $testBuild 'conformance-tools-build-short.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$shortCompiler`" build `"$(Join-Path $conformanceRoot 'tools\build.e')`" -o conformance-tools-build.out --json > `"$buildShortActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $buildShortActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\build.expected.jsonl')).Hash) { throw 'the short build spelling differs from the positional form' }
+# A repeated build of an unchanged program checks and links nothing (C097): the second
+# `--incremental` build stops after the load, and an output that is no longer the image
+# is linked and written again, the same image.
+$repeatDir = Join-Path $testBuild 'repeat-build'
+if (Test-Path -LiteralPath $repeatDir) { Remove-Item -Recurse -Force -LiteralPath $repeatDir }
+[void](New-Item -ItemType Directory -Force -Path $repeatDir)
+Copy-Item -LiteralPath (Join-Path $conformanceRoot 'tools\build.e') -Destination (Join-Path $repeatDir 'repeat.e')
+$repeatImage = Join-Path $repeatDir 'repeat.exe'
+$repeatFirst = & $compiler emit-executable (Join-Path $repeatDir 'repeat.e') $repo 'x64' 'windows' $repeatImage --incremental 2>&1
+if ($LASTEXITCODE -ne 0) { throw "the first repeated build failed: $repeatFirst" }
+$repeatHash = (Get-FileHash -LiteralPath $repeatImage).Hash
+$repeatSecond = (& $compiler emit-executable (Join-Path $repeatDir 'repeat.e') $repo 'x64' 'windows' $repeatImage --incremental --time 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $repeatSecond -match 'time check declarations|time link' -or $repeatSecond -notmatch 'executable written') { throw "an unchanged program was checked or linked again: $repeatSecond" }
+[IO.File]::WriteAllBytes($repeatImage, [byte[]](1, 2, 3))
+$repeatThird = (& $compiler emit-executable (Join-Path $repeatDir 'repeat.e') $repo 'x64' 'windows' $repeatImage --incremental --time 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $repeatThird -notmatch 'time link' -or (Get-FileHash -LiteralPath $repeatImage).Hash -ne $repeatHash) { throw "an output that was not the image was not linked again: $repeatThird" }
+& $repeatImage
+if ($LASTEXITCODE -ne 0) { throw 'the relinked repeated build did not run' }
 # `neper test FILE` (D292): the short spelling is the test stream, its WORKDIR
 # `.neper/debug/test/` under the operand's project -- the repo here -- made by the command.
 $testShortActual = Join-Path $testBuild 'conformance-tools-test-short.jsonl'
