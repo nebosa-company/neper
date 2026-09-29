@@ -1259,6 +1259,10 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
             long_form[count] = "--json"
             count += 1usize
         }
+        // A rebuild is incremental (C097, spec section 12): the unchanged modules' artifacts
+        // under `.neper/<mode>/em/` are kept, and the image is the clean build's.
+        long_form[count] = "--incremental"
+        count += 1usize
         if project_dir.len != 0usize {
             long_form[count] = "--project"
             long_form[count + 1usize] = project_dir
@@ -9641,6 +9645,128 @@ type HotBuild = struct {
     artifact: binary.Buffer,
 }
 
+// A repeated build of an unchanged program (C097): every module kept, the compiler and
+// the command line the last image was linked under, and the file at the output path
+// still that image's bytes -- then there is nothing to link, and nothing is written. The
+// key hashes the compiler's identity, the command line, and each module's name with its
+// artifact's checksum; the stamp beside the artifacts holds the key and the image's
+// SHA-256, written by `record_image` after a build writes its executable.
+// Asked right after the hot load, when every module is stable -- its source and every
+// dependency's unchanged since its artifact, which is what makes it kept -- so neither
+// the checker nor the link runs.
+fn image_current(a: *mem.Arena, hot: *HotLoad, loaded: *graph.Graph, held: [][]const u8, args: []str) -> bool {
+    if !hot.on || hot.stable.len < loaded.count || held.len < loaded.count { ret false }
+    var module_at = 0usize
+    while module_at < loaded.count {
+        if !hot.stable[module_at] || held[module_at].len == 0usize || (module_at < hot.distrust.len && hot.distrust[module_at]) { ret false }
+        module_at += 1usize
+    }
+    let (key, stamp) = image_key(a, hot.directory, hot.triple, loaded, held, args)
+    if key.len == 0usize { ret false }
+    // The stamp: the key, a space, the image's SHA-256, a newline.
+    let (recorded, recorded_error) = source.load(a, stamp)
+    if recorded_error != ok || recorded.len != 130usize || !same(recorded[0usize..64usize], key) { ret false }
+    let (image, image_error) = source.load(a, args[6usize])
+    if image_error != ok { ret false }
+    var digest: [64]u8 = zero
+    artifact_hash.sha256_hex_into(image, digest[..])
+    ret same(recorded[65usize..129usize], digest[..])
+}
+
+// The key of the image the command line links from the artifacts in the directory, and
+// the stamp's path; an empty key when an artifact cannot be read. A module this build
+// rebuilt is read from the artifact it just wrote; a kept one is already held.
+fn image_key(a: *mem.Arena, directory: str, triple: str, loaded: *graph.Graph, held: [][]const u8, args: []str) -> (str, str) {
+    if args.len < 7usize || held.len < loaded.count { ret ("", "") }
+    var size = 24usize
+    var arg_at = 1usize
+    while arg_at < args.len {
+        size += args[arg_at].len + 1usize
+        arg_at += 1usize
+    }
+    var module_at = 0usize
+    while module_at < loaded.count {
+        size += loaded.modules[module_at].name.len + 24usize
+        module_at += 1usize
+    }
+    let (text, text_error) = mem.alloc[u8](a, size)
+    if text_error != ok { ret ("", "") }
+    var at = put_number(text, 0usize, loaded.compiler_identity)
+    arg_at = 1usize
+    while arg_at < args.len {
+        // What does not change the image is not the image's: timing, the worker count
+        // and its schedule (section 15 makes the image independent of both).
+        if same(args[arg_at], "-j") {
+            arg_at += 1usize
+        } else {
+            if !same(args[arg_at], "--time") && !same(args[arg_at], "--perturb") {
+                at = tool.nptest_copy(text, at, args[arg_at])
+                at = tool.nptest_copy(text, at, "\n")
+            }
+        }
+        arg_at += 1usize
+    }
+    module_at = 0usize
+    while module_at < loaded.count {
+        var artifact = held[module_at]
+        if artifact.len == 0usize {
+            let (path, path_error) = compiled_module_path(a, directory, loaded.modules[module_at].name, triple)
+            if path_error != ok { ret ("", "") }
+            let (fresh, fresh_error) = load_artifact(a, path)
+            if fresh_error != ok { ret ("", "") }
+            artifact = fresh
+        }
+        let (checksum, checksum_error) = em.artifact_checksum(artifact)
+        if checksum_error != ok { ret ("", "") }
+        at = tool.nptest_copy(text, at, loaded.modules[module_at].name)
+        at = put_number(text, at, checksum)
+        module_at += 1usize
+    }
+    let (key, key_error) = mem.alloc[u8](a, 64usize)
+    if key_error != ok { ret ("", "") }
+    artifact_hash.sha256_hex_into(text[0usize..at], key)
+    let (stamp, stamp_error) = tool.manifest_join(a, directory, "image.stamp")
+    if stamp_error != ok { ret ("", "") }
+    ret (key, stamp)
+}
+
+// The stamp `image_current` reads, after a build wrote `image` (C097); a stamp that
+// cannot be written costs the next build its shortcut and nothing else.
+fn record_image(a: *mem.Arena, hot: *HotBuild, loaded: *graph.Graph, held: [][]const u8, args: []str, image: []const u8) {
+    if !hot.on { ret }
+    let (key, stamp) = image_key(a, hot.directory, hot.triple, loaded, held, args)
+    if key.len != 64usize { ret }
+    let (line, line_error) = mem.alloc[u8](a, 130usize)
+    if line_error != ok { ret }
+    var at = tool.nptest_copy(line, 0usize, key)
+    at = tool.nptest_copy(line, at, " ")
+    artifact_hash.sha256_hex_into(image, line[at..at + 64usize])
+    line[129usize] = 10u8
+    let written = write_file(a, stamp, line)
+}
+
+fn put_number(into: []u8, at: usize, value: usize) -> usize {
+    var digits: [20]u8 = zero
+    var count = 0usize
+    var rest = value
+    while count == 0usize || rest != 0usize {
+        digits[count] = u8(48usize + rest % 10usize)
+        rest = rest / 10usize
+        count += 1usize
+    }
+    var to = at
+    while count > 0usize && to < into.len {
+        count = count - 1usize
+        into[to] = digits[count]
+        to += 1usize
+    }
+    if to < into.len {
+        into[to] = 10u8
+        to += 1usize
+    }
+    ret to
+}
+
 // `.neper/<mode>/em/` under the project root, made when it is missing.
 fn artifact_directory(a: *mem.Arena, loaded: *graph.Graph, release: bool) -> (str, err) {
     var mode = "debug"
@@ -12542,6 +12668,13 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         report.arena_used = mem.stats(a).used
         try report_phase(&report, "load and parse")
         if load_error == ok && loaded.count != 0usize { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
+        // Nothing to check or link (C097): every module stable since its artifact, nothing
+        // reported (a stale source map fails the build), and the output the image this
+        // command line last wrote. The stream and `--stats` builds go the whole way.
+        if hot_build && load_error == ok && report.count == 0usize && !report.json && !report.build.on && image_current(a, &hot_load, &loaded, held_all, args) {
+            try io.print("executable written\n")
+            ret ok
+        }
         if load_error != ok {
             if disassemble {
                 report.pending_header = ""
@@ -13087,6 +13220,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 var reasons = no_reasons
                 if hot_load.on { reasons = hot_load.reason[0usize..loaded.count] }
                 try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, unchecked_build, args[6usize], packed, reasons, report.build.image_unchanged)
+                if hot_build { record_image(a, &hot, &loaded, held, args, packed) }
                 try report_phase(&report, "manifest")
                 report.build.wall_ms = (nptest_now() - report.build.started) / 1000000usize
                 report.build.image_bytes = packed.len

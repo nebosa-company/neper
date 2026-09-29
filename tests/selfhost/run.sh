@@ -5328,6 +5328,23 @@ chmod +x "$repo/build/linux/short/neper-self-short"
 (cd "$test_build" && "$repo/build/linux/short/neper-self-short" build "$conformance_root/tools/build.e" -o conformance-tools-build.out --json > "conformance-tools-build-short.jsonl")
 cmp -s "$test_build/conformance-tools-build-short.jsonl" "$conformance_root/tools/build.expected.jsonl" || { printf '%s
 ' "the short build spelling differs from the positional form" >&2; exit 1; }
+# A repeated build of an unchanged program checks and links nothing (C097): the second
+# `--incremental` build stops after the load, and an output that is no longer the image
+# is linked and written again, the same image.
+rm -rf "$test_build/repeat-build"
+mkdir -p "$test_build/repeat-build"
+cp "$conformance_root/tools/build.e" "$test_build/repeat-build/repeat.e"
+repeat_image="$test_build/repeat-build/repeat"
+"$test_build/neper-self" emit-executable "$test_build/repeat-build/repeat.e" "$repo" x64 linux "$repeat_image" --incremental > /dev/null
+repeat_hash=$(sha256sum "$repeat_image" | cut -d' ' -f1)
+repeat_second=$("$test_build/neper-self" emit-executable "$test_build/repeat-build/repeat.e" "$repo" x64 linux "$repeat_image" --incremental --time 2>&1)
+case "$repeat_second" in *'time check declarations'*|*'time link'*) printf '%s\n' "an unchanged program was checked or linked again: $repeat_second" >&2; exit 1 ;; esac
+case "$repeat_second" in *'executable written'*) ;; *) printf '%s\n' "the repeated build failed: $repeat_second" >&2; exit 1 ;; esac
+printf 'xyz' > "$repeat_image"
+repeat_third=$("$test_build/neper-self" emit-executable "$test_build/repeat-build/repeat.e" "$repo" x64 linux "$repeat_image" --incremental --time 2>&1)
+case "$repeat_third" in *'time link'*) ;; *) printf '%s\n' "an output that was not the image was not linked again: $repeat_third" >&2; exit 1 ;; esac
+[ "$(sha256sum "$repeat_image" | cut -d' ' -f1)" = "$repeat_hash" ] || { printf '%s\n' 'the relinked repeated build is not the first image' >&2; exit 1; }
+"$repeat_image"
 # `neper test FILE` (D292): the short spelling is the test stream, its WORKDIR
 # `.neper/debug/test/` under the operand's project -- the repo here -- made by the command.
 rm -rf "$repo/.neper/debug/test"

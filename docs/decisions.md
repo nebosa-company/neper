@@ -30866,3 +30866,46 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 
 - A Python patch run in the same command as a build still counts the build's failure as an edit that did not apply.
 - `COMPILE['Dart']` still needs checking against a Dart transcript's failed build.
+
+## D1681 — A repeated build is incremental, and an unchanged one stops after the load (C097)
+
+**Problem.** `neper build hello.e` twice took 569 ms, then 412 ms. `src/main.e` twice took 1,841 ms, then 1,726 ms. D336 recorded 80 ms for a warm compiler build.
+
+**Cause.** Two causes, named:
+
+- The short `build` and `run` spellings never passed `--incremental`, so every build from the command line was cold.
+- A warm build, even with every module kept, still checked every declaration, settled, and linked the image it already had: 285–335 ms for the compiler.
+
+**Decision.**
+
+- **Incremental by default.** The short `build` and `run` add `--incremental`. Spec section 12 already requires the incremental image to be the clean one, and it is, byte for byte.
+- **No-op builds.** After the hot load, a build stops with `executable written` when all of these hold:
+  - every module is stable (its source and every dependency unchanged since its artifact, none distrusted);
+  - nothing has been reported, so a stale source map still fails the build;
+  - the stamp beside the artifacts matches;
+  - the file at the output path still hashes to the image the stamp records.
+- **The stamp** is `.neper/<mode>/em/image.stamp`: a key and the image's SHA-256.
+  - The key is the SHA-256 of the compiler's identity (D411, with the options that change code), the command line, and each module's name with its artifact's stored checksum.
+  - The command line leaves out `-j N`, `--perturb` and `--time`, which section 15 makes image-neutral.
+  - Every build that writes its executable rewrites the stamp. It reads a rebuilt module's fresh artifact, so the next build can already stop.
+- **Whole-way builds.** The `--json` stream and `--stats` builds still run every phase, so their records stay whole.
+
+**Evidence.** Windows, idle machine:
+
+| | cold | warm, stops after load | warm, links |
+|---|---|---|---|
+| hello world | 210 ms | 23–28 ms | |
+| `src/main.e` | 1,770 ms | 49–51 ms | 285–335 ms |
+
+- The warm image is byte-equal to the cold one.
+- An edited source rebuilds, and edited back it links again.
+- A tampered or deleted output is linked again.
+- Another `-o` path is linked; one stamp slot per mode, so going back to the first path links once more.
+- A mode change rebuilds.
+- The short `build --json` stream is unchanged against its golden.
+- Pinned in both suites: the second `--incremental` build reports no check or link phase, and a tampered output is relinked to the first image, which runs.
+
+**Limits.**
+
+- The build manifest is the last linking build's; a no-op does not rewrite it.
+- The stamp holds one output path per mode.
