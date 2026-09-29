@@ -7,7 +7,7 @@ Numbering is global; the ranges in the headings are the transcript's own.
 
 ## Standard library plan
 
-Every entry below carries a verdict. 1232 entries map to a library function, 213 are duplicates of one of those (`see #N`), and 805 are skipped with a one-word reason.
+Every entry below carries a verdict. 1239 entries map to a library function, 214 are duplicates of one of those (`see #N`), and 797 are skipped with a one-word reason.
 
 - **`→ e.mod.fn`** — implementable; the proposed module and function name. Names follow the existing conventions in `docs/module-apis.md`: `snake_case`, arena-first for allocating calls, `[T: type]` generics.
 - **→ see #N** — the same algorithm already appears at #N; implement it once, there.
@@ -44,11 +44,12 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.algo.bdd` | new | #1390 |
 | `e.algo.bignum` | existing | #476, #491 |
 | `e.algo.bitset` | existing | #842 |
+| `e.algo.check` | new | #2224, #2225 |
 | `e.algo.coding` | new | 19 entries, first #319 |
 | `e.algo.combin` | new | #420, #421, #422, #423, #439, #847 |
 | `e.algo.combopt` | new | #114, #115, #116, #117, #118, #415, #1984, #1986, #1995, #1997, #1998, #1999 |
 | `e.algo.consistent_hash` | new | #255, #256, #928, #938 |
-| `e.algo.csp` | new | #1971, #1973, #1979, #1980, #1981, #1982, #1983, #1985 |
+| `e.algo.csp` | new | #1971, #1972, #1973, #1979, #1980, #1981, #1982, #1983, #1985 |
 | `e.algo.deflate` | existing | #620 |
 | `e.algo.disjoint_set` | existing | #200, #201, #202, #1076 |
 | `e.algo.dp` | new | 18 entries, first #266 |
@@ -139,6 +140,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.db.query` | new (under `e.db`) | 16 entries, first #877 |
 | `e.db.storage` | new (under `e.db`) | 18 entries, first #717 |
 | `e.debug` | existing | #1337, #1347 |
+| `e.debug.dump` | new (under `e.debug`) | #1645 |
 | `e.dist.anti_entropy` | new | #934 |
 | `e.dist.clock` | new | #147, #148 |
 | `e.dist.collective` | new | #1255, #1256 |
@@ -220,6 +222,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.math.opt` | new (under `e.math`) | 14 entries, first #516 |
 | `e.math.opt.meta` | new (split from `e.math.opt`) | #770, #771, #772, #773, #774, #779, #780 |
 | `e.math.opt.convex` | new (split from `e.math.opt`) | #517, #1461 |
+| `e.math.opt.milp` | new (under `e.math.opt`) | #1987 |
 | `e.math.root` | new (under `e.math`) | #496, #497, #498, #499, #500 |
 | `e.mem` | existing | #679, #680, #681, #682, #683 |
 | `e.ml.ann` | new | #1096, #1226, #1227 |
@@ -237,6 +240,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.ml.svm` | new | #742, #743 |
 | `e.ml.tree` | new | #736, #737, #738 |
 | `e.net` | existing | #714, #952, #953, #1436 |
+| `e.net.auth` | new (under `e.net`) | #1403 |
 | `e.net.balance` | new (under `e.net`) | #712, #713, #1264 |
 | `e.net.coap` | new (under `e.net`) | #1570 |
 | `e.net.dns` | new (under `e.net`) | #1408, #1578 |
@@ -283,7 +287,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.text.normalize` | existing | #325 |
 | `e.text.phonetic` | new | #312, #313, #314 |
 | `e.text.rank` | new | #367, #368, #1224, #1225 |
-| `e.text.regex` | existing | #348, #349, #350, #351, #353 |
+| `e.text.regex` | existing | #348, #349, #350, #351, #352, #353 |
 | `e.text.search` | new | #291, #292, #293, #294, #295, #296, #297, #299 |
 | `e.text.segment` | new | #2063, #2064 |
 | `e.text.shape` | existing | #2135, #2136 |
@@ -699,7 +703,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 349. **Powerset Construction (NFA to DFA)** – Converting non-deterministic state machines to deterministic ones. → `e.text.regex.dfa_from_nfa`
 350. **Hopcroft's DFA Minimization** – Merging equivalent state sets to construct minimal DFAs. → `e.text.regex.dfa_minimize`
 351. **DFA Execution** – Fast single-pass text validation using state transition matrices. → `e.text.regex.dfa_run`
-352. **Backtracking Regex Engine** – Recursive matching strategy supporting captures and backreferences. → skip: implementable, but too specialised for the standard library
+352. **Backtracking Regex Engine** – Recursive matching strategy supporting captures and backreferences. → `e.text.regex.compile_backtracking`
 353. **Pike Vectorized NFA Regex** – Parallel state set tracking preventing catastrophic backtracking. → `e.text.regex.pike_vm`
 354. **Wildcard Pattern Matching** – Evaluating wildcard strings containing ? and * symbols. → `e.path.glob_match`
 355. **String Trimming (LTRIM/RTRIM)** – Stripping leading and trailing whitespace characters. → `e.str.trim`
@@ -1810,7 +1814,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 
 1401. **TLS 1.3 1-RTT & 0-RTT Handshake Protocols** – Establishing encrypted session keys using Diffie-Hellman key exchanges while eliminating legacy round-trips. → `e.net.tls.handshake`
 1402. **IPsec ESP (Encapsulating Security Payload)** – Encrypting and authenticating IP packet payloads in Tunnel or Transport modes. → skip: OS kernel internals
-1403. **Kerberos V5 Authentication** – Ticket-granting authentication system using symmetric key cryptography and trusted KDCs. → skip: implementable, but too specialised for the standard library
+1403. **Kerberos V5 Authentication** – Ticket-granting authentication system using symmetric key cryptography and trusted KDCs. → `e.net.auth.client` (through the host's provider: SSPI on Windows, GSSAPI on Linux; `x.microsoft.tds` logs in with it)
 1404. **OAuth 2.0 PKCE (Proof Key for Code Exchange)** – Authorization code protocol utilizing dynamic code verifiers and code challenges to prevent authorization code interception. → `e.net.http.auth.pkce`
 1405. **OpenID Connect (OIDC) ID Token Validation** – Validating JWT identity tokens by verifying cryptographically signed JSON Web Keys (JWKS). → `e.fmt.jwt.verify`
 1406. **Aho-Corasick Multi-Pattern Inspection Engine** – Constructing finite-state pattern matching automata to inspect network payloads against signature dictionaries in single passes. → see #295 (`e.text.search.aho_corasick`)
@@ -2064,7 +2068,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 1642. **POSIX Signal Handling Subsystem** – Interrupting process control flows to execute registered signal routines upon receiving kernel signals ( SIGSEGV , SIGKILL , SIGINT ). → `e.os.signal`
 1643. **Linux Kernel Dynamic Probing (kprobes / uprobes)** – Attaching debug handlers dynamically to arbitrary kernel or user space instruction addresses without recompilation. → skip: OS kernel internals
 1644. **Hardware Performance Monitor Units (PMU)** – Reading specialized CPU registers to profile cycle counts, instruction retirements, and cache misses ( perf ). → skip: implementable, but too specialised for the standard library
-1645. **Core Dump Generation & Memory Parsing** – Writing complete process memory images to ELF binary files upon fatal system crashes for post-mortem analysis. → skip: implementable, but too specialised for the standard library
+1645. **Core Dump Generation & Memory Parsing** – Writing complete process memory images to ELF binary files upon fatal system crashes for post-mortem analysis. → `e.debug.dump.parse` (ELF cores and Windows minidumps; `write_core`/`write_minidump` produce them)
 1646. **Linux Pressure Stall Information (PSI)** – Real-time metrics monitoring hardware resource starvation across CPU, Memory, and I/O subsystems. → skip: OS kernel internals
 1647. **Linux zram Compressed Block Device** – Offloading memory pressures by creating compressed RAM block devices that act as fast swap spaces. → skip: OS kernel internals
 1648. **Rust Compile-Time Ownership & Borrow Checker** – Enforcing thread safety and memory safety statically without garbage collectors by enforcing strict reference ownership lifetimes. → skip: belongs in the Neper compiler, not the library
@@ -2411,7 +2415,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 1969. **Model-Based Quantifier Instantiation** – Instantiating quantifiers with terms drawn from candidate models. → skip: research-grade, no settled practical implementation
 1970. **E-Graph Equality Saturation** – Applying rewrite rules to all equivalent terms without losing any. → `e.algo.egraph.saturate`
 1971. **AC-3 Arc Consistency** – Pruning domain values lacking support in binary constraints. → `e.algo.csp.ac3`
-1972. **AC-4 Arc Consistency** – Support counting for arc consistency in optimal worst-case time. → skip: implementable, but too specialised for the standard library
+1972. **AC-4 Arc Consistency** – Support counting for arc consistency in optimal worst-case time. → `e.algo.csp.ac2001` (AC-2001 reaches AC-4's optimal O(e·d²) with a last-support pointer per value instead of support counters)
 1973. **Maintaining Arc Consistency (MAC)** – Re-establishing arc consistency after each search assignment. → `e.algo.csp.solve`
 1974. **Forward Checking** – Removing conflicting values from future variables after each assignment. → skip: an implementation detail of an existing module, not an API
 1975. **Minimum Remaining Values Heuristic** – Choosing the variable with the fewest legal values. → skip: an implementation detail of an existing module, not an API
@@ -2426,8 +2430,8 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 1984. **Large Neighborhood Search** – Repeatedly freeing part of a solution and re-solving it. → `e.algo.combopt.large_neighborhood_search`
 1985. **Limited Discrepancy Search** – Exploring paths in order of how often they disobey the heuristic. → `e.algo.csp.limited_discrepancy`
 1986. **Branch and Bound** – Pruning subtrees whose bound cannot beat the incumbent. → `e.algo.combopt.branch_and_bound`
-1987. **Branch and Cut** – Adding violated cutting planes to LP relaxations within branch and bound. → skip: implementable, but too specialised for the standard library
-1988. **Gomory Cut Generation** – Deriving integer cuts from fractional simplex rows. → skip: implementable, but too specialised for the standard library
+1987. **Branch and Cut** – Adding violated cutting planes to LP relaxations within branch and bound. → `e.math.opt.milp.solve`
+1988. **Gomory Cut Generation** – Deriving integer cuts from fractional simplex rows. → see #1987 (`e.math.opt.milp.solve`)
 1989. **Lagrangian Relaxation** – Moving hard constraints into the objective with multipliers and solving the dual. → skip: implementable, but too specialised for the standard library
 1990. **Column Generation** – Pricing new variables into a restricted master problem. → skip: implementable, but too specialised for the standard library
 1991. **Dantzig-Wolfe Decomposition** – Reformulating block-structured programs with convex combinations of extreme points. → skip: implementable, but too specialised for the standard library
@@ -2678,8 +2682,8 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 2221. **Deterministic Simulation Testing** – Running distributed code on a simulated scheduler with seeded randomness. → `e.test.sim.run`
 2222. **Jepsen-Style Linearizability Checking** – Verifying histories against a sequential model. → `e.test.linearize.check`
 2223. **Knossos / Porcupine Linearizability Check** – Searching for a linearization of a concurrent history. → see #2222 (`e.test.linearize.check`)
-2224. **Model Checking (Explicit State)** – Exhaustively exploring state space for property violations. → skip: implementable, but too specialised for the standard library
-2225. **Bounded Model Checking** – Unrolling transitions to a depth and checking with SAT. → skip: implementable, but too specialised for the standard library
+2224. **Model Checking (Explicit State)** – Exhaustively exploring state space for property violations. → `e.algo.check.explore`
+2225. **Bounded Model Checking** – Unrolling transitions to a depth and checking with SAT. → `e.algo.check.bmc`
 2226. **TLA+ State Space Exploration** – Breadth-first exploration of specification states with invariants. → skip: belongs in the toolchain (build, test runner, pacman)
 2227. **Chaos Fault Injection** – Introducing latency, errors, and crashes to test resilience. → `e.test.support.inject_fault`
 2228. **Circuit Breaker State Machine** – Opening after failures and probing before closing. → see #710 (`e.resilience.circuit_breaker`)

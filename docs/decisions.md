@@ -30997,3 +30997,141 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 - All 475,806 records validate against the v1 schema.
 - The operand-less `index` without `--all` is still byte-equal to its golden.
 - Pinned in both suites: the `e/mem.e` identity and more than three modules.
+
+---
+
+## D1690 — `e.text.regex` gains an opt-in backtracker (#352)
+
+**Why.** The Pike VM is linear-time and refuses backreferences and lookaround, so a PCRE-style pattern a user pastes in did not compile at all. `docs/algos.md` had skipped #352 as too specialised; the user asked for it.
+
+**Decision.**
+
+- **Opt-in, same type.** `compile_backtracking` returns the same `Regex`, tagged with its engine, so `is_match`, `find`, `captures` and `replace_all` run either engine unchanged. `compile` still builds only the Pike VM and now answers `NeedsBacktracking` (not `InvalidPattern`) for a construct only the backtracker runs, so a caller knows which engine to ask for.
+- **Constructs:** backreferences `\1`..`\9`, `\k<name>` and `(?P=name)`, named groups `(?<name>...)`/`(?P<name>...)` (regular, so the Pike VM takes them too, with `group_index`), lookahead, fixed-width lookbehind (Python's rule), atomic groups and possessive repeats. `case_insensitive` folds backreference comparison. Recursion, conditionals and inline flags are out.
+- **No hang, no allocation.** A step budget of 1,000,000 plus 1,000 per byte searched answers `TooManySteps`; the backtrack stack (32,768 entries, allocated by `compile`) answers `TooDeep`. `is_match` and `find` return no error, so they answer "no match" and `last_error` names the cause.
+- `a*+` and `a{2}+` used to compile silently as a repeat of a repeat; `+` after a quantifier is now possessive, as in every PCRE-family engine.
+
+**Evidence.**
+
+- `link/text_regex_backtrack` passes on both hosts under both compilers. Its expectations are generated from Python 3.12's `re` by `vectors.py`.
+- It covers each construct, `replace_all`, 18 refusals and 40 seeded random patterns. `(a+)+$` over forty `a`s and a `b` stops with `TooManySteps` well inside a second.
+- 3,300 further random patterns disagreed with Python only on exact possessive counts (`(.?b){2}+`). CPython 3.12.10 there departs from its documented `x{m,n}+` = `(?>x{m,n})`; written atomically, Python gives this engine's answers.
+- `link/text_regex` and `link/fmt_json_schema` are unchanged and pass.
+
+---
+
+## D1691 — `e.math.opt.milp`: branch and cut with Gomory mixed-integer cuts (#1987, #1988)
+
+**Why.** `e.math.opt.simplex` solves `Ax ≤ b, x ≥ 0` only, and integer programming is what scheduling and packing callers actually need.
+
+**Decision.**
+
+- **Its own LP.** A dense bounded-variable simplex over ranged rows and bounded variables: the dual simplex re-solves after a branch or a cut, the primal (sum-of-infeasibilities phase one, Dantzig pricing falling back to Bland) otherwise. `opt.simplex` is left as it is.
+- **Cuts at the root.** Gomory mixed-integer cuts are taken from the optimal root tableau for up to `cut_rounds` rounds, stopping when the bound stops moving. A cut is refused when its coefficient range passes 1e6. `cut_rounds = 0` switches them off.
+- **Search.** Best-bound node selection, branching on the most fractional variable, with an optional relative gap. A new incumbent is polished by fixing its rounded integers and re-solving the continuous variables. `solve` answers `Optimal`, `Infeasible`, `Unbounded` or `NodeLimit` with the objective, the bound, and the nodes and cuts used. All storage is the caller's (`scratch_len`, `slot_len`).
+- Out, each with a `ponytail:` note: presolve, a sparse LU, other cut families, and parallel nodes.
+
+**Evidence.**
+
+- `link/math_opt_milp` passes on both hosts under both compilers against `scipy.optimize.milp` (HiGHS).
+- It covers knapsack, general and mixed integers, equality rows, assignment, set cover, infeasible and unbounded instances, and the node limit, each with cuts on and off.
+- Gomory's example closes in fewer nodes with cuts, and twenty random instances match HiGHS within 1e-6.
+- A throwaway probe of 2,000 further instances agreed with and without cuts, and the cuts took total nodes from 38,208 to 29,585.
+
+---
+
+## D1692 — `e.algo.check`: explicit-state and bounded model checking (#2224, #2225)
+
+**Why.** `e.algo.sat` and `e.algo.smt` could decide formulas but nothing explored a transition system, and checking `e.sync`-style protocols needs exactly that.
+
+**Decision.**
+
+- **`explore`** is breadth-first over states of `width` u64 words. The visited set uses open addressing in the caller's table, and each state keeps a parent link, so the first violation or deadlock found is at the least depth and `trace` returns a shortest counterexample. There is an optional depth bound, and `Full` when storage runs out.
+- **`bmc`** unrolls a boolean transition system, given as clause-building callbacks over `e.algo.sat`, and asks for a bad state at step exactly j for j = 0..k. It answers the least j with per-frame values, or `Bounded`.
+- **`prove`** adds k-induction, so a safe property is proven, not only bounded. It has no simple-path constraint, so a property whose unreachable states loop among themselves is never proven (noted in the code).
+- Safety only: liveness, symmetry and partial-order reduction are out.
+
+**Evidence.** `link/algo_check` passes on both hosts under both compilers, with every expected number from a Python search.
+
+- Peterson's two-process mutex is safe: 20 states, 34 transitions.
+- A test-then-set mutex is caught with Python's shortest 5-state trace, and the trace replays.
+- Three dining philosophers deadlock at (1,1,1).
+- A 4-bit counter reaches 11 at exactly step 11, and k-induction proves 13 unreachable at depth 2.
+
+---
+
+## D1693 — `e.debug.dump`: ELF cores and Windows minidumps (#1645)
+
+**Why.** Crash reports need the dump a crash leaves. D1581's DWARF pairs with it, and the library had no reader.
+
+**Decision.**
+
+- **One view over two formats.** `parse` reads either format by its magic.
+  - From an x86-64 ELF core: NT_PRSTATUS, NT_PRPSINFO, NT_SIGINFO, NT_FILE and the PT_LOAD memory.
+  - From a minidump: threads with their CONTEXT, modules with UTF-16 names, both memory lists, the exception and system info.
+  - The result is threads with registers, modules or mapped files, and the crash.
+- **`read_memory`** may span adjacent regions but refuses a read that leaves them all (`Unmapped`). Names and memory are views into the caller's bytes.
+- **Writing goes through the host.**
+  - `write_minidump` calls dbghelp's `MiniDumpWriteDump`.
+  - `write_core` runs gdb's `gcore`. The process first names any tracer with `prctl(PR_SET_PTRACER)`, because WSL's Yama `ptrace_scope` is 1.
+  - These live in `e.debug.dump.host`, a module made only of per-target variants (surface `spec`).
+- x86-64 only, and no stack unwinding.
+
+**Evidence.**
+
+- `link/debug_dump` passes on both hosts under both compilers.
+- Synthetic dumps come from `vectors.py`: a 1.6 KB core and a 4.7 KB minidump in which each dumped byte is a function of its address. Every field and read is checked, as is each malformed-input refusal.
+- Real dumps: each host dumps the fixture's own process and reads back its thread, its executable (at `GetModuleHandleW(0)` on Windows, among the NT_FILE mappings on Linux) and a module-scope marker.
+- A gcore core of a Neper process is about 1 GB, because it includes the NORESERVE arena reservation. The fixture maps it with `e.fs.mmap` rather than reading it, then removes it.
+
+---
+
+## D1694 — `e.net.auth`: integrated authentication through the host's provider; SQL Server logs in with it (#1403)
+
+**Why.** `x.microsoft.tds` sent an empty SSPI block, so Windows authentication to SQL Server was impossible, and libpq GSS and HTTP `Negotiate` need the same thing. Reimplementing Kerberos would mean owning ticket crypto and KDC traffic that every host already provides.
+
+**Decision.**
+
+- **The host's provider.**
+  - Windows uses SSPI through `@import("secur32.dll")`, which is always present.
+  - Linux uses GSSAPI through `os.dlopen("libgssapi_krb5.so.2")`, as D1646 loads libcrypto, so a host without MIT Kerberos answers `NotFound` instead of failing to load.
+  - `auth.e` serves a target with neither and answers `NotFound` everywhere.
+- **API.**
+  - `client` and `server` open a context for Negotiate, Kerberos or NTLM.
+  - `step` trades one token each way until the context is complete.
+  - `user_name` and `peer_name` name the two sides.
+  - `negotiate_header` and `parse_negotiate` carry a token as `Negotiate <base64>`.
+- **`Context` differs per host**, so the surface is variant-composed (`spec`) and the catalogue leaves it opaque.
+- **Windows names the account as `whoami` does.** On a machine linked to a Microsoft account, SSPI calls the user `MicrosoftAccount\…`. `user_name` looks the account up from the token's SID instead.
+- **TDS.** With an empty `Options.user`, LOGIN7 sets fIntSecurity and carries the first Negotiate token for `MSSQLSvc/<host>:<port>`. Each server SSPI token (0xED) is answered with a packet of type 0x11 until the login completes.
+  - After the server's last token, LOGINACK follows unasked. Sending an empty SSPI message there makes SQL Server drop the connection.
+  - The context lives between an arena mark and reset, so the SQL-login footprint is unchanged. That path itself is unchanged.
+- LOGIN7 is still one 4 KB packet, so a Kerberos ticket that does not fit it is refused (`ponytail:`).
+
+**Evidence.**
+
+- **Windows.** `link/net_auth` runs in-process Negotiate and NTLM handshakes with the current user; both sides name `ROG\gaddl`. Garbled first tokens, an altered CHALLENGE and an out-of-order message are refused. It passes under both compilers.
+  - In-process NTLM is a local call whose AUTHENTICATE carries no NT response, which is why tampering is tested at the earlier messages.
+- **Linux.** It passes under both compilers, and end to end with Kerberos through `tests/selfhost/kerberos.sh`. That script runs a throwaway MIT realm, NEPER.TEST, from `/tmp` as the user; installing the packages is its only root step, done with `sudo -n`. `run.sh` uses it when `krb5kdc` is installed.
+- **SQL Server.** `link/x_tds_integrated` logs in to the local CELVYX instance with no password, and `SELECT SUSER_SNAME()` names the Windows user. It runs in `run.ps1` beside `x_tds`, which still passes.
+- **Not verified:** SSPI Kerberos (this host is not in a domain) and integrated TDS from Linux (no Kerberos-enabled SQL Server is reachable).
+
+---
+
+## D1695 — `e.algo.csp.ac2001`: arc consistency with last-support pointers (#1972)
+
+**Why.** AC-3 restarts every support search at the first value, which costs O(e·d³). #1972 (AC-4) was skipped as too specialised. AC-2001 (Bessière and Régin, 2001) reaches AC-4's optimal O(e·d²) without support counters, so the entry now points there.
+
+**Decision.**
+
+- **Same calling convention as `ac3`**, plus a caller table `last` of one entry per directed arc and value, holding the last support found.
+- A value whose stored support is still in the domain costs no check. Otherwise the search resumes after the stored support.
+- The domains reached are the same as `ac3`'s. `ac3` and the rest of the module are unchanged.
+
+**Evidence.**
+
+- `link/algo_csp` gains checks 5–10 and passes on both hosts under both compilers.
+- Across 23 instances (the existing examples and 20 random ones), `ac2001` matches `ac3` and a Python reference on domains and on wipe-outs.
+- Constraint checks match the reference exactly. `ac2001` is never higher and is lower on 9 instances (967 against 1,051 in total), and a table one entry short is refused.
+
+---

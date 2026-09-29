@@ -1,7 +1,9 @@
 // `e.algo.csp`: AC-3 prunes a chain of strict inequalities, MAC solves
 // 4-queens, limited discrepancy search finds it too, all-different applies
 // a Hall pruning, element, table and cumulative filter as expected, and the
-// unsatisfiable cases answer. Each check exits with its own code.
+// unsatisfiable cases answer. AC-2001 reaches AC-3's domains and answers
+// with no more constraint checks (checks 5..10). Each check exits with its
+// own code.
 
 use e.algo.csp as csp
 use e.io
@@ -40,6 +42,232 @@ fn set_all(domains: []u8, n: usize, k: usize) {
         domains[i] = 1u8
         i += 1usize
     }
+}
+
+// AC-2001 checks (5..10): constraints as a relation table `rel[x][y][a][b]`
+// whose `allowed` counts its calls. Expected domains, answers and call counts
+// come from vectors_ac2001.py: instances 0..2 are the chain over 4 and 2
+// values and 4-queens, 3..22 random binary CSPs from the LCG.
+type Table = struct { calls: usize, fewer: usize, n: usize, k: usize, rel: [900]u8 }
+type Lcg = struct { s: u64 }
+
+fn table_allowed(t: *Table, x: usize, y: usize, a: usize, b: usize) -> bool {
+    t.calls = t.calls + 1usize
+    ret t.rel[((x * t.n + y) * t.k + a) * t.k + b] != 0u8
+}
+
+fn rnd(g: *Lcg) -> u64 {
+    g.s = g.s *% 6364136223846793005u64 +% 1442695040888963407u64
+    ret g.s >> 33u32
+}
+
+fn clear_rel(t: *Table, n: usize, k: usize) {
+    t.n = n
+    t.k = k
+    var i = 0usize
+    while i < 900usize {
+        t.rel[i] = 0u8
+        i += 1usize
+    }
+}
+
+fn set_rel(t: *Table, x: usize, y: usize, a: usize, b: usize, v: u8) {
+    t.rel[((x * t.n + y) * t.k + a) * t.k + b] = v
+    t.rel[((y * t.n + x) * t.k + b) * t.k + a] = v
+}
+
+fn fill(t: *Table, n: usize, k: usize, pairs: []const usize, pred: fn(*Nothing, usize, usize, usize, usize) -> bool) {
+    var nothing = Nothing { unused: 0u8 }
+    clear_rel(t, n, k)
+    var p = 0usize
+    while p < pairs.len {
+        var a = 0usize
+        while a < k {
+            var b = 0usize
+            while b < k {
+                var v = 0u8
+                if pred(&nothing, pairs[p], pairs[p + 1usize], a, b) { v = 1u8 }
+                set_rel(t, pairs[p], pairs[p + 1usize], a, b, v)
+                b += 1usize
+            }
+            a += 1usize
+        }
+        p += 2usize
+    }
+}
+
+fn expected_domains() -> str {
+    ret "11000110001110001111111111111111111111111011111111111100011011011010111111110011010111110111011111111111101111111111110011011101011111111111111111111011111100111111100111010101111100111111101000101010000100001110001110011111011011110000111101110110001111110010101101001010010101111101111111011011101111110101110111001010011010011101101111111100111110111111101"
+}
+
+fn expected_results() -> str {
+    ret "oUooUUoooooooooUoUooooo"
+}
+
+fn ac3_calls(i: usize) -> usize {
+    let xs = [23]usize { 41usize, 8usize, 90usize, 81usize, 12usize, 17usize, 14usize, 57usize, 8usize, 66usize, 53usize, 8usize, 94usize, 50usize, 22usize, 2usize, 22usize, 37usize, 79usize, 41usize, 35usize, 38usize, 81usize }
+    ret xs[i]
+}
+
+fn ac2001_calls(i: usize) -> usize {
+    let xs = [23]usize { 36usize, 8usize, 90usize, 81usize, 12usize, 17usize, 14usize, 57usize, 8usize, 66usize, 53usize, 8usize, 70usize, 48usize, 22usize, 2usize, 17usize, 37usize, 79usize, 36usize, 29usize, 35usize, 66usize }
+    ret xs[i]
+}
+
+// Runs ac3 and ac2001 on one instance and compares them with each other and
+// with the reference: 6 domains, 7 answer, 8 call counts.
+fn run_instance(t: *Table, n: usize, k: usize, pairs: []const usize, start: []const u8, index: usize, offset: usize) -> i32 {
+    var d3: [64]u8 = zero
+    var d2: [64]u8 = zero
+    var queue: [64]usize = zero
+    var queued: [64]u8 = zero
+    var last: [256]usize = zero
+    var i = 0usize
+    while i < n * k {
+        d3[i] = start[i]
+        d2[i] = start[i]
+        i += 1usize
+    }
+    t.calls = 0usize
+    let e3 = csp.ac3[Table](d3[..], n, k, pairs, t, table_allowed, queue[..], queued[..])
+    let c3 = t.calls
+    t.calls = 0usize
+    let e2 = csp.ac2001[Table](d2[..], n, k, pairs, t, table_allowed, queue[..], queued[..], last[..])
+    let c2 = t.calls
+    let want = expected_domains()
+    i = 0usize
+    while i < n * k {
+        // 48 is '0'.
+        if d2[i] != d3[i] || d3[i] + 48u8 != want[offset + i] { ret 6i32 }
+        i += 1usize
+    }
+    // 111 is 'o' (ok), anything else 'U' (Unsatisfiable).
+    let consistent = expected_results()[index] == 111u8
+    if e2 != e3 || (e3 == ok) != consistent || (e3 != ok && e3 != csp.Unsatisfiable) { ret 7i32 }
+    if c3 != ac3_calls(index) || c2 != ac2001_calls(index) || c2 > c3 { ret 8i32 }
+    if c2 < c3 { t.fewer = t.fewer + 1usize }
+    ret 0i32
+}
+
+// Runs ac3 and ac2001 on the same start and answers whether domains and result agree.
+fn same_as_ac3(n: usize, k: usize, pairs: []const usize, pred: fn(*Nothing, usize, usize, usize, usize) -> bool) -> bool {
+    var nothing = Nothing { unused: 0u8 }
+    var d3: [64]u8 = zero
+    var d2: [64]u8 = zero
+    var queue: [64]usize = zero
+    var queued: [64]u8 = zero
+    var last: [256]usize = zero
+    set_all(d3[..], n, k)
+    set_all(d2[..], n, k)
+    let e3 = csp.ac3[Nothing](d3[..], n, k, pairs, &nothing, pred, queue[..], queued[..])
+    let e2 = csp.ac2001[Nothing](d2[..], n, k, pairs, &nothing, pred, queue[..], queued[..], last[..])
+    if e2 != e3 { ret false }
+    var i = 0usize
+    while i < n * k {
+        if d2[i] != d3[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn check_ac2001() -> i32 {
+    // 5: the existing examples, with the plain predicates.
+    var chain: [4]usize = zero
+    chain[1usize] = 1usize
+    chain[2usize] = 1usize
+    chain[3usize] = 2usize
+    var qp: [12]usize = zero
+    var p = 0usize
+    var i = 0usize
+    while i < 4usize {
+        var j = i + 1usize
+        while j < 4usize {
+            qp[p] = i
+            qp[p + 1usize] = j
+            p += 2usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !same_as_ac3(3usize, 4usize, chain[..], less) || !same_as_ac3(3usize, 2usize, chain[..], less) || !same_as_ac3(4usize, 4usize, qp[..], queens) { ret 5i32 }
+
+    // 6..8: the same three through the counting table, then 20 random CSPs.
+    var t = Table { calls: 0usize, fewer: 0usize, n: 0usize, k: 0usize, rel: zero }
+    var start: [64]u8 = zero
+    var offset = 0usize
+    fill(&t, 3usize, 4usize, chain[..], less)
+    set_all(start[..], 3usize, 4usize)
+    var code = run_instance(&t, 3usize, 4usize, chain[..], start[..], 0usize, offset)
+    if code != 0i32 { ret code }
+    offset += 12usize
+    fill(&t, 3usize, 2usize, chain[..], less)
+    set_all(start[..], 3usize, 2usize)
+    code = run_instance(&t, 3usize, 2usize, chain[..], start[..], 1usize, offset)
+    if code != 0i32 { ret code }
+    offset += 6usize
+    fill(&t, 4usize, 4usize, qp[..], queens)
+    set_all(start[..], 4usize, 4usize)
+    code = run_instance(&t, 4usize, 4usize, qp[..], start[..], 2usize, offset)
+    if code != 0i32 { ret code }
+    offset += 16usize
+    var g = Lcg { s: 2001u64 }
+    var rp: [30]usize = zero
+    var index = 3usize
+    while index < 23usize {
+        let n = 3usize + usize(rnd(&g) % 4u64)
+        let k = 2usize + usize(rnd(&g) % 4u64)
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            var j = i + 1usize
+            while j < n {
+                if rnd(&g) % 100u64 < 60u64 {
+                    rp[m] = i
+                    rp[m + 1usize] = j
+                    m += 2usize
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        clear_rel(&t, n, k)
+        p = 0usize
+        while p < m {
+            var a = 0usize
+            while a < k {
+                var b = 0usize
+                while b < k {
+                    var v = 0u8
+                    if rnd(&g) % 100u64 < 55u64 { v = 1u8 }
+                    set_rel(&t, rp[p], rp[p + 1usize], a, b, v)
+                    b += 1usize
+                }
+                a += 1usize
+            }
+            p += 2usize
+        }
+        i = 0usize
+        while i < n * k {
+            start[i] = 1u8
+            if rnd(&g) % 6u64 == 0u64 { start[i] = 0u8 }
+            i += 1usize
+        }
+        code = run_instance(&t, n, k, rp[..m], start[..], index, offset)
+        if code != 0i32 { ret code }
+        offset += n * k
+        index += 1usize
+    }
+    // 9: never more checks than AC-3 (checked above), strictly fewer somewhere.
+    if t.fewer == 0usize { ret 9i32 }
+
+    // 10: a `last` table one entry short is refused.
+    var d: [12]u8 = zero
+    var queue: [4]usize = zero
+    var queued: [4]u8 = zero
+    var last: [15]usize = zero
+    set_all(d[..], 3usize, 4usize)
+    if csp.ac2001[Table](d[..], 3usize, 4usize, chain[..], &t, table_allowed, queue[..], queued[..], last[..]) != csp.TooSmall { ret 10i32 }
+    ret 0i32
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -164,6 +392,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     demand[1usize] = 2usize
     domains[9usize] = 1u8
     if csp.cumulative(domains[..], 5usize, starts_vars[..], duration[..], demand[..], 1usize, 8usize, profile[..]) != csp.Unsatisfiable { os.exit(4i32) }
+
+    // 5..10: AC-2001 against AC-3.
+    let ac2001_code = check_ac2001()
+    if ac2001_code != 0i32 { os.exit(ac2001_code) }
 
     try io.print("algo csp ok\n")
     ret ok

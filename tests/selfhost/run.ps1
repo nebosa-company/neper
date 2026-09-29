@@ -1798,7 +1798,7 @@ $algoSatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $algoSatWritten -ne 'executable written') { throw 'algo_sat emission failed' }
 & $algoSatPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_sat check failed: exit $LASTEXITCODE" }
-# `e.algo.csp`: AC-3 on a chain, MAC and limited discrepancy on 4-queens, all-different Hall pruning, element, table and cumulative (D856).
+# `e.algo.csp`: AC-3 on a chain, MAC and limited discrepancy on 4-queens, all-different Hall pruning, element, table and cumulative (D856); AC-2001 reaching AC-3's domains in no more constraint checks, counted exactly against Python (D1695).
 $algoCspPath = Join-Path $testBuild 'algo-csp-selfhost.exe'
 $algoCspWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_csp\src\main.e') $repo 'x64' 'windows' $algoCspPath
 if ($LASTEXITCODE -ne 0 -or $algoCspWritten -ne 'executable written') { throw 'algo_csp emission failed' }
@@ -2590,6 +2590,36 @@ $fmtOpusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtOpusWritten -ne 'executable written') { throw 'fmt_opus emission failed' }
 & $fmtOpusPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_opus check failed: exit $LASTEXITCODE" }
+# `e.text.regex.compile_backtracking`: backreferences, named groups, lookahead and lookbehind, atomic groups and possessive repeats against Python's `re`, the step budget stopping `(a+)+$`, the backtrack-stack refusal, and `compile` naming what needs the backtracker (D1690).
+$textRegexBacktrackPath = Join-Path $testBuild 'text-regex-backtrack-selfhost.exe'
+$textRegexBacktrackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_regex_backtrack\src\main.e') $repo 'x64' 'windows' $textRegexBacktrackPath
+if ($LASTEXITCODE -ne 0 -or $textRegexBacktrackWritten -ne 'executable written') { throw 'text_regex_backtrack emission failed' }
+& $textRegexBacktrackPath
+if ($LASTEXITCODE -ne 0) { throw "a text_regex_backtrack check failed: exit $LASTEXITCODE" }
+# `e.math.opt.milp`: knapsack, general and mixed integers, equality rows, assignment and set cover against HiGHS with cuts on and off, infeasible and unbounded instances, the node limit, Gomory cuts closing Gomory's example in fewer nodes, and twenty random instances within 1e-6 of HiGHS (D1691).
+$mathOptMilpPath = Join-Path $testBuild 'math-opt-milp-selfhost.exe'
+$mathOptMilpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_opt_milp\src\main.e') $repo 'x64' 'windows' $mathOptMilpPath
+if ($LASTEXITCODE -ne 0 -or $mathOptMilpWritten -ne 'executable written') { throw 'math_opt_milp emission failed' }
+& $mathOptMilpPath
+if ($LASTEXITCODE -ne 0) { throw "a math_opt_milp check failed: exit $LASTEXITCODE" }
+# `e.algo.check`: Peterson's mutual exclusion safe with Python's state count, a broken mutex caught with the shortest trace and the trace replayed, three dining philosophers deadlocked, a 4-bit counter reaching 11 at exactly step 11, and k-induction proving 13 unreachable (D1692).
+$algoCheckPath = Join-Path $testBuild 'algo-check-selfhost.exe'
+$algoCheckWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_check\src\main.e') $repo 'x64' 'windows' $algoCheckPath
+if ($LASTEXITCODE -ne 0 -or $algoCheckWritten -ne 'executable written') { throw 'algo_check emission failed' }
+& $algoCheckPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_check check failed: exit $LASTEXITCODE" }
+# `e.debug.dump`: a generated ELF core and minidump read field by field with every malformed-input refusal, then a real dump of the fixture's own process (dbghelp on Windows, gcore on Linux) whose module list, thread and a marked global read back (D1693).
+$debugDumpPath = Join-Path $testBuild 'debug-dump-selfhost.exe'
+$debugDumpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\debug_dump\src\main.e') $repo 'x64' 'windows' $debugDumpPath
+if ($LASTEXITCODE -ne 0 -or $debugDumpWritten -ne 'executable written') { throw 'debug_dump emission failed' }
+& $debugDumpPath
+if ($LASTEXITCODE -ne 0) { throw "a debug_dump check failed: exit $LASTEXITCODE" }
+# `e.net.auth`: an in-process Negotiate and NTLM handshake with the current user on Windows naming the account `whoami` names, garbled and out-of-order tokens refused, the header round trip, and on Linux the GSSAPI path (Kerberos against kerberos.sh's throwaway KDC when one is installed) (D1694).
+$netAuthPath = Join-Path $testBuild 'net-auth-selfhost.exe'
+$netAuthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_auth\src\main.e') $repo 'x64' 'windows' $netAuthPath
+if ($LASTEXITCODE -ne 0 -or $netAuthWritten -ne 'executable written') { throw 'net_auth emission failed' }
+& $netAuthPath
+if ($LASTEXITCODE -ne 0) { throw "a net_auth check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
@@ -2810,6 +2840,11 @@ try {
 $tdsPath = Join-Path $testBuild 'x-tds-selfhost.exe'
 $tdsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_tds\src\main.e') $repo 'x64' 'windows' $tdsPath
 if ($LASTEXITCODE -ne 0 -or $tdsWritten -ne 'executable written') { throw 'x.microsoft.tds emission failed' }
+# Integrated login: no user name, so LOGIN7 carries an SSPI Negotiate token for the current Windows
+# user and `SELECT SUSER_SNAME()` must name that user (D1694).
+$tdsIntegratedPath = Join-Path $testBuild 'x-tds-integrated-selfhost.exe'
+$tdsIntegratedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_tds_integrated\src\main.e') $repo 'x64' 'windows' $tdsIntegratedPath
+if ($LASTEXITCODE -ne 0 -or $tdsIntegratedWritten -ne 'executable written') { throw 'x_tds_integrated emission failed' }
 # `x.openssl.crypto` finds libcrypto on the DLL search path; nothing ships it, so the suite puts
 # <tools>\openssl (Git for Windows' libcrypto-3-x64.dll) first on PATH for these two runs (D1646).
 $opensslPath = Join-Path $testBuild 'x-openssl-selfhost.exe'
@@ -2830,6 +2865,8 @@ try {
     }
     & $tdsPath localhost $tds['tds_port'] $tds['tds_root'] $tds['tds_user'] $tds['tds_password']
     if ($LASTEXITCODE -ne 0) { throw "the SQL Server driver answered wrongly: exit $LASTEXITCODE" }
+    & $tdsIntegratedPath localhost $tds['tds_port'] $tds['tds_root']
+    if ($LASTEXITCODE -ne 0) { throw "the SQL Server integrated login answered wrongly: exit $LASTEXITCODE" }
 } finally {
     $env:PATH = $pathBeforeOpenssl
     & (Join-Path $PSScriptRoot 'sqlserver.ps1') stop $sqlServer

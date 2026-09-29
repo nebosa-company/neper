@@ -2569,6 +2569,39 @@ conflict), `walksat`, `preprocess`, `satisfied`; `tseitin_and/or/xor/not`, `at_m
 (sequential counter), `pseudo_boolean` (a decision diagram over partial sums) and
 `equivalent` (a miter solved).
 
+### `e.algo.check`
+
+```neper
+type Verdict = enum u8 { Safe, Violated, Deadlock, Bounded }
+type Result = struct { verdict: Verdict, states: usize, transitions: usize, depth: usize, last: usize }
+type Solver = struct { assignment: []i8, trail: []u32, level: []u32, flipped: []u8, learned: []i32, learned_starts: []usize }
+error TooSmall
+error Invalid
+error Full
+const ROOT: u32 = 4294967295u32
+
+fn hash_state(s: []const u64) -> u64
+fn same_state(a: []const u64, b: []const u64) -> bool
+fn visit(s: []const u64, width: usize, store: []u64, table: []u32, count: usize, capacity: usize) -> (usize, bool, err)
+fn explore[Ctx: type](ctx: *Ctx, width: usize, initial: []const u64, successors: fn(*Ctx, []const u64, []u64) -> usize, invariant: fn(*Ctx, []const u64) -> bool, deadlock: bool, max_depth: usize, store: []u64, parent: []u32, table: []u32, scratch: []u64) -> (Result, err)
+fn trace(parent: []const u32, last: usize, out: []u32) -> (usize, err)
+fn solver(assignment: []i8, trail: []u32, level: []u32, flipped: []u8, learned: []i32, learned_starts: []usize) -> Solver
+fn satisfiable_with(f: *sat.Cnf, lit: i32, s: *Solver) -> (bool, err)
+fn fresh_frame(f: *sat.Cnf, frame: []i32)
+fn bmc[Ctx: type](ctx: *Ctx, n: usize, init: fn(*Ctx, *sat.Cnf, []const i32) -> err, trans: fn(*Ctx, *sat.Cnf, []const i32, []i32) -> err, bad: fn(*Ctx, *sat.Cnf, []const i32) -> (i32, err), k: usize, f: *sat.Cnf, frames: []i32, s: *Solver, values: []u8) -> (Verdict, usize, err)
+fn prove[Ctx: type](ctx: *Ctx, n: usize, init: fn(*Ctx, *sat.Cnf, []const i32) -> err, trans: fn(*Ctx, *sat.Cnf, []const i32, []i32) -> err, bad: fn(*Ctx, *sat.Cnf, []const i32) -> (i32, err), k: usize, base: *sat.Cnf, frames: []i32, step: *sat.Cnf, step_frames: []i32, s: *Solver, values: []u8) -> (Verdict, usize, err)
+```
+
+Model checking over caller storage. `explore` is explicit-state checking:
+breadth-first search over states of `width` u64 words with a visited set in
+the caller's table and a parent link per state, so the first violation or
+deadlock found is at the least depth and `trace` answers a shortest
+counterexample. `bmc` unrolls a boolean transition system, given as
+clause-building callbacks over `e.algo.sat`, and asks whether a bad state is
+reachable at step exactly j for j = 0..k; `prove` adds k-induction so a safe
+property is proven rather than bounded. Safety only: liveness and state-space
+reductions are out.
+
 ### `e.algo.csp`
 
 ```neper
@@ -2579,6 +2612,8 @@ error Unsatisfiable
 fn count(domains: []const u8, k: usize, x: usize) -> usize
 fn revise[Ctx: type](domains: []u8, k: usize, x: usize, y: usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool) -> bool
 fn ac3[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, queue: []usize, queued: []u8) -> err
+fn revise2001[Ctx: type](domains: []u8, k: usize, x: usize, y: usize, arc: usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, last: []usize) -> bool
+fn ac2001[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, queue: []usize, queued: []u8, last: []usize) -> err
 fn solve[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, assignment: []usize, saved: []u8, queue: []usize, queued: []u8) -> (bool, err)
 fn mac[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, assignment: []usize, saved: []u8, queue: []usize, queued: []u8, depth: usize) -> bool
 fn limited_discrepancy[Ctx: type](domains: []const u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, max_discrepancies: usize, assignment: []usize) -> (bool, usize, err)
@@ -4227,18 +4262,21 @@ type Regex = struct { state: *void }
 type Match = struct { start: usize, end: usize }
 type Captures = struct { whole: Match, groups: []const Match }
 type Options = struct { case_insensitive: bool, multiline: bool, dot_matches_newline: bool }
-type Op = enum u8 { Char, Any, Class, Split, Jmp, Save, Bol, Eol, WordB, NotWordB, Done }
+type Op = enum u8 { Char, Any, Class, Split, Jmp, Save, Bol, Eol, WordB, NotWordB, Done, Backref, Look, LookEnd, Atomic, AtomicEnd, RepStart, RepCheck }
 type Inst = struct { op: Op, x: u32, y: u32 }
-type Kind = enum u8 { Empty, Char, Any, Class, Bol, Eol, WordB, NotWordB, Group, Concat, Alt, Repeat }
+type Kind = enum u8 { Empty, Char, Any, Class, Bol, Eol, WordB, NotWordB, Group, Concat, Alt, Repeat, Backref, Look, Atomic }
 type Node = struct { kind: Kind, first: u32, second: u32, value: u32, min: u32, max: u32, lazy: bool }
-type Parser = struct { pattern: str, at: usize, nodes: []Node, node_count: usize, ranges: []u32, range_count: usize, groups: u32, depth: u32, options: Options }
-type Emitter = struct { insts: []Inst, count: usize, writing: bool }
+type Parser = struct { pattern: str, at: usize, nodes: []Node, node_count: usize, ranges: []u32, range_count: usize, groups: u32, depth: u32, options: Options, backtracking: bool, names: []u32 }
+type Emitter = struct { insts: []Inst, count: usize, writing: bool, backtracking: bool, loop_base: u32, loops: u32 }
 type Threads = struct { pcs: []u32, caps: []usize, seen: []u32, gen: u32, count: usize }
-type Program = struct { insts: []Inst, ranges: []u32, groups: usize, slots: usize, options: Options, a: Threads, b: Threads, work: []usize, result: []usize, stack: []usize }
+type Program = struct { insts: []Inst, ranges: []u32, groups: usize, slots: usize, options: Options, a: Threads, b: Threads, work: []usize, result: []usize, stack: []usize, backtracking: bool, source: str, names: []const u32, track: []usize, depth: usize, steps: usize, failure: err }
 type Nfa = struct { state: *void }
 type Dfa = struct { table: []const u32, points: []const u32, classes: usize, states: usize, start: u32, accept: []const u8 }
 error InvalidPattern
 error TooComplex
+error NeedsBacktracking
+error TooManySteps
+error TooDeep
 error TooLarge
 error Unsupported
 const NONE: usize = 18446744073709551615usize
@@ -4246,6 +4284,15 @@ const NO_NODE: u32 = 4294967295u32
 const MAX_INSTS: usize = 16384usize
 const MAX_REPEAT: u32 = 1000u32
 const MAX_DEPTH: u32 = 64u32
+const MAX_TRACK: usize = 32768usize
+const MIN_STEPS: usize = 1000000usize
+const STEPS_PER_BYTE: usize = 1000usize
+const MAX_WIDTH: usize = 1048576usize
+const T_ALT: usize = 0usize
+const T_CAP: usize = 1usize
+const T_ATOMIC: usize = 2usize
+const T_LOOK: usize = 3usize
+const T_NOTLOOK: usize = 4usize
 
 fn node(p: *Parser, kind: Kind, first: u32, second: u32, value: u32) -> (u32, err)
 fn add_range(p: *Parser, lo: u32, hi: u32) -> err
@@ -4256,6 +4303,11 @@ fn is_shorthand(scalar: u32) -> bool
 fn escape_scalar(scalar: u32) -> (u32, err)
 fn class_node(p: *Parser, start: usize, negated: bool) -> (u32, err)
 fn parse_class(p: *Parser) -> (u32, err)
+fn parse_name(p: *Parser, close: u32) -> (u32, u32, err)
+fn find_name(p: *Parser, start: u32, length: u32) -> u32
+fn open_group(p: *Parser, start: u32, length: u32) -> (u32, err)
+fn named_backref(p: *Parser, start: u32, length: u32) -> (u32, err)
+fn fixed_width(p: *Parser, at: u32) -> (usize, bool)
 fn parse_escape(p: *Parser) -> (u32, err)
 fn parse_atom(p: *Parser) -> (u32, err)
 fn parse_number(p: *Parser) -> (u32, bool)
@@ -4271,6 +4323,10 @@ fn gen_node(e: *Emitter, p: *Parser, at: u32) -> err
 fn gen_program(e: *Emitter, p: *Parser, root: u32) -> err
 fn threads(a: *mem.Arena, insts: usize, slots: usize) -> (Threads, err)
 fn compile(a: *mem.Arena, pattern: str, options: Options) -> (Regex, err)
+fn compile_backtracking(a: *mem.Arena, pattern: str, options: Options) -> (Regex, err)
+fn build(a: *mem.Arena, pattern: str, options: Options, backtracking: bool) -> (Regex, err)
+fn group_index(r: *const Regex, name: str) -> (usize, bool)
+fn last_error(r: *const Regex) -> err
 fn is_word_byte(text: str, at: usize) -> bool
 fn holds(prog: *Program, op: Op, text: str, pos: usize) -> bool
 fn in_ranges(prog: *Program, first: u32, count: u32, scalar: u32) -> bool
@@ -4278,6 +4334,15 @@ fn consumes(prog: *Program, inst: Inst, scalar: u32) -> bool
 fn clear(t: *Threads)
 fn add_thread(prog: *Program, t: *Threads, pc: u32, pos: usize, text: str)
 fn run(prog: *Program, text: str, from: usize, first: bool) -> bool
+fn bt_push(prog: *Program, kind: usize, x: usize, y: usize) -> bool
+fn bt_mark(prog: *Program) -> usize
+fn bt_cut(prog: *Program, m: usize)
+fn bt_unwind(prog: *Program, m: usize)
+fn step_back(text: str, pos: usize, count: u32) -> (usize, bool)
+fn backref(prog: *Program, text: str, group: u32, pos: usize) -> (usize, bool)
+fn bt_fail(prog: *Program) -> (u32, usize, bool)
+fn bt_attempt(prog: *Program, text: str, start: usize) -> bool
+fn bt_search(prog: *Program, text: str, from: usize) -> bool
 fn is_match(r: *const Regex, text: str) -> bool
 fn find(r: *const Regex, text: str, from: usize) -> (Match, bool)
 fn captures(a: *mem.Arena, r: *const Regex, text: str, from: usize) -> (Captures, bool, err)
@@ -7513,6 +7578,77 @@ zero while preserving the address.
 
 ## 7. Application facilities and networking
 
+### `e.debug.dump`
+
+```neper
+type Kind = enum u8 { Core, Minidump }
+type Registers = struct { rax: u64, rbx: u64, rcx: u64, rdx: u64, rsi: u64, rdi: u64, rbp: u64, rsp: u64, r8: u64, r9: u64, r10: u64, r11: u64, r12: u64, r13: u64, r14: u64, r15: u64, rip: u64, flags: u64 }
+type Thread = struct { id: u64, signal: u32, registers: Registers }
+type Module = struct { base: u64, size: u64, offset: u64, name: str }
+type Region = struct { address: u64, size: u64, offset: usize }
+type Dump = struct { kind: Kind, bytes: []const u8, pid: u64, process_name: str, threads: []Thread, modules: []Module, regions: []Region, has_crash: bool, crash_thread: u64, code: u32, signal_code: i32, fault_address: u64, crash_registers: Registers, processors: u32, os_major: u32, os_minor: u32, os_build: u32 }
+type Note = struct { kind: u32, core: bool, desc: []const u8 }
+error BadMagic
+error Truncated
+error OutOfBounds
+error Unsupported
+error Unmapped
+const NT_PRSTATUS: u32 = 1u32
+const NT_PRPSINFO: u32 = 3u32
+const NT_SIGINFO: u32 = 1397311305u32
+const NT_FILE: u32 = 1179208773u32
+const MDMP: u32 = 1347241037u32
+const CONTEXT_MIN: usize = 256usize
+const DATA_SEGMENTS: u32 = 1u32
+const FULL_MEMORY: u32 = 2u32
+
+fn le(b: []const u8, at: usize, n: usize) -> u64
+fn fits(b: []const u8, at: u64, n: u64) -> bool
+fn c_string(b: []const u8) -> str
+fn parse(a: *mem.Arena, bytes: []const u8) -> (Dump, err)
+fn read_memory(d: *const Dump, address: u64, dst: []u8) -> err
+fn find_thread(d: *const Dump, id: u64) -> (Thread, bool)
+fn note_at(notes: []const u8, at: usize) -> (Note, usize, err)
+fn core_registers(b: []const u8, at: usize) -> Registers
+fn core_note(a: *mem.Arena, d: *Dump, n: Note, fill: bool, count: *usize) -> err
+fn parse_core(a: *mem.Arena, bytes: []const u8) -> (Dump, err)
+fn context_registers(b: []const u8, at: usize) -> Registers
+fn minidump_string(a: *mem.Arena, b: []const u8, rva: u64) -> (str, err)
+fn parse_minidump(a: *mem.Arena, bytes: []const u8) -> (Dump, err)
+fn minidump_stream(a: *mem.Arena, d: *Dump, kind: u64, stream: []const u8, regions: []Region, used: *usize) -> err
+fn context_at(b: []const u8, stream: []const u8, at: usize) -> (Registers, err)
+fn write_minidump(a: *mem.Arena, pid: u32, path: str, flags: u32) -> err
+fn write_core(a: *mem.Arena, pid: u32, path: str) -> err
+```
+
+Post-mortem dumps. `parse` reads an x86-64 ELF core (NT_PRSTATUS, NT_PRPSINFO,
+NT_SIGINFO, NT_FILE and the PT_LOAD memory) or a Windows minidump (threads with
+their CONTEXT, modules, memory lists, the exception and system info) into one
+view: threads with registers, modules or mapped files, the crash, and
+`read_memory`, which refuses a read that leaves every region. `write_minidump`
+(dbghelp's MiniDumpWriteDump) and `write_core` (gdb's `gcore`) produce them
+through `e.debug.dump.host`. No stack unwinding.
+
+### `e.debug.dump.host`
+
+```neper
+error Unsupported
+error NotFound
+error Failed
+
+fn process_id() -> u32
+fn image_base() -> u64
+fn write_minidump(a: *mem.Arena, pid: u32, path: str, flags: u32) -> err
+fn write_core(a: *mem.Arena, pid: u32, path: str) -> err
+```
+
+The host half of `e.debug.dump`, composed of per-target variants only (`host.windows.e`,
+`host.linux.e`). Windows writes a minidump through dbghelp's `MiniDumpWriteDump` and answers
+`Unsupported` for a core; Linux writes a core with gdb's `gcore` (`NotFound` when gdb is not
+installed; the process names any tracer with `prctl(PR_SET_PTRACER)` for the call, since Yama
+refuses a sibling otherwise) and answers `Unsupported` for a minidump. `image_base` is the
+executable's load address on Windows and 0 on Linux.
+
 ### `e.metrics`
 
 ```neper
@@ -7797,6 +7933,43 @@ fn u_label_valid(points: []const u32) -> bool
 RFC 3492 `punycode_encode`/`punycode_decode` and IDNA labels: `to_ascii` (NFC, simple
 lowercase, `xn--` A-labels, length and hyphen rules), `to_unicode`, `is_ascii_label`,
 `label_valid`.
+
+### `e.net.auth`
+
+```neper
+type Mechanism = enum u8 { Negotiate, Kerberos, Ntlm }
+error NotFound
+error Refused
+error TooSmall
+error Failed
+error Invalid
+const MAX_TOKEN: usize = 65536usize
+
+fn client(a: *mem.Arena, mechanism: Mechanism, service_principal: str) -> (*Context, err)
+fn server(a: *mem.Arena, mechanism: Mechanism) -> (*Context, err)
+fn step(c: *Context, input: []const u8, out: []u8) -> (usize, bool, err)
+fn user_name(c: *Context, dst: []u8) -> (str, err)
+fn peer_name(c: *Context, dst: []u8) -> (str, err)
+fn close(c: *Context) -> err
+fn negotiate_header(dst: []u8, token: []const u8) -> (str, err)
+fn parse_negotiate(dst: []u8, value: str) -> ([]u8, err)
+```
+
+Integrated authentication through the host's security provider rather than a
+Kerberos of its own: SSPI (secur32.dll) on Windows and GSSAPI on Linux, the
+latter found at run time with `os.dlopen("libgssapi_krb5.so.2")` so a host
+without it answers `NotFound`. `client` and `server` open a context for
+Negotiate (SPNEGO), Kerberos or NTLM, `step` trades one token each way until
+the context is complete, and `user_name`/`peer_name` name the two sides.
+`negotiate_header` and `parse_negotiate` carry a token in HTTP's
+`Negotiate <base64>` form. `x.microsoft.tds` logs in with it when no user
+name is given.
+
+The surface is composed of per-target variants (`auth.windows.e`, `auth.linux.e`, and
+`auth.e` for a target with no provider, where every context answers `NotFound`). `Context`
+is each host's own struct -- SSPI handles on Windows, the loaded library's function table
+and GSSAPI handles on Linux -- so the catalogue leaves it opaque and callers hold only
+`*Context`.
 
 ### `e.net.balance`
 
@@ -14202,6 +14375,62 @@ One infeasible-start primal-dual interior-point method behind `interior_point`
 (`max c·x`) and `quadratic_program` (`min ½ x·Q x + c·x`), both subject to `A x <= b`,
 `x >= 0`; an equality is two inequalities. A programme that is infeasible or unbounded
 is `Stalled` when `max_iterations` runs out; scratch is `(n + m)^2 + 4 (n + m)`.
+
+### `e.math.opt.milp`
+
+```neper
+type Problem = struct { n: usize, m: usize, c: []const f64, a: []const f64, row_lower: []const f64, row_upper: []const f64, lower: []const f64, upper: []const f64, integer: []const bool }
+type Options = struct { node_limit: u32, cut_rounds: u32, max_cuts: usize, gap: f64, integrality: f64 }
+type Status = enum u8 { Optimal, Infeasible, Unbounded, NodeLimit }
+type Result = struct { status: Status, objective: f64, bound: f64, nodes: u32, cuts: u32 }
+type Lp = struct { n: usize, m: usize, rows: usize, width: usize, a: []const f64, cost: []const f64, cut: []f64, t: []f64, lo: []f64, hi: []f64, val: []f64, d: []f64, w: []f64, basis: []usize, state: []usize, integral: []usize, pivots: usize }
+error TooSmall
+error Invalid
+error Stalled
+const BASIC: usize = 0usize
+const AT_LOWER: usize = 1usize
+const AT_UPPER: usize = 2usize
+const FREE: usize = 3usize
+const LP_OPTIMAL: usize = 0usize
+const LP_INFEASIBLE: usize = 1usize
+const LP_UNBOUNDED: usize = 2usize
+const LP_STALLED: usize = 3usize
+
+fn feasibility() -> f64
+fn optimality() -> f64
+fn pivot_tolerance() -> f64
+fn infinity() -> f64
+fn finite(v: f64) -> bool
+fn defaults() -> Options
+fn scratch_len(n: usize, m: usize, max_cuts: usize, nodes: usize) -> usize
+fn slot_len(n: usize, m: usize, max_cuts: usize) -> usize
+fn row_coefficient(lp: *const Lp, k: usize, j: usize) -> f64
+fn column_cost(lp: *const Lp, j: usize) -> f64
+fn lp_objective(lp: *const Lp) -> f64
+fn lp_pivot(lp: *Lp, r: usize, q: usize)
+fn place_nonbasic(lp: *Lp, j: usize, prefer_upper: bool)
+fn lp_refactor(lp: *Lp) -> bool
+fn lp_values(lp: *Lp)
+fn lp_weights(lp: *Lp) -> bool
+fn lp_duals(lp: *Lp, phase_one: bool)
+fn lp_primal(lp: *Lp) -> usize
+fn lp_dual(lp: *Lp) -> usize
+fn lp_solve(lp: *Lp) -> usize
+fn fraction(v: f64) -> f64
+fn branching_variable(lp: *const Lp, tolerance: f64) -> usize
+fn gmi_round(lp: *Lp, max_rows: usize, g: []f64) -> usize
+fn is_whole(v: f64) -> bool
+fn solve(p: *const Problem, o: Options, x: []f64, scratch: []f64, slots: []usize) -> (Result, err)
+```
+
+Mixed-integer linear programming: minimise `c·x` over ranged rows and bounded
+variables, some of them integer. A dense bounded-variable simplex (dual after a
+branch or a cut, primal with a sum-of-infeasibilities phase one otherwise) under
+best-bound branch and bound on the most fractional variable, with Gomory
+mixed-integer cuts from the root tableau (`cut_rounds = 0` turns them off).
+`solve` answers `Optimal`, `Infeasible`, `Unbounded` or `NodeLimit` with the
+objective, the best bound, and the nodes and cuts used; all storage is the
+caller's (`scratch_len`, `slot_len`).
 
 ### `e.ml.linear`
 
