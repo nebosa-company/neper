@@ -45,7 +45,7 @@ def renamed(path):
         if r.get('record') == 'symbol' and r['kind'] in ('local', 'parameter') and r['module'] == module and r.get('selection_span'):
             symbols[r['id']] = r['name'].encode()
             s = r['selection_span']; spans.append((s['byte_start'], s['byte_end'], r['id']))
-        if r.get('record') == 'reference' and r.get('target_id') in symbols and r['role'] in ('read', 'write', 'call', 'address'):
+        if r.get('record') == 'reference' and r.get('target_id') in symbols and r['role'] in ('read', 'write', 'call', 'address', 'type'):
             s = r['source_span']
             if text[s['byte_start']:s['byte_end']] == symbols[r['target_id']]: spans.append((s['byte_start'], s['byte_end'], r['target_id']))
     new_names = {sid: same_length_name(name, taken) for sid, name in symbols.items()}

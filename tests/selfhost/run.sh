@@ -5159,6 +5159,12 @@ cmp -s "$test_build/conformance-stdin-fmt.e" "$conformance_root/tools/fmt.e" || 
 stdin_usage_status=0
 $test_build/neper-self tokens --json - < "$conformance_root/tokens/every_kind.e" > /dev/null 2>&1 || stdin_usage_status=$?
 [ "$stdin_usage_status" -eq 1 ]
+# (D1711) JSON output that cannot be written -- /dev/full refuses every write: one ASCII
+# line on stderr and exit 2, tooling section 2's one exception to an empty stderr.
+unwritable_status=0
+$test_build/neper-self check-file "$conformance_root/reject/scope.e" "$repo" x64 linux --json > /dev/full 2> "$test_build/unwritable.stderr" || unwritable_status=$?
+[ "$unwritable_status" -eq 2 ]
+[ "$(cat "$test_build/unwritable.stderr")" = 'error: the JSON output cannot be written' ]
 # `--absolute-paths` (D290): the operand's absolute spelling as `absolute_path` beside its
 # identity and nothing else -- the stream with that field taken out is the golden. An
 # absolute operand is spelled as given; a relative one under the current directory.
@@ -5315,6 +5321,12 @@ check_lib_status=0
 $test_build/neper-self check-project "$conformance_root/tools/check_project_lib" "$repo" x64 linux "$test_build/check-project-lib-work" --json > "$test_build/conformance-tools-check-project-lib.jsonl" || check_lib_status=$?
 [ "$check_lib_status" -eq 1 ]
 cmp "$test_build/conformance-tools-check-project-lib.jsonl" "$conformance_root/tools/check_project_lib.expected.jsonl"
+# (D1710) A note's `parent` is its error's index in the merged stream, also when the
+# error comes from a module walked after the note's.
+check_notes_status=0
+$test_build/neper-self check-project "$conformance_root/tools/check_project_notes" "$repo" x64 linux "$test_build/check-project-lib-work" --json > "$test_build/conformance-tools-check-project-notes.jsonl" || check_notes_status=$?
+[ "$check_notes_status" -eq 1 ]
+cmp "$test_build/conformance-tools-check-project-notes.jsonl" "$conformance_root/tools/check_project_notes.expected.jsonl"
 # `--language-version` (D283): the advertised 0.1 is accepted on any command and taken
 # off the arguments; another is E-CLI-9999 before any source is read, as a stream under
 # `--json` whose header names the command.

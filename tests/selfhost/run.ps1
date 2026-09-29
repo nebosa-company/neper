@@ -5463,6 +5463,12 @@ $checkLibActual = Join-Path $testBuild 'conformance-tools-check-project-lib.json
 cmd /c "`"$compiler`" check-project `"$(Join-Path $conformanceRoot 'tools/check_project_lib')`" `"$repo`" x64 windows `"$checkLibWork`" --json > `"$checkLibActual`""
 if ($LASTEXITCODE -ne 1) { throw "check-project --json over a broken lib exited $LASTEXITCODE, not 1" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $checkLibActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/check_project_lib.expected.jsonl')).Hash) { throw "check-project --json over a broken lib differs from the conformance corpus" }
+# (D1710) A note's `parent` is its error's index in the merged stream, also when the
+# error comes from a module walked after the note's.
+$checkNotesActual = Join-Path $testBuild 'conformance-tools-check-project-notes.jsonl'
+cmd /c "`"$compiler`" check-project `"$(Join-Path $conformanceRoot 'tools/check_project_notes')`" `"$repo`" x64 windows `"$checkLibWork`" --json > `"$checkNotesActual`""
+if ($LASTEXITCODE -ne 1) { throw "check-project --json over notes exited $LASTEXITCODE, not 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $checkNotesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/check_project_notes.expected.jsonl')).Hash) { throw "check-project --json over notes differs from the conformance corpus" }
 # `--language-version` (D283): the advertised 0.1 is accepted on any command and taken
 # off the arguments; another is E-CLI-9999 before any source is read, as a stream under
 # `--json` whose header names the command.
