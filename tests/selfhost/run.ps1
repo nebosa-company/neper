@@ -6840,7 +6840,7 @@ $hashSurface = Get-Content (Join-Path $repo 'lib\e\algo\hash.e') |
         if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.algo.hash contains an unreadable public declaration' }
         $Matches[1]
     }
-$expectedHashSurface = @('XxHash64', 'Crc32', 'fnv1a32', 'fnv1a64', 'xxhash64', 'xxhash64_init', 'xxhash64_update', 'xxhash64_done', 'crc32', 'crc32_init', 'crc32_update', 'crc32_done', 'adler32', 'fletcher16', 'fletcher32', 'fletcher64', 'lrc', 'murmur3_32', 'murmur3_load64', 'murmur3_fmix64', 'murmur3_x64_128', 'zobrist', 'zobrist_hash', 'zobrist_toggle', 'fletcher', 'murmur3')
+$expectedHashSurface = @('XxHash64', 'Crc32', 'Crc32c', 'fnv1a32', 'fnv1a64', 'xxhash64', 'xxhash64_init', 'xxhash64_update', 'xxhash64_done', 'crc32', 'crc32_init', 'crc32_update', 'crc32_done', 'crc32c', 'crc32c_init', 'crc32c_update', 'crc32c_done', 'adler32', 'fletcher16', 'fletcher32', 'fletcher64', 'lrc', 'murmur3_32', 'murmur3_load64', 'murmur3_fmix64', 'murmur3_x64_128', 'zobrist', 'zobrist_hash', 'zobrist_toggle', 'fletcher', 'murmur3')
 if (($hashSurface -join "`n") -ne ($expectedHashSurface -join "`n")) { throw 'e.algo.hash public declarations differ from module-apis.md' }
 $hashParsed = & $compiler parse-file (Join-Path $repo 'lib\e\algo\hash.e')
 if ($LASTEXITCODE -ne 0 -or $hashParsed -ne 'parse file ok') { throw 'e.algo.hash exceeded or failed CLI parser storage' }

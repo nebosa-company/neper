@@ -6572,6 +6572,7 @@ protocol_output=$("$protocol_executable_path")
 hash_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/e/algo/hash.e")
 expected_hash_surface='XxHash64
 Crc32
+Crc32c
 fnv1a32
 fnv1a64
 xxhash64
@@ -6582,6 +6583,10 @@ crc32
 crc32_init
 crc32_update
 crc32_done
+crc32c
+crc32c_init
+crc32c_update
+crc32c_done
 adler32
 fletcher16
 fletcher32
