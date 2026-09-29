@@ -10,6 +10,14 @@ type Cursor = struct {
     at: usize,
     out: []u8,
     written: usize,
+    // A VEX instruction's state (T010): 256-bit registers, and the extra source vvvv
+    // names, written after the destination; `narrow_rm` is a ymm form whose r/m stays
+    // xmm (a shift's count).
+    ymm: bool,
+    vex: bool,
+    nds: bool,
+    nds_register: usize,
+    narrow_rm: bool,
 }
 
 fn okay(e: err) -> bool {
@@ -132,7 +140,7 @@ fn register8(c: *Cursor, index: usize, rex: bool) -> err {
 }
 
 fn register_xmm(c: *Cursor, index: usize) -> err {
-    try puts(c, "xmm")
+    if c.ymm { try puts(c, "ymm") } else { try puts(c, "xmm") }
     if index >= 10usize { try put(c, 49u8) }
     ret put(c, u8(48usize + index % 10usize))
 }
@@ -193,12 +201,18 @@ fn operand_rm(c: *Cursor, modrm: usize, rex_r: bool, rex_x: bool, rex_b: bool, w
     var rm = modrm & 7usize
     if mode == 3usize {
         if rex_b { rm += 8usize }
+        let wide = c.ymm
+        if c.narrow_rm { c.ymm = false }
         let register_error = register(c, rm, width, rex)
+        c.ymm = wide
         ret (reg, register_error == ok)
     }
-    var size_error = size_word(c, width)
-    if width == 4usize { size_error = ok }
-    if size_error != ok { ret (reg, false) }
+    // An xmm operand's memory takes its size from the instruction: no size word (T010:
+    // it printed `qword` for a sixteen-byte `movups`, which GNU `as` refuses).
+    if width != 4usize {
+        let size_error = size_word(c, width)
+        if size_error != ok { ret (reg, false) }
+    }
     let open_error = put(c, 91u8)
     if open_error != ok { ret (reg, false) }
     var base = rm
@@ -355,6 +369,10 @@ fn two_operands(c: *Cursor, reg_first: bool, width: usize, rex_r: bool, rex_x: b
         if rex_r { reg += 8usize }
         if !okay(register(c, reg, reg_width, rex)) { ret false }
         if !okay(puts(c, ", ")) { ret false }
+        if c.nds {
+            if !okay(register(c, c.nds_register, reg_width, rex)) { ret false }
+            if !okay(puts(c, ", ")) { ret false }
+        }
         let (unused, rm_ok) = operand_rm(c, modrm, rex_r, rex_x, rex_b, width, rex)
         ret rm_ok
     }
@@ -375,9 +393,14 @@ fn instruction(c: *Cursor, start: usize) -> bool {
     var rex_r = false
     var rex_x = false
     var rex_b = false
+    c.ymm = false
+    c.vex = false
+    c.nds = false
+    c.narrow_rm = false
     let (first, present) = fetch(c)
     var opcode = first
     if !present { ret false }
+    if first == 196usize || first == 197usize { ret vex_instruction(c, first) }
     var prefixes = 0usize
     while prefixes < 4usize && (opcode == 240usize || opcode == 243usize || opcode == 242usize || opcode == 102usize) {
         if opcode == 240usize { lock = true }
@@ -620,9 +643,52 @@ fn instruction(c: *Cursor, start: usize) -> bool {
         ret okay(puts(c, "stosd"))
     }
     if opcode != 15usize { ret false }
-    // Two-byte opcodes.
     let (second, second_present) = fetch(c)
     if !second_present { ret false }
+    ret two_byte(c, second, repeat, operand16, rex, rex_w, rex_r, rex_x, rex_b, width)
+}
+
+// The VEX prefixes (D765, T010): C4's three bytes or C5's two carry the inverted REX
+// bits, the opcode map (only 0F is emitted), W, the inverted extra source, the length
+// and the mandatory prefix as `pp`; the 0F map's own rows decode the rest, a `v` ahead.
+fn vex_instruction(c: *Cursor, prefix: usize) -> bool {
+    let (payload, payload_present) = fetch(c)
+    if !payload_present { ret false }
+    let rex_r = (payload & 128usize) == 0usize
+    var rex_x = false
+    var rex_b = false
+    var rex_w = false
+    var last = payload
+    if prefix == 196usize {
+        if (payload & 31usize) != 1usize { ret false }
+        rex_x = (payload & 64usize) == 0usize
+        rex_b = (payload & 32usize) == 0usize
+        let (third, third_present) = fetch(c)
+        if !third_present { ret false }
+        last = third
+        rex_w = (last & 128usize) != 0usize
+    }
+    let pp = last & 3usize
+    var repeat = 0usize
+    if pp == 2usize { repeat = 243usize }
+    if pp == 3usize { repeat = 242usize }
+    let (second, second_present) = fetch(c)
+    if !second_present { ret false }
+    c.vex = true
+    c.ymm = (last & 4usize) != 0usize
+    if second == 119usize && !c.ymm { ret okay(puts(c, "vzeroupper")) }
+    // The moves, the shuffle and the moves to and from a general register read one
+    // operand; a shift by an immediate writes vvvv, which that row prints itself.
+    c.nds_register = 15usize - ((last >> 3usize) & 15usize)
+    c.nds = !(second == 16usize || second == 17usize || second == 18usize || second == 19usize || second == 40usize || second == 110usize || second == 112usize || second == 126usize || (second >= 113usize && second <= 115usize))
+    if !okay(put(c, 118u8)) { ret false }
+    var width = 2usize
+    if rex_w { width = 3usize }
+    ret two_byte(c, second, repeat, pp == 1usize, true, rex_w, rex_r, rex_x, rex_b, width)
+}
+
+// Two-byte opcodes: the 0F map, after the legacy prefixes or a VEX prefix.
+fn two_byte(c: *Cursor, second: usize, repeat: usize, operand16: bool, rex: bool, rex_w: bool, rex_r: bool, rex_x: bool, rex_b: bool, width: usize) -> bool {
     if second == 5usize { ret okay(puts(c, "syscall")) }
     if second == 11usize { ret okay(puts(c, "ud2")) }
     if second == 174usize {
@@ -722,14 +788,31 @@ fn instruction(c: *Cursor, start: usize) -> bool {
             if !predicate_present { ret false }
             ret okay(put_number(c, predicate))
         }
-        if operand16 && (second == 114usize || second == 115usize) {
+        // `pshufd`: the lanes named by the immediate.
+        if operand16 && second == 112usize {
+            if !okay(puts(c, "pshufd ")) { ret false }
+            if !two_operands(c, true, 4usize, rex_r, rex_x, rex_b, rex, 4usize) { ret false }
+            if !okay(puts(c, ", ")) { ret false }
+            let (selector, selector_present) = fetch(c)
+            if !selector_present { ret false }
+            ret okay(put_number(c, selector))
+        }
+        if operand16 && second >= 113usize && second <= 115usize {
             let (modrm, modrm_present) = fetch(c)
             if !modrm_present { ret false }
             let extension = (modrm >> 3usize) & 7usize
             if extension == 6usize { if !okay(puts(c, "psll")) { ret false } }
             if extension == 2usize { if !okay(puts(c, "psrl")) { ret false } }
-            if extension != 6usize && extension != 2usize { ret false }
-            if second == 114usize { if !okay(puts(c, "d ")) { ret false } } else { if !okay(puts(c, "q ")) { ret false } }
+            if extension == 4usize && second != 115usize { if !okay(puts(c, "psra")) { ret false } }
+            if extension != 6usize && extension != 2usize && !(extension == 4usize && second != 115usize) { ret false }
+            if second == 113usize { if !okay(puts(c, "w ")) { ret false } }
+            if second == 114usize { if !okay(puts(c, "d ")) { ret false } }
+            if second == 115usize { if !okay(puts(c, "q ")) { ret false } }
+            // The VEX form's destination is vvvv (NDD); the r/m is the source.
+            if c.vex {
+                if !okay(register(c, c.nds_register, 4usize, rex)) { ret false }
+                if !okay(puts(c, ", ")) { ret false }
+            }
             let (unused, rm_ok) = operand_rm(c, modrm, false, rex_x, rex_b, 4usize, rex)
             if !rm_ok { ret false }
             if !okay(puts(c, ", ")) { ret false }
@@ -739,6 +822,8 @@ fn instruction(c: *Cursor, start: usize) -> bool {
         }
         if operand16 {
             let mnemonic = packed_integer_mnemonic(second)
+            // A shift by a register counts by the low quadword of an xmm, even in a ymm form.
+            c.narrow_rm = (second >= 209usize && second <= 211usize) || (second >= 225usize && second <= 226usize) || (second >= 241usize && second <= 243usize)
             if mnemonic.len != 0usize {
                 if !okay(puts(c, mnemonic)) { ret false }
                 ret two_operands(c, true, 4usize, rex_r, rex_x, rex_b, rex, 4usize)
@@ -812,6 +897,22 @@ fn packed_integer_mnemonic(second: usize) -> str {
     if second == 239usize { ret "pxor " }
     if second == 118usize { ret "pcmpeqd " }
     if second == 116usize { ret "pcmpeqb " }
+    if second == 117usize { ret "pcmpeqw " }
+    // The multiplies the baseline builds out of, and the lanes moved between widths.
+    if second == 244usize { ret "pmuludq " }
+    if second == 96usize { ret "punpcklbw " }
+    if second == 98usize { ret "punpckldq " }
+    if second == 104usize { ret "punpckhbw " }
+    if second == 103usize { ret "packuswb " }
+    // Shifts by the low quadword of a register.
+    if second == 241usize { ret "psllw " }
+    if second == 242usize { ret "pslld " }
+    if second == 243usize { ret "psllq " }
+    if second == 209usize { ret "psrlw " }
+    if second == 210usize { ret "psrld " }
+    if second == 211usize { ret "psrlq " }
+    if second == 225usize { ret "psraw " }
+    if second == 226usize { ret "psrad " }
     ret ""
 }
 
@@ -893,11 +994,118 @@ fn text_line(c: *Cursor, from: usize, to: usize) -> err {
     ret put(c, 10u8)
 }
 
-// The listing of `code`, into `out`; returns how much of `out` was written.
-fn disassemble(code: []const usize, out: []u8) -> (usize, err) {
-    var c = Cursor { code: code, at: 0usize, out: out, written: 0usize }
+// Following jumps (T010): bit 8 of a word marks an instruction start reached from offset
+// 0 by falling through or branching, bit 9 one already followed. The emitter lays
+// constant tables and trap text inline behind a `jmp`; a sweep decoded them as code.
+// ponytail: a pass per backward-reaching mark, fine at function size.
+fn mark_reached(code: []usize) {
+    if code.len == 0usize { ret }
+    code[0usize] = code[0usize] | 256usize
+    var scratch: [192]u8 = zero
+    var changed = true
+    while changed {
+        changed = false
+        var at = 0usize
+        while at < code.len {
+            if (code[at] & 768usize) == 256usize {
+                code[at] = code[at] | 512usize
+                changed = true
+                var probe = Cursor { code: code, at: at, out: scratch[0usize..192usize], written: 0usize, ymm: false, vex: false, nds: false, nds_register: 0usize, narrow_rm: false }
+                var next = at + 1usize
+                if instruction(&probe, at) { next = probe.at }
+                let (landing, branches, falls) = flow(code, at, next)
+                if branches && landing < code.len { code[landing] = code[landing] | 256usize }
+                if falls && next < code.len { code[next] = code[next] | 256usize }
+            }
+            at += 1usize
+        }
+    }
+}
+
+// Where the instruction at `start` (ending at `next`) goes: a relative branch's
+// landing, and whether it falls through to `next`.
+fn flow(code: []const usize, start: usize, next: usize) -> (usize, bool, bool) {
+    var at = start
+    while at < next && prefix_byte(code[at] & 255usize) { at += 1usize }
+    if at >= next { ret (0usize, false, true) }
+    let op = code[at] & 255usize
+    var second = 0usize
+    if at + 1usize < next { second = code[at + 1usize] & 255usize }
+    let wide = op == 233usize || (op == 15usize && second >= 128usize && second <= 143usize)
+    if wide || op == 235usize || (op >= 112usize && op <= 127usize) {
+        var displacement = code[next - 1usize] & 255usize
+        var span = 256usize
+        if wide {
+            let (value, present) = fetch_little_at(code, next - 4usize)
+            if !present { ret (0usize, false, true) }
+            displacement = value
+            span = 4294967296usize
+        }
+        let falls = op != 233usize && op != 235usize
+        if displacement < span / 2usize { ret (next + displacement, true, falls) }
+        let magnitude = span - displacement
+        if magnitude > next { ret (0usize, false, falls) }
+        ret (next - magnitude, true, falls)
+    }
+    // ret, ret imm16, int3, ud2, and an indirect jmp end the path.
+    if op == 195usize || op == 194usize || op == 204usize { ret (0usize, false, false) }
+    if op == 15usize && second == 11usize { ret (0usize, false, false) }
+    if op == 255usize && ((second >> 3usize) & 7usize) >= 4usize && ((second >> 3usize) & 7usize) <= 5usize { ret (0usize, false, false) }
+    ret (0usize, false, true)
+}
+
+// Legacy prefixes and REX.
+fn prefix_byte(value: usize) -> bool {
+    if value >= 64usize && value <= 79usize { ret true }
+    ret value == 102usize || value == 103usize || value == 240usize || value == 242usize || value == 243usize || value == 46usize || value == 62usize || value == 38usize || value == 54usize || value == 100usize || value == 101usize
+}
+
+// Bytes no path reaches: text when they are, else `db` lines of up to sixteen.
+fn data_lines(c: *Cursor, from: usize, to: usize) -> err {
+    if skipped_is_trap_text(c.code, from, to) { ret text_line(c, from, to) }
+    var at = from
+    while at < to {
+        var end = at + 16usize
+        if end > to { end = to }
+        try put_hex(c, at, 4usize)
+        try puts(c, "  db ")
+        var b = at
+        while b < end {
+            if b != at { try puts(c, ", ") }
+            try puts(c, "0x")
+            try put_hex(c, c.code[b] & 255usize, 2usize)
+            b += 1usize
+        }
+        try puts(c, "  ; ")
+        try put_number(c, end - at)
+        try puts(c, " bytes")
+        try put(c, 10u8)
+        at = end
+    }
+    ret ok
+}
+
+// The listing of `code`, into `out`; returns how much of `out` was written. Bits above
+// the byte in each word are the reachability marks, set here.
+fn disassemble(code: []usize, out: []u8) -> (usize, err) {
+    var c = Cursor { code: code, at: 0usize, out: out, written: 0usize, ymm: false, vex: false, nds: false, nds_register: 0usize, narrow_rm: false }
+    // A `trap.N` symbol holds only its records (D922): no instruction to start from.
+    if skipped_is_trap_text(code, 0usize, code.len) {
+        let records_error = text_line(&c, 0usize, code.len)
+        if records_error != ok { ret (0usize, records_error) }
+        ret (c.written, ok)
+    }
+    mark_reached(code)
     while c.at < code.len {
         let start = c.at
+        if (code[start] & 256usize) == 0usize {
+            var run_end = start + 1usize
+            while run_end < code.len && (code[run_end] & 256usize) == 0usize { run_end += 1usize }
+            let data_error = data_lines(&c, start, run_end)
+            if data_error != ok { ret (0usize, data_error) }
+            c.at = run_end
+            continue
+        }
         let line_start = c.written
         let offset_error = put_hex(&c, start, 4usize)
         if offset_error != ok { ret (0usize, offset_error) }
@@ -1016,9 +1224,10 @@ fn att_starts(value: str, prefix: str) -> bool {
 
 fn att_is(value: str, other: str) -> bool { ret value.len == other.len && att_starts(value, other) }
 
-// A general register's width in bytes, 16 for an `xmm` register, 0 for anything else.
+// A general register's width in bytes, 16 for `xmm` and 32 for `ymm`, 0 for anything else.
 fn att_register_width(name: str) -> usize {
     if name.len >= 4usize && att_starts(name, "xmm") { ret 16usize }
+    if name.len >= 4usize && att_starts(name, "ymm") { ret 32usize }
     if att_listed("rax rcx rdx rbx rsp rbp rsi rdi rip", name) { ret 8usize }
     if att_listed("eax ecx edx ebx esp ebp esi edi", name) { ret 4usize }
     if att_listed("ax cx dx bx sp bp si di", name) { ret 2usize }
@@ -1074,14 +1283,14 @@ fn att_instruction(c: *Cursor, spelled: str) -> err {
     var space = 0usize
     while space < rest.len && rest[space] != 32u8 { space += 1usize }
     let mnemonic = rest[0usize..space]
-    var operands: [3]str = zero
+    var operands: [4]str = zero
     var count = 0usize
     if space < rest.len {
         var from = space + 1usize
         var at = from
         while at <= rest.len {
             if at == rest.len || (at + 1usize < rest.len && rest[at] == 44u8 && rest[at + 1usize] == 32u8) {
-                if count < 3usize {
+                if count < 4usize {
                     operands[count] = rest[from..at]
                     count += 1usize
                 }

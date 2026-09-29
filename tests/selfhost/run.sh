@@ -5563,6 +5563,12 @@ cmp "$test_build/conformance-tools-dis-inlined.jsonl" "$conformance_root/tools/d
 # `dis --att` (D1703): the same listing in GNU `as`'s AT&T spelling.
 $test_build/neper-self dis-file "$conformance_root/tools/dis.e" "$repo" x64 linux --json --att > "$test_build/conformance-tools-dis-att.jsonl"
 cmp "$test_build/conformance-tools-dis-att.jsonl" "$conformance_root/tools/dis_att.x64-linux.expected.jsonl"
+# `dis` follows jumps (D1704): a string laid inline behind a `jmp` is one `db` line.
+$test_build/neper-self dis-file "$conformance_root/tools/dis_follow.e" "$repo" x64 linux --json > "$test_build/conformance-tools-dis-follow.jsonl"
+cmp "$test_build/conformance-tools-dis-follow.jsonl" "$conformance_root/tools/dis_follow.x64-linux.expected.jsonl"
+# `dis` decodes the VEX forms of `--cpu x64-v3` (D1705).
+$test_build/neper-self dis-file "$conformance_root/tools/dis_vex.e" "$repo" x64 linux --json --release --cpu x64-v3 > "$test_build/conformance-tools-dis-vex.jsonl"
+cmp "$test_build/conformance-tools-dis-vex.jsonl" "$conformance_root/tools/dis_vex.x64-linux.expected.jsonl"
 cmp -s "$dis_actual" "$conformance_root/tools/dis.x64-linux.expected.jsonl" || { printf '%s
 ' "dis --json differs from the conformance corpus" >&2; exit 1; }
 # `fmt --json` (D234): the operand's canonical layout, byte for byte (target-independent);

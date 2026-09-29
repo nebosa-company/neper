@@ -31276,3 +31276,56 @@ Everything else goes through the library's update, and its own slicing-by-8 tabl
 - 31 lines of `fmt_json_schema` were dropped first, because GNU rejects even their Intel spelling. They are data that the linear sweep walks as code.
 - `tools/dis_att.x64-{windows,linux}.expected.jsonl` pin the listing in both suites.
 - The existing `dis` and `dis_inlined` goldens are byte-identical on both hosts.
+
+## D1704 — `dis` follows jumps, and decodes every legacy SSE form the emitter writes (T010)
+
+**Decision.** The listing now decodes only the bytes that control flow reaches from offset 0, instead of sweeping every byte in order.
+
+- `disasm_x64.mark_reached` marks reached instruction starts in bit 8 of the caller's widened words; every byte read already masks with 255. It follows:
+  - fall-through;
+  - `jmp` and `jcc`, both rel8 and rel32.
+- A path ends at `ret`, `int3`, `ud2` and an indirect `jmp`. `hlt` is not a terminator, because the emitter never writes one and a stray `f4` byte cut a path short.
+- Unreached bytes are listed in one of two ways:
+  - as the `text` line they already had, when they are trap records;
+  - otherwise as `db` lines of up to sixteen bytes, `; 0xN bytes`.
+- A `trap.N` symbol whose whole range is records has no instruction at all, so it is listed as text.
+- The sweep read the emitter's inline string and table constants as code, which gave two faults:
+  - `e.text.unicode.lower_table`'s 11 KB table came out as `shx dword [rax], 0x0` and the like;
+  - a UTF-8 string swallowed the first bytes of the `lea` after it.
+- The decoder gains the legacy SSE forms that `select_vector_binary`, `select_vector_shift` and `canonicalize_packed_nan` emit:
+  - `pshufd`, `pmuludq`, `punpcklbw`/`punpckhbw`/`punpckldq`, `packuswb` and `pcmpeqw`;
+  - the shifts by register, 0xd1–0xd3, 0xe1–0xe2 and 0xf1–0xf3;
+  - `psraw`/`psrad` and the word shifts by an immediate (0x71).
+- An xmm operand's memory no longer carries `qword`: the intent was no size word, but `size_word` had printed one before the override. GNU refused `movups xmm0, qword [rbx]`.
+- The VEX forms under `--cpu x64-v3` are not decoded.
+
+**Evidence.**
+- All 622 link fixtures were listed for x64-linux. The 617 that compile give 27,090,684 reached instructions with no undecodable byte. Before the SSE forms were added, following jumps alone left 69 undecodable bytes, all in `simd_lanes`. The five that do not compile are negative fixtures, a Windows-only one, and two lowering failures that are not the disassembler's.
+- Seven fixtures, 112,931 instructions including `simd_lanes`, were assembled with GNU `as` from both spellings, with identical bytes and no Intel line refused.
+- Against the listed bytes, GNU's own encoding differs only in 606 `mov r, r` whose `8b`/`89` direction it picks the other way.
+- `tools/dis_follow.e` pins the behaviour in both suites: a string of `nop`, `ret` and `jmp` bytes is one `db` line.
+- `dis`, `dis_att` and `dis_inlined` are byte-identical on both hosts.
+
+## D1705 — `dis` decodes the VEX forms of `--cpu x64-v3` (T010)
+
+**Decision.** A C4 or C5 prefix enters the same 0F-map rows as a legacy instruction, through `disasm_x64.vex_instruction`, with a `v` ahead of the mnemonic.
+
+- The prefix supplies what the legacy bytes otherwise would:
+  - the inverted R, X and B as REX;
+  - W;
+  - `pp` as the 66, F3 or F2 prefix;
+  - L as the `ymm` register names.
+- The cursor carries `vvvv` as the extra source, printed after the destination.
+- Some forms leave `vvvv` unused, as `emit_x64.sse` says: the moves, `pshufd`, and `movd`/`movq`.
+- A shift by an immediate writes its destination in `vvvv` (NDD).
+- A shift by a register keeps an xmm count in a ymm form: `vpsrad ymm0, ymm0, xmm1`.
+- `vzeroupper` is C5 F8 77.
+- The two-byte rows moved into `two_byte`, which both entries call. `att_register_width` knows `ymm`, and the AT&T operand list holds four, for `vcmpps`.
+- T010's three gaps are closed, so it is done.
+
+**Evidence.**
+- `simd_lanes` under `--cpu x64-v3` lists 24,191 reached instructions with no undecodable byte. Among them are 33 distinct VEX mnemonics, from `vaddps` to `vzeroupper`.
+- Its Intel and AT&T spellings assemble to identical bytes with GNU `as`. Against the listed bytes, the only same-length differences are the `mov r, r` direction D1704 found.
+- `tools/dis_vex.e` pins a thirty-two-byte add, multiply, shift and xor, in release, per host in both suites.
+- `dis`, `dis_att`, `dis_follow` and `dis_inlined` are unchanged on both hosts.
+- The Windows target was swept too: 611 of 622 link fixtures compile for it, and they give 25,882,717 reached instructions with no undecodable byte.
