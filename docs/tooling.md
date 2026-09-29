@@ -760,7 +760,11 @@ as function-relative byte offsets, `end` exclusive, and the callee's `line` the
 run begins at. A copy through another copy retains the intermediate functions in
 the optional `through` array, innermost-first (D565); direct copies omit it, and a
 debug build has an empty `inlined` list. These records precede the final command
-`result`.
+`result`. `text` lists only what control flow reaches from the function's start
+(D1704). Bytes behind a `jmp` that nothing reaches are `db` lines of up to sixteen,
+or one `text` line when they are trap records. With `--att`, each instruction is
+spelled as GNU `as` spells it (D1703); the offsets, bytes and data lines are
+unchanged.
 
 Every build writes `.neper/<mode>/build-manifest.json`. It is one canonical JSON
 object with `schema:"neper-build-manifest"`, `version:1`, `tool_version`,

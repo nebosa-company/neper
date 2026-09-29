@@ -6329,6 +6329,14 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disActual).Hash -ne (Get-FileH
 $disAttActual = Join-Path $testBuild 'conformance-tools-dis-att.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis.e')`" `"$repo`" x64 windows --json --att > `"$disAttActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disAttActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis_att.x64-windows.expected.jsonl')).Hash) { throw "dis --att differs from the conformance corpus" }
+# `dis` follows jumps (D1704): a string laid inline behind a `jmp` is one `db` line.
+$disFollowActual = Join-Path $testBuild 'conformance-tools-dis-follow.jsonl'
+cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_follow.e')`" `"$repo`" x64 windows --json > `"$disFollowActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disFollowActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis_follow.x64-windows.expected.jsonl')).Hash) { throw "dis following jumps differs from the conformance corpus" }
+# `dis` decodes the VEX forms of `--cpu x64-v3` (D1705).
+$disVexActual = Join-Path $testBuild 'conformance-tools-dis-vex.jsonl'
+cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_vex.e')`" `"$repo`" x64 windows --json --release --cpu x64-v3 > `"$disVexActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disVexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis_vex.x64-windows.expected.jsonl')).Hash) { throw "dis VEX forms differ from the conformance corpus" }
 # `dis-file --json --release` (D542, D565, H19): inlined runs retain a nested copy's chain.
 $disInlinedActual = Join-Path $testBuild 'conformance-tools-dis-inlined.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_inlined.e')`" `"$repo`" x64 windows --json --release > `"$disInlinedActual`""
