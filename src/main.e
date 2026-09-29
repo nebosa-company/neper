@@ -3957,6 +3957,9 @@ type Sink = struct {
     fix_at: usize,
     fix_end: usize,
     fix_kind: u8,
+    // Kind 5's sites (T029): the start of the local's own token and of each use, every
+    // one `fix_end - fix_at` bytes, all replaced by `fix_text`.
+    fix_sites: []const usize,
     // The two types of a mismatch (D401, H09), as fields beside the message; empty
     // when the diagnostic is not one.
     expected_text: str,
@@ -4222,8 +4225,11 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             var insert: lex.Token = zero
             insert.start = u32(report.fix_at)
             insert.end = u32(report.fix_at)
-            if report.fix_kind == 3u8 || report.fix_kind == 4u8 { insert.end = u32(report.fix_end) }
-            let insert_at = lex.span_of(text, lines, insert)
+            if report.fix_kind == 3u8 || report.fix_kind == 4u8 || report.fix_kind == 5u8 { insert.end = u32(report.fix_end) }
+            var insert_at = lex.span_of(text, lines, insert)
+            if report.fix_kind == 5u8 {
+                try write_all(report, "[{\"message\":\"rename the local and every use of it in its scope\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+            } else {
             if report.fix_kind == 4u8 {
                 try write_all(report, "[{\"message\":\"use the nearest name in scope\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
             } else {
@@ -4237,13 +4243,27 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
                 }
             }
             }
-            if report.operand_path.len != 0usize && is_operand {
-                try write_span(report, report.operand_path, insert_at, true)
-            } else {
-                try write_module_span(report, path, insert_at, is_operand)
             }
-            try write_all(report, ",\"replacement\":")
-            try write_json_string(report, report.fix_text)
+            // A rename (T029) is one edit per site, each over the name's own bytes.
+            var edit_count = 1usize
+            if report.fix_kind == 5u8 { edit_count = report.fix_sites.len }
+            var edit_at = 0usize
+            while edit_at < edit_count {
+                if report.fix_kind == 5u8 {
+                    insert.start = u32(report.fix_sites[edit_at])
+                    insert.end = u32(report.fix_sites[edit_at] + report.fix_end - report.fix_at)
+                    insert_at = lex.span_of(text, lines, insert)
+                    if edit_at > 0usize { try write_all(report, "},{\"span\":") }
+                }
+                if report.operand_path.len != 0usize && is_operand {
+                    try write_span(report, report.operand_path, insert_at, true)
+                } else {
+                    try write_module_span(report, path, insert_at, is_operand)
+                }
+                try write_all(report, ",\"replacement\":")
+                try write_json_string(report, report.fix_text)
+                edit_at += 1usize
+            }
             // The fix's precondition (D432, H18): the hash of the source it was written
             // against, as a plan's, so an applier refuses a file edited since.
             var digest: [64]u8 = zero
@@ -7852,7 +7872,143 @@ fn print_resolve_name_diagnostic(report: *Sink, g: *graph.Graph, resolver: *reso
     try write_all(&message, resolver.failure_name)
     try write_all(&message, "` ")
     try write_resolve_name_message(&message, resolver, resolve_error)
-    ret emit_diagnostic(report, path, module_text(g, resolver.failure_module), module_lines(g, resolver.failure_module), resolver.failure_token, true, resolve_name_code(resolve_error), message_storage[..message.count])
+    // A local that collides (T029): renamed with every use in its scope, as one
+    // `maybe` fix the repair loop applies without a model turn.
+    var sites: [256]usize = zero
+    var fresh_storage: [80]u8 = zero
+    var site_count = 0usize
+    if resolver.failure_module < g.count && (resolve_error == resolve.ModuleShadow || resolve_error == resolve.ReservedLocal || resolve_error == resolve.DuplicateLocal) {
+        let tokens = g.modules[resolver.failure_module].tokens
+        let module_text_of = g.modules[resolver.failure_module].text
+        let owner = resolver.failure_owner
+        let callable = same(owner, "function") || same(owner, "extern function") || same(owner, "compiler intrinsic")
+        let qualifier = same(owner, "use qualifier")
+        let typed = resolve_error == resolve.ReservedLocal && resolve.is_builtin_type(resolver.failure_name)
+        site_count = rename_sites(tokens, module_text_of, resolver.failure_name, usize(resolver.failure_token.start), callable, qualifier, typed, sites[..])
+        let fresh = free_local_name(resolver, resolver.failure_module, tokens, module_text_of, resolver.failure_name, fresh_storage[..])
+        if site_count != 0usize && fresh.len != 0usize {
+            report.fix_text = fresh
+            report.fix_at = usize(resolver.failure_token.start)
+            report.fix_end = usize(resolver.failure_token.end)
+            report.fix_kind = 5u8
+            report.fix_sites = sites[0usize..site_count]
+        }
+    }
+    let emitted = emit_diagnostic(report, path, module_text(g, resolver.failure_module), module_lines(g, resolver.failure_module), resolver.failure_token, true, resolve_name_code(resolve_error), message_storage[..message.count])
+    report.fix_text = ""
+    report.fix_kind = 0u8
+    ret emitted
+}
+
+// The token beside `at` in the given direction, past newlines (comments are trivia); `at` itself
+// when there is none.
+fn neighbour_token(tokens: []lex.Token, at: usize, forward: bool) -> usize {
+    var probe = at
+    while true {
+        if forward {
+            if probe + 1usize >= tokens.len { ret at }
+            probe += 1usize
+        } else {
+            if probe == 0usize { ret at }
+            probe = probe - 1usize
+        }
+        if tokens[probe].kind != .Newline { ret probe }
+    }
+    ret at
+}
+
+// Where a colliding local stands (T029): its own token, then every identifier of the
+// same spelling up to the end of its scope -- the block a `let` or `var` is in, or the
+// body a parameter, `for` name or capture heads. Not a use: a member or variant after
+// `.`, a field label in a literal, and by the collision's kind a call of the function
+// it collides with, a qualified path through the qualifier, or the builtin type in a
+// type position or conversion. Zero sites when more than `sites` holds, so a rename is
+// never partial.
+fn rename_sites(tokens: []lex.Token, module_text_of: str, name: str, start: usize, callable: bool, qualifier: bool, typed: bool, sites: []usize) -> usize {
+    var declared = 0usize
+    while declared < tokens.len && usize(tokens[declared].start) != start { declared += 1usize }
+    if declared == tokens.len || sites.len == 0usize { ret 0usize }
+    // A `let`/`var` name ends with its block; a header's name ends with the body after it.
+    var back = declared
+    var statement = false
+    while true {
+        let previous = neighbour_token(tokens, back, false)
+        if previous == back { break }
+        let kind = tokens[previous].kind
+        if kind == .KwLet || kind == .KwVar {
+            statement = true
+            break
+        }
+        if kind != .Identifier && kind != .PunctComma && kind != .PunctLParen { break }
+        back = previous
+    }
+    sites[0usize] = start
+    var count = 1usize
+    var depth = 0usize
+    var at = declared + 1usize
+    while at < tokens.len {
+        let kind = tokens[at].kind
+        if kind == .PunctLBrace { depth += 1usize }
+        if kind == .PunctRBrace {
+            if depth == 0usize { ret count }
+            depth = depth - 1usize
+            if depth == 0usize && !statement { ret count }
+        }
+        if kind == .Identifier && same(lex.token_text(module_text_of, tokens[at]), name) {
+            let before = tokens[neighbour_token(tokens, at, false)].kind
+            let after_at = neighbour_token(tokens, at, true)
+            let after = tokens[after_at].kind
+            var counted = before != .PunctDot
+            if after == .PunctColon && (before == .PunctLBrace || before == .PunctComma) { counted = false }
+            if callable && after == .PunctLParen { counted = false }
+            if qualifier && after == .PunctDot {
+                let member_at = neighbour_token(tokens, after_at, true)
+                let member = lex.token_text(module_text_of, tokens[member_at])
+                let past = tokens[neighbour_token(tokens, member_at, true)].kind
+                if past == .PunctLParen || past == .PunctLBracket || (member.len != 0usize && member[0usize] >= 65u8 && member[0usize] <= 90u8) { counted = false }
+            }
+            if typed && (after == .PunctLParen || after == .PunctLBracket || before == .PunctColon || before == .PunctArrow || before == .PunctStar || before == .PunctRBracket || before == .PunctLBracket || before == .KwConst) { counted = false }
+            if counted {
+                if count == sites.len { ret 0usize }
+                sites[count] = usize(tokens[at].start)
+                count += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret count
+}
+
+// A name for the renamed local (T029): `name_value`, then `name_value2` to `9`, the
+// first that is not reserved, not a module-scope name, and not spelt by any identifier
+// in the module; empty when none is.
+fn free_local_name(resolver: *resolve.Resolver, module_index: usize, tokens: []lex.Token, module_text_of: str, name: str, storage: []u8) -> str {
+    let base = name.len + 6usize
+    if base + 1usize > storage.len { ret "" }
+    var at = tool.nptest_copy(storage, 0usize, name)
+    at = tool.nptest_copy(storage, at, "_value")
+    var attempt = 1u8
+    while attempt <= 9u8 {
+        var length = base
+        if attempt > 1u8 {
+            storage[base] = 48u8 + attempt
+            length = base + 1usize
+        }
+        let candidate = storage[0usize..length]
+        var taken = resolve.reserved(candidate)
+        if !taken {
+            let (owner, owned) = resolve.module_name_owner(resolver, module_index, candidate)
+            taken = owned
+        }
+        var scan = 0usize
+        while !taken && scan < tokens.len {
+            if tokens[scan].kind == .Identifier && same(lex.token_text(module_text_of, tokens[scan]), candidate) { taken = true }
+            scan += 1usize
+        }
+        if !taken { ret candidate }
+        attempt += 1u8
+    }
+    ret ""
 }
 
 fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
