@@ -2267,8 +2267,11 @@ fn test_project_command(a: *mem.Arena, args: []str) -> err {
             argc += 1usize
         }
         argv[argc] = "--json"
-        argv[argc + 1usize] = "--path"
-        argv[argc + 2usize] = rels[at]
+        argv[argc + 1usize] = "--project-path"
+        // Under the project's `src`, spelled from the project root (T003).
+        let (under_src, under_src_error) = nptest_join(a, "src", rels[at])
+        if under_src_error != ok { ret under_src_error }
+        argv[argc + 2usize] = under_src
         argc += 3usize
         let (status, child_out, child_err, spawn_error) = nptest_spawn(a, argv[0usize..argc], child_base)
         if spawn_error != ok { ret spawn_error }
@@ -2486,6 +2489,14 @@ fn test_command(a: *mem.Arena, given: []str) -> err {
     // The identity (D263): the operand's basename and stem, or the `--path` given.
     var identity = basename(args[2usize])
     if args.len >= 10usize { identity = args[args.len - 1usize] }
+    // A project walk's module under its own root (T003): `--project-path src/REL` is REL
+    // under `project-src`, and its module is named from REL.
+    var shown_root = "operand"
+    if args.len >= 10usize && same(args[args.len - 2usize], "--project-path") {
+        let (project_root_name, project_relative) = project_identity(identity)
+        shown_root = project_root_name
+        identity = project_relative
+    }
     let (module_name, module_name_error) = nptest_module_name(a, identity)
     if module_name_error != ok { ret module_name_error }
     // A module with no tests has nothing to compile or run: its stream is the header,
@@ -2584,7 +2595,7 @@ fn test_command(a: *mem.Arena, given: []str) -> err {
     if timeout_s == 0usize { timeout_s = 1usize }
     // The child prints the runner by its reproducible spelling (D337), the basename
     // for a file under no source root.
-    try tool.test_json(a, module_name, "operand", identity, text, basename(runner_path), names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
+    try tool.test_json(a, module_name, shown_root, identity, text, basename(runner_path), names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
     var any = false
     at = 0usize
     while at < count {
@@ -2908,7 +2919,7 @@ fn index_project_command(a: *mem.Arena, args: []str) -> err {
         argv[4usize] = args[4usize]
         argv[5usize] = args[5usize]
         argv[6usize] = "--json"
-        argv[7usize] = "--path"
+        argv[7usize] = "--project-path"
         if at >= project_count { argv[7usize] = "--toolchain-path" }
         argv[8usize] = rels[at]
         let (status, child_out, child_err, spawn_error) = nptest_spawn(a, argv[..], child_base)
@@ -3104,8 +3115,11 @@ fn check_project_command(a: *mem.Arena, args: []str) -> err {
         argv[4usize] = args[4usize]
         argv[5usize] = args[5usize]
         argv[6usize] = "--json"
-        argv[7usize] = "--path"
-        argv[8usize] = rels[at]
+        argv[7usize] = "--project-path"
+        // Under the project's `src`, spelled from the project root (T003).
+        let (under_src, under_src_error) = nptest_join(a, "src", rels[at])
+        if under_src_error != ok { ret under_src_error }
+        argv[8usize] = under_src
         let (status, child_out, child_err, spawn_error) = nptest_spawn(a, argv[..], child_base)
         if spawn_error != ok { ret spawn_error }
         let (forwarded, forward_error) = forward_diagnostics(&report, child_out, rels[at])
@@ -3207,6 +3221,13 @@ fn check_flags(a: *mem.Arena, report: *Sink, args: []str) -> bool {
                 report.operand_path = args[at + 1usize]
                 at += 1usize
             } else {
+                if same(args[at], "--project-path") && at + 1usize < args.len {
+                    let (project_root_name, project_relative) = project_identity(args[at + 1usize])
+                    report.operand_source = args[2usize]
+                    report.operand_path = project_relative
+                    if !same(project_root_name, "operand") { report.operand_root = project_root_name }
+                    at += 1usize
+                } else {
                 if same(args[at], "--overlay") && at + 1usize < args.len {
                     // Loaded by the command (D524): the flag is only allowed here.
                     at += 1usize
@@ -3214,6 +3235,7 @@ fn check_flags(a: *mem.Arena, report: *Sink, args: []str) -> bool {
                     if !same(args[at], "--absolute-paths") { ret false }
                     report.operand_source = args[2usize]
                     report.absolute_path = absolute_operand(a, args[2usize])
+                }
                 }
             }
         }
@@ -3486,6 +3508,11 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     // A toolchain module indexed under `index --all` (T009) is under its own root.
     var identity_root = "operand"
     if args.len == 9usize && same(args[7usize], "--toolchain-path") { identity_root = "toolchain-lib" }
+    if args.len == 9usize && same(args[7usize], "--project-path") {
+        let (project_root_name, project_relative) = project_identity(args[8usize])
+        identity_root = project_root_name
+        identity = project_relative
+    }
     // The index writes its own header: the held one is dropped.
     report.pending_header = ""
     let (index_exit, index_error) = tool.index_json(a, identity_root, identity, loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count, absolute_path)
@@ -4096,6 +4123,9 @@ type Sink = struct {
     owner_text: str,
     near_text: str,
     operand_path: str,
+    // The root `operand_path` is under when a project walk named it (T003); empty for
+    // `operand`.
+    operand_root: str,
     // The roots a module's identity is spelled under (D427): the graph's, copied when
     // it is loaded, since the sink is made before the program is.
     toolchain_root: str,
@@ -4395,7 +4425,9 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             artifact_hash.sha256_hex_into(text, digest[..])
             try write_all(report, "}],\"preconditions\":[{\"source\":")
             if report.operand_path.len != 0usize && is_operand {
-                try write_source_identity(report, "operand", report.operand_path)
+                var precondition_root = "operand"
+                if report.operand_root.len != 0usize { precondition_root = report.operand_root }
+                try write_source_identity(report, precondition_root, report.operand_path)
             } else {
                 try write_module_identity(report, path, is_operand)
             }
@@ -4471,7 +4503,18 @@ fn write_module_span(report: *Sink, path: str, at: lex.Span, is_operand: bool) -
 }
 
 fn write_span(report: *Sink, identity: str, at: lex.Span, operand: bool) -> err {
+    // A project walk's module under its own root (T003): `--project-path`.
+    if operand && report.operand_root.len != 0usize { ret write_rooted_span(report, report.operand_root, identity, at, operand) }
     ret write_rooted_span(report, "operand", identity, at, operand)
+}
+
+// `--project-path REL` (T003, T015): a project walk names a module by where it is --
+// `src/x.e` is `x.e` under `project-src`, `lib/x.e` is `x.e` under `project-lib` --
+// rather than as an operand; answered as (root, path), `operand` for any other spelling.
+fn project_identity(rel: str) -> (str, str) {
+    if rel.len > 4usize && (same(rel[0usize..4usize], "src/") || same(rel[0usize..4usize], "src\\")) { ret ("project-src", rel[4usize..rel.len]) }
+    if rel.len > 4usize && (same(rel[0usize..4usize], "lib/") || same(rel[0usize..4usize], "lib\\")) { ret ("project-lib", rel[4usize..rel.len]) }
+    ret ("operand", rel)
 }
 
 // Whether a module's path is the operand's (D427): the same bytes, either separator
@@ -12802,7 +12845,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
     if (args.len == 7usize || (args.len == 8usize && same(args[7usize], "--absolute-paths"))) && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
     // `... --json --path REL` (D298): the operand's identity under its project's src.
-    if args.len == 9usize && same(args[1usize], "index-file") && same(args[6usize], "--json") && (same(args[7usize], "--path") || same(args[7usize], "--toolchain-path")) { ret index_command(a, args) }
+    if args.len == 9usize && same(args[1usize], "index-file") && same(args[6usize], "--json") && (same(args[7usize], "--path") || same(args[7usize], "--toolchain-path") || same(args[7usize], "--project-path")) { ret index_command(a, args) }
     // `apply-plan PLAN --root DIR [--project-src DIR] [--json]` (D481, H29): the plans applied by the compiler.
     if args.len >= 5usize && same(args[1usize], "apply-plan") && same(args[3usize], "--root") { ret apply_plan_command(a, args) }
     // `compare-manifests A B [--json]` (D482): two build manifests held against each other.
@@ -12830,8 +12873,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len == 8usize && same(args[1usize], "test-file") && same(args[7usize], "--json") { ret test_command(a, args) }
     if args.len == 9usize && same(args[1usize], "test-file") && same(args[8usize], "--json") { ret test_command(a, args) }
     // `... --json --path REL` (D263): the operand's identity under its project's src.
-    if args.len == 10usize && same(args[1usize], "test-file") && same(args[7usize], "--json") && same(args[8usize], "--path") { ret test_command(a, args) }
-    if args.len == 11usize && same(args[1usize], "test-file") && same(args[8usize], "--json") && same(args[9usize], "--path") { ret test_command(a, args) }
+    if args.len == 10usize && same(args[1usize], "test-file") && same(args[7usize], "--json") && (same(args[8usize], "--path") || same(args[8usize], "--project-path")) { ret test_command(a, args) }
+    if args.len == 11usize && same(args[1usize], "test-file") && same(args[8usize], "--json") && (same(args[9usize], "--path") || same(args[9usize], "--project-path")) { ret test_command(a, args) }
     // `test-project DIR TOOLCHAIN_ROOT ARCH OS WORKDIR [TIMEOUT_MS] --json` (D263): every
     // module under DIR/src, one stream.
     if args.len == 8usize && same(args[1usize], "test-project") && same(args[7usize], "--json") { ret test_project_command(a, args) }
