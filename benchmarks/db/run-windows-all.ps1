@@ -15,7 +15,9 @@ param(
     [Parameter(Mandatory = $true)][string]$NeperPrefix,
     [Parameter(Mandatory = $true)][string]$Out,
     [int]$Runs = 9,
-    [string]$Drivers = 'sqlite,postgresql,mysql,odbc,sqlserver'
+    [string]$Drivers = 'sqlite,postgresql,mysql,odbc,sqlserver',
+    # Adds Neper with <tools>\openssl's libcrypto sealing its SQL Server TLS records (D1646).
+    [switch]$Openssl
 )
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
@@ -48,10 +50,11 @@ try {
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $sqlServer
         & (Join-Path $repo 'tests\selfhost\sqlserver.ps1') start $sqlServer
         $tds = @('--tds', (Join-Path $sqlServer 'ports'))
+        if ($Openssl) { $tds += '--openssl' }
     }
     New-Item -Force $dsn | Out-Null
     New-ItemProperty -Force $dsn -Name Driver -Value (Join-Path $tools 'psqlodbc\podbc35w.dll') | Out-Null
-    $env:PATH = @((Join-Path $tools 'postgresql\bin'), (Join-Path $tools 'mysql\lib'), (Join-Path $tools 'mysql\bin'), (Join-Path $tools 'psqlodbc'), $savedPath) -join ';'
+    $env:PATH = @((Join-Path $tools 'openssl'), (Join-Path $tools 'postgresql\bin'), (Join-Path $tools 'mysql\lib'), (Join-Path $tools 'mysql\bin'), (Join-Path $tools 'psqlodbc'), $savedPath) -join ';'
     python (Join-Path $here 'run.py') --neper (Join-Path $work 'bench') --c (Join-Path $work 'bench-c.exe') --go (Join-Path $work 'bench-go.exe') --rust (Join-Path $work 'bench-rust.exe') --runs $Runs --scratch $work --pg-port $ports['pg_port'] --mysql-port $ports['mysql_port'] --drivers $Drivers @tds --out $Out
     $status = $LASTEXITCODE
 } finally {

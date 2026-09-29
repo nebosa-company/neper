@@ -19,6 +19,8 @@ over TDS 8.0 strict by Neper (x.microsoft.tds) and Go (go-mssqldb), by C through
 ODBC Driver 18 with Encrypt=Strict, and by Rust through tiberius, which has no strict mode and
 negotiates TLS inside PRELOGIN. Every one of them checks the server's certificate against the
 same pinned one. C runs its `odbc` path; the others take `host;port;der;pem;user;password`.
+With --openssl, SQL Server also runs Neper as `neper-openssl`, its TLS records sealed by the
+host's OpenSSL (D1646, a seventh field `openssl`).
 """
 import argparse, base64, json, os, platform, statistics, subprocess, sys
 
@@ -55,7 +57,10 @@ def location(driver, scratch, label):
             name = "{ODBC Driver 18 for SQL Server}"
             return (f"Driver={name};Server=tcp:127.0.0.1,{TDS['port']};Encrypt=Strict;ServerCertificate={TDS['pem']};"
                     f"UID={TDS['user']};PWD={{{TDS['password']}}};Database=neper")
-        return ";".join(["localhost", TDS["port"], TDS["root"], TDS["pem"], TDS["user"], TDS["password"]])
+        spec = ["localhost", TDS["port"], TDS["root"], TDS["pem"], TDS["user"], TDS["password"]]
+        if label == "neper-openssl":
+            spec.append("openssl")
+        return ";".join(spec)
     if driver == "sqlite":
         path = os.path.join(scratch, f"bench-{label}.sqlite")
         for suffix in ("", "-journal"):
@@ -93,6 +98,8 @@ def main():
     ap.add_argument("--pg-port", type=int, default=PORTS["postgresql"])
     ap.add_argument("--mysql-port", type=int, default=PORTS["mysql"])
     ap.add_argument("--tds", help="the ports file tests/selfhost/sqlserver.{ps1,sh} start wrote")
+    ap.add_argument("--openssl", action="store_true",
+                    help="also run the SQL Server benchmark as `neper-openssl`, its TLS records sealed by the host's OpenSSL (D1646)")
     args = ap.parse_args()
     PORTS["postgresql"], PORTS["mysql"] = args.pg_port, args.mysql_port
     if args.tds:
@@ -100,7 +107,10 @@ def main():
     results = {"host": platform.system().lower(), "runs": args.runs, "work": WORK, "drivers": {}}
     suffix = ".exe" if os.name == "nt" else ""
     for driver in args.drivers.split(","):
-        commands = {"neper": [f"{args.neper}-{driver}{suffix}"], "c": [args.c, "odbc" if driver == "sqlserver" else driver]}
+        commands = {"neper": [f"{args.neper}-{driver}{suffix}"]}
+        if args.openssl and driver == "sqlserver":
+            commands["neper-openssl"] = commands["neper"]
+        commands["c"] = [args.c, "odbc" if driver == "sqlserver" else driver]
         if args.go:
             commands["go"] = [args.go, driver]
         if args.rust:

@@ -32,7 +32,9 @@ bash "$repo/tests/selfhost/db_servers.sh" start "$work/servers"
 tds=()
 case ",$drivers," in *,sqlserver,*)
     bash "$repo/tests/selfhost/sqlserver.sh" start "$work/sqlserver"
-    tds=(--tds "$work/sqlserver/ports") ;;
+    tds=(--tds "$work/sqlserver/ports")
+    # NEPER_BENCH_OPENSSL=1 adds Neper with the system libcrypto sealing its TLS records (D1646).
+    if [ "${NEPER_BENCH_OPENSSL:-0}" = 1 ]; then tds+=(--openssl); fi ;;
 esac
 status=0
 python3 "$here/run.py" --neper "$work/bench" --c "$work/bench-c" --go "$work/bench-go" --rust "$work/bench-rust" \
