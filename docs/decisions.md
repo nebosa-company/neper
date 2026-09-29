@@ -31443,3 +31443,19 @@ The failing command returns its write error to `main`. `main` then tries to writ
 **Evidence.**
 - The whole `lib` was renamed on Windows: 85,972 names. The compiler built against it matches the stable image modulo the DWARF names, as `images.py` judges.
 - The `src` turn, 29,803 names, matches too.
+
+## D1713 — A source map moves the columns of a mapping's first line (T015)
+
+**Problem.** A mapping carried bytes and lines from the generated span to the original, but the columns were copied as they were. That is right below the mapping's first line, where the text is the same column for column. It is wrong on that first line whenever the mapping begins at different columns on the two sides.
+
+- A generator that indents what it splices writes the generated side at column 5 while the input has it at column 1. The five corpus maps whose generated statement sits in a function body all do this.
+- The runner renames the operand's `main` (D281), so its second mapping begins after the renamed name, mid-line.
+
+The corpus goldens had recorded the wrong columns: `let` at column 5 of `generated_map.input`, whose line starts with it.
+
+**Decision.** `read_mappings` also reads each side's start `column` and `column_utf16`. `remap_span` then moves a span on the mapping's first line by the difference, start and end separately, and leaves spans on later lines as they are. The top-level mapping and every nested level go through `remap_span`.
+
+**Evidence.**
+- The goldens of `generated_map`, `combined_inputs`, `nested_map`, `nested_stale` and `nested_deep` change in their column fields and in nothing else: primary and intermediate spans move from column 5 to 1, the columns the input and the intermediate have.
+- `tools/test_main_line.e` pins an unknown type on the renamed `main`'s own line in both suites. It is now reported at column 40 of the operand, where the old compiler said 55, the runner's column.
+- `many_mappings`, `stale_generator`, `hand_edited`, `combined_stale` and `test_main_error` are unchanged.
