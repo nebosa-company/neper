@@ -5483,6 +5483,19 @@ Copy-Item -LiteralPath $compiler -Destination $shortCompiler -Force
 $buildShortActual = Join-Path $testBuild 'conformance-tools-build-short.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$shortCompiler`" build `"$(Join-Path $conformanceRoot 'tools\build.e')`" -o conformance-tools-build.out --json > `"$buildShortActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $buildShortActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\build.expected.jsonl')).Hash) { throw 'the short build spelling differs from the positional form' }
+# `neper build` of a project (T002): no operand is the working directory's project, a
+# directory is that project, and either builds its `src/main.e` into an executable
+# named after the project's directory.
+$projectBuild = Join-Path $testBuild 'shortproj'
+if (Test-Path -LiteralPath $projectBuild) { Remove-Item -Recurse -Force -LiteralPath $projectBuild }
+[void](New-Item -ItemType Directory -Force -Path (Join-Path $projectBuild 'src'))
+Copy-Item -LiteralPath (Join-Path $conformanceRoot 'tools\build.e') -Destination (Join-Path $projectBuild 'src\main.e')
+$projectBuilt = cmd /c "cd /d `"$projectBuild`" && `"$shortCompiler`" build"
+if ($LASTEXITCODE -ne 0 -or $projectBuilt -ne 'executable written' -or -not (Test-Path -LiteralPath (Join-Path $projectBuild 'shortproj.exe'))) { throw "neper build with no operand did not build the project: $projectBuilt" }
+$projectNamed = cmd /c "cd /d `"$testBuild`" && `"$shortCompiler`" build shortproj -o shortproj-named.exe"
+if ($LASTEXITCODE -ne 0 -or $projectNamed -ne 'executable written') { throw "neper build DIR did not build the project: $projectNamed" }
+& (Join-Path $testBuild 'shortproj-named.exe')
+if ($LASTEXITCODE -ne 0) { throw 'the project built by neper build DIR did not run' }
 # A repeated build of an unchanged program checks and links nothing (C097): the second
 # `--incremental` build stops after the load, and an output that is no longer the image
 # is linked and written again, the same image.

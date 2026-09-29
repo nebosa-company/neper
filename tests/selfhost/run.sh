@@ -5328,6 +5328,17 @@ chmod +x "$repo/build/linux/short/neper-self-short"
 (cd "$test_build" && "$repo/build/linux/short/neper-self-short" build "$conformance_root/tools/build.e" -o conformance-tools-build.out --json > "conformance-tools-build-short.jsonl")
 cmp -s "$test_build/conformance-tools-build-short.jsonl" "$conformance_root/tools/build.expected.jsonl" || { printf '%s
 ' "the short build spelling differs from the positional form" >&2; exit 1; }
+# `neper build` of a project (T002): no operand is the working directory's project, a
+# directory is that project, and either builds its `src/main.e` into an executable
+# named after the project's directory.
+rm -rf "$test_build/shortproj"
+mkdir -p "$test_build/shortproj/src"
+cp "$conformance_root/tools/build.e" "$test_build/shortproj/src/main.e"
+project_built=$(cd "$test_build/shortproj" && "$repo/build/linux/short/neper-self-short" build)
+[ "$project_built" = 'executable written' ] && [ -x "$test_build/shortproj/shortproj" ] || { printf '%s\n' "neper build with no operand did not build the project: $project_built" >&2; exit 1; }
+project_named=$(cd "$test_build" && "$repo/build/linux/short/neper-self-short" build shortproj -o shortproj-named)
+[ "$project_named" = 'executable written' ] || { printf '%s\n' "neper build DIR did not build the project: $project_named" >&2; exit 1; }
+"$test_build/shortproj-named"
 # A repeated build of an unchanged program checks and links nothing (C097): the second
 # `--incremental` build stops after the load, and an output that is no longer the image
 # is linked and written again, the same image.

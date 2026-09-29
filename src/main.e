@@ -1163,9 +1163,13 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     // `check` and `test` with no operand (D294): the project the current directory is in,
     // as `check-project` and `test-project`; a `--` flag first is no operand either.
     let project_form = (is_check || is_test || is_fmt || is_index) && (args.len == 2usize || (args[2usize].len >= 2usize && args[2usize][0usize] == 45u8 && args[2usize][1usize] == 45u8))
-    if args.len < 3usize && !project_form { ret (args, false, ok) }
+    // `build` and `run` of a project (T002): no operand, a flag first, or an operand that
+    // is not a `.e` file -- a directory -- builds the project's `src/main.e`.
+    let no_operand = args.len == 2usize || (args[2usize].len >= 1usize && args[2usize][0usize] == 45u8)
+    let project_program = (is_build || is_run) && (no_operand || !(args[2usize].len > 2usize && args[2usize][args[2usize].len - 2usize] == 46u8 && args[2usize][args[2usize].len - 1usize] == 101u8))
+    if args.len < 3usize && !project_form && !project_program { ret (args, false, ok) }
     var file = ""
-    if !project_form { file = args[2usize] }
+    if !project_form && !no_operand { file = args[2usize] }
     let root = own_directory(args[0usize])
     // Flags after the operand.
     var triple = host_target(a)
@@ -1181,7 +1185,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     var perturb = false
     var program_args_at = args.len
     var at = 3usize
-    if project_form { at = 2usize }
+    if project_form || (project_program && no_operand) { at = 2usize }
     while at < args.len {
         if same(args[at], "--") {
             program_args_at = at
@@ -1232,6 +1236,15 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     long_form[count] = args[0usize]
     count += 1usize
     if is_build || is_run {
+        if project_program {
+            let (program, program_output, program_error) = project_program_root(a, file, os_name)
+            if program_error != ok { ret (args, false, program_error) }
+            file = program
+            if !has_output {
+                output = program_output
+                has_output = true
+            }
+        }
         if !has_output {
             var suffix = ""
             if same(os_name, "windows") { suffix = ".exe" }
@@ -1393,6 +1406,40 @@ fn test_workdir(a: *mem.Arena, file: str, project_dir: str) -> (str, err) {
 
 // The project the current directory is in (D294): `project.discover` from a name
 // beside it, so the walk starts at the directory itself.
+// The program a project builds (T002): `src/main.e` under the project `directory` is
+// in, or the working directory's when it is empty, and the executable named after the
+// project's directory as a program root's is after its module.
+fn project_program_root(a: *mem.Arena, directory: str, os_name: str) -> (str, str, err) {
+    var root = directory
+    if root.len == 0usize {
+        let (found, found_error) = project_from_cwd(a)
+        if found_error != ok { ret ("", "", found_error) }
+        root = found
+    } else {
+        let (probe, probe_error) = tool.manifest_join(a, directory, "main.e")
+        if probe_error != ok { ret ("", "", probe_error) }
+        let (discovered, discovery_error) = project.discover(a, probe)
+        if discovery_error != ok { ret ("", "", discovery_error) }
+        root = discovered.root
+    }
+    let (sources, sources_error) = tool.manifest_join(a, root, "src")
+    if sources_error != ok { ret ("", "", sources_error) }
+    let (program, program_error) = tool.manifest_join(a, sources, "main.e")
+    if program_error != ok { ret ("", "", program_error) }
+    // `.` names no project: the working directory's own name does.
+    var name = basename(root)
+    if name.len == 0usize || same(name, ".") {
+        let (here, here_error) = os.current_dir(a)
+        if here_error == ok { name = basename(here) }
+    }
+    if name.len == 0usize || same(name, ".") || same(name, "..") { name = "main" }
+    var suffix = ""
+    if same(os_name, "windows") { suffix = ".exe" }
+    let (output, output_error) = with_suffix(a, name, suffix)
+    if output_error != ok { ret ("", "", output_error) }
+    ret (program, output, ok)
+}
+
 fn project_from_cwd(a: *mem.Arena) -> (str, err) {
     let (dir, dir_error) = os.current_dir(a)
     if dir_error != ok { ret ("", dir_error) }

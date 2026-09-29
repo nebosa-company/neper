@@ -30909,3 +30909,18 @@ Excluding the probes raises Neper's $/KB from 0.667 to 0.844, which is the truth
 
 - The build manifest is the last linking build's; a no-op does not rewrite it.
 - The stamp holds one output path per mode.
+
+## D1682 — `neper build` and `neper run` of a project (T002)
+
+**Decision.** Given a directory, or no operand (or a flag first), `neper build` and `neper run` take the project that directory, or the working directory, is in (spec section 2's discovery). They build its `src/main.e`, and the executable is named after the project's directory, not after module `main`.
+
+- An operand not ending in `.e` is a directory.
+- `-o` still names the output.
+- This is the D294 rule `check` and `test` already follow, and it is written into spec section 13.
+- T002's other gap, warnings, is settled by the spec: warnings are disabled in v1 (section 13), and every diagnostic is an error or a note on one.
+
+**Evidence.**
+
+- A scratch project builds by `neper build` inside it, and from its `src/` (the project is discovered upward) as `myproj.exe`.
+- `neper build myproj -o built.exe` and `neper run myproj` work from the parent.
+- Pinned in both suites: `shortproj/` builds with no operand to `shortproj(.exe)`, and `build shortproj -o …` from its parent, which runs.
