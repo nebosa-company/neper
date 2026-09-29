@@ -4204,10 +4204,10 @@ One binary, named `neper`, does everything — compile, format, index, disassemb
 There is no separate build system and no package manager.
 
 ```
-neper build <file.e> [--target ARCH-OS|spv|ptx] [--gpu spv,ptx|none] [--cpu LEVEL]...
+neper build [<file.e>|DIR] [--target ARCH-OS|spv|ptx] [--gpu spv,ptx|none] [--cpu LEVEL]...
                      [--release] [--unchecked] [--g] [--linker=own|system] [--arena SIZE]
                      [--libpath DIR] [--link LIB] [-j N] [-o PATH]
-neper run <file.e> [the build options] [-- ARGS...]
+neper run [<file.e>|DIR] [the build options] [-- ARGS...]
 neper fmt [--check] [FILE.e|-]
 neper test [--filter PAT] [-j N] [--timeout SECS] [--release] [--test-arena SIZE] [FILE.e]
 neper tokens [--path VIRTUAL.e] <FILE.e|->
@@ -4231,7 +4231,13 @@ reaches, to `.neper/<mode>/` under the project root (§12). A file not under a
 source root is module `<filename>`,
 and `e.*` comes from the toolchain's own `lib/` (§2), so `neper run
 examples/hello.e` builds and runs module `hello` from any working directory, with
-no package around it. `--arena SIZE` sizes the root arena (§8; the default is
+no package around it. Given a directory instead of a file, or no operand, `neper
+build` and `neper run` take the project that directory — or the working directory
+— is in (§2), and build its `src/main.e`; the executable is then named after the
+project's directory rather than module `main`. A repeated build keeps each module
+whose source and dependencies are unchanged since its `.em`, and links nothing when
+every module is kept and the file at the output path is still the image the same
+command line wrote; the image is always the clean build's (§12). `--arena SIZE` sizes the root arena (§8; the default is
 1 GiB) — `SIZE` is an integer with an optional `K`, `M` or `G` suffix, in binary
 units — `--target` defaults to the full host triple, `--linker` selects the linker
 (Linking, below), and `-j N` the worker count (§15). `--cpu LEVEL` selects the
