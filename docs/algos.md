@@ -2072,7 +2072,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 1646. **Linux Pressure Stall Information (PSI)** – Real-time metrics monitoring hardware resource starvation across CPU, Memory, and I/O subsystems. → skip: OS kernel internals
 1647. **Linux zram Compressed Block Device** – Offloading memory pressures by creating compressed RAM block devices that act as fast swap spaces. → skip: OS kernel internals
 1648. **Rust Compile-Time Ownership & Borrow Checker** – Enforcing thread safety and memory safety statically without garbage collectors by enforcing strict reference ownership lifetimes. → skip: belongs in the Neper compiler, not the library
-1649. **C++11 Memory Model & Sequential Consistency** – Language-level primitives defining hardware atomic operation visibility and memory ordering constraints across threads. → see #1327 (`e.atomic.load_acquire`)
+1649. **C++11 Memory Model & Sequential Consistency** – Language-level primitives defining hardware atomic operation visibility and memory ordering constraints across threads. → see #1327 (`e.atomic.load`)
 1650. **Hardware Transactional Memory (Intel TSX)** – Execution model speculatively executing memory operations in hardware, aborting and rolling back if data conflicts occur. → skip: hardware or circuit design
 
 ## 29. Database Engines, Storage Systems & Big Data Architecture (1651–1700)
@@ -2453,7 +2453,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 2004. **Bentley-Ottmann Sweep** – Reporting all segment intersections in O((n+k) log n). → see #528 (`e.algo.geom.segment_intersections`)
 2005. **Point in Polygon (Ray Casting)** – Counting edge crossings of a ray from the point. → see #521 (`e.algo.geom.point_in_polygon`)
 2006. **Point in Polygon (Winding Number)** – Summing signed angle contributions of edges. → see #532 (`e.algo.geom.winding_number`)
-2007. **Polygon Triangulation (Ear Clipping)** – Removing convex ears until three vertices remain. → see #533 (`e.algo.geom.triangulate_ear_clip`)
+2007. **Polygon Triangulation (Ear Clipping)** – Removing convex ears until three vertices remain. → see #533 (`e.algo.geom.clip.triangulate_ear_clip`)
 2008. **Polygon Triangulation (Monotone Decomposition)** – Splitting into y-monotone pieces and triangulating each in linear time. → `e.algo.geom.triangulate_monotone`
 2009. **Delaunay Triangulation (Bowyer-Watson)** – Inserting points and re-triangulating the cavity of violated triangles. → see #530 (`e.algo.geom.delaunay`)
 2010. **Delaunay Triangulation (Divide and Conquer)** – Merging half triangulations with a rising bubble. → skip: implementable, but too specialised for the standard library
@@ -2464,12 +2464,12 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 2015. **Convex Hull 3D (Quickhull)** – Recursively adding the farthest point outside each face. → `e.algo.geom3.hull`
 2016. **Convex Hull 3D (Incremental)** – Adding points one at a time and re-stitching the horizon. → skip: implementable, but too specialised for the standard library
 2017. **Minkowski Sum of Convex Polygons** – Merging edge sequences by angle. → `e.algo.geom.minkowski_sum`
-2018. **Polygon Clipping (Sutherland-Hodgman)** – Clipping a polygon against each edge of a convex window. → see #534 (`e.algo.geom.clip_convex`)
+2018. **Polygon Clipping (Sutherland-Hodgman)** – Clipping a polygon against each edge of a convex window. → see #534 (`e.algo.geom.clip.clip_convex`)
 2019. **Polygon Clipping (Weiler-Atherton)** – Clipping arbitrary polygons by walking intersection points. → see #535 (`e.algo.geom.clip_polygon`)
 2020. **Polygon Boolean Operations (Greiner-Hormann)** – Union, intersection, and difference via intersection-marked vertex lists. → `e.algo.geom.polygon_boolean`
 2021. **Polygon Offsetting (Vatti / Clipper)** – Insetting or outsetting a polygon by a fixed distance. → `e.algo.geom.polygon_offset`
-2022. **Line Simplification (Douglas-Peucker)** – Dropping points closer than a tolerance to the chord. → see #557 (`e.algo.geom.simplify_douglas_peucker`)
-2023. **Line Simplification (Visvalingam-Whyatt)** – Removing points of least effective area. → see #558 (`e.algo.geom.simplify_visvalingam`)
+2022. **Line Simplification (Douglas-Peucker)** – Dropping points closer than a tolerance to the chord. → see #557 (`e.algo.geom.clip.simplify_douglas_peucker`)
+2023. **Line Simplification (Visvalingam-Whyatt)** – Removing points of least effective area. → see #558 (`e.algo.geom.clip.simplify_visvalingam`)
 2024. **Farthest Pair (Diameter via Calipers)** – Antipodal-pair scan of a convex hull for the maximum distance. → see #542 (`e.algo.geom.farthest_pair`)
 2025. **Smallest Enclosing Circle (Welzl)** – Randomized incremental minimum enclosing disk. → see #539 (`e.algo.geom.enclosing_circle`)
 2026. **Minimum Bounding Rectangle (Rotating Calipers)** – Smallest-area oriented box around a convex hull. → `e.algo.geom.min_bounding_rect`
