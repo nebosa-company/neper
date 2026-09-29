@@ -3675,7 +3675,14 @@ libraries = json.load(open(sys.argv[1]))['libraries']
 libc = [l for l in libraries if l['requested'] == 'libc.so.6']
 assert len(libc) == 1 and libc[0]['resolved'], libraries
 assert libc[0]['sha256'] == hashlib.sha256(open(libc[0]['resolved'], 'rb').read()).hexdigest(), libc
+text = open(sys.argv[1]).read().replace(libc[0]['sha256'], '0' * 64)
+open(sys.argv[1] + '.altered', 'w').write(text)
 PYEOF
+# `compare-manifests` holds libraries to their hashes (T022): another libc differs.
+if extern_compared=$($test_build/neper-self compare-manifests "$repo/tests/selfhost/fixtures/link/extern_import/.neper/debug/build-manifest.json" "$repo/tests/selfhost/fixtures/link/extern_import/.neper/debug/build-manifest.json.altered"); then
+    printf '%s\n' 'compare-manifests called another libc the same' >&2; exit 1
+fi
+case "$extern_compared" in *'library libc.so.6: '*) ;; *) printf '%s\n' "compare-manifests did not name libc: $extern_compared" >&2; exit 1 ;; esac
 # A C variadic through the same dynamic slots: `snprintf` with an `f64` in a `...`
 # position, which System V wants counted in `al`.
 variadic_path="$test_build/extern-variadic-selfhost"

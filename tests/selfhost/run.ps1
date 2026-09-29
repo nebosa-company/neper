@@ -4033,6 +4033,12 @@ if ($LASTEXITCODE -ne 0) { throw 'an imported extern call reached the wrong symb
 $externManifest = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'fixtures\link\extern_import\.neper\debug\build-manifest.json') | ConvertFrom-Json
 $externKernel = @($externManifest.libraries | Where-Object { $_.requested -eq 'kernel32' })
 if ($externKernel.Count -ne 1 -or $externKernel[0].resolved -notmatch 'System32.kernel32\.dll$' -or $externKernel[0].sha256 -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $externKernel[0].resolved).Hash.ToLower()) { throw "the manifest does not resolve kernel32: $($externManifest.libraries | ConvertTo-Json -Compress)" }
+# `compare-manifests` holds libraries to their hashes (T022): another kernel32 differs.
+$externManifestPath = Join-Path $PSScriptRoot 'fixtures\link\extern_import\.neper\debug\build-manifest.json'
+$externAltered = Join-Path $testBuild 'extern-manifest-altered.json'
+[IO.File]::WriteAllText($externAltered, ([IO.File]::ReadAllText($externManifestPath).Replace($externKernel[0].sha256, ('0' * 64))), (New-Object Text.UTF8Encoding($false)))
+$externCompared = & $compiler compare-manifests $externManifestPath $externAltered
+if ($LASTEXITCODE -ne 1 -or ($externCompared -join "`n") -notmatch 'library kernel32: ') { throw "compare-manifests did not hold kernel32 to its hash: $externCompared" }
 # 138 libc and libm imports (D1594): Linux-only to run, so here it is cross-emitted. Past about
 # 58 externs a module's unsafe inventory overflowed its buffer ("cannot lower `main`") on
 # either target, and the ELF linker refused anything past its one page of loader metadata.

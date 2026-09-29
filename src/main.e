@@ -5805,6 +5805,10 @@ fn compare_manifests_command(a: *mem.Arena, args: []str) -> err {
     try compare_scalar(&out, &differences, "options.cpu", json_str_after(left, "\"cpu\":\""), json_str_after(right, "\"cpu\":\""))
     try compare_entries(a, &out, &differences, "input", json_array_after(left, "\"inputs\":["), json_array_after(right, "\"inputs\":["), "\"path\":\"", "\"sha256\":\"", "")
     try compare_entries(a, &out, &differences, "dependency", json_array_after(left, "\"dependencies\":["), json_array_after(right, "\"dependencies\":["), "\"module\":\"", "\"interface_sha256\":\"", "\"body_sha256\":\"")
+    // Libraries by their requested name and the file's hash, not where it was found
+    // (D1685, T022); assets by logical name and hash.
+    try compare_entries(a, &out, &differences, "library", json_array_after(left, "\"libraries\":["), json_array_after(right, "\"libraries\":["), "\"requested\":\"", "\"sha256\":\"", "")
+    try compare_entries(a, &out, &differences, "asset", json_array_after(left, "\"assets\":["), json_array_after(right, "\"assets\":["), "\"name\":\"", "\"sha256\":\"", "")
     try compare_artifacts(a, &out, &differences, json_array_after(left, "\"artifacts\":["), json_array_after(right, "\"artifacts\":["))
     if json {
         try write_all(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"same\":")
