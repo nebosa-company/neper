@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bring your own OpenSSL: SQL Server scans, three times faster — Neper blog</title>
+  <meta name="description" content="x.microsoft.tds can hand its TLS record cipher to the host's OpenSSL, looked up at run time and never shipped: SQL Server scans get 3.2-3.6 times faster, and on Windows Neper's scan becomes the fastest of Neper, C, Go and Rust.">
+  <link rel="canonical" href="https://neper.dev/blog/sqlserver-openssl.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Bring your own OpenSSL: SQL Server scans, three times faster">
+  <meta property="og:description" content="x.microsoft.tds can hand its TLS record cipher to the host's OpenSSL, looked up at run time and never shipped: SQL Server scans get 3.2-3.6 times faster, and on Windows Neper's scan becomes the fastest of Neper, C, Go and Rust.">
+  <meta property="og:url" content="https://neper.dev/blog/sqlserver-openssl.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/sqlserver-openssl.svg">
+  <meta property="article:published_time" content="2026-09-29">
+  <meta property="article:modified_time" content="2026-09-29">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --success: #246b3a; --error: #b42431; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --success: #8fd79e; --error: #ffb3ad; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --success: #00461d; --error: #7d0018; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --success: #abf3b9; --error: #ffdad6; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 7 5, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    h3 { margin: var(--space-8) 0 var(--space-3); font: 400 22px/28px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .rank-1 { color: var(--success); font-weight: 600; }
+    .rank-2 { color: var(--primary); }
+    .rank-last { color: var(--error); }
+    tr.overall td { border-top: 2px solid var(--outline-variant); }
+    .legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0 0 var(--space-4); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .legend .key { display: inline-flex; align-items: center; gap: var(--space-2); }
+    .legend .key::before { content: ""; width: 12px; height: 12px; border-radius: var(--radius-full); background: currentColor; }
+    .legend .key span { color: var(--on-surface-variant); }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; blog // engineering</div>
+      <h1>Bring your own OpenSSL: SQL Server scans, three times faster</h1>
+      <p class="meta">September 29, 2026 · <code>lib/x/openssl</code>, <code>lib/e/net/tls.e</code>, <code>lib/x/microsoft/tds.e</code>, <code>benchmarks/db</code></p>
+      <img class="banner" src="img/sqlserver-openssl.svg" width="1200" height="630" alt="Bring your own OpenSSL. SQL Server scan on Windows, rows per second: Neper 707,389; Neper with OpenSSL 2,572,546; C 1,719,336; Go 987,118; Rust 1,942,502.">
+
+      <p class="lede">Neper's SQL Server driver speaks TDS inside TLS 1.3, and every byte it reads is decrypted by Neper's own AES-GCM. That cipher is portable and constant-time, and it is slow: it held the driver's scans to 28–35% of the fastest language in <a href="e-db-drivers.html">the e.db benchmark</a>. A program can now hand record encryption to the host's OpenSSL, if the host has one. Scans get 3.2–3.6 times faster, and on Windows Neper's scan is now the fastest of the five. Neper still ships no OpenSSL, and a program that asks for it still runs where there is none.</p>
+
+      <h2>Where the time went</h2>
+      <p>SQL Server 2022 and later can run TDS entirely inside TLS: the handshake comes before the first TDS byte, so the login and every result travel encrypted. Neper's driver, <code>x.microsoft.tds</code>, only connects that way. So a scan of 20,000 rows arrives as about 600 KB of TLS records, and each record is authenticated and decrypted with AES-128-GCM before the driver reads a byte of it.</p>
+      <p><code>e.crypto.aead</code>'s AES-GCM is written in portable Neper. It avoids secret-dependent table lookups and branches: four blocks at a time, bitsliced into eight 64-bit words, with a GHASH built from masked integer products (D1645). That is already 63 times faster than the version it replaced. It still runs on general-purpose instructions, while OpenSSL, Go and rustls use the CPU's AES and carry-less-multiply instructions. Sealing one record, measured from the same Neper program on the same laptop:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>One TLS record</th><th>Neper AES-GCM</th><th>OpenSSL</th><th>Factor</th></tr></thead>
+          <tbody>
+            <tr><td>100 bytes, Windows</td><td>11.1 µs</td><td>0.47 µs</td><td>24×</td></tr>
+            <tr><td>100 bytes, Linux</td><td>11.7 µs</td><td>0.70 µs</td><td>17×</td></tr>
+            <tr><td>16 KB, Windows</td><td>669 µs</td><td>2.5 µs</td><td>263×</td></tr>
+            <tr><td>16 KB, Linux</td><td>730 µs</td><td>2.8 µs</td><td>262×</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A lookup sends one small record and reads one back, so the cipher costs it tens of microseconds out of a couple of hundred. A scan is almost all large records, and there the cipher was most of the time.</p>
+
+      <h2>What moves to OpenSSL, and what does not</h2>
+      <p>Only the record cipher moves. <code>e.net.tls</code> has a new hook, <code>use_aead</code>, that a caller sets before the handshake. Its cipher must seal and open exactly as <code>e.crypto.aead</code>'s AES-128-GCM does, and from then on every protected record goes through it: the handshake's encrypted messages and the application data (D1646). Everything else stays in Neper:</p>
+      <ul>
+        <li><strong>The handshake</strong>: X25519, the transcript, the Finished checks.</li>
+        <li><strong>The certificate checks</strong>: the chain to the roots the caller pinned, the host name, and the RSA and ECDSA signatures. OpenSSL never decides whom to trust.</li>
+        <li><strong>The key schedule</strong>: HKDF, the traffic keys and the record sequence numbers. OpenSSL sees one key and one nonce per record, and nothing else.</li>
+      </ul>
+      <p>Handing all of TLS to <code>libssl</code> was the other design, and it would have moved certificate policy out of Neper as well. The narrow hook keeps the part that decides whom to trust, verified and portable, and outsources only arithmetic whose output is fully specified and checked.</p>
+
+      <h2>Using it</h2>
+      <p><code>x.openssl.crypto</code> adapts libcrypto's EVP AES-128-GCM to the hook. <code>load</code> answers <code>NotFound</code> when the host has no OpenSSL, so the natural shape is to try it and fall back:</p>
+      <pre><code><span class="kw">use</span> x.microsoft.tds
+<span class="kw">use</span> x.openssl.crypto
+
+<span class="com">// The host's OpenSSL if it has one; Neper's own cipher otherwise.</span>
+<span class="kw">let</span> (openssl, load_error) = crypto.<span class="fn">load</span>(a)
+<span class="kw">var</span> c: db.Connection = <span class="kw">zero</span>
+<span class="kw">if</span> load_error == <span class="kw">ok</span> {
+    c = <span class="kw">try</span> tds.<span class="fn">open_with_cipher</span>(a, options, crypto.<span class="fn">aead_of</span>(openssl))
+} <span class="kw">else</span> {
+    c = <span class="kw">try</span> tds.<span class="fn">open</span>(a, options)
+}</code></pre>
+      <p>Everything after that is plain <code>e.db</code>, and the connection behaves identically either way. The hook is not specific to SQL Server: any <code>e.net.tls</code> client can take it before its handshake.</p>
+      <pre><code><span class="kw">var</span> stream = <span class="kw">try</span> tls.<span class="fn">client</span>(a, source, sink, config)
+<span class="kw">try</span> tls.<span class="fn">use_aead</span>(&amp;stream, crypto.<span class="fn">aead_of</span>(openssl))
+<span class="kw">try</span> tls.<span class="fn">handshake</span>(&amp;stream)</code></pre>
+      <p>One <code>Crypto</code> holds one OpenSSL cipher context, so it serves one connection on one thread; a program with several connections loads one per connection.</p>
+
+      <h2>Optional, and nothing we ship</h2>
+      <ul>
+        <li><strong>No build-time link.</strong> The package names its ten libcrypto functions and looks each one up with <code>os.dlopen</code> and <code>os.dlsym</code> when <code>load</code> runs. A program that imports it has no dependency on OpenSSL when it starts, and on a host without it, <code>load</code> reports <code>NotFound</code>.</li>
+        <li><strong>The host's copy.</strong> On Linux that is the distribution's <code>libcrypto.so.3</code>; our tests ran OpenSSL 3.0.13 on Ubuntu 24.04. On Windows it is a <code>libcrypto-3-x64.dll</code> on the DLL search path; our tests use the one Git for Windows installs (OpenSSL 3.5.6), copied to a tools directory.</li>
+        <li><strong>No default.</strong> No <code>e.*</code> module reaches for OpenSSL on its own. Without the hook, TLS in Neper is Neper all the way down, as before.</li>
+      </ul>
+
+      <h2>How it is tested</h2>
+      <p>A new fixture, <code>link/x_openssl</code>, runs on both hosts with one exit code per check:</p>
+      <ul>
+        <li>OpenSSL's seal and open agree byte for byte with <code>e.crypto.aead</code> for every length from 0 to 300 bytes and for records up to 16,385, with random keys, nonces and additional data.</li>
+        <li>A flipped bit anywhere is refused, and the output is left zeroed, as the portable open never writes plaintext before the tag checks out. A short buffer is refused too.</li>
+        <li>A live TLS 1.3 exchange over pipes moves 100 KB each way between a client whose records OpenSSL seals and a server using the portable cipher, so each side checks the other's arithmetic.</li>
+        <li>The hook is refused once the handshake is done.</li>
+      </ul>
+      <p>With <code>PATH</code> cut down to the Windows system directories, <code>load</code> answers <code>NotFound</code>, and the fixture fails when told OpenSSL is required and passes when it is not. And <code>link/x_tds</code> stores 100 KB of text and bytes in SQL Server through an OpenSSL-sealed connection and reads them back through a portable one.</p>
+
+      <h2>Performance</h2>
+      <p>The workload is the e.db benchmark's: 20,000 rows of (bigint, text, double) inserted through one prepared statement in one transaction, scanned back through one streaming reader, and 5,000 primary-key lookups. SQL Server 2025 Developer ran locally: an instance on Windows 11, and Microsoft's <code>mssql-server</code> package under WSL2 Ubuntu 24.04, on a Core i5-12500H laptop.</p>
+      <ul>
+        <li><strong>Neper</strong> is <code>x.microsoft.tds</code> with its portable cipher, and <strong>Neper + OpenSSL</strong> the same program with <code>open_with_cipher</code>: TDS 8.0 strict.</li>
+        <li><strong>C</strong> runs through Microsoft's ODBC Driver 18 with <code>Encrypt=Strict</code>, on OpenSSL.</li>
+        <li><strong>Go</strong> runs through <code>microsoft/go-mssqldb</code> 1.11 in its strict mode.</li>
+        <li><strong>Rust</strong> runs through <code>tiberius</code> 0.12 on rustls. It has no strict mode, so it negotiates TLS inside TDS's PRELOGIN, and everything after that is encrypted.</li>
+      </ul>
+      <p>All five check the server's certificate against the same pinned one. Each round ran every implementation once, alternated, 9 rounds after a warm-up; the tables report medians. The interquartile spread was 3–14% on Linux and up to 43% on Windows, so read the Windows cells as rough.</p>
+
+      <p class="legend" aria-label="Colour key"><span class="key rank-1"><span>1st</span></span><span class="key rank-2"><span>2nd</span></span><span class="key rank-last"><span>last</span></span><span>in each row</span></p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Windows 11</th><th>Neper</th><th>Neper + OpenSSL</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
+          <tbody>
+            <tr><td>Insert, rows/s</td><td class="rank-last">6,021</td><td class="rank-2">7,591</td><td class="rank-1">8,912</td><td>7,093</td><td>7,570</td></tr>
+            <tr><td>Scan, rows/s</td><td class="rank-last">707,389</td><td class="rank-1">2,572,546</td><td>1,719,336</td><td>987,118</td><td class="rank-2">1,942,502</td></tr>
+            <tr><td>Lookup, µs</td><td>160.3</td><td>135.3</td><td class="rank-1">121.2</td><td class="rank-last">171.0</td><td class="rank-2">126.1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Linux (WSL2)</th><th>Neper</th><th>Neper + OpenSSL</th><th>C</th><th>Go</th><th>Rust</th></tr></thead>
+          <tbody>
+            <tr><td>Insert, rows/s</td><td>3,720</td><td>4,266</td><td class="rank-2">4,404</td><td class="rank-last">3,535</td><td class="rank-1">4,601</td></tr>
+            <tr><td>Scan, rows/s</td><td class="rank-last">618,079</td><td class="rank-2">1,962,373</td><td>1,910,784</td><td>1,226,245</td><td class="rank-1">2,015,439</td></tr>
+            <tr><td>Lookup, µs</td><td>261.8</td><td>237.0</td><td class="rank-2">235.1</td><td class="rank-last">299.5</td><td class="rank-1">223.6</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <strong>Scans: from last to first.</strong>
+        <p>With OpenSSL, Neper's scan goes from 707,389 to 2,572,546 rows per second on Windows (3.6×) and from 618,079 to 1,962,373 on Linux (3.2×). On Windows that is the fastest scan of the five, ahead of Rust's 1.94 million and C's 1.72 million. On Linux it is second, 3% behind Rust and ahead of C. Without it, Neper's scan is last on both hosts.</p>
+      </div>
+      <p><strong>Inserts and lookups gain less, as they should.</strong> Each statement waits on a round trip to the server, and its records are small, so the cipher was a smaller share of the time. With OpenSSL, inserts are 15% faster on Linux and 26% on Windows, and lookups take 9% and 16% less time. That brings Neper's lookups within 1% of C's on Linux and 12% on Windows, and its inserts within 7% of Rust's on Linux; on Windows they match Rust's and trail C's by 15%.</p>
+      <p><strong>Why the scan can win.</strong> Once the cipher is the same code the others run, what is left is the driver. Neper's parses TDS packets in place and copies each value once, into the reader's row. The C baseline goes through ODBC, which asks for every value with a separate <code>SQLGetData</code> call and converts the text to UTF-16. So Neper's scan is not fast because of OpenSSL; OpenSSL just stops hiding it.</p>
+
+      <h2>What comes next</h2>
+      <p>The better fix is for Neper not to need OpenSSL at all. Item C098 in the compiler backlog is to emit the AES and carry-less-multiply instructions directly, behind a CPU check, with the portable code as the fallback. The compiler already does this for the SHA-256 and CRC-32C it runs over its own build artifacts. Until then, OpenSSL is one line away for programs that want it, and nothing changes for those that do not.</p>
+
+      <h2>Try it</h2>
+      <p>The package is <code>lib/x/openssl</code>, specified in <a href="../packages/x.openssl.crypto.md"><code>docs/packages/x.openssl.crypto.md</code></a>; the hook is <code>tls.use_aead</code>, and the SQL Server entry point <code>tds.open_with_cipher</code>. To reproduce the tables, build <code>benchmarks/db/src/sqlserver.e</code> in release mode as <code>&lt;prefix&gt;-sqlserver</code>, set up the servers as the e.db post describes, and run:</p>
+      <pre><code><span class="prompt">$</span> pwsh benchmarks/db/run-windows-all.ps1 build/bench/neper results-windows.json -Drivers sqlserver -Openssl
+<span class="prompt">$</span> NEPER_BENCH_OPENSSL=1 bash benchmarks/db/run-linux-all.sh build/linux/bench/neper results-linux.json 9 sqlserver</code></pre>
+      <p>On Windows the script puts <code>&lt;tools&gt;\openssl</code> first on <code>PATH</code>; put a <code>libcrypto-3-x64.dll</code> there. The raw samples are in <code>benchmarks/db/results/</code>, as <code>windows-2026-09-29-sqlserver-openssl.json</code> and <code>linux-2026-09-29-sqlserver-openssl.json</code>.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>
