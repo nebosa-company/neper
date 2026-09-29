@@ -31154,3 +31154,19 @@ With this, T022's "dependency and library hashes the manifest does not yet carry
 - Two builds of `link/extern_import` agree.
 - A copy of the manifest with `kernel32`'s hash zeroed differs by `library kernel32: <hash> / 000…`, exit 1, on Windows. With `libc.so.6`'s zeroed, it differs the same way on Linux.
 - Pinned in both suites.
+
+## D1697 — A project walk names each module under its project root (T003, T015)
+
+**Problem.** Tooling section 1 gives a module under the project's `src` the identity `{"root":"project-src","path":"parse/expr.e"}`. The project walks still named their modules as operands: `check-project` and `test-project` as `operand` + `helper.e`, and `index-project` as `operand` + `src/main.e`.
+
+**Decision.** The walkers now pass `--project-path src/REL`, or `lib/REL` for `index-project`'s `lib` walk, in place of `--path`.
+
+- `check-file`, `index-file` and `test-file` read it as `REL` under `project-src` or `project-lib`: every span, the fix preconditions, and the test record's `file`.
+- A spelling under neither root stays `operand`.
+- `test-file` names the module from `REL`, as before.
+- `--path` keeps its meaning, the virtual identity of an operand or of stdin (D289).
+
+**Evidence.**
+
+- `tools/check_project`, `index_project` and `test_project` change in their identities and nothing else, byte-equal on both hosts. The operand-less `check`, `index` and `test` forms compare against the same goldens.
+- The records validate against the v1 schema.
