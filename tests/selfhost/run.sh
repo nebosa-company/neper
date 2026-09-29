@@ -6213,6 +6213,11 @@ $test_build/neper-self test-file "$conformance_root/tools/test_main_error.e" "$r
 [ "$main_error_status" -eq 2 ]
 cmp -s "$test_build/conformance-tools-test-main-error.jsonl" "$conformance_root/tools/test_main_error.expected.jsonl" || { printf '%s
 ' "a compile error past the renamed main differs from the conformance corpus" >&2; exit 1; }
+# (D1713) An error on the renamed `main`'s own line keeps the operand's column.
+main_line_status=0
+$test_build/neper-self test-file "$conformance_root/tools/test_main_line.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-main-line.jsonl" || main_line_status=$?
+[ "$main_line_status" -eq 2 ]
+cmp "$test_build/conformance-tools-test-main-line.jsonl" "$conformance_root/tools/test_main_line.expected.jsonl"
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 timeout_actual="$test_build/conformance-tools-test-timeout.jsonl"

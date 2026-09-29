@@ -6503,6 +6503,11 @@ $testMainErrorActual = Join-Path $testBuild 'conformance-tools-test-main-error.j
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_main_error.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testMainErrorActual`""
 if ($LASTEXITCODE -ne 2) { throw "a compile error past the renamed main exited $LASTEXITCODE, not 2" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testMainErrorActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_main_error.expected.jsonl')).Hash) { throw "a compile error past the renamed main differs from the conformance corpus" }
+# (D1713) An error on the renamed `main`'s own line keeps the operand's column.
+$testMainLineActual = Join-Path $testBuild 'conformance-tools-test-main-line.jsonl'
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_main_line.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testMainLineActual`""
+if ($LASTEXITCODE -ne 2) { throw "an error on the renamed main's line exited $LASTEXITCODE, not 2" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testMainLineActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_main_line.expected.jsonl')).Hash) { throw "an error on the renamed main's line differs from the conformance corpus" }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 $timeoutActual = Join-Path $testBuild 'conformance-tools-test-timeout.jsonl'

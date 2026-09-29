@@ -4401,6 +4401,12 @@ type Sink = struct {
     map_original_path: [96]str,
     map_original_start: [96]usize,
     map_original_line: [96]usize,
+    // Where each mapping starts on its line, both sides (T015): a mapping that begins
+    // mid-line moves the columns of its first line.
+    map_generated_column: [96]usize,
+    map_generated_column_utf16: [96]usize,
+    map_original_column: [96]usize,
+    map_original_column_utf16: [96]usize,
     // What may be edited (D373, H19): 0 unknown, 1 the generated output directly,
     // 2 the generator's input only -- the mapping's `edit`, absent in a version 1 map.
     map_edit: [96]u8,
@@ -4509,11 +4515,7 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
     }
     try write_all(report, ",\"span\":")
     if mapping < report.map_count {
-        var original = at
-        original.start = at.start - report.map_generated_start[mapping] + report.map_original_start[mapping]
-        original.end = at.end - report.map_generated_start[mapping] + report.map_original_start[mapping]
-        original.line = at.line - report.map_generated_line[mapping] + report.map_original_line[mapping]
-        original.end_line = at.end_line - report.map_generated_line[mapping] + report.map_original_line[mapping]
+        let original = remap_span(report, at, mapping)
         // The original's own map (D465, D499, H19): when the original is generated
         // too, the chain is followed level by level to the root original, which is
         // primary; every intermediate is related, the one nearest the root first.
@@ -4545,12 +4547,7 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             chain_spans[chain_count] = shown
             chain_paths[chain_count] = shown_path
             chain_count += 1usize
-            var deeper = shown
-            deeper.start = shown.start - report.map_generated_start[nested] + report.map_original_start[nested]
-            deeper.end = shown.end - report.map_generated_start[nested] + report.map_original_start[nested]
-            deeper.line = shown.line - report.map_generated_line[nested] + report.map_original_line[nested]
-            deeper.end_line = shown.end_line - report.map_generated_line[nested] + report.map_original_line[nested]
-            shown = deeper
+            shown = remap_span(report, shown, nested)
             shown_path = report.map_original_path[nested]
             level += 1usize
         }
@@ -5144,6 +5141,30 @@ fn nest_base(level: usize) -> usize { ret OPERAND_MAPPINGS + level * 8usize }
 // the eight a nested level keeps.
 const OPERAND_MAPPINGS: usize = 32usize
 
+// A generated span as its original, through one mapping: bytes and lines shift by the
+// mapping's start. Below the mapping's first line the text is the same, column for
+// column; on that line a mapping that begins mid-line -- a runner's renamed `main` --
+// moves the columns by where each side begins (T015).
+fn remap_span(report: *Sink, at: lex.Span, mapping: usize) -> lex.Span {
+    var moved = at
+    moved.start = at.start + report.map_original_start[mapping] - report.map_generated_start[mapping]
+    moved.end = at.end + report.map_original_start[mapping] - report.map_generated_start[mapping]
+    moved.line = at.line + report.map_original_line[mapping] - report.map_generated_line[mapping]
+    moved.end_line = at.end_line + report.map_original_line[mapping] - report.map_generated_line[mapping]
+    let first_line = report.map_generated_line[mapping]
+    if report.map_generated_column[mapping] != 0usize && report.map_original_column[mapping] != 0usize {
+        if at.line == first_line {
+            moved.column = at.column + report.map_original_column[mapping] - report.map_generated_column[mapping]
+            moved.column_utf16 = at.column_utf16 + report.map_original_column_utf16[mapping] - report.map_generated_column_utf16[mapping]
+        }
+        if at.end_line == first_line {
+            moved.end_column = at.end_column + report.map_original_column[mapping] - report.map_generated_column[mapping]
+            moved.end_column_utf16 = at.end_column_utf16 + report.map_original_column_utf16[mapping] - report.map_generated_column_utf16[mapping]
+        }
+    }
+    ret moved
+}
+
 // A map's mappings into the tables from `base` (D264, D465): each `generated_span`'s
 // start, end and line, the `original_span`'s path, start and line, and the
 // mapping's `edit`; `limit` at most. The count read.
@@ -5166,6 +5187,10 @@ fn read_mappings(report: *Sink, document: str, base: usize, limit: usize) -> usi
             report.map_original_path[index] = json_str_after(original, "\"path\":\"")
             report.map_original_start[index] = json_usize_after(original, "\"byte_start\":")
             report.map_original_line[index] = json_usize_after(original, "\"line\":")
+            report.map_generated_column[index] = json_usize_after(rest, "\"column\":")
+            report.map_generated_column_utf16[index] = json_usize_after(rest, "\"column_utf16\":")
+            report.map_original_column[index] = json_usize_after(original, "\"column\":")
+            report.map_original_column_utf16[index] = json_usize_after(original, "\"column_utf16\":")
             // The mapping's `edit` (D373), read before the next mapping begins.
             var object_end = json_key_at(rest[generated_key.len..rest.len], generated_key) + generated_key.len
             if object_end > rest.len { object_end = rest.len }

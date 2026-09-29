@@ -1,0 +1,4 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"test","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-NAME-9999","message":"unknown type `Missing`","symbol":"Missing","span":{"source":{"root":"operand","path":"test_main_line.e"},"byte_start":291,"byte_end":298,"line":6,"column":40,"end_line":6,"end_column":47,"column_utf16":40,"end_column_utf16":47},"parent":null,"related":[{"message":"in the generated source","span":{"source":{"root":"operand","path":"nptest-runner.e"},"byte_start":358,"byte_end":365,"line":8,"column":55,"end_line":8,"end_column":62,"column_utf16":55,"end_column_utf16":62}}],"fixes":[]}
+{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the tests could not be compiled","span":null,"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":2,"data":{"tests":0}}
