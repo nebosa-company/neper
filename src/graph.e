@@ -200,6 +200,10 @@ type Graph = struct {
     // The asset `project.yaml` declares whose file could not be read (T013), for the
     // report to name; empty otherwise.
     asset_missing: str,
+    // The libraries the image imports by name (T014), for the manifest, and whether this
+    // machine is the target's, where they can be found and hashed.
+    libraries: []str,
+    libraries_resolvable: bool,
     token_scratch: []lex.Token,
     nodes: []syntax.Node,
     children: []u32,

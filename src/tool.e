@@ -5957,6 +5957,142 @@ fn quoted_function(out: *Out, c: *check.Checker, g: *graph.Graph, function_index
     ret byte(out, 34u8)
 }
 
+// The libraries the image imports by name (T014, tooling section 7): each as requested,
+// with the roots it is looked for in, in order, and the file found there with its SHA-256.
+// An imported library is bound when the program starts, by the target's loader, so the
+// roots are that loader's: the executable's directory then `System32` on Windows, the
+// multiarch and plain library directories on Linux. A name with a separator is its own
+// path. Off the target's machine, or not found, `resolved` and `sha256` are null.
+fn manifest_libraries(a: *mem.Arena, out: *Out, g: *graph.Graph, os_name: str, artifact_path: str) -> err {
+    var roots_storage: [8]str = zero
+    var root_count = 0usize
+    if g.libraries_resolvable {
+        if graph.same(os_name, "windows") {
+            roots_storage[0usize] = library_parent(artifact_path)
+            root_count = 1usize
+            let (system_root, system_root_error) = os.env(a, "SystemRoot")
+            if system_root_error == ok && system_root.len != 0usize {
+                let (system32, system32_error) = manifest_join(a, system_root, "System32")
+                if system32_error == ok {
+                    roots_storage[1usize] = system32
+                    root_count = 2usize
+                }
+            }
+        } else {
+            roots_storage[0usize] = "/lib/x86_64-linux-gnu"
+            roots_storage[1usize] = "/usr/lib/x86_64-linux-gnu"
+            roots_storage[2usize] = "/lib64"
+            roots_storage[3usize] = "/usr/lib64"
+            roots_storage[4usize] = "/lib"
+            roots_storage[5usize] = "/usr/lib"
+            root_count = 6usize
+        }
+    }
+    var at = 0usize
+    while at < g.libraries.len {
+        let name = g.libraries[at]
+        if at > 0usize { try byte(out, 44u8) }
+        try text(out, "{\"requested\":")
+        try quoted(out, name)
+        var separated = false
+        var probe = 0usize
+        while probe < name.len {
+            if name[probe] == 47u8 || name[probe] == 92u8 { separated = true }
+            probe += 1usize
+        }
+        try text(out, ",\"search_roots\":[")
+        var roots_used = root_count
+        if separated { roots_used = 0usize }
+        var root_at = 0usize
+        while root_at < roots_used {
+            if root_at > 0usize { try byte(out, 44u8) }
+            try quoted(out, roots_storage[root_at])
+            root_at += 1usize
+        }
+        try text(out, "],\"resolved\":")
+        var found = ""
+        var digest = ""
+        if g.libraries_resolvable {
+            let checkpoint = mem.mark(a)
+            if separated {
+                let (bytes, load_error) = graph.load_file(a, name)
+                if load_error == ok {
+                    let (hex, hex_error) = artifact_hash.sha256_hex(a, bytes)
+                    if hex_error == ok {
+                        found = name
+                        digest = hex
+                    }
+                }
+            }
+            // The file the loader asks for: the image carries the name as written, and the
+            // Windows loader adds `.dll` to a name without an extension; `ld.so` adds nothing.
+            var file_name = name
+            var dotted = false
+            probe = 0usize
+            while probe < name.len {
+                if name[probe] == 46u8 { dotted = true }
+                probe += 1usize
+            }
+            if graph.same(os_name, "windows") && !dotted {
+                let (with_dll, with_dll_error) = mem.alloc[u8](a, name.len + 4usize)
+                if with_dll_error == ok {
+                    var copied = 0usize
+                    while copied < name.len {
+                        with_dll[copied] = name[copied]
+                        copied += 1usize
+                    }
+                    with_dll[name.len] = 46u8
+                    with_dll[name.len + 1usize] = 100u8
+                    with_dll[name.len + 2usize] = 108u8
+                    with_dll[name.len + 3usize] = 108u8
+                    file_name = with_dll
+                }
+            }
+            root_at = 0usize
+            while found.len == 0usize && root_at < roots_used {
+                let (candidate, candidate_error) = manifest_join(a, roots_storage[root_at], file_name)
+                if candidate_error == ok {
+                    let (bytes, load_error) = graph.load_file(a, candidate)
+                    if load_error == ok {
+                        let (hex, hex_error) = artifact_hash.sha256_hex(a, bytes)
+                        if hex_error == ok {
+                            found = candidate
+                            digest = hex
+                        }
+                    }
+                }
+                root_at += 1usize
+            }
+            if found.len == 0usize { mem.reset(a, checkpoint) }
+        }
+        if found.len == 0usize { try text(out, "null,\"sha256\":null}") } else {
+            try quoted(out, found)
+            try text(out, ",\"sha256\":")
+            try quoted(out, digest)
+            try byte(out, 125u8)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// The directory an executable is written to, `.` for a bare name: where the Windows loader
+// looks first.
+fn library_parent(path: str) -> str {
+    var end = 0usize
+    var found = false
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 47u8 || path[at] == 92u8 {
+            end = at
+            found = true
+        }
+        at += 1usize
+    }
+    if !found { ret "." }
+    ret path[0usize..end]
+}
+
 // The project's declared assets (D792): one line each, sorted by name as the
 // registry is, with the project-relative path, the media type, the attributes,
 // the size and the SHA-256 -- the identity `e.asset` carries, in the manifest.
@@ -6450,7 +6586,9 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         try byte(out, 125u8)
         at += 1usize
     }
-    try text(out, "],\"libraries\":[],\"assets\":[")
+    try text(out, "],\"libraries\":[")
+    try manifest_libraries(a, out, g, os_name, artifact_path)
+    try text(out, "],\"assets\":[")
     try manifest_assets(a, out, g)
     try text(out, "],\"artifacts\":[")
     if artifact_path.len != 0usize {

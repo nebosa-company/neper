@@ -9733,14 +9733,15 @@ fn image_current(a: *mem.Arena, hot: *HotLoad, loaded: *graph.Graph, held: [][]c
     }
     let (key, stamp) = image_key(a, hot.directory, hot.triple, loaded, held, args)
     if key.len == 0usize { ret false }
-    // The stamp: the key, a space, the image's SHA-256, a newline.
+    // The stamp: the key, a space, the image's SHA-256, a newline, then the libraries.
     let (recorded, recorded_error) = source.load(a, stamp)
-    if recorded_error != ok || recorded.len != 130usize || !same(recorded[0usize..64usize], key) { ret false }
+    if recorded_error != ok || recorded.len < 130usize || recorded[129usize] != 10u8 || !same(recorded[0usize..64usize], key) { ret false }
     let (image, image_error) = source.load(a, args[6usize])
     if image_error != ok { ret false }
     var digest: [64]u8 = zero
     artifact_hash.sha256_hex_into(image, digest[..])
-    ret same(recorded[65usize..129usize], digest[..])
+    if !same(recorded[65usize..129usize], digest[..]) { ret false }
+    ret stamped_libraries(a, loaded, recorded, args) == ok
 }
 
 // The key of the image the command line links from the artifacts in the directory, and
@@ -9800,6 +9801,28 @@ fn image_key(a: *mem.Arena, directory: str, triple: str, loaded: *graph.Graph, h
     ret (key, stamp)
 }
 
+// The libraries the image imports by name (T014): the builder's, in its import order, and
+// whether they can be looked for here -- only when this machine is the target's.
+fn note_libraries(a: *mem.Arena, loaded: *graph.Graph, builder: *nir.Builder, arch: str, os_name: str) -> err {
+    let count = nir.import_library_count(builder)
+    let (names, names_error) = mem.alloc[str](a, count + 1usize)
+    if names_error != ok { ret names_error }
+    var at = 0usize
+    while at < count {
+        names[at] = nir.import_library_name(builder, at)
+        at += 1usize
+    }
+    loaded.libraries = names[0usize..count]
+    ret note_resolvable(a, loaded, arch, os_name)
+}
+
+fn note_resolvable(a: *mem.Arena, loaded: *graph.Graph, arch: str, os_name: str) -> err {
+    let (built_for, built_for_error) = target_triple(a, arch, os_name)
+    if built_for_error != ok { ret built_for_error }
+    loaded.libraries_resolvable = same(built_for, host_target(a))
+    ret ok
+}
+
 // The manifest of a build that linked nothing (C097): every module kept as the hot load
 // found it, no work done, the image the file at the output path already is.
 fn noop_manifest(a: *mem.Arena, loaded: *graph.Graph, held: [][]const u8, hot: *HotLoad, args: []str, release: bool, unchecked: bool) -> err {
@@ -9831,13 +9854,53 @@ fn record_image(a: *mem.Arena, hot: *HotBuild, loaded: *graph.Graph, held: [][]c
     if !hot.on { ret }
     let (key, stamp) = image_key(a, hot.directory, hot.triple, loaded, held, args)
     if key.len != 64usize { ret }
-    let (line, line_error) = mem.alloc[u8](a, 130usize)
+    // The key, the image's SHA-256, then each library the image imports on a line of its
+    // own (T014), so a build that links nothing writes the same manifest.
+    var size = 130usize
+    var library_at = 0usize
+    while library_at < loaded.libraries.len {
+        size += loaded.libraries[library_at].len + 1usize
+        library_at += 1usize
+    }
+    let (line, line_error) = mem.alloc[u8](a, size)
     if line_error != ok { ret }
     var at = tool.nptest_copy(line, 0usize, key)
     at = tool.nptest_copy(line, at, " ")
     artifact_hash.sha256_hex_into(image, line[at..at + 64usize])
     line[129usize] = 10u8
-    let written = write_file(a, stamp, line)
+    at = 130usize
+    library_at = 0usize
+    while library_at < loaded.libraries.len {
+        at = tool.nptest_copy(line, at, loaded.libraries[library_at])
+        at = tool.nptest_copy(line, at, "\n")
+        library_at += 1usize
+    }
+    let written = write_file(a, stamp, line[0usize..at])
+}
+
+// The libraries a stamp lists after its first line (T014).
+fn stamped_libraries(a: *mem.Arena, loaded: *graph.Graph, recorded: str, args: []str) -> err {
+    var count = 0usize
+    var at = 130usize
+    while at < recorded.len {
+        if recorded[at] == 10u8 { count += 1usize }
+        at += 1usize
+    }
+    let (names, names_error) = mem.alloc[str](a, count + 1usize)
+    if names_error != ok { ret names_error }
+    var start = 130usize
+    var filled = 0usize
+    at = 130usize
+    while at < recorded.len {
+        if recorded[at] == 10u8 {
+            names[filled] = recorded[start..at]
+            filled += 1usize
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    loaded.libraries = names[0usize..filled]
+    ret note_resolvable(a, loaded, args[4usize], args[5usize])
 }
 
 fn put_number(into: []u8, at: usize, value: usize) -> usize {
@@ -13360,6 +13423,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 var no_reasons: []u8 = zero
                 var reasons = no_reasons
                 if hot_load.on { reasons = hot_load.reason[0usize..loaded.count] }
+                try note_libraries(a, &loaded, &builder, args[4usize], args[5usize])
                 try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, unchecked_build, args[6usize], packed, reasons, report.build.image_unchanged)
                 if hot_build { record_image(a, &hot, &loaded, held, args, packed) }
                 try report_phase(&report, "manifest")
