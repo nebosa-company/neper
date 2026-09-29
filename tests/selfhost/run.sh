@@ -3683,6 +3683,11 @@ if extern_compared=$($test_build/neper-self compare-manifests "$repo/tests/selfh
     printf '%s\n' 'compare-manifests called another libc the same' >&2; exit 1
 fi
 case "$extern_compared" in *'library libc.so.6: '*) ;; *) printf '%s\n' "compare-manifests did not name libc: $extern_compared" >&2; exit 1 ;; esac
+# Two errors whose qualified names hash alike refuse the build as E-LINK-9999 (T013).
+if collision_output=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/error_collision/src/main.e" "$repo" x64 linux "$test_build/error-collision" 2>&1); then
+    printf '%s\n' 'an error hash collision was built' >&2; exit 1
+fi
+case "$collision_output" in *'error[E-LINK-9999]: error hash collision: `main.Ea88a` and `main.E16e68` have the same 32-bit FNV-1a value'*) ;; *) printf '%s\n' "the collision was not E-LINK-9999: $collision_output" >&2; exit 1 ;; esac
 # A C variadic through the same dynamic slots: `snprintf` with an `f64` in a `...`
 # position, which System V wants counted in `al`.
 variadic_path="$test_build/extern-variadic-selfhost"
