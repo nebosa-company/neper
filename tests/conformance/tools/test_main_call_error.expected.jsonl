@@ -1,0 +1,4 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"test","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-TYPE-0002","message":"type mismatch: expected `i64`, found `i32`","expected":"i64","actual":"i32","span":{"source":{"root":"operand","path":"test_main_call_error.e"},"byte_start":391,"byte_end":394,"line":12,"column":61,"end_line":12,"end_column":64,"column_utf16":61,"end_column_utf16":64},"parent":null,"related":[{"message":"in the generated source","span":{"source":{"root":"operand","path":"nptest-runner.e"},"byte_start":488,"byte_end":491,"line":14,"column":91,"end_line":14,"end_column":94,"column_utf16":91,"end_column_utf16":94}}],"fixes":[]}
+{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the tests could not be compiled","span":null,"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":2,"data":{"tests":0}}

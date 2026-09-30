@@ -1109,9 +1109,10 @@ fn error_kind_of(code: i32) -> ErrorKind {
 // identifier to match exactly and answers `Other` with no code when it does not: a detail that is
 // absent costs a caller a diagnostic, and one belonging to another thread costs it the truth.
 //
-// ponytail: sixty-four slots, no eviction, no atomics. A program with more live threads than that
-// loses details it would otherwise keep, which is a diagnostic and never a wrong answer. Real
-// thread-local storage would replace the whole of it, and H07 is where that belongs.
+// ponytail: sixty-four slots probed from the identifier (D1717), no eviction, no atomics. A program
+// with more live threads than that loses details it would otherwise keep, which is a diagnostic
+// and never a wrong answer. Real thread-local storage would replace the whole of it, and H07 is
+// where that belongs.
 const ERROR_SLOTS: usize = 64usize
 
 var error_slot_thread: [64]usize
@@ -1126,9 +1127,25 @@ var error_slot_fresh: [64]u8
 // The code is written first and the identifier last, so a reader that sees its own identifier is
 // looking at a slot whose code was already stored. Without atomics that is the most that can be
 // said, and it is enough for the only failure that matters here.
+// The slot a thread's detail lives in (D1717): the one it already holds, else the first free one
+// from where its identifier lands, else that landing slot. Windows identifiers are multiples of
+// four, so landing on `thread % ERROR_SLOTS` alone used a quarter of the table, and two threads
+// shared a slot one run in sixteen -- the other's failures then erased this one's detail, which
+// link/fs_basics' root race caught as an `open_at` refusal with no detail.
+fn error_slot_of(thread: usize) -> usize {
+    let home = (thread >> 2usize) % ERROR_SLOTS
+    var step = 0usize
+    while step < ERROR_SLOTS {
+        let slot = (home + step) % ERROR_SLOTS
+        if error_slot_used[slot] == 0u8 || error_slot_thread[slot] == thread { ret slot }
+        step += 1usize
+    }
+    ret home
+}
+
 fn record_error_detail(code: i32) {
     let thread = current_thread_id()
-    let slot = thread % ERROR_SLOTS
+    let slot = error_slot_of(thread)
     error_slot_code[slot] = code
     error_slot_used[slot] = 1u8
     error_slot_thread[slot] = thread
@@ -1138,7 +1155,7 @@ fn record_error_detail(code: i32) {
 // A cleanup's failure is recorded only when no primary failure waits to be read.
 fn record_cleanup_error_detail(code: i32) {
     let thread = current_thread_id()
-    let slot = thread % ERROR_SLOTS
+    let slot = error_slot_of(thread)
     if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] != 0u8 && error_slot_thread[slot] == thread { ret }
     record_error_detail(code)
 }
@@ -1284,7 +1301,7 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     detail.operation = operation
     detail.subject = subject
     let thread = current_thread_id()
-    let slot = thread % ERROR_SLOTS
+    let slot = error_slot_of(thread)
     // Another thread's slot, or one nothing has written, is no detail at all.
     let used = error_slot_used[slot]
     if used == 0u8 { ret detail }
@@ -2115,7 +2132,7 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
             record_error_detail(i32(code))
             if timeout_ns == 0i64 { ret (lock, WouldBlock) }
             let thread = current_thread_id()
-            error_slot_used[thread % ERROR_SLOTS] = 2u8
+            error_slot_used[error_slot_of(thread)] = 2u8
             ret (lock, Timeout)
         }
         var slice = i64(LOCK_POLL_MS) * 1000000i64

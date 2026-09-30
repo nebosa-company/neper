@@ -6508,6 +6508,17 @@ $testMainErrorActual = Join-Path $testBuild 'conformance-tools-test-main-error.j
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_main_error.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testMainErrorActual`""
 if ($LASTEXITCODE -ne 2) { throw "a compile error past the renamed main exited $LASTEXITCODE, not 2" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testMainErrorActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_main_error.expected.jsonl')).Hash) { throw "a compile error past the renamed main differs from the conformance corpus" }
+# (D1716) A test that calls the operand's `main` reaches it, and an error after two such
+# calls on one line keeps the operand's column.
+$testMainCallActual = Join-Path $testBuild 'conformance-tools-test-main-call.jsonl'
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_main_call.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testMainCallActual`""
+if ($LASTEXITCODE -ne 0) { throw "a test calling the operand's main exited $LASTEXITCODE" }
+[IO.File]::WriteAllText($testMainCallActual, ([IO.File]::ReadAllText($testMainCallActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testMainCallActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_main_call.expected.jsonl')).Hash) { throw "a test calling the operand's main differs from the conformance corpus" }
+$testMainCallErrorActual = Join-Path $testBuild 'conformance-tools-test-main-call-error.jsonl'
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_main_call_error.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testMainCallErrorActual`""
+if ($LASTEXITCODE -ne 2) { throw "an error after calls of the operand's main exited $LASTEXITCODE, not 2" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testMainCallErrorActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_main_call_error.expected.jsonl')).Hash) { throw "an error after calls of the operand's main differs from the conformance corpus" }
 # (D1713) An error on the renamed `main`'s own line keeps the operand's column.
 $testMainLineActual = Join-Path $testBuild 'conformance-tools-test-main-line.jsonl'
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_main_line.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testMainLineActual`""
