@@ -54,7 +54,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, key_error) = gpu.open_id(a, gpu.DeviceKey { backend: .Cpu, uuid: zero })
     if key_error != gpu.NoDevice { os.exit(7i32) }
     let (described, info_error) = gpu.info(a, device)
-    if info_error != ok || described.capabilities.len != 5usize || !gpu.has(device, .Int64) || gpu.has(device, .Float16) { os.exit(8i32) }
+    if info_error != ok || described.capabilities.len != 6usize || !gpu.has(device, .Int64) || !gpu.has(device, .Subgroup) || gpu.has(device, .Float16) { os.exit(8i32) }
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { os.exit(9i32) }
     let (_, staging_error) = gpu.queue_with(device, gpu.StagingLimits { blocks: 0u32, block_bytes: 4096usize })

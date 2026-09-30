@@ -7197,6 +7197,8 @@ type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, 
 var gid: Id = zero
 var lid: Id = zero
 var wgid: Id = zero
+var sid: u32 = zero
+var subgroup_width: u32 = 32u32
 var next_owner: u32 = 1u32
 var open_devices: [16]*DeviceState = zero
 var open_count: usize = 0usize
@@ -7299,6 +7301,8 @@ fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], v
 fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err
 fn barrier()
 fn memory_barrier(scope: Scope)
+fn subgroup_size() -> u32
+fn subgroup_elect() -> bool
 fn atomic_load[T: type](p: *Atomic[T], order: atomic.Ordering, scope: Scope) -> T
 fn atomic_store[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope)
 fn atomic_xchg[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
@@ -7341,9 +7345,9 @@ D1610's argument block, makes the kernel's pipeline once per device, dispatches 
 waits. A kernel the SPIR-V emitter cannot write yet has no module there, and its Vulkan
 launch answers `Unsupported`; the CPU device still runs it.
 
-The landed device-only intrinsics are `gid`, `lid`, `wgid`, `barrier`,
-`memory_barrier` and the scoped atomic family above. The remaining planned intrinsics are
-`subgroup_size`, `subgroup_lane`, `subgroup_ballot`, `subgroup_any`, `subgroup_all`,
+The landed device-only intrinsics are `gid`, `lid`, `wgid`, `sid`, `barrier`,
+`memory_barrier`, `subgroup_size`, `subgroup_elect` and the scoped atomic family above.
+The remaining planned intrinsics are `subgroup_ballot`, `subgroup_any`, `subgroup_all`,
 `subgroup_broadcast`, `subgroup_add`, `subgroup_min` and `subgroup_max`.
 
 ### `e.gpu.vulkan`

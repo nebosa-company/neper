@@ -3149,6 +3149,17 @@ $gpuVulkanSyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanSyncWritten -ne 'executable written') { throw 'gpu_vulkan_sync emission failed' }
 $gpuVulkanSyncOutput = & $gpuVulkanSyncPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanSyncOutput -notmatch '^gpu sync (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan synchronization runtime failed: $gpuVulkanSyncOutput" }
+# Subgroup identity is width-dependent by contract: pin the module, then check the
+# CPU's 32-lane model and every Vulkan device's own width, including a partial group.
+$subgroupSpirv = Join-Path $testBuild 'subgroup.spv'
+$subgroupSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\subgroup.e') $repo 'spv' 'none' $subgroupSpirv
+if ($LASTEXITCODE -ne 0 -or $subgroupSpirvWritten -ne 'spir-v written') { throw 'subgroup SPIR-V emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $subgroupSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\subgroup.spv')).Hash) { throw 'the subgroup SPIR-V module differs from the conformance corpus' }
+$gpuSubgroupPath = Join-Path $testBuild 'gpu-subgroup-identity-selfhost.exe'
+$gpuSubgroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_identity\src\main.e') $repo 'x64' 'windows' $gpuSubgroupPath
+if ($LASTEXITCODE -ne 0 -or $gpuSubgroupWritten -ne 'executable written') { throw 'gpu_subgroup_identity emission failed' }
+$gpuSubgroupOutput = & $gpuSubgroupPath
+if ($LASTEXITCODE -ne 0 -or $gpuSubgroupOutput -notmatch '^gpu subgroup identity (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the subgroup identity runtime failed: $gpuSubgroupOutput" }
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-GPU-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,

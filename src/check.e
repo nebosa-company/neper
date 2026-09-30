@@ -4951,6 +4951,8 @@ fn intrinsic_signature(module: str, name: str) -> str {
     if same(module, "e.gpu") && same(name, "launch") { ret "fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err" }
     if same(module, "e.gpu") && same(name, "barrier") { ret "fn barrier()" }
     if same(module, "e.gpu") && same(name, "memory_barrier") { ret "fn memory_barrier(scope: Scope)" }
+    if same(module, "e.gpu") && same(name, "subgroup_size") { ret "fn subgroup_size() -> u32" }
+    if same(module, "e.gpu") && same(name, "subgroup_elect") { ret "fn subgroup_elect() -> bool" }
     if same(module, "e.gpu") {
         if same(name, "atomic_load") { ret "fn atomic_load[T: type](p: *Atomic[T], order: atomic.Ordering, scope: Scope) -> T" }
         if same(name, "atomic_store") { ret "fn atomic_store[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope)" }
@@ -9008,6 +9010,7 @@ type CallInfo = struct {
     // `gpu.barrier()` (D780): a cut in the kernel's CPU build, lowered in place.
     gpu_barrier: bool,
     gpu_memory_barrier: bool,
+    subgroup_op: SubgroupOp,
     protocol_pending: bool,
     protocol_builtin: ProtocolBuiltin,
     protocol_type: Type,
@@ -9068,6 +9071,7 @@ type AtomicInfo = struct {
 }
 
 type GpuScope = enum u8 { Workgroup, Device, Dynamic }
+type SubgroupOp = enum u8 { None, Size, Elect }
 
 // The compile-time questions that answer with a constant and emit nothing. Three of
 // them are `e.meta`'s reflection; the last two are `e.mem`'s layout, which is the same
@@ -9414,6 +9418,30 @@ fn memory_barrier_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     function.intrinsic = true
     info.function = function
     ret (info, ok)
+}
+
+fn subgroup_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, receiver: syntax.Node) -> (CastInfo, SubgroupOp, err) {
+    var info: CastInfo = zero
+    if receiver.kind != .FieldExpr { ret (info, .None, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, receiver)
+    if !found_member || !same(g.modules[target_module].name, "e.gpu") { ret (info, .None, ok) }
+    var op: SubgroupOp = .None
+    if same(member, "subgroup_size") { op = .Size }
+    if same(member, "subgroup_elect") { op = .Elect }
+    if op == .None { ret (info, op, ok) }
+    info.matched = true
+    if !c.body_is_kernel && !c.body_device_only {
+        record_failure(c, module_index, node, .GpuLaunch, "", "a subgroup builtin is written outside device code")
+        ret (info, op, InvalidType)
+    }
+    var function: Function = zero
+    function.name = member
+    function.module_index = target_module
+    function.parameter_count = 0usize
+    function.return_count = 1usize
+    function.intrinsic = true
+    info.function = function
+    ret (info, op, ok)
 }
 
 fn address_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (CastInfo, err) {
@@ -11413,6 +11441,13 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                             info.cast = bound.ty
                             info.is_cast = true
                         } else {
+                        let (subgroup, subgroup_op, subgroup_error) = subgroup_info(c, g, tree, module_index, node, receiver)
+                        if subgroup_error != ok { ret (info, subgroup_error) }
+                        if subgroup.matched {
+                            info.function = subgroup.function
+                            info.subgroup_op = subgroup_op
+                            has_function = true
+                        } else {
                         let (barrier, barrier_error) = barrier_info(c, g, tree, module_index, node, receiver)
                         if barrier_error != ok { ret (info, barrier_error) }
                         if barrier.matched {
@@ -11509,6 +11544,7 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                                 info.function.return_count = signature.return_count
                             }
                             has_function = true
+                        }
                         }
                         }
                         }
@@ -12538,6 +12574,11 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
     if call.mem_cast || call.mem_bitcast || call.mem_address || call.math_sqrt {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (call.cast, ok)
+    }
+    if call.subgroup_op != .None {
+        if index != 0usize { ret (invalid_type(), InvalidType) }
+        if call.subgroup_op == .Elect { ret (make_type(.Bool, "bool", call.function.module_index), ok) }
+        ret (make_type(.Integer, "u32", call.function.module_index), ok)
     }
 
     if call.thread_create {
@@ -17908,6 +17949,11 @@ fn device_private(c: *Checker, tree: *parse.Tree, text: str, names: *DeviceNames
     ret (name, true)
 }
 
+fn device_gpu_input(g: *graph.Graph, module_index: usize, name: str) -> bool {
+    if module_index >= g.count || !same(g.modules[module_index].name, "e.gpu") { ret false }
+    ret same(name, "gid") || same(name, "lid") || same(name, "wgid") || same(name, "sid") || same(name, "subgroup_width")
+}
+
 fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, text: str, node_index: usize, names: *DeviceNames, walk: *DeviceWalk) -> err {
     if walk.found { ret ok }
     let node = tree.nodes[node_index]
@@ -17979,7 +18025,7 @@ fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
             let (local_at, is_local) = device_name_at(names, name)
             if !is_local {
                 let (global_index, is_global) = find_global(c, module_index, name)
-                if is_global { device_found(walk, "the module-scope `var`", name) }
+                if is_global && !device_gpu_input(g, module_index, name) { device_found(walk, "the module-scope `var`", name) }
                 let (function_index, is_function) = find_function(c, module_index, name)
                 if is_function && !walk.found { device_found(walk, "the function used as a value", name) }
             }
@@ -18046,7 +18092,7 @@ fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                 let (base_at, base_local) = device_name_at(names, base_name)
                 if base_named && !base_local {
                     let (global_index, is_global) = find_global(c, module_index, base_name)
-                    if is_global { device_found(walk, "the module-scope `var`", base_name) }
+                    if is_global && !device_gpu_input(g, module_index, base_name) { device_found(walk, "the module-scope `var`", base_name) }
                     // Another module's: `other.counter` -- not `gpu.gid` and its kin, which
                     // `e.gpu` keeps as its CPU build's globals and the device reads as ids.
                     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
