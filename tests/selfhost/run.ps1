@@ -3115,6 +3115,17 @@ $gpuVulkanLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopWritten -ne 'executable written') { throw 'gpu_vulkan_loop emission failed' }
 $gpuVulkanLoopOutput = & $gpuVulkanLoopPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan loop runtime failed: $gpuVulkanLoopOutput" }
+# (D1613) Correctly rounded f32 division and square root, pinned as SPIR-V and
+# compared bit for bit with the CPU backend on every available Vulkan device.
+$floatSpirv = Join-Path $testBuild 'float.spv'
+$floatSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\float.e') $repo 'spv' 'none' $floatSpirv
+if ($LASTEXITCODE -ne 0 -or $floatSpirvWritten -ne 'spir-v written') { throw 'float SPIR-V emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $floatSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\float.spv')).Hash) { throw 'the float SPIR-V module differs from the conformance corpus' }
+$gpuVulkanFloatPath = Join-Path $testBuild 'gpu-vulkan-float-selfhost.exe'
+$gpuVulkanFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_float\src\main.e') $repo 'x64' 'windows' $gpuVulkanFloatPath
+if ($LASTEXITCODE -ne 0 -or $gpuVulkanFloatWritten -ne 'executable written') { throw 'gpu_vulkan_float emission failed' }
+$gpuVulkanFloatOutput = & $gpuVulkanFloatPath
+if ($LASTEXITCODE -ne 0 -or $gpuVulkanFloatOutput -notmatch '^gpu float (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan float runtime failed: $gpuVulkanFloatOutput" }
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-GPU-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,

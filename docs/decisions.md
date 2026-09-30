@@ -31669,3 +31669,28 @@ multiple `continue` edges, `break`, and mutable loop-carried values. The
 public Vulkan launch. `spirv-val --target-env vulkan1.2` accepts the module; it runs on
 the RTX 3080, the Iris Xe and WSL's Vulkan device; saxpy remains bit-identical in
 execution and is repinned with the exact selection merges.
+
+## D1613 — SPIR-V f32 division and square root finish with exact integer rounding
+
+**Problem.** Vulkan permits `OpFDiv` and the GLSL square-root instruction to differ
+from the correctly rounded result. Residual corrections over `Fma` remove almost all
+of that error, but real NVIDIA and Intel drivers still disagreed with the CPU by one
+bit on hard normal and subnormal inputs. Scaling a result into the subnormal range
+also introduced double rounding.
+
+**Decision.** f32 division and square root retain their `NoContraction` FMA
+refinement, then determine the final bit with integer arithmetic. Division normalizes
+the two 24-bit significands, performs one u64 quotient/remainder operation and rounds
+ties to even while constructing the normal, subnormal or infinite result. Square root
+uses a 24-step restoring integer square root over the normalized significand; positive
+subnormals first scale by an exact power of two. Special values keep the device seed,
+negative finite square roots become the canonical NaN, and every NaN result is
+canonical. f32 entry points request Vulkan's `DenormPreserve` mode; the GLSL import is
+emitted only when an instruction needs it.
+
+**Evidence.** `tests/conformance/spirv/float.spv` is accepted by `spirv-val
+--target-env vulkan1.2` and pinned byte for byte in both self-host suites. The
+`gpu_vulkan_float` fixture compares division and square root bits for 8,192
+deterministic random and boundary inputs against the CPU backend on every suitable
+device. It passes on the RTX 3080 and Iris Xe; a no-device host reports that outcome
+instead of silently using the CPU.
