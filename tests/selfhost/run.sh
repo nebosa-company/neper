@@ -6217,6 +6217,15 @@ $test_build/neper-self test-file "$conformance_root/tools/test_main_error.e" "$r
 [ "$main_error_status" -eq 2 ]
 cmp -s "$test_build/conformance-tools-test-main-error.jsonl" "$conformance_root/tools/test_main_error.expected.jsonl" || { printf '%s
 ' "a compile error past the renamed main differs from the conformance corpus" >&2; exit 1; }
+# (D1716) A test that calls the operand's `main` reaches it, and an error after two such
+# calls on one line keeps the operand's column.
+$test_build/neper-self test-file "$conformance_root/tools/test_main_call.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-main-call.jsonl"
+sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_build/conformance-tools-test-main-call.jsonl"
+cmp "$test_build/conformance-tools-test-main-call.jsonl" "$conformance_root/tools/test_main_call.expected.jsonl"
+main_call_status=0
+$test_build/neper-self test-file "$conformance_root/tools/test_main_call_error.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-main-call-error.jsonl" || main_call_status=$?
+[ "$main_call_status" -eq 2 ]
+cmp "$test_build/conformance-tools-test-main-call-error.jsonl" "$conformance_root/tools/test_main_call_error.expected.jsonl"
 # (D1713) An error on the renamed `main`'s own line keeps the operand's column.
 main_line_status=0
 $test_build/neper-self test-file "$conformance_root/tools/test_main_line.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-main-line.jsonl" || main_line_status=$?

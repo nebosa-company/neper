@@ -1856,8 +1856,30 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *
 // The runner source: the operand verbatim, a string-equality helper, and a `main` that
 // dispatches to the @test named by its index in argv, returning that test's `err` -- so the
 // runtime prints `error: ...` and exits 1 for a failure, and a trap aborts for a crash.
-fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize, timeout_ns: usize, main_name: lex.Token, has_main: bool) -> ([]u8, err) {
-    var size = text.len + 8192usize
+// Every `main` of the operand the runner renames (D281, D1716): the declaration and each
+// use, so a test that calls the operand's `main` calls it and not the runner's. A
+// `.main` member and a `main:` label are not the function. The tokens, in order.
+fn main_sites(a: *mem.Arena, text: str) -> ([]lex.Token, err) {
+    var none: []lex.Token = zero
+    let (tokens, token_count, invalid, scan_error) = tool.scan_all(a, text)
+    if scan_error != ok { ret (none, scan_error) }
+    let (sites, sites_error) = mem.alloc[lex.Token](a, token_count + 1usize)
+    if sites_error != ok { ret (none, sites_error) }
+    var count = 0usize
+    var at = 0usize
+    while at < token_count {
+        let token = tokens[at]
+        if token.kind == .Identifier && same(lex.token_text(text, token), "main") && (at == 0usize || tokens[at - 1usize].kind != .PunctDot) && (at + 1usize >= token_count || tokens[at + 1usize].kind != .PunctColon) {
+            sites[count] = token
+            count += 1usize
+        }
+        at += 1usize
+    }
+    ret (sites[0usize..count], ok)
+}
+
+fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize, timeout_ns: usize, sites: []const lex.Token) -> ([]u8, err) {
+    var size = text.len + 8192usize + sites.len * 16usize
     var at = 0usize
     while at < count {
         size += names[at].len + 128usize
@@ -1868,15 +1890,17 @@ fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize, t
     // `use` leads the file, so the watchdog's imports go before the operand; unique aliases
     // never collide with what the operand already imports.
     var written = nptest_append(buffer, 0usize, "use e.os as nptest_os\nuse e.atomic as nptest_atomic\n")
-    // The operand's own `main` is renamed so the runner's is the program root (D281);
-    // the source map carries the seam as a second mapping.
-    if has_main {
-        written = nptest_append(buffer, written, text[0usize..usize(main_name.start)])
+    // Every `main` of the operand is renamed so the runner's is the program root (D281,
+    // D1716); the source map carries a seam at each.
+    var copied = 0usize
+    var site_at = 0usize
+    while site_at < sites.len {
+        written = nptest_append(buffer, written, text[copied..usize(sites[site_at].start)])
         written = nptest_append(buffer, written, "nptest_operand_main")
-        written = nptest_append(buffer, written, text[usize(main_name.end)..text.len])
-    } else {
-        written = nptest_append(buffer, written, text)
+        copied = usize(sites[site_at].end)
+        site_at += 1usize
     }
+    written = nptest_append(buffer, written, text[copied..text.len])
     // A watchdog thread waits on a futex that main sets when the test returns; if the wait
     // times out first the test is still running, so the process exits 124 (D246).
     written = nptest_append(buffer, written, "\ntype NptestGuard = struct { done: Atomic[u32] }\nfn nptest_watchdog(guard: *NptestGuard) {\n    while nptest_atomic.load(&guard.done, .Acquire) == 0u32 {\n        let nptest_wait = nptest_os.wait_u32(&guard.done, 0u32, ")
@@ -2337,7 +2361,7 @@ fn test_project_command(a: *mem.Arena, args: []str) -> err {
 // at its place in the runner. The prefix is the two `use` lines D246 puts first.
 // One mapping: the operand's bytes [from, to) at `generated_start` in the runner, with
 // the original's line/column at both ends and the generated start line/column.
-fn runner_mapping(out: *Sink, identity: str, generated_start: usize, from: usize, to: usize, line: usize, column: usize, end_line: usize, end_column: usize, generated_line: usize, generated_column: usize) -> err {
+fn runner_mapping(out: *Sink, identity: str, generated_start: usize, from: usize, to: usize, line: usize, column: usize, end_line: usize, end_column: usize, generated_line: usize, generated_column: usize, generated_end_column: usize) -> err {
     try write_all(out, "{\"generated_span\":{\"source\":{\"root\":\"operand\",\"path\":\"nptest-runner.e\"},\"byte_start\":")
     try write_usize(out, generated_start)
     try write_all(out, ",\"byte_end\":")
@@ -2349,11 +2373,11 @@ fn runner_mapping(out: *Sink, identity: str, generated_start: usize, from: usize
     try write_all(out, ",\"end_line\":")
     try write_usize(out, end_line + 2usize)
     try write_all(out, ",\"end_column\":")
-    try write_usize(out, end_column)
+    try write_usize(out, generated_end_column)
     try write_all(out, ",\"column_utf16\":")
     try write_usize(out, generated_column)
     try write_all(out, ",\"end_column_utf16\":")
-    try write_usize(out, end_column)
+    try write_usize(out, generated_end_column)
     try write_all(out, "},\"original_span\":{\"source\":{\"root\":\"operand\",\"path\":")
     try write_json_string(out, identity)
     try write_all(out, "},\"byte_start\":")
@@ -2375,7 +2399,7 @@ fn runner_mapping(out: *Sink, identity: str, generated_start: usize, from: usize
     ret write_all(out, "},\"name\":null}")
 }
 
-fn write_runner_map(a: *mem.Arena, runner_path: str, runner: []u8, text: str, identity: str, main_name: lex.Token, has_main: bool) -> err {
+fn write_runner_map(a: *mem.Arena, runner_path: str, runner: []u8, text: str, identity: str, sites: []const lex.Token) -> err {
     var no_lines: [1]usize = zero
     // The two `use` lines the runner begins with.
     let prefix_lines = "use e.os as nptest_os\nuse e.atomic as nptest_atomic\n"
@@ -2393,26 +2417,60 @@ fn write_runner_map(a: *mem.Arena, runner_path: str, runner: []u8, text: str, id
         at += 1usize
     }
     let end_column = text.len - last_line_start + 1usize
-    let (storage, storage_error) = mem.alloc[u8](a, 2048usize + identity.len)
+    let (storage, storage_error) = mem.alloc[u8](a, 2048usize + identity.len + sites.len * (1024usize + identity.len))
     if storage_error != ok { ret storage_error }
+    let (spans, spans_error) = mem.alloc[lex.Span](a, sites.len + 1usize)
+    if spans_error != ok { ret spans_error }
+    var span_at = 0usize
+    while span_at < sites.len {
+        spans[span_at] = lex.span_of(text, no_lines[0usize..0usize], sites[span_at])
+        span_at += 1usize
+    }
     var out = capture_sink(storage)
     try write_all(&out, "{\"schema\":\"neper-source-map\",\"version\":1,\"generated\":{\"root\":\"operand\",\"path\":\"nptest-runner.e\"},\"generated_sha256\":\"")
     try write_all(&out, digest)
     try write_all(&out, "\",\"mappings\":[")
-    let main_span = lex.span_of(text, no_lines[0usize..0usize], main_name)
-    if has_main {
-        // Up to the renamed `main`, then after it: the runner's name is 15 bytes longer.
-        try runner_mapping(&out, identity, prefix, 0usize, usize(main_name.start), 1usize, 1usize, main_span.line, main_span.column, 3usize, 1usize)
-        try write_all(&out, ",")
-        let shifted = prefix + usize(main_name.end) + 15usize
-        try runner_mapping(&out, identity, shifted, usize(main_name.end), text.len, main_span.end_line, main_span.end_column, lines, end_column, main_span.end_line + 2usize, main_span.end_column + 15usize)
-    } else {
-        try runner_mapping(&out, identity, prefix, 0usize, text.len, 1usize, 1usize, lines, end_column, 3usize, 1usize)
+    // One mapping per stretch between renamed `main`s (D1716): the runner's name is 15
+    // bytes longer, so a stretch lands 15 bytes later per rename before it, and on a
+    // line with renames its columns move 15 for each one before them on that line.
+    var from = 0usize
+    var from_line = 1usize
+    var from_column = 1usize
+    var stretch = 0usize
+    while stretch <= sites.len {
+        var to = text.len
+        var to_line = lines
+        var to_column = end_column
+        if stretch < sites.len {
+            to = usize(sites[stretch].start)
+            to_line = spans[stretch].line
+            to_column = spans[stretch].column
+        }
+        if stretch > 0usize { try write_all(&out, ",") }
+        let before = spans[0usize..stretch]
+        try runner_mapping(&out, identity, prefix + from + 15usize * stretch, from, to, from_line, from_column, to_line, to_column, from_line + 2usize, from_column + 15usize * renames_on_line(before, from_line), to_column + 15usize * renames_on_line(before, to_line))
+        if stretch < sites.len {
+            from = usize(sites[stretch].end)
+            from_line = spans[stretch].end_line
+            from_column = spans[stretch].end_column
+        }
+        stretch += 1usize
     }
     try write_all(&out, "]}\n")
     let (map_path, map_path_error) = with_suffix(a, runner_path, ".map.json")
     if map_path_error != ok { ret map_path_error }
     ret save_bytes(a, map_path, out.capture[0usize..out.count])
+}
+
+// How many of `spans` sit on `line`.
+fn renames_on_line(spans: []const lex.Span, line: usize) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < spans.len {
+        if spans[at].line == line { count += 1usize }
+        at += 1usize
+    }
+    ret count
 }
 
 fn nptest_stem(path: str) -> str {
@@ -2510,7 +2568,13 @@ fn test_command(a: *mem.Arena, given: []str) -> err {
         try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"tests\":0}}\n")
         ret ok
     }
-    let (runner_source, runner_error) = generate_runner(a, text, names[0usize..count], count, timeout_ms * 1000000usize, main_name, has_main)
+    var sites: []lex.Token = zero
+    if has_main {
+        let (found_sites, sites_error) = main_sites(a, text)
+        if sites_error != ok { ret sites_error }
+        sites = found_sites
+    }
+    let (runner_source, runner_error) = generate_runner(a, text, names[0usize..count], count, timeout_ms * 1000000usize, sites)
     if runner_error != ok { ret runner_error }
     let (runner_path, runner_path_error) = nptest_join(a, args[6usize], "nptest-runner.e")
     if runner_path_error != ok { ret runner_path_error }
@@ -2519,7 +2583,7 @@ fn test_command(a: *mem.Arena, given: []str) -> err {
     try save_bytes(a, runner_path, runner_source)
     // The runner's source map (section 8, D264): the operand's text sits two `use` lines
     // down, one mapping, so a diagnostic in it comes back at the operand's own span.
-    try write_runner_map(a, runner_path, runner_source, text, identity, main_name, has_main)
+    try write_runner_map(a, runner_path, runner_source, text, identity, sites)
     // Compile the runner by spawning this compiler again; args[0] is its own path. The
     // runner lives in WORKDIR but is built as part of the operand's project (D263), so
     // the operand's `use` of its sibling modules resolves from there.

@@ -31508,3 +31508,30 @@ Compiler references merge into the index's span order. One that starts where a s
   It is byte-equal on Linux and validates against the stream schema.
 - The `index`, `index_comptime`, `explain`, `explain_arm`, `explain_fold`, `explain_when` and `fold_const` goldens are unchanged on both hosts.
 - `index-file src/main.e` goes from 0.65 s to 1.08 s: the check is the cost.
+
+## D1716 — The test runner renames every `main` of the operand (T005)
+
+**Problem.** The runner renamed only the operand's `fn main` declaration, to `nptest_operand_main` (D281). A test that called the operand's `main` therefore called the runner's own `main`, which dispatches tests. `calls_main` failed with the operand's `Odd`, which says nothing about why.
+
+**Decision.**
+- The runner renames every bare `main` of the operand: the declaration and each call or use. A `.main` member and a `main:` label are not the function and stay as they are.
+- A local cannot shadow a module-scope name (spec section 5), so a bare `main` is always the function.
+- The runner's map has one mapping per stretch between renamed sites. Each stretch lands 15 bytes later per rename before it, and on a line with renames its columns move 15 for each rename before them on that line. D1713 carries those columns back.
+- With one rename, the map is byte-identical to the old two-mapping one.
+
+**Evidence.**
+- `tools/test_main_call.e` calls the operand's `main` twice from a test, which passes, both suites and both hosts. The old compiler failed it with `test_main_call.Odd`.
+- `tools/test_main_call_error.e` puts an error after two calls on one line. It is reported at the operand's 12:61, with the runner's 14:91 related, 30 columns on for the two renames.
+- `test_main`, `test_main_error`, `test_main_line` and `test_compile_error` are unchanged on both hosts.
+
+## D1717 — The Windows error-detail slots are probed (the link/fs_basics race)
+
+**Problem.** `link/fs_basics` failed the Windows suite about one run in sixteen under load, with exit 228: twice in three suite runs on 2026-09-29/30. D793 had read 228 as the `stat` after a durable replace and given that `stat` five seconds of retries. But 228 is also `216 + 12`, the root race's failure 12: an `open_at` refused with `Denied` whose error detail was absent.
+
+A probe of the fixture, with its failures split, showed every one was that absent detail (9 of 150 runs under two concurrent builds). The `stat` never failed.
+
+The slot a thread's detail lives in was `thread % 64`. Windows thread identifiers are multiples of four, so only 16 of the 64 slots were ever used. The main thread and the race's attacker thread shared one about one run in sixteen, and the attacker's own `Denied` moves then took the slot, so the main thread's detail read as absent.
+
+**Decision.** `error_slot_of` probes from `(thread >> 2) % 64`. It takes the slot the thread already holds, else the first free one, else the landing slot. Recording, the cleanup rule (D360), reading and the lock timeout all go through it. Linux thread identifiers are consecutive, so `os.linux.e` keeps its plain modulus. The table stays a `ponytail:`, with thread-local storage as the replacement H07 names.
+
+**Evidence.** The same probe went from 9 failures in 150 runs to 0 in 200 under the same load.
