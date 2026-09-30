@@ -31604,3 +31604,37 @@ This row settles what the spec leaves open, and splits the work.
 - The module is byte-identical from the Windows and the Linux compiler, and `tests/conformance/spirv/saxpy.spv` pins it in both suites.
 - `tests/conformance/spirv/loop.e` pins the refusal of a loop, `E-GPU-9999` naming it, until row 4.
 - A failed bounds check returns from the kernel for now; the fault record is row 8. Integer `+`, `-` and `*` wrap until then too.
+
+## D1611 — Vulkan is a dynamically loaded runtime, and kernels carry their SPIR-V
+
+**Problem.** D1610 writes a device module, but a host executable had no way to find a
+Vulkan device, allocate device-addressable memory, dispatch that module, or associate a
+`gpu.launch[K]` call with `K`'s SPIR-V. The runtime must remain optional: a CPU-only
+program cannot acquire a loader dependency or silently substitute the CPU for Vulkan.
+
+**Decision.**
+- `e.gpu.vulkan` is the small x64 Vulkan 1.2 runtime beneath `e.gpu`. It opens the loader
+  with `os.dlopen`, resolves the entry points with `os.dlsym`, enumerates physical
+  devices, checks `bufferDeviceAddress` and `scalarBlockLayout`, and owns contexts,
+  mapped buffers, compute pipelines and dispatches. Vulkan C records cross as bytes at
+  their ABI offsets; no Vulkan SDK or link-time library is required.
+- The first buffer path uses host-visible, host-coherent, device-addressable storage.
+  Upload and download are ordinary copies. A dispatch uses one command pool and waits
+  for the queue to idle. These are deliberate correctness-first ceilings; staging,
+  retained pools and fences belong only after measurements require overlap.
+- Lowering synthesises `K$spirv(out: *str)` beside every kernel. It lowers that kernel
+  for the device, emits SPIR-V, and stores its bytes as hex so `.em` remains UTF-8. The
+  companion depends on the kernel's signature, exactly as `K$frame` and `K$shared` do,
+  so an incremental kernel edit rebuilds the embedded module.
+- A generated launcher passes `K$spirv`, the `module.kernel` entry name and a compact
+  parameter layout to `e.gpu.launch_run`. On `.Vulkan`, it decodes the module once,
+  caches the pipeline on the device, writes D1610's argument block from scalar values
+  and `Buf` device addresses, dispatches and waits. On `.Cpu`, the existing frame
+  scheduler is unchanged. Unsupported SPIR-V answers `Unsupported`; it never falls
+  back to CPU.
+
+**Evidence.** `gpu_vulkan_raw` dispatches the pinned saxpy module for `n = 4096` and
+`n = 4000` on every device at the floor and checks every output bit; without hardware
+it prints `no vulkan device`. `examples/saxpy.e` uses the public `gpu.launch` path and
+prints equal CPU and Vulkan checksums. Both paths pass on an NVIDIA RTX 3080 and an
+Intel Iris Xe, and both self-host suites carry the hardware gate.

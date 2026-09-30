@@ -38,8 +38,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Discovery: one CPU device, supported, no stable key; other backends absent.
     let (found, found_error) = gpu.devices(a, .Cpu, 4usize)
     if found_error != ok || found.len != 1usize || !found[0].supported || found[0].key_valid || found[0].kind != .Cpu || found[0].index != 0u32 { os.exit(1i32) }
+    // Vulkan is a backend now (D1611): its devices, or none; CUDA is still M4's.
     let (_, vulkan_error) = gpu.devices(a, .Vulkan, 4usize)
-    if vulkan_error != gpu.Unsupported { os.exit(2i32) }
+    if vulkan_error != ok && vulkan_error != gpu.NoDevice { os.exit(2i32) }
+    let (_, cuda_devices_error) = gpu.devices(a, .Cuda, 4usize)
+    if cuda_devices_error != gpu.Unsupported { os.exit(2i32) }
     let (_, limit_error) = gpu.devices(a, .Cpu, 0usize)
     if limit_error != gpu.TooLarge { os.exit(3i32) }
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)

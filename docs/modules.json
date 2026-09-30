@@ -83,6 +83,7 @@
     "e.time.calendar",
     "e.tz",
     "e.gpu",
+    "e.gpu.vulkan",
     "e.test.coverage",
     "e.test.fuzz",
     "e.debug",
@@ -2248,7 +2249,20 @@
    "milestone": "M3",
    "schedule": "scheduled",
    "direct_dependencies": [
+    "e.gpu.vulkan",
     "e.math",
+    "e.mem",
+    "e.os"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gpu.vulkan",
+   "layer": 5,
+   "surface": "partial",
+   "milestone": "M3",
+   "schedule": "scheduled",
+   "direct_dependencies": [
     "e.mem",
     "e.os"
    ],

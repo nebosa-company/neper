@@ -3077,25 +3077,34 @@ if ($LASTEXITCODE -ne 1 -or ($assetMissingOutput -join "`n") -notmatch 'project\
     throw "a missing asset was not named at the manifest: $assetMissingOutput"
 }
 # `e.gpu` on the CPU backend (D778): the device, queues, buffers, `gpu.launch[K]` over
-# a 1-D and a 2-D kernel with the ids, tokens and every refusal; `examples/saxpy.e`
-# prints the CPU checksum; a kernel called directly, a bare `@gpu` and a host slice
-# in a launch pack are refused at the call.
+# a 1-D and a 2-D kernel with the ids, tokens and every refusal; a kernel called
+# directly, a bare `@gpu` and a host slice in a launch pack are refused at the call.
 $gpuCpuPath = Join-Path $testBuild 'gpu-cpu-selfhost.exe'
 $gpuCpuWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_cpu\src\main.e') $repo 'x64' 'windows' $gpuCpuPath
 if ($LASTEXITCODE -ne 0 -or $gpuCpuWritten -ne 'executable written') { throw 'gpu_cpu emission failed' }
 $gpuCpuOutput = & $gpuCpuPath
 if ($LASTEXITCODE -ne 0 -or $gpuCpuOutput -ne 'gpu cpu ok') { throw "an e.gpu device, buffer, launch or refusal answered wrongly: exit $LASTEXITCODE" }
-$saxpyPath = Join-Path $testBuild 'saxpy-selfhost.exe'
-$saxpyWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'x64' 'windows' $saxpyPath
-if ($LASTEXITCODE -ne 0 -or $saxpyWritten -ne 'executable written') { throw 'examples/saxpy.e emission failed' }
-$saxpyOutput = & $saxpyPath
-if ($LASTEXITCODE -ne 0 -or ($saxpyOutput -join "`n") -ne 'cpu    checksum 16777216') { throw "examples/saxpy.e answered wrongly: $($saxpyOutput -join "`n")" }
-# (D1610) The device build: saxpy's kernel as SPIR-V, byte for byte the module both a
-# NVIDIA and an Intel driver ran bit-identically with the CPU; a loop is refused by name.
+# (D1610, D1611) The device build: saxpy's kernel as SPIR-V, byte for byte the module
+# both a NVIDIA and an Intel driver ran bit-identically with the CPU. The raw runtime
+# reaches every suitable Vulkan device, or explicitly reports that none exists.
 $saxpySpirv = Join-Path $testBuild 'saxpy.spv'
 $saxpySpirvWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'spv' 'none' $saxpySpirv
 if ($LASTEXITCODE -ne 0 -or $saxpySpirvWritten -ne 'spir-v written') { throw 'examples/saxpy.e SPIR-V emission failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $saxpySpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\saxpy.spv')).Hash) { throw 'the saxpy SPIR-V module differs from the conformance corpus' }
+$gpuVulkanRawPath = Join-Path $testBuild 'gpu-vulkan-raw-selfhost.exe'
+$gpuVulkanRawWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_raw\src\main.e') $repo 'x64' 'windows' $gpuVulkanRawPath
+if ($LASTEXITCODE -ne 0 -or $gpuVulkanRawWritten -ne 'executable written') { throw 'gpu_vulkan_raw emission failed' }
+$gpuVulkanRawOutput = & $gpuVulkanRawPath $saxpySpirv
+if ($LASTEXITCODE -ne 0 -or $gpuVulkanRawOutput -notmatch '^(no vulkan device|vulkan saxpy ok on [1-9][0-9]* devices)$') { throw "the Vulkan runtime failed: $gpuVulkanRawOutput" }
+$saxpyPath = Join-Path $testBuild 'saxpy-selfhost.exe'
+$saxpyWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'x64' 'windows' $saxpyPath
+if ($LASTEXITCODE -ne 0 -or $saxpyWritten -ne 'executable written') { throw 'examples/saxpy.e emission failed' }
+$saxpyOutput = & $saxpyPath
+$saxpyText = $saxpyOutput -join "`n"
+$saxpyExpected = 'cpu    checksum 16777216'
+if ($gpuVulkanRawOutput -ne 'no vulkan device') { $saxpyExpected += "`nvulkan checksum 16777216" }
+if ($LASTEXITCODE -ne 0 -or $saxpyText -ne $saxpyExpected) { throw "examples/saxpy.e answered wrongly: $saxpyText" }
+# A loop is refused by name until D1610's row 4.
 $loopSpirv = cmd /c "`"$compiler`" emit-executable `"$(Join-Path $repo 'tests\conformance\spirv\loop.e')`" `"$repo`" spv none `"$(Join-Path $testBuild 'loop.spv')`" 2>&1"
 if ($LASTEXITCODE -ne 1 -or ($loopSpirv -join "`n") -ne 'error[E-GPU-9999]: a loop in a kernel is not yet written as SPIR-V') { throw "a kernel loop was not refused by name: $($loopSpirv -join "`n")" }
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1

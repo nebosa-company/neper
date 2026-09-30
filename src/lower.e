@@ -12,6 +12,7 @@ use lex
 use nir
 use parse
 use resolve
+use spirv
 use syntax
 
 error FunctionNotFound
@@ -7155,8 +7156,83 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if frame_kernel {
         try emit_kernel_size(c, g, module_index, function, "$frame", builder.frame_offset, builder, signatures, c.tokens[usize(node.token_start)])
         try emit_kernel_size(c, g, module_index, function, "$shared", shared_total, builder, signatures, c.tokens[usize(node.token_start)])
+        // Not in the inlining oracle, which lowers under a cap: a `K$spirv` it held would be
+        // copied into a launcher with its string's index in the oracle's table.
+        if builder.instruction_limit == 0usize { try emit_kernel_spirv(c, g, tree, module_index, node, function_index, function, builder, signatures, bindings, c.tokens[usize(node.token_start)]) }
     }
     ret ok
+}
+
+// `K$spirv(out: *str)` (D1611): the kernel's SPIR-V module, beside it in its own module
+// as the spec puts device code (section 12), so a launcher in another module reads it
+// fresh. It is made by lowering the kernel again for the device, handing that to
+// `spirv.emit` and rolling it back out of the builder. A kernel the emitter cannot
+// write yet gets "", which a Vulkan launch answers `Unsupported`; the CPU still runs it.
+fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function_index: usize, function: check.Function, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, token: lex.Token) -> err {
+    let at = nir.mark(builder)
+    let signature_mark = signatures.count
+    builder.spirv = true
+    var defers: DeferState = zero
+    let lowered = lower_function_index(c, g, tree, module_index, node, function_index, builder, signatures, bindings, &defers)
+    builder.spirv = false
+    var spelling = "\"\""
+    if lowered == ok {
+        var message = ""
+        let (bytes, emit_error) = spirv.emit(c.arena, c, g, builder, at.function_count, &message)
+        if emit_error == ok {
+            let (escaped, escaped_error) = hex_string(c.arena, bytes)
+            if escaped_error != ok { ret escaped_error }
+            spelling = escaped
+        }
+    }
+    nir.reset(builder, at)
+    signatures.count = signature_mark
+    if lowered == mem.Exhausted { ret lowered }
+    let (name, name_error) = kernel_companion_name(c, function.name, "$spirv")
+    if name_error != ok { ret name_error }
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let text_type = check.make_type(.String, "str", module_index)
+    let (nir_function, begin_error) = nir.begin_function(builder, function.owner_module_index, name, function.instance_id)
+    if begin_error != ok { ret begin_error }
+    builder.functions[nir_function].path = g.modules[function.module_index].spelling
+    builder.functions[nir_function].module_name = g.modules[function.owner_module_index].name
+    try nir.begin_signature(builder, nir_function, signatures)
+    try nir.add_parameter_type(builder, nir_function, signatures, pointer_type)
+    let (entry, block_error) = nir.begin_block(builder)
+    if block_error != ok { ret block_error }
+    let (out_instruction, out, out_error) = nir.emit(builder, .Parameter, pointer_type, true, 0usize, token)
+    if out_error != ok { ret out_error }
+    let (string_index, string_error) = nir.intern_string(builder, spelling)
+    if string_error != ok { ret string_error }
+    let (module_instruction, module_text, module_error) = nir.emit(builder, .ConstString, text_type, true, string_index, token)
+    if module_error != ok { ret module_error }
+    let (copy_instruction, copy_ignored, copy_error) = nir.emit(builder, .Copy, text_type, false, 16usize, token)
+    if copy_error != ok { ret copy_error }
+    try nir.add_operand(builder, copy_instruction, out)
+    try nir.add_operand(builder, copy_instruction, module_text)
+    let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
+    if return_error != ok { ret return_error }
+    ret nir.end_function(builder)
+}
+
+// Bytes as a string literal's spelling, two hex digits a byte (D1611): an artifact's
+// strings are UTF-8, which a SPIR-V module's bytes are not, and `e.gpu` decodes them once
+// per pipeline.
+fn hex_string(a: *mem.Arena, bytes: []const u8) -> (str, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, bytes.len * 2usize + 2usize)
+    if storage_error != ok { ret ("", storage_error) }
+    let digits = "0123456789abcdef"
+    storage[0usize] = 34u8
+    var at = 1usize
+    var index = 0usize
+    while index < bytes.len {
+        storage[at] = digits[usize(bytes[index]) / 16usize]
+        storage[at + 1usize] = digits[usize(bytes[index]) % 16usize]
+        at += 2usize
+        index += 1usize
+    }
+    storage[at] = 34u8
+    ret (storage[0usize..at + 1usize], ok)
 }
 
 // Every `shared var` statement directly in the kernel's body: its storage offset,
@@ -8360,7 +8436,7 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     dims[0usize] = (usize(kernel.gpu_size) & 1023usize) + 1usize
     dims[1usize] = ((usize(kernel.gpu_size) >> 10usize) & 1023usize) + 1usize
     dims[2usize] = ((usize(kernel.gpu_size) >> 20usize) & 1023usize) + 1usize
-    var run_arguments: [9]usize = zero
+    var run_arguments: [12]usize = zero
     run_arguments[0usize] = parameters[0usize]
     run_arguments[1usize] = parameters[1usize]
     var dim_at = 0usize
@@ -8374,11 +8450,102 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     run_arguments[6usize] = shared_bytes
     run_arguments[7usize] = step_value
     run_arguments[8usize] = block
+    // For a Vulkan device (D1611): the kernel's SPIR-V from its module's `K$spirv`, its
+    // entry point's name, and a byte per parameter for the argument block.
+    let text_type = check.make_type(.String, "str", module_index)
+    let (module_slot_instruction, module_slot, module_slot_error) = nir.emit(builder, .Stack, text_type, true, 2usize, token)
+    if module_slot_error != ok { ret module_slot_error }
+    try emit_kernel_spirv_call(c, kernel, module_slot, builder, token)
+    run_arguments[9usize] = module_slot
+    let (entry_spelling, entry_spelling_error) = kernel_entry_spelling(c, g, kernel)
+    if entry_spelling_error != ok { ret entry_spelling_error }
+    let (entry_index, entry_index_error) = nir.intern_string(builder, entry_spelling)
+    if entry_index_error != ok { ret entry_index_error }
+    let (entry_instruction, entry_value, entry_error) = nir.emit(builder, .ConstString, text_type, true, entry_index, token)
+    if entry_error != ok { ret entry_error }
+    run_arguments[10usize] = entry_value
+    // A character per parameter, printable so the artifact's strings stay UTF-8: `s` a
+    // slice, `1` to `8` a scalar's size, `?` what the argument block cannot carry yet.
+    var layout_bytes: [18]u8 = zero
+    layout_bytes[0usize] = 34u8
+    var layout_at = 0usize
+    while layout_at < kernel.parameter_count {
+        let parameter_type = c.parameters[kernel.first_parameter + layout_at].ty
+        var code = 63u8
+        if parameter_type.kind == .Slice { code = 115u8 }
+        if !aggregate_value(c, parameter_type) {
+            let (parameter_info, parameter_info_error) = layout.type_info(c, parameter_type)
+            if parameter_info_error != ok { ret parameter_info_error }
+            if parameter_info.size >= 1usize && parameter_info.size <= 8usize { code = u8(48usize + parameter_info.size) }
+        }
+        layout_bytes[1usize + layout_at] = code
+        layout_at += 1usize
+    }
+    layout_bytes[1usize + kernel.parameter_count] = 34u8
+    let (layout_storage, layout_storage_error) = mem.alloc[u8](c.arena, kernel.parameter_count + 2usize)
+    if layout_storage_error != ok { ret layout_storage_error }
+    var copy_at = 0usize
+    while copy_at < kernel.parameter_count + 2usize {
+        layout_storage[copy_at] = layout_bytes[copy_at]
+        copy_at += 1usize
+    }
+    let layout_spelling = layout_storage[0usize..kernel.parameter_count + 2usize]
+    let (layout_index, layout_index_error) = nir.intern_string(builder, layout_spelling)
+    if layout_index_error != ok { ret layout_index_error }
+    let (layout_instruction, layout_value, layout_error) = nir.emit(builder, .ConstString, text_type, true, layout_index, token)
+    if layout_error != ok { ret layout_error }
+    run_arguments[11usize] = layout_value
     var run_results: CallResults = zero
-    try emit_library_call(c, g, "e.gpu", "launch_run", run_arguments[..], 9usize, builder, token, &run_results)
+    try emit_library_call(c, g, "e.gpu", "launch_run", run_arguments[..], 12usize, builder, token, &run_results)
     if run_results.count != 1usize { ret check.ArgumentCount }
     try emit_formatter_return(c, module_index, instance, 0usize, 0usize, run_results.values[0usize], false, builder, token)
     ret nir.end_function(builder)
+}
+
+// A call of `K$spirv(out)` (D1611): the kernel's module into the launcher's slot.
+fn emit_kernel_spirv_call(c: *check.Checker, kernel: check.Function, out: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let (name, name_error) = kernel_companion_name(c, kernel.name, "$spirv")
+    if name_error != ok { ret name_error }
+    var spirv_function: check.Function = zero
+    spirv_function.name = name
+    spirv_function.module_index = kernel.module_index
+    spirv_function.owner_module_index = kernel.owner_module_index
+    spirv_function.instance_id = kernel.instance_id
+    var spirv_call: check.CallInfo = zero
+    spirv_call.cast = check.invalid_type()
+    spirv_call.alloc_return = check.invalid_type()
+    spirv_call.alloc_arena = check.invalid_type()
+    spirv_call.function = spirv_function
+    var spirv_results: CallResults = zero
+    var arguments: [1]usize = zero
+    arguments[0usize] = out
+    ret emit_call_results(c, spirv_call, 0usize, arguments[0usize..1usize], 1usize, builder, token, &spirv_results)
+}
+
+// The kernel's entry point as a string literal's spelling: `module.kernel`, as the
+// SPIR-V emitter names it.
+fn kernel_entry_spelling(c: *check.Checker, g: *graph.Graph, kernel: check.Function) -> (str, err) {
+    let module_name = g.modules[kernel.module_index].name
+    let (storage, storage_error) = mem.alloc[u8](c.arena, module_name.len + kernel.name.len + 3usize)
+    if storage_error != ok { ret ("", storage_error) }
+    storage[0usize] = 34u8
+    var at = 1usize
+    var index = 0usize
+    while index < module_name.len {
+        storage[at] = module_name[index]
+        at += 1usize
+        index += 1usize
+    }
+    storage[at] = 46u8
+    at += 1usize
+    index = 0usize
+    while index < kernel.name.len {
+        storage[at] = kernel.name[index]
+        at += 1usize
+        index += 1usize
+    }
+    storage[at] = 34u8
+    ret (storage[0usize..at + 1usize], ok)
 }
 
 // A call of `K$frame()` or `K$shared()`, answering its value.

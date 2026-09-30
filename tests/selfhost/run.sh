@@ -2716,24 +2716,34 @@ case "$asset_missing_output" in
     *) printf '%s\n' "a missing asset was not named at the manifest: $asset_missing_output" >&2; exit 1 ;;
 esac
 # `e.gpu` on the CPU backend (D778): the device, queues, buffers, `gpu.launch[K]` over
-# a 1-D and a 2-D kernel with the ids, tokens and every refusal; `examples/saxpy.e`
-# prints the CPU checksum; a kernel called directly, a bare `@gpu` and a host slice
-# in a launch pack are refused at the call.
+# a 1-D and a 2-D kernel with the ids, tokens and every refusal; a kernel called
+# directly, a bare `@gpu` and a host slice in a launch pack are refused at the call.
 gpu_cpu_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_cpu/src/main.e" "$repo" x64 linux "$test_build/gpu-cpu-selfhost")
 [ "$gpu_cpu_written" = 'executable written' ]
 chmod +x "$test_build/gpu-cpu-selfhost"
 gpu_cpu_output=$("$test_build/gpu-cpu-selfhost")
 [ "$gpu_cpu_output" = 'gpu cpu ok' ]
+# (D1610, D1611) The device build: saxpy's kernel as SPIR-V, byte for byte the module
+# both a NVIDIA and an Intel driver ran bit-identically with the CPU. The raw runtime
+# reaches every suitable Vulkan device, or explicitly reports that none exists.
+saxpy_spirv_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" spv none "$test_build/saxpy.spv")
+[ "$saxpy_spirv_written" = 'spir-v written' ]
+cmp "$test_build/saxpy.spv" "$repo/tests/conformance/spirv/saxpy.spv"
+gpu_vulkan_raw_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_raw/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-raw-selfhost")
+[ "$gpu_vulkan_raw_written" = 'executable written' ]
+chmod +x "$test_build/gpu-vulkan-raw-selfhost"
+gpu_vulkan_raw_output=$("$test_build/gpu-vulkan-raw-selfhost" "$test_build/saxpy.spv")
+case "$gpu_vulkan_raw_output" in
+    'no vulkan device') saxpy_expected='cpu    checksum 16777216' ;;
+    'vulkan saxpy ok on '[1-9]' devices'|'vulkan saxpy ok on '1[0-6]' devices') saxpy_expected=$(printf 'cpu    checksum 16777216\nvulkan checksum 16777216') ;;
+    *) printf '%s\n' "the Vulkan runtime failed: $gpu_vulkan_raw_output" >&2; exit 1 ;;
+esac
 saxpy_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" x64 linux "$test_build/saxpy-selfhost")
 [ "$saxpy_written" = 'executable written' ]
 chmod +x "$test_build/saxpy-selfhost"
 saxpy_output=$("$test_build/saxpy-selfhost")
-[ "$saxpy_output" = 'cpu    checksum 16777216' ]
-# (D1610) The device build: saxpy's kernel as SPIR-V, byte for byte the module both a
-# NVIDIA and an Intel driver ran bit-identically with the CPU; a loop is refused by name.
-saxpy_spirv_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" spv none "$test_build/saxpy.spv")
-[ "$saxpy_spirv_written" = 'spir-v written' ]
-cmp "$test_build/saxpy.spv" "$repo/tests/conformance/spirv/saxpy.spv"
+[ "$saxpy_output" = "$saxpy_expected" ]
+# A loop is refused by name until D1610's row 4.
 loop_spirv_status=0
 loop_spirv=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/loop.e" "$repo" spv none "$test_build/loop.spv" 2>&1) || loop_spirv_status=$?
 [ "$loop_spirv_status" -eq 1 ]
