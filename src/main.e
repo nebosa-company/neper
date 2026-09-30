@@ -27,6 +27,7 @@ use project
 use regalloc
 use resolve
 use source
+use spirv
 use syntax
 use tool
 
@@ -1508,6 +1509,68 @@ fn ensure_dir(a: *mem.Arena, path: str) -> err {
 // The host by the shape of its current directory (D348): an absolute path begins
 // with `/` on Linux and with a drive on Windows. A handle's representation is its
 // module's (E-SAFETY-0010), and the bootstrap has no `when` in a body.
+// The device build (D1610): the program checked against the host, every module lowered
+// with kernels as plain functions, and the kernels written as one SPIR-V module.
+fn spirv_command(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
+    var loaded: graph.Graph = zero
+    try init_cli_graph(a, &loaded)
+    var host_os = "windows"
+    if same(host_target(a), "x64-linux") { host_os = "linux" }
+    let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], "x64", host_os)
+    if load_error != ok {
+        if load_error == mem.Exhausted { ret exhausted_diagnostic(&report) }
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
+        os.exit(2i32)
+        ret ok
+    }
+    var resolver: resolve.Resolver = zero
+    try init_cli_resolver(a, &resolver, &loaded, &report)
+    let resolve_error = resolve.collect(&resolver, &loaded)
+    if resolve_error != ok {
+        try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
+        os.exit(1i32)
+        ret ok
+    }
+    var checker: check.Checker = zero
+    try init_cli_checker(a, &checker, &loaded, &report)
+    checker.arena = a
+    let check_error = check.run(&checker, &resolver, &loaded)
+    if check_error != ok {
+        try print_check_diagnostic(&report, &loaded, &checker, check_error)
+        os.exit(1i32)
+        ret ok
+    }
+    var builder: nir.Builder = zero
+    var signatures: nir.Signatures = zero
+    try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report, body_bytes_of(&loaded, false), 1usize, false)
+    builder.spirv = true
+    let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, 4096usize)
+    if inlined_error != ok { ret inlined_error }
+    builder.inlined = inlined
+    let (inlined_marks, inlined_marks_error) = mem.alloc[u8](a, inlined.len)
+    if inlined_marks_error != ok { ret inlined_marks_error }
+    builder.inlined_marks = inlined_marks
+    try lower.declare_globals(&checker, &builder)
+    let (bindings, bindings_error) = mem.alloc[lower.Binding](a, sized(16384usize, loaded.total_bytes, 64usize))
+    if bindings_error != ok { ret bindings_error }
+    var module_at = 0usize
+    while module_at < loaded.count {
+        try lower.module(&checker, &loaded, module_at, &builder, &signatures, bindings)
+        module_at += 1usize
+    }
+    var failure = "the kernels cannot be written as SPIR-V"
+    let (words, emit_error) = spirv.emit(a, &checker, &loaded, &builder, &failure)
+    if emit_error != ok {
+        try emit_command_diagnostic(&report, "E-GPU-9999", failure)
+        os.exit(1i32)
+        ret ok
+    }
+    try save_bytes(a, args[6usize], words)
+    let (written, written_error) = os.write(os.stdout(), "spir-v written\n")
+    ret written_error
+}
+
 fn host_target(a: *mem.Arena) -> str {
     let (cwd, cwd_error) = os.current_dir(a)
     if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 { ret "x64-linux" }
@@ -13307,6 +13370,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // module under DIR/src, one stream.
     if args.len == 8usize && same(args[1usize], "test-project") && same(args[7usize], "--json") { ret test_project_command(a, args) }
     if args.len == 9usize && same(args[1usize], "test-project") && same(args[8usize], "--json") { ret test_project_command(a, args) }
+    // `emit-executable FILE ROOT spv none OUT` (D1610): the program's kernels as one
+    // SPIR-V module, and no executable.
+    if args.len == 7usize && same(args[1usize], "emit-executable") && same(args[4usize], "spv") { ret spirv_command(a, args) }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner

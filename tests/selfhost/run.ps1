@@ -3090,6 +3090,14 @@ $saxpyWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e')
 if ($LASTEXITCODE -ne 0 -or $saxpyWritten -ne 'executable written') { throw 'examples/saxpy.e emission failed' }
 $saxpyOutput = & $saxpyPath
 if ($LASTEXITCODE -ne 0 -or ($saxpyOutput -join "`n") -ne 'cpu    checksum 16777216') { throw "examples/saxpy.e answered wrongly: $($saxpyOutput -join "`n")" }
+# (D1610) The device build: saxpy's kernel as SPIR-V, byte for byte the module both a
+# NVIDIA and an Intel driver ran bit-identically with the CPU; a loop is refused by name.
+$saxpySpirv = Join-Path $testBuild 'saxpy.spv'
+$saxpySpirvWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'spv' 'none' $saxpySpirv
+if ($LASTEXITCODE -ne 0 -or $saxpySpirvWritten -ne 'spir-v written') { throw 'examples/saxpy.e SPIR-V emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $saxpySpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\saxpy.spv')).Hash) { throw 'the saxpy SPIR-V module differs from the conformance corpus' }
+$loopSpirv = cmd /c "`"$compiler`" emit-executable `"$(Join-Path $repo 'tests\conformance\spirv\loop.e')`" `"$repo`" spv none `"$(Join-Path $testBuild 'loop.spv')`" 2>&1"
+if ($LASTEXITCODE -ne 1 -or ($loopSpirv -join "`n") -ne 'error[E-GPU-9999]: a loop in a kernel is not yet written as SPIR-V') { throw "a kernel loop was not refused by name: $($loopSpirv -join "`n")" }
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-GPU-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
