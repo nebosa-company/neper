@@ -7175,14 +7175,28 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
 fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function_index: usize, function: check.Function, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, token: lex.Token) -> err {
     let at = nir.mark(builder)
     let signature_mark = signatures.count
+    let generic_mark = c.function_count
+    let (generic_lowered, generic_error) = mem.alloc[bool](c.arena, generic_mark + 1usize)
+    if generic_error != ok { ret generic_error }
+    var generic_at = 0usize
+    while generic_at < generic_mark {
+        generic_lowered[generic_at] = c.function_generics[generic_at].lowered
+        generic_at += 1usize
+    }
     builder.spirv = true
     var defers: DeferState = zero
-    let lowered = lower_function_index(c, g, tree, module_index, node, function_index, builder, signatures, bindings, &defers)
+    var lowered = lower_function_index(c, g, tree, module_index, node, function_index, builder, signatures, bindings, &defers)
+    let (pending, has_pending) = pending_instance(c, module_index)
+    if lowered == ok && has_pending {
+        lowered = lower_owned_instances(c, g, module_index, builder, signatures, bindings, &defers, false)
+        let token_error = check.tokenize_module(c, g, module_index)
+        if lowered == ok { lowered = token_error }
+    }
     builder.spirv = false
     var spelling = "\"\""
     if lowered == ok {
         var message = ""
-        let (bytes, emit_error) = spirv.emit(c.arena, c, g, builder, at.function_count, &message)
+        let (bytes, emit_error) = spirv.emit(c.arena, c, g, builder, signatures, at.function_count, &message)
         if emit_error == ok {
             let (escaped, escaped_error) = hex_string(c.arena, bytes)
             if escaped_error != ok { ret escaped_error }
@@ -7191,6 +7205,17 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     }
     nir.reset(builder, at)
     signatures.count = signature_mark
+    if has_pending {
+        generic_at = 0usize
+        while generic_at < c.function_count {
+            if generic_at < generic_mark {
+                c.function_generics[generic_at].lowered = generic_lowered[generic_at]
+            } else {
+                c.function_generics[generic_at].lowered = false
+            }
+            generic_at += 1usize
+        }
+    }
     if lowered == mem.Exhausted { ret lowered }
     let (name, name_error) = kernel_companion_name(c, function.name, "$spirv")
     if name_error != ok { ret name_error }
@@ -8645,20 +8670,21 @@ fn pending_formatter(c: *check.Checker, owner_module_index: usize) -> (usize, bo
 // the template's source, so lowering it needs the declaring module's tree. Each
 // pass parses one declaring module and lowers every pending instance from it;
 // instances that pass creates in turn are picked up by the next one.
-fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
-    var defers: DeferState = zero
+fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, defers: *DeferState, generated: bool) -> err {
     while true {
         // A formatter instance has no declaring module to parse, so it is drained
         // first and on its own; either kind can create the other.
-        let (formatter, found_formatter) = pending_formatter(c, module_index)
-        if found_formatter {
-            c.function_generics[formatter].lowered = true
-            if c.function_generics[formatter].launcher {
-                try lower_launcher_instance(c, g, module_index, formatter, builder, signatures)
-            } else {
-                try lower_formatter_instance(c, g, module_index, formatter, builder, signatures)
+        if generated {
+            let (formatter, found_formatter) = pending_formatter(c, module_index)
+            if found_formatter {
+                c.function_generics[formatter].lowered = true
+                if c.function_generics[formatter].launcher {
+                    try lower_launcher_instance(c, g, module_index, formatter, builder, signatures)
+                } else {
+                    try lower_formatter_instance(c, g, module_index, formatter, builder, signatures)
+                }
+                continue
             }
-            continue
         }
         let (first, found) = pending_instance(c, module_index)
         if !found { ret ok }
@@ -8679,7 +8705,7 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
                 c.function_generics[at].lowered = true
                 c.active_owner_module = module_index
                 c.active_owner_set = true
-                let lower_error = lower_instance(c, g, &tree, template_module, at, builder, signatures, bindings, &defers)
+                let lower_error = lower_instance(c, g, &tree, template_module, at, builder, signatures, bindings, defers)
                 c.active_owner_set = false
                 c.active_owner_module = 0usize
                 if lower_error != ok { ret lower_error }
@@ -8711,7 +8737,7 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
         c.main_reports_failure = false
         try synthesize_failure_report(c, g, builder, signatures)
     }
-    ret lower_owned_instances(c, g, module_index, builder, signatures, bindings)
+    ret lower_owned_instances(c, g, module_index, builder, signatures, bindings, &defers, true)
 }
 
 // `error: <qualified name>` on stderr, for the value `main` returned (section 13). The
