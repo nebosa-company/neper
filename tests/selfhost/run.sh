@@ -2729,6 +2729,15 @@ saxpy_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" 
 chmod +x "$test_build/saxpy-selfhost"
 saxpy_output=$("$test_build/saxpy-selfhost")
 [ "$saxpy_output" = 'cpu    checksum 16777216' ]
+# (D1610) The device build: saxpy's kernel as SPIR-V, byte for byte the module both a
+# NVIDIA and an Intel driver ran bit-identically with the CPU; a loop is refused by name.
+saxpy_spirv_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" spv none "$test_build/saxpy.spv")
+[ "$saxpy_spirv_written" = 'spir-v written' ]
+cmp "$test_build/saxpy.spv" "$repo/tests/conformance/spirv/saxpy.spv"
+loop_spirv_status=0
+loop_spirv=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/loop.e" "$repo" spv none "$test_build/loop.spv" 2>&1) || loop_spirv_status=$?
+[ "$loop_spirv_status" -eq 1 ]
+[ "$loop_spirv" = 'error[E-GPU-9999]: a loop in a kernel is not yet written as SPIR-V' ]
 gpu_direct=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_direct_call/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_direct" in
     *'main.e:9:5: error[E-GPU-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;

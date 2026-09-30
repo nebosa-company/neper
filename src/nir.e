@@ -389,6 +389,9 @@ type Builder = struct {
     // value and instruction, sixteen-aligned when it is more than one word. A frame
     // is at most FRAME_WORDS words.
     frame_mode: bool,
+    // A device build (D1610): a kernel lowers as a plain function, with no frame, for the
+    // SPIR-V emitter to read.
+    spirv: bool,
     frame_base: usize,
     frame_offset: usize,
     frame_next: usize,

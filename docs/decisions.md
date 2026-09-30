@@ -31551,3 +31551,56 @@ Checking the goldens against the lexer's and the parser's `Kind` enums answered 
 **Evidence.**
 - The parse goldens now name all 54 node kinds, and the token goldens all 94, checked against `src/syntax.e` and `src/lex.e`.
 - `node_kinds.expected.jsonl` validates against the stream schema, and the file is in the formatter's canonical form.
+
+## D1610 — The SPIR-V emitter's design, and C090 split into rows
+
+**Problem.** M3-02 (C090) has two halves: a SPIR-V emitter on the Vulkan 1.2 floor, and a Vulkan compute runtime. Its done criterion is that every exact kernel in the suite gives bit-identical output on the CPU backend and on a Vulkan device, `examples/saxpy.e` among them. Nothing of it existed:
+- the kernels lower only into the CPU frame (D780);
+- `spv` was an arch name that `valid_arch` accepts and nothing reads;
+- an untracked draft, `lib/e/gpu/vulkan.e`, loads the Vulkan loader and makes devices and buffers, and nothing calls it.
+
+The spec (sections 10 to 13) and D1, D22 and D39 already fix the language side:
+- a device slice is `{ 64-bit address, 32-bit len }` under `PhysicalStorageBuffer64` and scalar block layout;
+- private memory has no pointer or slice type in device code;
+- every float result is `NoContraction`, and division and square root are correctly rounded;
+- `LocalSize` comes from `@gpu`;
+- a device build includes only the device-reachable functions.
+
+This row settles what the spec leaves open, and splits the work.
+
+**Decision.**
+- **Input: NIR, not the tree.** A kernel is lowered for `spv` as a plain function: no frame, no `pc`, locals in `Stack` slots. The builder's `spirv` flag switches the frame off. The emitter, `src/spirv.e`, then works from what lowering already decided: casts, checks, monomorphised helpers, the bounds proofs. The price is that NIR's control flow is a plain graph and SPIR-V's must be structured. The emitter rebuilds structure from dominators: a loop from its back edges, with one continue block and one merge block, and a selection's merge block from post-dominance within the loop. NIR comes from structured source, so the graph is reducible.
+- **Private memory** is each `Stack` slot as one `Function`-storage array of 32-bit words. The spec keeps a private address from escaping (no `&x`, no `x[lo..hi]` on a local), so every private address is its slot plus an offset the emitter tracks. A narrower access is a shift and mask of its word.
+- **Device memory** is `PhysicalStorageBuffer64`. A device address is a pair of 32-bit words, turned into a typed pointer at each load or store by SPIR-V 1.5's `OpBitcast` and given an `Aligned` operand.
+  - An offset is added with `OpIAddCarry`, and an index times an element size is `OpUMulExtended`.
+  - No kernel needs `Int64` for its addresses. The first cut used 64-bit integers, and the Iris Xe, which meets section 10's floor, has no `shaderInt64` and refused the device.
+  - `Int64` is declared only for a kernel's own `u64` and `i64` values.
+- **Shared memory** is one `Workgroup` array of words per kernel, with shared addresses as offsets into it, like private ones. It is a later row.
+- **Invocation ids** are what lowering already reads: `GlobalAddress` of `e.gpu.gid`, `lid` or `wgid`. The emitter reads those through the `GlobalInvocationId`, `LocalInvocationId` and `WorkgroupId` built-ins.
+- **The launch ABI.**
+  - Each kernel is an entry point with `LocalSize` from `@gpu`.
+  - One push constant, eight bytes, holds the device address of the argument block.
+  - The block holds the parameters in declaration order at §4's offsets, a slice as `{ u64 address, u32 len }` padded to 16, then the fault record's address.
+  - The entry reads each parameter from the block and calls the kernel's function.
+  - A push-constant block would cap the arguments at 128 bytes; an address caps nothing.
+- **The device build.** `emit-executable FILE ROOT spv none OUT` writes one SPIR-V module holding every kernel of the program. For now it checks the program against the host OS; the device half's own `target.os` of `.None` comes with packaging. The host build's embedding (`--gpu spv`) comes after it.
+- **Verification.** Neither host has SPIRV-Tools. The development machine has two Vulkan 1.3 drivers, an NVIDIA RTX 3080 and an Intel Iris Xe, so a module counts as good when both create its pipeline and it runs bit-identically with the CPU build.
+
+**The rows**, as C090's gap lists them:
+1. saxpy-class kernels to SPIR-V: 32-bit scalars, device slices, invocation ids, `if` and `ret`.
+2. The Vulkan runtime in `e.gpu`: `.Vulkan` devices, buffers, pipelines, dispatch.
+3. `gpu.launch` on a Vulkan device with the kernel's module embedded, and `examples/saxpy.e` printing both checksums equal.
+4. Loops, `break`, `continue` and phis.
+5. Correctly rounded division and square root.
+6. 8-, 16- and 64-bit values, struct and array locals, helpers as functions, generics.
+7. Shared memory, barriers, atomics and subgroups.
+8. Faults reported from the device.
+9. Capability inference into the `.em`, and the pipeline cache.
+10. The bit-identity sweep of every exact kernel in the suite (GP-09, GP-10).
+
+**Evidence for row 1.**
+- `emit-executable examples/saxpy.e ROOT spv none OUT` writes a 2.9 KB module: SPIR-V 1.5, one entry point `saxpy.saxpy` with `LocalSize 256 1 1`, `Shader` and `PhysicalStorageBufferAddresses` only.
+- A development harness (Python over the Vulkan loader, not shipped) created the pipeline from it on an NVIDIA RTX 3080 and an Intel Iris Xe. With the argument block in D1610's layout, `n` of 4096, 4000 and 1 gave every `y[i]` bit-identical with `f32(f32(2 * x[i]) + y[i])`, the out-of-range invocations leaving theirs. The checksum at 4096 is 16777216 on both, as the CPU backend prints.
+- The module is byte-identical from the Windows and the Linux compiler, and `tests/conformance/spirv/saxpy.spv` pins it in both suites.
+- `tests/conformance/spirv/loop.e` pins the refusal of a loop, `E-GPU-9999` naming it, until row 4.
+- A failed bounds check returns from the kernel for now; the fault record is row 8. Integer `+`, `-` and `*` wrap until then too.

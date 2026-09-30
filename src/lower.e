@@ -6998,7 +6998,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     builder.site_line = 0usize
     try nir.begin_signature(builder, nir_function, signatures)
     let kernel_pointer_type = check.make_type(.Pointer, "", module_index)
-    if function.gpu {
+    if function.gpu && !builder.spirv {
         try nir.add_parameter_type(builder, nir_function, signatures, kernel_pointer_type)
         try nir.add_parameter_type(builder, nir_function, signatures, kernel_pointer_type)
     }
@@ -7060,7 +7060,9 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     var kernel_dispatch_branch = 0usize
     var kernel_body_block = 0usize
     var shared_base = 0usize
-    if function.gpu {
+    // A device build lowers the kernel as it is written (D1610): the frame is the CPU's.
+    let frame_kernel = function.gpu && !builder.spirv
+    if frame_kernel {
         let (frame_parameter, frame_value, frame_parameter_error) = nir.emit(builder, .Parameter, kernel_pointer_type, true, 0usize, c.tokens[usize(node.token_start)])
         if frame_parameter_error != ok { ret frame_parameter_error }
         let (shared_parameter, shared_value, shared_parameter_error) = nir.emit(builder, .Parameter, kernel_pointer_type, true, 1usize, c.tokens[usize(node.token_start)])
@@ -7103,7 +7105,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         parameter_at += 1usize
     }
     var shared_total = 0usize
-    if function.gpu {
+    if frame_kernel {
         // The workgroup's `shared var`s (D781): their offsets in the shared block and
         // their addresses, made here in the entry block so a use after a barrier is
         // dominated; the statement itself binds the name when it is reached.
@@ -7143,14 +7145,14 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         let (instruction, ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, c.tokens[usize(node.token_start)])
         if return_error != ok { ret return_error }
     }
-    if function.gpu {
+    if frame_kernel {
         try emit_kernel_dispatch(c, module_index, kernel_dispatch_branch, kernel_body_block, builder, c.tokens[usize(node.token_start)])
         builder.frame_mode = false
     }
     let end_error = nir.end_function(builder)
     if end_error != ok { ret end_error }
     c.local_count = local_checkpoint
-    if function.gpu {
+    if frame_kernel {
         try emit_kernel_size(c, g, module_index, function, "$frame", builder.frame_offset, builder, signatures, c.tokens[usize(node.token_start)])
         try emit_kernel_size(c, g, module_index, function, "$shared", shared_total, builder, signatures, c.tokens[usize(node.token_start)])
     }
@@ -8239,6 +8241,8 @@ fn launcher_buf_field(c: *check.Checker, buf_type: check.Type, base: usize, name
 // `launch_run` the queue, the grid, the workgroup size, the frame size, the step
 // and the block: the scheduler in `e.gpu` does the rest and answers the launch.
 fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usize, instance_index: usize, builder: *nir.Builder, signatures: *nir.Signatures) -> err {
+    // A launcher runs the grid on the host: a device build has none (D1610).
+    if builder.spirv { ret ok }
     if instance_index >= c.function_count { ret FunctionNotFound }
     let instance = c.functions[instance_index]
     let generic = c.function_generics[instance_index]
