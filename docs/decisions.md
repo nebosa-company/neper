@@ -31638,3 +31638,34 @@ program cannot acquire a loader dependency or silently substitute the CPU for Vu
 it prints `no vulkan device`. `examples/saxpy.e` uses the public `gpu.launch` path and
 prints equal CPU and Vulkan checksums. Both paths pass on an NVIDIA RTX 3080 and an
 Intel Iris Xe, and both self-host suites carry the hardware gate.
+
+## D1612 — SPIR-V loops reuse NIR's stack-carried state and join extra back edges
+
+**Problem.** D1610 refused the first back edge it found. Neper lowering already writes
+structured source loops, but their NIR shapes differ: a `for` has one increment block
+that is its continue target, while a `while` with source `continue` statements can have
+several branches back to its condition. SPIR-V shader control flow requires an
+`OpLoopMerge`, a declared continue target, and exactly one back edge per loop header.
+
+**Decision.** The SPIR-V flow walk records edges to ancestors instead of refusing
+them. A loop header is the target of such an edge; lowering always makes its
+`BranchIf` targets body then exit, so the exit is its merge block. With one back edge,
+that edge's block is already the continue target. With several, the emitter adds one
+empty continue block, redirects those edges to it, and gives it the sole branch back
+to the header. Back edges are omitted only from the existing post-dominator walk used
+to choose selection merges; nested loops retain their own declarations. `lower_if`
+records the exact source selection merge in the existing `BranchIf.immediate` field;
+the emitter uses it when an arm exits an enclosing loop, and keeps post-dominance as
+the fallback for compiler-synthesised branches.
+
+No SSA conversion was added. D1610 deliberately represents private locals as
+`Function`-storage word arrays, and NIR has no `Phi` producer; loop-carried mutations
+are therefore the same loads and stores on CPU and SPIR-V. Adding `OpPhi` without an
+input producer would be dead machinery, not loop support.
+
+**Evidence.** `tests/conformance/spirv/loop.spv` pins nested `while` and `for` loops,
+multiple `continue` edges, `break`, and mutable loop-carried values. The
+`gpu_vulkan_loop` fixture pins the CPU checksum, then compares every result with the
+public Vulkan launch. `spirv-val --target-env vulkan1.2` accepts the module; it runs on
+the RTX 3080, the Iris Xe and WSL's Vulkan device; saxpy remains bit-identical in
+execution and is repinned with the exact selection merges.

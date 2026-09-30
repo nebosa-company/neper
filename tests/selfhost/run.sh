@@ -2743,11 +2743,19 @@ saxpy_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" 
 chmod +x "$test_build/saxpy-selfhost"
 saxpy_output=$("$test_build/saxpy-selfhost")
 [ "$saxpy_output" = "$saxpy_expected" ]
-# A loop is refused by name until D1610's row 4.
-loop_spirv_status=0
-loop_spirv=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/loop.e" "$repo" spv none "$test_build/loop.spv" 2>&1) || loop_spirv_status=$?
-[ "$loop_spirv_status" -eq 1 ]
-[ "$loop_spirv" = 'error[E-GPU-9999]: a loop in a kernel is not yet written as SPIR-V' ]
+# (D1612) Structured `while`, `for`, `break` and `continue`, pinned byte for byte and
+# run through the public CPU/Vulkan launch path.
+loop_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/loop.e" "$repo" spv none "$test_build/loop.spv")
+[ "$loop_spirv_written" = 'spir-v written' ]
+cmp "$test_build/loop.spv" "$repo/tests/conformance/spirv/loop.spv"
+gpu_vulkan_loop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_loop/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-loop-selfhost")
+[ "$gpu_vulkan_loop_written" = 'executable written' ]
+chmod +x "$test_build/gpu-vulkan-loop-selfhost"
+gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
+case "$gpu_vulkan_loop_output" in
+    'gpu loop cpu only'|'gpu loop vulkan ok on '[1-9]' devices'|'gpu loop vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the Vulkan loop runtime failed: $gpu_vulkan_loop_output" >&2; exit 1 ;;
+esac
 gpu_direct=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_direct_call/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_direct" in
     *'main.e:9:5: error[E-GPU-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;

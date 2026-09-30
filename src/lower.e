@@ -5034,6 +5034,10 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
         let merge_block = builder.block_count
         let (merge_index, merge_error) = nir.begin_block(builder)
         if merge_error != ok || merge_index != merge_block { ret nir.InvalidControlFlow }
+        // The source selection's exact merge (D1612). Back ends that need structured
+        // control flow cannot recover it by post-dominance when one arm breaks or
+        // continues an enclosing loop. Zero still means that every arm terminates.
+        builder.instructions[decision].immediate = merge_block + 1usize
         if true_falls_through { try nir.set_branch_targets(builder, true_exit, merge_block, 0usize) }
         if false_falls_through { try nir.set_branch_targets(builder, false_exit, merge_block, 0usize) }
     }

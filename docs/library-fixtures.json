@@ -1201,6 +1201,7 @@
     "gpu_shared",
     "gpu_spaces",
     "gpu_tensor",
+    "gpu_vulkan_loop",
     "ui_a11y_controls",
     "ui_accessibility",
     "ui_actions",

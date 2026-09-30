@@ -94,6 +94,13 @@ type Flow = struct {
     order: []usize,
     order_count: usize,
     merges: []usize,
+    loop_merges: []usize,
+    loop_continues: []usize,
+    loop_counts: []usize,
+    // Two edge slots per block; zero is not a back edge, otherwise header + 1.
+    back_headers: []usize,
+    synthetic: []usize,
+    synthetic_count: usize,
     // Merge blocks no path reaches, written at the end with `OpUnreachable`.
     dead: []usize,
     dead_count: usize,
@@ -291,6 +298,7 @@ const OP_BITWISE_OR: usize = 197usize
 const OP_BITWISE_XOR: usize = 198usize
 const OP_BITWISE_AND: usize = 199usize
 const OP_NOT: usize = 200usize
+const OP_LOOP_MERGE: usize = 246usize
 const OP_SELECTION_MERGE: usize = 247usize
 const OP_LABEL: usize = 248usize
 const OP_BRANCH: usize = 249usize
@@ -592,6 +600,17 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
         try emit_block(m, c, builder, function, kernel, flow.order[order_at], &flow, &values, block_address)
         order_at += 1usize
     }
+    // Several source `continue`s make several NIR back edges. SPIR-V requires exactly
+    // one, so they meet in this otherwise empty continue block.
+    var synthetic_at = 0usize
+    while synthetic_at < flow.synthetic_count {
+        let header = flow.synthetic[synthetic_at]
+        head(&m.code, OP_LABEL, 2usize)
+        put(&m.code, flow.loop_continues[header])
+        head(&m.code, OP_BRANCH, 2usize)
+        put(&m.code, flow.labels[header])
+        synthetic_at += 1usize
+    }
     var dead_at = 0usize
     while dead_at < flow.dead_count {
         head(&m.code, OP_LABEL, 2usize)
@@ -692,9 +711,7 @@ fn declare_privates(m: *Module, builder: *nir.Builder, function: nir.Function, v
 // ---- control flow ----------------------------------------------------------------
 
 // The blocks' labels, their order (reverse postorder, so a block follows its
-// dominators) and each conditional branch's merge block: its immediate
-// post-dominator, or a fresh block no path reaches when every path from it returns.
-// A loop -- a branch back to a block still on the walk -- is a later row (D1610).
+// dominators), selection merges, and the loop merge/continue declarations (D1612).
 fn plan_flow(a: *mem.Arena, m: *Module, builder: *nir.Builder, function: nir.Function, flow: *Flow) -> err {
     let blocks = function.block_count
     let (labels, labels_error) = mem.alloc[usize](a, blocks + 1usize)
@@ -703,6 +720,16 @@ fn plan_flow(a: *mem.Arena, m: *Module, builder: *nir.Builder, function: nir.Fun
     if order_error != ok { ret order_error }
     let (merges, merges_error) = mem.alloc[usize](a, blocks + 1usize)
     if merges_error != ok { ret merges_error }
+    let (loop_merges, loop_merges_error) = mem.alloc[usize](a, blocks + 1usize)
+    if loop_merges_error != ok { ret loop_merges_error }
+    let (loop_continues, loop_continues_error) = mem.alloc[usize](a, blocks + 1usize)
+    if loop_continues_error != ok { ret loop_continues_error }
+    let (loop_counts, loop_counts_error) = mem.alloc[usize](a, blocks + 1usize)
+    if loop_counts_error != ok { ret loop_counts_error }
+    let (back_headers, back_headers_error) = mem.alloc[usize](a, blocks * 2usize + 2usize)
+    if back_headers_error != ok { ret back_headers_error }
+    let (synthetic, synthetic_error) = mem.alloc[usize](a, blocks + 1usize)
+    if synthetic_error != ok { ret synthetic_error }
     let (dead, dead_error) = mem.alloc[usize](a, blocks + 1usize)
     if dead_error != ok { ret dead_error }
     let (state, state_error) = mem.alloc[u8](a, blocks + 1usize)
@@ -721,12 +748,23 @@ fn plan_flow(a: *mem.Arena, m: *Module, builder: *nir.Builder, function: nir.Fun
     while at < blocks {
         labels[at] = fresh(m)
         merges[at] = 0usize
+        loop_merges[at] = 0usize
+        loop_continues[at] = 0usize
+        loop_counts[at] = 0usize
+        back_headers[at * 2usize] = 0usize
+        back_headers[at * 2usize + 1usize] = 0usize
         state[at] = 0u8
         at += 1usize
     }
     flow.labels = labels
     flow.order = order
     flow.merges = merges
+    flow.loop_merges = loop_merges
+    flow.loop_continues = loop_continues
+    flow.loop_counts = loop_counts
+    flow.back_headers = back_headers
+    flow.synthetic = synthetic
+    flow.synthetic_count = 0usize
     flow.dead = dead
     flow.dead_count = 0usize
     flow.first_block = function.first_block
@@ -738,11 +776,15 @@ fn plan_flow(a: *mem.Arena, m: *Module, builder: *nir.Builder, function: nir.Fun
     state[0usize] = 1u8
     while depth > 0usize {
         let block = stack[depth - 1usize]
-        let (next, has_next) = successor(builder, function, block, edge[depth - 1usize])
+        let edge_index = edge[depth - 1usize]
+        let (next, has_next) = successor(builder, function, block, edge_index)
         if has_next {
             edge[depth - 1usize] += 1usize
             if next >= blocks { ret fail(m, "a branch leaves the kernel's blocks") }
-            if state[next] == 1u8 { ret fail(m, "a loop in a kernel is not yet written as SPIR-V") }
+            if state[next] == 1u8 {
+                back_headers[block * 2usize + edge_index] = next + 1usize
+                loop_counts[next] += 1usize
+            }
             if state[next] == 0u8 {
                 state[next] = 1u8
                 stack[depth] = next
@@ -762,6 +804,35 @@ fn plan_flow(a: *mem.Arena, m: *Module, builder: *nir.Builder, function: nir.Fun
         order_count += 1usize
     }
     flow.order_count = order_count
+    // Lowering writes every source loop as `BranchIf body, exit`; the incoming back
+    // edge identifies its header and the second target is its merge. One back-edge
+    // block can be the continue target directly. Several get one synthetic join.
+    at = 0usize
+    while at < blocks {
+        if loop_counts[at] != 0usize {
+            let terminator = last_instruction(builder, function, at)
+            if terminator.opcode != .BranchIf { ret fail(m, "a kernel loop has no conditional header") }
+            let merge = terminator.target2 - function.first_block
+            if merge >= blocks { ret fail(m, "a kernel loop merge leaves the function") }
+            loop_merges[at] = labels[merge]
+            let body = terminator.target - function.first_block
+            // A range `for` has a dedicated increment block immediately after its
+            // header and branches past it to the body. A while-like loop does not;
+            // give it a distinct continue block even with one back edge, because the
+            // source may itself be a nested construct's merge block.
+            if loop_counts[at] == 1usize && body != at + 1usize {
+                var source = 0usize
+                while source < blocks && back_headers[source * 2usize] != at + 1usize && back_headers[source * 2usize + 1usize] != at + 1usize { source += 1usize }
+                if source == blocks { ret fail(m, "a kernel loop has no back-edge block") }
+                loop_continues[at] = labels[source]
+            } else {
+                loop_continues[at] = fresh(m)
+                synthetic[flow.synthetic_count] = at
+                flow.synthetic_count += 1usize
+            }
+        }
+        at += 1usize
+    }
     // Post-dominators over the acyclic graph, the exit a virtual node past the blocks:
     // in postorder every successor is done before its block.
     let exit = blocks
@@ -779,7 +850,7 @@ fn plan_flow(a: *mem.Arena, m: *Module, builder: *nir.Builder, function: nir.Fun
         var index = 0usize
         while index < 2usize {
             let (next, has_next) = successor(builder, function, block, index)
-            if has_next {
+            if has_next && back_headers[block * 2usize + index] == 0usize {
                 if found {
                     dominator = intersect(ipdom, rank, dominator, next, exit)
                 } else {
@@ -796,14 +867,28 @@ fn plan_flow(a: *mem.Arena, m: *Module, builder: *nir.Builder, function: nir.Fun
     at = 0usize
     while at < post_count {
         let block = post[at]
-        if last_instruction(builder, function, block).opcode == .BranchIf {
+        let branch = last_instruction(builder, function, block)
+        if branch.opcode == .BranchIf && loop_merges[block] == 0usize {
             var merge = 0usize
-            if ipdom[block] == exit {
+            if branch.immediate != 0usize {
+                let explicit = branch.immediate - 1usize
+                if explicit < function.first_block || explicit >= function.first_block + blocks { ret fail(m, "a selection merge leaves the kernel's blocks") }
+                merge = labels[explicit - function.first_block]
+            } else {
+                if ipdom[block] != exit { merge = labels[ipdom[block]] }
+            }
+            if merge == 0usize {
                 merge = fresh(m)
                 flow.dead[flow.dead_count] = merge
                 flow.dead_count += 1usize
             } else {
-                merge = labels[ipdom[block]]
+                var loop_at = 0usize
+                while loop_at < blocks && loop_merges[loop_at] != merge { loop_at += 1usize }
+                if loop_at < blocks {
+                    merge = fresh(m)
+                    flow.dead[flow.dead_count] = merge
+                    flow.dead_count += 1usize
+                }
                 var other = 0usize
                 while other < blocks {
                     if merges[other] == merge { ret fail(m, "two branches in a kernel meet at one block, which this row of the SPIR-V emitter does not structure yet") }
@@ -901,19 +986,35 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         ret ok
     }
     if opcode == .Branch {
+        var destination = flow.labels[instruction.target - flow.first_block]
+        let back = flow.back_headers[block_index * 2usize]
+        if back != 0usize && flow.loop_continues[back - 1usize] != flow.labels[block_index] { destination = flow.loop_continues[back - 1usize] }
         head(&m.code, OP_BRANCH, 2usize)
-        put(&m.code, flow.labels[instruction.target - flow.first_block])
+        put(&m.code, destination)
         ret ok
     }
     if opcode == .BranchIf {
         let condition = operand(builder, instruction, 0usize)
-        head(&m.code, OP_SELECTION_MERGE, 3usize)
-        put(&m.code, flow.merges[block_index])
-        put(&m.code, 0usize)
+        if flow.loop_merges[block_index] != 0usize {
+            head(&m.code, OP_LOOP_MERGE, 4usize)
+            put(&m.code, flow.loop_merges[block_index])
+            put(&m.code, flow.loop_continues[block_index])
+            put(&m.code, 0usize)
+        } else {
+            head(&m.code, OP_SELECTION_MERGE, 3usize)
+            put(&m.code, flow.merges[block_index])
+            put(&m.code, 0usize)
+        }
+        var destination = flow.labels[instruction.target - flow.first_block]
+        var destination2 = flow.labels[instruction.target2 - flow.first_block]
+        let back = flow.back_headers[block_index * 2usize]
+        let back2 = flow.back_headers[block_index * 2usize + 1usize]
+        if back != 0usize && flow.loop_continues[back - 1usize] != flow.labels[block_index] { destination = flow.loop_continues[back - 1usize] }
+        if back2 != 0usize && flow.loop_continues[back2 - 1usize] != flow.labels[block_index] { destination2 = flow.loop_continues[back2 - 1usize] }
         head(&m.code, OP_BRANCH_CONDITIONAL, 4usize)
         put(&m.code, values.id[condition])
-        put(&m.code, flow.labels[instruction.target - flow.first_block])
-        put(&m.code, flow.labels[instruction.target2 - flow.first_block])
+        put(&m.code, destination)
+        put(&m.code, destination2)
         ret ok
     }
     ret fail(m, "an operation in this kernel is not yet written as SPIR-V")
