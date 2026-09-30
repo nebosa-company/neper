@@ -2796,6 +2796,19 @@ case "$gpu_vulkan_sync_output" in
     'gpu sync cpu only'|'gpu sync vulkan ok on '[1-9]' devices'|'gpu sync vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the Vulkan synchronization runtime failed: $gpu_vulkan_sync_output" >&2; exit 1 ;;
 esac
+# Subgroup identity is width-dependent by contract: pin the module, then check the
+# CPU's 32-lane model and every Vulkan device's own width, including a partial group.
+subgroup_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/subgroup.e" "$repo" spv none "$test_build/subgroup.spv")
+[ "$subgroup_spirv_written" = 'spir-v written' ]
+cmp "$test_build/subgroup.spv" "$repo/tests/conformance/spirv/subgroup.spv"
+gpu_subgroup_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_subgroup_identity/src/main.e" "$repo" x64 linux "$test_build/gpu-subgroup-identity-selfhost")
+[ "$gpu_subgroup_written" = 'executable written' ]
+chmod +x "$test_build/gpu-subgroup-identity-selfhost"
+gpu_subgroup_output=$("$test_build/gpu-subgroup-identity-selfhost")
+case "$gpu_subgroup_output" in
+    'gpu subgroup identity cpu only'|'gpu subgroup identity vulkan ok on '[1-9]' devices'|'gpu subgroup identity vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the subgroup identity runtime failed: $gpu_subgroup_output" >&2; exit 1 ;;
+esac
 gpu_direct=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_direct_call/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_direct" in
     *'main.e:9:5: error[E-GPU-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;

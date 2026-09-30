@@ -31750,3 +31750,24 @@ memory barriers, every 32-bit atomic form and a 64-bit device atomic. The
 `gpu_vulkan_sync` fixture compares shared reduction and atomic results between CPU and
 Vulkan and passes on the RTX 3080, Iris Xe and WSL's Vulkan device. Subgroup operations remain the
 unfinished part of C090's synchronization row.
+
+## D1720 — Subgroup identity is an input, not a helper call
+
+**Problem.** C090 had no subgroup surface. The CPU scheduler already knew each
+invocation's linear local index, while SPIR-V exposed workgroup ids only. An ordinary
+device helper that loaded a subgroup built-in produced a module the Vulkan drivers
+rejected at pipeline creation.
+
+**Decision.** The CPU backend fixes subgroups at 32 consecutive local invocations and
+sets `gpu.sid` before each step. `gpu.subgroup_size()` and `gpu.subgroup_elect()` are
+compiler intrinsics lowered directly to the module globals that represent subgroup
+width and lane; elect is lane zero because subgroup builtins require uniform control.
+SPIR-V declares scalar `SubgroupSize` and `SubgroupLocalInvocationId` inputs only when
+a reachable function uses them, adds `GroupNonUniform`, and lists both in the entry
+interface. This is the shared base for the collective operations still outstanding.
+
+**Evidence.** `tests/conformance/spirv/subgroup.spv` pins the two inputs and elect.
+`gpu_subgroup_identity` checks a 40-invocation workgroup, including the CPU's partial
+last subgroup, and passes on the CPU, RTX 3080, Iris Xe and WSL's Vulkan device. The
+complete Windows self-host suite passes; the Linux suite passes the subgroup fixture
+directly and reached its unrelated pre-existing trap-backtrace assertion.

@@ -3098,6 +3098,31 @@ fn store_c_result(returned_type: check.Type, crossing: Crossing, call_result: us
 }
 
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if call.subgroup_op != .None {
+        results.call = call
+        results.count = 1usize
+        var name = "subgroup_width"
+        let u32_type = check.make_type(.Integer, "u32", call.function.module_index)
+        if call.subgroup_op == .Elect { name = "sid" }
+        let (global_index, found) = check.find_global(c, call.function.module_index, name)
+        if !found { ret FunctionNotFound }
+        let (address, address_type, address_error) = global_address(c, global_index, builder, token)
+        if address_error != ok { ret address_error }
+        let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, u32_type, true, 4usize, token)
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, address)
+        if call.subgroup_op == .Size {
+            results.values[0usize] = loaded
+            ret ok
+        }
+        let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, u32_type, true, 0usize, token)
+        if zero_error != ok { ret zero_error }
+        let boolean = check.make_type(.Bool, "bool", call.function.module_index)
+        let (elected, compare_error) = emit_supplied_compare(builder, .Equal, boolean, loaded, zero_value, token)
+        if compare_error != ok { ret compare_error }
+        results.values[0usize] = elected
+        ret ok
+    }
     if call.gpu_memory_barrier {
         results.call = call
         results.count = 0usize

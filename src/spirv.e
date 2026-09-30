@@ -32,6 +32,7 @@ const KIND_SCALAR: u8 = 1u8
 const KIND_PRIVATE: u8 = 2u8
 const KIND_BUILTIN: u8 = 3u8
 const KIND_SHARED: u8 = 4u8
+const KIND_INPUT: u8 = 5u8
 
 type Module = struct {
     bound: usize,
@@ -75,6 +76,8 @@ type Module = struct {
     v_gid: usize,
     v_lid: usize,
     v_wgid: usize,
+    v_sid: usize,
+    v_subgroup_width: usize,
     v_pc: usize,
     v_shared: usize,
     // Interned constants: (type id, low word, high word) -> id.
@@ -476,6 +479,8 @@ const DECORATION_NO_CONTRACTION: usize = 42usize
 const BUILTIN_WORKGROUP_ID: usize = 26usize
 const BUILTIN_LOCAL_INVOCATION_ID: usize = 27usize
 const BUILTIN_GLOBAL_INVOCATION_ID: usize = 28usize
+const BUILTIN_SUBGROUP_SIZE: usize = 36usize
+const BUILTIN_SUBGROUP_LOCAL_INVOCATION_ID: usize = 41usize
 
 // Memory operand `Aligned`.
 const MEMORY_ALIGNED: usize = 2usize
@@ -618,6 +623,42 @@ fn builtin_variable(m: *Module, builtin: usize) -> usize {
     put(&m.decorations, DECORATION_BUILTIN)
     put(&m.decorations, builtin)
     ret id
+}
+
+fn builtin_scalar_variable(m: *Module, builtin: usize) -> usize {
+    let id = global_variable(m, m.t_in_u32, STORAGE_INPUT)
+    head(&m.decorations, OP_DECORATE, 4usize)
+    put(&m.decorations, id)
+    put(&m.decorations, DECORATION_BUILTIN)
+    put(&m.decorations, builtin)
+    ret id
+}
+
+fn uses_subgroup_inputs(m: *Module, builder: *nir.Builder) -> bool {
+    var function_at = 0usize
+    while function_at < builder.function_count {
+        if m.function_reachable[function_at] {
+            let function = builder.functions[function_at]
+            var at = function.first_instruction
+            while at < function.first_instruction + function.instruction_count {
+                let instruction = builder.instructions[at]
+                if instruction.opcode == .GlobalAddress && instruction.immediate < builder.global_count {
+                    let name = builder.globals[instruction.immediate].name
+                    if same(name, "sid") || same(name, "subgroup_width") { ret true }
+                }
+                at += 1usize
+            }
+        }
+        function_at += 1usize
+    }
+    ret false
+}
+
+fn declare_subgroup_inputs(m: *Module, builder: *nir.Builder) {
+    if m.v_sid != 0usize || !uses_subgroup_inputs(m, builder) { ret }
+    capability(m, 61usize)
+    m.v_sid = builtin_scalar_variable(m, BUILTIN_SUBGROUP_LOCAL_INVOCATION_ID)
+    m.v_subgroup_width = builtin_scalar_variable(m, BUILTIN_SUBGROUP_SIZE)
 }
 
 // A constant of a scalar type, interned.
@@ -840,11 +881,13 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     try plan_flow(a, m, builder, function, &flow)
     var entry = m.function_ids[function_at]
     if entry == 0usize { entry = fresh(m) }
+    declare_subgroup_inputs(m, builder)
     // The entry point, with every interface variable (SPIR-V 1.4 on lists them all).
     let (name, name_error) = qualified_name(a, g, kernel)
     if name_error != ok { ret name_error }
     var interfaces = 4usize
     if m.v_shared != 0usize { interfaces += 1usize }
+    if m.v_sid != 0usize { interfaces += 2usize }
     head(&m.entries, OP_ENTRY_POINT, 3usize + string_words(name) + interfaces)
     put(&m.entries, 5usize)
     put(&m.entries, entry)
@@ -854,6 +897,10 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     put(&m.entries, m.v_lid)
     put(&m.entries, m.v_wgid)
     if m.v_shared != 0usize { put(&m.entries, m.v_shared) }
+    if m.v_sid != 0usize {
+        put(&m.entries, m.v_sid)
+        put(&m.entries, m.v_subgroup_width)
+    }
     // `LocalSize` from `@gpu(X, Y, Z)`, packed as D778 keeps it.
     let size = usize(kernel.gpu_size)
     head(&m.modes, OP_EXECUTION_MODE, 6usize)
@@ -1921,8 +1968,17 @@ fn emit_global_address(m: *Module, builder: *nir.Builder, instruction: nir.Instr
     if same(global.name, "gid") { variable = m.v_gid }
     if same(global.name, "lid") { variable = m.v_lid }
     if same(global.name, "wgid") { variable = m.v_wgid }
+    var kind = KIND_BUILTIN
+    if same(global.name, "sid") {
+        variable = m.v_sid
+        kind = KIND_INPUT
+    }
+    if same(global.name, "subgroup_width") {
+        variable = m.v_subgroup_width
+        kind = KIND_INPUT
+    }
     if variable == 0usize { ret fail(m, "a kernel reads a module-scope variable other than the invocation ids") }
-    values.kind[instruction.result] = KIND_BUILTIN
+    values.kind[instruction.result] = kind
     values.id[instruction.result] = variable
     values.offset[instruction.result] = 0usize
     ret ok
@@ -2039,6 +2095,16 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     let (ty, signed) = value_type(m, instruction.ty)
     if ty == 0usize { ret fail(m, "a load of this type is not yet written as SPIR-V") }
     let result = instruction.result
+    if KIND_INPUT == values.kind[address] {
+        if ty != m.t_u32 { ret fail(m, "a subgroup input is read in an unexpected shape") }
+        let id = fresh(m)
+        head(&m.code, OP_LOAD, 4usize)
+        put(&m.code, m.t_u32)
+        put(&m.code, id)
+        put(&m.code, values.id[address])
+        scalar(values, result, id, ty, signed)
+        ret ok
+    }
     if KIND_BUILTIN == values.kind[address] {
         if ty != m.t_u32 || values.offset[address] % 4usize != 0usize || values.offset[address] >= 12usize { ret fail(m, "an invocation id is read in an unexpected shape") }
         let chain = fresh(m)

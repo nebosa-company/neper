@@ -29,8 +29,9 @@
 // A kernel's `shared var`s live in one block per launch, handed to every step,
 // filled with 0xCD before each workgroup (D781).
 //
-// Not here yet: the subgroup builtins and a barrier in a helper a kernel calls
-// (only the kernel's own body is cut); `.Cuda` and a build without Vulkan answer
+// Collective subgroup builtins and a barrier in a helper are not here yet (only
+// the kernel's own body is cut); subgroup identity is the hardware input on Vulkan
+// and the fixed 32-lane model on the CPU. `.Cuda` and a build without Vulkan answer
 // `Unsupported`.
 //
 // The fault buffer (contract section 1.3, D785): a check failing in a kernel's CPU
@@ -109,6 +110,8 @@ type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, 
 var gid: Id = zero
 var lid: Id = zero
 var wgid: Id = zero
+var sid: u32 = zero
+var subgroup_width: u32 = 32u32
 
 var next_owner: u32 = 1u32
 var open_devices: [16]*DeviceState = zero
@@ -121,13 +124,14 @@ var launch_active: bool = zero
 var launch_queue: *QueueState = zero
 
 fn cpu_capabilities(a: *mem.Arena) -> ([]const Cap, err) {
-    let (caps, caps_error) = mem.alloc[Cap](a, 5usize)
+    let (caps, caps_error) = mem.alloc[Cap](a, 6usize)
     if caps_error != ok { ret (zero, caps_error) }
     caps[0usize] = .Int8
     caps[1usize] = .Int16
     caps[2usize] = .Int64
     caps[3usize] = .Float64
     caps[4usize] = .Atomic64
+    caps[5usize] = .Subgroup
     ret (caps, ok)
 }
 
@@ -314,7 +318,7 @@ fn close(device: *Device) -> err {
 fn has(device: *Device, capability: Cap) -> bool {
     let (_, state_error) = state_of(device)
     if state_error != ok { ret false }
-    ret capability == .Int8 || capability == .Int16 || capability == .Int64 || capability == .Float64 || capability == .Atomic64
+    ret capability == .Int8 || capability == .Int16 || capability == .Int64 || capability == .Float64 || capability == .Atomic64 || capability == .Subgroup
 }
 
 fn queue(device: *Device) -> (*Queue, err) {
@@ -843,6 +847,7 @@ fn set_ids(group: usize, local: usize) {
     lid = Id { x: u32(lx), y: u32(ly), z: u32(lz) }
     wgid = Id { x: u32(wx), y: u32(wy), z: u32(wz) }
     gid = Id { x: u32(wx * launch_size[0usize] + lx), y: u32(wy * launch_size[1usize] + ly), z: u32(wz * launch_size[2usize] + lz) }
+    sid = u32(local % 32usize)
 }
 
 fn frame_pc(frames: []u8, at: usize) -> usize {
