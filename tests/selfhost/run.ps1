@@ -3104,9 +3104,17 @@ $saxpyText = $saxpyOutput -join "`n"
 $saxpyExpected = 'cpu    checksum 16777216'
 if ($gpuVulkanRawOutput -ne 'no vulkan device') { $saxpyExpected += "`nvulkan checksum 16777216" }
 if ($LASTEXITCODE -ne 0 -or $saxpyText -ne $saxpyExpected) { throw "examples/saxpy.e answered wrongly: $saxpyText" }
-# A loop is refused by name until D1610's row 4.
-$loopSpirv = cmd /c "`"$compiler`" emit-executable `"$(Join-Path $repo 'tests\conformance\spirv\loop.e')`" `"$repo`" spv none `"$(Join-Path $testBuild 'loop.spv')`" 2>&1"
-if ($LASTEXITCODE -ne 1 -or ($loopSpirv -join "`n") -ne 'error[E-GPU-9999]: a loop in a kernel is not yet written as SPIR-V') { throw "a kernel loop was not refused by name: $($loopSpirv -join "`n")" }
+# (D1612) Structured `while`, `for`, `break` and `continue`, pinned byte for byte and
+# run through the public CPU/Vulkan launch path.
+$loopSpirv = Join-Path $testBuild 'loop.spv'
+$loopSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\loop.e') $repo 'spv' 'none' $loopSpirv
+if ($LASTEXITCODE -ne 0 -or $loopSpirvWritten -ne 'spir-v written') { throw 'loop SPIR-V emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $loopSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\loop.spv')).Hash) { throw 'the loop SPIR-V module differs from the conformance corpus' }
+$gpuVulkanLoopPath = Join-Path $testBuild 'gpu-vulkan-loop-selfhost.exe'
+$gpuVulkanLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $gpuVulkanLoopPath
+if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopWritten -ne 'executable written') { throw 'gpu_vulkan_loop emission failed' }
+$gpuVulkanLoopOutput = & $gpuVulkanLoopPath
+if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan loop runtime failed: $gpuVulkanLoopOutput" }
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-GPU-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
