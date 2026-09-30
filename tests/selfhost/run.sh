@@ -2756,6 +2756,19 @@ case "$gpu_vulkan_loop_output" in
     'gpu loop cpu only'|'gpu loop vulkan ok on '[1-9]' devices'|'gpu loop vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the Vulkan loop runtime failed: $gpu_vulkan_loop_output" >&2; exit 1 ;;
 esac
+# (D1613) Correctly rounded f32 division and square root, pinned as SPIR-V and
+# compared bit for bit with the CPU backend on every available Vulkan device.
+float_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/float.e" "$repo" spv none "$test_build/float.spv")
+[ "$float_spirv_written" = 'spir-v written' ]
+cmp "$test_build/float.spv" "$repo/tests/conformance/spirv/float.spv"
+gpu_vulkan_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_float/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-float-selfhost")
+[ "$gpu_vulkan_float_written" = 'executable written' ]
+chmod +x "$test_build/gpu-vulkan-float-selfhost"
+gpu_vulkan_float_output=$("$test_build/gpu-vulkan-float-selfhost")
+case "$gpu_vulkan_float_output" in
+    'gpu float cpu only'|'gpu float vulkan ok on '[1-9]' devices'|'gpu float vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the Vulkan float runtime failed: $gpu_vulkan_float_output" >&2; exit 1 ;;
+esac
 gpu_direct=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_direct_call/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_direct" in
     *'main.e:9:5: error[E-GPU-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;

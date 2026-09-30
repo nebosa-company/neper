@@ -34,6 +34,7 @@ const KIND_BUILTIN: u8 = 3u8
 type Module = struct {
     bound: usize,
     capabilities: Words,
+    imports: Words,
     entries: Words,
     modes: Words,
     decorations: Words,
@@ -59,6 +60,10 @@ type Module = struct {
     t_psb_f32: usize,
     t_psb_address: usize,
     t_fn_u32: usize,
+    // `GLSL.std.450`, declared only when an exact float sequence needs an extended
+    // instruction (`Fma` or the seed `Sqrt`).
+    glsl: usize,
+    denorm_preserve: bool,
     v_gid: usize,
     v_lid: usize,
     v_wgid: usize,
@@ -149,6 +154,7 @@ fn fail(m: *Module, message: str) -> err {
 
 fn init_module(a: *mem.Arena, m: *Module) -> err {
     try init_words(a, &m.capabilities, 64usize)
+    try init_words(a, &m.imports, 16usize)
     try init_words(a, &m.entries, 4096usize)
     try init_words(a, &m.modes, 1024usize)
     try init_words(a, &m.decorations, 16384usize)
@@ -228,6 +234,8 @@ fn put_string(w: *Words, value: str) {
 // ---- the module's fixed part ---------------------------------------------------
 
 const OP_MEMORY_MODEL: usize = 14usize
+const OP_EXT_INST_IMPORT: usize = 11usize
+const OP_EXT_INST: usize = 12usize
 const OP_ENTRY_POINT: usize = 15usize
 const OP_EXECUTION_MODE: usize = 16usize
 const OP_CAPABILITY: usize = 17usize
@@ -272,9 +280,13 @@ const OP_I_MUL: usize = 132usize
 const OP_F_MUL: usize = 133usize
 const OP_U_DIV: usize = 134usize
 const OP_S_DIV: usize = 135usize
+const OP_F_DIV: usize = 136usize
 const OP_U_MOD: usize = 137usize
 const OP_S_REM: usize = 138usize
+const OP_LOGICAL_OR: usize = 166usize
+const OP_LOGICAL_AND: usize = 167usize
 const OP_LOGICAL_NOT: usize = 168usize
+const OP_SELECT: usize = 169usize
 const OP_I_EQUAL: usize = 170usize
 const OP_I_NOT_EQUAL: usize = 171usize
 const OP_U_GREATER_THAN: usize = 172usize
@@ -399,6 +411,16 @@ fn u64_type(m: *Module) -> usize {
 fn capability(m: *Module, which: usize) {
     head(&m.capabilities, OP_CAPABILITY, 2usize)
     put(&m.capabilities, which)
+}
+
+fn glsl_import(m: *Module) -> usize {
+    if m.glsl == 0usize {
+        m.glsl = fresh(m)
+        head(&m.imports, OP_EXT_INST_IMPORT, 2usize + string_words("GLSL.std.450"))
+        put(&m.imports, m.glsl)
+        put_string(&m.imports, "GLSL.std.450")
+    }
+    ret m.glsl
 }
 
 fn int_type(m: *Module, width: usize) -> usize {
@@ -539,6 +561,17 @@ fn aggregate(ty: check.Type) -> bool {
     ret ty.kind == .Slice || ty.kind == .Named || ty.kind == .Array || ty.kind == .String
 }
 
+fn uses_f32(builder: *nir.Builder, function: nir.Function) -> bool {
+    let end = function.first_instruction + function.instruction_count
+    var at = function.first_instruction
+    while at < end {
+        let ty = builder.instructions[at].ty
+        if ty.kind == .Float && same(ty.name, "f32") { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn type_bytes(m: *Module, ty: usize) -> usize {
     if ty == m.t_v2u32 || (ty != 0usize && ty == m.t_u64) { ret 8usize }
     ret 4usize
@@ -573,6 +606,16 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     put(&m.modes, size % 1024usize + 1usize)
     put(&m.modes, size / 1024usize % 1024usize + 1usize)
     put(&m.modes, size / 1048576usize % 1024usize + 1usize)
+    if uses_f32(builder, function) {
+        if !m.denorm_preserve {
+            capability(m, 4464usize)
+            m.denorm_preserve = true
+        }
+        head(&m.modes, OP_EXECUTION_MODE, 4usize)
+        put(&m.modes, entry)
+        put(&m.modes, 4459usize)
+        put(&m.modes, 32usize)
+    }
     // The function, and its first block: every private variable, then the block's address.
     head(&m.code, OP_FUNCTION, 5usize)
     put(&m.code, m.t_void)
@@ -978,6 +1021,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
     if opcode == .Load { ret emit_load(m, builder, instruction, values) }
     if opcode == .Store { ret emit_store(m, builder, instruction, values) }
     if opcode == .Cast { ret emit_cast(m, builder, instruction, values) }
+    if opcode == .Sqrt { ret emit_sqrt(m, builder, instruction, values) }
     if opcode == .Add || opcode == .AddWrap || opcode == .Subtract || opcode == .SubtractWrap || opcode == .Multiply || opcode == .MultiplyWrap || opcode == .Divide || opcode == .Remainder || opcode == .BitAnd || opcode == .BitOr || opcode == .BitXor || opcode == .ShiftLeft || opcode == .ShiftRight { ret emit_binary(m, builder, instruction, values) }
     if opcode == .Equal || opcode == .NotEqual || opcode == .Less || opcode == .LessEqual || opcode == .Greater || opcode == .GreaterEqual { ret emit_compare(m, builder, instruction, values) }
     if opcode == .Negate || opcode == .BitNot { ret emit_unary(m, builder, instruction, values) }
@@ -1369,6 +1413,254 @@ fn no_contraction(m: *Module, id: usize) {
     put(&m.decorations, DECORATION_NO_CONTRACTION)
 }
 
+fn float_binary(m: *Module, opcode: usize, left: usize, right: usize) -> usize {
+    let id = binary(m, opcode, m.t_f32, left, right)
+    no_contraction(m, id)
+    ret id
+}
+
+fn float_fma(m: *Module, a: usize, b: usize, c: usize) -> usize {
+    let id = fresh(m)
+    head(&m.code, OP_EXT_INST, 8usize)
+    put(&m.code, m.t_f32)
+    put(&m.code, id)
+    put(&m.code, glsl_import(m))
+    put(&m.code, 50usize)
+    put(&m.code, a)
+    put(&m.code, b)
+    put(&m.code, c)
+    no_contraction(m, id)
+    ret id
+}
+
+fn float_sqrt_seed(m: *Module, value: usize) -> usize {
+    let id = fresh(m)
+    head(&m.code, OP_EXT_INST, 6usize)
+    put(&m.code, m.t_f32)
+    put(&m.code, id)
+    put(&m.code, glsl_import(m))
+    put(&m.code, 31usize)
+    put(&m.code, value)
+    ret id
+}
+
+fn select_float(m: *Module, condition: usize, yes: usize, no: usize) -> usize {
+    let id = fresh(m)
+    head(&m.code, OP_SELECT, 6usize)
+    put(&m.code, m.t_f32)
+    put(&m.code, id)
+    put(&m.code, condition)
+    put(&m.code, yes)
+    put(&m.code, no)
+    ret id
+}
+
+fn select_u32(m: *Module, condition: usize, yes: usize, no: usize) -> usize {
+    let id = fresh(m)
+    head(&m.code, OP_SELECT, 6usize)
+    put(&m.code, m.t_u32)
+    put(&m.code, id)
+    put(&m.code, condition)
+    put(&m.code, yes)
+    put(&m.code, no)
+    ret id
+}
+
+fn select_u64(m: *Module, condition: usize, yes: usize, no: usize) -> usize {
+    let ty = u64_type(m)
+    let id = fresh(m)
+    head(&m.code, OP_SELECT, 6usize)
+    put(&m.code, ty)
+    put(&m.code, id)
+    put(&m.code, condition)
+    put(&m.code, yes)
+    put(&m.code, no)
+    ret id
+}
+
+fn float_abs_bits(m: *Module, value: usize) -> usize {
+    let bits = convert(m, OP_BITCAST, m.t_u32, value)
+    ret binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 2147483647usize))
+}
+
+fn finite_nonzero(m: *Module, value: usize) -> usize {
+    let bits = float_abs_bits(m, value)
+    let finite = binary(m, OP_U_LESS_THAN, m.t_bool, bits, constant(m, m.t_u32, 2139095040usize))
+    let nonzero = binary(m, OP_I_NOT_EQUAL, m.t_bool, bits, constant(m, m.t_u32, 0usize))
+    ret binary(m, OP_LOGICAL_AND, m.t_bool, finite, nonzero)
+}
+
+fn canonical_float(m: *Module, value: usize) -> usize {
+    let bits = float_abs_bits(m, value)
+    let nan = binary(m, OP_U_GREATER_THAN, m.t_bool, bits, constant(m, m.t_u32, 2139095040usize))
+    ret select_float(m, nan, constant(m, m.t_f32, 2143289344usize), value)
+}
+
+// Markstein residual correction. The second pass starts from a neighbour of the
+// exact quotient even when Vulkan's seed was at its allowed 2.5-ULP limit.
+fn divide_core(m: *Module, numerator: usize, denominator: usize) -> usize {
+    var quotient = float_binary(m, OP_F_DIV, numerator, denominator)
+    let reciprocal = float_binary(m, OP_F_DIV, constant(m, m.t_f32, 1065353216usize), denominator)
+    var step = 0usize
+    while step < 2usize {
+        let negative = convert(m, OP_F_NEGATE, m.t_f32, quotient)
+        no_contraction(m, negative)
+        let residual = float_fma(m, negative, denominator, numerator)
+        quotient = float_fma(m, residual, reciprocal, quotient)
+        step += 1usize
+    }
+    ret quotient
+}
+
+fn normalized_significand(m: *Module, bits: usize) -> (usize, usize) {
+    let absolute = binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 2147483647usize))
+    let exponent = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, absolute, constant(m, m.t_u32, 23usize))
+    let fraction = binary(m, OP_BITWISE_AND, m.t_u32, absolute, constant(m, m.t_u32, 8388607usize))
+    let normal = binary(m, OP_I_NOT_EQUAL, m.t_bool, exponent, constant(m, m.t_u32, 0usize))
+    var significand = select_u32(m, normal, binary(m, OP_BITWISE_OR, m.t_u32, fraction, constant(m, m.t_u32, 8388608usize)), fraction)
+    significand = select_u32(m, binary(m, OP_I_EQUAL, m.t_bool, significand, constant(m, m.t_u32, 0usize)), constant(m, m.t_u32, 1usize), significand)
+    var effective = select_u32(m, normal, exponent, constant(m, m.t_u32, 1usize))
+    var step = 0usize
+    while step < 23usize {
+        let shift = binary(m, OP_U_LESS_THAN, m.t_bool, significand, constant(m, m.t_u32, 8388608usize))
+        significand = select_u32(m, shift, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, significand, constant(m, m.t_u32, 1usize)), significand)
+        effective = select_u32(m, shift, binary(m, OP_I_SUB, m.t_u32, effective, constant(m, m.t_u32, 1usize)), effective)
+        step += 1usize
+    }
+    ret (significand, effective)
+}
+
+fn rounded_quotient(m: *Module, numerator: usize, denominator: usize) -> usize {
+    let ty = u64_type(m)
+    let floor = binary(m, OP_U_DIV, ty, numerator, denominator)
+    let remainder = binary(m, OP_U_MOD, ty, numerator, denominator)
+    let twice_remainder = binary(m, OP_SHIFT_LEFT_LOGICAL, ty, remainder, constant(m, ty, 1usize))
+    let greater = binary(m, OP_U_GREATER_THAN, m.t_bool, twice_remainder, denominator)
+    let equal = binary(m, OP_I_EQUAL, m.t_bool, twice_remainder, denominator)
+    let odd = binary(m, OP_I_NOT_EQUAL, m.t_bool, binary(m, OP_BITWISE_AND, ty, floor, constant(m, ty, 1usize)), constant(m, ty, 0usize))
+    let round_up = binary(m, OP_LOGICAL_OR, m.t_bool, greater, binary(m, OP_LOGICAL_AND, m.t_bool, equal, odd))
+    ret select_u64(m, round_up, binary(m, OP_I_ADD, ty, floor, constant(m, ty, 1usize)), floor)
+}
+
+// Normalize the two 24-bit significands, divide them once in u64, and use the
+// remainder for round-to-nearest-even. This fixes the last bit independently of
+// the Vulkan implementation's permitted OpFDiv and Fma error.
+fn exact_divide(m: *Module, numerator: usize, denominator: usize) -> usize {
+    let ty = u64_type(m)
+    let numerator_bits = convert(m, OP_BITCAST, m.t_u32, numerator)
+    let denominator_bits = convert(m, OP_BITCAST, m.t_u32, denominator)
+    let (numerator_significand, numerator_exponent) = normalized_significand(m, numerator_bits)
+    let (denominator_significand, denominator_exponent) = normalized_significand(m, denominator_bits)
+    let shift = binary(m, OP_U_LESS_THAN, m.t_bool, numerator_significand, denominator_significand)
+    let normalized_numerator = select_u32(m, shift, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, numerator_significand, constant(m, m.t_u32, 1usize)), numerator_significand)
+    var result_exponent = binary(m, OP_I_ADD, m.t_u32, binary(m, OP_I_SUB, m.t_u32, numerator_exponent, denominator_exponent), constant(m, m.t_u32, 127usize))
+    result_exponent = select_u32(m, shift, binary(m, OP_I_SUB, m.t_u32, result_exponent, constant(m, m.t_u32, 1usize)), result_exponent)
+    let wide_numerator = binary(m, OP_SHIFT_LEFT_LOGICAL, ty, convert(m, OP_U_CONVERT, ty, normalized_numerator), constant(m, ty, 23usize))
+    let wide_denominator = convert(m, OP_U_CONVERT, ty, denominator_significand)
+    var rounded = rounded_quotient(m, wide_numerator, wide_denominator)
+    let carry = binary(m, OP_U_GREATER_THAN_EQUAL, m.t_bool, rounded, constant(m, ty, 16777216usize))
+    rounded = select_u64(m, carry, binary(m, OP_SHIFT_RIGHT_LOGICAL, ty, rounded, constant(m, ty, 1usize)), rounded)
+    let carry32 = select_u32(m, carry, constant(m, m.t_u32, 1usize), constant(m, m.t_u32, 0usize))
+    let normal_exponent = binary(m, OP_I_ADD, m.t_u32, result_exponent, carry32)
+    let overflow = binary(m, OP_S_GREATER_THAN_EQUAL, m.t_bool, normal_exponent, constant(m, m.t_u32, 255usize))
+    var normal_bits = binary(m, OP_BITWISE_OR, m.t_u32, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, normal_exponent, constant(m, m.t_u32, 23usize)), binary(m, OP_BITWISE_AND, m.t_u32, convert(m, OP_U_CONVERT, m.t_u32, rounded), constant(m, m.t_u32, 8388607usize)))
+    normal_bits = select_u32(m, overflow, constant(m, m.t_u32, 2139095040usize), normal_bits)
+    let subnormal = binary(m, OP_S_LESS_THAN_EQUAL, m.t_bool, result_exponent, constant(m, m.t_u32, 0usize))
+    let subnormal_shift_raw = binary(m, OP_I_SUB, m.t_u32, constant(m, m.t_u32, 1usize), result_exponent)
+    let too_small = binary(m, OP_U_GREATER_THAN, m.t_bool, subnormal_shift_raw, constant(m, m.t_u32, 24usize))
+    let subnormal_shift = select_u32(m, binary(m, OP_LOGICAL_OR, m.t_bool, convert(m, OP_LOGICAL_NOT, m.t_bool, subnormal), too_small), constant(m, m.t_u32, 0usize), subnormal_shift_raw)
+    let subnormal_denominator = binary(m, OP_SHIFT_LEFT_LOGICAL, ty, wide_denominator, convert(m, OP_U_CONVERT, ty, subnormal_shift))
+    var subnormal_bits = convert(m, OP_U_CONVERT, m.t_u32, rounded_quotient(m, wide_numerator, subnormal_denominator))
+    subnormal_bits = select_u32(m, too_small, constant(m, m.t_u32, 0usize), subnormal_bits)
+    let magnitude = select_u32(m, subnormal, subnormal_bits, normal_bits)
+    let sign = binary(m, OP_BITWISE_AND, m.t_u32, binary(m, OP_BITWISE_XOR, m.t_u32, numerator_bits, denominator_bits), constant(m, m.t_u32, 2147483648usize))
+    let bits = binary(m, OP_BITWISE_OR, m.t_u32, sign, magnitude)
+    ret convert(m, OP_BITCAST, m.t_f32, bits)
+}
+
+fn divide_float(m: *Module, numerator: usize, denominator: usize) -> usize {
+    let seed = float_binary(m, OP_F_DIV, numerator, denominator)
+    let refined = divide_core(m, numerator, denominator)
+    let quotient = exact_divide(m, numerator, denominator)
+    let valid = binary(m, OP_LOGICAL_AND, m.t_bool, finite_nonzero(m, numerator), finite_nonzero(m, denominator))
+    let rounded = select_float(m, valid, quotient, refined)
+    ret canonical_float(m, select_float(m, valid, rounded, seed))
+}
+
+fn integer_sqrt(m: *Module, radicand: usize) -> usize {
+    let ty = u64_type(m)
+    var root = constant(m, ty, 0usize)
+    var remainder = constant(m, ty, 0usize)
+    var digit = 24usize
+    while digit > 0usize {
+        digit = digit - 1usize
+        let shifted = binary(m, OP_SHIFT_RIGHT_LOGICAL, ty, radicand, constant(m, ty, digit * 2usize))
+        let next = binary(m, OP_BITWISE_AND, ty, shifted, constant(m, ty, 3usize))
+        remainder = binary(m, OP_BITWISE_OR, ty, binary(m, OP_SHIFT_LEFT_LOGICAL, ty, remainder, constant(m, ty, 2usize)), next)
+        let trial = binary(m, OP_BITWISE_OR, ty, binary(m, OP_SHIFT_LEFT_LOGICAL, ty, root, constant(m, ty, 2usize)), constant(m, ty, 1usize))
+        let take = binary(m, OP_U_GREATER_THAN_EQUAL, m.t_bool, remainder, trial)
+        remainder = select_u64(m, take, binary(m, OP_I_SUB, ty, remainder, trial), remainder)
+        root = binary(m, OP_SHIFT_LEFT_LOGICAL, ty, root, constant(m, ty, 1usize))
+        root = select_u64(m, take, binary(m, OP_BITWISE_OR, ty, root, constant(m, ty, 1usize)), root)
+    }
+    ret root
+}
+
+// `sqrt(M * 2^23)` is rounded as an integer; a remainder greater than the floor
+// root lies above the half-way square. The input is normal after scaling below.
+fn exact_sqrt_normal(m: *Module, value: usize) -> usize {
+    let ty = u64_type(m)
+    let bits = convert(m, OP_BITCAST, m.t_u32, value)
+    let exponent = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, bits, constant(m, m.t_u32, 23usize))
+    let fraction = binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 8388607usize))
+    let significand = binary(m, OP_BITWISE_OR, m.t_u32, fraction, constant(m, m.t_u32, 8388608usize))
+    let odd = binary(m, OP_I_EQUAL, m.t_bool, binary(m, OP_BITWISE_AND, m.t_u32, exponent, constant(m, m.t_u32, 1usize)), constant(m, m.t_u32, 0usize))
+    let doubled = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, significand, constant(m, m.t_u32, 1usize))
+    let normalized = select_u32(m, odd, doubled, significand)
+    let radicand = binary(m, OP_SHIFT_LEFT_LOGICAL, ty, convert(m, OP_U_CONVERT, ty, normalized), constant(m, ty, 23usize))
+    let floor = integer_sqrt(m, radicand)
+    let square = binary(m, OP_I_MUL, ty, floor, floor)
+    let remainder = binary(m, OP_I_SUB, ty, radicand, square)
+    let round_up = binary(m, OP_U_GREATER_THAN, m.t_bool, remainder, floor)
+    let rounded = select_u64(m, round_up, binary(m, OP_I_ADD, ty, floor, constant(m, ty, 1usize)), floor)
+    let rounded32 = convert(m, OP_U_CONVERT, m.t_u32, rounded)
+    let result_exponent = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, binary(m, OP_I_ADD, m.t_u32, exponent, constant(m, m.t_u32, 127usize)), constant(m, m.t_u32, 1usize))
+    let result_bits = binary(m, OP_I_ADD, m.t_u32, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, result_exponent, constant(m, m.t_u32, 23usize)), binary(m, OP_I_SUB, m.t_u32, rounded32, constant(m, m.t_u32, 8388608usize)))
+    ret convert(m, OP_BITCAST, m.t_f32, result_bits)
+}
+
+fn sqrt_float(m: *Module, value: usize) -> usize {
+    let seed = float_sqrt_seed(m, value)
+    let bits = float_abs_bits(m, value)
+    // Scaling by 2^48 makes every positive subnormal input normal; the root scales
+    // back exactly by 2^-24 after the Fma refinement and integer rounding pass.
+    let small = binary(m, OP_U_LESS_THAN, m.t_bool, bits, constant(m, m.t_u32, 201326592usize))
+    let scaled = float_binary(m, OP_F_MUL, value, constant(m, m.t_f32, 1468006400usize))
+    let adjusted = select_float(m, small, scaled, value)
+    var root = float_sqrt_seed(m, adjusted)
+    var step = 0usize
+    while step < 1usize {
+        let negative = convert(m, OP_F_NEGATE, m.t_f32, root)
+        no_contraction(m, negative)
+        let residual = float_fma(m, negative, root, adjusted)
+        let half_over_root = divide_core(m, constant(m, m.t_f32, 1056964608usize), root)
+        root = float_fma(m, residual, half_over_root, root)
+        step += 1usize
+    }
+    root = exact_sqrt_normal(m, adjusted)
+    let root_bits = convert(m, OP_BITCAST, m.t_u32, root)
+    let unscaled_bits = binary(m, OP_I_SUB, m.t_u32, root_bits, constant(m, m.t_u32, 201326592usize))
+    root = select_float(m, small, convert(m, OP_BITCAST, m.t_f32, unscaled_bits), root)
+    let valid = finite_nonzero(m, value)
+    let sign = binary(m, OP_BITWISE_AND, m.t_u32, convert(m, OP_BITCAST, m.t_u32, value), constant(m, m.t_u32, 2147483648usize))
+    let positive = binary(m, OP_I_EQUAL, m.t_bool, sign, constant(m, m.t_u32, 0usize))
+    let refine = binary(m, OP_LOGICAL_AND, m.t_bool, valid, positive)
+    let negative = binary(m, OP_LOGICAL_AND, m.t_bool, valid, convert(m, OP_LOGICAL_NOT, m.t_bool, positive))
+    var result = select_float(m, refine, root, seed)
+    result = select_float(m, negative, constant(m, m.t_f32, 2143289344usize), result)
+    ret canonical_float(m, result)
+}
+
 fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let left = operand(builder, instruction, 0usize)
     let right = operand(builder, instruction, 1usize)
@@ -1380,7 +1672,10 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
         if opcode == .Add { spirv = OP_F_ADD }
         if opcode == .Subtract { spirv = OP_F_SUB }
         if opcode == .Multiply { spirv = OP_F_MUL }
-        if opcode == .Divide { ret fail(m, "float division is not yet written as SPIR-V: it must be correctly rounded (D39)") }
+        if opcode == .Divide {
+            scalar(values, instruction.result, divide_float(m, values.id[left], values.id[right]), ty, signed)
+            ret ok
+        }
         if spirv == 0usize { ret fail(m, "a float operation is not yet written as SPIR-V") }
         let id = binary(m, spirv, ty, values.id[left], values.id[right])
         no_contraction(m, id)
@@ -1408,6 +1703,14 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     }
     if spirv == 0usize || ty == m.t_bool { ret fail(m, "an integer operation is not yet written as SPIR-V") }
     scalar(values, instruction.result, binary(m, spirv, ty, values.id[left], values.id[right]), ty, signed)
+    ret ok
+}
+
+fn emit_sqrt(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let source = operand(builder, instruction, 0usize)
+    let (ty, signed) = value_type(m, instruction.ty)
+    if ty != m.t_f32 || KIND_SCALAR != values.kind[source] { ret fail(m, "a square root of this type is not yet written as SPIR-V") }
+    scalar(values, instruction.result, sqrt_float(m, values.id[source]), ty, signed)
     ret ok
 }
 
@@ -1475,8 +1778,8 @@ fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
 // The module's words in SPIR-V's logical layout, little-endian bytes.
 fn assemble(a: *mem.Arena, m: *Module) -> ([]u8, err) {
     var no_bytes: []u8 = zero
-    if m.full || m.capabilities.full || m.entries.full || m.modes.full || m.decorations.full || m.types.full || m.code.full { ret (no_bytes, mem.Exhausted) }
-    let total = 5usize + m.capabilities.count + 3usize + m.entries.count + m.modes.count + m.decorations.count + m.types.count + m.code.count
+    if m.full || m.capabilities.full || m.imports.full || m.entries.full || m.modes.full || m.decorations.full || m.types.full || m.code.full { ret (no_bytes, mem.Exhausted) }
+    let total = 5usize + m.capabilities.count + m.imports.count + 3usize + m.entries.count + m.modes.count + m.decorations.count + m.types.count + m.code.count
     let (bytes, bytes_error) = mem.alloc[u8](a, total * 4usize)
     if bytes_error != ok { ret (no_bytes, bytes_error) }
     var at = 0usize
@@ -1487,6 +1790,7 @@ fn assemble(a: *mem.Arena, m: *Module) -> ([]u8, err) {
     at = put_word(bytes, at, m.bound)
     at = put_word(bytes, at, 0usize)
     at = put_words(bytes, at, m.capabilities)
+    at = put_words(bytes, at, m.imports)
     // OpMemoryModel PhysicalStorageBuffer64 GLSL450.
     at = put_word(bytes, at, 3usize * 65536usize + OP_MEMORY_MODEL)
     at = put_word(bytes, at, 5348usize)
