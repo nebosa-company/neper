@@ -31482,3 +31482,29 @@ Keys compare as written, so a key spelled with escapes is not found. No source m
 **Evidence.**
 - `tools/pretty_map.e` has a map that is indented and spaced, with every object's keys reversed and the input's path written `pretty_map.input`. Its type error is reported at `pretty_map.input` 1:1 on both hosts. The old compiler reported the map as stale and the error unmapped.
 - All eleven earlier map fixtures and the four `test-file` map cases are byte-identical on both hosts.
+
+## D1715 — The index names the calls the compiler makes (T009)
+
+**Problem.** Tooling section 5 says compiler-origin protocol and iterator calls are `reference` records with `origin` `compiler`, at the smallest source span that caused the call, naming the concrete target. `index-file` only resolved names, so it had none. The source alone cannot give them:
+- a template's `T.eq(a, b)` calls a different function for each instance;
+- a `for` over an iterator calls a `next` that nothing in the source spells.
+
+**Decision.**
+- `index-file` runs the checker after resolving, in partial mode, so a body that does not check leaves out only its own calls.
+- Each dispatch the checker settled on a declared function becomes a `protocol` reference with `origin` `compiler`. There is one per site and target, so a template's `T.eq` is listed once for each instance that declares `eq`.
+- The span is the site's first token, through `.name` when the site is `T.name` (or `it.field` as a `for` subject). `target_id` is the function's id when the function is in the indexed module, null otherwise, as for any cross-module target.
+- A supplied operation (spec section 9, rule 4) has no function to name, so it gives no reference.
+- The iterator's `next` is now a `dispatch` explain the checker records when a `for` resolves it. `next` is in tooling's list of dispatch protocols, so `explain-file` reports it too.
+- A module indexed on its own gets no reference from a template's `T.eq`, since only an instantiation chooses the function.
+
+Compiler references merge into the index's span order. One that starts where a source reference does goes after it, whatever the two names; this is marked `ponytail:`.
+
+**Evidence.**
+- `tools/index_protocol.e`, in both suites, gives:
+  - `T.eq` at 20:9 naming `index_protocol.point_eq`, id 4;
+  - the `for` subject `c` at 28:14 naming `index_protocol.count_next`, id 10;
+  - nothing for `same[u8]`, whose `eq` is supplied.
+
+  It is byte-equal on Linux and validates against the stream schema.
+- The `index`, `index_comptime`, `explain`, `explain_arm`, `explain_fold`, `explain_when` and `fold_const` goldens are unchanged on both hosts.
+- `index-file src/main.e` goes from 0.65 s to 1.08 s: the check is the cost.

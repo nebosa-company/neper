@@ -694,18 +694,18 @@ fn index_signature(out: *Out, source: str, tokens: []const lex.Token, opener: us
 // tree (D258). Locals and references are added by the later index passes (D271, D483).
 // Compiler-origin functions with a canonical checker signature are emitted after the
 // source records (D577).
-fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize, absolute: str) -> (usize, err) {
+fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize, absolute: str, compiler: []const CompilerRef) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
     var out: Out = zero
     out.bytes = storage
-    let (exit_code, index_error) = index_json_into(a, &out, root, path, source, module_name, module_index, symbols, count, absolute)
+    let (exit_code, index_error) = index_json_into(a, &out, root, path, source, module_name, module_index, symbols, count, absolute, compiler)
     ret (exit_code, index_error)
 }
 
 // The index of one module into `out` (D515): the query writes it, a plan over a type
 // captures it (`out.capture`) and reads the references back.
-fn index_json_into(a: *mem.Arena, out: *Out, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize, absolute: str) -> (usize, err) {
+fn index_json_into(a: *mem.Arena, out: *Out, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize, absolute: str, compiler: []const CompilerRef) -> (usize, err) {
     let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
     if scan_error != ok { ret (2usize, scan_error) }
     let (nodes, nodes_error) = mem.alloc[syntax.Node](a, source.len + 1024usize)
@@ -782,6 +782,7 @@ fn index_json_into(a: *mem.Arena, out: *Out, root: str, path: str, source: str, 
     refs.known_names = known_names[0usize..known_total]
     refs.known_ids = known_ids[0usize..known_total]
     refs.known_types = known_types[0usize..known_total]
+    refs.compiler = compiler
     known = 0usize
     var emitted = 1usize
     var at = 0usize
@@ -1121,6 +1122,93 @@ type IndexRefs = struct {
     local_last: usize,
     // The owner's qualified name, for a local's `target_qualified_name`.
     owner: str,
+    // The compiler-origin references (T009), in span order, and how far they are out.
+    compiler: []const CompilerRef,
+    compiler_next: usize,
+    compiler_token: usize,
+}
+
+// A compiler-origin reference (T009, tooling section 5): a protocol or iterator call
+// the checker settled, at the byte where the source caused it, naming the concrete
+// function; `name` finds the target's id when the function is the indexed module's.
+type CompilerRef = struct { start: usize, qualified: str, name: str, local: bool }
+
+// The indexed module's compiler-origin references (T009): each dispatch the checker
+// settled on a declared function, once per site and target, sorted by site then
+// target -- a template's `T.eq` names every instance's own. A supplied operation has
+// no function to name, and is not one.
+fn compiler_references(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_index: usize) -> ([]CompilerRef, err) {
+    var none: []CompilerRef = zero
+    if c.explain_count == 0usize { ret (none, ok) }
+    let (refs, refs_error) = mem.alloc[CompilerRef](a, c.explain_count)
+    if refs_error != ok { ret (none, refs_error) }
+    var count = 0usize
+    var at = 0usize
+    while at < c.explain_count {
+        let e = c.explains[at]
+        at += 1usize
+        if e.kind != 1u8 || !e.found || e.module_index != module_index || e.function_index >= c.function_count { continue }
+        let function = c.functions[e.function_index]
+        if function.module_index >= g.count { continue }
+        let owner = g.modules[function.module_index].name
+        let (qualified_storage, qualified_error) = mem.alloc[u8](a, owner.len + 1usize + function.name.len)
+        if qualified_error != ok { ret (none, qualified_error) }
+        var written = nptest_copy(qualified_storage, 0usize, owner)
+        qualified_storage[written] = 46u8
+        written = nptest_copy(qualified_storage, written + 1usize, function.name)
+        let made = CompilerRef { start: e.offset, qualified: qualified_storage[0usize..written], name: function.name, local: function.module_index == module_index }
+        var place = count
+        while place > 0usize && compiler_ref_before(made, refs[place - 1usize]) { place = place - 1usize }
+        let repeated = place > 0usize && refs[place - 1usize].start == made.start && graph.same(refs[place - 1usize].qualified, made.qualified)
+        if !repeated {
+            var shift = count
+            while shift > place {
+                refs[shift] = refs[shift - 1usize]
+                shift = shift - 1usize
+            }
+            refs[place] = made
+            count += 1usize
+        }
+    }
+    ret (refs[0usize..count], ok)
+}
+
+fn compiler_ref_before(x: CompilerRef, y: CompilerRef) -> bool {
+    if x.start != y.start { ret x.start < y.start }
+    ret text_before(x.qualified, y.qualified)
+}
+
+// The compiler-origin references whose site starts before `before` (T009): the span is
+// the site's first token, through `.name` when the site is `T.name` or `it.field`, and
+// the spelling is those bytes. ponytail: one that starts where a source reference does
+// goes after it whatever the two targets' names; the sort's last key is the name.
+fn index_emit_compiler(state: *IndexRefs, out: *Out, root: str, path: str, source: str, tokens: []const lex.Token, before: usize) -> err {
+    while state.compiler_next < state.compiler.len && state.compiler[state.compiler_next].start < before {
+        let made = state.compiler[state.compiler_next]
+        state.compiler_next += 1usize
+        while state.compiler_token < tokens.len && usize(tokens[state.compiler_token].start) < made.start { state.compiler_token += 1usize }
+        let first = state.compiler_token
+        if first >= tokens.len { continue }
+        var last = first
+        if first + 2usize < tokens.len && tokens[first + 1usize].kind == .PunctDot && tokens[first + 2usize].kind == .Identifier { last = first + 2usize }
+        var found = state.known_ids.len
+        if made.local {
+            var known_at = 0usize
+            while known_at < state.known_names.len {
+                if graph.same(state.known_names[known_at], made.name) {
+                    found = known_at
+                    known_at = state.known_names.len
+                }
+                known_at += 1usize
+            }
+        }
+        var target_id = 0usize
+        if found < state.known_ids.len { target_id = state.known_ids[found] }
+        let spelling = source[usize(tokens[first].start)..usize(tokens[last].end)]
+        try reference_record_from(out, root, path, source, tokens[first], tokens[last], "protocol", spelling, target_id, found < state.known_ids.len, made.qualified, "compiler")
+        state.written += 1usize
+    }
+    ret ok
 }
 
 // The collection half: every candidate node, sorted by span start (D280).
@@ -1230,6 +1318,7 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
     let roles = state.roles
     var at = state.next
     while at < state.picked && usize(tokens[starts[at]].start) < before {
+        try index_emit_compiler(state, out, root, path, source, tokens, usize(tokens[starts[at]].start))
         let node = tree.nodes[nodes[at]]
         if roles[at] == 0usize {
             // The import: spelled as the path, its found the module.
@@ -1347,7 +1436,7 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
         at += 1usize
     }
     state.next = at
-    ret ok
+    ret index_emit_compiler(state, out, root, path, source, tokens, before)
 }
 
 // A byte copy into a scratch buffer, returning the new length; a `.` is put between a
@@ -1364,6 +1453,11 @@ fn nptest_copy(dst: []u8, at: usize, src: str) -> usize {
 }
 
 fn reference_record(out: *Out, root: str, path: str, source: str, first: lex.Token, last: lex.Token, role: str, spelling: str, target_id: usize, has_target: bool, qualified: str) -> err {
+    ret reference_record_from(out, root, path, source, first, last, role, spelling, target_id, has_target, qualified, "source")
+}
+
+// A reference record with its `origin`, `source` or `compiler` (T009).
+fn reference_record_from(out: *Out, root: str, path: str, source: str, first: lex.Token, last: lex.Token, role: str, spelling: str, target_id: usize, has_target: bool, qualified: str, origin: str) -> err {
     try text(out, "{\"record\":\"reference\",\"source_span\":")
     try token_span(out, root, path, source, first, last)
     try text(out, ",\"role\":")
@@ -1374,7 +1468,9 @@ fn reference_record(out: *Out, root: str, path: str, source: str, first: lex.Tok
     if has_target { try decimal(out, target_id) } else { try text(out, "null") }
     try text(out, ",\"target_qualified_name\":")
     try quoted(out, qualified)
-    try text(out, ",\"origin\":\"source\"}")
+    try text(out, ",\"origin\":")
+    try quoted(out, origin)
+    try byte(out, 125u8)
     ret flush(out)
 }
 
@@ -5334,7 +5430,8 @@ fn type_sites(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, t
         taken.bytes = storage
         taken.capture = true
         let (root, relative) = source_identity_of(g, module.path)
-        let (index_exit, index_error) = index_json_into(a, &taken, root, relative, module.text, module.name, module_at, c.resolver.symbols[0usize..c.resolver.count], c.resolver.count, "")
+        var no_compiler: []CompilerRef = zero
+        let (index_exit, index_error) = index_json_into(a, &taken, root, relative, module.text, module.name, module_at, c.resolver.symbols[0usize..c.resolver.count], c.resolver.count, "", no_compiler)
         if index_error != ok { ret (sites, index_error) }
         let records = taken.bytes[0usize..taken.count]
         var line_start = 0usize

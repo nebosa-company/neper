@@ -3705,6 +3705,32 @@ fn fmt_check_command(a: *mem.Arena, args: []str) -> err {
     ret ok
 }
 
+// What the checker settled in the operand (T009): each protocol and iterator call, as
+// a compiler-origin reference. The check is partial, so a body that does not check
+// leaves only its own calls out, and the index stands whatever the check says.
+fn index_compiler_references(a: *mem.Arena, loaded: *graph.Graph, resolver: *resolve.Resolver, report: *Sink) -> ([]tool.CompilerRef, err) {
+    var none: []tool.CompilerRef = zero
+    var checker: check.Checker = zero
+    let init_error = init_cli_checker(a, &checker, loaded, report)
+    if init_error != ok { ret (none, init_error) }
+    checker.arena = a
+    let (explains, explains_error) = mem.alloc[check.Explain](a, 524288usize)
+    if explains_error != ok { ret (none, explains_error) }
+    checker.explains = explains
+    let (failed, failed_error) = mem.alloc[bool](a, checker.functions.len)
+    if failed_error != ok { ret (none, failed_error) }
+    // An allocation is not cleared: nothing has failed yet.
+    var clearing = 0usize
+    while clearing < failed.len {
+        failed[clearing] = false
+        clearing += 1usize
+    }
+    let partial_error = check.run_partial(&checker, resolver, loaded, failed)
+    if partial_error == mem.Exhausted { ret (none, partial_error) }
+    let (compiler, compiler_error) = tool.compiler_references(a, &checker, loaded, 0usize)
+    ret (compiler, compiler_error)
+}
+
 fn index_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     var absolute_path = ""
@@ -3759,9 +3785,11 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
         identity_root = project_root_name
         identity = project_relative
     }
+    let (compiler, compiler_error) = index_compiler_references(a, &loaded, &resolver, &report)
+    if compiler_error != ok { ret compiler_error }
     // The index writes its own header: the held one is dropped.
     report.pending_header = ""
-    let (index_exit, index_error) = tool.index_json(a, identity_root, identity, loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count, absolute_path)
+    let (index_exit, index_error) = tool.index_json(a, identity_root, identity, loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count, absolute_path, compiler)
     if index_error != ok { ret index_error }
     if index_exit != 0usize { os.exit(i32(index_exit)) }
     ret ok

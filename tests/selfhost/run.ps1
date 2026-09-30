@@ -5733,6 +5733,11 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-Fil
 $indexComptimeActual = Join-Path $testBuild 'conformance-tools-index-comptime.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index_comptime.e')`" `"$repo`" x64 windows --json > `"$indexComptimeActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexComptimeActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index_comptime.expected.jsonl')).Hash) { throw "index --json over comptime parameters differs from the conformance corpus" }
+# (D1715) The calls the compiler makes -- a template's `T.eq` per instance, a `for`'s
+# `next` -- are compiler-origin `protocol` references.
+$indexProtocolActual = Join-Path $testBuild 'conformance-tools-index-protocol.jsonl'
+cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index_protocol.e')`" `"$repo`" x64 windows --json > `"$indexProtocolActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexProtocolActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index_protocol.expected.jsonl')).Hash) { throw "index --json compiler-origin references differ from the conformance corpus" }
 # A resource closer is a semantic reference (D560, H17), though its contextual
 # `resource(close)` spelling is neither an expression nor an ordinary type use.
 $indexResource = & $compiler index-file (Join-Path $conformanceRoot 'tools/index_resource.e') $repo 'x64' 'windows' --json
