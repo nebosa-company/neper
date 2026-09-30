@@ -2249,6 +2249,7 @@
    "milestone": "M3",
    "schedule": "scheduled",
    "direct_dependencies": [
+    "e.atomic",
     "e.gpu.vulkan",
     "e.math",
     "e.mem",

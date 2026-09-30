@@ -29,9 +29,9 @@
 // A kernel's `shared var`s live in one block per launch, handed to every step,
 // filled with 0xCD before each workgroup (D781).
 //
-// Not here yet: the subgroup builtins, `Atomic` slices, a barrier in a helper a
-// kernel calls (only the kernel's own body is cut); `.Vulkan` and `.Cuda` answer
-// `Unsupported`, as a backend the build did not embed does.
+// Not here yet: the subgroup builtins and a barrier in a helper a kernel calls
+// (only the kernel's own body is cut); `.Cuda` and a build without Vulkan answer
+// `Unsupported`.
 //
 // The fault buffer (contract section 1.3, D785): a check failing in a kernel's CPU
 // build calls `fault`, which writes the queue's one record if none is written yet
@@ -46,6 +46,7 @@
 use e.math
 use e.mem
 use e.os
+use e.atomic
 use e.gpu.vulkan
 
 type Backend = enum u8 { Cpu, Vulkan, Cuda }

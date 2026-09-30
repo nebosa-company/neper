@@ -2782,6 +2782,20 @@ case "$gpu_vulkan_types_output" in
     'gpu types cpu only'|'gpu types vulkan ok on '[1-9]' devices'|'gpu types vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the Vulkan types runtime failed: $gpu_vulkan_types_output" >&2; exit 1 ;;
 esac
+# (D1615) Workgroup storage and barriers, both memory-barrier scopes, every 32-bit
+# integer atomic operation, pinned and run on every floor device; 64-bit atomics are
+# pinned only until capability discovery can gate their runtime test.
+sync_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/sync.e" "$repo" spv none "$test_build/sync.spv")
+[ "$sync_spirv_written" = 'spir-v written' ]
+cmp "$test_build/sync.spv" "$repo/tests/conformance/spirv/sync.spv"
+gpu_vulkan_sync_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_sync/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-sync-selfhost")
+[ "$gpu_vulkan_sync_written" = 'executable written' ]
+chmod +x "$test_build/gpu-vulkan-sync-selfhost"
+gpu_vulkan_sync_output=$("$test_build/gpu-vulkan-sync-selfhost")
+case "$gpu_vulkan_sync_output" in
+    'gpu sync cpu only'|'gpu sync vulkan ok on '[1-9]' devices'|'gpu sync vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the Vulkan synchronization runtime failed: $gpu_vulkan_sync_output" >&2; exit 1 ;;
+esac
 gpu_direct=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_direct_call/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_direct" in
     *'main.e:9:5: error[E-GPU-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;

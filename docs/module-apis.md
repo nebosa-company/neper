@@ -7297,6 +7297,19 @@ fn attention_row(args: *AttentionArgs, row: usize)
 fn attention_step(ctx: *void, frame: *u8, workgroup: *u8)
 fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], value: Buf[f32], out: Buf[f32], n: usize, d: usize, tile: usize, scale: f32) -> (usize, err)
 fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err
+fn barrier()
+fn memory_barrier(scope: Scope)
+fn atomic_load[T: type](p: *Atomic[T], order: atomic.Ordering, scope: Scope) -> T
+fn atomic_store[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope)
+fn atomic_xchg[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
+fn atomic_cas[T: type](p: *Atomic[T], expected: T, desired: T, success: atomic.Ordering, failure: atomic.Ordering, scope: Scope) -> (bool, T)
+fn atomic_add[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
+fn atomic_sub[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
+fn atomic_and[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
+fn atomic_or[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
+fn atomic_xor[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
+fn atomic_min[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
+fn atomic_max[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
 ```
 
 Presentation (spec section 10, D791) is images over kernels: an `Image` is a `Buf[u32]`
@@ -7328,10 +7341,10 @@ D1610's argument block, makes the kernel's pipeline once per device, dispatches 
 waits. A kernel the SPIR-V emitter cannot write yet has no module there, and its Vulkan
 launch answers `Unsupported`; the CPU device still runs it.
 
-The device-only intrinsics are exactly `gid`, `lid`, `wgid`, `barrier`,
+The landed device-only intrinsics are `gid`, `lid`, `wgid`, `barrier`,
+`memory_barrier` and the scoped atomic family above. The remaining planned intrinsics are
 `subgroup_size`, `subgroup_lane`, `subgroup_ballot`, `subgroup_any`, `subgroup_all`,
-`subgroup_broadcast`, `subgroup_add`, `subgroup_min`, `subgroup_max`, and the scoped
-atomic family specified by spec §10.
+`subgroup_broadcast`, `subgroup_add`, `subgroup_min` and `subgroup_max`.
 
 ### `e.gpu.vulkan`
 

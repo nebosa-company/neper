@@ -93,6 +93,10 @@ type Opcode = enum u8 {
     // data functions (`target`, `target2`), and it loads both and the symbol table and
     // enters `neper_trap`; a trapping site calls it with its line and column.
     TrapStub = 58,
+    // A workgroup control and memory barrier in a device build. The CPU build cuts
+    // the kernel at the same source call instead.
+    Barrier = 59,
+    MemoryBarrier = 60,
 }
 
 // `operation` is the rank below, `lane` the lane shape (0, 1, 2, 3 for an integer of

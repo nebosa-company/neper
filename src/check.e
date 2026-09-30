@@ -4950,6 +4950,20 @@ fn intrinsic_signature(module: str, name: str) -> str {
     if same(module, "e.io") && same(name, "printf") { ret "fn printf[FMT: str](args: ...) -> err" }
     if same(module, "e.gpu") && same(name, "launch") { ret "fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err" }
     if same(module, "e.gpu") && same(name, "barrier") { ret "fn barrier()" }
+    if same(module, "e.gpu") && same(name, "memory_barrier") { ret "fn memory_barrier(scope: Scope)" }
+    if same(module, "e.gpu") {
+        if same(name, "atomic_load") { ret "fn atomic_load[T: type](p: *Atomic[T], order: atomic.Ordering, scope: Scope) -> T" }
+        if same(name, "atomic_store") { ret "fn atomic_store[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope)" }
+        if same(name, "atomic_xchg") { ret "fn atomic_xchg[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T" }
+        if same(name, "atomic_cas") { ret "fn atomic_cas[T: type](p: *Atomic[T], expected: T, desired: T, success: atomic.Ordering, failure: atomic.Ordering, scope: Scope) -> (bool, T)" }
+        if same(name, "atomic_add") { ret "fn atomic_add[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T" }
+        if same(name, "atomic_sub") { ret "fn atomic_sub[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T" }
+        if same(name, "atomic_and") { ret "fn atomic_and[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T" }
+        if same(name, "atomic_or") { ret "fn atomic_or[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T" }
+        if same(name, "atomic_xor") { ret "fn atomic_xor[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T" }
+        if same(name, "atomic_min") { ret "fn atomic_min[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T" }
+        if same(name, "atomic_max") { ret "fn atomic_max[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T" }
+    }
     if same(module, "e.meta") && same(name, "signed") { ret "fn signed[T: type]() -> bool" }
     if same(module, "e.str") {
         if same(name, "format") { ret "fn format[FMT: str](a: *mem.Arena, args: ...) -> (str, err)" }
@@ -8993,6 +9007,7 @@ type CallInfo = struct {
     launcher_kernel: usize,
     // `gpu.barrier()` (D780): a cut in the kernel's CPU build, lowered in place.
     gpu_barrier: bool,
+    gpu_memory_barrier: bool,
     protocol_pending: bool,
     protocol_builtin: ProtocolBuiltin,
     protocol_type: Type,
@@ -9004,6 +9019,10 @@ type CallInfo = struct {
     atomic_element: Type,
     atomic_success: Ordering,
     atomic_failure: Ordering,
+    gpu_atomic: bool,
+    atomic_shared: bool,
+    atomic_scope: GpuScope,
+    atomic_scope_module: usize,
     // `meta.get` / `meta.set`: the field is settled here and what reaches lowering is
     // one load or store at its offset.
     meta_writes: bool,
@@ -9045,7 +9064,10 @@ type AtomicInfo = struct {
     matched: bool,
     op: AtomicOp,
     function: Function,
+    gpu: bool,
 }
+
+type GpuScope = enum u8 { Workgroup, Device, Dynamic }
 
 // The compile-time questions that answer with a constant and emit nothing. Three of
 // them are `e.meta`'s reflection; the last two are `e.mem`'s layout, which is the same
@@ -9368,6 +9390,26 @@ fn barrier_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     function.name = "barrier"
     function.module_index = target_module
     function.parameter_count = 0usize
+    function.return_count = 0usize
+    function.intrinsic = true
+    info.function = function
+    ret (info, ok)
+}
+
+fn memory_barrier_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, receiver: syntax.Node) -> (CastInfo, err) {
+    var info: CastInfo = zero
+    if receiver.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, receiver)
+    if !found_member || !same(g.modules[target_module].name, "e.gpu") || !same(member, "memory_barrier") { ret (info, ok) }
+    info.matched = true
+    if !c.body_is_kernel && !c.body_device_only {
+        record_failure(c, module_index, node, .GpuLaunch, "", "`gpu.memory_barrier()` is written outside device code")
+        ret (info, InvalidType)
+    }
+    var function: Function = zero
+    function.name = "memory_barrier"
+    function.module_index = target_module
+    function.parameter_count = 1usize
     function.return_count = 0usize
     function.intrinsic = true
     info.function = function
@@ -10699,6 +10741,21 @@ fn atomic_op_for_name(name: str) -> AtomicOp {
     ret .None
 }
 
+fn gpu_atomic_op_for_name(name: str) -> AtomicOp {
+    if same(name, "atomic_load") { ret .Load }
+    if same(name, "atomic_store") { ret .Store }
+    if same(name, "atomic_xchg") { ret .Xchg }
+    if same(name, "atomic_cas") { ret .Cas }
+    if same(name, "atomic_add") { ret .Add }
+    if same(name, "atomic_sub") { ret .Sub }
+    if same(name, "atomic_and") { ret .And }
+    if same(name, "atomic_or") { ret .Or }
+    if same(name, "atomic_xor") { ret .Xor }
+    if same(name, "atomic_min") { ret .Min }
+    if same(name, "atomic_max") { ret .Max }
+    ret .None
+}
+
 fn atomic_op_name(op: AtomicOp) -> str {
     if op == .Init { ret "init" }
     if op == .Load { ret "load" }
@@ -10830,15 +10887,31 @@ fn atomic_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     var info: AtomicInfo = zero
     if receiver.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, receiver)
-    if !found_member || !same(g.modules[target_module].name, "e.atomic") { ret (info, ok) }
-    let op = atomic_op_for_name(member)
+    if !found_member { ret (info, ok) }
+    var op: AtomicOp = .None
+    var atomic_module = target_module
+    if same(g.modules[target_module].name, "e.atomic") { op = atomic_op_for_name(member) }
+    if same(g.modules[target_module].name, "e.gpu") {
+        op = gpu_atomic_op_for_name(member)
+        if op != .None {
+            if !c.body_is_kernel && !c.body_device_only {
+                record_failure(c, module_index, receiver, .GpuLaunch, member, "is a device atomic and is legal only in a kernel or device-only helper")
+                ret (info, InvalidType)
+            }
+            let (found_atomic, has_atomic) = graph.find_module(g, "e.atomic")
+            if !has_atomic { ret (info, UnknownCallable) }
+            atomic_module = found_atomic
+            info.gpu = true
+        }
+    }
     if op == .None { ret (info, ok) }
     info.matched = true
     info.op = op
     var function: Function = zero
     function.name = member
-    function.module_index = target_module
+    function.module_index = atomic_module
     function.parameter_count = atomic_arity(op)
+    if info.gpu { function.parameter_count += 1usize }
     function.return_count = atomic_return_count(op)
     function.intrinsic = true
     info.function = function
@@ -10852,6 +10925,18 @@ fn check_atomic_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
     let op = info.atomic_op
     let atomic_module = info.function.module_index
     let ordering_type = make_type(.Named, "Ordering", atomic_module)
+    if info.gpu_atomic && position + 1usize == info.function.parameter_count {
+        let scope_type = make_type(.Named, "Scope", info.atomic_scope_module)
+        let (given, given_error) = check_expr(c, g, tree, module_index, child_index, scope_type)
+        if given_error != ok { ret given_error }
+        let node = tree.nodes[child_index]
+        if node.kind == .MemberExpr {
+            let (member, has_member) = switch_member_name(c, g.modules[module_index].text, node)
+            if has_member && same(member, "Workgroup") { info.atomic_scope = .Workgroup }
+            if has_member && same(member, "Device") { info.atomic_scope = .Device }
+        }
+        ret ok
+    }
     // `fence(o)` has no pointer and no `T`; `init(v)` takes the value the atomic will
     // hold, which is what fixes `T` for it.
     if op == .Fence {
@@ -10878,6 +10963,7 @@ fn check_atomic_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
             ret InvalidType
         }
         info.atomic_element = element
+        info.atomic_shared = pointer.in_shared
         ret ok
     }
     // `cas(p, expected, desired, success, failure)`: two values then two orderings.
@@ -11334,6 +11420,15 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                             info.gpu_barrier = true
                             has_function = true
                         } else {
+                        let (memory_barrier, memory_barrier_error) = memory_barrier_info(c, g, tree, module_index, node, receiver)
+                        if memory_barrier_error != ok { ret (info, memory_barrier_error) }
+                        if memory_barrier.matched {
+                            info.function = memory_barrier.function
+                            info.gpu_memory_barrier = true
+                            info.atomic_scope = .Dynamic
+                            info.atomic_scope_module = memory_barrier.function.module_index
+                            has_function = true
+                        } else {
                         let (address, address_error) = address_info(c, g, tree, module_index, receiver)
                         if address_error != ok { ret (info, address_error) }
                         if address.matched {
@@ -11350,6 +11445,13 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                             info.atomic_element = invalid_type()
                             info.atomic_success = .Dynamic
                             info.atomic_failure = .Dynamic
+                            info.gpu_atomic = atomics.gpu
+                            info.atomic_scope = .Dynamic
+                            if atomics.gpu {
+                                let (gpu_module, has_gpu) = graph.find_module(g, "e.gpu")
+                                if !has_gpu { ret (info, UnknownCallable) }
+                                info.atomic_scope_module = gpu_module
+                            }
                             has_function = true
                         } else {
                         let (protocol_type, protocol_name, is_protocol) = protocol_receiver(c, g, tree, module_index, receiver)
@@ -11407,6 +11509,7 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                                 info.function.return_count = signature.return_count
                             }
                             has_function = true
+                        }
                         }
                         }
                         }
@@ -11677,6 +11780,20 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                     if info.atomic_op != .None {
                         let atomic_error = check_atomic_argument(c, g, tree, module_index, child_index, child_position - 1usize, &info)
                         if atomic_error != ok { ret (info, atomic_error) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
+                    if info.gpu_memory_barrier {
+                        let scope_type = make_type(.Named, "Scope", info.atomic_scope_module)
+                        let (scope, scope_error) = check_expr(c, g, tree, module_index, child_index, scope_type)
+                        if scope_error != ok { ret (info, scope_error) }
+                        let scope_node = tree.nodes[child_index]
+                        if scope_node.kind == .MemberExpr {
+                            let (member, has_member) = switch_member_name(c, text, scope_node)
+                            if has_member && same(member, "Workgroup") { info.atomic_scope = .Workgroup }
+                            if has_member && same(member, "Device") { info.atomic_scope = .Device }
+                        }
                         child_position += 1usize
                         at += 1usize
                         continue

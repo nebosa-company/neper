@@ -31724,3 +31724,29 @@ a monomorphised generic helper. `spirv-val --target-env vulkan1.2` accepts it. T
 `gpu_vulkan_types` fixture executes the same kernel through CPU and Vulkan and compares
 all 64 u64 results; it passes on the RTX 3080, Iris Xe and WSL's Vulkan device. The raw
 saxpy, loop and float fixtures remain byte-pinned and pass on all three devices.
+
+## D1615 — Vulkan workgroup storage is one word block per module
+
+**Problem.** Device lowering skipped `shared var` declarations and rejected
+`gpu.barrier()`, while the SPIR-V emitter had no workgroup address kind or atomic
+instructions. Kernels using the synchronization surface therefore retained a working
+CPU build but embedded no Vulkan module.
+
+**Decision.** Device lowering reserves one shared `Stack` marker whose size is the
+kernel's already-computed shared total. The emitter turns the largest kernel marker
+into one module-scope u32 array in the `Workgroup` storage class and carries byte
+offsets through the same
+field, index, packed narrow load/store and aggregate-copy paths as private word
+arrays. `gpu.barrier()` emits the specified Workgroup control barrier;
+`gpu.memory_barrier` emits AcquireRelease memory barriers at Workgroup or Device
+scope. The scoped `gpu.atomic_*` family reuses section 8's checked atomic call shape
+and NIR operations, adding only the scope carried by device lowering. SPIR-V emits
+all integer load/store, exchange, compare-exchange, arithmetic, bitwise and min/max
+atomic instructions for i32/u32 and i64/u64; the CPU build ignores the narrower GPU
+scope and uses its system atomics.
+
+**Evidence.** `tests/conformance/spirv/sync.spv` pins workgroup storage, control and
+memory barriers, every 32-bit atomic form and a 64-bit device atomic. The
+`gpu_vulkan_sync` fixture compares shared reduction and atomic results between CPU and
+Vulkan and passes on the RTX 3080, Iris Xe and WSL's Vulkan device. Subgroup operations remain the
+unfinished part of C090's synchronization row.
