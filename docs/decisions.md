@@ -31535,3 +31535,19 @@ The slot a thread's detail lives in was `thread % 64`. Windows thread identifier
 **Decision.** `error_slot_of` probes from `(thread >> 2) % 64`. It takes the slot the thread already holds, else the first free one, else the landing slot. Recording, the cleanup rule (D360), reading and the lock timeout all go through it. Linux thread identifiers are consecutive, so `os.linux.e` keeps its plain modulus. The table stays a `ponytail:`, with thread-local storage as the replacement H07 names.
 
 **Evidence.** The same probe went from 9 failures in 150 runs to 0 in 200 under the same load.
+
+## D1718 — Every token kind and syntax node kind is pinned (T007, T008)
+
+**Problem.** Tooling v1 names 94 token kinds and 54 syntax node kinds (D73). T007's evidence said `tokens/every_kind` pins 93 of the 94, and T008 claimed the parse stream is lossless over all 54 nodes. Neither said which kinds no fixture reaches.
+
+Checking the goldens against the lexer's and the parser's `Kind` enums answered both:
+- The 94th token kind is `INVALID`. `every_kind` is a valid file and cannot hold one; `tokens/hostile` does, with its unterminated literals and invalid UTF-8.
+- Six node kinds were in no parse golden: `Attribute`, `UnionEnumType`, `UnionMember`, `GroupExpr`, `AggregateLiteral` and `LiteralItem`.
+
+**Decision.**
+- The token corpus stands as it is: its two fixtures pin all 94 kinds between them.
+- `parse/node_kinds.e` adds the six missing node kinds in one small file that also checks: an `@test` attribute, a tagged union with a bare, a scalar and a struct member, a parenthesised operand, and two aggregate literals. Both suites run it in the parse loop, exit 0.
+
+**Evidence.**
+- The parse goldens now name all 54 node kinds, and the token goldens all 94, checked against `src/syntax.e` and `src/lex.e`.
+- `node_kinds.expected.jsonl` validates against the stream schema, and the file is in the formatter's canonical form.
