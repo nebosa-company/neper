@@ -5573,6 +5573,10 @@ cmp -s "$index_actual" "$conformance_root/tools/index.expected.jsonl" || { print
 # Comptime parameters are symbols, and `[N]T` names them (D1708, T009).
 $test_build/neper-self index-file "$conformance_root/tools/index_comptime.e" "$repo" x64 linux --json > "$test_build/conformance-tools-index-comptime.jsonl"
 cmp "$test_build/conformance-tools-index-comptime.jsonl" "$conformance_root/tools/index_comptime.expected.jsonl"
+# (D1715) The calls the compiler makes -- a template's `T.eq` per instance, a `for`'s
+# `next` -- are compiler-origin `protocol` references.
+$test_build/neper-self index-file "$conformance_root/tools/index_protocol.e" "$repo" x64 linux --json > "$test_build/conformance-tools-index-protocol.jsonl"
+cmp "$test_build/conformance-tools-index-protocol.jsonl" "$conformance_root/tools/index_protocol.expected.jsonl"
 # A resource closer is a semantic reference (D560, H17), though its contextual
 # `resource(close)` spelling is neither an expression nor an ordinary type use.
 $test_build/neper-self index-file "$conformance_root/tools/index_resource.e" "$repo" x64 linux --json | python3 -c "import json,sys; refs=[r for r in map(json.loads,sys.stdin) if r.get('record')=='reference' and r.get('role')=='protocol' and r.get('target_qualified_name')=='index_resource.close']; assert len(refs)==1 and refs[0]['spelling']=='close'"

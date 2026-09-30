@@ -14371,6 +14371,9 @@ fn protocol_iteration_element(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
         record_failure(c, module_index, statement, .IteratorSignature, canonical_iterator.name, next.name)
         ret (invalid_type(), InvalidType)
     }
+    // The generated `next` call is a dispatch like any protocol's (T009), at the
+    // subject that caused it.
+    record_explain_dispatch(c, module_index, tree.nodes[subject_index], "next", canonical_iterator, next_index, true, .None)
     ret (element, ok)
 }
 
