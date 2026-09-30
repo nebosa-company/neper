@@ -31,6 +31,7 @@ const KIND_NONE: u8 = 0u8
 const KIND_SCALAR: u8 = 1u8
 const KIND_PRIVATE: u8 = 2u8
 const KIND_BUILTIN: u8 = 3u8
+const KIND_SHARED: u8 = 4u8
 
 type Module = struct {
     bound: usize,
@@ -65,6 +66,8 @@ type Module = struct {
     t_psb_f32: usize,
     t_psb_address: usize,
     t_fn_u32: usize,
+    t_wg_u32: usize,
+    t_wg_u64: usize,
     // `GLSL.std.450`, declared only when an exact float sequence needs an extended
     // instruction (`Fma` or the seed `Sqrt`).
     glsl: usize,
@@ -73,6 +76,7 @@ type Module = struct {
     v_lid: usize,
     v_wgid: usize,
     v_pc: usize,
+    v_shared: usize,
     // Interned constants: (type id, low word, high word) -> id.
     constant_types: []usize,
     constant_low: []usize,
@@ -153,11 +157,14 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     }
     var kernels = 0usize
     var function_at = first
+    var shared_words = 0usize
     while function_at < builder.function_count {
         let function = builder.functions[function_at]
         let (index, found) = check.find_function(c, function.module_index, function.name)
         if found && c.functions[index].gpu {
             m.function_reachable[function_at] = true
+            let words = kernel_shared_words(builder, function)
+            if words > shared_words { shared_words = words }
             kernels += 1usize
         }
         function_at += 1usize
@@ -166,6 +173,7 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
         *message = "the program has no kernel to write as SPIR-V"
         ret (no_bytes, Unsupported)
     }
+    if shared_words != 0usize { declare_shared(&m, shared_words) }
     var has_calls = false
     function_at = first
     while function_at < builder.function_count {
@@ -438,8 +446,24 @@ const OP_BRANCH_CONDITIONAL: usize = 250usize
 const OP_RETURN: usize = 253usize
 const OP_RETURN_VALUE: usize = 254usize
 const OP_UNREACHABLE: usize = 255usize
+const OP_CONTROL_BARRIER: usize = 224usize
+const OP_MEMORY_BARRIER: usize = 225usize
+const OP_ATOMIC_LOAD: usize = 227usize
+const OP_ATOMIC_STORE: usize = 228usize
+const OP_ATOMIC_EXCHANGE: usize = 229usize
+const OP_ATOMIC_COMPARE_EXCHANGE: usize = 230usize
+const OP_ATOMIC_I_ADD: usize = 234usize
+const OP_ATOMIC_I_SUB: usize = 235usize
+const OP_ATOMIC_S_MIN: usize = 236usize
+const OP_ATOMIC_U_MIN: usize = 237usize
+const OP_ATOMIC_S_MAX: usize = 238usize
+const OP_ATOMIC_U_MAX: usize = 239usize
+const OP_ATOMIC_AND: usize = 240usize
+const OP_ATOMIC_OR: usize = 241usize
+const OP_ATOMIC_XOR: usize = 242usize
 
 const STORAGE_INPUT: usize = 1usize
+const STORAGE_WORKGROUP: usize = 4usize
 const STORAGE_FUNCTION: usize = 7usize
 const STORAGE_PUSH_CONSTANT: usize = 9usize
 const STORAGE_PHYSICAL: usize = 5349usize
@@ -665,6 +689,30 @@ fn word_array(m: *Module, words: usize) -> usize {
     ret pointer
 }
 
+fn kernel_shared_words(builder: *nir.Builder, function: nir.Function) -> usize {
+    var at = 0usize
+    while at < function.instruction_count {
+        let instruction = builder.instructions[function.first_instruction + at]
+        if instruction.opcode == .Stack && instruction.ty.in_shared && instruction.immediate != 0usize {
+            ret instruction.immediate * 2usize
+        }
+        at += 1usize
+    }
+    ret 0usize
+}
+
+// The module's shared block: a Workgroup array large enough for any entry point.
+fn declare_shared(m: *Module, words: usize) {
+    let length = constant(m, m.t_u32, words)
+    let array = fresh(m)
+    head(&m.types, OP_TYPE_ARRAY, 4usize)
+    put(&m.types, array)
+    put(&m.types, m.t_u32)
+    put(&m.types, length)
+    if m.t_wg_u32 == 0usize { m.t_wg_u32 = pointer_type(m, STORAGE_WORKGROUP, m.t_u32) }
+    m.v_shared = global_variable(m, pointer_type(m, STORAGE_WORKGROUP, array), STORAGE_WORKGROUP)
+}
+
 // ---- types of values ---------------------------------------------------------
 
 // The SPIR-V type a NIR type is held in, and whether it is signed; 0 when this row of
@@ -672,7 +720,13 @@ fn word_array(m: *Module, words: usize) -> usize {
 fn value_type(m: *Module, ty: check.Type) -> (usize, bool) {
     if ty.kind == .Bool { ret (m.t_bool, false) }
     if ty.kind == .Err { ret (m.t_u32, false) }
-    if ty.kind == .Pointer { ret (m.t_v2u32, false) }
+    // Device intrinsics consume these enum arguments while lowering; their literal
+    // values may remain in NIR but need no storage representation of their own.
+    if ty.kind == .Named && (same(ty.name, "Ordering") || same(ty.name, "Scope")) { ret (m.t_u32, false) }
+    if ty.kind == .Pointer {
+        if ty.in_shared { ret (m.t_u32, false) }
+        ret (m.t_v2u32, false)
+    }
     if ty.kind == .Float {
         if same(ty.name, "f32") { ret (m.t_f32, false) }
         ret (0usize, false)
@@ -789,7 +843,9 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     // The entry point, with every interface variable (SPIR-V 1.4 on lists them all).
     let (name, name_error) = qualified_name(a, g, kernel)
     if name_error != ok { ret name_error }
-    head(&m.entries, OP_ENTRY_POINT, 3usize + string_words(name) + 4usize)
+    var interfaces = 4usize
+    if m.v_shared != 0usize { interfaces += 1usize }
+    head(&m.entries, OP_ENTRY_POINT, 3usize + string_words(name) + interfaces)
     put(&m.entries, 5usize)
     put(&m.entries, entry)
     put_string(&m.entries, name)
@@ -797,6 +853,7 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     put(&m.entries, m.v_gid)
     put(&m.entries, m.v_lid)
     put(&m.entries, m.v_wgid)
+    if m.v_shared != 0usize { put(&m.entries, m.v_shared) }
     // `LocalSize` from `@gpu(X, Y, Z)`, packed as D778 keeps it.
     let size = usize(kernel.gpu_size)
     head(&m.modes, OP_EXECUTION_MODE, 6usize)
@@ -922,8 +979,16 @@ fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Build
                     word += 1usize
                 }
             } else {
-                let (ty, signed) = value_type(m, instruction.ty)
-                scalar(&values, instruction.result, parameters[first], ty, signed)
+                if instruction.ty.kind == .Pointer && instruction.ty.in_shared {
+                    if m.v_shared == 0usize { ret fail(m, "a shared pointer parameter has no workgroup block") }
+                    values.kind[instruction.result] = KIND_SHARED
+                    values.id[instruction.result] = m.v_shared
+                    values.offset[instruction.result] = 0usize
+                    values.dynamic[instruction.result] = parameters[first]
+                } else {
+                    let (ty, signed) = value_type(m, instruction.ty)
+                    scalar(&values, instruction.result, parameters[first], ty, signed)
+                }
             }
         }
         instruction_at += 1usize
@@ -1025,6 +1090,10 @@ fn declare_privates(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         var bytes = 0usize
         // A slot is counted in eight-byte words, and none means one scalar's.
         if instruction.opcode == .Stack {
+            if instruction.ty.in_shared && instruction.immediate == 0usize {
+                at += 1usize
+                continue
+            }
             bytes = instruction.immediate * 8usize
             if bytes == 0usize { bytes = 8usize }
         }
@@ -1034,6 +1103,15 @@ fn declare_privates(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
             bytes = words * 4usize
         }
         if bytes != 0usize && instruction.has_result {
+            if instruction.ty.in_shared {
+                if m.v_shared == 0usize { ret fail(m, "a shared stack has no workgroup block") }
+                values.kind[instruction.result] = KIND_SHARED
+                values.id[instruction.result] = m.v_shared
+                values.offset[instruction.result] = 0usize
+                values.dynamic[instruction.result] = 0usize
+                at += 1usize
+                continue
+            }
             let pointer = word_array(m, (bytes + 3usize) / 4usize)
             let variable = fresh(m)
             head(&m.code, OP_VARIABLE, 4usize)
@@ -1348,8 +1426,13 @@ fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: 
                 word += 1usize
             }
         } else {
-            if KIND_SCALAR != values.kind[argument] { ret fail(m, "a helper call has no scalar argument") }
-            arguments[flat_at] = values.id[argument]
+            if parameter.kind == .Pointer && parameter.in_shared {
+                if KIND_SHARED != values.kind[argument] { ret fail(m, "a helper call has no shared pointer argument") }
+                arguments[flat_at] = private_bytes(m, values, argument, 0usize)
+            } else {
+                if KIND_SCALAR != values.kind[argument] { ret fail(m, "a helper call has no scalar argument") }
+                arguments[flat_at] = values.id[argument]
+            }
             flat_at += 1usize
         }
         at += 1usize
@@ -1375,9 +1458,28 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         ret emit_parameter(m, c, kernel, instruction, values, block_address)
     }
     if opcode == .Stack { ret ok }
+    if opcode == .Barrier {
+        head(&m.code, OP_CONTROL_BARRIER, 4usize)
+        put(&m.code, constant(m, m.t_u32, 2usize))
+        put(&m.code, constant(m, m.t_u32, 2usize))
+        put(&m.code, constant(m, m.t_u32, 264usize))
+        ret ok
+    }
+    if opcode == .MemoryBarrier {
+        head(&m.code, OP_MEMORY_BARRIER, 3usize)
+        var scope = 2usize
+        var semantics = 328usize
+        if instruction.immediate == 1usize {
+            scope = 1usize
+            semantics = 72usize
+        }
+        put(&m.code, constant(m, m.t_u32, scope))
+        put(&m.code, constant(m, m.t_u32, semantics))
+        ret ok
+    }
     if opcode == .Zero && !instruction.has_result {
         let address = operand(builder, instruction, 0usize)
-        if KIND_PRIVATE != values.kind[address] { ret fail(m, "an aggregate zero has no private destination") }
+        if KIND_PRIVATE != values.kind[address] && KIND_SHARED != values.kind[address] { ret fail(m, "an aggregate zero has no private or shared destination") }
         var byte = 0usize
         while byte < instruction.immediate {
             store_word(m, private_word(m, values, address, byte), constant(m, m.t_u32, 0usize))
@@ -1400,8 +1502,13 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
     if opcode == .GlobalAddress { ret emit_global_address(m, builder, instruction, values) }
     if opcode == .FieldAddress { ret emit_field_address(m, builder, instruction, values) }
     if opcode == .IndexAddress { ret emit_index_address(m, builder, instruction, values) }
+    if opcode == .Slice { ret emit_slice(m, builder, instruction, values) }
     if opcode == .Load { ret emit_load(m, builder, instruction, values) }
     if opcode == .Store { ret emit_store(m, builder, instruction, values) }
+    if opcode == .AtomicLoad { ret emit_atomic_load(m, builder, instruction, values) }
+    if opcode == .AtomicStore { ret emit_atomic_store(m, builder, instruction, values) }
+    if opcode == .AtomicRmw { ret emit_atomic_rmw(m, builder, instruction, values) }
+    if opcode == .AtomicCas { ret emit_atomic_cas(m, builder, instruction, values) }
     if opcode == .Cast { ret emit_cast(m, builder, instruction, values) }
     if opcode == .Sqrt { ret emit_sqrt(m, builder, instruction, values) }
     if opcode == .Add || opcode == .AddWrap || opcode == .Subtract || opcode == .SubtractWrap || opcode == .Multiply || opcode == .MultiplyWrap || opcode == .Divide || opcode == .Remainder || opcode == .BitAnd || opcode == .BitOr || opcode == .BitXor || opcode == .ShiftLeft || opcode == .ShiftRight { ret emit_binary(m, builder, instruction, values) }
@@ -1454,6 +1561,12 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         put(&m.code, destination2)
         ret ok
     }
+    if opcode == .Phi { ret fail(m, "a phi operation is not yet written as SPIR-V") }
+    if opcode == .Bitcast { ret fail(m, "a bitcast operation is not yet written as SPIR-V") }
+    if opcode == .AtomicFence { ret fail(m, "an atomic fence is not yet written as SPIR-V") }
+    if opcode == .Switch { ret fail(m, "a switch is not yet written as SPIR-V") }
+    if opcode == .Trap || opcode == .Unreachable { ret fail(m, "a trap is not yet written as SPIR-V") }
+    if opcode == .FunctionAddress || opcode == .IndirectCall { ret fail(m, "an indirect call is not yet written as SPIR-V") }
     ret fail(m, "an operation in this kernel is not yet written as SPIR-V")
 }
 
@@ -1592,16 +1705,139 @@ fn device_store(m: *Module, address: usize, value: usize, ty: usize) {
     put(&m.code, type_bytes(m, ty))
 }
 
+fn atomic_semantics(ordering: usize, workgroup: bool) -> usize {
+    var order = 0usize
+    if ordering == 1usize { order = 2usize }
+    if ordering == 2usize { order = 4usize }
+    if ordering == 3usize { order = 8usize }
+    if ordering >= 4usize { order = 16usize }
+    if workgroup { ret order + 256usize }
+    ret order + 64usize
+}
+
+fn atomic_pointer(m: *Module, values: *Values, address: usize, ty: usize) -> (usize, err) {
+    if KIND_SCALAR == values.kind[address] { ret (convert(m, OP_BITCAST, device_pointer_type(m, ty), values.id[address]), ok) }
+    if KIND_SHARED != values.kind[address] { ret (0usize, fail(m, "an atomic operation has no device or shared address")) }
+    let word = private_word(m, values, address, 0usize)
+    if ty == m.t_u32 { ret (word, ok) }
+    if ty != 0usize && ty == m.t_u64 {
+        capability(m, 12usize)
+        if m.t_wg_u64 == 0usize { m.t_wg_u64 = pointer_type(m, STORAGE_WORKGROUP, m.t_u64) }
+        ret (convert(m, OP_BITCAST, m.t_wg_u64, word), ok)
+    }
+    ret (0usize, fail(m, "an atomic operation has an unsupported element type"))
+}
+
+fn emit_atomic_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let address = operand(builder, instruction, 0usize)
+    let (ty, signed) = value_type(m, instruction.ty)
+    if ty != m.t_u32 && (ty == 0usize || ty != m.t_u64) { ret fail(m, "an atomic load has an unsupported element type") }
+    if ty == m.t_u64 { capability(m, 12usize) }
+    let (pointer, pointer_error) = atomic_pointer(m, values, address, ty)
+    if pointer_error != ok { ret pointer_error }
+    let id = fresh(m)
+    head(&m.code, OP_ATOMIC_LOAD, 6usize)
+    put(&m.code, ty)
+    put(&m.code, id)
+    put(&m.code, pointer)
+    var scope = 2usize
+    if instruction.immediate / 8usize % 2usize == 1usize { scope = 1usize }
+    put(&m.code, constant(m, m.t_u32, scope))
+    put(&m.code, constant(m, m.t_u32, atomic_semantics(instruction.immediate % 8usize, KIND_SHARED == values.kind[address])))
+    scalar(values, instruction.result, id, ty, signed)
+    ret ok
+}
+
+fn emit_atomic_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let address = operand(builder, instruction, 0usize)
+    let value = operand(builder, instruction, 1usize)
+    let (ty, signed) = value_type(m, instruction.ty)
+    if KIND_SCALAR != values.kind[value] || (ty != m.t_u32 && (ty == 0usize || ty != m.t_u64)) { ret fail(m, "an atomic store has an unsupported value") }
+    if ty == m.t_u64 { capability(m, 12usize) }
+    let (pointer, pointer_error) = atomic_pointer(m, values, address, ty)
+    if pointer_error != ok { ret pointer_error }
+    head(&m.code, OP_ATOMIC_STORE, 5usize)
+    put(&m.code, pointer)
+    var scope = 2usize
+    if instruction.immediate / 8usize % 2usize == 1usize { scope = 1usize }
+    put(&m.code, constant(m, m.t_u32, scope))
+    put(&m.code, constant(m, m.t_u32, atomic_semantics(instruction.immediate % 8usize, KIND_SHARED == values.kind[address])))
+    put(&m.code, values.id[value])
+    ret ok
+}
+
+fn emit_atomic_rmw(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let address = operand(builder, instruction, 0usize)
+    let value = operand(builder, instruction, 1usize)
+    let (ty, signed) = value_type(m, instruction.ty)
+    if KIND_SCALAR != values.kind[value] || (ty != m.t_u32 && (ty == 0usize || ty != m.t_u64)) { ret fail(m, "an atomic operation has an unsupported value") }
+    if ty == m.t_u64 { capability(m, 12usize) }
+    let (pointer, pointer_error) = atomic_pointer(m, values, address, ty)
+    if pointer_error != ok { ret pointer_error }
+    let kind = instruction.immediate / 16usize
+    var opcode = OP_ATOMIC_EXCHANGE
+    if kind == 1usize { opcode = OP_ATOMIC_I_ADD }
+    if kind == 2usize { opcode = OP_ATOMIC_I_SUB }
+    if kind == 3usize { opcode = OP_ATOMIC_AND }
+    if kind == 4usize { opcode = OP_ATOMIC_OR }
+    if kind == 5usize { opcode = OP_ATOMIC_XOR }
+    if kind == 6usize {
+        opcode = OP_ATOMIC_U_MIN
+        if signed { opcode = OP_ATOMIC_S_MIN }
+    }
+    if kind == 7usize {
+        opcode = OP_ATOMIC_U_MAX
+        if signed { opcode = OP_ATOMIC_S_MAX }
+    }
+    let id = fresh(m)
+    head(&m.code, opcode, 7usize)
+    put(&m.code, ty)
+    put(&m.code, id)
+    put(&m.code, pointer)
+    var scope = 2usize
+    if instruction.immediate / 8usize % 2usize == 1usize { scope = 1usize }
+    put(&m.code, constant(m, m.t_u32, scope))
+    put(&m.code, constant(m, m.t_u32, atomic_semantics(instruction.immediate % 8usize, KIND_SHARED == values.kind[address])))
+    put(&m.code, values.id[value])
+    scalar(values, instruction.result, id, ty, signed)
+    ret ok
+}
+
+fn emit_atomic_cas(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let address = operand(builder, instruction, 0usize)
+    let expected = operand(builder, instruction, 1usize)
+    let desired = operand(builder, instruction, 2usize)
+    let (ty, signed) = value_type(m, instruction.ty)
+    if KIND_SCALAR != values.kind[expected] || KIND_SCALAR != values.kind[desired] || (ty != m.t_u32 && (ty == 0usize || ty != m.t_u64)) { ret fail(m, "an atomic compare-and-swap has an unsupported value") }
+    if ty == m.t_u64 { capability(m, 12usize) }
+    let (pointer, pointer_error) = atomic_pointer(m, values, address, ty)
+    if pointer_error != ok { ret pointer_error }
+    let id = fresh(m)
+    head(&m.code, OP_ATOMIC_COMPARE_EXCHANGE, 9usize)
+    put(&m.code, ty)
+    put(&m.code, id)
+    put(&m.code, pointer)
+    var scope = 2usize
+    if instruction.immediate / 64usize % 2usize == 1usize { scope = 1usize }
+    put(&m.code, constant(m, m.t_u32, scope))
+    put(&m.code, constant(m, m.t_u32, atomic_semantics(instruction.immediate / 8usize % 8usize, KIND_SHARED == values.kind[address])))
+    put(&m.code, constant(m, m.t_u32, atomic_semantics(instruction.immediate % 8usize, KIND_SHARED == values.kind[address])))
+    put(&m.code, values.id[desired])
+    put(&m.code, values.id[expected])
+    scalar(values, instruction.result, id, ty, signed)
+    ret ok
+}
+
 // A word of a private variable by a constant index.
 fn private_word_store(m: *Module, variable: usize, word: usize, value: usize) {
-    let pointer = access_word(m, variable, constant(m, m.t_u32, word))
+    let pointer = access_word(m, variable, constant(m, m.t_u32, word), m.t_fn_u32)
     store_word(m, pointer, value)
 }
 
-fn access_word(m: *Module, variable: usize, index: usize) -> usize {
+fn access_word(m: *Module, variable: usize, index: usize, pointer: usize) -> usize {
     let id = fresh(m)
     head(&m.code, OP_ACCESS_CHAIN, 5usize)
-    put(&m.code, m.t_fn_u32)
+    put(&m.code, pointer)
     put(&m.code, id)
     put(&m.code, variable)
     put(&m.code, index)
@@ -1634,7 +1870,9 @@ fn private_bytes(m: *Module, values: *Values, address: usize, extra: usize) -> u
 fn private_word(m: *Module, values: *Values, address: usize, extra: usize) -> usize {
     let bytes = private_bytes(m, values, address, extra)
     let index = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, bytes, constant(m, m.t_u32, 2usize))
-    ret access_word(m, values.id[address], index)
+    var pointer = m.t_fn_u32
+    if KIND_SHARED == values.kind[address] { pointer = m.t_wg_u32 }
+    ret access_word(m, values.id[address], index, pointer)
 }
 
 fn private_byte_load(m: *Module, values: *Values, address: usize, extra: usize) -> usize {
@@ -1658,7 +1896,7 @@ fn private_byte_store(m: *Module, values: *Values, address: usize, extra: usize,
 fn emit_copy(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let destination = operand(builder, instruction, 0usize)
     let source = operand(builder, instruction, 1usize)
-    if KIND_PRIVATE != values.kind[destination] || KIND_PRIVATE != values.kind[source] { ret fail(m, "an aggregate copy to or from device memory is not yet written as SPIR-V") }
+    if (KIND_PRIVATE != values.kind[destination] && KIND_SHARED != values.kind[destination]) || (KIND_PRIVATE != values.kind[source] && KIND_SHARED != values.kind[source]) { ret fail(m, "an aggregate copy has no private or shared address") }
     if values.dynamic[destination] == 0usize && values.dynamic[source] == 0usize && values.offset[destination] % 4usize == 0usize && values.offset[source] % 4usize == 0usize && instruction.immediate % 4usize == 0usize {
         var word = 0usize
         while word < instruction.immediate {
@@ -1693,7 +1931,7 @@ fn emit_global_address(m: *Module, builder: *nir.Builder, instruction: nir.Instr
 fn emit_field_address(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let base = operand(builder, instruction, 0usize)
     let result = instruction.result
-    if values.kind[base] == KIND_PRIVATE || KIND_BUILTIN == values.kind[base] {
+    if values.kind[base] == KIND_PRIVATE || KIND_BUILTIN == values.kind[base] || KIND_SHARED == values.kind[base] {
         values.kind[result] = values.kind[base]
         values.id[result] = values.id[base]
         values.offset[result] = values.offset[base] + instruction.immediate
@@ -1717,10 +1955,10 @@ fn emit_index_address(m: *Module, builder: *nir.Builder, instruction: nir.Instru
         let length = operand(builder, instruction, 2usize)
         guard(m, binary(m, OP_U_LESS_THAN, m.t_bool, values.id[index], values.id[length]))
     }
-    if KIND_PRIVATE == values.kind[base] {
+    if KIND_PRIVATE == values.kind[base] || KIND_SHARED == values.kind[base] {
         var dynamic = binary(m, OP_I_MUL, m.t_u32, values.id[index], constant(m, m.t_u32, instruction.immediate))
         if values.dynamic[base] != 0usize { dynamic = binary(m, OP_I_ADD, m.t_u32, values.dynamic[base], dynamic) }
-        values.kind[result] = KIND_PRIVATE
+        values.kind[result] = values.kind[base]
         values.id[result] = values.id[base]
         values.offset[result] = values.offset[base]
         values.dynamic[result] = dynamic
@@ -1731,6 +1969,36 @@ fn emit_index_address(m: *Module, builder: *nir.Builder, instruction: nir.Instru
     // The element's offset as 64 bits -- a 32-bit index times the size -- then added.
     let scaled = binary(m, OP_U_MUL_EXTENDED, m.t_pair, values.id[index], constant(m, m.t_u32, instruction.immediate))
     scalar(values, result, add_wide(m, values.id[base], extract(m, scaled, 0usize), extract(m, scaled, 1usize)), m.t_v2u32, false)
+    ret ok
+}
+
+fn emit_slice(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    if instruction.operand_count != 5usize || instruction.immediate == 0usize { ret fail(m, "a slice has an unexpected shape") }
+    let destination = operand(builder, instruction, 0usize)
+    let data = operand(builder, instruction, 1usize)
+    let length = operand(builder, instruction, 2usize)
+    let lower = operand(builder, instruction, 3usize)
+    let upper = operand(builder, instruction, 4usize)
+    if KIND_PRIVATE != values.kind[destination] || KIND_SCALAR != values.kind[length] || KIND_SCALAR != values.kind[lower] || KIND_SCALAR != values.kind[upper] { ret fail(m, "a slice has no header or bounds") }
+    if !instruction.nocheck {
+        guard(m, binary(m, OP_U_LESS_THAN_EQUAL, m.t_bool, values.id[lower], values.id[upper]))
+        guard(m, binary(m, OP_U_LESS_THAN_EQUAL, m.t_bool, values.id[upper], values.id[length]))
+    }
+    let count = binary(m, OP_I_SUB, m.t_u32, values.id[upper], values.id[lower])
+    let scaled = binary(m, OP_I_MUL, m.t_u32, values.id[lower], constant(m, m.t_u32, instruction.immediate))
+    if KIND_SHARED == values.kind[data] {
+        var offset = private_bytes(m, values, data, 0usize)
+        offset = binary(m, OP_I_ADD, m.t_u32, offset, scaled)
+        private_word_store(m, values.id[destination], values.offset[destination] / 4usize, offset)
+        private_word_store(m, values.id[destination], values.offset[destination] / 4usize + 1usize, constant(m, m.t_u32, 0usize))
+    } else {
+        if KIND_SCALAR != values.kind[data] { ret fail(m, "a slice has no device or shared base") }
+        let address = add_wide(m, values.id[data], scaled, constant(m, m.t_u32, 0usize))
+        private_word_store(m, values.id[destination], values.offset[destination] / 4usize, extract(m, address, 0usize))
+        private_word_store(m, values.id[destination], values.offset[destination] / 4usize + 1usize, extract(m, address, 1usize))
+    }
+    private_word_store(m, values.id[destination], values.offset[destination] / 4usize + 2usize, count)
+    private_word_store(m, values.id[destination], values.offset[destination] / 4usize + 3usize, constant(m, m.t_u32, 0usize))
     ret ok
 }
 
@@ -1760,6 +2028,14 @@ fn guard(m: *Module, holds: usize) {
 
 fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let address = operand(builder, instruction, 0usize)
+    if instruction.ty.kind == .Pointer && instruction.ty.in_shared {
+        if KIND_PRIVATE != values.kind[address] || m.v_shared == 0usize { ret fail(m, "a shared pointer is not loaded from a slice header") }
+        values.kind[instruction.result] = KIND_SHARED
+        values.id[instruction.result] = m.v_shared
+        values.offset[instruction.result] = 0usize
+        values.dynamic[instruction.result] = load_word(m, private_word(m, values, address, 0usize))
+        ret ok
+    }
     let (ty, signed) = value_type(m, instruction.ty)
     if ty == 0usize { ret fail(m, "a load of this type is not yet written as SPIR-V") }
     let result = instruction.result
@@ -1779,7 +2055,7 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         scalar(values, result, id, ty, signed)
         ret ok
     }
-    if KIND_PRIVATE == values.kind[address] {
+    if KIND_PRIVATE == values.kind[address] || KIND_SHARED == values.kind[address] {
         if ty == m.t_bool { ret fail(m, "a private bool is not yet written as SPIR-V") }
         let low = load_word(m, private_word(m, values, address, 0usize))
         var value = low
@@ -1809,7 +2085,7 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     let value = operand(builder, instruction, 1usize)
     if KIND_SCALAR != values.kind[value] { ret fail(m, "a store of an aggregate is not yet written as SPIR-V") }
     let ty = values.ty[value]
-    if KIND_PRIVATE == values.kind[address] {
+    if KIND_PRIVATE == values.kind[address] || KIND_SHARED == values.kind[address] {
         if ty == m.t_bool { ret fail(m, "a private bool is not yet written as SPIR-V") }
         if ty == m.t_u8 || ty == m.t_u16 {
             let pointer = private_word(m, values, address, 0usize)

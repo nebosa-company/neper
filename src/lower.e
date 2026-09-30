@@ -839,6 +839,7 @@ fn call_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) ->
     }
     // Also synthesized: `T` came from the pointer while checking, so the value
     // arguments are `T` and the trailing ones are the ordering enum.
+    if call.gpu_memory_barrier { ret (check.make_type(.Named, "Scope", call.atomic_scope_module), ok) }
     if call.atomic_op != .None { ret (atomic_parameter_type(c, call, index), ok) }
     // Synthesized like the rest: `get` takes the value by pointer, `set` that and the
     // field's own type.
@@ -2056,6 +2057,7 @@ fn emit_mem_view(c: *check.Checker, call: check.CallInfo, arguments: []usize, ar
 // `T` and the trailing ones are the ordering enum.
 fn atomic_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) -> check.Type {
     let ordering = check.make_type(.Named, "Ordering", call.function.module_index)
+    if call.gpu_atomic && index + 1usize == call.function.parameter_count { ret check.make_type(.Named, "Scope", call.atomic_scope_module) }
     if call.atomic_op == .Fence { ret ordering }
     if call.atomic_op == .Init { ret call.atomic_element }
     if index == 0usize {
@@ -2064,6 +2066,7 @@ fn atomic_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) 
         var pointer = check.make_type(.Pointer, "", call.function.module_index)
         pointer.element = stored
         pointer.has_element = true
+        pointer.in_shared = call.atomic_shared
         ret pointer
     }
     var value_positions = 1usize
@@ -2084,6 +2087,21 @@ fn atomic_rmw_kind(op: check.AtomicOp) -> nir.AtomicRmwKind {
     ret .Xchg
 }
 
+fn atomic_scope_rank(call: check.CallInfo) -> usize {
+    if !call.gpu_atomic && !call.gpu_memory_barrier { ret 0usize }
+    if call.atomic_scope == .Workgroup { ret 0usize }
+    ret 1usize
+}
+
+fn emit_gpu_memory_barrier(call: check.CallInfo, builder: *nir.Builder, token: lex.Token) -> err {
+    if builder.spirv {
+        let (instruction, ignored, emit_error) = nir.emit(builder, .MemoryBarrier, zero, false, atomic_scope_rank(call), token)
+        ret emit_error
+    }
+    let (instruction, ignored, emit_error) = nir.emit(builder, .AtomicFence, zero, false, 3usize, token)
+    ret emit_error
+}
+
 // Section 8's operations, each one instruction. An ordering nobody could read at
 // compile time lowers as `SeqCst`: stronger is always safe, and on this target every
 // ordering but that one costs nothing anyway.
@@ -2092,6 +2110,8 @@ fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argu
     results.count = call.function.return_count
     let element = call.atomic_element
     let ordering = check.atomic_ordering_rank(call.atomic_success)
+    var scope = 0usize
+    if builder.spirv { scope = atomic_scope_rank(call) }
     if call.atomic_op == .Fence {
         let (instruction, ignored, emit_error) = nir.emit(builder, .AtomicFence, element, false, ordering, token)
         ret emit_error
@@ -2119,14 +2139,14 @@ fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argu
     }
     if argument_count < 2usize { ret check.ArgumentCount }
     if call.atomic_op == .Load {
-        let (instruction, value, emit_error) = nir.emit(builder, .AtomicLoad, element, true, ordering, token)
+        let (instruction, value, emit_error) = nir.emit(builder, .AtomicLoad, element, true, ordering + scope * 8usize, token)
         if emit_error != ok { ret emit_error }
         try nir.add_operand(builder, instruction, arguments[0usize])
         results.values[0usize] = value
         ret ok
     }
     if call.atomic_op == .Store {
-        let (instruction, ignored, emit_error) = nir.emit(builder, .AtomicStore, element, false, ordering, token)
+        let (instruction, ignored, emit_error) = nir.emit(builder, .AtomicStore, element, false, ordering + scope * 8usize, token)
         if emit_error != ok { ret emit_error }
         try nir.add_operand(builder, instruction, arguments[0usize])
         try nir.add_operand(builder, instruction, arguments[1usize])
@@ -2135,7 +2155,7 @@ fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argu
     if call.atomic_op == .Cas {
         if argument_count < 3usize { ret check.ArgumentCount }
         let failure = check.atomic_ordering_rank(call.atomic_failure)
-        let (instruction, previous, emit_error) = nir.emit(builder, .AtomicCas, element, true, ordering * 8usize + failure, token)
+        let (instruction, previous, emit_error) = nir.emit(builder, .AtomicCas, element, true, ordering * 8usize + failure + scope * 64usize, token)
         if emit_error != ok { ret emit_error }
         try nir.add_operand(builder, instruction, arguments[0usize])
         try nir.add_operand(builder, instruction, arguments[1usize])
@@ -2151,7 +2171,9 @@ fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argu
         results.values[1usize] = previous
         ret ok
     }
-    let (instruction, previous, emit_error) = nir.emit(builder, .AtomicRmw, element, true, nir.atomic_rmw_immediate(atomic_rmw_kind(call.atomic_op), ordering), token)
+    var immediate = nir.atomic_rmw_immediate(atomic_rmw_kind(call.atomic_op), ordering)
+    if builder.spirv { immediate = nir.atomic_rmw_kind_rank(atomic_rmw_kind(call.atomic_op)) * 16usize + scope * 8usize + ordering }
+    let (instruction, previous, emit_error) = nir.emit(builder, .AtomicRmw, element, true, immediate, token)
     if emit_error != ok { ret emit_error }
     try nir.add_operand(builder, instruction, arguments[0usize])
     try nir.add_operand(builder, instruction, arguments[1usize])
@@ -3076,6 +3098,11 @@ fn store_c_result(returned_type: check.Type, crossing: Crossing, call_result: us
 }
 
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if call.gpu_memory_barrier {
+        results.call = call
+        results.count = 0usize
+        ret emit_gpu_memory_barrier(call, builder, token)
+    }
     if call.gpu_barrier {
         results.call = call
         results.count = 0usize
@@ -7110,7 +7137,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         parameter_at += 1usize
     }
     var shared_total = 0usize
-    if frame_kernel {
+    if frame_kernel || builder.spirv {
         // The workgroup's `shared var`s (D781): their offsets in the shared block and
         // their addresses, made here in the entry block so a use after a barrier is
         // dominated; the statement itself binds the name when it is reached.
@@ -7118,16 +7145,20 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         if shared_error != ok { ret shared_error }
         shared_total = shared_bytes
         // (D1589) The kernel's shared total, for its Interface entry (spec section 10).
-        let (kernel_index, kernel_named) = check.find_function(c, function.module_index, function.name)
-        if kernel_named { check.set_kernel_fact(c, kernel_index, 65535usize, shared_bytes * 65536usize) }
+        if frame_kernel {
+            let (kernel_index, kernel_named) = check.find_function(c, function.module_index, function.name)
+            if kernel_named { check.set_kernel_fact(c, kernel_index, 65535usize, shared_bytes * 65536usize) }
+        }
         // Every parameter is in the entry block, which dominates the resumes; the
         // dispatch comes after them.
-        let (dispatch_branch, dispatch_branch_error) = emit_branch(builder, c.tokens[usize(node.token_start)])
-        if dispatch_branch_error != ok { ret dispatch_branch_error }
-        kernel_dispatch_branch = dispatch_branch
-        kernel_body_block = builder.block_count
-        let (body_index, body_block_error) = nir.begin_block(builder)
-        if body_block_error != ok || body_index != kernel_body_block { ret nir.InvalidControlFlow }
+        if frame_kernel {
+            let (dispatch_branch, dispatch_branch_error) = emit_branch(builder, c.tokens[usize(node.token_start)])
+            if dispatch_branch_error != ok { ret dispatch_branch_error }
+            kernel_dispatch_branch = dispatch_branch
+            kernel_body_block = builder.block_count
+            let (body_index, body_block_error) = nir.begin_block(builder)
+            if body_block_error != ok || body_index != kernel_body_block { ret nir.InvalidControlFlow }
+        }
     }
     var found_body = false
     var no_loop: LoopControl = zero
@@ -7271,6 +7302,16 @@ fn hex_string(a: *mem.Arena, bytes: []const u8) -> (str, err) {
 // declaration the compile error the checker made it. Answers the block's size.
 fn lower_shared_vars(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function_node: syntax.Node, shared_base: usize, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> (usize, err) {
     var total = 0usize
+    var base = shared_base
+    var base_instruction = 0usize
+    if builder.spirv {
+        var shared_type = check.make_type(.Integer, "u32", module_index)
+        shared_type.in_shared = true
+        let (instruction, value, stack_error) = nir.emit(builder, .Stack, shared_type, true, 0usize, c.tokens[usize(function_node.token_start)])
+        if stack_error != ok { ret (0usize, stack_error) }
+        base_instruction = instruction
+        base = value
+    }
     let function_end = usize(function_node.first_child) + usize(function_node.child_count)
     var function_at = usize(function_node.first_child)
     while function_at < function_end {
@@ -7298,13 +7339,15 @@ fn lower_shared_vars(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
                             total = offset + info.size
                             let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, declared, true, offset, c.tokens[usize(statement.token_start)])
                             if address_error != ok { ret (0usize, address_error) }
-                            let operand_error = nir.add_operand(builder, address_instruction, shared_base)
+                            let operand_error = nir.add_operand(builder, address_instruction, base)
                             if operand_error != ok { ret (0usize, operand_error) }
                             // Bound under the statement's first token as a marker; the
                             // statement renames it when reached.
                             let (marker, marker_error) = shared_marker_name(c, usize(statement.token_start))
                             if marker_error != ok { ret (0usize, marker_error) }
-                            let binding_error = add_binding(bindings, binding_count, Binding { name: marker, ty: declared, value: address, address: true })
+                            var workgroup = declared
+                            workgroup.in_shared = true
+                            let binding_error = add_binding(bindings, binding_count, Binding { name: marker, ty: workgroup, value: address, address: true })
                             if binding_error != ok { ret (0usize, binding_error) }
                         }
                     }
@@ -7313,6 +7356,11 @@ fn lower_shared_vars(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
             }
         }
         function_at += 1usize
+    }
+    if builder.spirv {
+        let (bytes, bytes_error) = layout.align_up(total, 8usize)
+        if bytes_error != ok { ret (0usize, bytes_error) }
+        builder.instructions[base_instruction].immediate = bytes / 8usize
     }
     ret (total, ok)
 }
@@ -7349,7 +7397,7 @@ fn shared_marker_name(c: *check.Checker, statement_index: usize) -> (str, err) {
 
 // The statement, when reached: the marker binding takes the declared name.
 fn lower_shared_var_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
-    if !builder.frame_mode { ret check.Unsupported }
+    if !builder.frame_mode && !builder.spirv { ret check.Unsupported }
     let (name, name_error) = check.shared_var_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
     let (marker, marker_error) = shared_marker_name(c, usize(node.token_start))
@@ -7458,6 +7506,10 @@ fn emit_kernel_bounds(builder: *nir.Builder, module_index: usize, index: usize, 
 // `gpu.barrier()`: the cut. The frame's `pc` becomes this barrier's number, the
 // step returns, and the code after the barrier begins a block the dispatch resumes.
 fn emit_kernel_barrier(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
+    if builder.spirv {
+        let (instruction, ignored, emit_error) = nir.emit(builder, .Barrier, zero, false, 0usize, token)
+        ret emit_error
+    }
     if !builder.frame_mode { ret check.Unsupported }
     if builder.kernel_barriers + 1usize >= builder.kernel_resume.len { ret check.Capacity }
     builder.kernel_barriers += 1usize

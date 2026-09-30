@@ -404,6 +404,8 @@ fn opcode_id(opcode: nir.Opcode) -> usize {
     if opcode == .VectorBinary { ret 56usize }
     if opcode == .Data { ret 57usize }
     if opcode == .TrapStub { ret 58usize }
+    if opcode == .Barrier { ret 59usize }
+    if opcode == .MemoryBarrier { ret 60usize }
     ret 0usize
 }
 

@@ -3137,6 +3137,18 @@ $gpuVulkanTypesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanTypesWritten -ne 'executable written') { throw 'gpu_vulkan_types emission failed' }
 $gpuVulkanTypesOutput = & $gpuVulkanTypesPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanTypesOutput -notmatch '^gpu types (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan types runtime failed: $gpuVulkanTypesOutput" }
+# (D1615) Workgroup storage and barriers, both memory-barrier scopes, every 32-bit
+# integer atomic operation, pinned and run on every floor device; 64-bit atomics are
+# pinned only until capability discovery can gate their runtime test.
+$syncSpirv = Join-Path $testBuild 'sync.spv'
+$syncSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\sync.e') $repo 'spv' 'none' $syncSpirv
+if ($LASTEXITCODE -ne 0 -or $syncSpirvWritten -ne 'spir-v written') { throw 'sync SPIR-V emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $syncSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\sync.spv')).Hash) { throw 'the sync SPIR-V module differs from the conformance corpus' }
+$gpuVulkanSyncPath = Join-Path $testBuild 'gpu-vulkan-sync-selfhost.exe'
+$gpuVulkanSyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_sync\src\main.e') $repo 'x64' 'windows' $gpuVulkanSyncPath
+if ($LASTEXITCODE -ne 0 -or $gpuVulkanSyncWritten -ne 'executable written') { throw 'gpu_vulkan_sync emission failed' }
+$gpuVulkanSyncOutput = & $gpuVulkanSyncPath
+if ($LASTEXITCODE -ne 0 -or $gpuVulkanSyncOutput -notmatch '^gpu sync (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan synchronization runtime failed: $gpuVulkanSyncOutput" }
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-GPU-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
