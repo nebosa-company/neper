@@ -7190,8 +7190,8 @@ type Surface = struct { kind: SurfaceKind, handle: *void, context: *void }
 type Target = struct { state: *void }
 type Frame = struct { image: Image, serial: u64 }
 type Scope = enum u8 { Workgroup, Device }
-type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool }
-type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32 }
+type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool, device: vulkan.Buffer }
+type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
 type QueueState = struct { device: *DeviceState, index: u32, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquired: bool, closed: bool }
 var gid: Id = zero
@@ -7280,7 +7280,14 @@ fn write_decimal(out: []u8, at: usize, v: usize) -> usize
 fn write_text(out: []u8, at: usize, text: str) -> usize
 fn write_id(out: []u8, at0: usize, group: usize, local: usize) -> usize
 fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local: usize, other_at: usize)
-fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(ctx: *void, frame: *u8, workgroup: *u8), ctx: *void) -> err
+fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(ctx: *void, frame: *u8, workgroup: *u8), ctx: *void, module: str, entry: str, layout: str) -> err
+fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, ctx: *void, module: str, entry: str, layout: str) -> err
+fn device_pipeline(device: *DeviceState, module: str, entry: str) -> (vulkan.Pipeline, err)
+fn hex_bytes(a: *mem.Arena, digits: str) -> ([]u8, err)
+fn hex_digit(digit: u8) -> usize
+fn vulkan_info(physical: vulkan.Physical, index: u32) -> DeviceInfo
+fn open_vulkan(a: *mem.Arena, index: u32) -> (*Device, err)
+fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err)
 fn device_slice[T: type](state: *QueueState, buf: Buf[T]) -> ([]T, err)
 fn mark_done(frame: *u8)
 fn bitonic_step(keys: []u32, i: u32, j: u32, k: u32)
@@ -7311,10 +7318,56 @@ that invocation; the next `sync` or `download` answers `Fault` once and `last_fa
 answers the record behind the last `Fault` the queue reported (D785). These additions are planned for M3 CPU/Vulkan, with CUDA in M4; they do not
 claim implementation or an optimized production CPU fallback.
 
+A `.Vulkan` device (D1611) is `e.gpu.vulkan` underneath: `devices` lists every physical
+device with `supported` meaning section 10's floor, `open` answers `NoDevice` without a
+loader or a device at that index and `Unsupported` below the floor, and a buffer is
+mapped host memory, so `upload`, `write` and `download` are copies. `gpu.launch` hands
+`launch_run` the kernel's SPIR-V, as hex digits from its module's `K$spirv` companion,
+its entry point and a character per parameter; a launch on a Vulkan device lays out
+D1610's argument block, makes the kernel's pipeline once per device, dispatches and
+waits. A kernel the SPIR-V emitter cannot write yet has no module there, and its Vulkan
+launch answers `Unsupported`; the CPU device still runs it.
+
 The device-only intrinsics are exactly `gid`, `lid`, `wgid`, `barrier`,
 `subgroup_size`, `subgroup_lane`, `subgroup_ballot`, `subgroup_any`, `subgroup_all`,
 `subgroup_broadcast`, `subgroup_add`, `subgroup_min`, `subgroup_max`, and the scoped
 atomic family specified by spec §10.
+
+### `e.gpu.vulkan`
+
+```neper
+error NoLoader
+error NoDevice
+error Unsupported
+error OutOfMemory
+error Failed
+
+type Physical = struct { handle: usize, name: str, device_type: u32, vendor: u32, device: u32, api_version: u32, memory_bytes: u64, caps: usize, floor: bool, compute_family: u32, uuid: [16]u8 }
+type Context = struct { physical: usize, device: usize, queue: usize, family: u32, memory_type: u32 }
+type Buffer = struct { handle: usize, memory: usize, address: u64, bytes: []u8 }
+type Pipeline = struct { module: usize, layout: usize, pipeline: usize }
+
+fn load(a: *mem.Arena) -> err
+fn devices(a: *mem.Arena, limit: usize) -> ([]Physical, err)
+fn describe(a: *mem.Arena, handle: usize) -> (Physical, err)
+fn open(a: *mem.Arena, physical: Physical) -> (Context, err)
+fn close(context: Context)
+fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err)
+fn free(context: Context, made: Buffer)
+fn pipeline(a: *mem.Arena, context: Context, code: []const u8, entry: str) -> (Pipeline, err)
+fn destroy(context: Context, made: Pipeline)
+fn dispatch(a: *mem.Arena, context: Context, made: Pipeline, block: u64, x: u32, y: u32, z: u32) -> err
+```
+
+The Vulkan compute runtime `e.gpu` stands on (D1610, D1611): the loader opened at run time
+through `os.dlopen` and every entry point through `os.dlsym`, so a program that never opens
+a `.Vulkan` device needs none installed, and none is linked. Vulkan's structures cross as
+byte records at their C offsets for x64. A buffer is host-visible, host-coherent memory,
+mapped for its life, with its device address; a pipeline has one eight-byte push constant,
+the argument block's address; `dispatch` records, submits and waits for the queue to go
+idle. Its helpers (`record`, `put32`, `put64`, `get32`, `get64`, `put_pointer`,
+`library_name`, `load_dispatch`, `record_and_submit`) and the `Api` table are the
+module's own.
 
 ### `e.gpu.tensor`
 

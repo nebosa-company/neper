@@ -846,6 +846,12 @@ fn dependency_reference_name(name: str) -> (str, bool) {
         let shared_tail = name[name.len - shared_suffix.len..name.len]
         if same(shared_tail, shared_suffix) { ret (name[0usize..name.len - shared_suffix.len], true) }
     }
+    // The kernel's SPIR-V (D1611), a companion as its sizes are.
+    let spirv_suffix = "$spirv"
+    if name.len > spirv_suffix.len {
+        let spirv_tail = name[name.len - spirv_suffix.len..name.len]
+        if same(spirv_tail, spirv_suffix) { ret (name[0usize..name.len - spirv_suffix.len], true) }
+    }
     ret (name, true)
 }
 

@@ -46,6 +46,7 @@
 use e.math
 use e.mem
 use e.os
+use e.gpu.vulkan
 
 type Backend = enum u8 { Cpu, Vulkan, Cuda }
 type DeviceKind = enum u8 { Unknown, Cpu, Integrated, Discrete, Virtual, Other }
@@ -90,9 +91,13 @@ const MAX_AXIS: usize = 4294967295usize
 
 // One buffer slot: the storage's bytes, the element count and size, and the
 // generation a handle has to carry.
-type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool }
+// A Vulkan device's buffer is mapped host memory (D1611): `bytes` is the mapping, so a
+// write, an upload and a download are the CPU's copies, and `device` is what frees it.
+type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool, device: vulkan.Buffer }
 
-type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32 }
+// A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
+// kernel module and entry it has launched (D1611).
+type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
 
 type QueueState = struct { device: *DeviceState, index: u32, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
@@ -141,7 +146,39 @@ fn cpu_info(a: *mem.Arena) -> (DeviceInfo, err) {
     ret (record, ok)
 }
 
+// A Vulkan device as `devices` and `info` report it (D1611): its name, kind, memory and
+// whether section 10's floor holds on it. Its key is the one D83 defers to C093.
+fn vulkan_info(physical: vulkan.Physical, index: u32) -> DeviceInfo {
+    var record: DeviceInfo = zero
+    record.key.backend = .Vulkan
+    record.key_valid = false
+    record.index = index
+    record.name = physical.name
+    record.kind = .Other
+    if physical.device_type == 1u32 { record.kind = .Integrated }
+    if physical.device_type == 2u32 { record.kind = .Discrete }
+    if physical.device_type == 3u32 { record.kind = .Virtual }
+    if physical.device_type == 4u32 { record.kind = .Cpu }
+    record.memory_bytes = physical.memory_bytes
+    record.memory_known = true
+    record.supported = physical.floor
+    ret record
+}
+
 fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo, err) {
+    if backend == .Vulkan {
+        let (found, found_error) = vulkan.devices(a, limit)
+        if found_error == vulkan.NoLoader || found_error == vulkan.NoDevice { ret (zero, NoDevice) }
+        if found_error != ok { ret (zero, Lost) }
+        let (records, records_error) = mem.alloc[DeviceInfo](a, found.len)
+        if records_error != ok { ret (zero, records_error) }
+        var at = 0usize
+        while at < found.len {
+            records[at] = vulkan_info(found[at], u32(at))
+            at += 1usize
+        }
+        ret (records, ok)
+    }
     if backend != .Cpu { ret (zero, Unsupported) }
     if limit < 1usize { ret (zero, TooLarge) }
     let (records, records_error) = mem.alloc[DeviceInfo](a, 1usize)
@@ -168,8 +205,41 @@ fn state_of(device: *Device) -> (*DeviceState, err) {
 }
 
 fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
+    if backend == .Vulkan {
+        let (device, device_error) = open_vulkan(a, index)
+        ret (device, device_error)
+    }
     if backend != .Cpu { ret (zero, Unsupported) }
     if index != 0u32 { ret (zero, NoDevice) }
+    let (device, device_error) = open_state(a, .Cpu)
+    ret (device, device_error)
+}
+
+// The `index`th Vulkan device (D1611): `NoDevice` without a loader or with fewer devices,
+// `Unsupported` below section 10's floor.
+fn open_vulkan(a: *mem.Arena, index: u32) -> (*Device, err) {
+    let (found, found_error) = vulkan.devices(a, MAX_DEVICES)
+    if found_error == vulkan.NoLoader || found_error == vulkan.NoDevice { ret (zero, NoDevice) }
+    if found_error != ok { ret (zero, Lost) }
+    if usize(index) >= found.len { ret (zero, NoDevice) }
+    let physical = found[usize(index)]
+    if !physical.floor { ret (zero, Unsupported) }
+    let (context, context_error) = vulkan.open(a, physical)
+    if context_error == vulkan.Unsupported { ret (zero, Unsupported) }
+    if context_error != ok { ret (zero, Lost) }
+    let (device, device_error) = open_state(a, .Vulkan)
+    if device_error != ok {
+        vulkan.close(context)
+        ret (zero, device_error)
+    }
+    let (state, state_error) = state_of(device)
+    if state_error != ok { ret (zero, state_error) }
+    state.context = context
+    state.physical = physical
+    ret (device, ok)
+}
+
+fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     if open_count >= MAX_DEVICES { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[DeviceState](a, 1usize)
     if states_error != ok { ret (zero, states_error) }
@@ -178,7 +248,7 @@ fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
     var empty: []u8 = zero
     var i = 0usize
     while i < MAX_BUFFERS {
-        buffers[i] = Buffer { bytes: empty, count: 0usize, elem: 0usize, generation: 1u32, live: false }
+        buffers[i] = Buffer { bytes: empty, count: 0usize, elem: 0usize, generation: 1u32, live: false, device: zero }
         i += 1usize
     }
     let state = &states[0usize]
@@ -187,6 +257,12 @@ fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
     state.closed = false
     state.buffers = buffers
     state.queues = 0u32
+    state.backend = backend
+    var no_context: vulkan.Context = zero
+    var no_physical: vulkan.Physical = zero
+    state.context = no_context
+    state.physical = no_physical
+    state.pipeline_count = 0usize
     next_owner += 1u32
     open_devices[open_count] = state
     open_count += 1usize
@@ -203,8 +279,9 @@ fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err) {
 }
 
 fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
-    let (_, state_error) = state_of(device)
+    let (state, state_error) = state_of(device)
     if state_error != ok { ret (zero, state_error) }
+    if state.backend == .Vulkan { ret (vulkan_info(state.physical, 0u32), ok) }
     let (record, record_error) = cpu_info(a)
     ret (record, record_error)
 }
@@ -216,10 +293,19 @@ fn close(device: *Device) -> err {
     var i = 0usize
     while i < state.buffers.len {
         if state.buffers[i].live {
+            if state.backend == .Vulkan { vulkan.free(state.context, state.buffers[i].device) }
             state.buffers[i].live = false
             state.buffers[i].generation += 1u32
         }
         i += 1usize
+    }
+    if state.backend == .Vulkan {
+        var made = 0usize
+        while made < state.pipeline_count {
+            vulkan.destroy(state.context, state.pipelines[made])
+            made += 1usize
+        }
+        vulkan.close(state.context)
     }
     ret ok
 }
@@ -275,13 +361,20 @@ fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err) {
     while slot < state.device.buffers.len && state.device.buffers[slot].live { slot += 1usize }
     if slot >= state.device.buffers.len { ret (zero, TooLarge) }
     let a = state.device.arena
+    let generation = state.device.buffers[slot].generation
+    // A Vulkan buffer's bytes are its mapping (D1611).
+    if state.device.backend == .Vulkan {
+        let (made, made_error) = vulkan.buffer(a, state.device.context, n * elem)
+        if made_error != ok { ret (zero, OutOfMemory) }
+        state.device.buffers[slot] = Buffer { bytes: made.bytes, count: n, elem: elem, generation: generation, live: true, device: made }
+        ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
+    }
     let (storage, storage_error) = mem.alloc[T](a, n)
     if storage_error != ok { ret (zero, storage_error) }
     // The storage is the arena's top: its bytes are the last `n * elem` allocated.
     var bytes: []u8 = zero
     if n > 0usize { bytes = mem.view(a, a.off - n * elem, n * elem) }
-    let generation = state.device.buffers[slot].generation
-    state.device.buffers[slot] = Buffer { bytes: bytes, count: n, elem: elem, generation: generation, live: true }
+    state.device.buffers[slot] = Buffer { bytes: bytes, count: n, elem: elem, generation: generation, live: true, device: zero }
     ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
 }
 
@@ -302,6 +395,7 @@ fn upload[T: type](q: *Queue, src: []const T) -> (Buf[T], err) {
     let write_error = write[T](q, buf, 0usize, src)
     if write_error != ok {
         let (state, _) = queue_state(q)
+        if state.device.backend == .Vulkan { vulkan.free(state.device.context, state.device.buffers[usize(buf.slot)].device) }
         state.device.buffers[usize(buf.slot)].live = false
         state.device.buffers[usize(buf.slot)].generation += 1u32
         ret (zero, write_error)
@@ -443,6 +537,7 @@ fn release[T: type](q: *Queue, buf: Buf[T]) -> err {
     let (slot, slot_error) = slot_of(state, buf.owner, buf.slot, buf.generation)
     if slot_error != ok { ret slot_error }
     var empty: []u8 = zero
+    if state.device.backend == .Vulkan { vulkan.free(state.device.context, state.device.buffers[slot].device) }
     state.device.buffers[slot].live = false
     state.device.buffers[slot].generation += 1u32
     state.device.buffers[slot].bytes = empty
@@ -625,8 +720,116 @@ fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usi
     let (index, slot_error) = slot_of(state, owner, slot, generation)
     if slot_error != ok { ret (0usize, 0usize, slot_error) }
     let buffer = state.device.buffers[index]
+    // A Vulkan buffer crosses as its device address (D1611).
+    if state.device.backend == .Vulkan { ret (usize(buffer.device.address), buffer.count, ok) }
     if buffer.count == 0usize { ret (0usize, 0usize, ok) }
     ret (mem.address_of(&buffer.bytes[0usize]), buffer.count, ok)
+}
+
+// A launch on a Vulkan device (D1611): the launcher's block -- sixteen bytes a parameter,
+// a scalar's bytes or a slice's device address and length -- laid out again as D1610's
+// argument block in a buffer of its own, the kernel's pipeline made once per device, and
+// the grid dispatched and waited for. A kernel the emitter could not write has no module
+// and is `Unsupported` here; the CPU still runs it.
+fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, ctx: *void, module: str, entry: str, layout: str) -> err {
+    if module.len == 0usize { ret Unsupported }
+    let (gx, gx_error) = groups_along(grid.x, x)
+    if gx_error != ok { ret gx_error }
+    let (gy, gy_error) = groups_along(grid.y, y)
+    if gy_error != ok { ret gy_error }
+    let (gz, gz_error) = groups_along(grid.z, z)
+    if gz_error != ok { ret gz_error }
+    if gx > 65535usize || gy > 65535usize || gz > 65535usize { ret TooLarge }
+    if gx == 0usize || gy == 0usize || gz == 0usize { ret ok }
+    let device = state.device
+    let a = device.arena
+    var over: mem.Arena = zero
+    over.base = mem.cast[*u8](ctx)
+    over.cap = 16usize * layout.len
+    over.off = 16usize * layout.len
+    let source = mem.view(&over, 0usize, 16usize * layout.len)
+    let (block, block_error) = vulkan.buffer(a, device.context, 16usize * layout.len + 16usize)
+    if block_error != ok { ret OutOfMemory }
+    var offset = 0usize
+    var at = 0usize
+    while at < layout.len {
+        if layout[at] != 115u8 && (layout[at] < 49u8 || layout[at] > 56u8) {
+            vulkan.free(device.context, block)
+            ret Unsupported
+        }
+        let code = usize(layout[at]) - 48usize
+        if layout[at] == 115u8 {
+            offset = (offset + 7usize) / 8usize * 8usize
+            copy_bytes(block.bytes[offset..offset + 8usize], source[16usize * at..16usize * at + 8usize])
+            copy_bytes(block.bytes[offset + 8usize..offset + 12usize], source[16usize * at + 8usize..16usize * at + 12usize])
+            offset += 16usize
+        } else {
+            offset = (offset + code - 1usize) / code * code
+            copy_bytes(block.bytes[offset..offset + code], source[16usize * at..16usize * at + code])
+            offset += code
+        }
+        at += 1usize
+    }
+    let (made, made_error) = device_pipeline(device, module, entry)
+    if made_error != ok {
+        vulkan.free(device.context, block)
+        ret made_error
+    }
+    let dispatch_error = vulkan.dispatch(a, device.context, made, block.address, u32(gx), u32(gy), u32(gz))
+    vulkan.free(device.context, block)
+    if dispatch_error != ok { ret Lost }
+    state.serial += 1u64
+    ret ok
+}
+
+// The pipeline for a kernel's module and entry on this device, made the first time.
+fn device_pipeline(device: *DeviceState, module: str, entry: str) -> (vulkan.Pipeline, err) {
+    let key = mem.address_of(&module[0usize])
+    var at = 0usize
+    while at < device.pipeline_count {
+        if device.pipeline_modules[at] == key && device.pipeline_entries[at].len == entry.len {
+            var same = true
+            var k = 0usize
+            while k < entry.len {
+                if device.pipeline_entries[at][k] != entry[k] { same = false }
+                k += 1usize
+            }
+            if same { ret (device.pipelines[at], ok) }
+        }
+        at += 1usize
+    }
+    if device.pipeline_count >= 16usize { ret (zero, TooLarge) }
+    let (code, code_error) = hex_bytes(device.arena, module)
+    if code_error != ok { ret (zero, code_error) }
+    let (made, made_error) = vulkan.pipeline(device.arena, device.context, code, entry)
+    if made_error != ok { ret (made, Unsupported) }
+    device.pipeline_modules[device.pipeline_count] = key
+    device.pipeline_entries[device.pipeline_count] = entry
+    device.pipelines[device.pipeline_count] = made
+    device.pipeline_count += 1usize
+    ret (made, ok)
+}
+
+// A kernel's module back from its hex digits (D1611).
+fn hex_bytes(a: *mem.Arena, digits: str) -> ([]u8, err) {
+    if digits.len % 2usize != 0usize { ret (zero, Unsupported) }
+    let (bytes, bytes_error) = mem.alloc[u8](a, digits.len / 2usize)
+    if bytes_error != ok { ret (zero, bytes_error) }
+    var at = 0usize
+    while at < bytes.len {
+        let high = hex_digit(digits[2usize * at])
+        let low = hex_digit(digits[2usize * at + 1usize])
+        if high > 15usize || low > 15usize { ret (zero, Unsupported) }
+        bytes[at] = u8(high * 16usize + low)
+        at += 1usize
+    }
+    ret (bytes, ok)
+}
+
+fn hex_digit(digit: u8) -> usize {
+    if digit >= 48u8 && digit <= 57u8 { ret usize(digit) - 48usize }
+    if digit >= 97u8 && digit <= 102u8 { ret usize(digit) - 87usize }
+    ret 16usize
 }
 
 fn set_ids(group: usize, local: usize) {
@@ -731,9 +934,14 @@ fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local
 // size `(x, y, z)`, one frame of `frame_bytes` per invocation of a workgroup, and
 // `step(ctx, frame)` run for every invocation in local-id order, round after round,
 // until all have returned -- each round ending at one barrier for all of them.
-fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(ctx: *void, frame: *u8, workgroup: *u8), ctx: *void) -> err {
+// `module`, `entry` and `layout` are the kernel's for a Vulkan device (D1611): its
+// SPIR-V as hex digits, its entry point, and a character per parameter -- `s` a slice,
+// `1` to `8` a scalar's size in bytes, `?` what the argument block cannot carry yet. The
+// CPU ignores them.
+fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(ctx: *void, frame: *u8, workgroup: *u8), ctx: *void, module: str, entry: str, layout: str) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    if state.device.backend == .Vulkan { ret launch_device(state, grid, x, y, z, ctx, module, entry, layout) }
     if launch_active { ret Unsupported }
     if x == 0usize || y == 0usize || z == 0usize || x * y * z > 1024usize { ret Unsupported }
     let (gx, gx_error) = groups_along(grid.x, x)
@@ -937,7 +1145,7 @@ fn sort_bitonic(device: *Device, q: *Queue, buffer: Buf[u32], n: usize) -> err {
         while j > 0usize {
             args.j = u32(j)
             args.k = u32(k)
-            try launch_run(q, grid1(p), 256usize, 1usize, 1usize, 16usize, 0usize, sort_step, mem.cast[*void](&args))
+            try launch_run(q, grid1(p), 256usize, 1usize, 1usize, 16usize, 0usize, sort_step, mem.cast[*void](&args), "", "", "")
             j = j >> 1u32
         }
         k = k << 1u32
@@ -1047,7 +1255,7 @@ fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], v
     let (out_view, out_error) = device_slice[f32](state, out)
     if out_error != ok { ret (0usize, out_error) }
     var args = AttentionArgs { query: query_view, key: key_view, value: value_view, out: out_view, n: u32(n), d: u32(d), tile: u32(tile), scale: scale }
-    let run_error = launch_run(q, grid1(n), 256usize, 1usize, 1usize, 16usize, 0usize, attention_step, mem.cast[*void](&args))
+    let run_error = launch_run(q, grid1(n), 256usize, 1usize, 1usize, 16usize, 0usize, attention_step, mem.cast[*void](&args), "", "", "")
     if run_error != ok { ret (0usize, run_error) }
     ret (tiles, ok)
 }

@@ -97,18 +97,23 @@ type Flow = struct {
     // Merge blocks no path reaches, written at the end with `OpUnreachable`.
     dead: []usize,
     dead_count: usize,
+    // A branch names its target absolutely, as a builder block (the x64 back end
+    // subtracts this too).
+    first_block: usize,
 }
 
 error Unsupported
 
 // `message` says why when it fails, for the command's diagnostic.
-fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, message: *str) -> ([]u8, err) {
+// Every kernel among the builder's functions from `first` on (D1611: a host build hands
+// over the one it has just lowered for the device).
+fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, first: usize, message: *str) -> ([]u8, err) {
     var no_bytes: []u8 = zero
     var m: Module = zero
     let init_error = init_module(a, &m)
     if init_error != ok { ret (no_bytes, init_error) }
     var kernels = 0usize
-    var function_at = 0usize
+    var function_at = first
     while function_at < builder.function_count {
         let function = builder.functions[function_at]
         let (index, found) = check.find_function(c, function.module_index, function.name)
@@ -658,7 +663,11 @@ fn declare_privates(m: *Module, builder: *nir.Builder, function: nir.Function, v
     while at < function.instruction_count {
         let instruction = builder.instructions[function.first_instruction + at]
         var bytes = 0usize
-        if instruction.opcode == .Stack { bytes = instruction.immediate }
+        // A slot is counted in eight-byte words, and none means one scalar's.
+        if instruction.opcode == .Stack {
+            bytes = instruction.immediate * 8usize
+            if bytes == 0usize { bytes = 8usize }
+        }
         if instruction.opcode == .Parameter && aggregate(instruction.ty) {
             if instruction.ty.kind != .Slice { ret fail(m, "a kernel parameter of this type is not yet written as SPIR-V") }
             bytes = 16usize
@@ -720,6 +729,7 @@ fn plan_flow(a: *mem.Arena, m: *Module, builder: *nir.Builder, function: nir.Fun
     flow.merges = merges
     flow.dead = dead
     flow.dead_count = 0usize
+    flow.first_block = function.first_block
     // Postorder by an explicit walk; a successor still on the walk is a loop.
     var post_count = 0usize
     var depth = 1usize
@@ -831,10 +841,10 @@ fn last_instruction(builder: *nir.Builder, function: nir.Function, block: usize)
 // The `index`th successor of a block, from its terminator.
 fn successor(builder: *nir.Builder, function: nir.Function, block: usize, index: usize) -> (usize, bool) {
     let terminator = last_instruction(builder, function, block)
-    if terminator.opcode == .Branch && index == 0usize { ret (terminator.target, true) }
+    if terminator.opcode == .Branch && index == 0usize { ret (terminator.target - function.first_block, true) }
     if terminator.opcode == .BranchIf {
-        if index == 0usize { ret (terminator.target, true) }
-        if index == 1usize { ret (terminator.target2, true) }
+        if index == 0usize { ret (terminator.target - function.first_block, true) }
+        if index == 1usize { ret (terminator.target2 - function.first_block, true) }
     }
     ret (0usize, false)
 }
@@ -892,7 +902,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
     }
     if opcode == .Branch {
         head(&m.code, OP_BRANCH, 2usize)
-        put(&m.code, flow.labels[instruction.target])
+        put(&m.code, flow.labels[instruction.target - flow.first_block])
         ret ok
     }
     if opcode == .BranchIf {
@@ -902,8 +912,8 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         put(&m.code, 0usize)
         head(&m.code, OP_BRANCH_CONDITIONAL, 4usize)
         put(&m.code, values.id[condition])
-        put(&m.code, flow.labels[instruction.target])
-        put(&m.code, flow.labels[instruction.target2])
+        put(&m.code, flow.labels[instruction.target - flow.first_block])
+        put(&m.code, flow.labels[instruction.target2 - flow.first_block])
         ret ok
     }
     ret fail(m, "an operation in this kernel is not yet written as SPIR-V")
