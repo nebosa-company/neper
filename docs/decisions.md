@@ -31694,3 +31694,33 @@ emitted only when an instruction needs it.
 deterministic random and boundary inputs against the CPU backend on every suitable
 device. It passes on the RTX 3080 and Iris Xe; a no-device host reports that outcome
 instead of silently using the CPU.
+
+## D1614 — SPIR-V helpers flatten aggregate parameters into words
+
+**Problem.** The first five Vulkan rows emitted only 32-bit kernel bodies. Device code
+could not preserve packed 8- and 16-bit fields, hold struct or array locals, call an
+ordinary helper, or emit the concrete instance of a generic helper. SPIR-V also
+forbids passing a `Function` pointer between functions, so Neper's private aggregate
+address cannot be the helper ABI.
+
+**Decision.** The device emitter adds Int8, Int16 and Int64 scalar types on demand and
+requests the matching storage-buffer capabilities for narrow device accesses. Private
+memory stays an array of u32 words: narrow loads extract their byte lane, narrow stores
+replace that lane, and aligned aggregate copies move whole words. A helper's scalar
+parameters remain SPIR-V values; each by-value aggregate parameter is flattened into
+u32 words at the call and rebuilt in the callee's private word array. Reachability from
+the kernel assigns every helper a function id and type before bodies are written, then
+emits `OpFunctionCall` and scalar `OpReturnValue`. Pending monomorphised instances are
+lowered into the temporary device NIR before its `K$spirv` companion is made, while
+generated host launchers stay in the ordinary module pass.
+
+The old one-pass kernel route remains for a kernel with no calls. It is smaller and
+keeps the already pinned modules unchanged; the closure and function prepass exists
+only when a call requires it.
+
+**Evidence.** `tests/conformance/spirv/types.spv` pins u8, i16, u16 and u64 values, a
+struct copied through a private local, an array local, a by-value aggregate helper and
+a monomorphised generic helper. `spirv-val --target-env vulkan1.2` accepts it. The
+`gpu_vulkan_types` fixture executes the same kernel through CPU and Vulkan and compares
+all 64 u64 results; it passes on the RTX 3080, Iris Xe and WSL's Vulkan device. The raw
+saxpy, loop and float fixtures remain byte-pinned and pass on all three devices.

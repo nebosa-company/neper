@@ -21,6 +21,7 @@
 use e.mem
 use check
 use graph
+use layout
 use nir
 
 type Words = struct { data: []u32, count: usize, full: bool }
@@ -42,6 +43,8 @@ type Module = struct {
     code: Words,
     t_void: usize,
     t_bool: usize,
+    t_u8: usize,
+    t_u16: usize,
     t_u32: usize,
     // Declared on first use, with the `Int64` capability.
     t_u64: usize,
@@ -56,6 +59,8 @@ type Module = struct {
     t_pc_pointer: usize,
     t_pc_address: usize,
     t_psb_u32: usize,
+    t_psb_u8: usize,
+    t_psb_u16: usize,
     t_psb_u64: usize,
     t_psb_f32: usize,
     t_psb_address: usize,
@@ -78,6 +83,11 @@ type Module = struct {
     array_lengths: []usize,
     array_pointers: []usize,
     array_count: usize,
+    function_ids: []usize,
+    function_types: []usize,
+    function_reachable: []bool,
+    signatures: *nir.Signatures,
+    function_return: usize,
     full: bool,
     // Why emission stopped, for the command's diagnostic.
     failure: str,
@@ -119,22 +129,35 @@ error Unsupported
 // `message` says why when it fails, for the command's diagnostic.
 // Every kernel among the builder's functions from `first` on (D1611: a host build hands
 // over the one it has just lowered for the device).
-fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, first: usize, message: *str) -> ([]u8, err) {
+fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, first: usize, message: *str) -> ([]u8, err) {
     var no_bytes: []u8 = zero
     var m: Module = zero
     let init_error = init_module(a, &m)
     if init_error != ok { ret (no_bytes, init_error) }
+    let (function_ids, ids_error) = mem.alloc[usize](a, builder.function_count + 1usize)
+    if ids_error != ok { ret (no_bytes, ids_error) }
+    let (function_types, types_error) = mem.alloc[usize](a, builder.function_count + 1usize)
+    if types_error != ok { ret (no_bytes, types_error) }
+    let (function_reachable, reachable_error) = mem.alloc[bool](a, builder.function_count + 1usize)
+    if reachable_error != ok { ret (no_bytes, reachable_error) }
+    m.function_ids = function_ids
+    m.function_types = function_types
+    m.function_reachable = function_reachable
+    m.signatures = signatures
+    var clear_at = 0usize
+    while clear_at < builder.function_count {
+        m.function_ids[clear_at] = 0usize
+        m.function_types[clear_at] = 0usize
+        m.function_reachable[clear_at] = false
+        clear_at += 1usize
+    }
     var kernels = 0usize
     var function_at = first
     while function_at < builder.function_count {
         let function = builder.functions[function_at]
         let (index, found) = check.find_function(c, function.module_index, function.name)
         if found && c.functions[index].gpu {
-            let kernel_error = emit_kernel(a, &m, c, g, builder, function_at, index)
-            if kernel_error != ok {
-                *message = m.failure
-                ret (no_bytes, kernel_error)
-            }
+            m.function_reachable[function_at] = true
             kernels += 1usize
         }
         function_at += 1usize
@@ -142,6 +165,101 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     if kernels == 0usize {
         *message = "the program has no kernel to write as SPIR-V"
         ret (no_bytes, Unsupported)
+    }
+    var has_calls = false
+    function_at = first
+    while function_at < builder.function_count {
+        if m.function_reachable[function_at] {
+            let function = builder.functions[function_at]
+            var instruction_at = function.first_instruction
+            while instruction_at < function.first_instruction + function.instruction_count {
+                if builder.instructions[instruction_at].opcode == .Call { has_calls = true }
+                instruction_at += 1usize
+            }
+        }
+        function_at += 1usize
+    }
+    if !has_calls {
+        function_at = first
+        while function_at < builder.function_count {
+            if m.function_reachable[function_at] {
+                let function = builder.functions[function_at]
+                let (checked, found) = check.find_function(c, function.module_index, function.name)
+                if found {
+                    let kernel_error = emit_kernel(a, &m, c, g, builder, function_at, checked)
+                    if kernel_error != ok {
+                        *message = m.failure
+                        ret (no_bytes, kernel_error)
+                    }
+                }
+            }
+            function_at += 1usize
+        }
+        let (bytes, bytes_error) = assemble(a, &m)
+        ret (bytes, bytes_error)
+    }
+    nir.resolve_reference_targets(builder)
+    var changed = true
+    while changed {
+        changed = false
+        function_at = 0usize
+        while function_at < builder.function_count {
+            if m.function_reachable[function_at] {
+                let function = builder.functions[function_at]
+                var instruction_at = function.first_instruction
+                while instruction_at < function.first_instruction + function.instruction_count {
+                    let instruction = builder.instructions[instruction_at]
+                    if instruction.opcode == .Call {
+                        if instruction.immediate >= builder.function_ref_count { ret (no_bytes, fail(&m, "a helper call has no function reference")) }
+                        let (callee, found) = nir.function_for_reference(builder, builder.function_refs[instruction.immediate])
+                        if !found || callee >= builder.function_count { ret (no_bytes, fail(&m, "a helper call has no SPIR-V body")) }
+                        if !m.function_reachable[callee] {
+                            m.function_reachable[callee] = true
+                            changed = true
+                        }
+                    }
+                    instruction_at += 1usize
+                }
+            }
+            function_at += 1usize
+        }
+    }
+    function_at = 0usize
+    while function_at < builder.function_count {
+        if m.function_reachable[function_at] {
+            m.function_ids[function_at] = fresh(&m)
+            let function = builder.functions[function_at]
+            let (checked, found) = check.find_function(c, function.module_index, function.name)
+            if function_at >= first && found && c.functions[checked].gpu {
+                m.function_types[function_at] = m.t_fn_void
+            } else {
+                let (function_type, type_error) = declare_function_type(&m, c, function_at)
+                if type_error != ok {
+                    *message = m.failure
+                    ret (no_bytes, type_error)
+                }
+                m.function_types[function_at] = function_type
+            }
+        }
+        function_at += 1usize
+    }
+    function_at = 0usize
+    while function_at < builder.function_count {
+        if m.function_reachable[function_at] {
+            let function = builder.functions[function_at]
+            let (checked, found) = check.find_function(c, function.module_index, function.name)
+            var function_error = ok
+            if function_at >= first && found && c.functions[checked].gpu {
+                function_error = emit_kernel(a, &m, c, g, builder, function_at, checked)
+            } else {
+                function_error = emit_helper(a, &m, c, builder, function_at)
+            }
+            if function_error != ok {
+                *message = m.failure
+                ret (no_bytes, function_error)
+            }
+        }
+        function_at += 1usize
     }
     let (bytes, bytes_error) = assemble(a, &m)
     ret (bytes, bytes_error)
@@ -252,7 +370,9 @@ const OP_CONSTANT_TRUE: usize = 41usize
 const OP_CONSTANT_FALSE: usize = 42usize
 const OP_CONSTANT: usize = 43usize
 const OP_FUNCTION: usize = 54usize
+const OP_FUNCTION_PARAMETER: usize = 55usize
 const OP_FUNCTION_END: usize = 56usize
+const OP_FUNCTION_CALL: usize = 57usize
 const OP_VARIABLE: usize = 59usize
 const OP_LOAD: usize = 61usize
 const OP_STORE: usize = 62usize
@@ -316,6 +436,7 @@ const OP_LABEL: usize = 248usize
 const OP_BRANCH: usize = 249usize
 const OP_BRANCH_CONDITIONAL: usize = 250usize
 const OP_RETURN: usize = 253usize
+const OP_RETURN_VALUE: usize = 254usize
 const OP_UNREACHABLE: usize = 255usize
 
 const STORAGE_INPUT: usize = 1usize
@@ -408,6 +529,22 @@ fn u64_type(m: *Module) -> usize {
     ret m.t_u64
 }
 
+fn u8_type(m: *Module) -> usize {
+    if m.t_u8 == 0usize {
+        capability(m, 39usize)
+        m.t_u8 = int_type(m, 8usize)
+    }
+    ret m.t_u8
+}
+
+fn u16_type(m: *Module) -> usize {
+    if m.t_u16 == 0usize {
+        capability(m, 22usize)
+        m.t_u16 = int_type(m, 16usize)
+    }
+    ret m.t_u16
+}
+
 fn capability(m: *Module, which: usize) {
     head(&m.capabilities, OP_CAPABILITY, 2usize)
     put(&m.capabilities, which)
@@ -462,7 +599,9 @@ fn builtin_variable(m: *Module, builtin: usize) -> usize {
 // A constant of a scalar type, interned.
 fn constant(m: *Module, ty: usize, value: usize) -> usize {
     var high = 0usize
-    let low = value & 4294967295usize
+    var low = value & 4294967295usize
+    if ty != 0usize && ty == m.t_u8 { low = low & 255usize }
+    if ty != 0usize && ty == m.t_u16 { low = low & 65535usize }
     if ty != 0usize && ty == m.t_u64 { high = value >> 32usize }
     var at = 0usize
     while at < m.constant_count {
@@ -539,6 +678,10 @@ fn value_type(m: *Module, ty: check.Type) -> (usize, bool) {
         ret (0usize, false)
     }
     if ty.kind == .Integer {
+        if same(ty.name, "u8") { ret (u8_type(m), false) }
+        if same(ty.name, "i8") { ret (u8_type(m), true) }
+        if same(ty.name, "u16") { ret (u16_type(m), false) }
+        if same(ty.name, "i16") { ret (u16_type(m), true) }
         if same(ty.name, "u32") || same(ty.name, "usize") { ret (m.t_u32, false) }
         if same(ty.name, "i32") || same(ty.name, "isize") { ret (m.t_u32, true) }
         if same(ty.name, "u64") { ret (u64_type(m), false) }
@@ -573,8 +716,63 @@ fn uses_f32(builder: *nir.Builder, function: nir.Function) -> bool {
 }
 
 fn type_bytes(m: *Module, ty: usize) -> usize {
+    if ty != 0usize && ty == m.t_u8 { ret 1usize }
+    if ty != 0usize && ty == m.t_u16 { ret 2usize }
     if ty == m.t_v2u32 || (ty != 0usize && ty == m.t_u64) { ret 8usize }
     ret 4usize
+}
+
+fn aggregate_words(c: *check.Checker, ty: check.Type) -> (usize, err) {
+    if ty.kind == .Slice || ty.kind == .String { ret (4usize, ok) }
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (0usize, info_error) }
+    ret ((info.size + 3usize) / 4usize, ok)
+}
+
+fn declare_function_type(m: *Module, c: *check.Checker, function_at: usize) -> (usize, err) {
+    if function_at >= m.signatures.entries.len { ret (0usize, fail(m, "a helper has no signature")) }
+    let signature = m.signatures.entries[function_at]
+    if signature.return_count > 1usize { ret (0usize, fail(m, "a helper returns more than one value")) }
+    var returned = m.t_void
+    if signature.return_count == 1usize {
+        let (ty, signed) = value_type(m, m.signatures.types[signature.first_return_type])
+        if ty == 0usize { ret (0usize, fail(m, "a helper returns an aggregate value")) }
+        returned = ty
+    }
+    var parameters: [256]usize = zero
+    var parameter_words = 0usize
+    var at = 0usize
+    while at < signature.parameter_count {
+        let parameter = m.signatures.types[signature.first_parameter_type + at]
+        if aggregate(parameter) {
+            let (words, words_error) = aggregate_words(c, parameter)
+            if words_error != ok { ret (0usize, words_error) }
+            if parameter_words + words > parameters.len { ret (0usize, fail(m, "a helper has too many flattened parameters")) }
+            var word = 0usize
+            while word < words {
+                parameters[parameter_words] = m.t_u32
+                parameter_words += 1usize
+                word += 1usize
+            }
+        } else {
+            if parameter_words == parameters.len { ret (0usize, fail(m, "a helper has too many flattened parameters")) }
+            let (ty, signed) = value_type(m, parameter)
+            if ty == 0usize { ret (0usize, fail(m, "a helper parameter has an unsupported type")) }
+            parameters[parameter_words] = ty
+            parameter_words += 1usize
+        }
+        at += 1usize
+    }
+    let id = fresh(m)
+    head(&m.types, OP_TYPE_FUNCTION, 3usize + parameter_words)
+    put(&m.types, id)
+    put(&m.types, returned)
+    at = 0usize
+    while at < parameter_words {
+        put(&m.types, parameters[at])
+        at += 1usize
+    }
+    ret (id, ok)
 }
 
 // ---- a kernel ------------------------------------------------------------------
@@ -586,7 +784,8 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     try init_values(a, &values, function.value_count + 1usize)
     var flow: Flow = zero
     try plan_flow(a, m, builder, function, &flow)
-    let entry = fresh(m)
+    var entry = m.function_ids[function_at]
+    if entry == 0usize { entry = fresh(m) }
     // The entry point, with every interface variable (SPIR-V 1.4 on lists them all).
     let (name, name_error) = qualified_name(a, g, kernel)
     if name_error != ok { ret name_error }
@@ -624,7 +823,7 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     put(&m.code, m.t_fn_void)
     head(&m.code, OP_LABEL, 2usize)
     put(&m.code, fresh(m))
-    try declare_privates(m, builder, function, &values)
+    try declare_privates(m, c, builder, function, &values)
     let chain = fresh(m)
     head(&m.code, OP_ACCESS_CHAIN, 5usize)
     put(&m.code, m.t_pc_address)
@@ -638,9 +837,108 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     put(&m.code, chain)
     head(&m.code, OP_BRANCH, 2usize)
     put(&m.code, flow.labels[0usize])
+    m.function_return = m.t_void
+    ret emit_function_body(m, c, builder, function, kernel, &flow, &values, block_address)
+}
+
+fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Builder, function_at: usize) -> err {
+    let function = builder.functions[function_at]
+    if function_at >= m.signatures.entries.len { ret fail(m, "a helper has no signature") }
+    let signature = m.signatures.entries[function_at]
+    var returned = m.t_void
+    if signature.return_count == 1usize {
+        let (return_type, return_signed) = value_type(m, m.signatures.types[signature.first_return_type])
+        if return_type == 0usize { ret fail(m, "a helper returns an aggregate value") }
+        returned = return_type
+    }
+    var values: Values = zero
+    try init_values(a, &values, function.value_count + 1usize)
+    var flow: Flow = zero
+    try plan_flow(a, m, builder, function, &flow)
+    var parameter_words = 0usize
+    var parameter_at = 0usize
+    while parameter_at < signature.parameter_count {
+        let parameter = m.signatures.types[signature.first_parameter_type + parameter_at]
+        if aggregate(parameter) {
+            let (words, words_error) = aggregate_words(c, parameter)
+            if words_error != ok { ret words_error }
+            parameter_words += words
+        } else {
+            parameter_words += 1usize
+        }
+        parameter_at += 1usize
+    }
+    let (parameters, parameters_error) = mem.alloc[usize](a, parameter_words + 1usize)
+    if parameters_error != ok { ret parameters_error }
+    let (parameter_first, first_error) = mem.alloc[usize](a, signature.parameter_count + 1usize)
+    if first_error != ok { ret first_error }
+    head(&m.code, OP_FUNCTION, 5usize)
+    put(&m.code, returned)
+    put(&m.code, m.function_ids[function_at])
+    put(&m.code, 0usize)
+    put(&m.code, m.function_types[function_at])
+    parameter_at = 0usize
+    var flat_at = 0usize
+    while parameter_at < signature.parameter_count {
+        parameter_first[parameter_at] = flat_at
+        let parameter = m.signatures.types[signature.first_parameter_type + parameter_at]
+        var words = 1usize
+        var ty = m.t_u32
+        if aggregate(parameter) {
+            let (count, words_error) = aggregate_words(c, parameter)
+            if words_error != ok { ret words_error }
+            words = count
+        } else {
+            let (held, signed) = value_type(m, parameter)
+            ty = held
+        }
+        var word = 0usize
+        while word < words {
+            let id = fresh(m)
+            head(&m.code, OP_FUNCTION_PARAMETER, 3usize)
+            put(&m.code, ty)
+            put(&m.code, id)
+            parameters[flat_at] = id
+            flat_at += 1usize
+            word += 1usize
+        }
+        parameter_at += 1usize
+    }
+    head(&m.code, OP_LABEL, 2usize)
+    put(&m.code, fresh(m))
+    try declare_privates(m, c, builder, function, &values)
+    var instruction_at = function.first_instruction
+    while instruction_at < function.first_instruction + function.instruction_count {
+        let instruction = builder.instructions[instruction_at]
+        if instruction.opcode == .Parameter {
+            if instruction.immediate >= signature.parameter_count { ret fail(m, "a helper parameter is out of range") }
+            let first = parameter_first[instruction.immediate]
+            if aggregate(instruction.ty) {
+                let (words, words_error) = aggregate_words(c, instruction.ty)
+                if words_error != ok { ret words_error }
+                var word = 0usize
+                while word < words {
+                    private_word_store(m, values.id[instruction.result], word, parameters[first + word])
+                    word += 1usize
+                }
+            } else {
+                let (ty, signed) = value_type(m, instruction.ty)
+                scalar(&values, instruction.result, parameters[first], ty, signed)
+            }
+        }
+        instruction_at += 1usize
+    }
+    head(&m.code, OP_BRANCH, 2usize)
+    put(&m.code, flow.labels[0usize])
+    var no_kernel: check.Function = zero
+    m.function_return = returned
+    ret emit_function_body(m, c, builder, function, no_kernel, &flow, &values, 0usize)
+}
+
+fn emit_function_body(m: *Module, c: *check.Checker, builder: *nir.Builder, function: nir.Function, kernel: check.Function, flow: *Flow, values: *Values, block_address: usize) -> err {
     var order_at = 0usize
     while order_at < flow.order_count {
-        try emit_block(m, c, builder, function, kernel, flow.order[order_at], &flow, &values, block_address)
+        try emit_block(m, c, builder, function, kernel, flow.order[order_at], flow, values, block_address)
         order_at += 1usize
     }
     // Several source `continue`s make several NIR back edges. SPIR-V requires exactly
@@ -720,7 +1018,7 @@ fn qualified_name(a: *mem.Arena, g: *graph.Graph, kernel: check.Function) -> (st
 
 // Every `Stack` slot and aggregate parameter as a `Function` array of words; SPIR-V
 // wants all of them in the function's first block.
-fn declare_privates(m: *Module, builder: *nir.Builder, function: nir.Function, values: *Values) -> err {
+fn declare_privates(m: *Module, c: *check.Checker, builder: *nir.Builder, function: nir.Function, values: *Values) -> err {
     var at = 0usize
     while at < function.instruction_count {
         let instruction = builder.instructions[function.first_instruction + at]
@@ -731,8 +1029,9 @@ fn declare_privates(m: *Module, builder: *nir.Builder, function: nir.Function, v
             if bytes == 0usize { bytes = 8usize }
         }
         if instruction.opcode == .Parameter && aggregate(instruction.ty) {
-            if instruction.ty.kind != .Slice { ret fail(m, "a kernel parameter of this type is not yet written as SPIR-V") }
-            bytes = 16usize
+            let (words, words_error) = aggregate_words(c, instruction.ty)
+            if words_error != ok { ret words_error }
+            bytes = words * 4usize
         }
         if bytes != 0usize && instruction.has_result {
             let pointer = word_array(m, (bytes + 3usize) / 4usize)
@@ -1003,13 +1302,96 @@ fn scalar(values: *Values, value: usize, id: usize, ty: usize, signed: bool) {
     values.signed[value] = signed
 }
 
+fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    if instruction.immediate >= builder.function_ref_count { ret fail(m, "a helper call has no function reference") }
+    let (callee, found) = nir.function_for_reference(builder, builder.function_refs[instruction.immediate])
+    if !found || callee >= builder.function_count || m.function_ids[callee] == 0usize { ret fail(m, "a helper call has no SPIR-V body") }
+    var result_type = m.t_void
+    var signed = false
+    if instruction.has_result {
+        let (ty, result_signed) = value_type(m, instruction.ty)
+        if ty == 0usize { ret fail(m, "a helper call returns an aggregate value") }
+        result_type = ty
+        signed = result_signed
+    }
+    if callee >= m.signatures.entries.len { ret fail(m, "a helper call has no signature") }
+    let signature = m.signatures.entries[callee]
+    if instruction.operand_count != signature.parameter_count { ret fail(m, "a helper call has the wrong argument count") }
+    var argument_words = 0usize
+    var at = 0usize
+    while at < signature.parameter_count {
+        let parameter = m.signatures.types[signature.first_parameter_type + at]
+        if aggregate(parameter) {
+            let (words, words_error) = aggregate_words(c, parameter)
+            if words_error != ok { ret words_error }
+            argument_words += words
+        } else {
+            argument_words += 1usize
+        }
+        at += 1usize
+    }
+    var arguments: [256]usize = zero
+    if argument_words > arguments.len { ret fail(m, "a helper call has too many flattened arguments") }
+    var flat_at = 0usize
+    at = 0usize
+    while at < instruction.operand_count {
+        let argument = operand(builder, instruction, at)
+        let parameter = m.signatures.types[signature.first_parameter_type + at]
+        if aggregate(parameter) {
+            if KIND_PRIVATE != values.kind[argument] { ret fail(m, "a helper call has no aggregate argument") }
+            let (words, words_error) = aggregate_words(c, parameter)
+            if words_error != ok { ret words_error }
+            var word = 0usize
+            while word < words {
+                arguments[flat_at] = load_word(m, private_word(m, values, argument, word * 4usize))
+                flat_at += 1usize
+                word += 1usize
+            }
+        } else {
+            if KIND_SCALAR != values.kind[argument] { ret fail(m, "a helper call has no scalar argument") }
+            arguments[flat_at] = values.id[argument]
+            flat_at += 1usize
+        }
+        at += 1usize
+    }
+    head(&m.code, OP_FUNCTION_CALL, 4usize + argument_words)
+    put(&m.code, result_type)
+    let result = fresh(m)
+    put(&m.code, result)
+    put(&m.code, m.function_ids[callee])
+    flat_at = 0usize
+    while flat_at < argument_words {
+        put(&m.code, arguments[flat_at])
+        flat_at += 1usize
+    }
+    if instruction.has_result { scalar(values, instruction.result, result, result_type, signed) }
+    ret ok
+}
+
 fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel: check.Function, instruction: nir.Instruction, block_index: usize, flow: *Flow, values: *Values, block_address: usize) -> err {
     let opcode = instruction.opcode
-    if opcode == .Parameter { ret emit_parameter(m, c, kernel, instruction, values, block_address) }
+    if opcode == .Parameter {
+        if block_address == 0usize { ret ok }
+        ret emit_parameter(m, c, kernel, instruction, values, block_address)
+    }
     if opcode == .Stack { ret ok }
+    if opcode == .Zero && !instruction.has_result {
+        let address = operand(builder, instruction, 0usize)
+        if KIND_PRIVATE != values.kind[address] { ret fail(m, "an aggregate zero has no private destination") }
+        var byte = 0usize
+        while byte < instruction.immediate {
+            store_word(m, private_word(m, values, address, byte), constant(m, m.t_u32, 0usize))
+            byte += 4usize
+        }
+        ret ok
+    }
     if opcode == .ConstInteger || opcode == .ConstFloat || opcode == .ConstBool || opcode == .Zero {
         let (ty, signed) = value_type(m, instruction.ty)
-        if ty == 0usize { ret fail(m, "a constant of this type is not yet written as SPIR-V") }
+        if ty == 0usize {
+            if instruction.ty.kind == .Named { ret fail(m, "a struct constant is not yet written as SPIR-V") }
+            if instruction.ty.kind == .Array { ret fail(m, "an array constant is not yet written as SPIR-V") }
+            ret fail(m, "a constant of this type is not yet written as SPIR-V")
+        }
         var bits = instruction.immediate
         if opcode == .Zero { bits = 0usize }
         scalar(values, instruction.result, constant(m, ty, bits), ty, signed)
@@ -1025,8 +1407,19 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
     if opcode == .Add || opcode == .AddWrap || opcode == .Subtract || opcode == .SubtractWrap || opcode == .Multiply || opcode == .MultiplyWrap || opcode == .Divide || opcode == .Remainder || opcode == .BitAnd || opcode == .BitOr || opcode == .BitXor || opcode == .ShiftLeft || opcode == .ShiftRight { ret emit_binary(m, builder, instruction, values) }
     if opcode == .Equal || opcode == .NotEqual || opcode == .Less || opcode == .LessEqual || opcode == .Greater || opcode == .GreaterEqual { ret emit_compare(m, builder, instruction, values) }
     if opcode == .Negate || opcode == .BitNot { ret emit_unary(m, builder, instruction, values) }
+    if opcode == .Copy { ret emit_copy(m, builder, instruction, values) }
+    if opcode == .Call { ret emit_call(m, c, builder, instruction, values) }
+    if opcode == .Extract { ret fail(m, "a call result extraction is not yet written as SPIR-V") }
     if opcode == .Return {
-        head(&m.code, OP_RETURN, 1usize)
+        if instruction.operand_count == 0usize {
+            head(&m.code, OP_RETURN, 1usize)
+            ret ok
+        }
+        if instruction.operand_count != 1usize { ret fail(m, "a helper returns more than one value") }
+        let returned = operand(builder, instruction, 0usize)
+        if KIND_SCALAR != values.kind[returned] { ret fail(m, "a helper returns an aggregate value") }
+        head(&m.code, OP_RETURN_VALUE, 2usize)
+        put(&m.code, values.id[returned])
         ret ok
     }
     if opcode == .Branch {
@@ -1158,6 +1551,20 @@ fn convert(m: *Module, opcode: usize, ty: usize, value: usize) -> usize {
 }
 
 fn device_pointer_type(m: *Module, ty: usize) -> usize {
+    if ty != 0usize && ty == m.t_u8 {
+        if m.t_psb_u8 == 0usize {
+            capability(m, 4448usize)
+            m.t_psb_u8 = pointer_type(m, STORAGE_PHYSICAL, m.t_u8)
+        }
+        ret m.t_psb_u8
+    }
+    if ty != 0usize && ty == m.t_u16 {
+        if m.t_psb_u16 == 0usize {
+            capability(m, 4433usize)
+            m.t_psb_u16 = pointer_type(m, STORAGE_PHYSICAL, m.t_u16)
+        }
+        ret m.t_psb_u16
+    }
     if ty != 0usize && ty == m.t_u64 { ret m.t_psb_u64 }
     if ty == m.t_v2u32 { ret m.t_psb_address }
     if ty == m.t_f32 { ret m.t_psb_f32 }
@@ -1218,11 +1625,54 @@ fn store_word(m: *Module, pointer: usize, value: usize) {
 
 // A private address's word, `extra` bytes on: the constant byte offset plus the
 // dynamic one, over four.
-fn private_word(m: *Module, values: *Values, address: usize, extra: usize) -> usize {
+fn private_bytes(m: *Module, values: *Values, address: usize, extra: usize) -> usize {
     var bytes = constant(m, m.t_u32, values.offset[address] + extra)
     if values.dynamic[address] != 0usize { bytes = binary(m, OP_I_ADD, m.t_u32, bytes, values.dynamic[address]) }
+    ret bytes
+}
+
+fn private_word(m: *Module, values: *Values, address: usize, extra: usize) -> usize {
+    let bytes = private_bytes(m, values, address, extra)
     let index = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, bytes, constant(m, m.t_u32, 2usize))
     ret access_word(m, values.id[address], index)
+}
+
+fn private_byte_load(m: *Module, values: *Values, address: usize, extra: usize) -> usize {
+    let bytes = private_bytes(m, values, address, extra)
+    let word = load_word(m, private_word(m, values, address, extra))
+    let shift = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, bytes, constant(m, m.t_u32, 3usize)), constant(m, m.t_u32, 3usize))
+    ret binary(m, OP_BITWISE_AND, m.t_u32, binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, word, shift), constant(m, m.t_u32, 255usize))
+}
+
+fn private_byte_store(m: *Module, values: *Values, address: usize, extra: usize, value: usize) {
+    let pointer = private_word(m, values, address, extra)
+    let old = load_word(m, pointer)
+    let bytes = private_bytes(m, values, address, extra)
+    let shift = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, bytes, constant(m, m.t_u32, 3usize)), constant(m, m.t_u32, 3usize))
+    let mask = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, constant(m, m.t_u32, 255usize), shift)
+    let cleared = binary(m, OP_BITWISE_AND, m.t_u32, old, convert(m, OP_NOT, m.t_u32, mask))
+    let placed = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, value, constant(m, m.t_u32, 255usize)), shift)
+    store_word(m, pointer, binary(m, OP_BITWISE_OR, m.t_u32, cleared, placed))
+}
+
+fn emit_copy(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let destination = operand(builder, instruction, 0usize)
+    let source = operand(builder, instruction, 1usize)
+    if KIND_PRIVATE != values.kind[destination] || KIND_PRIVATE != values.kind[source] { ret fail(m, "an aggregate copy to or from device memory is not yet written as SPIR-V") }
+    if values.dynamic[destination] == 0usize && values.dynamic[source] == 0usize && values.offset[destination] % 4usize == 0usize && values.offset[source] % 4usize == 0usize && instruction.immediate % 4usize == 0usize {
+        var word = 0usize
+        while word < instruction.immediate {
+            store_word(m, private_word(m, values, destination, word), load_word(m, private_word(m, values, source, word)))
+            word += 4usize
+        }
+        ret ok
+    }
+    var byte = 0usize
+    while byte < instruction.immediate {
+        private_byte_store(m, values, destination, byte, private_byte_load(m, values, source, byte))
+        byte += 1usize
+    }
+    ret ok
 }
 
 fn emit_global_address(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
@@ -1298,7 +1748,12 @@ fn guard(m: *Module, holds: usize) {
     put(&m.code, failed)
     head(&m.code, OP_LABEL, 2usize)
     put(&m.code, failed)
-    head(&m.code, OP_RETURN, 1usize)
+    if m.function_return == m.t_void {
+        head(&m.code, OP_RETURN, 1usize)
+    } else {
+        head(&m.code, OP_RETURN_VALUE, 2usize)
+        put(&m.code, constant(m, m.function_return, 0usize))
+    }
     head(&m.code, OP_LABEL, 2usize)
     put(&m.code, rest)
 }
@@ -1328,6 +1783,11 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         if ty == m.t_bool { ret fail(m, "a private bool is not yet written as SPIR-V") }
         let low = load_word(m, private_word(m, values, address, 0usize))
         var value = low
+        if ty == m.t_u8 || ty == m.t_u16 {
+            let bytes = private_bytes(m, values, address, 0usize)
+            let shift = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, bytes, constant(m, m.t_u32, 3usize)), constant(m, m.t_u32, 3usize))
+            value = convert(m, OP_U_CONVERT, ty, binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, low, shift))
+        }
         if ty == m.t_f32 { value = convert(m, OP_BITCAST, m.t_f32, low) }
         if ty == m.t_v2u32 { value = pair(m, low, load_word(m, private_word(m, values, address, 4usize))) }
         if ty != 0usize && ty == m.t_u64 {
@@ -1351,6 +1811,20 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     let ty = values.ty[value]
     if KIND_PRIVATE == values.kind[address] {
         if ty == m.t_bool { ret fail(m, "a private bool is not yet written as SPIR-V") }
+        if ty == m.t_u8 || ty == m.t_u16 {
+            let pointer = private_word(m, values, address, 0usize)
+            let old = load_word(m, pointer)
+            let bytes = private_bytes(m, values, address, 0usize)
+            let shift = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, bytes, constant(m, m.t_u32, 3usize)), constant(m, m.t_u32, 3usize))
+            var mask = 255usize
+            if ty == m.t_u16 { mask = 65535usize }
+            let shifted_mask = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, constant(m, m.t_u32, mask), shift)
+            let cleared = binary(m, OP_BITWISE_AND, m.t_u32, old, convert(m, OP_NOT, m.t_u32, shifted_mask))
+            let widened = convert(m, OP_U_CONVERT, m.t_u32, values.id[value])
+            let placed = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, widened, shift)
+            store_word(m, pointer, binary(m, OP_BITWISE_OR, m.t_u32, cleared, placed))
+            ret ok
+        }
         var low = values.id[value]
         if ty == m.t_f32 { low = convert(m, OP_BITCAST, m.t_u32, values.id[value]) }
         if ty == m.t_v2u32 {
@@ -1378,8 +1852,8 @@ fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     if from == m.t_v2u32 || ty == m.t_v2u32 {
         if from != ty { ret fail(m, "a conversion between an address and an integer is not written as SPIR-V") }
     }
-    let integer_from = from == m.t_u32 || (from != 0usize && from == m.t_u64)
-    let integer_to = ty == m.t_u32 || (ty != 0usize && ty == m.t_u64)
+    let integer_from = from == m.t_u8 || from == m.t_u16 || from == m.t_u32 || (from != 0usize && from == m.t_u64)
+    let integer_to = ty == m.t_u8 || ty == m.t_u16 || ty == m.t_u32 || (ty != 0usize && ty == m.t_u64)
     var id = values.id[source]
     if from != ty {
         if integer_from && integer_to {

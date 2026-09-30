@@ -2769,6 +2769,19 @@ case "$gpu_vulkan_float_output" in
     'gpu float cpu only'|'gpu float vulkan ok on '[1-9]' devices'|'gpu float vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the Vulkan float runtime failed: $gpu_vulkan_float_output" >&2; exit 1 ;;
 esac
+# (D1614) Narrow and wide integers, aggregate locals, ordinary helpers and generic
+# instances, pinned as SPIR-V and compared on every available Vulkan device.
+types_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/types.e" "$repo" spv none "$test_build/types.spv")
+[ "$types_spirv_written" = 'spir-v written' ]
+cmp "$test_build/types.spv" "$repo/tests/conformance/spirv/types.spv"
+gpu_vulkan_types_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_types/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-types-selfhost")
+[ "$gpu_vulkan_types_written" = 'executable written' ]
+chmod +x "$test_build/gpu-vulkan-types-selfhost"
+gpu_vulkan_types_output=$("$test_build/gpu-vulkan-types-selfhost")
+case "$gpu_vulkan_types_output" in
+    'gpu types cpu only'|'gpu types vulkan ok on '[1-9]' devices'|'gpu types vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the Vulkan types runtime failed: $gpu_vulkan_types_output" >&2; exit 1 ;;
+esac
 gpu_direct=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_direct_call/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_direct" in
     *'main.e:9:5: error[E-GPU-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;

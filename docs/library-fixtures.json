@@ -1203,6 +1203,7 @@
     "gpu_tensor",
     "gpu_vulkan_float",
     "gpu_vulkan_loop",
+    "gpu_vulkan_types",
     "ui_a11y_controls",
     "ui_accessibility",
     "ui_actions",
