@@ -5217,7 +5217,7 @@ if ($LASTEXITCODE -ne 1 -or ($arenaSmallOutput -join "`n") -notmatch 'error: e\.
 # docs/tooling.md sections 4 and 9 (D227): `tokens --json` and `parse --json` against the
 # conformance corpus, byte for byte, with the exit status the result record carries.
 $conformanceRoot = Join-Path $repo 'tests\conformance'
-foreach ($case in @(@('tokens', 'every_kind', 0), @('tokens', 'hostile', 1), @('parse', 'every_kind', 0), @('parse', 'recovery', 1), @('parse', 'two_errors', 1), @('parse', 'barrier', 1))) {
+foreach ($case in @(@('tokens', 'every_kind', 0), @('tokens', 'hostile', 1), @('parse', 'every_kind', 0), @('parse', 'recovery', 1), @('parse', 'two_errors', 1), @('parse', 'barrier', 1), @('parse', 'node_kinds', 0))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
     $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
     $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"

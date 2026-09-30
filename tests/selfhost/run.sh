@@ -5089,7 +5089,7 @@ case "$arena_small_output" in *'error: e.mem.Exhausted'*) ;; *) printf '%s
 # docs/tooling.md sections 4 and 9 (D227): `tokens --json` and `parse --json` against the
 # conformance corpus, byte for byte, with the exit status the result record carries.
 conformance_root="$repo/tests/conformance"
-for conformance_case in 'tokens every_kind 0' 'tokens hostile 1' 'parse every_kind 0' 'parse recovery 1' 'parse two_errors 1' 'parse barrier 1'; do
+for conformance_case in 'tokens every_kind 0' 'tokens hostile 1' 'parse every_kind 0' 'parse recovery 1' 'parse two_errors 1' 'parse barrier 1' 'parse node_kinds 0'; do
     set -- $conformance_case
     conformance_actual="$test_build/conformance-$1-$2.jsonl"
     conformance_status=0
