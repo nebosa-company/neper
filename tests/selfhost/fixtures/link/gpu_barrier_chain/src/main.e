@@ -32,6 +32,7 @@ fn middle(out: []u32, lane: u32) {
             out[usize(lane)] = lane + combine(out, lane, inner(lane)) - lane
             let view = View { data: out }
             view.data[usize(inner(lane) - 44u32)] = lane + 44u32
+            view.data[usize(lane)] += inner(lane) - (lane + 44u32)
         }
     }
 }

@@ -32451,3 +32451,21 @@ gaps fixtures pass on Windows. Five repeated Windows self-builds passed, and
 consecutive Windows and WSL compiler stages are byte-identical. Generic,
 aggregate-return, indirect and other pending-expression helper shapes remain
 unverified.
+
+## D1757 — Retain a compound assignment's prior value across a helper barrier
+
+**Decision.** A compound assignment evaluates its place and reads its old
+value before evaluating the right side. When that side can reach a barrier,
+save both the address and the old value in the invocation frame and reload
+them after the cut. The ordinary `=` path shares the address save; neither
+path changes source evaluation order or adds slots for calls that cannot cut.
+
+**Evidence.** An added `+=` after two helper calls in
+`link/gpu_barrier_chain` previously failed NIR verification at the binary
+operand. It now passes in debug and release on Windows and WSL, including a
+four-worker Windows release build. The direct helper still runs on CPU and
+available Vulkan devices on both hosts; barrier, large-helper, frame-many,
+shared, subgroup-width and gaps fixtures pass on Windows. Sequential
+self-hosted compiler stages are byte-identical on Windows and WSL. A generic
+barrier helper remains refused by the checker before lowering, so C091 is
+still partial.

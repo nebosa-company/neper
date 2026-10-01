@@ -5344,26 +5344,6 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     }
     let (address, place_type, address_error) = lower_place(c, g, tree, module_index, children[0usize], builder, bindings, binding_count)
     if address_error != ok { ret address_error }
-    let assignment = check.assignment_operator(c, usize(tree.nodes[children[0usize]].token_end), usize(tree.nodes[children[1usize]].token_start))
-    if assignment != .PunctAssign {
-        let opcode = compound_opcode(assignment)
-        if opcode == .Invalid || aggregate_value(c, place_type) { ret check.InvalidOperator }
-        let (info, info_error) = layout.type_info(c, place_type)
-        if info_error != ok { ret info_error }
-        let (load_instruction, current, load_error) = nir.emit(builder, .Load, place_type, true, info.size, c.tokens[usize(node.token_start)])
-        if load_error != ok { ret load_error }
-        try nir.add_operand(builder, load_instruction, address)
-        var expected = place_type
-        if opcode == .ShiftLeft || opcode == .ShiftRight { expected = check.invalid_type() }
-        let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], expected, builder, bindings, binding_count)
-        if right_error != ok { ret right_error }
-        if opcode != .ShiftLeft && opcode != .ShiftRight && !check.type_equal(c, place_type, right_type) { ret check.InvalidType }
-        let (binary_instruction, value, binary_error) = nir.emit(builder, opcode, place_type, true, 0usize, c.tokens[usize(node.token_start)])
-        if binary_error != ok { ret binary_error }
-        try nir.add_operand(builder, binary_instruction, current)
-        try nir.add_operand(builder, binary_instruction, right)
-        ret store_assignment_value(c, place_type, address, value, c.tokens[usize(node.token_start)], builder)
-    }
     let pointer_type = check.make_type(.Pointer, "", module_index)
     let token = c.tokens[usize(node.token_start)]
     var address_slot = 0usize
@@ -5373,6 +5353,36 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         address_slot = saved
     }
     let before = builder.kernel_barriers
+    let assignment = check.assignment_operator(c, usize(tree.nodes[children[0usize]].token_end), usize(tree.nodes[children[1usize]].token_start))
+    if assignment != .PunctAssign {
+        let opcode = compound_opcode(assignment)
+        if opcode == .Invalid || aggregate_value(c, place_type) { ret check.InvalidOperator }
+        let (info, info_error) = layout.type_info(c, place_type)
+        if info_error != ok { ret info_error }
+        let (load_instruction, current, load_error) = nir.emit(builder, .Load, place_type, true, info.size, c.tokens[usize(node.token_start)])
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, address)
+        var current_slot = 0usize
+        if address_slot != 0usize {
+            let (saved, save_error) = frame_save_temporary(c, place_type, current, token, builder)
+            if save_error != ok { ret save_error }
+            current_slot = saved
+        }
+        var expected = place_type
+        if opcode == .ShiftLeft || opcode == .ShiftRight { expected = check.invalid_type() }
+        let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], expected, builder, bindings, binding_count)
+        if right_error != ok { ret right_error }
+        if opcode != .ShiftLeft && opcode != .ShiftRight && !check.type_equal(c, place_type, right_type) { ret check.InvalidType }
+        let (resumed_current, current_error) = frame_resume_temporary(c, place_type, current, current_slot, before, token, builder)
+        if current_error != ok { ret current_error }
+        let (resumed_address, resume_error) = frame_resume_temporary(c, pointer_type, address, address_slot, before, token, builder)
+        if resume_error != ok { ret resume_error }
+        let (binary_instruction, value, binary_error) = nir.emit(builder, opcode, place_type, true, 0usize, c.tokens[usize(node.token_start)])
+        if binary_error != ok { ret binary_error }
+        try nir.add_operand(builder, binary_instruction, resumed_current)
+        try nir.add_operand(builder, binary_instruction, right)
+        ret store_assignment_value(c, place_type, resumed_address, value, token, builder)
+    }
     let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, children[1usize], place_type, builder, bindings, binding_count)
     if value_error != ok { ret value_error }
     // What the checker admitted here is assignability, not equality: a `[]T` into a
