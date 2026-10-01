@@ -387,12 +387,11 @@ type Builder = struct {
     runtime_prefix: usize,
     // Set while lowering a `@nocheck` block; every instruction emitted carries it.
     nocheck: bool,
-    // A kernel's CPU build (D780): every `Stack` slot becomes a word of the
-    // invocation's frame, `pc` then loop-occurrence header first. The words' addresses are made
-    // in the entry block, one `FieldAddress` each over `frame_base`, so they dominate
-    // every block a barrier resumes at; a `Stack` then answers the next free one's
-    // value and instruction, sixteen-aligned when it is more than one word. A frame
-    // is at most FRAME_WORDS words.
+    // A kernel's CPU build (D780): each `Stack` allocation lives in the
+    // invocation's frame, after `pc` and the loop-occurrence header. Its address
+    // is made in the entry block so it dominates every barrier resume; lowering
+    // fills in the offset when the allocation is reached. Multiword allocations
+    // are sixteen-aligned.
     frame_mode: bool,
     // A device build (D1610): a kernel lowers as a plain function, with no frame, for the
     // SPIR-V emitter to read.
@@ -400,6 +399,7 @@ type Builder = struct {
     frame_base: usize,
     frame_offset: usize,
     frame_next: usize,
+    frame_slot_count: usize,
     loop_slots: []usize,
     loop_depth: usize,
     // The tables are the caller's arena's, not the builder's own bytes: a builder
@@ -1318,11 +1318,14 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         if words == 0usize { words = 1usize }
         var next = builder.frame_next
         if words > 1usize { next = (next + 1usize) / 2usize * 2usize }
-        let most = FRAME_WORDS
-        if next + words > most { ret (0usize, 0usize, Capacity) }
+        let slot = builder.frame_slot_count
+        if slot >= FRAME_SLOTS { ret (0usize, 0usize, Capacity) }
         builder.frame_next = next + words
+        builder.frame_slot_count = slot + 1usize
         builder.frame_offset = 16usize + 8usize * builder.loop_slots.len + 8usize * builder.frame_next
-        ret (builder.frame_slot_instructions[next], builder.frame_slot_values[next], ok)
+        let instruction = builder.frame_slot_instructions[slot]
+        builder.instructions[instruction].immediate = 16usize + 8usize * builder.loop_slots.len + 8usize * next
+        ret (instruction, builder.frame_slot_values[slot], ok)
     }
     let instruction_index = builder.instruction_count
     var result = 0usize
@@ -1358,21 +1361,22 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
     ret (instruction_index, result, ok)
 }
 
-// ponytail: 256 preaddressed words (+ pc) cover 2 KB frames; allocate entry
-// addresses on demand if kernels need substantially larger private arrays.
-const FRAME_WORDS: usize = 256usize
+// ponytail: 256 preaddressed allocations; grow entry addresses when a kernel
+// actually needs more distinct locals, not merely a larger private array.
+const FRAME_SLOTS: usize = 256usize
 
 const TRAP_DATA: usize = 256usize
 
-// The frame's words, after `pc`, loop depth and its ordinal vector, addressed
-// once in the entry block of a kernel's CPU build.
-// `values`, `instructions` and `resume` are the caller's tables, FRAME_WORDS and
+// The frame's allocation addresses, after `pc`, loop depth and its ordinal vector,
+// emitted once in the entry block of a kernel's CPU build.
+// `values`, `instructions` and `resume` are the caller's tables, FRAME_SLOTS and
 // 64 long.
 fn begin_frame(builder: *Builder, frame_base: usize, values: []usize, instructions: []usize, resume: []usize, loop_slots: []usize, token: lex.Token) -> err {
-    if values.len < FRAME_WORDS || instructions.len < FRAME_WORDS || resume.len < 64usize { ret Capacity }
+    if values.len < FRAME_SLOTS || instructions.len < FRAME_SLOTS || resume.len < 64usize { ret Capacity }
     builder.frame_mode = false
     builder.frame_base = frame_base
     builder.frame_next = 0usize
+    builder.frame_slot_count = 0usize
     builder.frame_offset = 16usize + 8usize * loop_slots.len
     builder.loop_slots = loop_slots
     builder.loop_depth = 0usize
@@ -1382,15 +1386,14 @@ fn begin_frame(builder: *Builder, frame_base: usize, values: []usize, instructio
     builder.kernel_resume = resume
     let usize_type = check.make_type(.Integer, "usize", 0usize)
     let field_address: Opcode = .FieldAddress
-    let words = FRAME_WORDS
-    var word = 0usize
-    while word < words {
-        let (instruction, value, emit_error) = emit(builder, field_address, usize_type, true, 16usize + 8usize * loop_slots.len + 8usize * word, token)
+    var slot = 0usize
+    while slot < FRAME_SLOTS {
+        let (instruction, value, emit_error) = emit(builder, field_address, usize_type, true, 0usize, token)
         if emit_error != ok { ret emit_error }
         try add_operand(builder, instruction, frame_base)
-        builder.frame_slot_instructions[word] = instruction
-        builder.frame_slot_values[word] = value
-        word += 1usize
+        builder.frame_slot_instructions[slot] = instruction
+        builder.frame_slot_values[slot] = value
+        slot += 1usize
     }
     builder.frame_mode = true
     ret ok

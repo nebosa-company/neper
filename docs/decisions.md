@@ -32331,3 +32331,19 @@ on each host. The committed SPIR-V branch condition also now uses syntax both
 bootstrap and self-hosted parsers accept. The full Windows suite proceeds
 through compiler-resolved module surfaces, then stops at the independently
 stale library-fixture manifest in the shared tree.
+
+## D1750 — Address CPU kernel frame allocations, not every private word
+
+**Decision.** The CPU kernel's entry block still predefines 256 frame addresses
+so each can dominate a barrier resume. A `Stack` allocation now claims one
+address and fills its `FieldAddress` offset when lowered; the frame's byte
+cursor remains separate and retains sixteen-byte alignment for multiword
+allocations. Large private arrays therefore use one address, not one per word.
+The remaining 256 limit counts distinct allocations, not frame bytes.
+
+**Evidence.** `link/gpu_barrier` carries a 640-element `u32` array (2.5 KB),
+including its last element and a subsequent local, across a barrier on CPU
+and Vulkan; the fixture passes on Windows and WSL. Neighboring `gpu_shared`
+and `gpu_spaces` fixtures pass on Windows, and consecutive self-hosted
+compiler stages are byte-equal. Preallocating 512 word addresses instead
+exhausted the module's NIR instruction pool while compiling this fixture.
