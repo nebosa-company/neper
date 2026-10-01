@@ -2938,6 +2938,11 @@ gpu_barrier_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/gpu-barrier-selfhost"
 gpu_barrier_output=$("$test_build/gpu-barrier-selfhost")
 [ "$gpu_barrier_output" = 'gpu barrier ok' ]
+gpu_frame_many_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_frame_many/src/main.e" "$repo" x64 linux "$test_build/gpu-frame-many-selfhost")
+[ "$gpu_frame_many_written" = 'executable written' ]
+chmod +x "$test_build/gpu-frame-many-selfhost"
+gpu_frame_many_output=$("$test_build/gpu-frame-many-selfhost")
+[ "$gpu_frame_many_output" = 'gpu frame many ok' ]
 gpu_divergence_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_divergence/src/main.e" "$repo" x64 linux "$test_build/gpu-divergence-selfhost")
 [ "$gpu_divergence_written" = 'executable written' ]
 chmod +x "$test_build/gpu-divergence-selfhost"
