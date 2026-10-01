@@ -7561,7 +7561,7 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         var checked = false
         let (bytes, emit_error) = spirv.emit(c.arena, c, g, builder, signatures, at.function_count, &message, &checked)
         if emit_error == ok {
-            let (escaped, escaped_error) = hex_string(c.arena, bytes, checked)
+            let (escaped, escaped_error) = hex_string(c.arena, bytes, checked, g.compiler_identity)
             if escaped_error != ok { ret escaped_error }
             spelling = escaped
         }
@@ -7607,11 +7607,11 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     ret nir.end_function(builder)
 }
 
-// Bytes as a string literal's spelling, two hex digits a byte (D1611): an artifact's
-// strings are UTF-8, which a SPIR-V module's bytes are not, and `e.gpu` decodes them once
-// per pipeline.
-fn hex_string(a: *mem.Arena, bytes: []const u8, checked: bool) -> (str, err) {
-    let (storage, storage_error) = mem.alloc[u8](a, bytes.len * 2usize + 3usize)
+// The optional checked marker, the writing compiler's fixed-width identity, a colon and
+// two hex digits per SPIR-V byte (D1611, D1734). Artifact strings are UTF-8, which a
+// SPIR-V module's bytes are not, and `e.gpu` decodes them once per pipeline.
+fn hex_string(a: *mem.Arena, bytes: []const u8, checked: bool, compiler_identity: usize) -> (str, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, bytes.len * 2usize + 20usize)
     if storage_error != ok { ret ("", storage_error) }
     let digits = "0123456789abcdef"
     storage[0usize] = 34u8
@@ -7620,6 +7620,15 @@ fn hex_string(a: *mem.Arena, bytes: []const u8, checked: bool) -> (str, err) {
         storage[at] = 33u8
         at += 1usize
     }
+    var identity_at = 0usize
+    while identity_at < 16usize {
+        let shift = u64((15usize - identity_at) * 4usize)
+        storage[at] = digits[usize((u64(compiler_identity) >> shift) & 15u64)]
+        at += 1usize
+        identity_at += 1usize
+    }
+    storage[at] = 58u8
+    at += 1usize
     var index = 0usize
     while index < bytes.len {
         storage[at] = digits[usize(bytes[index]) / 16usize]

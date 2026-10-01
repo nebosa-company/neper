@@ -7425,8 +7425,9 @@ fn dispatch(a: *mem.Arena, context: Context, made: Pipeline, block: u64, x: u32,
 
 `e.gpu` keys one opaque driver cache blob by the embedded SPIR-V content hash,
 entry point, device UUID, driver/API versions, vendor/device IDs and capability
-set (D1733). Code-affecting launch, numeric, safety and build choices are already
-represented by the SPIR-V bytes. The record is CRC-32C checked, a checksum-valid
+set plus the writing compiler's executable/options identity (D1733, D1734).
+Code-affecting launch, numeric, safety and build choices are already represented
+by the SPIR-V bytes. The record is CRC-32C checked, a checksum-valid
 driver rejection is retried from an empty cache, and refreshed bytes replace the
 old record durably only after a successful pipeline build. `NEPER_GPU_CACHE`
 selects an existing cache root for CI; otherwise the platform user cache is used.

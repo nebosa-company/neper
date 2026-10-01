@@ -3130,6 +3130,13 @@ if ($gpuVulkanLoopOutput -ne 'gpu loop cpu only') {
     if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop vulkan ok on [1-9][0-9]* devices$') { throw 'the Vulkan runtime did not recover from a corrupt pipeline cache' }
     $rebuiltCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
     if ($corruptCacheHash -eq $rebuiltCacheHash -or $validCacheHash -ne $rebuiltCacheHash) { throw 'the Vulkan runtime did not replace the corrupt pipeline cache atomically' }
+    $cacheCount = @(Get-ChildItem -File -Recurse $gpuCache -Filter '*.bin').Count
+    $cappedLoopPath = Join-Path $testBuild 'gpu-vulkan-loop-capped-selfhost.exe'
+    $cappedLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $cappedLoopPath --inline-cap 39
+    if ($LASTEXITCODE -ne 0 -or $cappedLoopWritten -ne 'executable written') { throw 'the alternate compiler-identity Vulkan fixture did not build' }
+    $cappedLoopOutput = & $cappedLoopPath
+    if ($LASTEXITCODE -ne 0 -or $cappedLoopOutput -notmatch '^gpu loop vulkan ok on [1-9][0-9]* devices$') { throw 'the alternate compiler-identity Vulkan fixture failed' }
+    if (@(Get-ChildItem -File -Recurse $gpuCache -Filter '*.bin').Count -ne 2 * $cacheCount) { throw 'the Vulkan cache key omitted the compiler identity' }
 }
 $env:NEPER_GPU_CACHE = $previousGpuCache
 # (D1613) Correctly rounded f32 division and square root, pinned as SPIR-V and

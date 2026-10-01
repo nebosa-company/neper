@@ -32050,8 +32050,8 @@ module, entry point and device identity. The key starts with the contract's xxHa
 of the decoded SPIR-V and adds the entry, pipeline-cache UUID, driver and API versions,
 vendor/device IDs and capability bits. Launch specialisation, numerical policy,
 safety policy and build mode need no parallel metadata: each changes the embedded
-module whose bytes are already the first key part. The compiler-executable hash stays
-out until it is available to generated code; this row is therefore partial.
+module whose bytes are already the first key part. D1734 adds the writing compiler's
+executable/options identity as the remaining independent input.
 
 Records live under the platform user cache, or `NEPER_GPU_CACHE/v1` for an isolated
 run. An outer magic, length and CRC-32C reject torn or damaged files before the driver.
@@ -32064,5 +32064,21 @@ failure is a miss and never changes launch correctness.
 Iris Xe. Both write driver blobs to an isolated root. The suite corrupts Vulkan's own
 cache header, recomputes the outer CRC-32C, reruns the executable and requires the
 CPU-identical result plus byte-for-byte restoration of the prior valid cache. Both
-suite scripts parse. The failed-rebuild preservation injection and compiler identity
-key remain for the completed cache row.
+suite scripts parse. The failed-rebuild preservation injection remains for the
+completed cache row.
+
+## D1734 — Embedded device code carries its writing compiler identity
+
+**Decision.** A generated `K$spirv` string now carries the optional fault marker,
+sixteen hexadecimal digits of `Graph.compiler_identity`, a colon and the SPIR-V hex.
+The value is the same executable CRC/length plus inline-cap and CPU-level option bits
+that D398 and D431 write into artifacts. Clean `emit-executable` builds now learn it
+too; previously only artifact writers and incremental executable builds did, leaving
+ordinary embedded kernels at zero. `e.gpu` parses the private header and includes the
+identity in the durable pipeline-cache key. Raw SPIR-V output is unchanged.
+
+**Evidence.** The same no-helper loop kernel built by one compiler under default and
+`--inline-cap 39` identities creates two cache entries per device while producing the
+same CPU-identical output: two to four files across the NVIDIA and Intel adapters on
+Windows, and one to two on WSL. The bootstrap builds the compiler with the widened
+companion format, both runtime modules check, and the suite scripts parse.

@@ -1087,8 +1087,18 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, c
     let device = state.device
     let a = device.arena
     let checked = module[0usize] == 33u8
-    var module_code = module
-    if checked { module_code = module[1usize..] }
+    var module_at = 0usize
+    if checked { module_at = 1usize }
+    if module.len < module_at + 17usize || module[module_at + 16usize] != 58u8 { ret Unsupported }
+    var compiler_identity = 0u64
+    var identity_at = 0usize
+    while identity_at < 16usize {
+        let digit = hex_digit(module[module_at + identity_at])
+        if digit > 15usize { ret Unsupported }
+        compiler_identity = compiler_identity * 16u64 + u64(digit)
+        identity_at += 1usize
+    }
+    let module_code = module[module_at + 17usize..]
     let parameter_count = layout.len
     var over: mem.Arena = zero
     over.base = mem.cast[*u8](ctx)
@@ -1137,7 +1147,7 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, c
         at += 1usize
         source_at += 1usize
     }
-    let (made, made_error) = device_pipeline(device, module_code, entry)
+    let (made, made_error) = device_pipeline(device, module_code, entry, compiler_identity)
     if made_error != ok {
         if checked { vulkan.free(device.context, fault_buffer) }
         vulkan.free(device.context, block)
@@ -1180,7 +1190,7 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, c
 }
 
 // The pipeline for a kernel's module and entry on this device, made the first time.
-fn device_pipeline(device: *DeviceState, module: str, entry: str) -> (vulkan.Pipeline, err) {
+fn device_pipeline(device: *DeviceState, module: str, entry: str, compiler_identity: u64) -> (vulkan.Pipeline, err) {
     let key = mem.address_of(&module[0usize])
     var at = 0usize
     while at < device.pipeline_count {
@@ -1198,7 +1208,7 @@ fn device_pipeline(device: *DeviceState, module: str, entry: str) -> (vulkan.Pip
     if device.pipeline_count >= 16usize { ret (zero, TooLarge) }
     let (code, code_error) = hex_bytes(device.arena, module)
     if code_error != ok { ret (zero, code_error) }
-    let cache_key = pipeline_cache_key(device.physical, code, entry)
+    let cache_key = pipeline_cache_key(device.physical, code, entry, compiler_identity)
     var cached: []u8 = zero
     let (cache_path, path_error) = pipeline_cache_path(device.arena, cache_key)
     if path_error == ok { cached = pipeline_cache_read(device.arena, cache_path, cache_key) }
@@ -1215,9 +1225,9 @@ fn device_pipeline(device: *DeviceState, module: str, entry: str) -> (vulkan.Pip
 // Vulkan's blob is local optimisation state. The embedded SPIR-V hash carries the
 // launch specialisation, capability, numerical, safety and build-mode choices that
 // changed its code; the remaining bytes distinguish the entry and driver device.
-fn pipeline_cache_key(physical: vulkan.Physical, code: []const u8, entry: str) -> u64 {
+fn pipeline_cache_key(physical: vulkan.Physical, code: []const u8, entry: str, compiler_identity: u64) -> u64 {
     let kernel = hash.xxhash64(code, 0u64)
-    var fields: [40]u8 = zero
+    var fields: [48]u8 = zero
     cache_put_u64(fields[..], 0usize, kernel)
     cache_put_u64(fields[..], 8usize, u64(entry.len))
     cache_put_u32(fields[..], 16usize, physical.driver_version)
@@ -1225,6 +1235,7 @@ fn pipeline_cache_key(physical: vulkan.Physical, code: []const u8, entry: str) -
     cache_put_u32(fields[..], 24usize, physical.vendor)
     cache_put_u32(fields[..], 28usize, physical.device)
     cache_put_u64(fields[..], 32usize, u64(physical.caps))
+    cache_put_u64(fields[..], 40usize, compiler_identity)
     var identity = hash.xxhash64_init(0u64)
     hash.xxhash64_update(&identity, "vulkan")
     hash.xxhash64_update(&identity, fields[..])

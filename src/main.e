@@ -13427,8 +13427,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // (D1666) A build that writes an executable keeps each module's front in a
         // reservation of its own.
         loaded.module_blocks = writes_executable
-        // Every command that writes or reads artifacts knows which compiler it is (D398).
-        if writes_em || writes_all_em || hot_build { learn_compiler_identity(a, &loaded, args[0usize], args) }
+        // Every artifact writer and executable embedding device code knows which
+        // compiler it is (D398, D1734).
+        if writes_executable || writes_em || writes_all_em { learn_compiler_identity(a, &loaded, args[0usize], args) }
         if trailing_flags {
             loaded.jobs = jobs_flag(args)
             loaded.perturb = has_flag(args, "--perturb")
