@@ -1522,7 +1522,11 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     var bytes_per_frame = frame_bytes
     if bytes_per_frame < 8usize { bytes_per_frame = 8usize }
     bytes_per_frame = (bytes_per_frame + 15usize) / 16usize * 16usize
-    let (frames, frames_error) = mem.alloc[u8](state.device.arena, per_group * bytes_per_frame + 16usize)
+    if shared_bytes > 49152usize { ret TooLarge }
+    let arena = state.device.arena
+    let scratch_top = mem.mark(arena)
+    defer mem.reset(arena, scratch_top)
+    let (frames, frames_error) = mem.alloc[u8](arena, per_group * bytes_per_frame + 16usize)
     if frames_error != ok { ret frames_error }
     // Frames start sixteen-aligned: the arena's cursor may not.
     var base = 0usize
@@ -1531,10 +1535,9 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     // The workgroup's shared memory (section 10): 48 KB is every desktop part's
     // limit; filled with 0xCD before every workgroup, so a read before the barrier
     // that publishes it is recognisable.
-    if shared_bytes > 49152usize { ret TooLarge }
     var shared_size = shared_bytes
     if shared_size < 16usize { shared_size = 16usize }
-    let (shared_storage, shared_error) = mem.alloc[u8](state.device.arena, shared_size + 16usize)
+    let (shared_storage, shared_error) = mem.alloc[u8](arena, shared_size + 16usize)
     if shared_error != ok { ret shared_error }
     var shared_base = 0usize
     let shared_misalign = mem.address_of(&shared_storage[0usize]) % 16usize

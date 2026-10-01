@@ -97,7 +97,9 @@ fn run(a: *mem.Arena, backend: gpu.Backend, index: u32, relay_out: []u32, round_
     let (for_buf, for_error) = gpu.upload[u32](q, for_values[0..])
     if for_error != ok { ret for_error }
     defer let _ = gpu.release(q, for_buf)
+    let scratch_before = mem.mark(a)
     try gpu.launch[for_rounds](q, gpu.grid1(8usize), for_buf, 2u32)
+    if backend == .Cpu && mem.mark(a) != scratch_before { os.exit(17i32) }
     var for_out: [8]u32 = zero
     try gpu.download[u32](q, for_buf, for_out[0..])
     var for_at = 0usize
