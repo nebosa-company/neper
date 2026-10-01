@@ -3242,7 +3242,8 @@ foreach ($gpuProfileCase in @(
     @('recursion', 'main.e:14:1: error[E-GPU-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth'),
     @('private', 'main.e:9:1: error[E-GPU-9999]: `fill` reaches a slice of the private variable `local` through fill'),
     @('global', 'main.e:11:1: error[E-GPU-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump'),
-    @('param', 'main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type'))) {
+    @('param', 'main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type'),
+    @('indirect', 'main.e:10:1: error[E-GPU-9999]: `fill` reaches a call through the function pointer field `run` through fill -> through_field')) {
     $gpuProfile = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\gpu_profile_$($gpuProfileCase[0])\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1 -or -not ($gpuProfile -join "`n").Contains($gpuProfileCase[1])) { throw "the device profile did not refuse $($gpuProfileCase[0]): $($gpuProfile -join "`n")" }
 }

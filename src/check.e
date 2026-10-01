@@ -18131,6 +18131,17 @@ fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                 let (called_at, called_local) = device_name_at(names, called)
                 if called_named && called_local { device_found(walk, "a call through the function pointer", called) }
             }
+            if has_callee_node && tree.nodes[callee_node].kind == .FieldExpr {
+                let (base, has_base) = first_node_child(tree, tree.nodes[callee_node])
+                if has_base {
+                    let (base_name, base_named) = device_base_name(c, tree, text, base)
+                    let (_, base_local) = device_name_at(names, base_name)
+                    if !base_named || base_local {
+                        let (member, named) = field_expression_name(c, text, tree, tree.nodes[callee_node])
+                        if named { device_found(walk, "a call through the function pointer field", member) }
+                    }
+                }
+            }
         }
         // The resolved callee expression -- including `f[T]` -- is a call, not a
         // function used as a value. Its arguments still need the device walk.

@@ -32544,3 +32544,18 @@ compilers run the fixture, and consecutive self-hosted stages are byte-identical
 on both hosts. The full suites still stop at the shared tree's stale
 `docs/library-fixtures.json` gate. Indirect and other pending-expression
 helper shapes remain unverified.
+
+## D1762 — Refuse indirect device calls through function-pointer fields
+
+**Decision.** Keep C091's CPU barrier inlining limited to direct calls: the GPU
+profile bans indirect calls on both CPU and Vulkan. The device reachability walk
+now reports an unresolved field call as a function-pointer call at the kernel,
+with its helper chain. Qualified module calls retain their existing handling.
+
+**Evidence.** Before the check, `check/gpu_profile_indirect` accepted a field
+call through a zero-initialized function pointer; it now reports the violation
+through `fill -> through_field` on Windows and WSL. The barrier-chain runtime
+fixture still passes on both hosts, valid device code still checks, and the
+C-bootstrap and self-hosted compiler builds are byte-identical on both hosts.
+The full suites remain gated by the shared tree's stale library-fixture
+manifest. Other pending-expression helper shapes remain unverified.
