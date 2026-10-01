@@ -32285,3 +32285,16 @@ without that capability requirement. Run it on both CPU and Vulkan.
 supported Windows Vulkan devices, and on one WSL Vulkan device. The standalone
 SPIR-V emitter accepted the fixture; no compiler or runtime source change was
 needed beyond using a floor-profile probe. Temporary diagnostics were removed.
+
+## D1747 — Select CPU subgroup width at run time
+
+**Decision.** `neper run --subgroup-width` accepts 8, 16, 32, or 64 and passes
+the choice to its child as `NEPER_SUBGROUP_WIDTH`; an omitted flag explicitly
+sets 32. `e.gpu.open(.Cpu)` reads and validates that setting once per device
+open. The scheduler, lane IDs, collective boundaries, and floating reduction
+scratch all use the selected width; Vulkan keeps its hardware subgroup width.
+
+**Evidence.** `link/gpu_subgroup_width` checks all 100 lanes of a workgroup at
+each width, including the short final subgroup, integer and floating sums,
+lane IDs, and broadcast. All four `neper run` cases pass on Windows and WSL;
+an invalid width is rejected by the CLI.

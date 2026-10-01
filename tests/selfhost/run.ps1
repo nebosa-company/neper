@@ -3205,6 +3205,11 @@ $gpuSubgroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupWritten -ne 'executable written') { throw 'gpu_subgroup_identity emission failed' }
 $gpuSubgroupOutput = & $gpuSubgroupPath
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupOutput -notmatch '^gpu subgroup identity (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the subgroup identity runtime failed: $gpuSubgroupOutput" }
+# The CPU model accepts the four explicit widths and handles a short final subgroup.
+foreach ($width in @(8, 16, 32, 64)) {
+    $widthRun = & $compiler run (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_width\src\main.e') $repo 'x64' 'windows' (Join-Path $testBuild "gpu-subgroup-width-$width-selfhost.exe") --json --subgroup-width "$width" -- "$width"
+    if ($LASTEXITCODE -ne 0 -or ($widthRun -join "`n") -notmatch '"record":"run","process_exit_code":0,"stdout":"gpu subgroup width ok\\n"') { throw "the $width-lane subgroup runtime failed: $($widthRun -join "`n")" }
+}
 $gpuSubgroupReducePath = Join-Path $testBuild 'gpu-subgroup-reduce-selfhost.exe'
 $gpuSubgroupReduceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_reduce\src\main.e') $repo 'x64' 'windows' $gpuSubgroupReducePath
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupReduceWritten -ne 'executable written') { throw 'gpu_subgroup_reduce emission failed' }
