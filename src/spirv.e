@@ -78,6 +78,7 @@ type Module = struct {
     subgroup_vote: bool,
     subgroup_ballot: bool,
     subgroup_shuffle: bool,
+    subgroup_arithmetic: bool,
     v_gid: usize,
     v_lid: usize,
     v_wgid: usize,
@@ -461,6 +462,17 @@ const OP_GROUP_NON_UNIFORM_ANY: usize = 335usize
 const OP_GROUP_NON_UNIFORM_BROADCAST: usize = 337usize
 const OP_GROUP_NON_UNIFORM_BALLOT: usize = 339usize
 const OP_GROUP_NON_UNIFORM_SHUFFLE: usize = 345usize
+const OP_GROUP_NON_UNIFORM_I_ADD: usize = 349usize
+const OP_GROUP_NON_UNIFORM_F_ADD: usize = 350usize
+const OP_GROUP_NON_UNIFORM_S_MIN: usize = 353usize
+const OP_GROUP_NON_UNIFORM_U_MIN: usize = 354usize
+const OP_GROUP_NON_UNIFORM_F_MIN: usize = 355usize
+const OP_GROUP_NON_UNIFORM_S_MAX: usize = 356usize
+const OP_GROUP_NON_UNIFORM_U_MAX: usize = 357usize
+const OP_GROUP_NON_UNIFORM_F_MAX: usize = 358usize
+const OP_GROUP_NON_UNIFORM_BITWISE_AND: usize = 359usize
+const OP_GROUP_NON_UNIFORM_BITWISE_OR: usize = 360usize
+const OP_GROUP_NON_UNIFORM_BITWISE_XOR: usize = 361usize
 const OP_ATOMIC_LOAD: usize = 227usize
 const OP_ATOMIC_STORE: usize = 228usize
 const OP_ATOMIC_EXCHANGE: usize = 229usize
@@ -623,6 +635,17 @@ fn subgroup_shuffle_capability(m: *Module) {
     if !m.subgroup_shuffle {
         capability(m, 65usize)
         m.subgroup_shuffle = true
+    }
+}
+
+fn subgroup_arithmetic_capability(m: *Module) {
+    if !m.subgroup {
+        capability(m, 61usize)
+        m.subgroup = true
+    }
+    if !m.subgroup_arithmetic {
+        capability(m, 63usize)
+        m.subgroup_arithmetic = true
     }
 }
 
@@ -1546,6 +1569,39 @@ fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: 
 }
 
 fn emit_subgroup(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    if instruction.immediate >= 5usize && instruction.immediate <= 10usize {
+        if instruction.operand_count != 1usize { ret fail(m, "a subgroup reduction has the wrong argument count") }
+        let value = operand(builder, instruction, 0usize)
+        let (result_type, signed) = value_type(m, instruction.ty)
+        if result_type == 0usize || KIND_SCALAR != values.kind[value] || values.ty[value] != result_type { ret fail(m, "a subgroup reduction has an unsupported value") }
+        let floating = instruction.ty.kind == .Float
+        if floating && instruction.immediate >= 8usize { ret fail(m, "a subgroup bitwise reduction is not integer") }
+        var opcode = OP_GROUP_NON_UNIFORM_I_ADD
+        if instruction.immediate == 5usize && floating { opcode = OP_GROUP_NON_UNIFORM_F_ADD }
+        if instruction.immediate == 6usize {
+            opcode = OP_GROUP_NON_UNIFORM_U_MIN
+            if signed { opcode = OP_GROUP_NON_UNIFORM_S_MIN }
+            if floating { opcode = OP_GROUP_NON_UNIFORM_F_MIN }
+        }
+        if instruction.immediate == 7usize {
+            opcode = OP_GROUP_NON_UNIFORM_U_MAX
+            if signed { opcode = OP_GROUP_NON_UNIFORM_S_MAX }
+            if floating { opcode = OP_GROUP_NON_UNIFORM_F_MAX }
+        }
+        if instruction.immediate == 8usize { opcode = OP_GROUP_NON_UNIFORM_BITWISE_AND }
+        if instruction.immediate == 9usize { opcode = OP_GROUP_NON_UNIFORM_BITWISE_OR }
+        if instruction.immediate == 10usize { opcode = OP_GROUP_NON_UNIFORM_BITWISE_XOR }
+        subgroup_arithmetic_capability(m)
+        head(&m.code, opcode, 6usize)
+        put(&m.code, result_type)
+        let result = fresh(m)
+        put(&m.code, result)
+        put(&m.code, constant(m, m.t_u32, 3usize))
+        put(&m.code, 0usize)
+        put(&m.code, values.id[value])
+        scalar(values, instruction.result, result, result_type, signed)
+        ret ok
+    }
     if instruction.immediate == 3usize || instruction.immediate == 4usize {
         if instruction.operand_count != 2usize { ret fail(m, "a subgroup exchange has the wrong argument count") }
         let value = operand(builder, instruction, 0usize)

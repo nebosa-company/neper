@@ -29,9 +29,9 @@
 // A kernel's `shared var`s live in one block per launch, handed to every step,
 // filled with 0xCD before each workgroup (D781).
 //
-// Subgroup identity, votes, broadcast and shuffle use hardware inputs and collectives
-// on Vulkan and the fixed 32-lane model on the CPU. Reductions and a barrier in a helper
-// are not here yet (only the kernel's own body is cut). `.Cuda` and a build
+// Subgroup identity and collectives use hardware inputs and operations on Vulkan and
+// the fixed 32-lane model on the CPU. A barrier in a helper is not here yet (only the
+// kernel's own body is cut). `.Cuda` and a build
 // without Vulkan answer `Unsupported`.
 //
 // The fault buffer (contract section 1.3, D785): a check failing in a kernel's CPU
@@ -177,6 +177,204 @@ fn subgroup_exchange(kind: u32) -> u64 {
 
 fn subgroup_exchange32(kind: u32) -> u32 { ret u32(subgroup_exchange(kind)) }
 fn subgroup_exchange64(kind: u32) -> u64 { ret subgroup_exchange(kind) }
+
+fn subgroup_begin() -> usize { ret launch_local / 32usize * 32usize }
+
+fn subgroup_end(first: usize) -> usize {
+    var end = first + 32usize
+    let count = launch_size[0usize] * launch_size[1usize] * launch_size[2usize]
+    if end > count { end = count }
+    ret end
+}
+
+fn subgroup_add_u64(a: u64, b: u64) -> u64 {
+    var left = a
+    var right = b
+    while right != 0u64 {
+        let carry = (left & right) << 1u32
+        left = left ^ right
+        right = carry
+    }
+    ret left
+}
+
+fn subgroup_reduce_u32(kind: u32) -> u32 {
+    let first = subgroup_begin()
+    let end = subgroup_end(first)
+    var result = 0u32
+    var seen = false
+    var at = first
+    while at < end {
+        if subgroup_active[at] {
+            let value = u32(subgroup_word_snapshot[at] & 4294967295u64)
+            if !seen {
+                result = value
+                seen = true
+            } else {
+                if kind == 0u32 { result = u32((u64(result) + u64(value)) & 4294967295u64) }
+                if kind == 1u32 && value < result { result = value }
+                if kind == 2u32 && value > result { result = value }
+                if kind == 3u32 { result = result & value }
+                if kind == 4u32 { result = result | value }
+                if kind == 5u32 { result = result ^ value }
+            }
+        }
+        at += 1usize
+    }
+    ret result
+}
+
+fn subgroup_reduce_i32(kind: u32) -> i32 {
+    let first = subgroup_begin()
+    let end = subgroup_end(first)
+    var bits = 0u32
+    var result = 0i32
+    var seen = false
+    var at = first
+    while at < end {
+        if subgroup_active[at] {
+            let word = u32(subgroup_word_snapshot[at] & 4294967295u64)
+            let value = mem.bitcast[i32](word)
+            if !seen {
+                bits = word
+                result = value
+                seen = true
+            } else {
+                if kind == 0u32 { bits = u32((u64(bits) + u64(word)) & 4294967295u64) }
+                if kind == 1u32 && value < result { result = value }
+                if kind == 2u32 && value > result { result = value }
+                if kind == 3u32 { bits = bits & word }
+                if kind == 4u32 { bits = bits | word }
+                if kind == 5u32 { bits = bits ^ word }
+            }
+        }
+        at += 1usize
+    }
+    if kind == 1u32 || kind == 2u32 { ret result }
+    ret mem.bitcast[i32](bits)
+}
+
+fn subgroup_reduce_u64(kind: u32) -> u64 {
+    let first = subgroup_begin()
+    let end = subgroup_end(first)
+    var result = 0u64
+    var seen = false
+    var at = first
+    while at < end {
+        if subgroup_active[at] {
+            let value = subgroup_word_snapshot[at]
+            if !seen {
+                result = value
+                seen = true
+            } else {
+                if kind == 0u32 { result = subgroup_add_u64(result, value) }
+                if kind == 1u32 && value < result { result = value }
+                if kind == 2u32 && value > result { result = value }
+                if kind == 3u32 { result = result & value }
+                if kind == 4u32 { result = result | value }
+                if kind == 5u32 { result = result ^ value }
+            }
+        }
+        at += 1usize
+    }
+    ret result
+}
+
+fn subgroup_reduce_i64(kind: u32) -> i64 {
+    let first = subgroup_begin()
+    let end = subgroup_end(first)
+    var bits = 0u64
+    var result = 0i64
+    var seen = false
+    var at = first
+    while at < end {
+        if subgroup_active[at] {
+            let word = subgroup_word_snapshot[at]
+            let value = mem.bitcast[i64](word)
+            if !seen {
+                bits = word
+                result = value
+                seen = true
+            } else {
+                if kind == 0u32 { bits = subgroup_add_u64(bits, word) }
+                if kind == 1u32 && value < result { result = value }
+                if kind == 2u32 && value > result { result = value }
+                if kind == 3u32 { bits = bits & word }
+                if kind == 4u32 { bits = bits | word }
+                if kind == 5u32 { bits = bits ^ word }
+            }
+        }
+        at += 1usize
+    }
+    if kind == 1u32 || kind == 2u32 { ret result }
+    ret mem.bitcast[i64](bits)
+}
+
+fn subgroup_reduce_f32(kind: u32) -> f32 {
+    let first = subgroup_begin()
+    let end = subgroup_end(first)
+    var values: [32]f32 = zero
+    var count = 0usize
+    var at = first
+    while at < end {
+        if subgroup_active[at] {
+            values[count] = mem.bitcast[f32](u32(subgroup_word_snapshot[at] & 4294967295u64))
+            count += 1usize
+        }
+        at += 1usize
+    }
+    while count > 1usize {
+        var source_at = 0usize
+        var out_at = 0usize
+        while source_at + 1usize < count {
+            var value = values[source_at] + values[source_at + 1usize]
+            if kind == 1u32 { value = math.min[f32](values[source_at], values[source_at + 1usize]) }
+            if kind == 2u32 { value = math.max[f32](values[source_at], values[source_at + 1usize]) }
+            values[out_at] = value
+            source_at += 2usize
+            out_at += 1usize
+        }
+        if source_at < count {
+            values[out_at] = values[source_at]
+            out_at += 1usize
+        }
+        count = out_at
+    }
+    ret values[0usize]
+}
+
+fn subgroup_reduce_f64(kind: u32) -> f64 {
+    let first = subgroup_begin()
+    let end = subgroup_end(first)
+    var values: [32]f64 = zero
+    var count = 0usize
+    var at = first
+    while at < end {
+        if subgroup_active[at] {
+            values[count] = mem.bitcast[f64](subgroup_word_snapshot[at])
+            count += 1usize
+        }
+        at += 1usize
+    }
+    while count > 1usize {
+        var source_at = 0usize
+        var out_at = 0usize
+        while source_at + 1usize < count {
+            var value = values[source_at] + values[source_at + 1usize]
+            if kind == 1u32 { value = math.min[f64](values[source_at], values[source_at + 1usize]) }
+            if kind == 2u32 { value = math.max[f64](values[source_at], values[source_at + 1usize]) }
+            values[out_at] = value
+            source_at += 2usize
+            out_at += 1usize
+        }
+        if source_at < count {
+            values[out_at] = values[source_at]
+            out_at += 1usize
+        }
+        count = out_at
+    }
+    ret values[0usize]
+}
 
 fn subgroup_vote(kind: u32) -> u64 {
     let first = launch_local / 32usize * 32usize

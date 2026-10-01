@@ -3160,6 +3160,11 @@ $gpuSubgroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupWritten -ne 'executable written') { throw 'gpu_subgroup_identity emission failed' }
 $gpuSubgroupOutput = & $gpuSubgroupPath
 if ($LASTEXITCODE -ne 0 -or $gpuSubgroupOutput -notmatch '^gpu subgroup identity (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the subgroup identity runtime failed: $gpuSubgroupOutput" }
+$gpuSubgroupReducePath = Join-Path $testBuild 'gpu-subgroup-reduce-selfhost.exe'
+$gpuSubgroupReduceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_subgroup_reduce\src\main.e') $repo 'x64' 'windows' $gpuSubgroupReducePath
+if ($LASTEXITCODE -ne 0 -or $gpuSubgroupReduceWritten -ne 'executable written') { throw 'gpu_subgroup_reduce emission failed' }
+$gpuSubgroupReduceOutput = & $gpuSubgroupReducePath
+if ($LASTEXITCODE -ne 0 -or $gpuSubgroupReduceOutput -notmatch '^gpu subgroup reduce (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the subgroup reduction runtime failed: $gpuSubgroupReduceOutput" }
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-GPU-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,

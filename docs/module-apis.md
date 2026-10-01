@@ -7295,6 +7295,15 @@ fn subgroup_failure(bounds: bool)
 fn subgroup_exchange(kind: u32) -> u64
 fn subgroup_exchange32(kind: u32) -> u32
 fn subgroup_exchange64(kind: u32) -> u64
+fn subgroup_begin() -> usize
+fn subgroup_end(first: usize) -> usize
+fn subgroup_add_u64(a: u64, b: u64) -> u64
+fn subgroup_reduce_u32(kind: u32) -> u32
+fn subgroup_reduce_i32(kind: u32) -> i32
+fn subgroup_reduce_u64(kind: u32) -> u64
+fn subgroup_reduce_i64(kind: u32) -> i64
+fn subgroup_reduce_f32(kind: u32) -> f32
+fn subgroup_reduce_f64(kind: u32) -> f64
 fn subgroup_vote(kind: u32) -> u64
 fn set_ids(group: usize, local: usize)
 fn subgroup_wait(pc: usize) -> bool
@@ -7332,6 +7341,12 @@ fn subgroup_any(value: bool) -> bool
 fn subgroup_ballot(value: bool) -> u64
 fn subgroup_broadcast[T: type](value: T, lane: u32) -> T
 fn subgroup_shuffle[T: type](value: T, lane: u32) -> T
+fn subgroup_add[T: type](value: T) -> T
+fn subgroup_min[T: type](value: T) -> T
+fn subgroup_max[T: type](value: T) -> T
+fn subgroup_and[T: type](value: T) -> T
+fn subgroup_or[T: type](value: T) -> T
+fn subgroup_xor[T: type](value: T) -> T
 fn atomic_load[T: type](p: *Atomic[T], order: atomic.Ordering, scope: Scope) -> T
 fn atomic_store[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope)
 fn atomic_xchg[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
@@ -7379,9 +7394,8 @@ launch answers `Unsupported`; the CPU device still runs it.
 
 The landed device-only intrinsics are `gid`, `lid`, `wgid`, `sid`, `barrier`,
 `memory_barrier`, `subgroup_size`, `subgroup_elect`, `subgroup_all`, `subgroup_any`,
-`subgroup_ballot`, `subgroup_broadcast`, `subgroup_shuffle` and the scoped atomic family
-above. The remaining planned subgroup intrinsics are the arithmetic and bitwise
-reductions.
+`subgroup_ballot`, `subgroup_broadcast`, `subgroup_shuffle`, the six arithmetic and
+bitwise reductions, and the scoped atomic family above.
 
 ### `e.gpu.vulkan`
 

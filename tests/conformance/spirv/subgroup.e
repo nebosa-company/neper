@@ -30,3 +30,60 @@ fn subgroup_scalar_exchange(signed_values: []i32, float_values: []f32, widths: [
     float_values[at] = shuffled
     widths[at] = gpu.subgroup_size()
 }
+
+@gpu(40, caps(.Subgroup, .Int64))
+fn subgroup_integer_reduce(values: []u64) {
+    let at = usize(gpu.lid.x) * 12usize
+    let narrow = gpu.sid + 1u32
+    let add32 = gpu.subgroup_add(narrow)
+    let min32 = gpu.subgroup_min(narrow)
+    let max32 = gpu.subgroup_max(narrow)
+    let and32 = gpu.subgroup_and(narrow)
+    let or32 = gpu.subgroup_or(narrow)
+    let xor32 = gpu.subgroup_xor(narrow)
+    let wide = u64(gpu.sid) + 4294967296u64
+    let add64 = gpu.subgroup_add(wide)
+    let min64 = gpu.subgroup_min(wide)
+    let max64 = gpu.subgroup_max(wide)
+    let and64 = gpu.subgroup_and(wide)
+    let or64 = gpu.subgroup_or(wide)
+    let xor64 = gpu.subgroup_xor(wide)
+    values[at] = u64(add32)
+    values[at + 1usize] = u64(min32)
+    values[at + 2usize] = u64(max32)
+    values[at + 3usize] = u64(and32)
+    values[at + 4usize] = u64(or32)
+    values[at + 5usize] = u64(xor32)
+    values[at + 6usize] = add64
+    values[at + 7usize] = min64
+    values[at + 8usize] = max64
+    values[at + 9usize] = and64
+    values[at + 10usize] = or64
+    values[at + 11usize] = xor64
+}
+
+@gpu(40, caps(.Subgroup))
+fn subgroup_scalar_reduce(signed_values: []i32, float_values: []f32) {
+    let signed_at = usize(gpu.lid.x) * 6usize
+    let signed = i32(gpu.sid) - 16i32
+    let signed_add = gpu.subgroup_add(signed)
+    let signed_min = gpu.subgroup_min(signed)
+    let signed_max = gpu.subgroup_max(signed)
+    let signed_and = gpu.subgroup_and(signed)
+    let signed_or = gpu.subgroup_or(signed)
+    let signed_xor = gpu.subgroup_xor(signed)
+    let float_at = usize(gpu.lid.x) * 3usize
+    let floating = f32(gpu.sid) + 0.5f32
+    let float_add = gpu.subgroup_add(floating)
+    let float_min = gpu.subgroup_min(floating)
+    let float_max = gpu.subgroup_max(floating)
+    signed_values[signed_at] = signed_add
+    signed_values[signed_at + 1usize] = signed_min
+    signed_values[signed_at + 2usize] = signed_max
+    signed_values[signed_at + 3usize] = signed_and
+    signed_values[signed_at + 4usize] = signed_or
+    signed_values[signed_at + 5usize] = signed_xor
+    float_values[float_at] = float_add
+    float_values[float_at + 1usize] = float_min
+    float_values[float_at + 2usize] = float_max
+}
