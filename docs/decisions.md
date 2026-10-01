@@ -32216,3 +32216,25 @@ to the one scalar kind it had rejected.
 match every CPU word on two Windows adapters and WSL's Vulkan device; `saxpy` is
 compared where denormal preservation is supported, and `needs_ftz` either writes one
 on a capable device or is refused. Both complete fixtures pass on Windows and WSL.
+
+## D1742 — The exact-kernel sweep follows semantic compatibility, not fixture names
+
+**Decision.** Every positive correctness kernel reached by the M3 GPU corpus now
+runs on the CPU and each compatible Vulkan device, with exact output comparison.
+`e.gpu.tensor` replays the five kernels its fixture reaches: u32 add and matmul on
+every floor device, i64 add with Int64, and f32 add and matmul with preserved
+denormals. A capability absence skips only that kernel family, not the integer floor.
+
+Three sources are deliberately outside the comparison set. `gpu_shared.early_read`
+observes the CPU debugger's 0xCD initialization while Vulkan workgroup memory is
+undefined. `gpu_divergence` deliberately violates uniform-barrier rules.
+`front_counts` and `gpu_reshape` are compiler statistics and incremental-signature
+fixtures whose source shape and exit codes are their oracle, not GPU correctness;
+adding a second runtime path would invalidate what they measure.
+
+**Evidence.** `gpu_tensor` compares all reached results on two Windows adapters and
+WSL's Vulkan device and its full CPU surface still passes. Together with D1739-D1741,
+the literal audit covers `gpu_spaces`, `gpu_barrier`, `gpu_shared`, `gpu_cpu`,
+`gpu_present`, and `gpu_tensor`; D1720-D1736 cover the Vulkan-first subgroup, fault,
+sync, types, loop and float corpus. C090's correctness and performance rows are
+complete.
