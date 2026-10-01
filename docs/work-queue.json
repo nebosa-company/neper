@@ -739,6 +739,50 @@
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Petcow src/facts.rs:88 parse_facts (key=value with integer coercion, CRLF-safe) plus custom_fact_script (first-line-only capture), and src/inventory.rs:88 resolve/select (group vars merged in listed order under host vars) plus :133 synthesize_hosts (address_from lookup, tag-derived groups, resource_id passthrough, skip on missing address). Pure but app-shaped: land as x.ops helpers alongside the x.ssh driver (L048), with fixtures from facts.rs:113 and inventory.rs:203. Plan: docs/petcow.md A9."
+    },
+    {
+      "id": "L051",
+      "category": "library",
+      "group": "Drivers",
+      "order": 149,
+      "title": "Packet codecs and pcap I/O (e.net.packet, e.net.pcap)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "e.net is socket-level only (tcp_connect/tcp_listen/udp_bind in lib/e/net.e) with a DNS wire codec (lib/e/net/dns.e) but no Ethernet/IPv4/IPv6/TCP/UDP/ICMP encode/decode and no pcap read/write -- the scapy/dpkt/pyshark gap. Add pure e.net.packet (headers, checksums, fail-closed on truncated input) plus e.net.pcap (pcap/pcapng read/write) with crafted-packet fixtures, checksum vectors and pcap round-trip goldens; raw-socket send stays platform code outside e.* tests. Plan: docs/ethical-hacking.md S1."
+    },
+    {
+      "id": "L052",
+      "category": "library",
+      "group": "Formats",
+      "order": 150,
+      "title": "Executable format readers (e.fmt.elf, e.fmt.pe)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "lib/e/fmt has ~40 codecs and zero executable formats -- the lief/pefile/pyelftools gap for RE triage and forensics. Add read-only e.fmt.elf and e.fmt.pe (headers, program/section tables, symbol and dynamic tables) with minimal hand-built binary fixtures plus readelf/objdump text goldens; no disassembler, Mach-O deferred. Plan: docs/ethical-hacking.md S2."
+    },
+    {
+      "id": "L053",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 151,
+      "title": "Multi-pattern signature scanning (YARA-lite subset)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "e.grep is literal search only (lib/e/grep.e) -- the yara-python gap for malware triage over S1/S2 inputs. First diff e.algo.search for Aho-Corasick; if absent, add a YARA-lite subset (hex strings with wildcards/jumps, ASCII/UTF-16 literals, all-of/any-of/count conditions) with fixtures for overlapping matches, wildcards and no-match. Plan: docs/ethical-hacking.md S3."
+    },
+    {
+      "id": "L054",
+      "category": "library",
+      "group": "Drivers",
+      "order": 152,
+      "title": "HTTP fuzz and host-sweep helpers for authorized scanning",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "e.net.http plus e.fmt.html/xml and e.text.regex cover web-test transport and parsing, but the wfuzz/gobuster pattern (payload encoders, concurrent sweep runner, finding records) is rebuilt by every scanner. Add e.net.http extensions plus a recipe: payload-encoder table, sweep runner over e.task with e.ratelimit and e.cancel, stable-ID finding records via e.algo.hash; fixtures use fake HTTP only, target authorization stays caller policy. Plan: docs/ethical-hacking.md S4."
     }
   ]
 }
