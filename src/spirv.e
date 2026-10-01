@@ -390,6 +390,7 @@ const OP_TYPE_FUNCTION: usize = 33usize
 const OP_CONSTANT_TRUE: usize = 41usize
 const OP_CONSTANT_FALSE: usize = 42usize
 const OP_CONSTANT: usize = 43usize
+const OP_CONSTANT_COMPOSITE: usize = 44usize
 const OP_FUNCTION: usize = 54usize
 const OP_FUNCTION_PARAMETER: usize = 55usize
 const OP_FUNCTION_END: usize = 56usize
@@ -735,37 +736,48 @@ fn declare_subgroup_inputs(m: *Module, builder: *nir.Builder) {
     m.v_subgroup_width = builtin_scalar_variable(m, BUILTIN_SUBGROUP_SIZE)
 }
 
-// A constant of a scalar type, interned.
+// A scalar or two-word address constant, interned.
 fn constant(m: *Module, ty: usize, value: usize) -> usize {
     var high = 0usize
     var low = value & 4294967295usize
     if ty != 0usize && ty == m.t_u8 { low = low & 255usize }
     if ty != 0usize && ty == m.t_u16 { low = low & 65535usize }
     if ty != 0usize && ty == m.t_u64 { high = value >> 32usize }
+    if ty == m.t_v2u32 { high = value >> 32usize }
     var at = 0usize
     while at < m.constant_count {
         if m.constant_types[at] == ty && m.constant_low[at] == low && m.constant_high[at] == high { ret m.constant_ids[at] }
         at += 1usize
     }
     let id = fresh(m)
-    if ty == m.t_bool {
-        var opcode = OP_CONSTANT_FALSE
-        if value != 0usize { opcode = OP_CONSTANT_TRUE }
-        head(&m.types, opcode, 3usize)
+    if ty == m.t_v2u32 {
+        let low_word = constant(m, m.t_u32, low)
+        let high_word = constant(m, m.t_u32, high)
+        head(&m.types, OP_CONSTANT_COMPOSITE, 5usize)
         put(&m.types, ty)
         put(&m.types, id)
+        put(&m.types, low_word)
+        put(&m.types, high_word)
     } else {
-        if ty != 0usize && ty == m.t_u64 {
-            head(&m.types, OP_CONSTANT, 5usize)
+        if ty == m.t_bool {
+            var opcode = OP_CONSTANT_FALSE
+            if value != 0usize { opcode = OP_CONSTANT_TRUE }
+            head(&m.types, opcode, 3usize)
             put(&m.types, ty)
             put(&m.types, id)
-            put(&m.types, low)
-            put(&m.types, high)
         } else {
-            head(&m.types, OP_CONSTANT, 4usize)
-            put(&m.types, ty)
-            put(&m.types, id)
-            put(&m.types, low)
+            if ty != 0usize && ty == m.t_u64 {
+                head(&m.types, OP_CONSTANT, 5usize)
+                put(&m.types, ty)
+                put(&m.types, id)
+                put(&m.types, low)
+                put(&m.types, high)
+            } else {
+                head(&m.types, OP_CONSTANT, 4usize)
+                put(&m.types, ty)
+                put(&m.types, id)
+                put(&m.types, low)
+            }
         }
     }
     if m.constant_count >= m.constant_ids.len {
@@ -1750,6 +1762,13 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
     }
     if opcode == .BranchIf {
         let condition = operand(builder, instruction, 0usize)
+        var condition_id = values.id[condition]
+        // Lowering branches directly on a pointer for the null check. A device
+        // address is two words, so collapse it before the structured branch header.
+        if values.ty[condition] == m.t_v2u32 {
+            let bits = binary(m, OP_BITWISE_OR, m.t_u32, extract(m, condition_id, 0usize), extract(m, condition_id, 1usize))
+            condition_id = binary(m, OP_I_NOT_EQUAL, m.t_bool, bits, constant(m, m.t_u32, 0usize))
+        }
         if flow.loop_merges[block_index] != 0usize {
             head(&m.code, OP_LOOP_MERGE, 4usize)
             put(&m.code, flow.loop_merges[block_index])
@@ -1767,7 +1786,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         if back != 0usize && flow.loop_continues[back - 1usize] != flow.labels[block_index] { destination = flow.loop_continues[back - 1usize] }
         if back2 != 0usize && flow.loop_continues[back2 - 1usize] != flow.labels[block_index] { destination2 = flow.loop_continues[back2 - 1usize] }
         head(&m.code, OP_BRANCH_CONDITIONAL, 4usize)
-        put(&m.code, values.id[condition])
+        put(&m.code, condition_id)
         put(&m.code, destination)
         put(&m.code, destination2)
         ret ok
@@ -1778,6 +1797,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
     if opcode == .Switch { ret fail(m, "a switch is not yet written as SPIR-V") }
     if opcode == .Trap {
         var kind = 99usize
+        if same(instruction.ty.name, "null") { kind = 1usize }
         if same(instruction.ty.name, "tag") || same(instruction.ty.name, "enum") || same(instruction.ty.name, "invalid") { kind = 2usize }
         if kind == 99usize { ret fail(m, "this trap kind is not yet written as a device fault") }
         write_fault(m, kind, instruction.site.line)
