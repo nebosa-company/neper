@@ -2421,33 +2421,23 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
                     wanted = found && oracle.inline_entries[previous].mandatory
                 }
                 if wanted && function.return_count <= 1usize {
-                    var hidden = false
-                    if function.return_count == 1usize {
-                        var function_call: check.CallInfo = zero
-                        function_call.function = function
-                        var return_layout: ReturnLayout = zero
-                        try call_return_layout(c, function_call, &return_layout)
-                        hidden = return_layout.via_slot
-                    }
-                    if !hidden {
-                        let before = oracle.function_count
-                        var tree: parse.Tree = zero
-                        try graph.parse_module(g, function.module_index, &tree)
-                        try check.tokenize_module(c, g, function.module_index)
-                        try lower_instance(c, g, &tree, function.module_index, instance_at, oracle, signatures, bindings, &oracle_defers)
-                        c.failure_has_token = false
-                        if *entry_count == entries.len { ret check.Capacity }
-                        var entry: nir.InlineEntry = zero
-                        entry.module_index = function.owner_module_index
-                        entry.name = function.name
-                        entry.instance = function.instance_id
-                        entry.function_index = before
-                        entry.walked_in = function.module_index
-                        entry.oracle = oracle
-                        entry.checker = c
-                        entries[*entry_count] = entry
-                        *entry_count += 1usize
-                    }
+                    let before = oracle.function_count
+                    var tree: parse.Tree = zero
+                    try graph.parse_module(g, function.module_index, &tree)
+                    try check.tokenize_module(c, g, function.module_index)
+                    try lower_instance(c, g, &tree, function.module_index, instance_at, oracle, signatures, bindings, &oracle_defers)
+                    c.failure_has_token = false
+                    if *entry_count == entries.len { ret check.Capacity }
+                    var entry: nir.InlineEntry = zero
+                    entry.module_index = function.owner_module_index
+                    entry.name = function.name
+                    entry.instance = function.instance_id
+                    entry.function_index = before
+                    entry.walked_in = function.module_index
+                    entry.oracle = oracle
+                    entry.checker = c
+                    entries[*entry_count] = entry
+                    *entry_count += 1usize
                 }
             }
             instance_at += 1usize
@@ -2530,7 +2520,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         try call_return_layout(c, function_call, &return_layout)
                         hidden = return_layout.via_slot
                     }
-                    if hidden {
+                    if hidden && !oracle.barrier_oracle {
                         if oracle.explain { explain_inline(oracle, g, module_index, name, "not a candidate: its result comes back through a slot") }
                         node_index += 1usize
                         continue
@@ -2783,6 +2773,20 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     // one: the types its instructions carry are imported as they are copied.
     let foreign = entry.checker.fork_id != c.fork_id
     let callee = oracle.functions[entry.function_index]
+    var return_layout: ReturnLayout = zero
+    try call_return_layout(c, call, &return_layout)
+    let hidden_return = return_layout.via_slot && results.count != 0usize
+    var return_slot = 0usize
+    if hidden_return {
+        let (slots_aligned, slots_error) = layout.align_up(return_layout.size, 8usize)
+        if slots_error != ok { ret slots_error }
+        var slots = slots_aligned / 8usize
+        if slots == 0usize { slots = 1usize }
+        let slot_type = check.make_type(.Other, "return-slot", call.function.module_index)
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, slot_type, true, slots, token)
+        if stack_error != ok { ret stack_error }
+        return_slot = stack
+    }
     try record_inlined(builder, entry.module_index, entry.name, entry.instance)
     // The callee's body may itself hold copies (D212): every callee of those is a
     // body edge of this module too, or an edit to it would leave this copy stale.
@@ -2822,7 +2826,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     var result_type: check.Type = zero
     var slot = 0usize
     var slot_size = 0usize
-    if results.count == 1usize {
+    if results.count == 1usize && !hidden_return {
         let (returned, returned_error) = check.call_return(c, call, 0usize)
         if returned_error != ok { ret returned_error }
         result_type = returned
@@ -2874,8 +2878,14 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
             let (copied_origin, copied_origin_error) = add_inline_origin(builder, entry.module_index, entry.name, imported_origin)
             if copied_origin_error != ok { ret copied_origin_error }
             if instruction.opcode == .Parameter {
-                if instruction.immediate >= argument_count { ret check.ArgumentCount }
-                value_map[instruction.result] = arguments[instruction.immediate]
+                if hidden_return && instruction.immediate == 0usize {
+                    value_map[instruction.result] = return_slot
+                } else {
+                    var argument_index = instruction.immediate
+                    if hidden_return { argument_index = argument_index - 1usize }
+                    if argument_index >= argument_count { ret check.ArgumentCount }
+                    value_map[instruction.result] = arguments[argument_index]
+                }
             } else {
                 if instruction.opcode == .Barrier && (builder.frame_mode || builder.frame_locals) {
                     var no_slots: [1]usize = zero
@@ -2989,6 +2999,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     builder.current_path = caller_path
     let (continuation_index, continuation_error) = nir.begin_block(builder)
     if continuation_error != ok || continuation_index != continuation { ret nir.InvalidControlFlow }
+    if hidden_return { ret read_return_slot(c, call, &return_layout, return_slot, builder, token, results) }
     if results.count == 1usize {
         if return_sites == 1usize {
             results.values[0usize] = single_result
@@ -2998,6 +3009,32 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
             try nir.add_operand(builder, load_instruction, slot)
             results.values[0usize] = loaded
         }
+    }
+    ret ok
+}
+
+// Both a native call and a copied helper leave slot-return results in the same
+// caller-owned storage. An aggregate remains an address; scalars are loaded.
+fn read_return_slot(c: *check.Checker, call: check.CallInfo, return_layout: *ReturnLayout, slot: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    var result_at = 0usize
+    while result_at < results.count {
+        let (result_type, result_type_error) = check.call_return(c, call, result_at)
+        if result_type_error != ok { ret result_type_error }
+        let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, result_type, true, return_layout.offsets[result_at], token)
+        if address_error != ok { ret address_error }
+        try nir.add_operand(builder, address_instruction, slot)
+        if aggregate_value(c, result_type) {
+            results.values[result_at] = address
+            results.addresses[result_at] = true
+        } else {
+            let (info, info_error) = layout.type_info(c, result_type)
+            if info_error != ok { ret info_error }
+            let (load_instruction, value, load_error) = nir.emit(builder, .Load, result_type, true, info.size, token)
+            if load_error != ok { ret load_error }
+            try nir.add_operand(builder, load_instruction, address)
+            results.values[result_at] = value
+        }
+        result_at += 1usize
     }
     ret ok
 }
@@ -3520,16 +3557,17 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
     var return_layout: ReturnLayout = zero
     let return_layout_error = call_return_layout(c, call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
-    // Section 12's inlining: a callee the oracle holds -- forty NIR instructions or
-    // fewer, one register result at most -- is copied in here instead of called (D207).
-    if builder.has_oracle && !call.indirect && !call.mem_alloc && !call.function.intrinsic && !call.function.external && !call.function.generic && !call.function.gpu && !return_layout.via_slot && results.count <= 1usize {
-        var scalar_result = true
+    // Section 12's ordinary oracle keeps scalar-only calls; the barrier oracle
+    // also copies a single result returned through a hidden slot.
+    if builder.has_oracle && !call.indirect && !call.mem_alloc && !call.function.intrinsic && !call.function.external && !call.function.generic && !call.function.gpu {
+        var inline_shape = !return_layout.via_slot && results.count <= 1usize
         if results.count == 1usize {
             let (returned, returned_error) = check.call_return(c, call, 0usize)
             if returned_error != ok { ret returned_error }
-            scalar_result = !aggregate_value(c, returned)
+            if aggregate_value(c, returned) { inline_shape = false }
         }
-        if scalar_result {
+        if builder.inline_only_mandatory && return_layout.via_slot && results.count == 1usize { inline_shape = true }
+        if inline_shape {
             let (entry_index, inlinable) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
             if inlinable && (!builder.inline_only_mandatory || builder.inline_entries[entry_index].mandatory) { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
         }
@@ -3671,29 +3709,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
         }
         ret ok
     }
-    var result_at = 0usize
-    while result_at < results.count {
-        let (result_type, result_type_error) = check.call_return(c, call, result_at)
-        if result_type_error != ok { ret result_type_error }
-        let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, result_type, true, return_layout.offsets[result_at], token)
-        if address_error != ok { ret address_error }
-        let address_operand_error = nir.add_operand(builder, address_instruction, slot)
-        if address_operand_error != ok { ret address_operand_error }
-        if aggregate_value(c, result_type) {
-            results.values[result_at] = address
-            results.addresses[result_at] = true
-        } else {
-            let (info, info_error) = layout.type_info(c, result_type)
-            if info_error != ok { ret info_error }
-            let (load_instruction, value, load_error) = nir.emit(builder, .Load, result_type, true, info.size, token)
-            if load_error != ok { ret load_error }
-            let load_operand_error = nir.add_operand(builder, load_instruction, address)
-            if load_operand_error != ok { ret load_operand_error }
-            results.values[result_at] = value
-        }
-        result_at += 1usize
-    }
-    ret ok
+    ret read_return_slot(c, call, &return_layout, slot, builder, token, results)
 }
 
 // Whether the storage a by-value argument names could be written during the call

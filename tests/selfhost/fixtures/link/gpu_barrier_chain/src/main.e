@@ -5,6 +5,7 @@ use e.mem
 error WrongValue
 
 type View = struct { data: []u32 }
+type Packet = struct { value: u32, lane: u32 }
 
 fn inner(lane: u32) -> u32 {
     var saved = lane + 41u32
@@ -30,6 +31,11 @@ fn passthrough[T: type](value: T) -> T {
     ret value
 }
 
+fn packed(lane: u32) -> Packet {
+    gpu.barrier()
+    ret Packet { value: lane + 44u32, lane: lane }
+}
+
 fn middle(out: []u32, lane: u32) {
     for pass in 0u32..1u32 {
         // The store address, binary left operand and first call argument precede inner's barriers.
@@ -39,6 +45,10 @@ fn middle(out: []u32, lane: u32) {
             view.data[usize(inner(lane) - 44u32)] = lane + 44u32
             view.data[usize(lane)] += inner(lane) - (lane + 44u32)
             view.data[usize(lane)] = passthrough(lane + 44u32)
+            let packet = packed(lane)
+            view.data[usize(lane)] = packet.value + packet.lane - lane
+            let copied = passthrough(packet)
+            view.data[usize(lane)] = copied.value + copied.lane - lane
         }
     }
 }

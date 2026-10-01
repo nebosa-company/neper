@@ -32499,3 +32499,26 @@ and pass 226 source-surface checks; both stop at the pre-existing stale
 `docs/library-fixtures.json` gate in the shared dirty tree. Focused generic
 barrier fixtures pass with the freshly bootstrapped compilers on both hosts;
 `lint_bootstrap.py` reports zero findings.
+
+## D1760 — Copy barrier helpers with one hidden-slot result
+
+**Decision.** The barrier-only oracle admits a helper with one aggregate result
+returned through the caller's hidden slot; ordinary release inlining keeps its
+scalar-only rule. An inlined body's hidden `Parameter` maps to a new caller-owned
+slot, and the shared result reader exposes the aggregate address after the
+continuation. The same path handles a concrete generic instance. Superseding
+D1759's provisional bootstrap local capacity, 265 is the measured minimum for
+`dispatch` (264 fails); the smaller per-function table leaves room for the
+additional result reader.
+
+**Evidence.** `link/gpu_barrier_chain` previously trapped when `packed` returned
+a struct after a barrier. It now passes both direct and generic aggregate
+returns in debug and release on Windows and WSL. Ordinary aggregate-return
+fixtures `link/advanced` and `link/by_value_snapshot` pass on Windows, and
+`link/advanced` passes on WSL. Windows C bootstrap builds the current compiler;
+both self-hosted compiler stages are byte-identical and `lint_bootstrap.py`
+finds no violations. Linux's C bootstrap generated assembly but the assembler
+reported ENOMEM under this WSL host's 4.9 GB memory limit; its existing
+self-hosted compiler built the change and ran the fixture. The full suites
+remain gated by the shared tree's stale library-fixture manifest. Multi-result,
+indirect and other pending-expression helper shapes remain unverified.
