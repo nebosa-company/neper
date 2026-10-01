@@ -18,6 +18,35 @@ fn fill(width: u32, height: u32, pixels: []u32) {
     pixels[usize(y * width + x)] = 4278190080u32 | (y << 8u32) | x
 }
 
+fn compare_vulkan(a: *mem.Arena, cpu: []const u32) -> err {
+    let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
+    if found_error == gpu.NoDevice || found_error == gpu.Unsupported { ret ok }
+    if found_error != ok { ret found_error }
+    var at = 0usize
+    while at < found.len {
+        if found[at].supported {
+            let (device, open_error) = gpu.open(a, .Vulkan, u32(at))
+            if open_error != ok { ret open_error }
+            let (q, queue_error) = gpu.queue(device)
+            if queue_error != ok { ret queue_error }
+            let (pixels, pixels_error) = gpu.alloc[u32](q, 128usize)
+            if pixels_error != ok { ret pixels_error }
+            try gpu.launch[fill](q, gpu.grid2(16usize, 8usize), 16u32, 8u32, pixels)
+            var device_pixels: [128]u32 = zero
+            try gpu.download[u32](q, pixels, device_pixels[0..])
+            var i = 0usize
+            while i < device_pixels.len {
+                if device_pixels[i] != cpu[i] { os.exit(34i32) }
+                i += 1usize
+            }
+            try gpu.release(q, pixels)
+            try gpu.close(device)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -56,6 +85,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var shot: [128]u32 = zero
     if gpu.read_image(q, snapshot, shot[0..]) != ok { os.exit(18i32) }
     if shot[0] != 4278190080u32 || shot[5usize * 16usize + 7usize] != (4278190080u32 | (5u32 << 8u32) | 7u32) || shot[127] != (4278190080u32 | (7u32 << 8u32) | 15u32) { os.exit(19i32) }
+    try compare_vulkan(a, shot[0..])
     let (_, stale_error) = gpu.present(q, t, frame)
     if stale_error != gpu.InvalidHandle { os.exit(20i32) }
     // The next frame is the other image, blank until drawn; presenting it swaps.

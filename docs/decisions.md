@@ -32202,3 +32202,17 @@ available; the intentionally uninitialized `early_read` remains CPU-only. The sw
 found the old overwrite at lane 7 (`80` instead of `75`) and the narrowed allocation
 rule removes it on two Windows adapters and WSL. `gpu_barrier` likewise compares its
 `relay`, looped `rounds`, and barrier-free `plain` outputs on those devices.
+
+## D1741 — Kernel bool spills use their one-byte storage representation
+
+**Decision.** A bool in Function or Workgroup storage occupies the same packed byte
+layout as the language value: stores select integer 0 or 1 and merge that byte into
+the containing word; loads extract the byte and compare it with zero. SSA bools
+remain SPIR-V `OpTypeBool`. This is the existing narrow private-memory path extended
+to the one scalar kind it had rejected.
+
+**Evidence.** `gpu_cpu`'s short-circuit 2-D `ids` guard and `gpu_present`'s analogous
+`fill` guard now emit modules accepted by Vulkan 1.2 validation. `ids` and `fill`
+match every CPU word on two Windows adapters and WSL's Vulkan device; `saxpy` is
+compared where denormal preservation is supported, and `needs_ftz` either writes one
+on a capable device or is refused. Both complete fixtures pass on Windows and WSL.
