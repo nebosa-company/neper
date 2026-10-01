@@ -101,6 +101,9 @@ type Module = struct {
     function_reachable: []bool,
     signatures: *nir.Signatures,
     function_return: usize,
+    // A checked build reserves the first argument-block word pair for the queue's
+    // fault-buffer address. `--unchecked` keeps the old parameter-only ABI.
+    checked: bool,
     full: bool,
     // Why emission stopped, for the command's diagnostic.
     failure: str,
@@ -147,6 +150,7 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     var m: Module = zero
     let init_error = init_module(a, &m)
     if init_error != ok { ret (no_bytes, init_error) }
+    m.checked = !builder.nocheck
     let (function_ids, ids_error) = mem.alloc[usize](a, builder.function_count + 1usize)
     if ids_error != ok { ret (no_bytes, ids_error) }
     let (function_types, types_error) = mem.alloc[usize](a, builder.function_count + 1usize)
@@ -1783,6 +1787,7 @@ fn emit_parameter(m: *Module, c: *check.Checker, kernel: check.Function, instruc
     let index = instruction.immediate
     // The parameter's offset: every one before it at its natural alignment.
     var offset = 0usize
+    if m.checked { offset = 8usize }
     var at = 0usize
     while at <= index {
         let ty = c.parameters[kernel.first_parameter + at].ty
@@ -2160,8 +2165,7 @@ fn emit_field_address(m: *Module, builder: *nir.Builder, instruction: nir.Instru
 }
 
 // `base[index]` with the element size in the immediate, checked against the length
-// unless `@nocheck`: a failed check returns from the kernel (the fault record is a
-// later row, D1610).
+// unless `@nocheck`: a failed check records the fault and returns from the invocation.
 fn emit_index_address(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let base = operand(builder, instruction, 0usize)
     let index = operand(builder, instruction, 1usize)
@@ -2169,7 +2173,7 @@ fn emit_index_address(m: *Module, builder: *nir.Builder, instruction: nir.Instru
     if KIND_SCALAR != values.kind[index] { ret fail(m, "an index has no value") }
     if instruction.operand_count >= 3usize && !instruction.nocheck {
         let length = operand(builder, instruction, 2usize)
-        guard(m, binary(m, OP_U_LESS_THAN, m.t_bool, values.id[index], values.id[length]))
+        guard(m, binary(m, OP_U_LESS_THAN, m.t_bool, values.id[index], values.id[length]), 0usize, instruction.site.line)
     }
     if KIND_PRIVATE == values.kind[base] || KIND_SHARED == values.kind[base] {
         var dynamic = binary(m, OP_I_MUL, m.t_u32, values.id[index], constant(m, m.t_u32, instruction.immediate))
@@ -2197,8 +2201,8 @@ fn emit_slice(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     let upper = operand(builder, instruction, 4usize)
     if KIND_PRIVATE != values.kind[destination] || KIND_SCALAR != values.kind[length] || KIND_SCALAR != values.kind[lower] || KIND_SCALAR != values.kind[upper] { ret fail(m, "a slice has no header or bounds") }
     if !instruction.nocheck {
-        guard(m, binary(m, OP_U_LESS_THAN_EQUAL, m.t_bool, values.id[lower], values.id[upper]))
-        guard(m, binary(m, OP_U_LESS_THAN_EQUAL, m.t_bool, values.id[upper], values.id[length]))
+        guard(m, binary(m, OP_U_LESS_THAN_EQUAL, m.t_bool, values.id[lower], values.id[upper]), 0usize, instruction.site.line)
+        guard(m, binary(m, OP_U_LESS_THAN_EQUAL, m.t_bool, values.id[upper], values.id[length]), 0usize, instruction.site.line)
     }
     let count = binary(m, OP_I_SUB, m.t_u32, values.id[upper], values.id[lower])
     let scaled = binary(m, OP_I_MUL, m.t_u32, values.id[lower], constant(m, m.t_u32, instruction.immediate))
@@ -2218,9 +2222,77 @@ fn emit_slice(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     ret ok
 }
 
-// A check that returns from the kernel when it fails: a selection whose one arm
-// returns, and whose merge is where the block goes on.
-fn guard(m: *Module, holds: usize) {
+// The checked launch's hidden first slot is the device address of a 28-byte fault
+// buffer: count, kernel, kind, site and gid. CAS elects the first writer; later
+// failures only increment count.
+fn write_fault(m: *Module, kind: usize, site: usize) {
+    let chain = fresh(m)
+    head(&m.code, OP_ACCESS_CHAIN, 5usize)
+    put(&m.code, m.t_pc_address)
+    put(&m.code, chain)
+    put(&m.code, m.v_pc)
+    put(&m.code, constant(m, m.t_u32, 0usize))
+    let block = fresh(m)
+    head(&m.code, OP_LOAD, 4usize)
+    put(&m.code, m.t_v2u32)
+    put(&m.code, block)
+    put(&m.code, chain)
+    let fault = device_load(m, block, m.t_v2u32)
+    let count = convert(m, OP_BITCAST, m.t_psb_u32, fault)
+    let old = fresh(m)
+    head(&m.code, OP_ATOMIC_COMPARE_EXCHANGE, 9usize)
+    put(&m.code, m.t_u32)
+    put(&m.code, old)
+    put(&m.code, count)
+    put(&m.code, constant(m, m.t_u32, 1usize))
+    put(&m.code, constant(m, m.t_u32, 80usize))
+    put(&m.code, constant(m, m.t_u32, 66usize))
+    put(&m.code, constant(m, m.t_u32, 1usize))
+    put(&m.code, constant(m, m.t_u32, 0usize))
+    let first = binary(m, OP_I_EQUAL, m.t_bool, old, constant(m, m.t_u32, 0usize))
+    let write = fresh(m)
+    let count_later = fresh(m)
+    let done = fresh(m)
+    head(&m.code, OP_SELECTION_MERGE, 3usize)
+    put(&m.code, done)
+    put(&m.code, 0usize)
+    head(&m.code, OP_BRANCH_CONDITIONAL, 4usize)
+    put(&m.code, first)
+    put(&m.code, write)
+    put(&m.code, count_later)
+    head(&m.code, OP_LABEL, 2usize)
+    put(&m.code, write)
+    device_store(m, add_address(m, fault, 8usize), constant(m, u8_type(m), kind), u8_type(m))
+    device_store(m, add_address(m, fault, 12usize), constant(m, m.t_u32, site), m.t_u32)
+    let invocation = fresh(m)
+    head(&m.code, OP_LOAD, 4usize)
+    put(&m.code, m.t_v3u32)
+    put(&m.code, invocation)
+    put(&m.code, m.v_gid)
+    device_store(m, add_address(m, fault, 16usize), extract(m, invocation, 0usize), m.t_u32)
+    device_store(m, add_address(m, fault, 20usize), extract(m, invocation, 1usize), m.t_u32)
+    device_store(m, add_address(m, fault, 24usize), extract(m, invocation, 2usize), m.t_u32)
+    head(&m.code, OP_BRANCH, 2usize)
+    put(&m.code, done)
+    head(&m.code, OP_LABEL, 2usize)
+    put(&m.code, count_later)
+    let ignored = fresh(m)
+    head(&m.code, OP_ATOMIC_I_ADD, 7usize)
+    put(&m.code, m.t_u32)
+    put(&m.code, ignored)
+    put(&m.code, count)
+    put(&m.code, constant(m, m.t_u32, 1usize))
+    put(&m.code, constant(m, m.t_u32, 80usize))
+    put(&m.code, constant(m, m.t_u32, 1usize))
+    head(&m.code, OP_BRANCH, 2usize)
+    put(&m.code, done)
+    head(&m.code, OP_LABEL, 2usize)
+    put(&m.code, done)
+}
+
+// A check that records and returns from the invocation when it fails; the merge is
+// where the checked operation continues.
+fn guard(m: *Module, holds: usize, kind: usize, site: usize) {
     let failed = fresh(m)
     let rest = fresh(m)
     head(&m.code, OP_SELECTION_MERGE, 3usize)
@@ -2232,6 +2304,7 @@ fn guard(m: *Module, holds: usize) {
     put(&m.code, failed)
     head(&m.code, OP_LABEL, 2usize)
     put(&m.code, failed)
+    write_fault(m, kind, site)
     if m.function_return == m.t_void {
         head(&m.code, OP_RETURN, 1usize)
     } else {

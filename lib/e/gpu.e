@@ -1066,9 +1066,9 @@ fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usi
 
 // A launch on a Vulkan device (D1611): the launcher's block -- sixteen bytes a parameter,
 // a scalar's bytes or a slice's device address and length -- laid out again as D1610's
-// argument block in a buffer of its own, the kernel's pipeline made once per device, and
-// the grid dispatched and waited for. A kernel the emitter could not write has no module
-// and is `Unsupported` here; the CPU still runs it.
+// argument block in a buffer of its own. A checked layout starts with `!`: its hidden
+// first u64 is a mapped fault buffer's device address. A kernel the emitter could not
+// write has no module and is `Unsupported` here; the CPU still runs it.
 fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, ctx: *void, module: str, entry: str, layout: str) -> err {
     if module.len == 0usize { ret Unsupported }
     let (gx, gx_error) = groups_along(grid.x, x)
@@ -1081,41 +1081,98 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, c
     if gx == 0usize || gy == 0usize || gz == 0usize { ret ok }
     let device = state.device
     let a = device.arena
+    var checked = false
+    var first = 0usize
+    if layout.len != 0usize && layout[0usize] == 33u8 {
+        checked = true
+        first = 1usize
+    }
+    let parameter_count = layout.len - first
     var over: mem.Arena = zero
     over.base = mem.cast[*u8](ctx)
-    over.cap = 16usize * layout.len
-    over.off = 16usize * layout.len
-    let source = mem.view(&over, 0usize, 16usize * layout.len)
-    let (block, block_error) = vulkan.buffer(a, device.context, 16usize * layout.len + 16usize)
+    over.cap = 16usize * parameter_count
+    over.off = 16usize * parameter_count
+    let source = mem.view(&over, 0usize, 16usize * parameter_count)
+    let (block, block_error) = vulkan.buffer(a, device.context, 16usize * parameter_count + 24usize)
     if block_error != ok { ret OutOfMemory }
     var offset = 0usize
-    var at = 0usize
+    var fault_buffer: vulkan.Buffer = zero
+    if checked {
+        let (made_fault, fault_error) = vulkan.buffer(a, device.context, 32usize)
+        if fault_error != ok {
+            vulkan.free(device.context, block)
+            ret OutOfMemory
+        }
+        fault_buffer = made_fault
+        var clear_at = 0usize
+        while clear_at < fault_buffer.bytes.len {
+            fault_buffer.bytes[clear_at] = 0u8
+            clear_at += 1usize
+        }
+        *mem.cast[*u64](&block.bytes[0usize]) = fault_buffer.address
+        *mem.cast[*u32](&fault_buffer.bytes[4usize]) = u32(state.serial)
+        offset = 8usize
+    }
+    var at = first
+    var source_at = 0usize
     while at < layout.len {
         if layout[at] != 115u8 && (layout[at] < 49u8 || layout[at] > 56u8) {
+            if checked { vulkan.free(device.context, fault_buffer) }
             vulkan.free(device.context, block)
             ret Unsupported
         }
         let code = usize(layout[at]) - 48usize
         if layout[at] == 115u8 {
             offset = (offset + 7usize) / 8usize * 8usize
-            copy_bytes(block.bytes[offset..offset + 8usize], source[16usize * at..16usize * at + 8usize])
-            copy_bytes(block.bytes[offset + 8usize..offset + 12usize], source[16usize * at + 8usize..16usize * at + 12usize])
+            copy_bytes(block.bytes[offset..offset + 8usize], source[16usize * source_at..16usize * source_at + 8usize])
+            copy_bytes(block.bytes[offset + 8usize..offset + 12usize], source[16usize * source_at + 8usize..16usize * source_at + 12usize])
             offset += 16usize
         } else {
             offset = (offset + code - 1usize) / code * code
-            copy_bytes(block.bytes[offset..offset + code], source[16usize * at..16usize * at + code])
+            copy_bytes(block.bytes[offset..offset + code], source[16usize * source_at..16usize * source_at + code])
             offset += code
         }
         at += 1usize
+        source_at += 1usize
     }
     let (made, made_error) = device_pipeline(device, module, entry)
     if made_error != ok {
+        if checked { vulkan.free(device.context, fault_buffer) }
         vulkan.free(device.context, block)
         ret made_error
     }
     let dispatch_error = vulkan.dispatch(a, device.context, made, block.address, u32(gx), u32(gy), u32(gz))
     vulkan.free(device.context, block)
-    if dispatch_error != ok { ret Lost }
+    if dispatch_error != ok {
+        if checked { vulkan.free(device.context, fault_buffer) }
+        ret Lost
+    }
+    if checked {
+        let count = *mem.cast[*u32](&fault_buffer.bytes[0usize])
+        if count != 0u32 {
+            if state.fault_count == 0u32 {
+                var kind: FaultKind = .Bounds
+                let kind_value = fault_buffer.bytes[8usize]
+                if kind_value == 1u8 { kind = .Null }
+                if kind_value == 2u8 { kind = .Tag }
+                if kind_value == 3u8 { kind = .Alignment }
+                if kind_value == 4u8 { kind = .Overflow }
+                if kind_value == 5u8 { kind = .DivideByZero }
+                state.fault = FaultRecord {
+                    kernel: *mem.cast[*u32](&fault_buffer.bytes[4usize]),
+                    kind: kind,
+                    site: *mem.cast[*u32](&fault_buffer.bytes[12usize]),
+                    gid: Id {
+                        x: *mem.cast[*u32](&fault_buffer.bytes[16usize]),
+                        y: *mem.cast[*u32](&fault_buffer.bytes[20usize]),
+                        z: *mem.cast[*u32](&fault_buffer.bytes[24usize]),
+                    },
+                }
+            }
+            state.fault_count += count
+        }
+        vulkan.free(device.context, fault_buffer)
+    }
     state.serial += 1u64
     ret ok
 }

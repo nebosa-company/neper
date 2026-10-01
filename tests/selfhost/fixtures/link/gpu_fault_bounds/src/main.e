@@ -76,6 +76,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !relayed_found || relayed.gid.x != 1u32 || relayed.site != 28u32 { os.exit(26i32) }
     if gpu.download(q, dz, seen[0..4]) != ok || seen[1] != 11u32 || seen[3] != 13u32 || seen[0] != 14u32 || seen[2] != 3u32 { os.exit(27i32) }
     if gpu.close(device) != ok { os.exit(28i32) }
+    try vulkan_faults(a)
     try io.print("gpu fault ok\n")
+    ret ok
+}
+
+// The device path reports the same record, reports it once, and remains usable.
+fn vulkan_fault(a: *mem.Arena, index: u32) -> err {
+    let (device, device_error) = gpu.open(a, .Vulkan, index)
+    if device_error != ok { ret device_error }
+    defer let _ = gpu.close(device)
+    let (q, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret queue_error }
+    var source: [8]u32 = [8]u32{ 1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32 }
+    let (buffer, buffer_error) = gpu.upload[u32](q, source[0..])
+    if buffer_error != ok { ret buffer_error }
+    defer let _ = gpu.release(q, buffer)
+    try gpu.launch[poke](q, gpu.grid1(8usize), 5u32, buffer)
+    if gpu.sync(q) != gpu.Fault || gpu.sync(q) != ok { os.exit(30i32) }
+    let (record, found) = gpu.last_fault(q)
+    if !found || record.kernel != 0u32 || record.kind != .Bounds || record.site != 19u32 || record.gid.x != 5u32 || record.gid.y != 0u32 || record.gid.z != 0u32 { os.exit(31i32) }
+    var seen: [8]u32 = zero
+    if gpu.download(q, buffer, seen[0..]) != ok || seen[4] != 10u32 || seen[5] != 6u32 || seen[6] != 14u32 { os.exit(32i32) }
+    try gpu.launch[poke](q, gpu.grid1(8usize), 99u32, buffer)
+    if gpu.download(q, buffer, seen[0..]) != ok || seen[0] != 4u32 || seen[5] != 12u32 { os.exit(33i32) }
+    try gpu.launch[poke](q, gpu.grid1(8usize), 0u32, buffer)
+    if gpu.download(q, buffer, seen[0..]) != gpu.Fault || gpu.download(q, buffer, seen[0..]) != ok { os.exit(34i32) }
+    let (again, again_found) = gpu.last_fault(q)
+    if !again_found || again.kernel != 2u32 || again.gid.x != 0u32 { os.exit(35i32) }
+    ret ok
+}
+
+fn vulkan_faults(a: *mem.Arena) -> err {
+    let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
+    if found_error == gpu.NoDevice || found_error == gpu.Unsupported { ret ok }
+    if found_error != ok { ret found_error }
+    var at = 0usize
+    while at < found.len {
+        if found[at].supported { try vulkan_fault(a, u32(at)) }
+        at += 1usize
+    }
     ret ok
 }
