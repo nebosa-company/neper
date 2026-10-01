@@ -16,6 +16,113 @@ fn near(x: f32, y: f32) -> bool {
     ret d < 0.0001 && d > -0.0001
 }
 
+fn run_parity(a: *mem.Arena, backend: gpu.Backend, index: u32, u_out: []u32, i_out: []i64, f_out: []f32) -> (u32, err) {
+    let (device, open_error) = gpu.open(a, backend, index)
+    if open_error != ok { ret (0u32, open_error) }
+    defer let _ = gpu.close(device)
+    let (q, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret (0u32, queue_error) }
+    let shape_2x2: [2]usize = [2]usize{ 2usize, 2usize }
+    var u_values: [4]u32 = [4]u32{ 1u32, 2u32, 3u32, 4u32 }
+    let (u_host, u_host_error) = linalg_tensor.contiguous[u32](a, u_values[0..], shape_2x2[0..])
+    if u_host_error != ok { ret (0u32, u_host_error) }
+    let (ux, ux_error) = tensor.upload[u32](a, q, linalg_tensor.as_const[u32](u_host))
+    if ux_error != ok { ret (0u32, ux_error) }
+    defer let _ = tensor.release[u32](q, ux)
+    let (ud, ud_error) = tensor.upload[u32](a, q, linalg_tensor.as_const[u32](u_host))
+    if ud_error != ok { ret (0u32, ud_error) }
+    defer let _ = tensor.release[u32](q, ud)
+    try tensor.matmul[u32](q, ud, ux, ux)
+    let (u_product, u_product_error) = linalg_tensor.contiguous[u32](a, u_out[0usize..4usize], shape_2x2[0..])
+    if u_product_error != ok { ret (0u32, u_product_error) }
+    try tensor.download[u32](q, ud, u_product)
+    try tensor.add[u32](q, ud, ux, ux)
+    let (u_sum, u_sum_error) = linalg_tensor.contiguous[u32](a, u_out[4usize..8usize], shape_2x2[0..])
+    if u_sum_error != ok { ret (0u32, u_sum_error) }
+    try tensor.download[u32](q, ud, u_sum)
+    var mask = 1u32
+
+    if gpu.has(device, .Int64) {
+        let shape_4: [1]usize = [1]usize{ 4usize }
+        var i_values: [4]i64 = [4]i64{ 1i64, -2i64, 3000000000i64, 4i64 }
+        let (i_host, i_host_error) = linalg_tensor.contiguous[i64](a, i_values[0..], shape_4[0..])
+        if i_host_error != ok { ret (0u32, i_host_error) }
+        let (ix, ix_error) = tensor.upload[i64](a, q, linalg_tensor.as_const[i64](i_host))
+        if ix_error != ok { ret (0u32, ix_error) }
+        defer let _ = tensor.release[i64](q, ix)
+        try tensor.add[i64](q, ix, ix, ix)
+        let (i_result, i_result_error) = linalg_tensor.contiguous[i64](a, i_out, shape_4[0..])
+        if i_result_error != ok { ret (0u32, i_result_error) }
+        try tensor.download[i64](q, ix, i_result)
+        mask |= 2u32
+    }
+
+    if gpu.has(device, .DenormPreserve) {
+        var f_values: [4]f32 = [4]f32{ 1.0, 2.0, 3.0, 4.0 }
+        let (f_host, f_host_error) = linalg_tensor.contiguous[f32](a, f_values[0..], shape_2x2[0..])
+        if f_host_error != ok { ret (0u32, f_host_error) }
+        let (fx, fx_error) = tensor.upload[f32](a, q, linalg_tensor.as_const[f32](f_host))
+        if fx_error != ok { ret (0u32, fx_error) }
+        defer let _ = tensor.release[f32](q, fx)
+        let (fd, fd_error) = tensor.upload[f32](a, q, linalg_tensor.as_const[f32](f_host))
+        if fd_error != ok { ret (0u32, fd_error) }
+        defer let _ = tensor.release[f32](q, fd)
+        try tensor.matmul[f32](q, fd, fx, fx)
+        let (f_product, f_product_error) = linalg_tensor.contiguous[f32](a, f_out[0usize..4usize], shape_2x2[0..])
+        if f_product_error != ok { ret (0u32, f_product_error) }
+        try tensor.download[f32](q, fd, f_product)
+        try tensor.add[f32](q, fd, fx, fx)
+        let (f_sum, f_sum_error) = linalg_tensor.contiguous[f32](a, f_out[4usize..8usize], shape_2x2[0..])
+        if f_sum_error != ok { ret (0u32, f_sum_error) }
+        try tensor.download[f32](q, fd, f_sum)
+        mask |= 4u32
+    }
+    ret (mask, ok)
+}
+
+fn compare_backends(a: *mem.Arena) -> err {
+    var cpu_u: [8]u32 = zero
+    var cpu_i: [4]i64 = zero
+    var cpu_f: [8]f32 = zero
+    let (cpu_mask, cpu_error) = run_parity(a, .Cpu, 0u32, cpu_u[0..], cpu_i[0..], cpu_f[0..])
+    if cpu_error != ok { ret cpu_error }
+    if cpu_mask != 7u32 { os.exit(58i32) }
+    let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
+    if found_error == gpu.NoDevice || found_error == gpu.Unsupported { ret ok }
+    if found_error != ok { ret found_error }
+    var at = 0usize
+    while at < found.len {
+        if found[at].supported {
+            var device_u: [8]u32 = zero
+            var device_i: [4]i64 = zero
+            var device_f: [8]f32 = zero
+            let (mask, run_error) = run_parity(a, .Vulkan, u32(at), device_u[0..], device_i[0..], device_f[0..])
+            if run_error != ok { ret run_error }
+            var i = 0usize
+            while i < device_u.len {
+                if device_u[i] != cpu_u[i] { os.exit(58i32) }
+                i += 1usize
+            }
+            if (mask & 2u32) != 0u32 {
+                i = 0usize
+                while i < device_i.len {
+                    if device_i[i] != cpu_i[i] { os.exit(58i32) }
+                    i += 1usize
+                }
+            }
+            if (mask & 4u32) != 0u32 {
+                i = 0usize
+                while i < device_f.len {
+                    if device_f[i] != cpu_f[i] { os.exit(58i32) }
+                    i += 1usize
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -147,6 +254,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tensor.release[f32](q, sum) != ok { os.exit(38i32) }
     if tensor.download[f32](q, sum, out) != gpu.InvalidHandle { os.exit(39i32) }
     if tensor.release[f32](q, sum) != gpu.InvalidHandle { os.exit(40i32) }
+    try compare_backends(a)
 
     try io.print("gpu tensor ok\n")
     ret ok
