@@ -2498,6 +2498,10 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
 fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let address = operand(builder, instruction, 0usize)
     let value = operand(builder, instruction, 1usize)
+    if KIND_SHARED == values.kind[value] && KIND_PRIVATE == values.kind[address] {
+        store_word(m, private_word(m, values, address, 0usize), private_bytes(m, values, value, 0usize))
+        ret ok
+    }
     if KIND_SCALAR != values.kind[value] { ret fail(m, "a store of an aggregate is not yet written as SPIR-V") }
     let ty = values.ty[value]
     if KIND_PRIVATE == values.kind[address] || KIND_SHARED == values.kind[address] {

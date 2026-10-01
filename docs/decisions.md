@@ -32688,3 +32688,28 @@ conformance SPIR-V modules validate for Vulkan 1.2. In an isolated worktree,
 the Windows self-host suite passes its surface, manifest, library, pinned
 SPIR-V and tensor gates, then stops at `link/gpu_shared_address_spaces` with
 `e.gpu.Unsupported`; C091 remains partial.
+
+## D1771 — Save shared pointers in private SPIR-V slots
+
+**Decision.** A store of a workgroup pointer into a private local slot writes
+its byte offset into the workgroup block. A later shared-pointer load already
+reconstructs that address from the slot; other aggregate stores remain refused.
+
+**Evidence.** `link/gpu_spaces` previously embedded no SPIR-V module because
+`cell(*shared u32)` saved its parameter into a private slot. The module now
+emits and validates for Vulkan 1.2. The unchanged fixture passes on CPU and
+both Windows Vulkan devices; the Linux build emits and validates the module
+and prints `gpu spaces ok`.
+
+## D1772 — Test cache recovery without requiring canonical driver bytes
+
+**Decision.** The Vulkan cache-recovery fixture checks that a corrupted entry
+is replaced and that an injected failed rebuild preserves the replacement.
+It no longer demands that a driver's opaque rebuilt blob hash match the blob
+from an earlier pipeline creation.
+
+**Evidence.** From a fresh cache directory, corrupting one file changed its
+hash; the next launch passed and replaced it with a third hash. Injected
+rebuild failure then failed as intended, and a normal launch recovered. The
+old byte-equality assertion stopped otherwise passing Windows suite runs
+intermittently. C091 remains partial pending the remaining suite gates.

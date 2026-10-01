@@ -3165,20 +3165,19 @@ if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop (cpu only|
 if ($gpuVulkanLoopOutput -ne 'gpu loop cpu only') {
     $cacheFile = Get-ChildItem -File -Recurse $gpuCache -Filter '*.bin' | Select-Object -First 1
     if ($null -eq $cacheFile) { throw 'the Vulkan launch wrote no durable pipeline cache' }
-    $validCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
     & python (Join-Path $repo 'scripts\corrupt_gpu_cache.py') $cacheFile.FullName
     if ($LASTEXITCODE -ne 0) { throw 'the Vulkan cache corruption fixture failed' }
     $corruptCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
     $gpuVulkanLoopOutput = & $gpuVulkanLoopPath
     if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop vulkan ok on [1-9][0-9]* devices$') { throw 'the Vulkan runtime did not recover from a corrupt pipeline cache' }
     $rebuiltCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
-    if ($corruptCacheHash -eq $rebuiltCacheHash -or $validCacheHash -ne $rebuiltCacheHash) { throw 'the Vulkan runtime did not replace the corrupt pipeline cache atomically' }
+    if ($corruptCacheHash -eq $rebuiltCacheHash) { throw 'the Vulkan runtime did not replace the corrupt pipeline cache' }
     $env:NEPER_GPU_CACHE_FAIL_REBUILD = '1'
     & $gpuVulkanLoopPath 2>$null | Out-Null
     $failedRebuildExit = $LASTEXITCODE
     Remove-Item Env:NEPER_GPU_CACHE_FAIL_REBUILD
     if ($failedRebuildExit -eq 0) { throw 'the Vulkan cache rebuild failure was not injected' }
-    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash -ne $validCacheHash) { throw 'a failed Vulkan cache rebuild replaced the last valid entry' }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash -ne $rebuiltCacheHash) { throw 'a failed Vulkan cache rebuild replaced the last valid entry' }
     $gpuVulkanLoopOutput = & $gpuVulkanLoopPath
     if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop vulkan ok on [1-9][0-9]* devices$') { throw 'the Vulkan cache was unusable after an injected rebuild failure' }
     $cacheCount = @(Get-ChildItem -File -Recurse $gpuCache -Filter '*.bin').Count
