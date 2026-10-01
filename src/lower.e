@@ -6847,6 +6847,31 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         initial = first_value
         limit = second_value
     }
+    // The dispatch can resume inside the body, bypassing the expressions above.
+    // Keep loop-invariant values in the invocation frame, as the counter is.
+    var limit_slot = 0usize
+    var data_slot = 0usize
+    if builder.frame_mode {
+        let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, counter_type, true, 0usize, token)
+        if slot_error != ok { ret slot_error }
+        let (limit_info, limit_info_error) = layout.type_info(c, counter_type)
+        if limit_info_error != ok { ret limit_info_error }
+        let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, counter_type, false, limit_info.size, token)
+        if store_error != ok { ret store_error }
+        try nir.add_operand(builder, store_instruction, slot)
+        try nir.add_operand(builder, store_instruction, limit)
+        limit_slot = slot
+        if collection {
+            let pointer_type = check.make_type(.Pointer, "", module_index)
+            let (data_instruction, data_address, data_error) = nir.emit(builder, .Stack, pointer_type, true, 0usize, token)
+            if data_error != ok { ret data_error }
+            let (data_store, data_ignored, data_store_error) = nir.emit(builder, .Store, pointer_type, false, 8usize, token)
+            if data_store_error != ok { ret data_store_error }
+            try nir.add_operand(builder, data_store, data_address)
+            try nir.add_operand(builder, data_store, data)
+            data_slot = data_address
+        }
+    }
     let (counter_stack_instruction, counter_stack, counter_stack_error) = nir.emit(builder, .Stack, counter_type, true, 0usize, token)
     if counter_stack_error != ok { ret counter_stack_error }
     let (counter_info, counter_info_error) = layout.type_info(c, counter_type)
@@ -6864,11 +6889,26 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     let (condition_load_instruction, condition_counter, condition_load_error) = nir.emit(builder, .Load, counter_type, true, counter_info.size, token)
     if condition_load_error != ok { ret condition_load_error }
     try nir.add_operand(builder, condition_load_instruction, counter_stack)
+    var condition_limit = limit
+    var condition_data = data
+    if builder.frame_mode {
+        let (limit_load, loaded_limit, limit_error) = nir.emit(builder, .Load, counter_type, true, counter_info.size, token)
+        if limit_error != ok { ret limit_error }
+        try nir.add_operand(builder, limit_load, limit_slot)
+        condition_limit = loaded_limit
+        if collection {
+            let pointer_type = check.make_type(.Pointer, "", module_index)
+            let (data_load, loaded_data, data_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, token)
+            if data_error != ok { ret data_error }
+            try nir.add_operand(builder, data_load, data_slot)
+            condition_data = loaded_data
+        }
+    }
     let boolean = check.make_type(.Bool, "bool", module_index)
     let (compare_instruction, has_next, compare_error) = nir.emit(builder, .Less, boolean, true, 0usize, token)
     if compare_error != ok { ret compare_error }
     try nir.add_operand(builder, compare_instruction, condition_counter)
-    try nir.add_operand(builder, compare_instruction, limit)
+    try nir.add_operand(builder, compare_instruction, condition_limit)
     let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
     if decision_error != ok { ret decision_error }
     try nir.add_operand(builder, decision, has_next)
@@ -6903,9 +6943,9 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         var element_value = 0usize
         let (address_instruction, element_address, address_error) = nir.emit(builder, .IndexAddress, element_type, true, stride, token)
         if address_error != ok { ret address_error }
-        try nir.add_operand(builder, address_instruction, data)
+        try nir.add_operand(builder, address_instruction, condition_data)
         try nir.add_operand(builder, address_instruction, body_counter)
-        try nir.add_operand(builder, address_instruction, limit)
+        try nir.add_operand(builder, address_instruction, condition_limit)
         var element_address_value = aggregate_value(c, element_type)
         element_value = element_address
         if !element_address_value {

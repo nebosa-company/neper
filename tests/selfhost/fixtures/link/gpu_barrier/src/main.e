@@ -40,6 +40,23 @@ fn rounds(buf: []u32) {
     }
 }
 
+@gpu(8)
+fn for_rounds(buf: []u32, n: u32) {
+    let limit = n + 1u32
+    for round in 0u32..limit {
+        buf[usize(gpu.lid.x)] += round + 1u32
+        gpu.barrier()
+    }
+}
+
+@gpu(8)
+fn collection_rounds(out: []u32, weights: []u32) {
+    for weight in weights {
+        out[usize(gpu.lid.x)] += weight
+        gpu.barrier()
+    }
+}
+
 @gpu(16)
 fn plain(n: u32, out: []u32) {
     if gpu.gid.x >= n { ret }
@@ -74,6 +91,36 @@ fn run(a: *mem.Arena, backend: gpu.Backend, index: u32, relay_out: []u32, round_
     defer let _ = gpu.release(q, ring_buf)
     try gpu.launch[rounds](q, gpu.grid1(8usize), ring_buf)
     try gpu.download[u32](q, ring_buf, round_out)
+
+    // A runtime-bound for loop must retain its bound and counter across cuts.
+    var for_values: [8]u32 = zero
+    let (for_buf, for_error) = gpu.upload[u32](q, for_values[0..])
+    if for_error != ok { ret for_error }
+    defer let _ = gpu.release(q, for_buf)
+    try gpu.launch[for_rounds](q, gpu.grid1(8usize), for_buf, 2u32)
+    var for_out: [8]u32 = zero
+    try gpu.download[u32](q, for_buf, for_out[0..])
+    var for_at = 0usize
+    while for_at < for_out.len {
+        if for_out[for_at] != 6u32 { os.exit(15i32) }
+        for_at += 1usize
+    }
+    var weights: [3]u32 = [3]u32{ 1u32, 2u32, 3u32 }
+    let (weights_buf, weights_error) = gpu.upload[u32](q, weights[0..])
+    if weights_error != ok { ret weights_error }
+    defer let _ = gpu.release(q, weights_buf)
+    var collection_values: [8]u32 = zero
+    let (collection_buf, collection_error) = gpu.upload[u32](q, collection_values[0..])
+    if collection_error != ok { ret collection_error }
+    defer let _ = gpu.release(q, collection_buf)
+    try gpu.launch[collection_rounds](q, gpu.grid1(8usize), collection_buf, weights_buf)
+    var collection_out: [8]u32 = zero
+    try gpu.download[u32](q, collection_buf, collection_out[0..])
+    var collection_at = 0usize
+    while collection_at < collection_out.len {
+        if collection_out[collection_at] != 6u32 { os.exit(16i32) }
+        collection_at += 1usize
+    }
 
     // A kernel without a barrier under the same model.
     let (plain_buf, plain_error) = gpu.alloc[u32](q, 40usize)
