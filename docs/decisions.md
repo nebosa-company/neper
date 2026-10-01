@@ -32132,3 +32132,25 @@ denormal-preserving float kernel, while the integer loop fixture agrees on WSL's
 Vulkan device and both Windows devices. The remaining exact and bounded kernels,
 capability refusals and device faults are the hardware runs recorded in D1612-D1615
 and D1720-D1732; their six pinned SPIR-V modules are byte-identical across hosts.
+
+## D1737 — The performance-language result is one alternating, oracle-checked corpus
+
+**Decision.** `benchmarks/gp` fixes two algorithms and their sizes across Neper, C,
+C++, Rust and Go. GP-09 lower-case-hex encodes and decodes 4,194,317 bytes eight
+times; GP-10 applies `y[i] = 3*x[i] + y[i]` to 1,048,576 `u32` values sixteen times.
+Neper runs GP-10 through both `.Cpu` and `.Vulkan`; the four comparison languages run
+the CPU loop. All programs print the same checksum or the runner refuses the result.
+
+`run.py` uses only the Python standard library and native `/usr/bin/time`. It warms
+each tool and executable, alternates implementations within every build and runtime
+round, and records every sample plus p50/p95, peak RSS, image size, commands,
+toolchain versions and the Git revision in one JSON document. Seven runs are the
+publication cell; a shorter run is only a smoke test. GP-09's Neper source keeps the
+same explicit-vector body, masks, alignment and scalar tail as its acceptance fixture.
+
+**Evidence.** A three-run smoke measurement built all ten CPU programs plus Neper's
+Vulkan variant with GCC, G++, Rust, the official checksum-verified portable Go
+toolchain and the self-hosted Linux Neper compiler. Every GP-09 program printed
+`534775349`; every GP-10 program, including Neper CPU and WSL Vulkan, printed
+`25745686528`. The JSON held compile and runtime distributions and peak RSS for all
+eleven cells. The seven-run publication is the remaining step.
