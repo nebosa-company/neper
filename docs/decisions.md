@@ -32575,3 +32575,20 @@ both C bootstraps build and run the changed compiler, and bootstrapped and
 self-hosted builds are byte-identical on both hosts. The full suites remain
 gated by the shared tree's stale library-fixture manifest. Other
 pending-expression helper shapes remain unverified.
+
+## D1764 — Keep slice inputs across barrier-bearing bounds
+
+**Decision.** A slice evaluates its base before its bounds. If a bound may
+reach a CPU barrier, save the already-read data pointer and length in the
+invocation frame. Save an earlier lower bound before a later cutting upper
+bound, and restore implicit bounds from the preserved values. Ordinary slices
+and Vulkan lowering keep their existing path.
+
+**Evidence.** `out[lower..passthrough(upper)]` previously failed NIR
+verification. `link/gpu_barrier_chain` now passes lower-only, upper-only and
+two-bound slices with barrier-bearing helpers in debug and release on Windows
+and WSL. `link/mem_slices` still passes. Both C bootstraps build the changed
+compiler; bootstrapped, self-hosted and next-stage binaries are byte-identical
+on both hosts when built sequentially. The full suites remain gated by the
+shared tree's stale library-fixture manifest. Other pending-expression helper
+shapes remain unverified.

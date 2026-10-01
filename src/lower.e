@@ -4042,22 +4042,70 @@ fn lower_slice(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if zero_error != ok { ret (0usize, result_type, zero_error) }
     var lower = zero_value
     var upper = length
+    var bound_is_lower = usize(bracket.child_count) == 3usize
+    if usize(bracket.child_count) == 2usize {
+        var range_at = usize(tree.nodes[bracket.base].token_end)
+        while range_at < usize(node.token_end) && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
+        if range_at >= usize(node.token_end) { ret (0usize, result_type, parse.InvalidSyntax) }
+        bound_is_lower = usize(tree.nodes[bracket.first].token_start) < range_at
+    }
+    let frame = (builder.frame_mode || builder.frame_locals) && !builder.spirv
+    let second_cut = frame && usize(bracket.child_count) == 3usize && expression_may_cut(c, g, tree, module_index, bracket.second, builder)
+    let bounds_cut = frame && ((usize(bracket.child_count) >= 2usize && expression_may_cut(c, g, tree, module_index, bracket.first, builder)) || second_cut)
+    var data_slot = 0usize
+    var length_slot = 0usize
+    var lower_slot = 0usize
+    var lower_before = 0usize
+    let before = builder.kernel_barriers
+    if bounds_cut {
+        let token = c.tokens[usize(node.token_start)]
+        let (saved_data, data_error) = frame_save_temporary(c, pointer_type, data, token, builder)
+        if data_error != ok { ret (0usize, result_type, data_error) }
+        data_slot = saved_data
+        let (saved_length, length_error) = frame_save_temporary(c, length_type, length, token, builder)
+        if length_error != ok { ret (0usize, result_type, length_error) }
+        length_slot = saved_length
+        if !bound_is_lower {
+            let (saved_lower, lower_error) = frame_save_temporary(c, length_type, lower, token, builder)
+            if lower_error != ok { ret (0usize, result_type, lower_error) }
+            lower_slot = saved_lower
+            lower_before = before
+        }
+    }
     if usize(bracket.child_count) == 3usize {
         let (lower_value, lower_type, lower_error) = lower_expression(c, g, tree, module_index, bracket.first, length_type, builder, bindings, binding_count)
         if lower_error != ok { ret (0usize, result_type, lower_error) }
         lower = lower_value
+        if second_cut {
+            let (saved_lower, save_error) = frame_save_temporary(c, length_type, lower, c.tokens[usize(node.token_start)], builder)
+            if save_error != ok { ret (0usize, result_type, save_error) }
+            lower_slot = saved_lower
+            lower_before = builder.kernel_barriers
+        }
         let (upper_value, upper_type, upper_error) = lower_expression(c, g, tree, module_index, bracket.second, length_type, builder, bindings, binding_count)
         if upper_error != ok { ret (0usize, result_type, upper_error) }
         upper = upper_value
     } else {
         if usize(bracket.child_count) == 2usize {
-            var range_at = usize(tree.nodes[bracket.base].token_end)
-            while range_at < usize(node.token_end) && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
-            if range_at >= usize(node.token_end) { ret (0usize, result_type, parse.InvalidSyntax) }
             let (bound, bound_type, bound_error) = lower_expression(c, g, tree, module_index, bracket.first, length_type, builder, bindings, binding_count)
             if bound_error != ok { ret (0usize, result_type, bound_error) }
-            if usize(tree.nodes[bracket.first].token_start) < range_at { lower = bound } else { upper = bound }
+            if bound_is_lower { lower = bound } else { upper = bound }
         }
+    }
+    if data_slot != 0usize {
+        let token = c.tokens[usize(node.token_start)]
+        let (resumed_data, data_error) = frame_resume_temporary(c, pointer_type, data, data_slot, before, token, builder)
+        if data_error != ok { ret (0usize, result_type, data_error) }
+        data = resumed_data
+        let (resumed_length, length_error) = frame_resume_temporary(c, length_type, length, length_slot, before, token, builder)
+        if length_error != ok { ret (0usize, result_type, length_error) }
+        length = resumed_length
+        if lower_slot != 0usize {
+            let (resumed_lower, lower_error) = frame_resume_temporary(c, length_type, lower, lower_slot, lower_before, token, builder)
+            if lower_error != ok { ret (0usize, result_type, lower_error) }
+            lower = resumed_lower
+        }
+        if usize(bracket.child_count) == 2usize && bound_is_lower { upper = length }
     }
     let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, result_type, true, 2usize, c.tokens[usize(node.token_start)])
     if stack_error != ok { ret (0usize, result_type, stack_error) }

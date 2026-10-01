@@ -99,6 +99,14 @@ fn middle(out: []u32, lane: u32) {
             view.data[usize(lane)] = pending_packet.value + pending_packet.lane - lane + packet_lane - lane
             let (pending_first, pending_second, pending_third) = triple_pending(lane)
             view.data[usize(lane)] = pending_first + pending_second - lane + pending_third - lane
+            let part = out[usize(lane)..passthrough(usize(lane) + 1usize)]
+            view.data[usize(lane)] = part[0usize]
+            let tail = out[passthrough(usize(lane))..]
+            view.data[usize(lane)] = tail[0usize]
+            let head = out[..passthrough(usize(lane) + 1usize)]
+            view.data[usize(lane)] = head[usize(lane)]
+            let single = out[passthrough(usize(lane))..passthrough(usize(lane) + 1usize)]
+            view.data[usize(lane)] = single[0usize]
         }
     }
 }
