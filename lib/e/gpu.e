@@ -1409,18 +1409,20 @@ fn subgroup_ready(frames: []u8, base: usize, bytes_per_frame: usize, per_group: 
     if end > per_group { end = per_group }
     var at = first
     while at < end {
-        let reached = frame_pc(frames, base + at * bytes_per_frame)
-        if reached != FAULTED && reached != pc { ret false }
+        let peer = base + at * bytes_per_frame
+        let reached = frame_pc(frames, peer)
+        if reached != FAULTED && (reached != pc || !same_barrier(frames, base + local * bytes_per_frame, peer)) { ret false }
         at += 1usize
     }
     ret true
 }
 
-fn workgroup_ready(frames: []u8, base: usize, bytes_per_frame: usize, per_group: usize, pc: usize) -> bool {
+fn workgroup_ready(frames: []u8, base: usize, bytes_per_frame: usize, per_group: usize, local: usize, pc: usize) -> bool {
     var at = 0usize
     while at < per_group {
-        let reached = frame_pc(frames, base + at * bytes_per_frame)
-        if reached != FAULTED && reached != pc { ret false }
+        let peer = base + at * bytes_per_frame
+        let reached = frame_pc(frames, peer)
+        if reached != FAULTED && (reached != pc || !same_barrier(frames, base + local * bytes_per_frame, peer)) { ret false }
         at += 1usize
     }
     ret true
@@ -1439,6 +1441,18 @@ fn frame_pc(frames: []u8, at: usize) -> usize {
         value = (value << 8usize) | usize(frames[at + i])
     }
     ret value
+}
+
+fn same_barrier(frames: []u8, left: usize, right: usize) -> bool {
+    if frame_pc(frames, left) != frame_pc(frames, right) { ret false }
+    let depth = frame_pc(frames, left + 8usize)
+    if depth != frame_pc(frames, right + 8usize) { ret false }
+    var at = 0usize
+    while at < depth {
+        if frame_pc(frames, left + 16usize + 8usize * at) != frame_pc(frames, right + 16usize + 8usize * at) { ret false }
+        at += 1usize
+    }
+    ret true
 }
 
 fn write_decimal(out: []u8, at: usize, v: usize) -> usize {
@@ -1509,6 +1523,7 @@ fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local
         at = write_id(line[0..], at, group, other_local)
         at = write_text(line[0..], at, " reached barrier ")
         at = write_decimal(line[0..], at, barrier_number(other_at))
+        if stopped_at == other_at && stopped_local != other_local { at = write_text(line[0..], at, " (different loop occurrence)") }
     }
     line[at] = 10u8
     at += 1usize
@@ -1597,7 +1612,7 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
                     any_active = true
                     if pc == 0usize { runnable[local] = true }
                     if subgroup_wait(pc) { runnable[local] = subgroup_ready(frames, base, bytes_per_frame, per_group, local, pc) }
-                    if pc != 0usize && !subgroup_wait(pc) { runnable[local] = workgroup_ready(frames, base, bytes_per_frame, per_group, pc) }
+                    if pc != 0usize && !subgroup_wait(pc) { runnable[local] = workgroup_ready(frames, base, bytes_per_frame, per_group, local, pc) }
                     if runnable[local] { any_runnable = true }
                 }
                 local += 1usize
@@ -1626,7 +1641,7 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
                 local = first
                 while local < end {
                     let reached = frame_pc(frames, base + local * bytes_per_frame)
-                    if reached != FAULTED && reached != waiting_at { divergence(group, local, reached, waiting_local, waiting_at) }
+                    if reached != FAULTED && !same_barrier(frames, base + local * bytes_per_frame, base + waiting_local * bytes_per_frame) { divergence(group, local, reached, waiting_local, waiting_at) }
                     local += 1usize
                 }
                 divergence(group, waiting_local, waiting_at, waiting_local, waiting_at)

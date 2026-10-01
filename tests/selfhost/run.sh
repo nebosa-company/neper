@@ -2948,6 +2948,14 @@ case "$gpu_divergence_output" in
     *'trap[barrier]: invocation (2, 0, 0) of workgroup (0, 0, 0) returned before barrier 1 that invocation (0, 0, 0)'*) ;;
     *) printf '%s\n' "a divergent workgroup did not trap as barrier: $gpu_divergence_output" >&2; exit 1 ;;
 esac
+gpu_occurrence_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_occurrence/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-occurrence-selfhost")
+[ "$gpu_occurrence_written" = 'executable written' ]
+chmod +x "$test_build/gpu-barrier-occurrence-selfhost"
+for variant in while for; do
+    gpu_occurrence_status=0
+    if [ "$variant" = for ]; then gpu_occurrence_output=$("$test_build/gpu-barrier-occurrence-selfhost" for 2>&1) || gpu_occurrence_status=$?; else gpu_occurrence_output=$("$test_build/gpu-barrier-occurrence-selfhost" 2>&1) || gpu_occurrence_status=$?; fi
+    [ "$gpu_occurrence_status" = 134 ] && printf '%s\n' "$gpu_occurrence_output" | grep -Fq 'reached barrier 1 (different loop occurrence)' || { printf '%s\n' "a $variant-loop barrier occurrence did not trap: $gpu_occurrence_output" >&2; exit 1; }
+done
 gpu_outside=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_barrier_outside/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_outside" in
     *'main.e:4:5: error[E-GPU-9999]: `gpu.barrier()` is written outside a kernel'*) ;;

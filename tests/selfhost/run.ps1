@@ -3276,6 +3276,13 @@ $gpuDivergenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gpuDivergenceWritten -ne 'executable written') { throw 'gpu_divergence emission failed' }
 $gpuDivergenceOutput = & $gpuDivergencePath 2>&1
 if ($LASTEXITCODE -ne 134 -or ($gpuDivergenceOutput -join "`n") -notmatch 'trap\[barrier\]: invocation \(2, 0, 0\) of workgroup \(0, 0, 0\) returned before barrier 1 that invocation \(0, 0, 0\)') { throw "a divergent workgroup did not trap as barrier: exit $LASTEXITCODE, $($gpuDivergenceOutput -join "`n")" }
+$gpuOccurrencePath = Join-Path $testBuild 'gpu-barrier-occurrence-selfhost.exe'
+$gpuOccurrenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_barrier_occurrence\src\main.e') $repo 'x64' 'windows' $gpuOccurrencePath
+if ($LASTEXITCODE -ne 0 -or $gpuOccurrenceWritten -ne 'executable written') { throw 'gpu_barrier_occurrence emission failed' }
+foreach ($variant in @('while', 'for')) {
+    if ($variant -eq 'for') { $gpuOccurrenceOutput = & $gpuOccurrencePath for 2>&1 } else { $gpuOccurrenceOutput = & $gpuOccurrencePath 2>&1 }
+    if ($LASTEXITCODE -ne 134 -or ($gpuOccurrenceOutput -join "`n") -notmatch 'reached barrier 1 \(different loop occurrence\)') { throw "a $variant-loop barrier occurrence did not trap: exit $LASTEXITCODE, $($gpuOccurrenceOutput -join "`n")" }
+}
 $gpuOutside = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_barrier_outside\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-GPU-9999\]: `gpu\.barrier\(\)` is written outside a kernel') { throw "a barrier outside a kernel was not refused: $($gpuOutside -join "`n")" }
 # `shared var` on the CPU backend (D781): the spec's block sum through workgroup memory
