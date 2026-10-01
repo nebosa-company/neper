@@ -1533,6 +1533,16 @@ ml_nn_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$ml_nn_written" = 'executable written' ]
 chmod +x "$test_build/ml-nn-selfhost"
 "$test_build/ml-nn-selfhost"
+# `e.ml.recurrent`: one LSTM and GRU step against hand-computed gates, both two-step forwards, and the storage and empty cases.
+ml_recurrent_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_recurrent/src/main.e" "$repo" x64 linux "$test_build/ml-recurrent-selfhost")
+[ "$ml_recurrent_written" = 'executable written' ]
+chmod +x "$test_build/ml-recurrent-selfhost"
+"$test_build/ml-recurrent-selfhost"
+# `e.ml.gnn`: GCN, single-head GAT and message passing on a three-node chain against hand-computed projections, plus the storage and endpoint cases.
+ml_gnn_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_gnn/src/main.e" "$repo" x64 linux "$test_build/ml-gnn-selfhost")
+[ "$ml_gnn_written" = 'executable written' ]
+chmod +x "$test_build/ml-gnn-selfhost"
+"$test_build/ml-gnn-selfhost"
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 ml_hmm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hmm/src/main.e" "$repo" x64 linux "$test_build/ml-hmm-selfhost")
 [ "$ml_hmm_written" = 'executable written' ]

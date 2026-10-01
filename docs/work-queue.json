@@ -323,17 +323,6 @@
       "evidence": "Celvyx implements 2x2 diagnostic-table sensitivity, specificity, accuracy, predictive values, likelihood ratios, diagnostic odds ratio, and exact confidence intervals in `src/lib/core/medical/diagnostic.dart`. Neper has contingency-table tests but no diagnostic-metric API. Keep this as a small generic binary-classification/statistics module; exclude medical report grids. The catalog entry is 2258."
     },
     {
-      "id": "L009",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 107,
-      "title": "Neural layers for molecules and sequences in e.ml",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Neper has the perceptron, scalar autodiff, scaled dot-product and multi-head attention with RoPE in `e.ml.nn`, plus MinHash/LSH/HNSW/IVF-PQ similarity search in `e.ml.ann`, but no recurrent layers (LSTM/GRU for SMILES) and no graph layers (GCN/GAT/MPNN, ChemProp-style message passing) for molecular property and drug-target prediction. Keep the reusable layers with the caller-storage conventions of `e.ml.nn`; exclude trained weights (ChemBERTa, BioBERT, MegaMolBART) and generative products (JT-VAE, MolGAN, diffusion dockers). The catalog entry is 2259."
-    },
-    {
       "id": "L010",
       "category": "library",
       "group": "Algorithms",

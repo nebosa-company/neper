@@ -1681,6 +1681,18 @@ $mlNnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $mlNnWritten -ne 'executable written') { throw 'ml_nn emission failed' }
 & $mlNnPath
 if ($LASTEXITCODE -ne 0) { throw "a ml_nn check failed: exit $LASTEXITCODE" }
+# `e.ml.recurrent`: one LSTM and GRU step against hand-computed gates, both two-step forwards, and the storage and empty cases.
+$mlRecurrentPath = Join-Path $testBuild 'ml-recurrent-selfhost.exe'
+$mlRecurrentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_recurrent\src\main.e') $repo 'x64' 'windows' $mlRecurrentPath
+if ($LASTEXITCODE -ne 0 -or $mlRecurrentWritten -ne 'executable written') { throw 'ml_recurrent emission failed' }
+& $mlRecurrentPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_recurrent check failed: exit $LASTEXITCODE" }
+# `e.ml.gnn`: GCN, single-head GAT and message passing on a three-node chain against hand-computed projections, plus the storage and endpoint cases.
+$mlGnnPath = Join-Path $testBuild 'ml-gnn-selfhost.exe'
+$mlGnnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_gnn\src\main.e') $repo 'x64' 'windows' $mlGnnPath
+if ($LASTEXITCODE -ne 0 -or $mlGnnWritten -ne 'executable written') { throw 'ml_gnn emission failed' }
+& $mlGnnPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_gnn check failed: exit $LASTEXITCODE" }
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 $mlHmmPath = Join-Path $testBuild 'ml-hmm-selfhost.exe'
 $mlHmmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_hmm\src\main.e') $repo 'x64' 'windows' $mlHmmPath

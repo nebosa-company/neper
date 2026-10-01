@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Render the four headline readiness metrics to docs/progress.html.
+"""Render the five headline readiness metrics to docs/progress.html.
 
 Usage:  python scripts/render_progress.py     (from the repository root)
 
-The page intentionally renders only four computed readiness metrics. Compiler and
-tooling scores come from the active queue plus the completed ledger; module and
-UI/host scores come from their machine-readable inventories.
+The page intentionally renders only five computed readiness metrics. Compiler,
+tooling and library scores come from the active queue plus the completed
+ledger; module and UI/host scores come from their machine-readable inventories.
 """
 import json, re, subprocess, datetime
 from pathlib import Path
@@ -43,21 +43,23 @@ def load_work_rows():
         score = float(item["score"])
         if not 0 <= score <= 1 or delivered != (score == 1):
             raise SystemExit("work item is in the wrong file: " + item["id"])
-        if item["category"] not in {"compiler", "tooling"}:
+        if item["category"] not in {"compiler", "tooling", "library"}:
             raise SystemExit("invalid work item category: " + item["id"])
         rows.append(item)
 
-    compiler_rows, tooling_rows = {}, []
+    compiler_rows, tooling_rows, library_rows = {}, [], []
     for item in sorted(rows, key=lambda row: (row["category"], row["order"])):
         row = (item["title"], float(item["score"]), item["evidence"])
         if item["category"] == "compiler":
             compiler_rows.setdefault(item["group"], []).append(row)
-        else:
+        elif item["category"] == "tooling":
             tooling_rows.append(row)
-    return compiler_rows, tooling_rows
+        else:
+            library_rows.append(row)
+    return compiler_rows, tooling_rows, library_rows
 
 
-compiler, tooling = load_work_rows()
+compiler, tooling, library = load_work_rows()
 
 
 # Stamp the last commit that touched what this page measures, not HEAD. Stamping
@@ -148,8 +150,11 @@ c_sum = sum(score for group in compiler.values() for _, score, _ in group)
 c_n = sum(len(group) for group in compiler.values())
 t_sum = sum(score for _, score, _ in tooling)
 t_n = len(tooling)
-C, M, W, T = (100 * c_sum / c_n, 100 * dgot / dtot,
-              100 * wgot / wtot, 100 * t_sum / t_n)
+l_sum = sum(score for _, score, _ in library)
+l_n = len(library)
+C, M, W, T, L = (100 * c_sum / c_n, 100 * dgot / dtot,
+                 100 * wgot / wtot, 100 * t_sum / t_n,
+                 100 * l_sum / l_n if l_n else 100.0)
 
 
 def previous_percentages(path):
@@ -190,6 +195,7 @@ kpi = '\n'.join([
     meter('Modules', M, '%d of %d declarations, %d of %d selected algorithms' % (dgot, dtot, algos_total - algos_missing, algos_total)),
     meter('UI and host integration', W, '%d of %d capabilities' % (wgot, wtot)),
     meter('Tooling', T, '%.2f of %d capabilities' % (t_sum, t_n)),
+    meter('Library', L, '%.2f of %d capabilities' % (l_sum, l_n)),
 ])
 
 html = """<!doctype html>
@@ -273,4 +279,4 @@ __KPI__
 html = html.replace('__KPI__', kpi).replace('__REV__', rev).replace('__DATE__', when)
 progress_path.write_text(html, encoding='utf-8', newline='\n')
 print('wrote docs/progress.html')
-print('compiler %.2f  modules %.2f  ui-host %.2f  tooling %.2f' % (C, M, W, T))
+print('compiler %.2f  modules %.2f  ui-host %.2f  tooling %.2f  library %.2f' % (C, M, W, T, L))

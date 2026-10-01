@@ -14859,6 +14859,45 @@ Discrete-emission models as row-major probabilities: `forward` (scaled log
 likelihood), `viterbi` (the most probable path and its log probability) and
 `baum_welch` (one re-estimation pass in place, answering the likelihood before it).
 
+### `e.ml.recurrent`
+
+```neper
+error TooSmall
+error Invalid
+
+fn sigmoid(x: f64) -> f64
+fn tanh(x: f64) -> f64
+fn lstm_step(x: []const f64, h_prev: []const f64, c_prev: []const f64, d: usize, h: usize, wx: []const f64, wh: []const f64, b: []const f64, h_new: []f64, c_new: []f64, scratch: []f64) -> err
+fn lstm_forward(x: []const f64, steps: usize, d: usize, h: usize, wx: []const f64, wh: []const f64, b: []const f64, h0: []const f64, c0: []const f64, h_out: []f64, c_out: []f64, scratch: []f64) -> err
+fn gru_step(x: []const f64, h_prev: []const f64, d: usize, h: usize, wx: []const f64, wh: []const f64, b: []const f64, h_new: []f64, scratch: []f64) -> err
+fn gru_forward(x: []const f64, steps: usize, d: usize, h: usize, wx: []const f64, wh: []const f64, b: []const f64, h0: []const f64, h_out: []f64, scratch: []f64) -> err
+```
+
+Single-layer LSTM and GRU over caller storage with packed weights (`4h` rows
+input/forget/cell/output, `3h` rows reset/update/candidate): `lstm_step` and
+`gru_step` advance one input, `lstm_forward` and `gru_forward` run a sequence
+from an initial state keeping every state.
+
+### `e.ml.gnn`
+
+```neper
+error TooSmall
+error Invalid
+
+fn relu(x: f64) -> f64
+fn leaky_relu(x: f64, slope: f64) -> f64
+fn gat_score(p: []const f64, n: usize, e: usize, i: usize, j: usize, attention: []const f64, slope: f64) -> f64
+fn gcn_layer(x: []const f64, n: usize, d: usize, e: usize, src: []const usize, dst: []const usize, m: usize, weight: []const f64, out: []f64, scratch: []f64) -> err
+fn gat_layer(x: []const f64, n: usize, d: usize, e: usize, src: []const usize, dst: []const usize, m: usize, weight: []const f64, attention: []const f64, slope: f64, out: []f64, scratch: []f64) -> err
+fn mpnn_step(x: []const f64, n: usize, d: usize, e: usize, src: []const usize, dst: []const usize, m: usize, message: []const f64, update: []const f64, out: []f64, scratch: []f64) -> err
+```
+
+Graph layers over edge lists (`src[k] -> dst[k]`) with an implicit self-loop on
+every node: `gcn_layer` (symmetric degree normalization), `gat_layer`
+(single-head max-subtracted softmax attention, `gat_score` the unnormalized
+edge score) and `mpnn_step` (sum aggregation with separate message and update
+maps), each ending in `relu`.
+
 ### `e.ml.rl`
 
 ```neper

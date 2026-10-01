@@ -217,6 +217,8 @@
     "e.ml.loss",
     "e.ml.sample",
     "e.ml.nn",
+    "e.ml.recurrent",
+    "e.ml.gnn",
     "e.ml.hmm",
     "e.ml.rl",
     "e.ml.reduce",
@@ -4087,6 +4089,28 @@
   },
   {
    "name": "e.ml.nn",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.recurrent",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.gnn",
    "layer": 2,
    "surface": "source",
    "milestone": null,
