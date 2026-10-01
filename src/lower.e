@@ -5180,7 +5180,34 @@ fn emit_return_values(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         try c_argument(c, &passing, returned_type, values[0usize], builder, token, pieces[..], &piece_count)
         c_result = c_result_type(crossing, module_index)
     }
+    var saved: [16]usize = zero
+    let before = builder.kernel_barriers
+    if count != 0usize && defers.count != 0usize && (builder.frame_mode || builder.frame_locals) && !builder.spirv {
+        // ponytail: spill return values for any defer; refine to cutting defers if frame size matters.
+        var result_at = 0usize
+        while result_at < count {
+            let result_type = c.return_types[function.first_return + result_at]
+            var storage_type = result_type
+            if aggregate_value(c, result_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+            let (slot, save_error) = frame_save_temporary(c, storage_type, values[result_at], token, builder)
+            if save_error != ok { ret save_error }
+            saved[result_at] = slot
+            result_at += 1usize
+        }
+    }
     try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
+    if builder.kernel_barriers != before {
+        var result_at = 0usize
+        while result_at < count {
+            let result_type = c.return_types[function.first_return + result_at]
+            var storage_type = result_type
+            if aggregate_value(c, result_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+            let (restored, restore_error) = frame_resume_temporary(c, storage_type, values[result_at], saved[result_at], before, token, builder)
+            if restore_error != ok { ret restore_error }
+            values[result_at] = restored
+            result_at += 1usize
+        }
+    }
     if piece_count != 0usize {
         let (pieces_instruction, pieces_ignored, pieces_error) = nir.emit(builder, .Return, c_result, false, 0usize, token)
         if pieces_error != ok { ret pieces_error }

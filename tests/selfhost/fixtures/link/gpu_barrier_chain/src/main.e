@@ -72,6 +72,21 @@ fn triple_pending(lane: u32) -> (u32, u32, u32) {
     ret (lane + 44u32, passthrough(lane), passthrough(lane))
 }
 
+fn deferred_barrier(lane: u32) -> u32 {
+    defer gpu.barrier()
+    ret lane + 44u32
+}
+
+fn deferred_pair(lane: u32) -> (u32, u32) {
+    defer gpu.barrier()
+    ret (lane + 44u32, lane)
+}
+
+fn deferred_packet(lane: u32) -> Packet {
+    defer gpu.barrier()
+    ret Packet { value: lane + 44u32, lane: lane }
+}
+
 fn middle(out: []u32, lane: u32) {
     for pass in 0u32..1u32 {
         // The store address, binary left operand and first call argument precede inner's barriers.
@@ -107,6 +122,11 @@ fn middle(out: []u32, lane: u32) {
             view.data[usize(lane)] = head[usize(lane)]
             let single = out[passthrough(usize(lane))..passthrough(usize(lane) + 1usize)]
             view.data[usize(lane)] = single[0usize]
+            view.data[usize(lane)] = deferred_barrier(lane)
+            let (after_defer, deferred_lane) = deferred_pair(lane)
+            view.data[usize(lane)] = after_defer + deferred_lane - lane
+            let deferred_value = deferred_packet(lane)
+            view.data[usize(lane)] = deferred_value.value + deferred_value.lane - lane
         }
     }
 }

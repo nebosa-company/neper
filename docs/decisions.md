@@ -32592,3 +32592,22 @@ compiler; bootstrapped, self-hosted and next-stage binaries are byte-identical
 on both hosts when built sequentially. The full suites remain gated by the
 shared tree's stale library-fixture manifest. Other pending-expression helper
 shapes remain unverified.
+
+## D1765 — Preserve return values while deferred barriers run
+
+**Decision.** The ordinary return path saves results in invocation-frame slots
+before emitting deferred statements and reloads only when they introduced a
+barrier cut. Aggregate results save their address. A hidden-slot return has
+already copied its results before defers, so it keeps its existing path. The
+simple rule spills for any defer in a CPU step; narrow it only if frame size
+becomes material (`ponytail:` in lowering).
+
+**Evidence.** A helper returning a scalar after `defer gpu.barrier()` previously
+failed NIR verification. `link/gpu_barrier_chain` now checks scalar,
+two-register and aggregate returns across deferred barriers in debug and
+release on Windows and WSL. The ordinary `link/try_positions` fixture passes
+on both hosts. Both C bootstraps build the compiler; next-stage hashes match
+their self-hosted builds on both hosts, and three further sequential Windows
+self-builds passed after two intermittent access violations. The full suites
+still stop at the shared tree's stale library-fixture manifest. Captured
+defer arguments and other pending-expression helper shapes remain unverified.
