@@ -32249,3 +32249,14 @@ condition block, which every new iteration reaches. Device lowering is unchanged
 **Evidence.** A runtime-bound `for` containing `gpu.barrier()` previously failed
 NIR verification. `gpu_barrier` now runs that form and a slice-collection form,
 checking the exact result on CPU and supported Vulkan devices on Windows and WSL.
+
+## D1744 — CPU launch scratch ends with the launch
+
+**Decision.** `launch_run` marks the device arena immediately before allocating
+per-invocation frames and the shared block, then resets it on return or allocation
+failure. A launch's output and buffer metadata are allocated before that mark and
+remain live; the GPU kernel cannot persist a pointer into its temporary frame.
+
+**Evidence.** `gpu_barrier` checks that a CPU launch leaves the arena mark unchanged.
+It and `gpu_gaps` (which calls the scheduler from sort and attention) pass on
+Windows and WSL. The Vulkan path allocates no CPU frames and is unchanged.
