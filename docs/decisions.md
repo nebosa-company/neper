@@ -32097,3 +32097,38 @@ requires a nonzero launch exit plus the exact same file hash. After removing the
 injection, the same executable succeeds again with CPU-identical output. This passes
 on the NVIDIA RTX 3080 and Intel Iris Xe on Windows and on WSL's Vulkan device; both
 suite scripts parse and `e.gpu.vulkan` checks.
+
+## D1736 — GP-09 and GP-10 reuse the acceptance paths that already carry their oracles
+
+**Decision.** GP-09 is a lower-case Base16 codec in
+`tests/selfhost/fixtures/link/gp09_simd_hex`: sixteen aligned input bytes are loaded
+as a vector, masks select digit or letter output, unaligned encoded text is validated
+as vectors, and the remaining bytes take the scalar path. It compares every prefix
+length from zero through 65 with `e.bytes`, then decodes it. The same source runs at
+the baseline x64 level and `x64-v3`; a second implementation or benchmark framework
+would add no correctness evidence.
+
+GP-10 is the M3 corpus rather than a duplicate numerical program: `saxpy` covers
+caller-to-device transfers and the public launch path; the pinned loop, float, types,
+sync and subgroup modules cover reached helpers, exact and bounded arithmetic,
+capabilities and synchronization; the fault fixtures cover launch-time and
+device-time errors. Exact outputs are compared with the CPU backend on every
+compatible Vulkan device. The floating subgroup reductions retain their documented
+order-dependent bound and are the only approximate operations in that corpus.
+
+**Workload design.** GP-09 has fixed stack storage, no owned resource, one thread,
+`Invalid`/`TooSmall` errors, no foreign boundary, and the module graph
+`main -> {e.bytes, e.simd, e.mem, e.io, e.os}`. GP-10 uses the caller arena for each
+device, queue and buffer table; buffers and devices are explicitly released/closed;
+one ordered queue is the concurrency unit; ordinary failures are `err` values and
+kernel checks are `FaultRecord`s; `e.gpu.vulkan` is the sole loader/driver boundary;
+the graph is `root -> e.gpu -> e.gpu.vulkan`, with each reached kernel companion
+embedded in its root.
+
+**Evidence.** GP-09 passes every length and the invalid-input case in baseline and
+`x64-v3` executables on Windows and Linux. `saxpy` prints the same 16,777,216 checksum
+on the CPU and both Windows Vulkan devices; WSL correctly refuses that
+denormal-preserving float kernel, while the integer loop fixture agrees on WSL's
+Vulkan device and both Windows devices. The remaining exact and bounded kernels,
+capability refusals and device faults are the hardware runs recorded in D1612-D1615
+and D1720-D1732; their six pinned SPIR-V modules are byte-identical across hosts.

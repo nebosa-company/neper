@@ -780,6 +780,16 @@ for avx_mode in "debug" "release --release"; do
     chmod +x "$test_build/simd-lanes-v3-$avx_name"
     "$test_build/simd-lanes-v3-$avx_name"
 done
+# GP-09: the same Base16 codec and scalar tails must match `e.bytes` at both
+# applicable x64 instruction levels.
+for gp09_mode in "v1" "v3 --cpu x64-v3"; do
+    set -- $gp09_mode
+    gp09_name="$1"
+    shift
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/gp09_simd_hex/src/main.e" "$repo" x64 linux "$test_build/gp09-simd-hex-$gp09_name" "$@")" = 'executable written' ]
+    chmod +x "$test_build/gp09-simd-hex-$gp09_name"
+    [ "$("$test_build/gp09-simd-hex-$gp09_name")" = 'gp09 simd hex ok' ]
+done
 avx_bad=0
 "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/simd_lanes/src/main.e" "$repo" x64 linux "$test_build/simd-lanes-v9" --cpu x64-v9 > /dev/null 2>&1 || avx_bad=$?
 [ "$avx_bad" -ne 0 ]
@@ -2723,6 +2733,8 @@ gpu_cpu_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/gpu-cpu-selfhost"
 gpu_cpu_output=$("$test_build/gpu-cpu-selfhost")
 [ "$gpu_cpu_output" = 'gpu cpu ok' ]
+# GP-10 (D1736) is this existing M3 corpus: transfers, capabilities, launch/fault
+# errors and every exact or bounded kernel compare the CPU with compatible devices.
 # (D1610, D1611) The device build: saxpy's kernel as SPIR-V, byte for byte the module
 # both a NVIDIA and an Intel driver ran bit-identically with the CPU. The raw runtime
 # reaches every suitable Vulkan device, or explicitly reports that none exists.

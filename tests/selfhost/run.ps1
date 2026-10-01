@@ -784,6 +784,15 @@ foreach ($avxMode in @(@('debug', @()), @('release', @('--release')))) {
     & $avxPath
     if ($LASTEXITCODE -ne 0) { throw "an e.simd check failed under --cpu x64-v3 ($($avxMode[0])): exit $LASTEXITCODE" }
 }
+# GP-09: the same Base16 codec and scalar tails must match `e.bytes` at both
+# applicable x64 instruction levels.
+foreach ($gp09Mode in @(@('v1', @()), @('v3', @('--cpu', 'x64-v3')))) {
+    $gp09Path = Join-Path $testBuild "gp09-simd-hex-$($gp09Mode[0]).exe"
+    $gp09Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gp09_simd_hex\src\main.e') $repo 'x64' 'windows' $gp09Path @($gp09Mode[1])
+    if ($LASTEXITCODE -ne 0 -or $gp09Written -ne 'executable written') { throw "GP-09 emission failed ($($gp09Mode[0]))" }
+    $gp09Output = & $gp09Path
+    if ($LASTEXITCODE -ne 0 -or $gp09Output -ne 'gp09 simd hex ok') { throw "GP-09 failed ($($gp09Mode[0])): $gp09Output" }
+}
 & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_lanes\src\main.e') $repo 'x64' 'windows' (Join-Path $testBuild 'simd-lanes-v9.exe') --cpu x64-v9 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) { throw 'a level the build does not have was accepted' }
 # A module-scope `var` is storage: a function that writes and another that reads agree, and each
@@ -3084,6 +3093,8 @@ $gpuCpuWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $gpuCpuWritten -ne 'executable written') { throw 'gpu_cpu emission failed' }
 $gpuCpuOutput = & $gpuCpuPath
 if ($LASTEXITCODE -ne 0 -or $gpuCpuOutput -ne 'gpu cpu ok') { throw "an e.gpu device, buffer, launch or refusal answered wrongly: exit $LASTEXITCODE" }
+# GP-10 (D1736) is this existing M3 corpus: transfers, capabilities, launch/fault
+# errors and every exact or bounded kernel compare the CPU with compatible devices.
 # (D1610, D1611) The device build: saxpy's kernel as SPIR-V, byte for byte the module
 # both a NVIDIA and an Intel driver ran bit-identically with the CPU. The raw runtime
 # reaches every suitable Vulkan device, or explicitly reports that none exists.
