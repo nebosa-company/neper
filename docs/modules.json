@@ -166,6 +166,7 @@
     "e.math.special",
     "e.algo.rand.dist",
     "e.algo.stat.test",
+    "e.algo.stat.mixed",
     "e.algo.graph.flow",
     "e.algo.graph.match",
     "e.algo.graph.path",
@@ -3530,6 +3531,19 @@
    "direct_dependencies": [
     "e.algo.rand",
     "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.mixed",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.opt",
     "e.math.special"
    ],
    "blocked_by": []

@@ -3046,6 +3046,41 @@ sorts its inputs and uses the Numerical Recipes small-sample correction;
 Scratch: `mann_whitney` `2 * (a.len + b.len)` floats, `wilcoxon` `3 * a.len`,
 `kruskal_wallis` the total, each with as many indices in `order`.
 
+### `e.algo.stat.mixed`
+
+```neper
+error TooSmall
+error Singular
+error Invalid
+type Corr = enum u8 { Independence, Exchangeable, Ar1 }
+type MmrmCtx = struct { y: []const f64, x: []const f64, n: usize, p: usize, counts: []const usize, groups: usize, visit: []const usize, visits: usize, lbuf: []f64, vbuf: []f64, xvx: []f64, xvy: []f64, ybuf: []f64, xcol: []f64 }
+type RiCtx = struct { y: []const f64, x: []const f64, n: usize, d: usize, counts: []const usize, groups: usize, xvx: []f64, xvy: []f64 }
+fn mixed_solve(matrix: []f64, rhs: []f64, n: usize) -> err
+fn mixed_chol(matrix: []f64, n: usize) -> err
+fn mixed_chol_solve(l: []const f64, rhs: []f64, n: usize) -> err
+fn mixed_chol_logdet(l: []const f64, n: usize) -> f64
+fn wald_p(estimate: f64, se: f64) -> (f64, err)
+fn mixed_contrast(beta: []const f64, covariance: []const f64, p: usize, weights: []const f64) -> (f64, f64, f64, err)
+fn gee_solve_block(corr: Corr, alpha: f64, phi: f64, v: []const f64, m: usize, w: []f64) -> err
+fn gee(y: []const f64, x: []const f64, n: usize, d: usize, sizes: []const usize, groups: usize, corr: Corr, beta: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn mmrm_unpack(theta: []const f64, v: usize, l: []f64)
+fn mmrm_fit_given(ctx: *MmrmCtx, l: []const f64) -> (f64, err)
+fn mmrm_objective(ctx: *MmrmCtx, theta: []const f64) -> f64
+fn mmrm_un(y: []const f64, x: []const f64, n: usize, p: usize, counts: []const usize, groups: usize, visit: []const usize, visits: usize, beta: []f64, beta_cov: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn ri_fit_given(ctx: *RiCtx, tau2: f64, sig2: f64) -> (f64, err)
+fn ri_objective(ctx: *RiCtx, theta: []const f64) -> f64
+fn lmm_intercept(y: []const f64, x: []const f64, n: usize, d: usize, counts: []const usize, groups: usize, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, scratch: []f64) -> (u32, err)
+```
+
+Longitudinal Gaussian models over subject-grouped rows (a missed visit is an
+absent row): `gee` by Fisher scoring with moment-estimated working
+correlations (closed-form block inverses) and the robust sandwich;
+`mmrm_un` with an unstructured covariance by REML (log-Cholesky Nelder-Mead,
+GLS at the optimum); `lmm_intercept` for the random-intercept model by REML
+with BLUPs; `wald_p` and `mixed_contrast` for inference. Scratch: `gee`
+`4d² + d + n + 2·mmax`, `mmrm_un` `(m+1)² + 5m + 2v² + p² + p + 2v` with
+`m = v(v+1)/2`, `lmm_intercept` `19 + 2d² + d`.
+
 ### `e.algo.stat`
 
 ```neper

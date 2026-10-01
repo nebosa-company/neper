@@ -1553,6 +1553,11 @@ ml_chemometric_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$ml_chemometric_written" = 'executable written' ]
 chmod +x "$test_build/ml-chemometric-selfhost"
 "$test_build/ml-chemometric-selfhost"
+# `e.algo.stat.mixed`: GEE under three working correlations, a random-intercept LMM, MMRM with unstructured covariance on complete and dropout data, treatment contrasts, and the helper and error cases.
+ml_mixed_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_mixed/src/main.e" "$repo" x64 linux "$test_build/ml-mixed-selfhost")
+[ "$ml_mixed_written" = 'executable written' ]
+chmod +x "$test_build/ml-mixed-selfhost"
+"$test_build/ml-mixed-selfhost"
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 ml_hmm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hmm/src/main.e" "$repo" x64 linux "$test_build/ml-hmm-selfhost")
 [ "$ml_hmm_written" = 'executable written' ]
