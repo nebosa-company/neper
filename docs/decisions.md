@@ -31751,6 +31751,29 @@ memory barriers, every 32-bit atomic form and a 64-bit device atomic. The
 Vulkan and passes on the RTX 3080, Iris Xe and WSL's Vulkan device. Subgroup operations remain the
 unfinished part of C090's synchronization row.
 
+## D1719 — MTG Studio adds two algorithm backlog candidates
+
+**Problem.** Comparing `mtg.studio.src` and `mtg.studio.web` with Neper found
+many apparent algorithms that are already covered by `e.lib`: the card-scan
+pHash/DCT/Hamming path is in `e.gfx.image` and `e.gfx.vision`, image components
+and geometry are present, and text distance, ranking, and statistical summaries
+already have general APIs. Adding those again would create duplicate surfaces.
+
+**Decision.** Add only two scoped candidates to the algorithm catalog and work
+queue. First, `e.algo.stat` may gain hypergeometric PMF and tail helpers for
+finite-population draws, using validated inputs and stable arithmetic. Second,
+`e.gfx.vision` may gain a reusable 2D total-least-squares line fit with one
+outlier-rejection pass. The second candidate stops at the line fit; the MTG
+card detector, silhouette extraction, and rectifier remain application code.
+
+**Evidence.** The first candidate is implemented independently in
+`mtg.studio.web/js/domain/draw-probability.js` and
+`mtg.studio.src/shared/lib/helpers/math.helper.dart`. The second is used by
+the scanner's edge-refinement path in
+`mtg.studio.web/js/domain/scan-rectify.js` and
+`mtg.studio.src/scan-spike/lib/rectify.dart`. The catalog entries are 2251 and
+2252; backlog items L001 and L002 track implementation separately.
+
 ## D1720 — Subgroup identity is an input, not a helper call
 
 **Problem.** C090 had no subgroup surface. The CPU scheduler already knew each
@@ -31818,3 +31841,58 @@ on both. The saxpy example selects a compatible Vulkan device and matches the CP
 checksum. WSL runs subgroup and integer kernels on its advertised-capability device
 and correctly leaves the denormal-preserving float kernel on the CPU. The complete
 Windows self-host suite passes.
+
+## D1723 — Subgroup exchange snapshots raw lane values
+
+**Problem.** Broadcast and shuffle return a lane's value after every active lane has
+reached the same collective. The CPU's vote snapshot held only predicates, and an SSA
+value computed before the subgroup cut does not survive the resumable step call.
+
+**Decision.** CPU lowering bitcasts each supported 32- or 64-bit scalar to its unsigned
+representation and records that word with the requested source lane before the common
+subgroup cut. The scheduler snapshots words and lanes beside vote predicates; resumed
+lanes read only that snapshot. Broadcast verifies that every active lane requested the
+same source and traps as `barrier` otherwise; both operations trap as `bounds` when the
+source is outside the active part of a partial subgroup. SPIR-V emits
+`OpGroupNonUniformBroadcast` with `GroupNonUniformBallot` and
+`OpGroupNonUniformShuffle` with `GroupNonUniformShuffle`.
+
+**Evidence.** `tests/conformance/spirv/subgroup.spv` pins broadcast and shuffle for
+u32, i32, u64 and f32 values and is byte-identical from the Windows and Linux
+self-hosted compilers. `gpu_subgroup_identity` validates full and partial subgroup
+results on the CPU, the compatible Intel and NVIDIA Windows adapters, and WSL's Vulkan
+device. Direct CPU probes also pin exit 134 and the `barrier`/`bounds` reports for a
+non-uniform broadcast source and an inactive shuffle source. The complete Windows
+self-host suite passes.
+
+## D1724 — Chit-chat contributes two reusable algorithm candidates
+
+**Problem.** The `D:\repos\chit-chat` review found several algorithms, but most
+are either protocol compositions, application heuristics, or already present in
+Neper. Adding all of them would turn an inventory into speculative library scope.
+
+**Decision.** Add only two candidates to the algorithm catalog and backlog:
+Ristretto255/hash-to-group primitives (`e.crypto.ristretto255`) and Padme
+length bucketing (`e.algo.privacy.padme_ceil`). The first is a reusable
+cryptographic primitive that could support PSI, OPRF/VOPRF, and related privacy
+protocols; it must be a standardized, constant-time implementation with test
+vectors rather than a copy of chit-chat's application-specific PSI exchange.
+The second is a small, self-contained privacy helper that reduces message-size
+leakage while bounding padding overhead; only the pure size-rounding operation
+belongs in e.lib, not chit-chat's encrypted-frame format or cover-traffic policy.
+
+**Rejected alternatives.** Double Ratchet, PSI exchange, onion addressing, and
+the mesh/file protocols are compositions tied to chit-chat's wire and state
+models, so they belong in an application or protocol library. ML-KEM, Argon2id,
+X25519, Ed25519, HKDF, and AEAD are duplicates of existing Neper crypto
+surfaces. Hashcash proof-of-work is a short protocol-local loop that can already
+be built from Neper's hash and leading-zero helpers, so a wrapper adds no useful
+API until a second independent consumer exists. Language detection and ANSI
+image rendering are deliberately heuristic client/UI features, not stable
+general-purpose e.lib algorithms.
+
+**Evidence.** Chit-chat's implementations are in
+`protocol/lib/src/crypto/edwards25519.dart`,
+`protocol/lib/src/crypto/psi.dart`, and
+`protocol/lib/src/crypto/crypto_session.dart`. The catalog entries are 2253 and
+2254; backlog items are L003 and L004.

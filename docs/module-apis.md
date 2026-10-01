@@ -7210,6 +7210,10 @@ var launch_local: usize = 0usize
 var subgroup_values: [1024]bool = zero
 var subgroup_snapshot: [1024]bool = zero
 var subgroup_active: [1024]bool = zero
+var subgroup_words: [1024]u64 = zero
+var subgroup_word_snapshot: [1024]u64 = zero
+var subgroup_lanes: [1024]u32 = zero
+var subgroup_lane_snapshot: [1024]u32 = zero
 type SortArgs = struct { keys: []u32, n: u32, j: u32, k: u32 }
 type AttentionArgs = struct { query: []const f32, key: []const f32, value: []const f32, out: []f32, n: u32, d: u32, tile: u32, scale: f32 }
 error NoDevice
@@ -7285,6 +7289,12 @@ fn close_target(t: *Target) -> err
 fn groups_along(invocations: usize, size: usize) -> (usize, err)
 fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usize, err)
 fn subgroup_record(value: bool)
+fn subgroup_record32(value: u32, lane: u32)
+fn subgroup_record64(value: u64, lane: u32)
+fn subgroup_failure(bounds: bool)
+fn subgroup_exchange(kind: u32) -> u64
+fn subgroup_exchange32(kind: u32) -> u32
+fn subgroup_exchange64(kind: u32) -> u64
 fn subgroup_vote(kind: u32) -> u64
 fn set_ids(group: usize, local: usize)
 fn subgroup_wait(pc: usize) -> bool
@@ -7320,6 +7330,8 @@ fn subgroup_elect() -> bool
 fn subgroup_all(value: bool) -> bool
 fn subgroup_any(value: bool) -> bool
 fn subgroup_ballot(value: bool) -> u64
+fn subgroup_broadcast[T: type](value: T, lane: u32) -> T
+fn subgroup_shuffle[T: type](value: T, lane: u32) -> T
 fn atomic_load[T: type](p: *Atomic[T], order: atomic.Ordering, scope: Scope) -> T
 fn atomic_store[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope)
 fn atomic_xchg[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
@@ -7367,8 +7379,9 @@ launch answers `Unsupported`; the CPU device still runs it.
 
 The landed device-only intrinsics are `gid`, `lid`, `wgid`, `sid`, `barrier`,
 `memory_barrier`, `subgroup_size`, `subgroup_elect`, `subgroup_all`, `subgroup_any`,
-`subgroup_ballot` and the scoped atomic family above. The remaining planned intrinsics
-are `subgroup_broadcast`, `subgroup_add`, `subgroup_min` and `subgroup_max`.
+`subgroup_ballot`, `subgroup_broadcast`, `subgroup_shuffle` and the scoped atomic family
+above. The remaining planned subgroup intrinsics are the arithmetic and bitwise
+reductions.
 
 ### `e.gpu.vulkan`
 

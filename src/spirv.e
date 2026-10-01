@@ -77,6 +77,7 @@ type Module = struct {
     subgroup: bool,
     subgroup_vote: bool,
     subgroup_ballot: bool,
+    subgroup_shuffle: bool,
     v_gid: usize,
     v_lid: usize,
     v_wgid: usize,
@@ -457,7 +458,9 @@ const OP_CONTROL_BARRIER: usize = 224usize
 const OP_MEMORY_BARRIER: usize = 225usize
 const OP_GROUP_NON_UNIFORM_ALL: usize = 334usize
 const OP_GROUP_NON_UNIFORM_ANY: usize = 335usize
+const OP_GROUP_NON_UNIFORM_BROADCAST: usize = 337usize
 const OP_GROUP_NON_UNIFORM_BALLOT: usize = 339usize
+const OP_GROUP_NON_UNIFORM_SHUFFLE: usize = 345usize
 const OP_ATOMIC_LOAD: usize = 227usize
 const OP_ATOMIC_STORE: usize = 228usize
 const OP_ATOMIC_EXCHANGE: usize = 229usize
@@ -609,6 +612,17 @@ fn subgroup_capability(m: *Module, ballot: bool) {
     if !ballot && !m.subgroup_vote {
         capability(m, 62usize)
         m.subgroup_vote = true
+    }
+}
+
+fn subgroup_shuffle_capability(m: *Module) {
+    if !m.subgroup {
+        capability(m, 61usize)
+        m.subgroup = true
+    }
+    if !m.subgroup_shuffle {
+        capability(m, 65usize)
+        m.subgroup_shuffle = true
     }
 }
 
@@ -1532,6 +1546,30 @@ fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: 
 }
 
 fn emit_subgroup(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    if instruction.immediate == 3usize || instruction.immediate == 4usize {
+        if instruction.operand_count != 2usize { ret fail(m, "a subgroup exchange has the wrong argument count") }
+        let value = operand(builder, instruction, 0usize)
+        let lane = operand(builder, instruction, 1usize)
+        let (result_type, signed) = value_type(m, instruction.ty)
+        if result_type == 0usize || KIND_SCALAR != values.kind[value] || values.ty[value] != result_type { ret fail(m, "a subgroup exchange has an unsupported value") }
+        if KIND_SCALAR != values.kind[lane] || values.ty[lane] != m.t_u32 { ret fail(m, "a subgroup exchange lane is not u32") }
+        var opcode = OP_GROUP_NON_UNIFORM_BROADCAST
+        if instruction.immediate == 3usize {
+            subgroup_capability(m, true)
+        } else {
+            opcode = OP_GROUP_NON_UNIFORM_SHUFFLE
+            subgroup_shuffle_capability(m)
+        }
+        head(&m.code, opcode, 6usize)
+        put(&m.code, result_type)
+        let result = fresh(m)
+        put(&m.code, result)
+        put(&m.code, constant(m, m.t_u32, 3usize))
+        put(&m.code, values.id[value])
+        put(&m.code, values.id[lane])
+        scalar(values, instruction.result, result, result_type, signed)
+        ret ok
+    }
     if instruction.operand_count != 1usize { ret fail(m, "a subgroup operation has the wrong argument count") }
     let predicate = operand(builder, instruction, 0usize)
     if KIND_SCALAR != values.kind[predicate] || values.ty[predicate] != m.t_bool { ret fail(m, "a subgroup predicate is not bool") }

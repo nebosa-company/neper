@@ -29,9 +29,9 @@
 // A kernel's `shared var`s live in one block per launch, handed to every step,
 // filled with 0xCD before each workgroup (D781).
 //
-// Subgroup identity, all, any and ballot use hardware inputs and collectives on Vulkan
-// and the fixed 32-lane model on the CPU. Broadcast, shuffle, reductions and a barrier
-// in a helper are not here yet (only the kernel's own body is cut). `.Cuda` and a build
+// Subgroup identity, votes, broadcast and shuffle use hardware inputs and collectives
+// on Vulkan and the fixed 32-lane model on the CPU. Reductions and a barrier in a helper
+// are not here yet (only the kernel's own body is cut). `.Cuda` and a build
 // without Vulkan answer `Unsupported`.
 //
 // The fault buffer (contract section 1.3, D785): a check failing in a kernel's CPU
@@ -128,8 +128,55 @@ var launch_local: usize = 0usize
 var subgroup_values: [1024]bool = zero
 var subgroup_snapshot: [1024]bool = zero
 var subgroup_active: [1024]bool = zero
+var subgroup_words: [1024]u64 = zero
+var subgroup_word_snapshot: [1024]u64 = zero
+var subgroup_lanes: [1024]u32 = zero
+var subgroup_lane_snapshot: [1024]u32 = zero
 
 fn subgroup_record(value: bool) { subgroup_values[launch_local] = value }
+
+fn subgroup_record32(value: u32, lane: u32) {
+    subgroup_words[launch_local] = u64(value)
+    subgroup_lanes[launch_local] = lane
+}
+
+fn subgroup_record64(value: u64, lane: u32) {
+    subgroup_words[launch_local] = value
+    subgroup_lanes[launch_local] = lane
+}
+
+fn subgroup_failure(bounds: bool) {
+    var line: [80]u8 = zero
+    var at = 0usize
+    if bounds {
+        at = write_text(line[0..], at, "trap[bounds]: subgroup source lane is not active\n")
+    } else {
+        at = write_text(line[0..], at, "trap[barrier]: subgroup broadcast lane is not uniform\n")
+    }
+    let error_output = os.stderr()
+    let (written, write_error) = os.write(error_output, line[..at])
+    os.exit(134i32)
+}
+
+fn subgroup_exchange(kind: u32) -> u64 {
+    let first = launch_local / 32usize * 32usize
+    var end = first + 32usize
+    let count = launch_size[0usize] * launch_size[1usize] * launch_size[2usize]
+    if end > count { end = count }
+    let lane = subgroup_lane_snapshot[launch_local]
+    if kind == 0u32 {
+        var at = first
+        while at < end {
+            if subgroup_active[at] && subgroup_lane_snapshot[at] != lane { subgroup_failure(false) }
+            at += 1usize
+        }
+    }
+    if usize(lane) >= end - first || !subgroup_active[first + usize(lane)] { subgroup_failure(true) }
+    ret subgroup_word_snapshot[first + usize(lane)]
+}
+
+fn subgroup_exchange32(kind: u32) -> u32 { ret u32(subgroup_exchange(kind)) }
+fn subgroup_exchange64(kind: u32) -> u64 { ret subgroup_exchange(kind) }
 
 fn subgroup_vote(kind: u32) -> u64 {
     let first = launch_local / 32usize * 32usize
@@ -1169,6 +1216,8 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
             local = 0usize
             while local < per_group {
                 subgroup_snapshot[local] = subgroup_values[local]
+                subgroup_word_snapshot[local] = subgroup_words[local]
+                subgroup_lane_snapshot[local] = subgroup_lanes[local]
                 let state_at = frame_pc(frames, base + local * bytes_per_frame)
                 subgroup_active[local] = state_at != DONE && state_at != FAULTED
                 local += 1usize
