@@ -146,12 +146,12 @@ error Unsupported
 // `message` says why when it fails, for the command's diagnostic.
 // Every kernel among the builder's functions from `first` on (D1611: a host build hands
 // over the one it has just lowered for the device).
-fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, first: usize, message: *str) -> ([]u8, err) {
+fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, first: usize, message: *str, has_checks: *bool) -> ([]u8, err) {
     var no_bytes: []u8 = zero
     var m: Module = zero
+    *has_checks = false
     let init_error = init_module(a, &m)
     if init_error != ok { ret (no_bytes, init_error) }
-    m.checked = !builder.nocheck
     let (function_ids, ids_error) = mem.alloc[usize](a, builder.function_count + 1usize)
     if ids_error != ok { ret (no_bytes, ids_error) }
     let (function_types, types_error) = mem.alloc[usize](a, builder.function_count + 1usize)
@@ -202,6 +202,8 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
         function_at += 1usize
     }
     if !has_calls {
+        m.checked = !builder.nocheck && reachable_checked(&m, builder)
+        *has_checks = m.checked
         function_at = first
         while function_at < builder.function_count {
             if m.function_reachable[function_at] {
@@ -246,6 +248,8 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
             function_at += 1usize
         }
     }
+    m.checked = !builder.nocheck && reachable_checked(&m, builder)
+    *has_checks = m.checked
     function_at = 0usize
     while function_at < builder.function_count {
         if m.function_reachable[function_at] {
@@ -285,6 +289,27 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     }
     let (bytes, bytes_error) = assemble(a, &m)
     ret (bytes, bytes_error)
+}
+
+// Whether this module can write a fault. Bounds and slice checks are emitted directly;
+// every other checked operation reaches the common writer through a `Trap`.
+fn reachable_checked(m: *Module, builder: *nir.Builder) -> bool {
+    var function_at = 0usize
+    while function_at < builder.function_count {
+        if m.function_reachable[function_at] {
+            let function = builder.functions[function_at]
+            var at = function.first_instruction
+            while at < function.first_instruction + function.instruction_count {
+                let instruction = builder.instructions[at]
+                if instruction.opcode == .Trap { ret true }
+                if instruction.opcode == .IndexAddress && instruction.operand_count >= 3usize && !instruction.nocheck { ret true }
+                if instruction.opcode == .Slice && !instruction.nocheck { ret true }
+                at += 1usize
+            }
+        }
+        function_at += 1usize
+    }
+    ret false
 }
 
 fn fail(m: *Module, message: str) -> err {
