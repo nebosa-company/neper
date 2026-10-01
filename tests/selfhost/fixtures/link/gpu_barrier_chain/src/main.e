@@ -23,10 +23,8 @@ fn unused(n: u32) {
 
 fn middle(out: []u32, lane: u32) {
     for pass in 0u32..1u32 {
-        if gpu.lid.x < 8u32 {
-            let value = inner(lane)
-            out[usize(lane)] = value
-        }
+        // The store address and binary left operand precede inner's barriers.
+        if gpu.lid.x < 8u32 { out[usize(lane)] = lane + inner(lane) - lane }
     }
 }
 

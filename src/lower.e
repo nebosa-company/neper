@@ -2848,6 +2848,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                     } else {
                         let (copied, ignored, barrier_error) = nir.emit_at(builder, .Barrier, zero, false, 0usize, instruction.site)
                         if barrier_error != ok { ret barrier_error }
+                        builder.kernel_barriers += 1usize
                         builder.instructions[copied].inline_origin = copied_origin
                         var slot_at = 0usize
                         while slot_at < builder.loop_depth {
@@ -5164,6 +5165,43 @@ fn store_assignment_value(c: *check.Checker, ty: check.Type, address: usize, val
     ret ok
 }
 
+// A caller may evaluate one operand before a helper that cuts at a barrier.
+// Put that pending value in the invocation frame, then reload it after the cut.
+fn frame_save_temporary(c: *check.Checker, ty: check.Type, value: usize, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
+    if builder.spirv || (!builder.frame_mode && !builder.frame_locals) { ret (0usize, ok) }
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (0usize, info_error) }
+    let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, ty, true, 0usize, token)
+    if slot_error != ok { ret (0usize, slot_error) }
+    let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, ty, false, info.size, token)
+    if store_error != ok { ret (0usize, store_error) }
+    try nir.add_operand(builder, store_instruction, slot)
+    try nir.add_operand(builder, store_instruction, value)
+    ret (slot, ok)
+}
+
+fn frame_resume_temporary(c: *check.Checker, ty: check.Type, value: usize, slot: usize, before: usize, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
+    if slot == 0usize || builder.kernel_barriers == before { ret (value, ok) }
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (0usize, info_error) }
+    let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, ty, true, info.size, token)
+    if load_error != ok { ret (0usize, load_error) }
+    try nir.add_operand(builder, load_instruction, slot)
+    ret (loaded, ok)
+}
+
+fn expression_has_call(tree: *parse.Tree, node_index: usize) -> bool {
+    let node = tree.nodes[node_index]
+    if node.kind == .CallExpr { ret true }
+    var at = usize(node.first_child)
+    let end = at + usize(node.child_count)
+    while at < end {
+        if parse.child_is_node_at(tree, at) && expression_has_call(tree, parse.child_index_at(tree, at)) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
     var children: [17]usize = zero
     var count = 0usize
@@ -5259,12 +5297,23 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         try nir.add_operand(builder, binary_instruction, right)
         ret store_assignment_value(c, place_type, address, value, c.tokens[usize(node.token_start)], builder)
     }
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let token = c.tokens[usize(node.token_start)]
+    var address_slot = 0usize
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_has_call(tree, children[1usize]) {
+        let (saved, save_error) = frame_save_temporary(c, pointer_type, address, token, builder)
+        if save_error != ok { ret save_error }
+        address_slot = saved
+    }
+    let before = builder.kernel_barriers
     let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, children[1usize], place_type, builder, bindings, binding_count)
     if value_error != ok { ret value_error }
     // What the checker admitted here is assignability, not equality: a `[]T` into a
     // `[]const T` place, a `*T` into a `*const T`. Both are the same bits.
     if !check.type_assignable(c, value_type, place_type) { ret check.InvalidType }
-    ret store_assignment_value(c, place_type, address, value, c.tokens[usize(node.token_start)], builder)
+    let (resumed_address, resume_error) = frame_resume_temporary(c, pointer_type, address, address_slot, before, token, builder)
+    if resume_error != ok { ret resume_error }
+    ret store_assignment_value(c, place_type, resumed_address, value, token, builder)
 }
 
 fn lower_call_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
@@ -6530,16 +6579,26 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     }
     let (left, lowered_left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], left_type, builder, bindings, binding_count)
     if left_error != ok { ret (0usize, lowered_left_type, left_error) }
+    var left_slot = 0usize
+    let expression_token = c.tokens[usize(node.token_start)]
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_has_call(tree, children[1usize]) {
+        let (saved, save_error) = frame_save_temporary(c, lowered_left_type, left, expression_token, builder)
+        if save_error != ok { ret (0usize, result_type, save_error) }
+        left_slot = saved
+    }
+    let before = builder.kernel_barriers
     var right_expected = left_type
     if operator == .PunctShiftLeft || operator == .PunctShiftRight { right_expected = check.invalid_type() }
     let (right_type, right_type_error) = check.check_expr(c, g, tree, module_index, children[1usize], right_expected)
     if right_type_error != ok { ret (0usize, right_type, right_type_error) }
     let (right, lowered_right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], right_type, builder, bindings, binding_count)
     if right_error != ok { ret (0usize, lowered_right_type, right_error) }
-    var left_ordered = left
+    let (resumed_left, resume_error) = frame_resume_temporary(c, lowered_left_type, left, left_slot, before, expression_token, builder)
+    if resume_error != ok { ret (0usize, result_type, resume_error) }
+    var left_ordered = resumed_left
     var right_ordered = right
     if ordering_opcode(opcode) {
-        let (left_operand, left_coerce_error) = coerce_ordering_operand(c, left_type, left, builder, c.tokens[usize(node.token_start)])
+        let (left_operand, left_coerce_error) = coerce_ordering_operand(c, left_type, resumed_left, builder, c.tokens[usize(node.token_start)])
         if left_coerce_error != ok { ret (0usize, result_type, left_coerce_error) }
         let (right_operand, right_coerce_error) = coerce_ordering_operand(c, right_type, right, builder, c.tokens[usize(node.token_start)])
         if right_coerce_error != ok { ret (0usize, result_type, right_coerce_error) }
@@ -8233,6 +8292,7 @@ fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, e
         let (instruction, ignored, emit_error) = nir.emit(builder, .Barrier, zero, false, 0usize, token)
         if emit_error != ok { ret emit_error }
         if builder.frame_locals {
+            builder.kernel_barriers += 1usize
             var at = 0usize
             while at < builder.loop_depth {
                 try nir.add_operand(builder, instruction, builder.loop_slots[at])

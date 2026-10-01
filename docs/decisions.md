@@ -32413,3 +32413,21 @@ frame-many, shared and subgroup fixtures pass on Windows. Consecutive
 self-hosted compiler stages are byte-identical on both hosts. A caller
 temporary computed before a barrier-bearing expression is not yet retained
 across the CPU cut; the fixture evaluates the helper before its store address.
+
+## D1755 — Retain pending assignment and binary values across helper barriers
+
+**Decision.** A CPU kernel or device helper saves a pending store address or
+binary left operand in a frame slot before evaluating a right-hand expression
+that contains a call. If inlining that call reaches a barrier, lowering reloads
+the saved value after the cut. The barrier oracle counts copied barriers in
+helper bodies as well as cuts in kernels. Evaluation order is unchanged;
+ordinary host expressions and SPIR-V builds do not acquire these slots.
+
+**Evidence.** `link/gpu_barrier_chain` now evaluates both the indexed store
+address and a binary left operand before the innermost barrier helper returns.
+It passes in debug and release on Windows and WSL. The helper-loop occurrence
+still traps, and the neighboring barrier, large-helper, frame-many, shared,
+subgroup-width and gaps fixtures pass on Windows; frame-many and shared also
+pass on WSL. Consecutive self-hosted compiler stages are byte-identical on
+both hosts. Other pending-expression shapes, including earlier call arguments
+and a computed index base, remain to be checked.
