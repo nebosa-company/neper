@@ -406,6 +406,7 @@ fn opcode_id(opcode: nir.Opcode) -> usize {
     if opcode == .TrapStub { ret 58usize }
     if opcode == .Barrier { ret 59usize }
     if opcode == .MemoryBarrier { ret 60usize }
+    if opcode == .Subgroup { ret 61usize }
     ret 0usize
 }
 

@@ -15,11 +15,11 @@
 // an invocation from where it stopped to its next barrier or its return, leaving
 // the barrier's number -- or the done mark -- in the frame's first eight bytes.
 // `launch_run` is the scheduler: workgroups in workgroup-id order, and within one,
-// every invocation stepped in local-id order until all have returned; before each
-// step the ids are set -- this module's `gid`, `lid` and `wgid`, which a kernel reads
-// as `gpu.gid.x`. After each round the invocations still running must all stand
-// at the same barrier: one that returned while its peers wait, or reached another
-// barrier, is the bug a device turns into a hang, and traps here as `barrier`.
+// every runnable invocation stepped in local-id order until all have returned; before
+// each step the ids are set -- this module's `gid`, `lid` and `wgid`, which a kernel
+// reads as `gpu.gid.x`. Workgroup barriers wait for the group; subgroup collectives
+// wait for their fixed 32-lane subgroup. Divergence within either scope traps here as
+// `barrier`, the CPU form of the hang it causes on a device.
 // The ids are set for the calling thread's launch only, so launches on two threads
 // at once are the caller's race, as is every other use of a queue from two threads
 // (section 10: a queue is one thread at a time). ponytail: no lock on the device
@@ -29,10 +29,10 @@
 // A kernel's `shared var`s live in one block per launch, handed to every step,
 // filled with 0xCD before each workgroup (D781).
 //
-// Collective subgroup builtins and a barrier in a helper are not here yet (only
-// the kernel's own body is cut); subgroup identity is the hardware input on Vulkan
-// and the fixed 32-lane model on the CPU. `.Cuda` and a build without Vulkan answer
-// `Unsupported`.
+// Subgroup identity, all, any and ballot use hardware inputs and collectives on Vulkan
+// and the fixed 32-lane model on the CPU. Broadcast, shuffle, reductions and a barrier
+// in a helper are not here yet (only the kernel's own body is cut). `.Cuda` and a build
+// without Vulkan answer `Unsupported`.
 //
 // The fault buffer (contract section 1.3, D785): a check failing in a kernel's CPU
 // build calls `fault`, which writes the queue's one record if none is written yet
@@ -90,6 +90,7 @@ const MAX_BUFFERS: usize = 4096usize
 const MAX_DEVICES: usize = 16usize
 const MAX_QUEUES: usize = 64usize
 const MAX_AXIS: usize = 4294967295usize
+const SUBGROUP_PC: usize = 1073741824usize
 
 // One buffer slot: the storage's bytes, the element count and size, and the
 // generation a handle has to carry.
@@ -122,6 +123,31 @@ var launch_size: [3]usize = zero
 var launch_groups: [3]usize = zero
 var launch_active: bool = zero
 var launch_queue: *QueueState = zero
+var launch_local: usize = 0usize
+var subgroup_values: [1024]bool = zero
+var subgroup_snapshot: [1024]bool = zero
+var subgroup_active: [1024]bool = zero
+
+fn subgroup_record(value: bool) { subgroup_values[launch_local] = value }
+
+fn subgroup_vote(kind: u32) -> u64 {
+    let first = launch_local / 32usize * 32usize
+    var end = first + 32usize
+    let count = launch_size[0usize] * launch_size[1usize] * launch_size[2usize]
+    if end > count { end = count }
+    var result = 0u64
+    if kind == 0u32 { result = 1u64 }
+    var at = first
+    while at < end {
+        if subgroup_active[at] {
+            if kind == 0u32 && !subgroup_snapshot[at] { result = 0u64 }
+            if kind == 1u32 && subgroup_snapshot[at] { result = 1u64 }
+            if kind == 2u32 && subgroup_snapshot[at] { result = result | (1u64 << u32(at - first)) }
+        }
+        at += 1usize
+    }
+    ret result
+}
 
 fn cpu_capabilities(a: *mem.Arena) -> ([]const Cap, err) {
     let (caps, caps_error) = mem.alloc[Cap](a, 6usize)
@@ -848,6 +874,37 @@ fn set_ids(group: usize, local: usize) {
     wgid = Id { x: u32(wx), y: u32(wy), z: u32(wz) }
     gid = Id { x: u32(wx * launch_size[0usize] + lx), y: u32(wy * launch_size[1usize] + ly), z: u32(wz * launch_size[2usize] + lz) }
     sid = u32(local % 32usize)
+    launch_local = local
+}
+
+fn subgroup_wait(pc: usize) -> bool { ret pc >= SUBGROUP_PC && pc < FAULTED }
+
+fn subgroup_ready(frames: []u8, base: usize, bytes_per_frame: usize, per_group: usize, local: usize, pc: usize) -> bool {
+    let first = local / 32usize * 32usize
+    var end = first + 32usize
+    if end > per_group { end = per_group }
+    var at = first
+    while at < end {
+        let reached = frame_pc(frames, base + at * bytes_per_frame)
+        if reached != FAULTED && reached != pc { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn workgroup_ready(frames: []u8, base: usize, bytes_per_frame: usize, per_group: usize, pc: usize) -> bool {
+    var at = 0usize
+    while at < per_group {
+        let reached = frame_pc(frames, base + at * bytes_per_frame)
+        if reached != FAULTED && reached != pc { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn barrier_number(pc: usize) -> usize {
+    if subgroup_wait(pc) { ret pc - SUBGROUP_PC }
+    ret pc
 }
 
 fn frame_pc(frames: []u8, at: usize) -> usize {
@@ -917,17 +974,17 @@ fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local
     at = write_id(line[0..], at, group, stopped_local)
     if stopped_at == DONE {
         at = write_text(line[0..], at, " returned before barrier ")
-        at = write_decimal(line[0..], at, other_at)
+        at = write_decimal(line[0..], at, barrier_number(other_at))
         at = write_text(line[0..], at, " that ")
         at = write_id(line[0..], at, group, other_local)
         at = write_text(line[0..], at, " reached")
     } else {
         at = write_text(line[0..], at, " reached barrier ")
-        at = write_decimal(line[0..], at, stopped_at)
+        at = write_decimal(line[0..], at, barrier_number(stopped_at))
         at = write_text(line[0..], at, " while ")
         at = write_id(line[0..], at, group, other_local)
         at = write_text(line[0..], at, " reached barrier ")
-        at = write_decimal(line[0..], at, other_at)
+        at = write_decimal(line[0..], at, barrier_number(other_at))
     }
     line[at] = 10u8
     at += 1usize
@@ -998,41 +1055,65 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
             shared_storage[shared_base + i] = 205u8
             i += 1usize
         }
+        var runnable: [1024]bool = zero
         while true {
             var any_active = false
+            var any_runnable = false
             var local = 0usize
             while local < per_group {
-                let frame_at = base + local * bytes_per_frame
-                let pc = frame_pc(frames, frame_at)
+                let pc = frame_pc(frames, base + local * bytes_per_frame)
+                runnable[local] = false
                 if pc != DONE && pc != FAULTED {
                     any_active = true
-                    set_ids(group, local)
-                    step(ctx, &frames[frame_at], &shared_storage[shared_base])
+                    if pc == 0usize { runnable[local] = true }
+                    if subgroup_wait(pc) { runnable[local] = subgroup_ready(frames, base, bytes_per_frame, per_group, local, pc) }
+                    if pc != 0usize && !subgroup_wait(pc) { runnable[local] = workgroup_ready(frames, base, bytes_per_frame, per_group, pc) }
+                    if runnable[local] { any_runnable = true }
                 }
                 local += 1usize
             }
             if !any_active { break }
-            // Every invocation still running stands at one barrier; one that
-            // returned while others wait, or stopped elsewhere, is divergence.
-            var waiting_at = DONE
-            var waiting_local = 0usize
-            local = 0usize
-            while local < per_group {
-                let reached = frame_pc(frames, base + local * bytes_per_frame)
-                if reached != DONE && reached != FAULTED {
-                    if waiting_at == DONE {
+            if !any_runnable {
+                var waiting_at = DONE
+                var waiting_local = 0usize
+                local = 0usize
+                while local < per_group {
+                    let reached = frame_pc(frames, base + local * bytes_per_frame)
+                    if reached != DONE && reached != FAULTED {
                         waiting_at = reached
                         waiting_local = local
-                    } else {
-                        if reached != waiting_at { divergence(group, local, reached, waiting_local, waiting_at) }
+                        break
                     }
+                    local += 1usize
                 }
-                local += 1usize
+                var first = 0usize
+                var end = per_group
+                if subgroup_wait(waiting_at) {
+                    first = waiting_local / 32usize * 32usize
+                    end = first + 32usize
+                    if end > per_group { end = per_group }
+                }
+                local = first
+                while local < end {
+                    let reached = frame_pc(frames, base + local * bytes_per_frame)
+                    if reached != FAULTED && reached != waiting_at { divergence(group, local, reached, waiting_local, waiting_at) }
+                    local += 1usize
+                }
+                divergence(group, waiting_local, waiting_at, waiting_local, waiting_at)
             }
-            if waiting_at == DONE { break }
             local = 0usize
             while local < per_group {
-                if frame_pc(frames, base + local * bytes_per_frame) == DONE { divergence(group, local, DONE, waiting_local, waiting_at) }
+                subgroup_snapshot[local] = subgroup_values[local]
+                let state_at = frame_pc(frames, base + local * bytes_per_frame)
+                subgroup_active[local] = state_at != DONE && state_at != FAULTED
+                local += 1usize
+            }
+            local = 0usize
+            while local < per_group {
+                if runnable[local] {
+                    set_ids(group, local)
+                    step(ctx, &frames[base + local * bytes_per_frame], &shared_storage[shared_base])
+                }
                 local += 1usize
             }
         }

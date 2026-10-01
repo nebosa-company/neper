@@ -52,6 +52,7 @@ type Module = struct {
     t_u64: usize,
     t_f32: usize,
     t_v2u32: usize,
+    t_v4u32: usize,
     t_pair: usize,
     t_fn_void: usize,
     t_v3u32: usize,
@@ -73,6 +74,9 @@ type Module = struct {
     // instruction (`Fma` or the seed `Sqrt`).
     glsl: usize,
     denorm_preserve: bool,
+    subgroup: bool,
+    subgroup_vote: bool,
+    subgroup_ballot: bool,
     v_gid: usize,
     v_lid: usize,
     v_wgid: usize,
@@ -451,6 +455,9 @@ const OP_RETURN_VALUE: usize = 254usize
 const OP_UNREACHABLE: usize = 255usize
 const OP_CONTROL_BARRIER: usize = 224usize
 const OP_MEMORY_BARRIER: usize = 225usize
+const OP_GROUP_NON_UNIFORM_ALL: usize = 334usize
+const OP_GROUP_NON_UNIFORM_ANY: usize = 335usize
+const OP_GROUP_NON_UNIFORM_BALLOT: usize = 339usize
 const OP_ATOMIC_LOAD: usize = 227usize
 const OP_ATOMIC_STORE: usize = 228usize
 const OP_ATOMIC_EXCHANGE: usize = 229usize
@@ -558,6 +565,17 @@ fn u64_type(m: *Module) -> usize {
     ret m.t_u64
 }
 
+fn v4u32_type(m: *Module) -> usize {
+    if m.t_v4u32 == 0usize {
+        m.t_v4u32 = fresh(m)
+        head(&m.types, OP_TYPE_VECTOR, 4usize)
+        put(&m.types, m.t_v4u32)
+        put(&m.types, m.t_u32)
+        put(&m.types, 4usize)
+    }
+    ret m.t_v4u32
+}
+
 fn u8_type(m: *Module) -> usize {
     if m.t_u8 == 0usize {
         capability(m, 39usize)
@@ -577,6 +595,21 @@ fn u16_type(m: *Module) -> usize {
 fn capability(m: *Module, which: usize) {
     head(&m.capabilities, OP_CAPABILITY, 2usize)
     put(&m.capabilities, which)
+}
+
+fn subgroup_capability(m: *Module, ballot: bool) {
+    if !m.subgroup {
+        capability(m, 61usize)
+        m.subgroup = true
+    }
+    if ballot && !m.subgroup_ballot {
+        capability(m, 64usize)
+        m.subgroup_ballot = true
+    }
+    if !ballot && !m.subgroup_vote {
+        capability(m, 62usize)
+        m.subgroup_vote = true
+    }
 }
 
 fn glsl_import(m: *Module) -> usize {
@@ -1498,6 +1531,38 @@ fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: 
     ret ok
 }
 
+fn emit_subgroup(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    if instruction.operand_count != 1usize { ret fail(m, "a subgroup operation has the wrong argument count") }
+    let predicate = operand(builder, instruction, 0usize)
+    if KIND_SCALAR != values.kind[predicate] || values.ty[predicate] != m.t_bool { ret fail(m, "a subgroup predicate is not bool") }
+    let ballot = instruction.immediate == 2usize
+    subgroup_capability(m, ballot)
+    var opcode = OP_GROUP_NON_UNIFORM_ALL
+    var result_type = m.t_bool
+    if instruction.immediate == 1usize { opcode = OP_GROUP_NON_UNIFORM_ANY }
+    if ballot {
+        opcode = OP_GROUP_NON_UNIFORM_BALLOT
+        result_type = v4u32_type(m)
+    }
+    if instruction.immediate > 2usize { ret fail(m, "a subgroup operation is unknown") }
+    head(&m.code, opcode, 5usize)
+    put(&m.code, result_type)
+    let result = fresh(m)
+    put(&m.code, result)
+    put(&m.code, constant(m, m.t_u32, 3usize))
+    put(&m.code, values.id[predicate])
+    if !ballot {
+        scalar(values, instruction.result, result, m.t_bool, false)
+        ret ok
+    }
+    let wide = u64_type(m)
+    let low = convert(m, OP_U_CONVERT, wide, extract(m, result, 0usize))
+    let high = convert(m, OP_U_CONVERT, wide, extract(m, result, 1usize))
+    let shifted = binary(m, OP_SHIFT_LEFT_LOGICAL, wide, high, constant(m, wide, 32usize))
+    scalar(values, instruction.result, binary(m, OP_BITWISE_OR, wide, low, shifted), wide, false)
+    ret ok
+}
+
 fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel: check.Function, instruction: nir.Instruction, block_index: usize, flow: *Flow, values: *Values, block_address: usize) -> err {
     let opcode = instruction.opcode
     if opcode == .Parameter {
@@ -1505,6 +1570,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         ret emit_parameter(m, c, kernel, instruction, values, block_address)
     }
     if opcode == .Stack { ret ok }
+    if opcode == .Subgroup { ret emit_subgroup(m, builder, instruction, values) }
     if opcode == .Barrier {
         head(&m.code, OP_CONTROL_BARRIER, 4usize)
         put(&m.code, constant(m, m.t_u32, 2usize))

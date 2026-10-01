@@ -4953,6 +4953,9 @@ fn intrinsic_signature(module: str, name: str) -> str {
     if same(module, "e.gpu") && same(name, "memory_barrier") { ret "fn memory_barrier(scope: Scope)" }
     if same(module, "e.gpu") && same(name, "subgroup_size") { ret "fn subgroup_size() -> u32" }
     if same(module, "e.gpu") && same(name, "subgroup_elect") { ret "fn subgroup_elect() -> bool" }
+    if same(module, "e.gpu") && same(name, "subgroup_all") { ret "fn subgroup_all(value: bool) -> bool" }
+    if same(module, "e.gpu") && same(name, "subgroup_any") { ret "fn subgroup_any(value: bool) -> bool" }
+    if same(module, "e.gpu") && same(name, "subgroup_ballot") { ret "fn subgroup_ballot(value: bool) -> u64" }
     if same(module, "e.gpu") {
         if same(name, "atomic_load") { ret "fn atomic_load[T: type](p: *Atomic[T], order: atomic.Ordering, scope: Scope) -> T" }
         if same(name, "atomic_store") { ret "fn atomic_store[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope)" }
@@ -9071,7 +9074,7 @@ type AtomicInfo = struct {
 }
 
 type GpuScope = enum u8 { Workgroup, Device, Dynamic }
-type SubgroupOp = enum u8 { None, Size, Elect }
+type SubgroupOp = enum u8 { None, Size, Elect, All, Any, Ballot }
 
 // The compile-time questions that answer with a constant and emit nothing. Three of
 // them are `e.meta`'s reflection; the last two are `e.mem`'s layout, which is the same
@@ -9428,6 +9431,9 @@ fn subgroup_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     var op: SubgroupOp = .None
     if same(member, "subgroup_size") { op = .Size }
     if same(member, "subgroup_elect") { op = .Elect }
+    if same(member, "subgroup_all") { op = .All }
+    if same(member, "subgroup_any") { op = .Any }
+    if same(member, "subgroup_ballot") { op = .Ballot }
     if op == .None { ret (info, op, ok) }
     info.matched = true
     if !c.body_is_kernel && !c.body_device_only {
@@ -9438,6 +9444,7 @@ fn subgroup_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     function.name = member
     function.module_index = target_module
     function.parameter_count = 0usize
+    if op == .All || op == .Any || op == .Ballot { function.parameter_count = 1usize }
     function.return_count = 1usize
     function.intrinsic = true
     info.function = function
@@ -11813,6 +11820,13 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         at += 1usize
                         continue
                     }
+                    if info.subgroup_op == .All || info.subgroup_op == .Any || info.subgroup_op == .Ballot {
+                        let (predicate, predicate_error) = check_expr(c, g, tree, module_index, child_index, make_type(.Bool, "bool", function.module_index))
+                        if predicate_error != ok { ret (info, predicate_error) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
                     if info.atomic_op != .None {
                         let atomic_error = check_atomic_argument(c, g, tree, module_index, child_index, child_position - 1usize, &info)
                         if atomic_error != ok { ret (info, atomic_error) }
@@ -12577,7 +12591,8 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
     }
     if call.subgroup_op != .None {
         if index != 0usize { ret (invalid_type(), InvalidType) }
-        if call.subgroup_op == .Elect { ret (make_type(.Bool, "bool", call.function.module_index), ok) }
+        if call.subgroup_op == .Elect || call.subgroup_op == .All || call.subgroup_op == .Any { ret (make_type(.Bool, "bool", call.function.module_index), ok) }
+        if call.subgroup_op == .Ballot { ret (make_type(.Integer, "u64", call.function.module_index), ok) }
         ret (make_type(.Integer, "u32", call.function.module_index), ok)
     }
 

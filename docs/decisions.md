@@ -31771,3 +31771,25 @@ interface. This is the shared base for the collective operations still outstandi
 last subgroup, and passes on the CPU, RTX 3080, Iris Xe and WSL's Vulkan device. The
 complete Windows self-host suite passes; the Linux suite passes the subgroup fixture
 directly and reached its unrelated pre-existing trap-backtrace assertion.
+
+## D1721 — CPU subgroup collectives resume by subgroup
+
+**Problem.** A CPU kernel step resumed only when its whole workgroup stood at one
+barrier. That model cannot implement subgroup votes: independent subgroups may reach
+different collective sites, and lanes resuming sequentially may overwrite the next
+predicate before their peers have read the previous vote. SPIR-V also needed typed
+group operations rather than helper calls.
+
+**Decision.** A CPU subgroup cut stores a tagged program counter. The launch scheduler
+resumes a cut when every live lane in that fixed 32-lane subgroup has arrived, while a
+workgroup barrier retains whole-group scope. Predicate bits are snapshotted before the
+runnable lanes step, so every lane observes one completed collective. `subgroup_all`,
+`subgroup_any` and `subgroup_ballot` share that path; ballot returns the low 64 lanes.
+SPIR-V emits `OpGroupNonUniformAll`, `OpGroupNonUniformAny` and
+`OpGroupNonUniformBallot`, requesting Vote or Ballot capability on first use and
+joining the ballot's low two u32 words into Neper's u64 result.
+
+**Evidence.** `tests/conformance/spirv/subgroup.spv` pins identity, all, any and ballot.
+`gpu_subgroup_identity` checks equal votes and masks in a 40-invocation workgroup,
+including the partial final subgroup. It passes on the CPU, two Windows Vulkan devices
+and WSL's Vulkan device. The complete Windows self-host suite passes.

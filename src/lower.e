@@ -817,6 +817,9 @@ fn call_return_layout(c: *check.Checker, call: check.CallInfo, result: *ReturnLa
 
 fn call_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) -> (check.Type, err) {
     if index >= call.function.parameter_count { ret (check.invalid_type(), check.ArgumentCount) }
+    if call.subgroup_op == .All || call.subgroup_op == .Any || call.subgroup_op == .Ballot {
+        ret (check.make_type(.Bool, "bool", call.function.module_index), ok)
+    }
     if call.indirect {
         let (signature, has_signature) = check.function_signature_of(c, call.indirect_type)
         if !has_signature { ret (check.invalid_type(), check.InvalidType) }
@@ -3097,10 +3100,51 @@ fn store_c_result(returned_type: check.Type, crossing: Crossing, call_result: us
     ret ok
 }
 
-fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     if call.subgroup_op != .None {
         results.call = call
         results.count = 1usize
+        if call.subgroup_op == .All || call.subgroup_op == .Any || call.subgroup_op == .Ballot {
+            if argument_count != 1usize { ret check.ArgumentCount }
+            let boolean = check.make_type(.Bool, "bool", call.function.module_index)
+            let u32_type = check.make_type(.Integer, "u32", call.function.module_index)
+            let u64_type = check.make_type(.Integer, "u64", call.function.module_index)
+            var kind = 0usize
+            var returned = boolean
+            if call.subgroup_op == .Any { kind = 1usize }
+            if call.subgroup_op == .Ballot {
+                kind = 2usize
+                returned = u64_type
+            }
+            if builder.spirv {
+                let (instruction, value, emit_error) = nir.emit(builder, .Subgroup, returned, true, kind, token)
+                if emit_error != ok { ret emit_error }
+                try nir.add_operand(builder, instruction, arguments[0usize])
+                results.values[0usize] = value
+                ret ok
+            }
+            var helper_results: CallResults = zero
+            try emit_library_call(c, g, "e.gpu", "subgroup_record", arguments, 1usize, builder, token, &helper_results)
+            if helper_results.count != 0usize { ret check.InvalidReturn }
+            try emit_kernel_subgroup(builder, call.function.module_index, token)
+            let (kind_instruction, kind_value, kind_error) = nir.emit(builder, .ConstInteger, u32_type, true, kind, token)
+            if kind_error != ok { ret kind_error }
+            var vote_arguments: [1]usize = zero
+            vote_arguments[0usize] = kind_value
+            var vote_results: CallResults = zero
+            try emit_library_call(c, g, "e.gpu", "subgroup_vote", vote_arguments[..], 1usize, builder, token, &vote_results)
+            if vote_results.count != 1usize { ret check.InvalidReturn }
+            if call.subgroup_op == .Ballot {
+                results.values[0usize] = vote_results.values[0usize]
+                ret ok
+            }
+            let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, u64_type, true, 0usize, token)
+            if zero_error != ok { ret zero_error }
+            let (voted, compare_error) = emit_supplied_compare(builder, .NotEqual, boolean, vote_results.values[0usize], zero_value, token)
+            if compare_error != ok { ret compare_error }
+            results.values[0usize] = voted
+            ret ok
+        }
         var name = "subgroup_width"
         let u32_type = check.make_type(.Integer, "u32", call.function.module_index)
         if call.subgroup_op == .Elect { name = "sid" }
@@ -3468,7 +3512,7 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     }
     let align_error = emit_align_check(c, g, call, arguments[..], argument_count, builder, c.tokens[usize(node.token_start)])
     if align_error != ok { ret align_error }
-    ret emit_call_results(c, call, callee, arguments[..], argument_count, builder, c.tokens[usize(node.token_start)], results)
+    ret emit_call_results(c, g, call, callee, arguments[..], argument_count, builder, c.tokens[usize(node.token_start)], results)
 }
 
 fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (check.CallInfo, usize, err) {
@@ -5823,7 +5867,7 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     var arguments: [1]usize = zero
     arguments[0usize] = iterator_pointer
     var results: CallResults = zero
-    try emit_call_results(c, call, 0usize, arguments[..], 1usize, builder, token, &results)
+    try emit_call_results(c, g, call, 0usize, arguments[..], 1usize, builder, token, &results)
     if results.count != 2usize { ret check.InvalidType }
     let (element_type, element_type_error) = check.call_return(c, call, 0usize)
     if element_type_error != ok { ret element_type_error }
@@ -6684,7 +6728,7 @@ fn emit_deferred_from(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         var entry = defers.entries[at]
         if entry.kind == .Call {
             var results: CallResults = zero
-            try emit_call_results(c, entry.call, entry.callee, entry.arguments[..], entry.argument_count, builder, entry.token, &results)
+            try emit_call_results(c, g, entry.call, entry.callee, entry.arguments[..], entry.argument_count, builder, entry.token, &results)
         } else {
             let local_checkpoint = c.local_count
             var current_binding_count = binding_count
@@ -7441,6 +7485,7 @@ fn lower_shared_var_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.T
 }
 
 const KERNEL_DONE: usize = 4294967295usize
+const KERNEL_SUBGROUP_PC: usize = 1073741824usize
 
 // The frame's `pc` slot at offset 0 of the frame `frame_mode` addresses.
 fn emit_kernel_pc_address(builder: *nir.Builder, module_index: usize, token: lex.Token) -> (usize, err) {
@@ -7530,8 +7575,8 @@ fn emit_kernel_bounds(builder: *nir.Builder, module_index: usize, index: usize, 
 
 // `gpu.barrier()`: the cut. The frame's `pc` becomes this barrier's number, the
 // step returns, and the code after the barrier begins a block the dispatch resumes.
-fn emit_kernel_barrier(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
-    if builder.spirv {
+fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, token: lex.Token) -> err {
+    if builder.spirv && !subgroup {
         let (instruction, ignored, emit_error) = nir.emit(builder, .Barrier, zero, false, 0usize, token)
         ret emit_error
     }
@@ -7539,14 +7584,25 @@ fn emit_kernel_barrier(builder: *nir.Builder, module_index: usize, token: lex.To
     if builder.kernel_barriers + 1usize >= builder.kernel_resume.len { ret check.Capacity }
     builder.kernel_barriers += 1usize
     let number = builder.kernel_barriers
-    try emit_kernel_pc_store(builder, module_index, number, token)
+    var pc = number
+    if subgroup { pc += KERNEL_SUBGROUP_PC }
+    try emit_kernel_pc_store(builder, module_index, pc, token)
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
     if return_error != ok { ret return_error }
     let resume_block = builder.block_count
     let (resume_index, resume_error) = nir.begin_block(builder)
     if resume_error != ok || resume_index != resume_block { ret nir.InvalidControlFlow }
-    builder.kernel_resume[number] = resume_block
+    builder.kernel_resume[number] = resume_block * 2usize
+    if subgroup { builder.kernel_resume[number] += 1usize }
     ret ok
+}
+
+fn emit_kernel_barrier(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
+    ret emit_kernel_cut(builder, module_index, false, token)
+}
+
+fn emit_kernel_subgroup(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
+    ret emit_kernel_cut(builder, module_index, true, token)
 }
 
 // The dispatch the entry branches to: `pc` from the frame, a comparison per barrier
@@ -7565,7 +7621,10 @@ fn emit_kernel_dispatch(c: *check.Checker, module_index: usize, entry_branch: us
     try nir.add_operand(builder, load_instruction, address)
     var number = 1usize
     while number <= builder.kernel_barriers {
-        let (constant_instruction, constant, constant_error) = nir.emit(builder, .ConstInteger, usize_type, true, number, token)
+        let packed = builder.kernel_resume[number]
+        var expected = number
+        if packed % 2usize != 0usize { expected += KERNEL_SUBGROUP_PC }
+        let (constant_instruction, constant, constant_error) = nir.emit(builder, .ConstInteger, usize_type, true, expected, token)
         if constant_error != ok { ret constant_error }
         let (matched, compare_error) = emit_supplied_compare(builder, .Equal, boolean, pc, constant, token)
         if compare_error != ok { ret compare_error }
@@ -7575,7 +7634,7 @@ fn emit_kernel_dispatch(c: *check.Checker, module_index: usize, entry_branch: us
         let next_block = builder.block_count
         let (next_index, next_error) = nir.begin_block(builder)
         if next_error != ok || next_index != next_block { ret nir.InvalidControlFlow }
-        try nir.set_branch_targets(builder, decision, builder.kernel_resume[number], next_block)
+        try nir.set_branch_targets(builder, decision, packed / 2usize, next_block)
         number += 1usize
     }
     let (start_branch, start_error) = emit_branch(builder, token)
@@ -7687,7 +7746,7 @@ fn emit_library_call(c: *check.Checker, g: *graph.Graph, module_name: str, name:
     call.alloc_return = check.invalid_type()
     call.alloc_arena = check.invalid_type()
     call.function = c.functions[function_index]
-    ret emit_call_results(c, call, 0usize, arguments, argument_count, builder, token, results)
+    ret emit_call_results(c, g, call, 0usize, arguments, argument_count, builder, token, results)
 }
 
 // The one place a generated formatter returns. `printf` returns `err` in a register;
@@ -7939,7 +7998,7 @@ fn emit_formatter_value(c: *check.Checker, g: *graph.Graph, module_index: usize,
         push_err_call.alloc_return = check.invalid_type()
         push_err_call.alloc_arena = check.invalid_type()
         push_err_call.function = c.functions[push_err_index]
-        try emit_call_results(c, push_err_call, 0usize, arguments[..], argument_count, builder, token, &results)
+        try emit_call_results(c, g, push_err_call, 0usize, arguments[..], argument_count, builder, token, &results)
     } else {
         try emit_library_call(c, g, "e.str", push_name, arguments[..], argument_count, builder, token, &results)
     }
@@ -8528,9 +8587,9 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
         argument_at += 1usize
     }
     // The kernel's frame and shared sizes, from the functions lowered beside it.
-    let (frame_bytes, frame_bytes_error) = emit_kernel_size_call(c, kernel, "$frame", usize_type, builder, token)
+    let (frame_bytes, frame_bytes_error) = emit_kernel_size_call(c, g, kernel, "$frame", usize_type, builder, token)
     if frame_bytes_error != ok { ret frame_bytes_error }
-    let (shared_bytes, shared_bytes_error) = emit_kernel_size_call(c, kernel, "$shared", usize_type, builder, token)
+    let (shared_bytes, shared_bytes_error) = emit_kernel_size_call(c, g, kernel, "$shared", usize_type, builder, token)
     if shared_bytes_error != ok { ret shared_bytes_error }
     // The step as a value.
     let (step_ref, step_ref_error) = nir.intern_function(builder, instance.owner_module_index, "launch$step", instance.instance_id)
@@ -8561,7 +8620,7 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     let text_type = check.make_type(.String, "str", module_index)
     let (module_slot_instruction, module_slot, module_slot_error) = nir.emit(builder, .Stack, text_type, true, 2usize, token)
     if module_slot_error != ok { ret module_slot_error }
-    try emit_kernel_spirv_call(c, kernel, module_slot, builder, token)
+    try emit_kernel_spirv_call(c, g, kernel, module_slot, builder, token)
     run_arguments[9usize] = module_slot
     let (entry_spelling, entry_spelling_error) = kernel_entry_spelling(c, g, kernel)
     if entry_spelling_error != ok { ret entry_spelling_error }
@@ -8609,7 +8668,7 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
 }
 
 // A call of `K$spirv(out)` (D1611): the kernel's module into the launcher's slot.
-fn emit_kernel_spirv_call(c: *check.Checker, kernel: check.Function, out: usize, builder: *nir.Builder, token: lex.Token) -> err {
+fn emit_kernel_spirv_call(c: *check.Checker, g: *graph.Graph, kernel: check.Function, out: usize, builder: *nir.Builder, token: lex.Token) -> err {
     let (name, name_error) = kernel_companion_name(c, kernel.name, "$spirv")
     if name_error != ok { ret name_error }
     var spirv_function: check.Function = zero
@@ -8625,7 +8684,7 @@ fn emit_kernel_spirv_call(c: *check.Checker, kernel: check.Function, out: usize,
     var spirv_results: CallResults = zero
     var arguments: [1]usize = zero
     arguments[0usize] = out
-    ret emit_call_results(c, spirv_call, 0usize, arguments[0usize..1usize], 1usize, builder, token, &spirv_results)
+    ret emit_call_results(c, g, spirv_call, 0usize, arguments[0usize..1usize], 1usize, builder, token, &spirv_results)
 }
 
 // The kernel's entry point as a string literal's spelling: `module.kernel`, as the
@@ -8655,7 +8714,7 @@ fn kernel_entry_spelling(c: *check.Checker, g: *graph.Graph, kernel: check.Funct
 }
 
 // A call of `K$frame()` or `K$shared()`, answering its value.
-fn emit_kernel_size_call(c: *check.Checker, kernel: check.Function, suffix: str, usize_type: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+fn emit_kernel_size_call(c: *check.Checker, g: *graph.Graph, kernel: check.Function, suffix: str, usize_type: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     let (name, name_error) = kernel_companion_name(c, kernel.name, suffix)
     if name_error != ok { ret (0usize, name_error) }
     var size_function: check.Function = zero
@@ -8674,7 +8733,7 @@ fn emit_kernel_size_call(c: *check.Checker, kernel: check.Function, suffix: str,
     size_call.function = size_function
     var size_results: CallResults = zero
     var no_arguments: [1]usize = zero
-    let call_error = emit_call_results(c, size_call, 0usize, no_arguments[0usize..0usize], 0usize, builder, token, &size_results)
+    let call_error = emit_call_results(c, g, size_call, 0usize, no_arguments[0usize..0usize], 0usize, builder, token, &size_results)
     if call_error != ok { ret (0usize, call_error) }
     if size_results.count != 1usize { ret (0usize, check.ArgumentCount) }
     ret (size_results.values[0usize], ok)
@@ -8727,7 +8786,7 @@ fn lower_launch_step(c: *check.Checker, g: *graph.Graph, module_index: usize, in
     kernel_call.alloc_arena = check.invalid_type()
     kernel_call.function = kernel
     var kernel_results: CallResults = zero
-    try emit_call_results(c, kernel_call, 0usize, kernel_arguments[..], 2usize + kernel.parameter_count, builder, token, &kernel_results)
+    try emit_call_results(c, g, kernel_call, 0usize, kernel_arguments[..], 2usize + kernel.parameter_count, builder, token, &kernel_results)
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
     if return_error != ok { ret return_error }
     ret nir.end_function(builder)
