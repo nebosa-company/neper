@@ -32347,3 +32347,18 @@ and Vulkan; the fixture passes on Windows and WSL. Neighboring `gpu_shared`
 and `gpu_spaces` fixtures pass on Windows, and consecutive self-hosted
 compiler stages are byte-equal. Preallocating 512 word addresses instead
 exhausted the module's NIR instruction pool while compiling this fixture.
+
+## D1751 — Hoist only the CPU frame addresses a kernel uses
+
+**Decision.** Supersede D1750's 256-entry address table. Each CPU-kernel
+`Stack` emits a temporary `FrameAddress` with its final byte offset. Once
+lowering has emitted the dispatch, a single pass moves those instructions
+before the entry branch and changes them to ordinary `FieldAddress` rows.
+The entry then dominates every barrier resume, while frame storage and
+instruction count scale with actual allocations. Only the compiler's general
+NIR and arena capacities remain, not a private-allocation-specific ceiling.
+
+**Evidence.** `link/gpu_frame_many` makes 300 distinct private allocations in
+one kernel and reads their retained sum after a barrier; it passes on Windows
+and WSL. `link/gpu_barrier` still passes on both hosts, including Vulkan, and
+consecutive self-hosted Windows compiler stages are byte-identical.

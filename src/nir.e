@@ -98,6 +98,9 @@ type Opcode = enum u8 {
     Barrier = 59,
     MemoryBarrier = 60,
     Subgroup = 61,
+    // Temporary while lowering a CPU kernel; hoisted into its entry block and
+    // changed to FieldAddress before verification or serialization.
+    FrameAddress = 62,
 }
 
 // `operation` is the rank below, `lane` the lane shape (0, 1, 2, 3 for an integer of
@@ -388,10 +391,9 @@ type Builder = struct {
     // Set while lowering a `@nocheck` block; every instruction emitted carries it.
     nocheck: bool,
     // A kernel's CPU build (D780): each `Stack` allocation lives in the
-    // invocation's frame, after `pc` and the loop-occurrence header. Its address
-    // is made in the entry block so it dominates every barrier resume; lowering
-    // fills in the offset when the allocation is reached. Multiword allocations
-    // are sixteen-aligned.
+    // invocation's frame after `pc` and the loop-occurrence header. Its address
+    // is hoisted into the entry block before verification, so it dominates every
+    // barrier resume. Multiword allocations are sixteen-aligned.
     frame_mode: bool,
     // A device build (D1610): a kernel lowers as a plain function, with no frame, for the
     // SPIR-V emitter to read.
@@ -402,10 +404,6 @@ type Builder = struct {
     frame_slot_count: usize,
     loop_slots: []usize,
     loop_depth: usize,
-    // The tables are the caller's arena's, not the builder's own bytes: a builder
-    // is copied onto worker stacks, and 2 KB more on one overflowed `build`.
-    frame_slot_values: []usize,
-    frame_slot_instructions: []usize,
     // The barriers cut so far in the kernel being lowered, and the block each one
     // resumes at; the dispatch at the entry branches to them by the frame's `pc`.
     kernel_barriers: usize,
@@ -1318,14 +1316,15 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         if words == 0usize { words = 1usize }
         var next = builder.frame_next
         if words > 1usize { next = (next + 1usize) / 2usize * 2usize }
-        let slot = builder.frame_slot_count
-        if slot >= FRAME_SLOTS { ret (0usize, 0usize, Capacity) }
         builder.frame_next = next + words
-        builder.frame_slot_count = slot + 1usize
+        builder.frame_slot_count += 1usize
         builder.frame_offset = 16usize + 8usize * builder.loop_slots.len + 8usize * builder.frame_next
-        let instruction = builder.frame_slot_instructions[slot]
-        builder.instructions[instruction].immediate = 16usize + 8usize * builder.loop_slots.len + 8usize * next
-        ret (instruction, builder.frame_slot_values[slot], ok)
+        let usize_type = check.make_type(.Integer, "usize", 0usize)
+        let (instruction, value, address_error) = emit(builder, .FrameAddress, usize_type, true, 16usize + 8usize * builder.loop_slots.len + 8usize * next, token)
+        if address_error != ok { ret (0usize, 0usize, address_error) }
+        let operand_error = add_operand(builder, instruction, builder.frame_base)
+        if operand_error != ok { ret (0usize, 0usize, operand_error) }
+        ret (instruction, value, ok)
     }
     let instruction_index = builder.instruction_count
     var result = 0usize
@@ -1361,18 +1360,11 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
     ret (instruction_index, result, ok)
 }
 
-// ponytail: 256 preaddressed allocations; grow entry addresses when a kernel
-// actually needs more distinct locals, not merely a larger private array.
-const FRAME_SLOTS: usize = 256usize
-
 const TRAP_DATA: usize = 256usize
 
-// The frame's allocation addresses, after `pc`, loop depth and its ordinal vector,
-// emitted once in the entry block of a kernel's CPU build.
-// `values`, `instructions` and `resume` are the caller's tables, FRAME_SLOTS and
-// 64 long.
-fn begin_frame(builder: *Builder, frame_base: usize, values: []usize, instructions: []usize, resume: []usize, loop_slots: []usize, token: lex.Token) -> err {
-    if values.len < FRAME_SLOTS || instructions.len < FRAME_SLOTS || resume.len < 64usize { ret Capacity }
+// A CPU kernel's frame starts after `pc` and the loop-occurrence header.
+fn begin_frame(builder: *Builder, frame_base: usize, resume: []usize, loop_slots: []usize) -> err {
+    if resume.len < 64usize { ret Capacity }
     builder.frame_mode = false
     builder.frame_base = frame_base
     builder.frame_next = 0usize
@@ -1381,21 +1373,64 @@ fn begin_frame(builder: *Builder, frame_base: usize, values: []usize, instructio
     builder.loop_slots = loop_slots
     builder.loop_depth = 0usize
     builder.kernel_barriers = 0usize
-    builder.frame_slot_values = values
-    builder.frame_slot_instructions = instructions
     builder.kernel_resume = resume
-    let usize_type = check.make_type(.Integer, "usize", 0usize)
-    let field_address: Opcode = .FieldAddress
+    builder.frame_mode = true
+    ret ok
+}
+
+// Move every frame address into the entry block after lowering, before the
+// entry's branch. Values and operand lists stay unchanged; only instruction
+// order and block ranges move. The caller supplies one scratch row per address.
+fn hoist_frame_addresses(builder: *Builder, slots: []Instruction) -> err {
+    if slots.len < builder.frame_slot_count || !builder.function_active { ret Capacity }
+    let function = builder.functions[builder.current_function]
+    let first_block = function.first_block
+    if function.block_count == 0usize { ret InvalidControlFlow }
+    let entry = builder.blocks[first_block]
+    if !entry.terminated || entry.instruction_count == 0usize { ret InvalidControlFlow }
+    var write = function.first_instruction
+    var count = 0usize
+    var block_at = first_block
+    while block_at < first_block + function.block_count {
+        let block = builder.blocks[block_at]
+        builder.blocks[block_at].first_instruction = write
+        var kept = 0usize
+        var read = block.first_instruction
+        while read < block.first_instruction + block.instruction_count {
+            let instruction = builder.instructions[read]
+            if instruction.opcode == .FrameAddress {
+                if count == slots.len { ret Capacity }
+                slots[count] = instruction
+                slots[count].opcode = .FieldAddress
+                count += 1usize
+            } else {
+                builder.instructions[write] = instruction
+                write += 1usize
+                kept += 1usize
+            }
+            read += 1usize
+        }
+        builder.blocks[block_at].instruction_count = kept
+        block_at += 1usize
+    }
+    if count != builder.frame_slot_count { ret InvalidControlFlow }
+    let insert = builder.blocks[first_block].first_instruction + builder.blocks[first_block].instruction_count - 1usize
+    var move_at = write
+    while move_at > insert {
+        move_at = move_at - 1usize
+        builder.instructions[move_at + count] = builder.instructions[move_at]
+    }
     var slot = 0usize
-    while slot < FRAME_SLOTS {
-        let (instruction, value, emit_error) = emit(builder, field_address, usize_type, true, 0usize, token)
-        if emit_error != ok { ret emit_error }
-        try add_operand(builder, instruction, frame_base)
-        builder.frame_slot_instructions[slot] = instruction
-        builder.frame_slot_values[slot] = value
+    while slot < count {
+        builder.instructions[insert + slot] = slots[slot]
         slot += 1usize
     }
-    builder.frame_mode = true
+    builder.blocks[first_block].instruction_count += count
+    block_at = first_block + 1usize
+    while block_at < first_block + function.block_count {
+        builder.blocks[block_at].first_instruction += count
+        block_at += 1usize
+    }
     ret ok
 }
 

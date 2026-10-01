@@ -3271,6 +3271,11 @@ $gpuBarrierWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gpuBarrierWritten -ne 'executable written') { throw 'gpu_barrier emission failed' }
 $gpuBarrierOutput = & $gpuBarrierPath
 if ($LASTEXITCODE -ne 0 -or $gpuBarrierOutput -ne 'gpu barrier ok') { throw "a kernel with barriers answered wrongly: exit $LASTEXITCODE" }
+$gpuFrameManyPath = Join-Path $testBuild 'gpu-frame-many-selfhost.exe'
+$gpuFrameManyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_frame_many\src\main.e') $repo 'x64' 'windows' $gpuFrameManyPath
+if ($LASTEXITCODE -ne 0 -or $gpuFrameManyWritten -ne 'executable written') { throw 'gpu_frame_many emission failed' }
+$gpuFrameManyOutput = & $gpuFrameManyPath
+if ($LASTEXITCODE -ne 0 -or $gpuFrameManyOutput -ne 'gpu frame many ok') { throw "a kernel with over 256 private allocations answered wrongly: exit $LASTEXITCODE" }
 $gpuDivergencePath = Join-Path $testBuild 'gpu-divergence-selfhost.exe'
 $gpuDivergenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_divergence\src\main.e') $repo 'x64' 'windows' $gpuDivergencePath
 if ($LASTEXITCODE -ne 0 -or $gpuDivergenceWritten -ne 'executable written') { throw 'gpu_divergence emission failed' }

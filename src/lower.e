@@ -7544,16 +7544,12 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         if shared_parameter_error != ok { ret shared_parameter_error }
         shared_base = shared_value
         hidden_parameters = 2usize
-        let (frame_values, frame_values_error) = mem.alloc[usize](c.arena, 256usize)
-        if frame_values_error != ok { ret frame_values_error }
-        let (frame_instructions, frame_instructions_error) = mem.alloc[usize](c.arena, 256usize)
-        if frame_instructions_error != ok { ret frame_instructions_error }
         let (resume_blocks, resume_blocks_error) = mem.alloc[usize](c.arena, 64usize)
         if resume_blocks_error != ok { ret resume_blocks_error }
         let loop_depth = kernel_loop_nesting(tree, node, 0usize)
         let (loop_slots, loop_slots_error) = mem.alloc[usize](c.arena, loop_depth)
         if loop_slots_error != ok { ret loop_slots_error }
-        try nir.begin_frame(builder, frame_value, frame_values, frame_instructions, resume_blocks, loop_slots, c.tokens[usize(node.token_start)])
+        try nir.begin_frame(builder, frame_value, resume_blocks, loop_slots)
         let (gpu_module, found_gpu) = graph.find_module(g, "e.gpu")
         if !found_gpu { ret FunctionNotFound }
         let (fault_index, found_fault) = check.find_function(c, gpu_module, "fault")
@@ -7630,6 +7626,9 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if frame_kernel {
         try emit_kernel_dispatch(c, module_index, kernel_dispatch_branch, kernel_body_block, builder, c.tokens[usize(node.token_start)])
         builder.frame_mode = false
+        let (frame_addresses, frame_addresses_error) = mem.alloc[nir.Instruction](c.arena, builder.frame_slot_count)
+        if frame_addresses_error != ok { ret frame_addresses_error }
+        try nir.hoist_frame_addresses(builder, frame_addresses)
     }
     let end_error = nir.end_function(builder)
     if end_error != ok { ret end_error }
