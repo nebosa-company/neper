@@ -2863,6 +2863,11 @@ case "$gpu_subgroup_output" in
     'gpu subgroup identity cpu only'|'gpu subgroup identity vulkan ok on '[1-9]' devices'|'gpu subgroup identity vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the subgroup identity runtime failed: $gpu_subgroup_output" >&2; exit 1 ;;
 esac
+# The CPU model accepts the four explicit widths and handles a short final subgroup.
+for width in 8 16 32 64; do
+    width_run=$("$test_build/neper-self" run "$repo/tests/selfhost/fixtures/link/gpu_subgroup_width/src/main.e" "$repo" x64 linux "$test_build/gpu-subgroup-width-$width-selfhost" --json --subgroup-width "$width" -- "$width")
+    printf '%s\n' "$width_run" | grep -Fq '"record":"run","process_exit_code":0,"stdout":"gpu subgroup width ok\n"' || { printf '%s\n' "the $width-lane subgroup runtime failed: $width_run" >&2; exit 1; }
+done
 gpu_subgroup_reduce_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_subgroup_reduce/src/main.e" "$repo" x64 linux "$test_build/gpu-subgroup-reduce-selfhost")
 [ "$gpu_subgroup_reduce_written" = 'executable written' ]
 chmod +x "$test_build/gpu-subgroup-reduce-selfhost"

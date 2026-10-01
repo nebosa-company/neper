@@ -774,7 +774,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--fault-dry") || same(flag, "--overlay") || same(flag, "--cpu")
+    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--fault-dry") || same(flag, "--overlay") || same(flag, "--cpu") || same(flag, "--subgroup-width")
 }
 
 // `--cpu LEVEL` (D765): section 13's x64 levels, `x64-v1` the SSE2 baseline the build
@@ -867,6 +867,11 @@ fn flags_known(args: []str) -> bool {
     while at < args.len {
         // `-- ARGS...` (D267): the program's own arguments, not the compiler's flags.
         if same(args[at], "--") { ret true }
+        if same(args[at], "--subgroup-width") {
+            if !same(args[1usize], "run") || at + 1usize >= args.len { ret false }
+            let width = args[at + 1usize]
+            if !same(width, "8") && !same(width, "16") && !same(width, "32") && !same(width, "64") { ret false }
+        }
         if same(args[at], "--arena") || same(args[at], "--memory-budget") {
             if at + 1usize >= args.len { ret false }
             let (size, size_ok) = arena_size(args[at + 1usize])
@@ -1618,7 +1623,7 @@ fn program_arguments(args: []str) -> []str {
 // The child's peak working set comes from the same wait as its exit code (D311), and
 // goes straight to the build record: `--stats` is its one reader, and `fn main` has no
 // local to spare for it.
-fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str) -> (i32, str, str, err) {
+fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str, command_args: []str) -> (i32, str, str, err) {
     let (stdout_path, stdout_path_error) = with_suffix(a, path, ".stdout")
     if stdout_path_error != ok { ret (0i32, "", "", stdout_path_error) }
     let (stderr_path, stderr_path_error) = with_suffix(a, path, ".stderr")
@@ -1668,14 +1673,24 @@ fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str) -> (i3
         let stdout_abandoned = os.close(stdout_file)
         ret (0i32, "", "", stderr_open_error)
     }
-    var streams: os.Stdio = zero
-    streams.stdout = stdout_file
-    streams.stderr = stderr_file
-    let (child, spawn_error) = os.spawn(a, argv[..argc], streams)
-    let stdout_stream = streams.stdout
-    let stderr_stream = streams.stderr
-    let stdout_close_error = os.close(stdout_stream)
-    let stderr_close_error = os.close(stderr_stream)
+    let (width, configured) = decimal_flag(command_args, "--subgroup-width")
+    var environment: [1]str = zero
+    var setting = "NEPER_SUBGROUP_WIDTH=32"
+    if configured {
+        if width == 8usize { setting = "NEPER_SUBGROUP_WIDTH=8" }
+        if width == 16usize { setting = "NEPER_SUBGROUP_WIDTH=16" }
+        if width == 64usize { setting = "NEPER_SUBGROUP_WIDTH=64" }
+    }
+    environment[0usize] = setting
+    var options: os.SpawnOptions = zero
+    options.argv = argv[..argc]
+    options.env = environment[0usize..1usize]
+    options.inherit_env = true
+    options.stdio.stdout = stdout_file
+    options.stdio.stderr = stderr_file
+    let (child, spawn_error) = os.spawn_with_options(a, options)
+    let stdout_close_error = os.close(options.stdio.stdout)
+    let stderr_close_error = os.close(options.stdio.stderr)
     if spawn_error != ok { ret (0i32, "", "", spawn_error) }
     // The child is waited for whatever the closes said (D345): a spawned process is
     // owned until it is.
@@ -14025,7 +14040,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 if running {
                     report.build.capture_limit = capture_flag(args)
                     report.build.started = nptest_now()
-                    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, &report, args[6usize], program_arguments(args))
+                    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, &report, args[6usize], program_arguments(args), args)
                     report.build.ran = true
                     report.build.run_ms = (nptest_now() - report.build.started) / 1000000usize
                     report.build.exit_code = status
@@ -14103,7 +14118,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | manifest-em ARTIFACT... --json | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--instances N] [--fault-write N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | manifest-em ARTIFACT... --json | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--instances N] [--fault-write N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] [--subgroup-width 8|16|32|64] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

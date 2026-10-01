@@ -18,19 +18,19 @@
 // every runnable invocation stepped in local-id order until all have returned; before
 // each step the ids are set -- this module's `gid`, `lid` and `wgid`, which a kernel
 // reads as `gpu.gid.x`. Workgroup barriers wait for the group; subgroup collectives
-// wait for their fixed 32-lane subgroup. Divergence within either scope traps here as
+// wait for their configured subgroup. Divergence within either scope traps here as
 // `barrier`, the CPU form of the hang it causes on a device.
 // The ids are set for the calling thread's launch only, so launches on two threads
 // at once are the caller's race, as is every other use of a queue from two threads
 // (section 10: a queue is one thread at a time). ponytail: no lock on the device
-// block either; add one when a second thread opens a queue. A launch's frames are
-// arena until the device closes; reusing them across launches is the upgrade.
+// block either; add one when a second thread opens a queue. Launch scratch is
+// returned to the arena when the launch finishes (D1744).
 //
 // A kernel's `shared var`s live in one block per launch, handed to every step,
 // filled with 0xCD before each workgroup (D781).
 //
 // Subgroup identity and collectives use hardware inputs and operations on Vulkan and
-// the fixed 32-lane model on the CPU. A barrier in a helper is not here yet (only the
+// the selected 8/16/32/64-lane model on the CPU. A barrier in a helper is not here yet (only the
 // kernel's own body is cut). `.Cuda` and a build
 // without Vulkan answer `Unsupported`.
 //
@@ -162,8 +162,8 @@ fn subgroup_failure(bounds: bool) {
 }
 
 fn subgroup_exchange(kind: u32) -> u64 {
-    let first = launch_local / 32usize * 32usize
-    var end = first + 32usize
+    let first = subgroup_begin()
+    var end = first + usize(subgroup_width)
     let count = launch_size[0usize] * launch_size[1usize] * launch_size[2usize]
     if end > count { end = count }
     let lane = subgroup_lane_snapshot[launch_local]
@@ -181,10 +181,10 @@ fn subgroup_exchange(kind: u32) -> u64 {
 fn subgroup_exchange32(kind: u32) -> u32 { ret u32(subgroup_exchange(kind)) }
 fn subgroup_exchange64(kind: u32) -> u64 { ret subgroup_exchange(kind) }
 
-fn subgroup_begin() -> usize { ret launch_local / 32usize * 32usize }
+fn subgroup_begin() -> usize { ret launch_local / usize(subgroup_width) * usize(subgroup_width) }
 
 fn subgroup_end(first: usize) -> usize {
-    var end = first + 32usize
+    var end = first + usize(subgroup_width)
     let count = launch_size[0usize] * launch_size[1usize] * launch_size[2usize]
     if end > count { end = count }
     ret end
@@ -316,7 +316,7 @@ fn subgroup_reduce_i64(kind: u32) -> i64 {
 fn subgroup_reduce_f32(kind: u32) -> f32 {
     let first = subgroup_begin()
     let end = subgroup_end(first)
-    var values: [32]f32 = zero
+    var values: [64]f32 = zero
     var count = 0usize
     var at = first
     while at < end {
@@ -349,7 +349,7 @@ fn subgroup_reduce_f32(kind: u32) -> f32 {
 fn subgroup_reduce_f64(kind: u32) -> f64 {
     let first = subgroup_begin()
     let end = subgroup_end(first)
-    var values: [32]f64 = zero
+    var values: [64]f64 = zero
     var count = 0usize
     var at = first
     while at < end {
@@ -380,8 +380,8 @@ fn subgroup_reduce_f64(kind: u32) -> f64 {
 }
 
 fn subgroup_vote(kind: u32) -> u64 {
-    let first = launch_local / 32usize * 32usize
-    var end = first + 32usize
+    let first = subgroup_begin()
+    var end = first + usize(subgroup_width)
     let count = launch_size[0usize] * launch_size[1usize] * launch_size[2usize]
     if end > count { end = count }
     var result = 0u64
@@ -547,6 +547,28 @@ fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
     }
     if backend != .Cpu { ret (zero, Unsupported) }
     if index != 0u32 { ret (zero, NoDevice) }
+    subgroup_width = 32u32
+    let checkpoint = mem.mark(a)
+    let (configured, env_error) = os.env(a, "NEPER_SUBGROUP_WIDTH")
+    if env_error == ok {
+        var width = 0u32
+        if configured.len == 1usize && configured[0usize] == 56u8 { width = 8u32 }
+        if configured.len == 2usize && configured[0usize] == 49u8 {
+            if configured[1usize] == 54u8 { width = 16u32 }
+        }
+        if configured.len == 2usize && configured[0usize] == 51u8 {
+            if configured[1usize] == 50u8 { width = 32u32 }
+        }
+        if configured.len == 2usize && configured[0usize] == 54u8 {
+            if configured[1usize] == 52u8 { width = 64u32 }
+        }
+        mem.reset(a, checkpoint)
+        if width == 0u32 { ret (zero, Unsupported) }
+        subgroup_width = width
+    } else {
+        mem.reset(a, checkpoint)
+        if env_error != os.NotFound { ret (zero, Unsupported) }
+    }
     let (device, device_error) = open_state(a, .Cpu)
     ret (device, device_error)
 }
@@ -1375,15 +1397,15 @@ fn set_ids(group: usize, local: usize) {
     lid = Id { x: u32(lx), y: u32(ly), z: u32(lz) }
     wgid = Id { x: u32(wx), y: u32(wy), z: u32(wz) }
     gid = Id { x: u32(wx * launch_size[0usize] + lx), y: u32(wy * launch_size[1usize] + ly), z: u32(wz * launch_size[2usize] + lz) }
-    sid = u32(local % 32usize)
+    sid = u32(local % usize(subgroup_width))
     launch_local = local
 }
 
 fn subgroup_wait(pc: usize) -> bool { ret pc >= SUBGROUP_PC && pc < FAULTED }
 
 fn subgroup_ready(frames: []u8, base: usize, bytes_per_frame: usize, per_group: usize, local: usize, pc: usize) -> bool {
-    let first = local / 32usize * 32usize
-    var end = first + 32usize
+    let first = local / usize(subgroup_width) * usize(subgroup_width)
+    var end = first + usize(subgroup_width)
     if end > per_group { end = per_group }
     var at = first
     while at < end {
@@ -1597,8 +1619,8 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
                 var first = 0usize
                 var end = per_group
                 if subgroup_wait(waiting_at) {
-                    first = waiting_local / 32usize * 32usize
-                    end = first + 32usize
+                    first = waiting_local / usize(subgroup_width) * usize(subgroup_width)
+                    end = first + usize(subgroup_width)
                     if end > per_group { end = per_group }
                 }
                 local = first
