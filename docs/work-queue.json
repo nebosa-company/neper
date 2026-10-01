@@ -323,17 +323,6 @@
       "evidence": "Celvyx implements 2x2 diagnostic-table sensitivity, specificity, accuracy, predictive values, likelihood ratios, diagnostic odds ratio, and exact confidence intervals in `src/lib/core/medical/diagnostic.dart`. Neper has contingency-table tests but no diagnostic-metric API. Keep this as a small generic binary-classification/statistics module; exclude medical report grids. The catalog entry is 2258."
     },
     {
-      "id": "L011",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 109,
-      "title": "Chemometric extensions in e.ml (PLS regression, UMAP)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "`e.ml.linear` fits OLS, ridge, lasso, and logistic regression, and `e.ml.reduce` covers PCA (Jacobi eigendecomposition), Oja streaming, frequent directions, and exact t-SNE, but there is no partial-least-squares regression (classical QSAR, PAT/NIR calibration) and no UMAP for chemical and single-cell visualization. Keep both under the existing caller-storage conventions; exclude 3D-QSAR field products (CoMFA/CoMSIA) and pharmacophore suites. The catalog entry is 2261."
-    },
-    {
       "id": "L012",
       "category": "library",
       "group": "Algorithms",

@@ -1548,6 +1548,11 @@ ml_fingerprint_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$ml_fingerprint_written" = 'executable written' ]
 chmod +x "$test_build/ml-fingerprint-selfhost"
 "$test_build/ml-fingerprint-selfhost"
+# `e.ml.linear` PLS and `e.ml.reduce` UMAP: NIPALS coefficients with the degenerate cases, the scaled PCA start, a 200-epoch layout keeping two groups apart, and the storage and parameter cases.
+ml_chemometric_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_chemometric/src/main.e" "$repo" x64 linux "$test_build/ml-chemometric-selfhost")
+[ "$ml_chemometric_written" = 'executable written' ]
+chmod +x "$test_build/ml-chemometric-selfhost"
+"$test_build/ml-chemometric-selfhost"
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 ml_hmm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hmm/src/main.e" "$repo" x64 linux "$test_build/ml-hmm-selfhost")
 [ "$ml_hmm_written" = 'executable written' ]

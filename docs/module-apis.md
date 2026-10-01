@@ -14583,13 +14583,17 @@ fn sigmoid(z: f64) -> f64
 fn predict(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
 fn predict_probability(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
 fn logistic(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err)
+fn pls_solve(matrix: []f64, rhs: []f64, c: usize) -> err
+fn pls(x: []const f64, y: []const f64, n: usize, d: usize, components: usize, coefficients: []f64, scratch: []f64) -> err
 ```
 
 Row-major samples (`n` rows of `d`), coefficients `d + 1` with the intercept last:
 `ols` and `ridge` solve the normal equations (`Singular` without a unique solution),
 `lasso` is cyclic coordinate descent with soft thresholding on
 `(1 / 2n) Σ (y - Xβ)² + λ Σ |β|`, `logistic` is Newton on the log loss with a ridge
-of `lambda`; `predict` and `predict_probability` apply the coefficients.
+of `lambda`; `predict` and `predict_probability` apply the coefficients; `pls` is
+NIPALS partial least squares over `components` directions (`pls_solve` the principal
+regression in place).
 
 ### `e.ml.cluster`
 
@@ -14954,12 +14958,17 @@ fn pca_online(w: []f64, sample: []const f64, rate: f64) -> (f64, err)
 fn frequent_directions_insert(sketch: []f64, rows: usize, d: usize, filled: *usize, sample: []const f64, scratch: []f64) -> err
 fn tsne(x: []const f64, n: usize, d: usize, perplexity: f64, iterations: u32, rate: f64, momentum: f64, y: []f64, scratch: []f64) -> err
 fn frequent_directions(x: []const f64, n: usize, d: usize, sketch: []f64, rows: usize, scratch: []f64) -> (usize, err)
+fn umap_affinity(dist: []const f64, k: usize, rho: f64, sigma: f64) -> f64
+fn umap_sigma(dist: []const f64, k: usize, rho: f64, goal: f64) -> f64
+fn umap(x: []const f64, n: usize, d: usize, neighbors: usize, a: f64, b: f64, epochs: u32, rate: f64, negatives: usize, y: []f64, r: *rand.Pcg64, fscratch: []f64, iscratch: []usize) -> err
 ```
 
 `symmetric_eigen` (cyclic Jacobi) serves `pca` (mean, falling variances, components
 by row) and `pca_project`; `pca_online` is Oja's rule; `frequent_directions_insert`
 maintains the deterministic sketch; `tsne` is exact t-SNE with a perplexity search
-and momentum gradient descent into two dimensions.
+and momentum gradient descent into two dimensions; `umap` (`umap_sigma` smooth-kNN
+scales, `umap_affinity` the fuzzy sums) runs exact neighbourhoods, symmetrized
+fuzzy affinities, a PCA start and cross-entropy SGD with uniform negatives.
 
 ### `e.ml.ann`
 

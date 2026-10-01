@@ -271,3 +271,224 @@ fn logistic(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tol
     }
     ret (iteration, ok)
 }
+
+// Solve the dense `c × c` system in place for the principal regression;
+// the answer replaces `rhs`. `Singular` below 1e-12 pivots.
+fn pls_solve(matrix: []f64, rhs: []f64, c: usize) -> err {
+    var column = 0usize
+    while column < c {
+        var pivot = column
+        var row = column + 1usize
+        while row < c {
+            if math.abs[f64](matrix[row * c + column]) > math.abs[f64](matrix[pivot * c + column]) { pivot = row }
+            row += 1usize
+        }
+        if math.abs[f64](matrix[pivot * c + column]) < 1.0e-12f64 { ret Singular }
+        if pivot != column {
+            var swap = 0usize
+            while swap < c {
+                let t = matrix[column * c + swap]
+                matrix[column * c + swap] = matrix[pivot * c + swap]
+                matrix[pivot * c + swap] = t
+                swap += 1usize
+            }
+            let t = rhs[column]
+            rhs[column] = rhs[pivot]
+            rhs[pivot] = t
+        }
+        row = column + 1usize
+        while row < c {
+            let factor = matrix[row * c + column] / matrix[column * c + column]
+            if factor != 0.0f64 {
+                var e = column
+                while e < c {
+                    matrix[row * c + e] -= factor * matrix[column * c + e]
+                    e += 1usize
+                }
+                rhs[row] -= factor * rhs[column]
+            }
+            row += 1usize
+        }
+        column += 1usize
+    }
+    var i = c
+    while i > 0usize {
+        i -= 1usize
+        var s = rhs[i]
+        var e = i + 1usize
+        while e < c {
+            s -= matrix[i * c + e] * rhs[e]
+            e += 1usize
+        }
+        rhs[i] = s / matrix[i * c + i]
+    }
+    ret ok
+}
+
+// Partial least squares (PLS1, NIPALS) of `y` on `x` (`n × d`) with
+// `components` latent directions: centered NIPALS deflation, then the
+// principal regression over the loadings solved in place. Answers `d + 1`
+// coefficients, the intercept last, as `ols` does.
+// `scratch.len >= n * d + 2 * n + 2 * d + components * (components + 2)`
+// holds the deflated copies, one direction at a time, and the solve.
+// `Invalid` with no components, more components than features, or a round
+// whose covariance direction vanishes exactly; a constant target yields
+// near-zero slopes with the mean as intercept (no error).
+fn pls(x: []const f64, y: []const f64, n: usize, d: usize, components: usize, coefficients: []f64, scratch: []f64) -> err {
+    let c = components
+    if x.len < n * d || y.len < n || coefficients.len < d + 1usize || scratch.len < n * d + 2usize * n + 2usize * d + c * (c + 2usize) { ret TooSmall }
+    if n == 0usize || d == 0usize || c == 0usize || c > d { ret Invalid }
+    var xw = scratch[..n * d]
+    var off = n * d
+    var yw = scratch[off..off + n]
+    off += n
+    var mean_x = scratch[off..off + d]
+    off += d
+    var direction = scratch[off..off + d]
+    off += d
+    var scores = scratch[off..off + n]
+    off += n
+    var weights = scratch[off..off + d * c]
+    off += d * c
+    var loadings = scratch[off..off + d * c]
+    off += d * c
+    var system = scratch[off..off + c * c]
+    off += c * c
+    var response = scratch[off..off + c]
+    var mean_y = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean_y += y[i] / f64(n)
+        i += 1usize
+    }
+    var j = 0usize
+    while j < d {
+        mean_x[j] = 0.0f64
+        i = 0usize
+        while i < n {
+            mean_x[j] += x[i * d + j] / f64(n)
+            i += 1usize
+        }
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        yw[i] = y[i] - mean_y
+        j = 0usize
+        while j < d {
+            xw[i * d + j] = x[i * d + j] - mean_x[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var a = 0usize
+    while a < c {
+        j = 0usize
+        while j < d {
+            direction[j] = 0.0f64
+            i = 0usize
+            while i < n {
+                direction[j] += xw[i * d + j] * yw[i]
+                i += 1usize
+            }
+            j += 1usize
+        }
+        var energy = 0.0f64
+        j = 0usize
+        while j < d {
+            energy += direction[j] * direction[j]
+            j += 1usize
+        }
+        if energy == 0.0f64 { ret Invalid }
+        let norm = math.sqrt[f64](energy)
+        j = 0usize
+        while j < d {
+            direction[j] = direction[j] / norm
+            weights[j * c + a] = direction[j]
+            j += 1usize
+        }
+        i = 0usize
+        while i < n {
+            scores[i] = 0.0f64
+            j = 0usize
+            while j < d {
+                scores[i] += xw[i * d + j] * direction[j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var spread = 0.0f64
+        i = 0usize
+        while i < n {
+            spread += scores[i] * scores[i]
+            i += 1usize
+        }
+        if spread == 0.0f64 { ret Invalid }
+        j = 0usize
+        while j < d {
+            var loading = 0.0f64
+            i = 0usize
+            while i < n {
+                loading += xw[i * d + j] * scores[i]
+                i += 1usize
+            }
+            loadings[j * c + a] = loading / spread
+            j += 1usize
+        }
+        var answer = 0.0f64
+        i = 0usize
+        while i < n {
+            answer += yw[i] * scores[i]
+            i += 1usize
+        }
+        answer = answer / spread
+        response[a] = answer
+        i = 0usize
+        while i < n {
+            j = 0usize
+            while j < d {
+                xw[i * d + j] -= scores[i] * loadings[j * c + a]
+                j += 1usize
+            }
+            yw[i] -= scores[i] * answer
+            i += 1usize
+        }
+        a += 1usize
+    }
+    var r = 0usize
+    while r < c {
+        var s = 0usize
+        while s < c {
+            var entry = 0.0f64
+            j = 0usize
+            while j < d {
+                entry += loadings[j * c + r] * weights[j * c + s]
+                j += 1usize
+            }
+            system[r * c + s] = entry
+            s += 1usize
+        }
+        r += 1usize
+    }
+    let solve_error = pls_solve(system, response, c)
+    if solve_error != ok { ret solve_error }
+    j = 0usize
+    while j < d {
+        var beta = 0.0f64
+        var s = 0usize
+        while s < c {
+            beta += weights[j * c + s] * response[s]
+            s += 1usize
+        }
+        coefficients[j] = beta
+        j += 1usize
+    }
+    var correction = 0.0f64
+    j = 0usize
+    while j < d {
+        correction += coefficients[j] * mean_x[j]
+        j += 1usize
+    }
+    coefficients[d] = mean_y - correction
+    ret ok
+}

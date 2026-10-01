@@ -1699,6 +1699,12 @@ $mlFingerprintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $mlFingerprintWritten -ne 'executable written') { throw 'ml_fingerprint emission failed' }
 & $mlFingerprintPath
 if ($LASTEXITCODE -ne 0) { throw "a ml_fingerprint check failed: exit $LASTEXITCODE" }
+# `e.ml.linear` PLS and `e.ml.reduce` UMAP: NIPALS coefficients with the degenerate cases, the scaled PCA start, a 200-epoch layout keeping two groups apart, and the storage and parameter cases.
+$mlChemometricPath = Join-Path $testBuild 'ml-chemometric-selfhost.exe'
+$mlChemometricWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_chemometric\src\main.e') $repo 'x64' 'windows' $mlChemometricPath
+if ($LASTEXITCODE -ne 0 -or $mlChemometricWritten -ne 'executable written') { throw 'ml_chemometric emission failed' }
+& $mlChemometricPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_chemometric check failed: exit $LASTEXITCODE" }
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 $mlHmmPath = Join-Path $testBuild 'ml-hmm-selfhost.exe'
 $mlHmmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_hmm\src\main.e') $repo 'x64' 'windows' $mlHmmPath
