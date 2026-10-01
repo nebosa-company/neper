@@ -32380,3 +32380,17 @@ and release, on Windows and WSL. A host call to the helper is rejected by the
 device-only checker. The existing barrier, shared-memory, subgroup and large-
 frame fixtures pass on Windows; consecutive self-hosted compiler stages are
 byte-identical on both hosts.
+
+## D1753 — Grow inline maps only for large barrier helpers
+
+**Decision.** Keep the 128-value and 64-block stack maps for ordinary inline
+calls. When a callee exceeds either map, allocate just that map from the build
+arena; the compiler's normal arena and NIR capacities remain the limits. This
+removes a separate ceiling on direct barrier helpers without changing the
+forty-instruction release inline cap for ordinary calls.
+
+**Evidence.** `link/gpu_barrier_large_helper` has 70 conditional blocks before
+its barrier. The previous compiler refused its kernel during lowering; the
+grown-map compiler builds and runs it in debug and release on Windows and WSL,
+including a four-worker Windows release build. Consecutive self-hosted stages
+are byte-identical on both hosts. Nested helper calls are still pending.

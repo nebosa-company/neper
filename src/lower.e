@@ -2660,9 +2660,27 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
         if nested.caller_function == entry.function_index { try record_inlined(builder, nested.callee_module, nested.name, nested.instance) }
         nested_at += 1usize
     }
-    var value_map: [128]usize = zero
-    var block_map: [64]usize = zero
-    if callee.value_count > value_map.len || callee.block_count > block_map.len { ret check.Capacity }
+    var local_values: [128]usize = zero
+    var local_blocks: [64]usize = zero
+    var value_map = local_values[0usize..]
+    var block_map = local_blocks[0usize..]
+    // ponytail: large inlines use arena scratch per call; reuse it only if they
+    // become common enough to matter to compiler memory.
+    if callee.value_count > value_map.len {
+        let (values, alloc_error) = mem.alloc[usize](c.arena, callee.value_count)
+        if alloc_error != ok { ret alloc_error }
+        value_map = values
+        var clear_at = 0usize
+        while clear_at < values.len {
+            values[clear_at] = 0usize
+            clear_at += 1usize
+        }
+    }
+    if callee.block_count > block_map.len {
+        let (blocks, alloc_error) = mem.alloc[usize](c.arena, callee.block_count)
+        if alloc_error != ok { ret alloc_error }
+        block_map = blocks
+    }
     var return_sites = 0usize
     var instruction_at = callee.first_instruction
     while instruction_at < callee.first_instruction + callee.instruction_count {
