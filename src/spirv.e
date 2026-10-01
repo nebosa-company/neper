@@ -1266,7 +1266,7 @@ fn declare_privates(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         var bytes = 0usize
         // A slot is counted in eight-byte words, and none means one scalar's.
         if instruction.opcode == .Stack {
-            if instruction.ty.in_shared && instruction.ty.kind != .Slice && instruction.immediate == 0usize {
+            if instruction.ty.in_shared && instruction.ty.kind == .Integer && instruction.immediate == 0usize {
                 at += 1usize
                 continue
             }
@@ -1279,9 +1279,10 @@ fn declare_privates(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
             bytes = words * 4usize
         }
         if bytes != 0usize && instruction.has_result {
-            // A `[]shared T` value is a private four-word header naming workgroup
-            // storage; only the pointee lives in Workgroup storage.
-            if instruction.ty.in_shared && instruction.ty.kind != .Slice {
+            // Only lowering's synthetic integer slot owns the Workgroup block.
+            // Contextual `in_shared` on slice headers and expression temporaries
+            // describes their pointee or destination; those values stay private.
+            if instruction.opcode == .Stack && instruction.ty.in_shared && instruction.ty.kind == .Integer {
                 if m.v_shared == 0usize { ret fail(m, "a shared stack has no workgroup block") }
                 values.kind[instruction.result] = KIND_SHARED
                 values.id[instruction.result] = m.v_shared

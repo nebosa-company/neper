@@ -46,11 +46,12 @@ fn plain(n: u32, out: []u32) {
     out[usize(gpu.gid.x)] = gpu.gid.x * 3u32
 }
 
-fn main(a: *mem.Arena, args: []str) -> err {
-    let (device, open_error) = gpu.open(a, .Cpu, 0u32)
-    if open_error != ok { os.exit(1i32) }
+fn run(a: *mem.Arena, backend: gpu.Backend, index: u32, relay_out: []u32, round_out: []u32, plain_out: []u32) -> err {
+    let (device, open_error) = gpu.open(a, backend, index)
+    if open_error != ok { ret open_error }
+    defer let _ = gpu.close(device)
     let (q, queue_error) = gpu.queue(device)
-    if queue_error != ok { os.exit(2i32) }
+    if queue_error != ok { ret queue_error }
 
     // relay over two workgroups of 64.
     var values: [128]u32 = zero
@@ -60,36 +61,69 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     let (buf, buf_error) = gpu.upload[u32](q, values[0..])
-    if buf_error != ok { os.exit(3i32) }
-    if gpu.launch[relay](q, gpu.grid1(128usize), buf) != ok { os.exit(4i32) }
-    var out: [128]u32 = zero
-    if gpu.download[u32](q, buf, out[0..]) != ok { os.exit(5i32) }
-    i = 0usize
-    while i < 128usize {
-        let group = i / 64usize
-        let local = i % 64usize
-        let predecessor = group * 64usize + (local + 63usize) % 64usize
-        if out[i] != (values[predecessor] + 1u32) * 2u32 { os.exit(6i32) }
-        i += 1usize
-    }
+    if buf_error != ok { ret buf_error }
+    defer let _ = gpu.release(q, buf)
+    try gpu.launch[relay](q, gpu.grid1(128usize), buf)
+    try gpu.download[u32](q, buf, relay_out)
 
     // rounds: from [1, 0, 0, 0, 0, 0, 0, 0] three rounds of adding the left neighbour.
     var ring: [8]u32 = zero
     ring[0] = 1u32
     let (ring_buf, ring_error) = gpu.upload[u32](q, ring[0..])
-    if ring_error != ok { os.exit(7i32) }
-    if gpu.launch[rounds](q, gpu.grid1(8usize), ring_buf) != ok { os.exit(8i32) }
-    var after: [8]u32 = zero
-    if gpu.download[u32](q, ring_buf, after[0..]) != ok { os.exit(9i32) }
-    // Round 1: [1, 1, 0, ...]; round 2: [1, 2, 1, 0, ...]; round 3: [1, 3, 3, 1, 0, ...].
-    if after[0] != 1u32 || after[1] != 3u32 || after[2] != 3u32 || after[3] != 1u32 || after[4] != 0u32 || after[7] != 0u32 { os.exit(10i32) }
+    if ring_error != ok { ret ring_error }
+    defer let _ = gpu.release(q, ring_buf)
+    try gpu.launch[rounds](q, gpu.grid1(8usize), ring_buf)
+    try gpu.download[u32](q, ring_buf, round_out)
 
     // A kernel without a barrier under the same model.
     let (plain_buf, plain_error) = gpu.alloc[u32](q, 40usize)
-    if plain_error != ok { os.exit(11i32) }
-    if gpu.launch[plain](q, gpu.grid1(40usize), 40u32, plain_buf) != ok { os.exit(12i32) }
+    if plain_error != ok { ret plain_error }
+    defer let _ = gpu.release(q, plain_buf)
+    try gpu.launch[plain](q, gpu.grid1(40usize), 40u32, plain_buf)
+    ret gpu.download[u32](q, plain_buf, plain_out)
+}
+
+fn same(a: []const u32, b: []const u32) -> bool {
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret a.len == b.len
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    var out: [128]u32 = zero
+    var after: [8]u32 = zero
     var plain_out: [40]u32 = zero
-    if gpu.download[u32](q, plain_buf, plain_out[0..]) != ok || plain_out[39] != 117u32 || plain_out[0] != 0u32 { os.exit(13i32) }
+    try run(a, .Cpu, 0u32, out[0..], after[0..], plain_out[0..])
+    var i = 0usize
+    while i < 128usize {
+        let group = i / 64usize
+        let local = i % 64usize
+        let predecessor = group * 64usize + (local + 63usize) % 64usize
+        if out[i] != (u32(predecessor) * 10u32 + 1u32) * 2u32 { os.exit(6i32) }
+        i += 1usize
+    }
+    // Round 1: [1, 1, 0, ...]; round 2: [1, 2, 1, 0, ...]; round 3: [1, 3, 3, 1, 0, ...].
+    if after[0] != 1u32 || after[1] != 3u32 || after[2] != 3u32 || after[3] != 1u32 || after[4] != 0u32 || after[7] != 0u32 { os.exit(10i32) }
+    if plain_out[39] != 117u32 || plain_out[0] != 0u32 { os.exit(13i32) }
+
+    let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
+    if found_error != gpu.NoDevice && found_error != gpu.Unsupported {
+        if found_error != ok { ret found_error }
+        var at = 0usize
+        while at < found.len {
+            if found[at].supported {
+                var device_out: [128]u32 = zero
+                var device_after: [8]u32 = zero
+                var device_plain: [40]u32 = zero
+                try run(a, .Vulkan, u32(at), device_out[0..], device_after[0..], device_plain[0..])
+                if !same(out[0..], device_out[0..]) || !same(after[0..], device_after[0..]) || !same(plain_out[0..], device_plain[0..]) { os.exit(14i32) }
+            }
+            at += 1usize
+        }
+    }
 
     try io.print("gpu barrier ok\n")
     ret ok
