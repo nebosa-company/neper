@@ -5801,6 +5801,48 @@ fn proof_offset_form(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     ret (left_index, constant, true)
 }
 
+// A loop's ordinal starts at zero on entry and advances for every body visit,
+// including visits that skip a barrier. Nested ordinals stay in separate slots.
+fn kernel_loop_open(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
+    if !builder.frame_mode { ret ok }
+    if builder.loop_depth >= builder.loop_slots.len { ret check.Capacity }
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, usize_type, true, 0usize, token)
+    if slot_error != ok { ret slot_error }
+    let (zero_instruction, initial, zero_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
+    if zero_error != ok { ret zero_error }
+    let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if store_error != ok { ret store_error }
+    try nir.add_operand(builder, store_instruction, slot)
+    try nir.add_operand(builder, store_instruction, initial)
+    builder.loop_slots[builder.loop_depth] = slot
+    builder.loop_depth += 1usize
+    ret ok
+}
+
+fn kernel_loop_tick(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
+    if !builder.frame_mode { ret ok }
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let slot = builder.loop_slots[builder.loop_depth - 1usize]
+    let (load_instruction, previous, load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if load_error != ok { ret load_error }
+    try nir.add_operand(builder, load_instruction, slot)
+    let (one_instruction, one, one_error) = nir.emit(builder, .ConstInteger, usize_type, true, 1usize, token)
+    if one_error != ok { ret one_error }
+    let (add_instruction, next, add_error) = nir.emit(builder, .Add, usize_type, true, 0usize, token)
+    if add_error != ok { ret add_error }
+    try nir.add_operand(builder, add_instruction, previous)
+    try nir.add_operand(builder, add_instruction, one)
+    let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if store_error != ok { ret store_error }
+    try nir.add_operand(builder, store_instruction, slot)
+    ret nir.add_operand(builder, store_instruction, next)
+}
+
+fn kernel_loop_close(builder: *nir.Builder) {
+    if builder.frame_mode { builder.loop_depth = builder.loop_depth - 1usize }
+}
+
 fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
     var condition_index = 0usize
     var body_index = 0usize
@@ -5823,6 +5865,7 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         at += 1usize
     }
     if !found_condition || !found_body { ret parse.InvalidSyntax }
+    try kernel_loop_open(builder, module_index, c.tokens[usize(node.token_start)])
     let (entry_branch, entry_error) = emit_branch(builder, c.tokens[usize(node.token_start)])
     if entry_error != ok { ret entry_error }
     let condition_block = builder.block_count
@@ -5838,12 +5881,14 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let body_block = builder.block_count
     let (body_block_index, body_block_error) = nir.begin_block(builder)
     if body_block_error != ok || body_block_index != body_block { ret nir.InvalidControlFlow }
+    try kernel_loop_tick(builder, module_index, c.tokens[usize(node.token_start)])
     var break_storage: [256]usize = zero
     var control = LoopControl { active: true, continue_target: condition_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
     let proved = proof_open(c, g, tree, module_index, condition_index, body_index, builder, bindings, *binding_count)
     let body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
     if proved { builder.proof_count = builder.proof_count - 1usize }
     if body_error != ok { ret body_error }
+    kernel_loop_close(builder)
     if !builder.blocks[builder.current_block].terminated {
         let (back_edge, back_edge_error) = emit_branch(builder, c.tokens[usize(node.token_start)])
         if back_edge_error != ok { ret back_edge_error }
@@ -5940,6 +5985,7 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     if next_error != ok { ret next_error }
     var call: check.CallInfo = zero
     call.function = next
+    try kernel_loop_open(builder, module_index, token)
     let (entry_branch, entry_error) = emit_branch(builder, token)
     if entry_error != ok { ret entry_error }
     let condition_block = builder.block_count
@@ -5961,6 +6007,7 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     let body_block = builder.block_count
     let (body_index_value, body_error) = nir.begin_block(builder)
     if body_error != ok || body_index_value != body_block { ret nir.InvalidControlFlow }
+    try kernel_loop_tick(builder, module_index, token)
     let local_checkpoint = c.local_count
     let binding_checkpoint = *binding_count
     try bind_value(c, g, module_index, name, element_type, results.values[0usize], results.addresses[0usize], false, builder, bindings, binding_count)
@@ -5970,6 +6017,7 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
     if lowered_body_error != ok { ret lowered_body_error }
+    kernel_loop_close(builder)
     if !builder.blocks[builder.current_block].terminated {
         let (back_edge, back_edge_error) = emit_branch(builder, token)
         if back_edge_error != ok { ret back_edge_error }
@@ -6880,6 +6928,7 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     if initial_store_error != ok { ret initial_store_error }
     try nir.add_operand(builder, initial_store_instruction, counter_stack)
     try nir.add_operand(builder, initial_store_instruction, initial)
+    try kernel_loop_open(builder, module_index, token)
     let (entry_branch, entry_branch_error) = emit_branch(builder, token)
     if entry_branch_error != ok { ret entry_branch_error }
     let condition_block = builder.block_count
@@ -6934,6 +6983,7 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     let body_block = builder.block_count
     let (body_block_index, body_block_error) = nir.begin_block(builder)
     if body_block_error != ok || body_block_index != body_block { ret nir.InvalidControlFlow }
+    try kernel_loop_tick(builder, module_index, token)
     let (body_counter_instruction, body_counter, body_counter_error) = nir.emit(builder, .Load, counter_type, true, counter_info.size, token)
     if body_counter_error != ok { ret body_counter_error }
     try nir.add_operand(builder, body_counter_instruction, counter_stack)
@@ -6967,6 +7017,7 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
     if body_error != ok { ret body_error }
+    kernel_loop_close(builder)
     if !builder.blocks[builder.current_block].terminated {
         let (body_edge, body_edge_error) = emit_branch(builder, token)
         if body_edge_error != ok { ret body_edge_error }
@@ -7351,6 +7402,22 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     ret ok
 }
 
+fn kernel_loop_nesting(tree: *parse.Tree, node: syntax.Node, depth: usize) -> usize {
+    var here = depth
+    if node.kind == .WhileStmt || node.kind == .ForStmt { here += 1usize }
+    var maximum = here
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            let nested = kernel_loop_nesting(tree, tree.nodes[parse.child_index_at(tree, at)], here)
+            if nested > maximum { maximum = nested }
+        }
+        at += 1usize
+    }
+    ret maximum
+}
+
 fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, defers: *DeferState) -> err {
     check.begin_call_scope(c)
     let text = g.modules[module_index].text
@@ -7461,7 +7528,8 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         hidden_parameters = 1usize
     }
     // A kernel's CPU build (spec section 10's CPU execution model, D780): every local
-    // lives in the invocation's frame behind parameter 0, eight bytes of `pc` first;
+    // lives in the invocation's frame behind parameter 0, with `pc` and loop
+    // ordinals first;
     // the entry branches to a dispatch, built after the body, that resumes at the
     // block after the barrier `pc` names.
     var kernel_dispatch_branch = 0usize
@@ -7482,7 +7550,10 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         if frame_instructions_error != ok { ret frame_instructions_error }
         let (resume_blocks, resume_blocks_error) = mem.alloc[usize](c.arena, 64usize)
         if resume_blocks_error != ok { ret resume_blocks_error }
-        try nir.begin_frame(builder, frame_value, frame_values, frame_instructions, resume_blocks, c.tokens[usize(node.token_start)])
+        let loop_depth = kernel_loop_nesting(tree, node, 0usize)
+        let (loop_slots, loop_slots_error) = mem.alloc[usize](c.arena, loop_depth)
+        if loop_slots_error != ok { ret loop_slots_error }
+        try nir.begin_frame(builder, frame_value, frame_values, frame_instructions, resume_blocks, loop_slots, c.tokens[usize(node.token_start)])
         let (gpu_module, found_gpu) = graph.find_module(g, "e.gpu")
         if !found_gpu { ret FunctionNotFound }
         let (fault_index, found_fault) = check.find_function(c, gpu_module, "fault")
@@ -7829,6 +7900,33 @@ fn emit_kernel_pc_store(builder: *nir.Builder, module_index: usize, value: usize
     ret nir.add_operand(builder, store_instruction, constant)
 }
 
+fn emit_kernel_frame_store(builder: *nir.Builder, module_index: usize, offset: usize, value: usize, token: lex.Token) -> err {
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, usize_type, true, offset, token)
+    if address_error != ok { ret address_error }
+    try nir.add_operand(builder, address_instruction, builder.frame_base)
+    let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if store_error != ok { ret store_error }
+    try nir.add_operand(builder, store_instruction, address)
+    ret nir.add_operand(builder, store_instruction, value)
+}
+
+fn emit_kernel_loop_signature(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let (depth_instruction, depth, depth_error) = nir.emit(builder, .ConstInteger, usize_type, true, builder.loop_depth, token)
+    if depth_error != ok { ret depth_error }
+    try emit_kernel_frame_store(builder, module_index, 8usize, depth, token)
+    var at = 0usize
+    while at < builder.loop_depth {
+        let (load_instruction, ordinal, load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, builder.loop_slots[at])
+        try emit_kernel_frame_store(builder, module_index, 16usize + 8usize * at, ordinal, token)
+        at += 1usize
+    }
+    ret ok
+}
+
 // An invocation that returns writes the done mark, which the scheduler reads.
 fn emit_kernel_done(builder: *nir.Builder, token: lex.Token) -> err {
     ret emit_kernel_pc_store(builder, 0usize, KERNEL_DONE, token)
@@ -7906,6 +8004,7 @@ fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, t
     let number = builder.kernel_barriers
     var pc = number
     if subgroup { pc += KERNEL_SUBGROUP_PC }
+    try emit_kernel_loop_signature(builder, module_index, token)
     try emit_kernel_pc_store(builder, module_index, pc, token)
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
     if return_error != ok { ret return_error }

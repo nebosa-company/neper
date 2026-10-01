@@ -1048,6 +1048,7 @@ static void install_os_intrinsics(Compiler *c) {
     Type file = type_make(TY_NAMED, "os.File"), proc = type_make(TY_NAMED, "os.Proc");
     Type clock = type_make(TY_NAMED, "os.Clock"), flags = type_make(TY_NAMED, "os.OpenFlags");
     Type handle = type_make(TY_NAMED, "os.Handle"), stdio_type = type_make(TY_NAMED, "os.Stdio");
+    Type spawn_options = type_make(TY_NAMED, "os.SpawnOptions");
     Type entry = type_make(TY_NAMED, "os.DirEntry");
     Type arena_pointer = intrinsic_pointer(arena, 0);
     Type bytes = intrinsic_slice(u8, 0), const_bytes = string;
@@ -1101,6 +1102,12 @@ static void install_os_intrinsics(Compiler *c) {
     intrinsic_field(decl, token, "stdout", file, 1, 0);
     intrinsic_field(decl, token, "stderr", file, 1, 0);
     intrinsic_field(decl, token, "inherit", handles, 1, 0);
+    decl = intrinsic_type(c, token, "os.SpawnOptions", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(decl, token, "argv", const_strings, 1, 0);
+    intrinsic_field(decl, token, "env", const_strings, 1, 0);
+    intrinsic_field(decl, token, "inherit_env", type_make(TY_BOOL, "bool"), 1, 0);
+    intrinsic_field(decl, token, "cwd", string, 1, 0);
+    intrinsic_field(decl, token, "stdio", stdio_type, 1, 0);
 
 #define OS_FN(source_name, native_name) fn = intrinsic_function(c, token, source_name, native_name)
     OS_FN("os.open", "neper_os_open"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_param(fn, token, "flags", flags); intrinsic_returns(fn, 2, file, error);
@@ -1116,6 +1123,7 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.replace", "neper_os_replace"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "src", string); intrinsic_param(fn, token, "dst", string); intrinsic_param(fn, token, "overwrite", type_make(TY_BOOL, "bool")); intrinsic_param(fn, token, "durable", type_make(TY_BOOL, "bool")); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.set_mode", "neper_os_set_mode"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_param(fn, token, "mode", u32); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.spawn", "neper_os_spawn"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "argv", const_strings); intrinsic_param(fn, token, "stdio", stdio_type); intrinsic_returns(fn, 2, proc, error);
+    OS_FN("os.spawn_with_options", "neper_os_spawn_with_options"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "options", spawn_options); intrinsic_returns(fn, 2, proc, error);
     OS_FN("os.wait", "neper_os_wait"); intrinsic_param(fn, token, "p", proc); intrinsic_returns(fn, 2, i32, error);
     OS_FN("os.wait_usage", "neper_os_wait_usage"); intrinsic_param(fn, token, "p", proc); intrinsic_returns(fn, 2, type_make(TY_NAMED, "os.ProcUsage"), error);
     OS_FN("os.peak_memory", "neper_os_peak_memory"); intrinsic_returns(fn, 2, usize, error);
@@ -7425,7 +7433,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN CommandLineToArgvW:PROC\n"
         "EXTERN neper_os_set_args:PROC\nEXTERN neper_os_open:PROC\nEXTERN neper_os_read:PROC\n"
         "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdin:PROC\nEXTERN neper_os_stdout:PROC\n"
-        "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_replace:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\n"
+        "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_replace:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\nEXTERN neper_os_spawn_with_options:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\nEXTERN neper_os_env:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_release:PROC\nEXTERN neper_os_clock:PROC\nEXTERN neper_os_random:PROC\nEXTERN neper_os_create_new:PROC\n"
         "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\nEXTERN neper_os_seek:PROC\nEXTERN neper_os_copy_bytes:PROC\nEXTERN neper_os_sha256_blocks:PROC\nEXTERN neper_os_crc32c_bytes:PROC\n"

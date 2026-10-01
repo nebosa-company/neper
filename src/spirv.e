@@ -1835,11 +1835,13 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         // address is two words, so collapse it before the structured branch header.
         // A workgroup pointer represented here is always derived from a `shared var`;
         // offset zero is its first byte, not null.
-        if values.kind[condition] == KIND_SHARED {
+        if KIND_SHARED == values.kind[condition] {
             condition_id = constant(m, m.t_bool, 1usize)
-        } else if values.ty[condition] == m.t_v2u32 {
-            let bits = binary(m, OP_BITWISE_OR, m.t_u32, extract(m, condition_id, 0usize), extract(m, condition_id, 1usize))
-            condition_id = binary(m, OP_I_NOT_EQUAL, m.t_bool, bits, constant(m, m.t_u32, 0usize))
+        } else {
+            if m.t_v2u32 == values.ty[condition] {
+                let bits = binary(m, OP_BITWISE_OR, m.t_u32, extract(m, condition_id, 0usize), extract(m, condition_id, 1usize))
+                condition_id = binary(m, OP_I_NOT_EQUAL, m.t_bool, bits, constant(m, m.t_u32, 0usize))
+            }
         }
         if flow.loop_merges[block_index] != 0usize && flow.loop_bodies[block_index] == 0usize {
             head(&m.code, OP_LOOP_MERGE, 4usize)

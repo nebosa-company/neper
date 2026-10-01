@@ -388,7 +388,7 @@ type Builder = struct {
     // Set while lowering a `@nocheck` block; every instruction emitted carries it.
     nocheck: bool,
     // A kernel's CPU build (D780): every `Stack` slot becomes a word of the
-    // invocation's frame, eight bytes of `pc` first. The words' addresses are made
+    // invocation's frame, `pc` then loop-occurrence header first. The words' addresses are made
     // in the entry block, one `FieldAddress` each over `frame_base`, so they dominate
     // every block a barrier resumes at; a `Stack` then answers the next free one's
     // value and instruction, sixteen-aligned when it is more than one word. A frame
@@ -400,6 +400,8 @@ type Builder = struct {
     frame_base: usize,
     frame_offset: usize,
     frame_next: usize,
+    loop_slots: []usize,
+    loop_depth: usize,
     // The tables are the caller's arena's, not the builder's own bytes: a builder
     // is copied onto worker stacks, and 2 KB more on one overflowed `build`.
     frame_slot_values: []usize,
@@ -1319,7 +1321,7 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         let most = FRAME_WORDS
         if next + words > most { ret (0usize, 0usize, Capacity) }
         builder.frame_next = next + words
-        builder.frame_offset = 8usize + 8usize * builder.frame_next
+        builder.frame_offset = 16usize + 8usize * builder.loop_slots.len + 8usize * builder.frame_next
         ret (builder.frame_slot_instructions[next], builder.frame_slot_values[next], ok)
     }
     let instruction_index = builder.instruction_count
@@ -1362,15 +1364,18 @@ const FRAME_WORDS: usize = 256usize
 
 const TRAP_DATA: usize = 256usize
 
-// The frame's words, addressed once in the entry block of a kernel's CPU build.
+// The frame's words, after `pc`, loop depth and its ordinal vector, addressed
+// once in the entry block of a kernel's CPU build.
 // `values`, `instructions` and `resume` are the caller's tables, FRAME_WORDS and
 // 64 long.
-fn begin_frame(builder: *Builder, frame_base: usize, values: []usize, instructions: []usize, resume: []usize, token: lex.Token) -> err {
+fn begin_frame(builder: *Builder, frame_base: usize, values: []usize, instructions: []usize, resume: []usize, loop_slots: []usize, token: lex.Token) -> err {
     if values.len < FRAME_WORDS || instructions.len < FRAME_WORDS || resume.len < 64usize { ret Capacity }
     builder.frame_mode = false
     builder.frame_base = frame_base
     builder.frame_next = 0usize
-    builder.frame_offset = 8usize
+    builder.frame_offset = 16usize + 8usize * loop_slots.len
+    builder.loop_slots = loop_slots
+    builder.loop_depth = 0usize
     builder.kernel_barriers = 0usize
     builder.frame_slot_values = values
     builder.frame_slot_instructions = instructions
@@ -1380,7 +1385,7 @@ fn begin_frame(builder: *Builder, frame_base: usize, values: []usize, instructio
     let words = FRAME_WORDS
     var word = 0usize
     while word < words {
-        let (instruction, value, emit_error) = emit(builder, field_address, usize_type, true, 8usize + 8usize * word, token)
+        let (instruction, value, emit_error) = emit(builder, field_address, usize_type, true, 16usize + 8usize * loop_slots.len + 8usize * word, token)
         if emit_error != ok { ret emit_error }
         try add_operand(builder, instruction, frame_base)
         builder.frame_slot_instructions[word] = instruction

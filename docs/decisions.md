@@ -32298,3 +32298,36 @@ scratch all use the selected width; Vulkan keeps its hardware subgroup width.
 each width, including the short final subgroup, integer and floating sums,
 lane IDs, and broadcast. All four `neper run` cases pass on Windows and WSL;
 an invalid width is rejected by the CLI.
+
+## D1748 — Compare loop ordinals at CPU barrier rendezvous
+
+**Decision.** A static barrier ID alone can pair different iterations of one
+loop when an invocation skips a body visit. Each CPU kernel frame now holds
+its active loop depth and one ordinal per nested `while` or runtime `for`.
+The lowering increments an ordinal on each body visit and snapshots the active
+vector at a barrier or subgroup cut; `e.gpu` compares the full vector alongside
+the static ID. This checks only actual rendezvous, leaving divergent loops that
+never execute a barrier unconstrained. The device build has no added state.
+
+**Evidence.** Before this change, `link/gpu_barrier_occurrence` exited without
+trapping when two lanes reached the same barrier in different loop iterations.
+It now traps with exit 134 for both `while` and `for` on Windows and WSL, while
+a nested uniform loop completes. The existing barrier and subgroup fixtures
+pass on both hosts; successive self-hosted compiler stages are byte-equal.
+
+## D1749 — Bridge the run environment option in the C bootstrap
+
+**Decision.** The stage-one compiler's fixed `e.os` surface now declares
+`SpawnOptions` and `spawn_with_options`, which `neper run --subgroup-width`
+requires. Its native runtime handles the compiler's single inherited
+environment override and refuses other option shapes; the self-hosted compiler
+still uses the full Windows and Linux `e.os` implementations. The stage-one
+bridge restores the parent's environment after creating the child and remains
+single-threaded, as is stage one's thread runtime.
+
+**Evidence.** The C bootstrap builds `src/main.e` on Windows and WSL, and the
+resulting stage-one compiler runs `gpu_subgroup_width` with the selected width
+on each host. The committed SPIR-V branch condition also now uses syntax both
+bootstrap and self-hosted parsers accept. The full Windows suite proceeds
+through compiler-resolved module surfaces, then stops at the independently
+stale library-fixture manifest in the shared tree.
