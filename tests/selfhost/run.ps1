@@ -3113,8 +3113,25 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $loopSpirv).Hash -ne (Get-FileH
 $gpuVulkanLoopPath = Join-Path $testBuild 'gpu-vulkan-loop-selfhost.exe'
 $gpuVulkanLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $gpuVulkanLoopPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopWritten -ne 'executable written') { throw 'gpu_vulkan_loop emission failed' }
+$previousGpuCache = $env:NEPER_GPU_CACHE
+$gpuCache = Join-Path $testBuild 'gpu-cache'
+New-Item -ItemType Directory -Force -Path $gpuCache | Out-Null
+$env:NEPER_GPU_CACHE = $gpuCache
 $gpuVulkanLoopOutput = & $gpuVulkanLoopPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan loop runtime failed: $gpuVulkanLoopOutput" }
+if ($gpuVulkanLoopOutput -ne 'gpu loop cpu only') {
+    $cacheFile = Get-ChildItem -File -Recurse $gpuCache -Filter '*.bin' | Select-Object -First 1
+    if ($null -eq $cacheFile) { throw 'the Vulkan launch wrote no durable pipeline cache' }
+    $validCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
+    & python (Join-Path $repo 'scripts\corrupt_gpu_cache.py') $cacheFile.FullName
+    if ($LASTEXITCODE -ne 0) { throw 'the Vulkan cache corruption fixture failed' }
+    $corruptCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
+    $gpuVulkanLoopOutput = & $gpuVulkanLoopPath
+    if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop vulkan ok on [1-9][0-9]* devices$') { throw 'the Vulkan runtime did not recover from a corrupt pipeline cache' }
+    $rebuiltCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
+    if ($corruptCacheHash -eq $rebuiltCacheHash -or $validCacheHash -ne $rebuiltCacheHash) { throw 'the Vulkan runtime did not replace the corrupt pipeline cache atomically' }
+}
+$env:NEPER_GPU_CACHE = $previousGpuCache
 # (D1613) Correctly rounded f32 division and square root, pinned as SPIR-V and
 # compared bit for bit with the CPU backend on every available Vulkan device.
 $floatSpirv = Join-Path $testBuild 'float.spv'

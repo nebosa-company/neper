@@ -32042,3 +32042,27 @@ unchecked manifests say `checks: off` on Windows and Linux. The PowerShell and s
 suite scripts parse, and the fixture passes on two Windows devices and WSL's device.
 The complete suite remains blocked before this fixture by the unrelated stale
 library-fixture catalog recorded in D1730.
+
+## D1733 — Vulkan pipeline caches are content-addressed local state
+
+**Decision.** The Vulkan runtime keeps one driver cache blob per embedded SPIR-V
+module, entry point and device identity. The key starts with the contract's xxHash64
+of the decoded SPIR-V and adds the entry, pipeline-cache UUID, driver and API versions,
+vendor/device IDs and capability bits. Launch specialisation, numerical policy,
+safety policy and build mode need no parallel metadata: each changes the embedded
+module whose bytes are already the first key part. The compiler-executable hash stays
+out until it is available to generated code; this row is therefore partial.
+
+Records live under the platform user cache, or `NEPER_GPU_CACHE/v1` for an isolated
+run. An outer magic, length and CRC-32C reject torn or damaged files before the driver.
+Vulkan receives a checksum-valid blob and, if cache creation or pipeline compilation
+rejects it, the runtime retries empty. A successful pipeline fetches refreshed bytes
+and publishes them through a durable atomic replace; cache read, write or allocation
+failure is a miss and never changes launch correctness.
+
+**Evidence.** `gpu_vulkan_loop` runs cold and warm on an NVIDIA RTX 3080 and Intel
+Iris Xe. Both write driver blobs to an isolated root. The suite corrupts Vulkan's own
+cache header, recomputes the outer CRC-32C, reruns the executable and requires the
+CPU-identical result plus byte-for-byte restoration of the prior valid cache. Both
+suite scripts parse. The failed-rebuild preservation injection and compiler identity
+key remain for the completed cache row.

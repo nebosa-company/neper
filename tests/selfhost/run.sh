@@ -2751,11 +2751,31 @@ cmp "$test_build/loop.spv" "$repo/tests/conformance/spirv/loop.spv"
 gpu_vulkan_loop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_loop/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-loop-selfhost")
 [ "$gpu_vulkan_loop_written" = 'executable written' ]
 chmod +x "$test_build/gpu-vulkan-loop-selfhost"
+previous_gpu_cache=${NEPER_GPU_CACHE-}
+gpu_cache=$test_build/gpu-cache
+mkdir -p "$gpu_cache"
+export NEPER_GPU_CACHE=$gpu_cache
 gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
 case "$gpu_vulkan_loop_output" in
     'gpu loop cpu only'|'gpu loop vulkan ok on '[1-9]' devices'|'gpu loop vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the Vulkan loop runtime failed: $gpu_vulkan_loop_output" >&2; exit 1 ;;
 esac
+if [ "$gpu_vulkan_loop_output" != 'gpu loop cpu only' ]; then
+    cache_file=$(find "$gpu_cache" -type f -name '*.bin' -print -quit)
+    [ -n "$cache_file" ]
+    valid_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
+    python3 "$repo/scripts/corrupt_gpu_cache.py" "$cache_file"
+    corrupt_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
+    gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
+    case "$gpu_vulkan_loop_output" in
+        'gpu loop vulkan ok on '[1-9]' devices'|'gpu loop vulkan ok on '1[0-6]' devices') ;;
+        *) printf '%s\n' 'the Vulkan runtime did not recover from a corrupt pipeline cache' >&2; exit 1 ;;
+    esac
+    rebuilt_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
+    [ "$corrupt_cache_hash" != "$rebuilt_cache_hash" ]
+    [ "$valid_cache_hash" = "$rebuilt_cache_hash" ]
+fi
+if [ -n "$previous_gpu_cache" ]; then export NEPER_GPU_CACHE=$previous_gpu_cache; else unset NEPER_GPU_CACHE; fi
 # (D1613) Correctly rounded f32 division and square root, pinned as SPIR-V and
 # compared bit for bit with the CPU backend on every available Vulkan device.
 float_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/float.e" "$repo" spv none "$test_build/float.spv")
