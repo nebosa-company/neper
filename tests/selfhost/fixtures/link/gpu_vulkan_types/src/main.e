@@ -5,6 +5,13 @@ use e.io
 use e.mem
 use e.os
 
+fn supports(caps: []const gpu.Cap, wanted: gpu.Cap) -> bool {
+    for capability in caps {
+        if capability == wanted { ret true }
+    }
+    ret false
+}
+
 type Pair = struct { byte: u8, delta: i16, wide: u64 }
 
 fn sum[T: type](left: T, right: T) -> T { ret left + right }
@@ -61,7 +68,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var ran = 0usize
     var device_at = 0usize
     while device_at < found.len {
-        if found[device_at].supported {
+        if found[device_at].supported && supports(found[device_at].capabilities, .Int8) && supports(found[device_at].capabilities, .Int16) && supports(found[device_at].capabilities, .Int64) {
             var answer: [64]u64 = zero
             try run(a, .Vulkan, u32(device_at), input[0..], answer[0..])
             at = 0usize

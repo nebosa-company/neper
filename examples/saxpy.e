@@ -6,6 +6,13 @@ use e.mem
 use e.gpu
 use e.io
 
+fn supports(caps: []const gpu.Cap, wanted: gpu.Cap) -> bool {
+    for capability in caps {
+        if capability == wanted { ret true }
+    }
+    ret false
+}
+
 // The workgroup size is part of the attribute (spec §10): 256 invocations along x.
 // gpu.launch[saxpy] is the only way to call it, on the CPU as on the device.
 @gpu(256)
@@ -71,15 +78,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try run(cq, 2.0, x[0..], y[0..])
     try io.printf["cpu    checksum {}\n"](checksum(y[0..]))
 
-    // A Vulkan device may be absent; NoDevice is an ordinary outcome here, not
-    // a failure. Anything else is.
-    let (dev, e) = gpu.open(a, .Vulkan, 0)
-    if e == gpu.NoDevice || e == gpu.Unsupported { // absent, or a backend this build did not embed
+    // A compatible Vulkan device may be absent; that is an ordinary outcome here.
+    let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
+    if found_error == gpu.NoDevice || found_error == gpu.Unsupported {
         ret ok
     }
-    if e != ok {
-        ret e
+    if found_error != ok { ret found_error }
+    var device_at = 0usize
+    while device_at < found.len && (!found[device_at].supported || !supports(found[device_at].capabilities, .DenormPreserve)) {
+        device_at += 1usize
     }
+    if device_at == found.len { ret ok }
+    let (dev, open_error) = gpu.open(a, .Vulkan, u32(device_at))
+    if open_error != ok { ret open_error }
     defer let _ = gpu.close(dev)
     let (q, q_error) = gpu.queue(dev)
     if q_error != ok { ret q_error }

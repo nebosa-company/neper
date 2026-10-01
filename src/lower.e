@@ -8596,12 +8596,13 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     if step_ref_error != ok { ret step_ref_error }
     let (step_instruction, step_value, step_error) = nir.emit(builder, .FunctionAddress, pointer_type, true, step_ref, token)
     if step_error != ok { ret step_error }
-    // launch_run(q, grid, x, y, z, frame_bytes, shared_bytes, step, ctx) -> err
+    // launch_run(q, grid, x, y, z, frame_bytes, shared_bytes, step, ctx,
+    // requirements, module, entry, layout) -> err
     var dims: [3]usize = zero
     dims[0usize] = (usize(kernel.gpu_size) & 1023usize) + 1usize
     dims[1usize] = ((usize(kernel.gpu_size) >> 10usize) & 1023usize) + 1usize
     dims[2usize] = ((usize(kernel.gpu_size) >> 20usize) & 1023usize) + 1usize
-    var run_arguments: [12]usize = zero
+    var run_arguments: [13]usize = zero
     run_arguments[0usize] = parameters[0usize]
     run_arguments[1usize] = parameters[1usize]
     var dim_at = 0usize
@@ -8615,20 +8616,23 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     run_arguments[6usize] = shared_bytes
     run_arguments[7usize] = step_value
     run_arguments[8usize] = block
+    let (requirements_instruction, requirements_value, requirements_error) = nir.emit(builder, .ConstInteger, usize_type, true, check.kernel_fact(c, generic.template_index) & 511usize, token)
+    if requirements_error != ok { ret requirements_error }
+    run_arguments[9usize] = requirements_value
     // For a Vulkan device (D1611): the kernel's SPIR-V from its module's `K$spirv`, its
     // entry point's name, and a byte per parameter for the argument block.
     let text_type = check.make_type(.String, "str", module_index)
     let (module_slot_instruction, module_slot, module_slot_error) = nir.emit(builder, .Stack, text_type, true, 2usize, token)
     if module_slot_error != ok { ret module_slot_error }
     try emit_kernel_spirv_call(c, g, kernel, module_slot, builder, token)
-    run_arguments[9usize] = module_slot
+    run_arguments[10usize] = module_slot
     let (entry_spelling, entry_spelling_error) = kernel_entry_spelling(c, g, kernel)
     if entry_spelling_error != ok { ret entry_spelling_error }
     let (entry_index, entry_index_error) = nir.intern_string(builder, entry_spelling)
     if entry_index_error != ok { ret entry_index_error }
     let (entry_instruction, entry_value, entry_error) = nir.emit(builder, .ConstString, text_type, true, entry_index, token)
     if entry_error != ok { ret entry_error }
-    run_arguments[10usize] = entry_value
+    run_arguments[11usize] = entry_value
     // A character per parameter, printable so the artifact's strings stay UTF-8: `s` a
     // slice, `1` to `8` a scalar's size, `?` what the argument block cannot carry yet.
     var layout_bytes: [18]u8 = zero
@@ -8659,9 +8663,9 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     if layout_index_error != ok { ret layout_index_error }
     let (layout_instruction, layout_value, layout_error) = nir.emit(builder, .ConstString, text_type, true, layout_index, token)
     if layout_error != ok { ret layout_error }
-    run_arguments[11usize] = layout_value
+    run_arguments[12usize] = layout_value
     var run_results: CallResults = zero
-    try emit_library_call(c, g, "e.gpu", "launch_run", run_arguments[..], 12usize, builder, token, &run_results)
+    try emit_library_call(c, g, "e.gpu", "launch_run", run_arguments[..], 13usize, builder, token, &run_results)
     if run_results.count != 1usize { ret check.ArgumentCount }
     try emit_formatter_return(c, module_index, instance, 0usize, 0usize, run_results.values[0usize], false, builder, token)
     ret nir.end_function(builder)

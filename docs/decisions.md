@@ -31793,3 +31793,28 @@ joining the ballot's low two u32 words into Neper's u64 result.
 `gpu_subgroup_identity` checks equal votes and masks in a 40-invocation workgroup,
 including the partial final subgroup. It passes on the CPU, two Windows Vulkan devices
 and WSL's Vulkan device. The complete Windows self-host suite passes.
+
+## D1722 — Kernel capabilities cross the launch boundary
+
+**Problem.** The checker inferred each kernel's capability set, but the generated
+launcher discarded it. `gpu.has` also returned the CPU's fixed answer for Vulkan, and
+Vulkan discovery exposed neither subgroup operations nor f32 denormal modes. A launch
+could therefore reach pipeline creation on a device that could not execute its kernel.
+
+**Decision.** A generated launcher passes the inferred nine-bit capability mask to
+`launch_run`, which compares it with the opened device before either backend executes.
+The CPU advertises its implemented integer, atomic, subgroup and denormal-preserving
+surface. Vulkan chains subgroup and float-control records from
+`vkGetPhysicalDeviceProperties2`, combines those results with feature discovery, and
+uses that one mask for `DeviceInfo.capabilities`, `gpu.has` and launch refusal. Tests
+enumerate only devices that advertise every capability their kernel needs.
+
+**Evidence.** `gpu_cpu` checks the CPU descriptor and `gpu.has`, then proves an `ftz`
+kernel is refused before it writes. On Windows, discovery distinguishes an Intel Iris
+Xe mask with f32 denormal controls from an RTX 3080 mask without them;
+`gpu_subgroup_identity`, `gpu_vulkan_float` and `gpu_vulkan_types` each run on the
+compatible adapter, while `gpu_vulkan_sync`, `gpu_vulkan_loop` and raw saxpy still run
+on both. The saxpy example selects a compatible Vulkan device and matches the CPU
+checksum. WSL runs subgroup and integer kernels on its advertised-capability device
+and correctly leaves the denormal-preserving float kernel on the CPU. The complete
+Windows self-host suite passes.

@@ -7227,12 +7227,15 @@ const MAX_DEVICES: usize = 16usize
 const MAX_QUEUES: usize = 64usize
 const MAX_AXIS: usize = 4294967295usize
 const SUBGROUP_PC: usize = 1073741824usize
+const CPU_CAPABILITIES: usize = 375usize
 const MAX_IMAGE_SIDE: u32 = 16384u32
 const DONE: usize = 4294967295usize
 const FAULTED: usize = 4294967294usize
 const MAX_SORT: usize = 16777216usize
 const MAX_HEAD: usize = 256usize
 
+fn capability_bit(capability: Cap) -> usize
+fn capability_list(a: *mem.Arena, bits: usize) -> ([]const Cap, err)
 fn cpu_capabilities(a: *mem.Arena) -> ([]const Cap, err)
 fn cpu_info(a: *mem.Arena) -> (DeviceInfo, err)
 fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo, err)
@@ -7293,12 +7296,12 @@ fn write_decimal(out: []u8, at: usize, v: usize) -> usize
 fn write_text(out: []u8, at: usize, text: str) -> usize
 fn write_id(out: []u8, at0: usize, group: usize, local: usize) -> usize
 fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local: usize, other_at: usize)
-fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(ctx: *void, frame: *u8, workgroup: *u8), ctx: *void, module: str, entry: str, layout: str) -> err
+fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(opaque: *void, frame: *u8, workgroup: *u8), ctx: *void, requirements: usize, module: str, entry: str, layout: str) -> err
 fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, ctx: *void, module: str, entry: str, layout: str) -> err
 fn device_pipeline(device: *DeviceState, module: str, entry: str) -> (vulkan.Pipeline, err)
 fn hex_bytes(a: *mem.Arena, digits: str) -> ([]u8, err)
 fn hex_digit(digit: u8) -> usize
-fn vulkan_info(physical: vulkan.Physical, index: u32) -> DeviceInfo
+fn vulkan_info(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (DeviceInfo, err)
 fn open_vulkan(a: *mem.Arena, index: u32) -> (*Device, err)
 fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err)
 fn device_slice[T: type](state: *QueueState, buf: Buf[T]) -> ([]T, err)
@@ -7356,7 +7359,10 @@ mapped host memory, so `upload`, `write` and `download` are copies. `gpu.launch`
 `launch_run` the kernel's SPIR-V, as hex digits from its module's `K$spirv` companion,
 its entry point and a character per parameter; a launch on a Vulkan device lays out
 D1610's argument block, makes the kernel's pipeline once per device, dispatches and
-waits. A kernel the SPIR-V emitter cannot write yet has no module there, and its Vulkan
+waits. The generated launcher also carries the checker's inferred capability mask;
+`launch_run` compares it with the selected device before dispatch and answers
+`Unsupported` when any required capability is absent. A kernel the SPIR-V emitter
+cannot write yet has no module there, and its Vulkan
 launch answers `Unsupported`; the CPU device still runs it.
 
 The landed device-only intrinsics are `gid`, `lid`, `wgid`, `sid`, `barrier`,
@@ -7373,7 +7379,7 @@ error Unsupported
 error OutOfMemory
 error Failed
 
-type Physical = struct { handle: usize, name: str, device_type: u32, vendor: u32, device: u32, api_version: u32, memory_bytes: u64, caps: usize, floor: bool, compute_family: u32, uuid: [16]u8 }
+type Physical = struct { handle: usize, name: str, device_type: u32, vendor: u32, device: u32, api_version: u32, memory_bytes: u64, caps: usize, subgroup_size: u32, floor: bool, compute_family: u32, uuid: [16]u8 }
 type Context = struct { physical: usize, device: usize, queue: usize, family: u32, memory_type: u32 }
 type Buffer = struct { handle: usize, memory: usize, address: u64, bytes: []u8 }
 type Pipeline = struct { module: usize, layout: usize, pipeline: usize }
@@ -7393,7 +7399,9 @@ fn dispatch(a: *mem.Arena, context: Context, made: Pipeline, block: u64, x: u32,
 The Vulkan compute runtime `e.gpu` stands on (D1610, D1611): the loader opened at run time
 through `os.dlopen` and every entry point through `os.dlsym`, so a program that never opens
 a `.Vulkan` device needs none installed, and none is linked. Vulkan's structures cross as
-byte records at their C offsets for x64. A buffer is host-visible, host-coherent memory,
+byte records at their C offsets for x64. Discovery chains subgroup and float-control
+properties onto `VkPhysicalDeviceProperties2`; `caps` records the supported integer,
+float, atomic, subgroup and f32 denormal modes. A buffer is host-visible, host-coherent memory,
 mapped for its life, with its device address; a pipeline has one eight-byte push constant,
 the argument block's address; `dispatch` records, submits and waits for the queue to go
 idle. Its helpers (`record`, `put32`, `put64`, `get32`, `get64`, `put_pointer`,
