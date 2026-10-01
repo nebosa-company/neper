@@ -13741,6 +13741,38 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if inlined_marks_error != ok { ret inlined_marks_error }
         builder.inlined_marks = inlined_marks
         builder.has_oracle = false
+        if !release_build {
+            let (needs_helper_oracle, needs_error) = lower.barrier_helper_present(&checker, &loaded)
+            if needs_error != ok { ret needs_error }
+            if needs_helper_oracle {
+                try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize, loaded.total_bytes)
+                oracle.cpu_level = early_builder.cpu_level
+                let (helper_entries, helper_entries_error) = mem.alloc[nir.InlineEntry](a, sized(4096usize, loaded.total_bytes, 128usize))
+                if helper_entries_error != ok { ret helper_entries_error }
+                var helper_entry_count = 0usize
+                let helper_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, helper_entries, &helper_entry_count)
+                if helper_error != ok {
+                    try print_lower_diagnostic(&report, &loaded, &checker, &oracle, helper_error)
+                    try finish_report(&report)
+                    os.exit(1i32)
+                    ret ok
+                }
+                builder.oracle = &oracle
+                builder.oracle_signatures = &oracle_signatures
+                builder.has_oracle = true
+                builder.inline_entries = helper_entries
+                builder.inline_entry_count = helper_entry_count
+                var worker_at = 0usize
+                while worker_at < crew.count {
+                    crew.workers[worker_at].builder.has_oracle = true
+                    crew.workers[worker_at].builder.oracle = &oracle
+                    crew.workers[worker_at].builder.oracle_signatures = &oracle_signatures
+                    crew.workers[worker_at].builder.inline_entries = helper_entries
+                    crew.workers[worker_at].builder.inline_entry_count = helper_entry_count
+                    worker_at += 1usize
+                }
+            }
+        }
         if release_build && with_crew {
             // The two oracles on the crew (D326): the first was built with the bodies,
             // the second is built now against it, worker by worker.

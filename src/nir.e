@@ -395,6 +395,9 @@ type Builder = struct {
     // is hoisted into the entry block before verification, so it dominates every
     // barrier resume. Multiword allocations are sixteen-aligned.
     frame_mode: bool,
+    // Device-only helpers keep their locals in Stack slots so copying one into
+    // a kernel can turn those slots into invocation-frame addresses.
+    frame_locals: bool,
     // A device build (D1610): a kernel lowers as a plain function, with no frame, for the
     // SPIR-V emitter to read.
     spirv: bool,

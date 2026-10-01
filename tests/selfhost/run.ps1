@@ -3271,6 +3271,15 @@ $gpuBarrierWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gpuBarrierWritten -ne 'executable written') { throw 'gpu_barrier emission failed' }
 $gpuBarrierOutput = & $gpuBarrierPath
 if ($LASTEXITCODE -ne 0 -or $gpuBarrierOutput -ne 'gpu barrier ok') { throw "a kernel with barriers answered wrongly: exit $LASTEXITCODE" }
+foreach ($mode in @('debug', 'release')) {
+    $gpuHelperPath = Join-Path $testBuild "gpu-barrier-helper-$mode.exe"
+    $gpuHelperArgs = @('emit-executable', (Join-Path $PSScriptRoot 'fixtures\link\gpu_barrier_helper\src\main.e'), $repo, 'x64', 'windows', $gpuHelperPath)
+    if ($mode -eq 'release') { $gpuHelperArgs += '--release' }
+    $gpuHelperWritten = & $compiler @gpuHelperArgs
+    if ($LASTEXITCODE -ne 0 -or $gpuHelperWritten -ne 'executable written') { throw "gpu_barrier_helper $mode emission failed" }
+    $gpuHelperOutput = & $gpuHelperPath
+    if ($LASTEXITCODE -ne 0 -or $gpuHelperOutput -ne 'gpu barrier helper ok') { throw "a $mode barrier helper answered wrongly: exit $LASTEXITCODE" }
+}
 $gpuFrameManyPath = Join-Path $testBuild 'gpu-frame-many-selfhost.exe'
 $gpuFrameManyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_frame_many\src\main.e') $repo 'x64' 'windows' $gpuFrameManyPath
 if ($LASTEXITCODE -ne 0 -or $gpuFrameManyWritten -ne 'executable written') { throw 'gpu_frame_many emission failed' }
@@ -3289,7 +3298,7 @@ foreach ($variant in @('while', 'for')) {
     if ($LASTEXITCODE -ne 134 -or ($gpuOccurrenceOutput -join "`n") -notmatch 'reached barrier 1 \(different loop occurrence\)') { throw "a $variant-loop barrier occurrence did not trap: exit $LASTEXITCODE, $($gpuOccurrenceOutput -join "`n")" }
 }
 $gpuOutside = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_barrier_outside\src\main.e') $repo 'x64' 'windows' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($gpuOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-GPU-9999\]: `gpu\.barrier\(\)` is written outside a kernel') { throw "a barrier outside a kernel was not refused: $($gpuOutside -join "`n")" }
+if ($LASTEXITCODE -ne 1 -or ($gpuOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-GPU-9999\]: `gpu\.barrier\(\)` is written outside device code') { throw "a barrier in main was not refused: $($gpuOutside -join "`n")" }
 # `shared var` on the CPU backend (D781): the spec's block sum through workgroup memory
 # over three workgroups, a struct-typed shared var, the 0xCD fill before the publishing
 # barrier; a shared var outside a kernel and one with an initialiser are refused.

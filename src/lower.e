@@ -16,6 +16,7 @@ use spirv
 use syntax
 
 error FunctionNotFound
+error HelperInlineMissing
 
 type Binding = struct {
     name: str,
@@ -126,7 +127,7 @@ fn bind_value(c: *check.Checker, g: *graph.Graph, module_index: usize, token: le
         stored_value = stack
         address = true
     } else {
-    if (mutable || builder.frame_mode) && !address {
+    if (mutable || builder.frame_mode || builder.frame_locals) && !address {
         let (info, info_error) = layout.type_info(c, ty)
         if info_error != ok { ret info_error }
         let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, ty, true, 0usize, token)
@@ -2254,6 +2255,55 @@ fn find_inline_entry(builder: *nir.Builder, module_index: usize, name: str, inst
     ret (0usize, false)
 }
 
+fn node_has_gpu_barrier(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> bool {
+    let node = tree.nodes[node_index]
+    if node.kind == .CallExpr {
+        let (receiver_index, has_receiver) = check.first_node_child(tree, node)
+        if has_receiver && tree.nodes[receiver_index].kind == .FieldExpr {
+            let (target_module, member, found) = check.qualified_member(c, g, tree, module_index, tree.nodes[receiver_index])
+            if found && check.same(g.modules[target_module].name, "e.gpu") && check.same(member, "barrier") { ret true }
+        }
+    }
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) && node_has_gpu_barrier(c, g, tree, module_index, parse.child_index_at(tree, at)) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn helper_has_barrier(c: *check.Checker, g: *graph.Graph, function: check.Function) -> (bool, err) {
+    if function.source_end <= function.source_start || function.module_index >= g.count { ret (false, ok) }
+    let (_, parse_error) = check.interp_module(c, g, function.module_index)
+    if parse_error != ok { ret (false, parse_error) }
+    let saved_tokens = c.tokens
+    let saved_count = c.token_count
+    c.tokens = c.interp_tokens[function.module_index]
+    c.token_count = c.interp_token_counts[function.module_index]
+    let tree = &c.interp_trees[function.module_index]
+    let (declaration, found) = check.declaration_at(c, tree, function.source_start)
+    var answer = false
+    if found { answer = node_has_gpu_barrier(c, g, tree, function.module_index, declaration) }
+    c.tokens = saved_tokens
+    c.token_count = saved_count
+    ret (answer, ok)
+}
+
+fn barrier_helper_present(c: *check.Checker, g: *graph.Graph) -> (bool, err) {
+    var at = 0usize
+    while at < c.function_count {
+        let function = c.functions[at]
+        if !function.gpu && check.device_only(c, g, at) {
+            let (present, present_error) = helper_has_barrier(c, g, function)
+            if present_error != ok { ret (false, present_error) }
+            if present { ret (true, ok) }
+        }
+        at += 1usize
+    }
+    ret (false, ok)
+}
+
 // The oracle: every non-generic function of every module whose source is short is
 // lowered into a builder of its own before the program is, and the ones that came out
 // at the cap or under, took no hidden return slot and return at most one value are
@@ -2303,17 +2353,24 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .FnDecl && usize(node.token_end) - usize(node.token_start) <= oracle_candidate_tokens() {
+        if node.top_level && node.kind == .FnDecl {
             let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
             if name_error != ok { ret name_error }
             let (function_index, found) = check.find_function(c, module_index, name)
             if found {
                 let function = c.functions[function_index]
+                var barrier_helper = false
+                if check.device_only(c, g, function_index) {
+                    let (has_barrier, barrier_error) = helper_has_barrier(c, g, function)
+                    if barrier_error != ok { ret barrier_error }
+                    barrier_helper = has_barrier
+                }
                 // The second oracle (D212) is built against the first, and inlining into a
                 // body only lengthens it, so a body the first oracle rejected stays
                 // rejected: the second visits the first's entries alone (D310). The
                 // entries were recorded in this same walk order, so a cursor finds them.
-                var wanted = true
+                var wanted = usize(node.token_end) - usize(node.token_start) <= oracle_candidate_tokens() || barrier_helper
+                if !oracle.release { wanted = barrier_helper }
                 if oracle.has_oracle {
                     wanted = false
                     if entry_cursor < oracle.inline_entry_count {
@@ -2330,7 +2387,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     if check.same(name, "main") { explain_inline(oracle, g, module_index, name, "not a candidate: the program root") }
                     if function.return_count > 1usize { explain_inline(oracle, g, module_index, name, "not a candidate: more than one result") }
                 }
-                if wanted && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
+                if wanted && !function.gpu && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
                     // A result that comes back through a slot is decided before any lowering.
                     var hidden = false
                     if function.return_count == 1usize {
@@ -2350,6 +2407,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     let local_checkpoint = c.local_count
                     oracle.limit_base = oracle.instruction_count
                     oracle.instruction_limit = inline_cap(oracle) + 1usize
+                    if barrier_helper { oracle.instruction_limit = 0usize }
                     let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, oracle_defers)
                     oracle.instruction_limit = 0usize
                     // The lowering arms the checker's failure position at every statement it
@@ -2380,7 +2438,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     if oracle.explain {
                         if calls_instance { explain_inline(oracle, g, module_index, name, "rejected: it calls a generic instance") } else { explain_inline(oracle, g, module_index, name, "inlinable: at or under the cap") }
                     }
-                    if lowered.instruction_count <= inline_cap(oracle) && !calls_instance {
+                    if (lowered.instruction_count <= inline_cap(oracle) || barrier_helper) && !calls_instance {
                         let entry_at = *entry_count
                         if entry_at == entries.len { ret check.Capacity }
                         var entry: nir.InlineEntry = zero
@@ -2635,11 +2693,20 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     builder.current_path = callee.path
     let first_block = builder.block_count
     var block_at = 0usize
+    var cuts = 0usize
     while block_at < callee.block_count {
-        block_map[block_at] = first_block + block_at
+        block_map[block_at] = first_block + block_at + cuts
+        if builder.frame_mode {
+            let source_block = oracle.blocks[callee.first_block + block_at]
+            var source_at = source_block.first_instruction
+            while source_at < source_block.first_instruction + source_block.instruction_count {
+                if oracle.instructions[source_at].opcode == .Barrier { cuts += 1usize }
+                source_at += 1usize
+            }
+        }
         block_at += 1usize
     }
-    let continuation = first_block + callee.block_count
+    let continuation = first_block + callee.block_count + cuts
     let (entry_branch, entry_branch_error) = emit_branch(builder, token)
     if entry_branch_error != ok { ret entry_branch_error }
     try nir.set_branch_targets(builder, entry_branch, first_block, 0usize)
@@ -2660,6 +2727,9 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                 if instruction.immediate >= argument_count { ret check.ArgumentCount }
                 value_map[instruction.result] = arguments[instruction.immediate]
             } else {
+                if instruction.opcode == .Barrier && builder.frame_mode {
+                    try emit_kernel_barrier(builder, call.function.module_index, nir.site_token(instruction.site))
+                } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {
                         let returned = value_map[oracle.operands[instruction.first_operand]]
@@ -2730,6 +2800,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                         try nir.set_branch_targets(builder, copied, block_map[instruction.target - callee.first_block], target2)
                     }
                     if instruction.has_result { value_map[instruction.result] = result }
+                }
                 }
             }
             instruction_at += 1usize
@@ -3283,6 +3354,13 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
             let (entry_index, inlinable) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
             if inlinable { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
         }
+    }
+    // A barrier helper cannot fall back to a native call: it must be copied into
+    // the kernel so its cut stores that invocation's pc and returns to the scheduler.
+    if builder.frame_mode && !call.indirect && !call.function.intrinsic {
+        let (has_barrier, barrier_error) = helper_has_barrier(c, g, call.function)
+        if barrier_error != ok { ret barrier_error }
+        if has_barrier { ret HelperInlineMissing }
     }
     // A struct or union a call into C returns in registers (D1675) still reaches the
     // caller through a slot, stored there after the call instead of by the callee.
@@ -7493,6 +7571,8 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     // (D1677) And a device-only helper's (D1589), which may call another: the flag held
     // whatever body this checker checked last, so the call was refused on some schedules.
     c.body_device_only = check.device_only(c, g, function_index)
+    c.body_is_main = check.same(function.name, "main")
+    builder.frame_locals = c.body_device_only && !function.gpu
     // The checker's local table still holds the last body it checked -- the last
     // generic instance, checked after every module's bodies -- and a name that is not
     // a local of this body but was one of that instance's would answer from it (D872):
@@ -7573,7 +7653,20 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             if parameter_error != ok { ret parameter_error }
             result = own_result
         }
-        try add_binding(bindings, &binding_count, Binding { name: parameter.name, ty: parameter.ty, value: result, address: aggregate_value(c, parameter.ty) })
+        var parameter_address = aggregate_value(c, parameter.ty)
+        if builder.frame_locals && !parameter_address {
+            let (info, info_error) = layout.type_info(c, parameter.ty)
+            if info_error != ok { ret info_error }
+            let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, parameter.ty, true, 0usize, c.tokens[usize(node.token_start)])
+            if slot_error != ok { ret slot_error }
+            let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, parameter.ty, false, info.size, c.tokens[usize(node.token_start)])
+            if store_error != ok { ret store_error }
+            try nir.add_operand(builder, store_instruction, slot)
+            try nir.add_operand(builder, store_instruction, result)
+            result = slot
+            parameter_address = true
+        }
+        try add_binding(bindings, &binding_count, Binding { name: parameter.name, ty: parameter.ty, value: result, address: parameter_address })
         if !function.gpu { nir.add_debug_local(builder, result, parameter.name, parameter.ty, parameter_at + 1usize, aggregate_value(c, parameter.ty)) }
         try check.add_local(c, parameter.name, parameter.ty, false)
         parameter_at += 1usize
@@ -7632,6 +7725,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     }
     let end_error = nir.end_function(builder)
     if end_error != ok { ret end_error }
+    builder.frame_locals = false
     c.local_count = local_checkpoint
     if frame_kernel {
         try emit_kernel_size(c, g, module_index, function, "$frame", builder.frame_offset, builder, signatures, c.tokens[usize(node.token_start)])
@@ -7993,7 +8087,7 @@ fn emit_kernel_bounds(builder: *nir.Builder, module_index: usize, index: usize, 
 // `gpu.barrier()`: the cut. The frame's `pc` becomes this barrier's number, the
 // step returns, and the code after the barrier begins a block the dispatch resumes.
 fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, token: lex.Token) -> err {
-    if builder.spirv && !subgroup {
+    if (builder.spirv || builder.frame_locals) && !subgroup {
         let (instruction, ignored, emit_error) = nir.emit(builder, .Barrier, zero, false, 0usize, token)
         ret emit_error
     }
