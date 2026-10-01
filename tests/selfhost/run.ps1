@@ -3301,6 +3301,24 @@ foreach ($mode in @('debug', 'release')) {
     $gpuLargeHelperOutput = & $gpuLargeHelperPath
     if ($LASTEXITCODE -ne 0 -or $gpuLargeHelperOutput -ne 'gpu barrier large helper ok') { throw "a $mode large barrier helper answered wrongly: exit $LASTEXITCODE" }
 }
+foreach ($mode in @('debug', 'release')) {
+    $gpuChainPath = Join-Path $testBuild "gpu-barrier-chain-$mode.exe"
+    $gpuChainArgs = @('emit-executable', (Join-Path $PSScriptRoot 'fixtures\link\gpu_barrier_chain\src\main.e'), $repo, 'x64', 'windows', $gpuChainPath)
+    if ($mode -eq 'release') { $gpuChainArgs += '--release' }
+    $gpuChainWritten = & $compiler @gpuChainArgs
+    if ($LASTEXITCODE -ne 0 -or $gpuChainWritten -ne 'executable written') { throw "gpu_barrier_chain $mode emission failed" }
+    $gpuChainOutput = & $gpuChainPath
+    if ($LASTEXITCODE -ne 0 -or $gpuChainOutput -ne 'gpu barrier chain ok') { throw "a $mode barrier helper chain answered wrongly: exit $LASTEXITCODE" }
+}
+foreach ($mode in @('debug', 'release')) {
+    $gpuHelperOccurrencePath = Join-Path $testBuild "gpu-barrier-helper-occurrence-$mode.exe"
+    $gpuHelperOccurrenceArgs = @('emit-executable', (Join-Path $PSScriptRoot 'fixtures\link\gpu_barrier_helper_occurrence\src\main.e'), $repo, 'x64', 'windows', $gpuHelperOccurrencePath)
+    if ($mode -eq 'release') { $gpuHelperOccurrenceArgs += '--release' }
+    $gpuHelperOccurrenceWritten = & $compiler @gpuHelperOccurrenceArgs
+    if ($LASTEXITCODE -ne 0 -or $gpuHelperOccurrenceWritten -ne 'executable written') { throw "gpu_barrier_helper_occurrence $mode emission failed" }
+    $gpuHelperOccurrenceOutput = & $gpuHelperOccurrencePath 2>&1
+    if ($LASTEXITCODE -ne 134 -or ($gpuHelperOccurrenceOutput -join "`n") -notmatch 'reached barrier 1 \(different loop occurrence\)') { throw "a $mode helper-loop mismatch did not trap: exit $LASTEXITCODE, $($gpuHelperOccurrenceOutput -join "`n")" }
+}
 $gpuFrameManyPath = Join-Path $testBuild 'gpu-frame-many-selfhost.exe'
 $gpuFrameManyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_frame_many\src\main.e') $repo 'x64' 'windows' $gpuFrameManyPath
 if ($LASTEXITCODE -ne 0 -or $gpuFrameManyWritten -ne 'executable written') { throw 'gpu_frame_many emission failed' }

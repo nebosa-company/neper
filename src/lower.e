@@ -17,6 +17,7 @@ use syntax
 
 error FunctionNotFound
 error HelperInlineMissing
+error BarrierInlineCycle
 
 type Binding = struct {
     name: str,
@@ -2290,11 +2291,11 @@ fn helper_has_barrier(c: *check.Checker, g: *graph.Graph, function: check.Functi
     ret (answer, ok)
 }
 
-fn barrier_helper_present(c: *check.Checker, g: *graph.Graph) -> (bool, err) {
+fn barrier_helper_present(c: *check.Checker, g: *graph.Graph, reachable: []bool) -> (bool, err) {
     var at = 0usize
     while at < c.function_count {
         let function = c.functions[at]
-        if !function.gpu && check.device_only(c, g, at) {
+        if at < reachable.len && reachable[at] && !function.gpu && check.device_only(c, g, at) {
             let (present, present_error) = helper_has_barrier(c, g, function)
             if present_error != ok { ret (false, present_error) }
             if present { ret (true, ok) }
@@ -2302,6 +2303,87 @@ fn barrier_helper_present(c: *check.Checker, g: *graph.Graph) -> (bool, err) {
         at += 1usize
     }
     ret (false, ok)
+}
+
+fn inline_entry_calls_marked(entries: []nir.InlineEntry, count: usize, entry: nir.InlineEntry) -> bool {
+    let oracle = entry.oracle
+    let function = oracle.functions[entry.function_index]
+    var at = function.first_instruction
+    while at < function.first_instruction + function.instruction_count {
+        let instruction = oracle.instructions[at]
+        if (instruction.opcode == .Call || instruction.opcode == .FunctionAddress) && instruction.immediate < oracle.function_ref_count {
+            let reference = oracle.function_refs[instruction.immediate]
+            var candidate = 0usize
+            while candidate < count {
+                let marked = entries[candidate]
+                if marked.mandatory && marked.module_index == reference.module_index && marked.instance == reference.instance && check.same(marked.name, reference.name) { ret true }
+                candidate += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+// ponytail: this quadratic walk is only over kernel-reached device helpers;
+// index calls if GPU programs grow enough to make oracle time measurable.
+// Only callers of an actual barrier need mandatory inlining.
+fn mark_barrier_entries(entries: []nir.InlineEntry, count: usize) -> (usize, bool) {
+    var at = 0usize
+    while at < count {
+        let entry = entries[at]
+        let oracle = entry.oracle
+        let function = oracle.functions[entry.function_index]
+        var instruction_at = function.first_instruction
+        while instruction_at < function.first_instruction + function.instruction_count {
+            if oracle.instructions[instruction_at].opcode == .Barrier { entries[at].mandatory = true }
+            instruction_at += 1usize
+        }
+        at += 1usize
+    }
+    var changed = true
+    while changed {
+        changed = false
+        at = 0usize
+        while at < count {
+            if !entries[at].mandatory && inline_entry_calls_marked(entries, count, entries[at]) {
+                entries[at].mandatory = true
+                changed = true
+            }
+            at += 1usize
+        }
+    }
+    var marked_count = 0usize
+    var pending = false
+    at = 0usize
+    while at < count {
+        if entries[at].mandatory {
+            marked_count += 1usize
+            if inline_entry_calls_marked(entries, count, entries[at]) { pending = true }
+        }
+        at += 1usize
+    }
+    ret (marked_count, pending)
+}
+
+fn max_barrier_helper_depth(builder: *nir.Builder) -> usize {
+    var maximum = 0usize
+    var entry_at = 0usize
+    while entry_at < builder.inline_entry_count {
+        let entry = builder.inline_entries[entry_at]
+        if entry.mandatory {
+            let oracle = entry.oracle
+            let function = oracle.functions[entry.function_index]
+            var at = function.first_instruction
+            while at < function.first_instruction + function.instruction_count {
+                let instruction = oracle.instructions[at]
+                if instruction.opcode == .Barrier && instruction.operand_count > maximum { maximum = instruction.operand_count }
+                at += 1usize
+            }
+        }
+        entry_at += 1usize
+    }
+    ret maximum
 }
 
 // The oracle: every non-generic function of every module whose source is short is
@@ -2359,8 +2441,9 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
             let (function_index, found) = check.find_function(c, module_index, name)
             if found {
                 let function = c.functions[function_index]
+                let device_helper = check.device_only(c, g, function_index)
                 var barrier_helper = false
-                if check.device_only(c, g, function_index) {
+                if device_helper && !oracle.barrier_oracle {
                     let (has_barrier, barrier_error) = helper_has_barrier(c, g, function)
                     if barrier_error != ok { ret barrier_error }
                     barrier_helper = has_barrier
@@ -2371,12 +2454,14 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                 // entries were recorded in this same walk order, so a cursor finds them.
                 var wanted = usize(node.token_end) - usize(node.token_start) <= oracle_candidate_tokens() || barrier_helper
                 if !oracle.release { wanted = barrier_helper }
+                if oracle.barrier_oracle { wanted = device_helper && function_index < oracle.barrier_reachable.len && oracle.barrier_reachable[function_index] }
                 if oracle.has_oracle {
                     wanted = false
                     if entry_cursor < oracle.inline_entry_count {
                         let previous = oracle.inline_entries[entry_cursor]
                         if previous.module_index == function.owner_module_index && previous.instance == function.instance_id && check.same(previous.name, name) {
                             wanted = true
+                            if oracle.barrier_oracle { wanted = previous.mandatory }
                             entry_cursor += 1usize
                         }
                     }
@@ -2407,7 +2492,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     let local_checkpoint = c.local_count
                     oracle.limit_base = oracle.instruction_count
                     oracle.instruction_limit = inline_cap(oracle) + 1usize
-                    if barrier_helper { oracle.instruction_limit = 0usize }
+                    if barrier_helper || oracle.barrier_oracle { oracle.instruction_limit = 0usize }
                     let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, oracle_defers)
                     oracle.instruction_limit = 0usize
                     // The lowering arms the checker's failure position at every statement it
@@ -2438,7 +2523,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     if oracle.explain {
                         if calls_instance { explain_inline(oracle, g, module_index, name, "rejected: it calls a generic instance") } else { explain_inline(oracle, g, module_index, name, "inlinable: at or under the cap") }
                     }
-                    if (lowered.instruction_count <= inline_cap(oracle) || barrier_helper) && !calls_instance {
+                    if (lowered.instruction_count <= inline_cap(oracle) || barrier_helper || oracle.barrier_oracle) && !calls_instance {
                         let entry_at = *entry_count
                         if entry_at == entries.len { ret check.Capacity }
                         var entry: nir.InlineEntry = zero
@@ -2745,8 +2830,36 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                 if instruction.immediate >= argument_count { ret check.ArgumentCount }
                 value_map[instruction.result] = arguments[instruction.immediate]
             } else {
-                if instruction.opcode == .Barrier && builder.frame_mode {
-                    try emit_kernel_barrier(builder, call.function.module_index, nir.site_token(instruction.site))
+                if instruction.opcode == .Barrier && (builder.frame_mode || builder.frame_locals) {
+                    var no_slots: [1]usize = zero
+                    var mapped_slots = no_slots[0usize..0usize]
+                    if instruction.operand_count != 0usize {
+                        let (slots, slots_error) = mem.alloc[usize](c.arena, instruction.operand_count)
+                        if slots_error != ok { ret slots_error }
+                        mapped_slots = slots
+                        var slot_at = 0usize
+                        while slot_at < instruction.operand_count {
+                            mapped_slots[slot_at] = value_map[oracle.operands[instruction.first_operand + slot_at]]
+                            slot_at += 1usize
+                        }
+                    }
+                    if builder.frame_mode {
+                        try emit_kernel_barrier_slots(builder, call.function.module_index, mapped_slots, nir.site_token(instruction.site))
+                    } else {
+                        let (copied, ignored, barrier_error) = nir.emit_at(builder, .Barrier, zero, false, 0usize, instruction.site)
+                        if barrier_error != ok { ret barrier_error }
+                        builder.instructions[copied].inline_origin = copied_origin
+                        var slot_at = 0usize
+                        while slot_at < builder.loop_depth {
+                            try nir.add_operand(builder, copied, builder.loop_slots[slot_at])
+                            slot_at += 1usize
+                        }
+                        slot_at = 0usize
+                        while slot_at < mapped_slots.len {
+                            try nir.add_operand(builder, copied, mapped_slots[slot_at])
+                            slot_at += 1usize
+                        }
+                    }
                 } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {
@@ -3370,7 +3483,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
         }
         if scalar_result {
             let (entry_index, inlinable) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
-            if inlinable { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
+            if inlinable && (!builder.inline_only_mandatory || builder.inline_entries[entry_index].mandatory) { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
         }
     }
     // A barrier helper cannot fall back to a native call: it must be copied into
@@ -5900,7 +6013,7 @@ fn proof_offset_form(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // A loop's ordinal starts at zero on entry and advances for every body visit,
 // including visits that skip a barrier. Nested ordinals stay in separate slots.
 fn kernel_loop_open(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
-    if !builder.frame_mode { ret ok }
+    if !builder.frame_mode && !builder.frame_locals { ret ok }
     if builder.loop_depth >= builder.loop_slots.len { ret check.Capacity }
     let usize_type = check.make_type(.Integer, "usize", module_index)
     let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, usize_type, true, 0usize, token)
@@ -5917,7 +6030,7 @@ fn kernel_loop_open(builder: *nir.Builder, module_index: usize, token: lex.Token
 }
 
 fn kernel_loop_tick(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
-    if !builder.frame_mode { ret ok }
+    if !builder.frame_mode && !builder.frame_locals { ret ok }
     let usize_type = check.make_type(.Integer, "usize", module_index)
     let slot = builder.loop_slots[builder.loop_depth - 1usize]
     let (load_instruction, previous, load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
@@ -5936,7 +6049,7 @@ fn kernel_loop_tick(builder: *nir.Builder, module_index: usize, token: lex.Token
 }
 
 fn kernel_loop_close(builder: *nir.Builder) {
-    if builder.frame_mode { builder.loop_depth = builder.loop_depth - 1usize }
+    if builder.frame_mode || builder.frame_locals { builder.loop_depth = builder.loop_depth - 1usize }
 }
 
 fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
@@ -6995,7 +7108,7 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     // Keep loop-invariant values in the invocation frame, as the counter is.
     var limit_slot = 0usize
     var data_slot = 0usize
-    if builder.frame_mode {
+    if builder.frame_mode || builder.frame_locals {
         let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, counter_type, true, 0usize, token)
         if slot_error != ok { ret slot_error }
         let (limit_info, limit_info_error) = layout.type_info(c, counter_type)
@@ -7036,7 +7149,7 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     try nir.add_operand(builder, condition_load_instruction, counter_stack)
     var condition_limit = limit
     var condition_data = data
-    if builder.frame_mode {
+    if builder.frame_mode || builder.frame_locals {
         let (limit_load, loaded_limit, limit_error) = nir.emit(builder, .Load, counter_type, true, counter_info.size, token)
         if limit_error != ok { ret limit_error }
         try nir.add_operand(builder, limit_load, limit_slot)
@@ -7591,6 +7704,13 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     c.body_device_only = check.device_only(c, g, function_index)
     c.body_is_main = check.same(function.name, "main")
     builder.frame_locals = c.body_device_only && !function.gpu
+    if builder.frame_locals {
+        let helper_depth = kernel_loop_nesting(tree, node, 0usize)
+        let (helper_slots, helper_slots_error) = mem.alloc[usize](c.arena, helper_depth)
+        if helper_slots_error != ok { ret helper_slots_error }
+        builder.loop_slots = helper_slots
+        builder.loop_depth = 0usize
+    }
     // The checker's local table still holds the last body it checked -- the last
     // generic instance, checked after every module's bodies -- and a name that is not
     // a local of this body but was one of that instance's would answer from it (D872):
@@ -7644,7 +7764,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         hidden_parameters = 2usize
         let (resume_blocks, resume_blocks_error) = mem.alloc[usize](c.arena, 64usize)
         if resume_blocks_error != ok { ret resume_blocks_error }
-        let loop_depth = kernel_loop_nesting(tree, node, 0usize)
+        let loop_depth = kernel_loop_nesting(tree, node, 0usize) + max_barrier_helper_depth(builder)
         let (loop_slots, loop_slots_error) = mem.alloc[usize](c.arena, loop_depth)
         if loop_slots_error != ok { ret loop_slots_error }
         try nir.begin_frame(builder, frame_value, resume_blocks, loop_slots)
@@ -8022,16 +8142,20 @@ fn emit_kernel_frame_store(builder: *nir.Builder, module_index: usize, offset: u
     ret nir.add_operand(builder, store_instruction, value)
 }
 
-fn emit_kernel_loop_signature(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
+fn emit_kernel_loop_signature(builder: *nir.Builder, module_index: usize, extra_slots: []usize, token: lex.Token) -> err {
+    let total_depth = builder.loop_depth + extra_slots.len
+    if total_depth > builder.loop_slots.len { ret check.Capacity }
     let usize_type = check.make_type(.Integer, "usize", module_index)
-    let (depth_instruction, depth, depth_error) = nir.emit(builder, .ConstInteger, usize_type, true, builder.loop_depth, token)
+    let (depth_instruction, depth, depth_error) = nir.emit(builder, .ConstInteger, usize_type, true, total_depth, token)
     if depth_error != ok { ret depth_error }
     try emit_kernel_frame_store(builder, module_index, 8usize, depth, token)
     var at = 0usize
-    while at < builder.loop_depth {
+    while at < total_depth {
+        var slot = 0usize
+        if at < builder.loop_depth { slot = builder.loop_slots[at] } else { slot = extra_slots[at - builder.loop_depth] }
         let (load_instruction, ordinal, load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
         if load_error != ok { ret load_error }
-        try nir.add_operand(builder, load_instruction, builder.loop_slots[at])
+        try nir.add_operand(builder, load_instruction, slot)
         try emit_kernel_frame_store(builder, module_index, 16usize + 8usize * at, ordinal, token)
         at += 1usize
     }
@@ -8104,10 +8228,23 @@ fn emit_kernel_bounds(builder: *nir.Builder, module_index: usize, index: usize, 
 
 // `gpu.barrier()`: the cut. The frame's `pc` becomes this barrier's number, the
 // step returns, and the code after the barrier begins a block the dispatch resumes.
-fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, token: lex.Token) -> err {
+fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, extra_slots: []usize, token: lex.Token) -> err {
     if (builder.spirv || builder.frame_locals) && !subgroup {
         let (instruction, ignored, emit_error) = nir.emit(builder, .Barrier, zero, false, 0usize, token)
-        ret emit_error
+        if emit_error != ok { ret emit_error }
+        if builder.frame_locals {
+            var at = 0usize
+            while at < builder.loop_depth {
+                try nir.add_operand(builder, instruction, builder.loop_slots[at])
+                at += 1usize
+            }
+            at = 0usize
+            while at < extra_slots.len {
+                try nir.add_operand(builder, instruction, extra_slots[at])
+                at += 1usize
+            }
+        }
+        ret ok
     }
     if !builder.frame_mode { ret check.Unsupported }
     if builder.kernel_barriers + 1usize >= builder.kernel_resume.len { ret check.Capacity }
@@ -8115,7 +8252,7 @@ fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, t
     let number = builder.kernel_barriers
     var pc = number
     if subgroup { pc += KERNEL_SUBGROUP_PC }
-    try emit_kernel_loop_signature(builder, module_index, token)
+    try emit_kernel_loop_signature(builder, module_index, extra_slots, token)
     try emit_kernel_pc_store(builder, module_index, pc, token)
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
     if return_error != ok { ret return_error }
@@ -8128,11 +8265,17 @@ fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, t
 }
 
 fn emit_kernel_barrier(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
-    ret emit_kernel_cut(builder, module_index, false, token)
+    var none: [1]usize = zero
+    ret emit_kernel_cut(builder, module_index, false, none[0usize..0usize], token)
+}
+
+fn emit_kernel_barrier_slots(builder: *nir.Builder, module_index: usize, slots: []usize, token: lex.Token) -> err {
+    ret emit_kernel_cut(builder, module_index, false, slots, token)
 }
 
 fn emit_kernel_subgroup(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
-    ret emit_kernel_cut(builder, module_index, true, token)
+    var none: [1]usize = zero
+    ret emit_kernel_cut(builder, module_index, true, none[0usize..0usize], token)
 }
 
 // The dispatch the entry branches to: `pc` from the frame, a comparison per barrier

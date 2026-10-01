@@ -18226,6 +18226,30 @@ fn device_walk(c: *Checker, g: *graph.Graph, function_index: usize, walk: *Devic
     ret walk_error
 }
 
+fn device_reachable_functions(c: *Checker, g: *graph.Graph, reachable: []bool) -> err {
+    if reachable.len < c.function_count { ret Capacity }
+    var at = 0usize
+    while at < reachable.len {
+        reachable[at] = false
+        at += 1usize
+    }
+    at = 0usize
+    while at < c.function_count {
+        if c.functions[at].gpu {
+            var walk: DeviceWalk = zero
+            walk.bound = 1023usize
+            try device_walk(c, g, at, &walk)
+            var visited = 0usize
+            while visited < walk.visited_count {
+                reachable[walk.visited[visited]] = true
+                visited += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn device_body(c: *Checker, g: *graph.Graph, function: Function, walk: *DeviceWalk) -> err {
     let tree = &c.interp_trees[function.module_index]
     let text = g.modules[function.module_index].text

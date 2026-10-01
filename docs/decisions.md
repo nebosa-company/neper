@@ -32394,3 +32394,22 @@ its barrier. The previous compiler refused its kernel during lowering; the
 grown-map compiler builds and runs it in debug and release on Windows and WSL,
 including a four-worker Windows release build. Consecutive self-hosted stages
 are byte-identical on both hosts. Nested helper calls are still pending.
+
+## D1754 — Inline only barrier-reachable helper chains into CPU steps
+
+**Decision.** Build a separate, uncapped oracle for kernel-reachable device
+helpers and repeatedly copy the bodies that transitively reach a barrier.
+Ordinary debug calls remain calls, and release keeps its ordinary two-pass
+inliner. A copied helper barrier carries its nested loop-iteration ordinals
+into the CPU kernel's barrier signature, so different occurrences of the same
+static barrier still trap. Unreached helpers do not enter this oracle.
+
+**Evidence.** `link/gpu_barrier_chain` passes through five helper calls,
+including nested `for` and `while` loops, a scalar return, and an unused
+recursive helper. It passes in debug and release on Windows and WSL.
+`link/gpu_barrier_helper_occurrence` traps on a helper-loop mismatch in both
+modes on both hosts. The existing barrier, direct-helper, large-helper,
+frame-many, shared and subgroup fixtures pass on Windows. Consecutive
+self-hosted compiler stages are byte-identical on both hosts. A caller
+temporary computed before a barrier-bearing expression is not yet retained
+across the CPU cut; the fixture evaluates the helper before its store address.

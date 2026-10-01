@@ -4237,6 +4237,62 @@ fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signat
     ret nir.init_signatures(signatures, signature_entries, signature_types)
 }
 
+type BarrierOracle = struct {
+    builder: *nir.Builder,
+    signatures: *nir.Signatures,
+    entries: []nir.InlineEntry,
+    count: usize,
+}
+
+// Copy just the device helpers on a path to a barrier until no such call
+// remains. Ordinary debug calls stay real calls; release keeps its usual
+// two-pass oracle separately.
+fn build_barrier_oracle(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bindings: []lower.Binding, reachable: []bool, cpu_level: usize, release: bool) -> (BarrierOracle, err) {
+    var current: BarrierOracle = zero
+    var pass = 0usize
+    while true {
+        if pass != 0usize && pass >= current.count { ret (current, lower.BarrierInlineCycle) }
+        let previous = current
+        let (builders, builder_error) = mem.alloc[nir.Builder](a, 1usize)
+        if builder_error != ok { ret (current, builder_error) }
+        var fresh_builder: nir.Builder = zero
+        builders[0usize] = fresh_builder
+        let (signature_storage, signature_error) = mem.alloc[nir.Signatures](a, 1usize)
+        if signature_error != ok { ret (current, signature_error) }
+        var fresh_signatures: nir.Signatures = zero
+        signature_storage[0usize] = fresh_signatures
+        current.builder = &builders[0usize]
+        current.signatures = &signature_storage[0usize]
+        let init_error = init_oracle_nir(a, current.builder, current.signatures, checker.parameter_count + checker.return_type_count + 1usize, loaded.total_bytes)
+        if init_error != ok { ret (current, init_error) }
+        current.builder.barrier_oracle = true
+        current.builder.barrier_reachable = reachable
+        current.builder.release = release
+        current.builder.cpu_level = cpu_level
+        if pass != 0usize {
+            current.builder.oracle = previous.builder
+            current.builder.oracle_signatures = previous.signatures
+            current.builder.has_oracle = true
+            current.builder.inline_only_mandatory = true
+            current.builder.inline_entries = previous.entries
+            current.builder.inline_entry_count = previous.count
+            let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
+            if inlined_error != ok { ret (current, inlined_error) }
+            current.builder.inlined = inlined
+        }
+        let (entries, entries_error) = mem.alloc[nir.InlineEntry](a, sized(4096usize, loaded.total_bytes, 128usize))
+        if entries_error != ok { ret (current, entries_error) }
+        current.entries = entries
+        current.count = 0usize
+        let build_error = lower.build_inline_oracle(checker, loaded, current.builder, current.signatures, bindings, entries, &current.count)
+        if build_error != ok { ret (current, build_error) }
+        let (marked, pending) = lower.mark_barrier_entries(entries, current.count)
+        if marked == 0usize { ret (current, lower.HelperInlineMissing) }
+        if !pending { ret (current, ok) }
+        pass += 1usize
+    }
+}
+
 // A generic instance's cost (D453, H06): the template's name, which instance of
 // it, its NIR instructions and the bytes its code came to, appended to the
 // builder's explanations for the flush after the lowering.
@@ -9010,6 +9066,8 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
                             if lower_error == regalloc.InvalidIR { try write_all(&message, ": the allocator refused the NIR") }
                             if lower_error == regalloc.NoRegisters { try write_all(&message, ": the allocator ran out of registers") }
                             if lower_error == lower.FunctionNotFound { try write_all(&message, ": a function was not found") }
+                            if lower_error == lower.HelperInlineMissing { try write_all(&message, ": a barrier helper has no inlinable body") }
+                            if lower_error == lower.BarrierInlineCycle { try write_all(&message, ": a barrier helper call chain is cyclic or indirect") }
                             if lower_error == codegen_x64.Unsupported { try write_all(&message, ": the selector does not support the instruction") }
                             // Anything else names itself (D872): the error value is the only
                             // evidence of which step refused the body.
@@ -13741,38 +13799,6 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if inlined_marks_error != ok { ret inlined_marks_error }
         builder.inlined_marks = inlined_marks
         builder.has_oracle = false
-        if !release_build {
-            let (needs_helper_oracle, needs_error) = lower.barrier_helper_present(&checker, &loaded)
-            if needs_error != ok { ret needs_error }
-            if needs_helper_oracle {
-                try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize, loaded.total_bytes)
-                oracle.cpu_level = early_builder.cpu_level
-                let (helper_entries, helper_entries_error) = mem.alloc[nir.InlineEntry](a, sized(4096usize, loaded.total_bytes, 128usize))
-                if helper_entries_error != ok { ret helper_entries_error }
-                var helper_entry_count = 0usize
-                let helper_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, helper_entries, &helper_entry_count)
-                if helper_error != ok {
-                    try print_lower_diagnostic(&report, &loaded, &checker, &oracle, helper_error)
-                    try finish_report(&report)
-                    os.exit(1i32)
-                    ret ok
-                }
-                builder.oracle = &oracle
-                builder.oracle_signatures = &oracle_signatures
-                builder.has_oracle = true
-                builder.inline_entries = helper_entries
-                builder.inline_entry_count = helper_entry_count
-                var worker_at = 0usize
-                while worker_at < crew.count {
-                    crew.workers[worker_at].builder.has_oracle = true
-                    crew.workers[worker_at].builder.oracle = &oracle
-                    crew.workers[worker_at].builder.oracle_signatures = &oracle_signatures
-                    crew.workers[worker_at].builder.inline_entries = helper_entries
-                    crew.workers[worker_at].builder.inline_entry_count = helper_entry_count
-                    worker_at += 1usize
-                }
-            }
-        }
         if release_build && with_crew {
             // The two oracles on the crew (D326): the first was built with the bodies,
             // the second is built now against it, worker by worker.
@@ -13847,6 +13873,53 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             builder.has_oracle = true
             builder.inline_entries = inline_entries
             builder.inline_entry_count = inline_entry_count
+        }
+        let (device_reachable, device_reachable_error) = mem.alloc[bool](a, checker.function_count)
+        if device_reachable_error != ok { ret device_reachable_error }
+        try check.device_reachable_functions(&checker, &loaded, device_reachable)
+        let (needs_barrier_oracle, needs_barrier_error) = lower.barrier_helper_present(&checker, &loaded, device_reachable)
+        if needs_barrier_error != ok { ret needs_barrier_error }
+        if needs_barrier_oracle {
+            let (barrier, barrier_error) = build_barrier_oracle(a, &checker, &loaded, bindings, device_reachable, early_builder.cpu_level, release_build)
+            if barrier_error != ok {
+                try print_lower_diagnostic(&report, &loaded, &checker, barrier.builder, barrier_error)
+                try finish_report(&report)
+                os.exit(1i32)
+                ret ok
+            }
+            var marked_count = 0usize
+            var entry_at = 0usize
+            while entry_at < barrier.count {
+                if barrier.entries[entry_at].mandatory { marked_count += 1usize }
+                entry_at += 1usize
+            }
+            let (combined, combined_error) = mem.alloc[nir.InlineEntry](a, marked_count + builder.inline_entry_count)
+            if combined_error != ok { ret combined_error }
+            var at = 0usize
+            entry_at = 0usize
+            while entry_at < barrier.count {
+                if barrier.entries[entry_at].mandatory {
+                    combined[at] = barrier.entries[entry_at]
+                    at += 1usize
+                }
+                entry_at += 1usize
+            }
+            entry_at = 0usize
+            while entry_at < builder.inline_entry_count {
+                combined[at] = builder.inline_entries[entry_at]
+                at += 1usize
+                entry_at += 1usize
+            }
+            builder.has_oracle = true
+            builder.inline_entries = combined
+            builder.inline_entry_count = at
+            var worker_at = 0usize
+            while worker_at < crew.count {
+                crew.workers[worker_at].builder.has_oracle = true
+                crew.workers[worker_at].builder.inline_entries = combined
+                crew.workers[worker_at].builder.inline_entry_count = at
+                worker_at += 1usize
+            }
         }
         var artifact_mode: em.BuildMode = .Debug
         if release_build { artifact_mode = .Release }

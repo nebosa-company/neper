@@ -296,6 +296,8 @@ type InlineEntry = struct {
     // worker's builder carries the types over from that checker.
     oracle: *Builder,
     checker: *check.Checker,
+    // This body reaches a workgroup barrier and must be copied into a CPU step.
+    mandatory: bool,
 }
 
 // A callee inlined into a module: what section 12 calls a body edge, recorded so the
@@ -501,6 +503,11 @@ type Builder = struct {
     oracle: *Builder,
     oracle_signatures: *Signatures,
     has_oracle: bool,
+    // The extra GPU pass copies only barrier-reachable helpers; ordinary debug
+    // calls keep their frames, and release's normal two-pass oracle is unchanged.
+    barrier_oracle: bool,
+    barrier_reachable: []bool,
+    inline_only_mandatory: bool,
     inline_entries: []InlineEntry,
     inline_entry_count: usize,
     inlined: []InlinedRef,

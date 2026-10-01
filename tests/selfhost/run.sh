@@ -2970,6 +2970,29 @@ for mode in debug release; do
     gpu_large_helper_output=$("$test_build/gpu-barrier-large-helper-$mode")
     [ "$gpu_large_helper_output" = 'gpu barrier large helper ok' ]
 done
+for mode in debug release; do
+    if [ "$mode" = release ]; then
+        gpu_chain_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_chain/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-chain-$mode" --release)
+    else
+        gpu_chain_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_chain/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-chain-$mode")
+    fi
+    [ "$gpu_chain_written" = 'executable written' ]
+    chmod +x "$test_build/gpu-barrier-chain-$mode"
+    gpu_chain_output=$("$test_build/gpu-barrier-chain-$mode")
+    [ "$gpu_chain_output" = 'gpu barrier chain ok' ]
+done
+for mode in debug release; do
+    if [ "$mode" = release ]; then
+        gpu_helper_occurrence_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_helper_occurrence/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-helper-occurrence-$mode" --release)
+    else
+        gpu_helper_occurrence_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_helper_occurrence/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-helper-occurrence-$mode")
+    fi
+    [ "$gpu_helper_occurrence_written" = 'executable written' ]
+    chmod +x "$test_build/gpu-barrier-helper-occurrence-$mode"
+    gpu_helper_occurrence_status=0
+    gpu_helper_occurrence_output=$("$test_build/gpu-barrier-helper-occurrence-$mode" 2>&1) || gpu_helper_occurrence_status=$?
+    [ "$gpu_helper_occurrence_status" = 134 ] && printf '%s\n' "$gpu_helper_occurrence_output" | grep -Fq 'reached barrier 1 (different loop occurrence)' || { printf '%s\n' "a $mode helper-loop mismatch did not trap: $gpu_helper_occurrence_output" >&2; exit 1; }
+done
 gpu_frame_many_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_frame_many/src/main.e" "$repo" x64 linux "$test_build/gpu-frame-many-selfhost")
 [ "$gpu_frame_many_written" = 'executable written' ]
 chmod +x "$test_build/gpu-frame-many-selfhost"
