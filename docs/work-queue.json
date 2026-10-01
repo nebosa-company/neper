@@ -277,6 +277,149 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Chit-chat uses the Padme ceiling in `protocol/lib/src/crypto/crypto_session.dart` to collapse encrypted frame lengths into logarithmic size classes while keeping padding overhead bounded. Neper has privacy and framing code but no reusable Padme size-bucket helper. Keep the candidate to a pure `padme_ceil` operation with boundary tests; do not import chit-chat's encrypted-frame format or cover-traffic policy. The catalog entry is 2254."
+    },
+    {
+      "id": "L005",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 103,
+      "title": "Survival-analysis extensions in e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Celvyx implements Nelson-Aalen cumulative hazard, Aalen-Johansen competing-risks cumulative incidence, restricted mean survival time, and weighted log-rank tests in `src/lib/core/medical/nelson_aalen.dart`, `competing_risks.dart`, `rmst.dart`, and `weighted_logrank.dart`. Neper has general distributions and hypothesis tests but no matching survival-analysis surface. Keep the reusable estimators and tests; exclude the labelled spreadsheet grids. The catalog entry is 2255."
+    },
+    {
+      "id": "L006",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 104,
+      "title": "Meta-analysis core in e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Celvyx provides odds-ratio, risk-ratio, Cohen-d, Hedges-g, and Fisher-z effect sizes plus fixed/random-effects heterogeneity, Q, I-squared, tau-squared, subgroup analysis, and meta-regression in `src/lib/core/medical/meta_effect_size.dart`, `meta_heterogeneity.dart`, and `meta_regression.dart`. Neper has resampling and ordinary regression but no meta-analysis API. Add the numerical core, not medical report formatting. The catalog entry is 2256."
+    },
+    {
+      "id": "L007",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 105,
+      "title": "Generalized regression extensions in e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Celvyx covers Poisson rate regression with exposure offsets, negative-binomial regression, conditional logistic regression for matched sets, and ordinal logistic regression in `src/lib/core/medical/clinical_poisson.dart`, `negative_binomial.dart`, `conditional_logistic.dart`, and `ordinal_logistic.dart`. Neper already has binary logistic regression in `e.ml.linear`, so this is an extension rather than a duplicate. Keep model fitting and diagnostics; exclude clinical presentation wrappers. The catalog entry is 2257."
+    },
+    {
+      "id": "L008",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 106,
+      "title": "Diagnostic-test statistics in e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Celvyx implements 2x2 diagnostic-table sensitivity, specificity, accuracy, predictive values, likelihood ratios, diagnostic odds ratio, and exact confidence intervals in `src/lib/core/medical/diagnostic.dart`. Neper has contingency-table tests but no diagnostic-metric API. Keep this as a small generic binary-classification/statistics module; exclude medical report grids. The catalog entry is 2258."
+    },
+    {
+      "id": "L009",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 107,
+      "title": "Neural layers for molecules and sequences in e.ml",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Neper has the perceptron, scalar autodiff, scaled dot-product and multi-head attention with RoPE in `e.ml.nn`, plus MinHash/LSH/HNSW/IVF-PQ similarity search in `e.ml.ann`, but no recurrent layers (LSTM/GRU for SMILES) and no graph layers (GCN/GAT/MPNN, ChemProp-style message passing) for molecular property and drug-target prediction. Keep the reusable layers with the caller-storage conventions of `e.ml.nn`; exclude trained weights (ChemBERTa, BioBERT, MegaMolBART) and generative products (JT-VAE, MolGAN, diffusion dockers). The catalog entry is 2259."
+    },
+    {
+      "id": "L010",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 108,
+      "title": "Chemical similarity and scaffold core in e.ml",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Neper estimates Jaccard similarity over `u64` sets with MinHash signatures and LSH banding in `e.ml.ann`, the direct analogue of fingerprint screening, but has no chemistry fingerprints (ECFP/Morgan, MACCS), no Tanimoto/Dice scoring, no Butina clustering for library diversity, and no maximum-common-substructure (FMCS) for scaffold matching. Keep bit-fingerprint, similarity, Butina, and MCS helpers over generic graphs; exclude vendor docking scorers (GlideScore, GoldScore, ChemPLP). The catalog entry is 2260."
+    },
+    {
+      "id": "L011",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 109,
+      "title": "Chemometric extensions in e.ml (PLS regression, UMAP)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "`e.ml.linear` fits OLS, ridge, lasso, and logistic regression, and `e.ml.reduce` covers PCA (Jacobi eigendecomposition), Oja streaming, frequent directions, and exact t-SNE, but there is no partial-least-squares regression (classical QSAR, PAT/NIR calibration) and no UMAP for chemical and single-cell visualization. Keep both under the existing caller-storage conventions; exclude 3D-QSAR field products (CoMFA/CoMSIA) and pharmacophore suites. The catalog entry is 2261."
+    },
+    {
+      "id": "L012",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 110,
+      "title": "Longitudinal and mixed-model core in e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Trial efficacy analysis needs linear mixed models and MMRM for repeated measures plus GEE for population-averaged effects. Neper has OLS/ridge/lasso in `e.ml.linear`, streaming moments and covariance (with Ledoit-Wolf shrinkage) in `e.algo.stat`, and one-way ANOVA in `e.algo.stat.test`, but no random-effects, MMRM, or GEE surface. Keep the numerical core with caller scratch; exclude trial presentation wrappers. The catalog entry is 2262."
+    },
+    {
+      "id": "L013",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 111,
+      "title": "Time-to-event trial extensions in e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "`e.algo.stat.test` covers t, Welch, Mann-Whitney, Wilcoxon, chi-squared, Fisher exact, two-sample and one-sample KS, ANOVA, Kruskal-Wallis, permutation, Bonferroni, and Benjamini-Hochberg, and L005 adds Nelson-Aalen, competing risks, RMST, and weighted log-rank, but there is no Kaplan-Meier estimator, unweighted log-rank test, Cox proportional-hazards fit, group-sequential alpha spending (O'Brien-Fleming/Pocock), Simon two-stage Phase-II design, continual-reassessment dose escalation, or Farrington-Manning non-inferiority. Keep estimators, tests, and designs; exclude trial-management workflows. The catalog entry is 2263."
+    },
+    {
+      "id": "L014",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 112,
+      "title": "Causal and missing-data core in e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Real-world-evidence analysis needs propensity scores with IPTW, doubly-robust treatment-effect estimators, and multiple imputation (MICE). Neper has bootstrap and jackknife resampling plus Wilson and Clopper-Pearson binomial intervals in `e.algo.stat`, but no propensity, weighting, doubly-robust, or chained-equation imputation API. Keep the numerical core; exclude study-design and reporting wrappers. The catalog entry is 2264."
+    },
+    {
+      "id": "L015",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 113,
+      "title": "PK/PD mathematics in e.math",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "`e.math.ode` steps Euler, RK4, RKF45, velocity Verlet, leapfrog, Yoshida, and Euler-Maruyama, and `e.math.opt` minimizes by gradient descent, conjugate gradient, BFGS, L-BFGS, Nelder-Mead, and dense simplex, but there is no non-compartmental analysis (trapezoidal AUC/Cmax), no Emax/Hill dose-response fit, and no Michaelis-Menten enzyme-kinetics fit. Keep NCA plus the two saturating-curve fits over the existing optimizers; exclude population-PK suites (NONMEM) and whole-body simulators (Simcyp PBPK). The catalog entry is 2265."
+    },
+    {
+      "id": "L016",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 114,
+      "title": "Safety-signal detection in e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Pharmacovigilance mines FAERS-style tables with disproportionality scores (reporting odds ratio, proportional reporting ratio, BCPNN information component) and comedication patterns with frequent-itemset rules (Apriori/FP-growth) for drug-drug interactions. Neper has binomial proportion intervals and chi-squared/Fisher contingency tests in `e.algo.stat` and `e.algo.stat.test`, but no disproportionality or frequent-itemset surface. Keep the scores and rule mining with caller storage; exclude case-report workflows and MedDRA coding products. The catalog entry is 2266."
+    },
+    {
+      "id": "L017",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 115,
+      "title": "Forecast and inventory extensions (ARIMA, EOQ/newsvendor)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "`e.algo.timeseries` forecasts with Holt-Winters, STL/LOESS, GARCH, and Hawkes plus CUSUM/Page-Hinkley/ADWIN change detection, and `e.algo.combopt` solves tours (nearest-neighbor, 2-opt/3-opt, Held-Karp, Christofides, Lin-Kernighan) and VRP by savings, but there is no ARIMA for ADR-surveillance and demand series and no inventory core (EOQ, newsvendor) for supply planning. Keep ARIMA plus the two inventory policies; exclude cold-chain logistics products. The catalog entry is 2267."
     }
   ]
 }
