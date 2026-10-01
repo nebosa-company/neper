@@ -32559,3 +32559,19 @@ fixture still passes on both hosts, valid device code still checks, and the
 C-bootstrap and self-hosted compiler builds are byte-identical on both hosts.
 The full suites remain gated by the shared tree's stale library-fixture
 manifest. Other pending-expression helper shapes remain unverified.
+
+## D1763 — Keep earlier return values across later barrier expressions
+
+**Decision.** When a later return expression may reach a CPU barrier, save
+earlier results in the invocation frame before evaluating it and reload after
+the cut. An aggregate result saves its address; its storage already belongs
+to the frame. Non-cutting returns keep their existing lowering.
+
+**Evidence.** `link/gpu_barrier_chain` previously failed NIR verification when
+the second result of `ret (value, passthrough(lane))` reached a barrier. Scalar,
+aggregate and three-result returns now pass in debug and release on Windows
+and WSL, including two later cuts. `link/by_value_snapshot` still passes;
+both C bootstraps build and run the changed compiler, and bootstrapped and
+self-hosted builds are byte-identical on both hosts. The full suites remain
+gated by the shared tree's stale library-fixture manifest. Other
+pending-expression helper shapes remain unverified.

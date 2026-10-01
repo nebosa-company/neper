@@ -5022,6 +5022,8 @@ fn lower_try_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
 
 fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
     var values: [16]usize = zero
+    var saved: [16]usize = zero
+    var saved_before: [16]usize = zero
     var count = 0usize
     var literal_ok = false
     let end = usize(node.first_child) + usize(node.child_count)
@@ -5033,7 +5035,25 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
             if count == 0usize && returned.kind == .LiteralExpr && c.tokens[usize(returned.token_start)].kind == .KwOk { literal_ok = true }
             let (expected, type_error) = check.function_return(c, function, count)
             if type_error != ok { ret type_error }
-            let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), expected, builder, bindings, binding_count)
+            let child_index = parse.child_index_at(tree, at)
+            if count != 0usize && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, child_index, builder) {
+                let pointer_type = check.make_type(.Pointer, "", module_index)
+                var previous = 0usize
+                while previous < count {
+                    if saved[previous] == 0usize {
+                        let (previous_type, previous_error) = check.function_return(c, function, previous)
+                        if previous_error != ok { ret previous_error }
+                        var storage_type = previous_type
+                        if aggregate_value(c, previous_type) { storage_type = pointer_type }
+                        let (slot, save_error) = frame_save_temporary(c, storage_type, values[previous], c.tokens[usize(node.token_start)], builder)
+                        if save_error != ok { ret save_error }
+                        saved[previous] = slot
+                        saved_before[previous] = builder.kernel_barriers
+                    }
+                    previous += 1usize
+                }
+            }
+            let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, child_index, expected, builder, bindings, binding_count)
             if value_error != ok { ret value_error }
             values[count] = value
             count += 1usize
@@ -5041,6 +5061,19 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         at += 1usize
     }
     if count != function.return_count { ret check.InvalidReturn }
+    var previous = 0usize
+    while previous < count {
+        if saved[previous] != 0usize {
+            let (previous_type, previous_error) = check.function_return(c, function, previous)
+            if previous_error != ok { ret previous_error }
+            var storage_type = previous_type
+            if aggregate_value(c, previous_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+            let (restored, restore_error) = frame_resume_temporary(c, storage_type, values[previous], saved[previous], saved_before[previous], c.tokens[usize(node.token_start)], builder)
+            if restore_error != ok { ret restore_error }
+            values[previous] = restored
+        }
+        previous += 1usize
+    }
     ret emit_return_values(c, g, tree, module_index, function, c.tokens[usize(node.token_start)], values[0usize..count], literal_ok, builder, bindings, binding_count, defers)
 }
 

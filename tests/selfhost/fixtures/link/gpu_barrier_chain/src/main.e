@@ -57,6 +57,21 @@ fn triple(lane: u32) -> (u32, u32, u32) {
     ret (lane + 44u32, lane, lane)
 }
 
+fn pair_pending(lane: u32) -> (u32, u32) {
+    gpu.barrier()
+    ret (lane + 44u32, passthrough(lane))
+}
+
+fn packet_pending(lane: u32) -> (Packet, u32) {
+    gpu.barrier()
+    ret (Packet { value: lane + 44u32, lane: lane }, passthrough(lane))
+}
+
+fn triple_pending(lane: u32) -> (u32, u32, u32) {
+    gpu.barrier()
+    ret (lane + 44u32, passthrough(lane), passthrough(lane))
+}
+
 fn middle(out: []u32, lane: u32) {
     for pass in 0u32..1u32 {
         // The store address, binary left operand and first call argument precede inner's barriers.
@@ -78,6 +93,12 @@ fn middle(out: []u32, lane: u32) {
             view.data[usize(lane)] = third + 44u32 + third_lane - lane
             let (wide, wide_lane, last_lane) = triple(lane)
             view.data[usize(lane)] = wide + wide_lane - lane + last_lane - lane
+            let (pending, pending_lane) = pair_pending(lane)
+            view.data[usize(lane)] = pending + pending_lane - lane
+            let (pending_packet, packet_lane) = packet_pending(lane)
+            view.data[usize(lane)] = pending_packet.value + pending_packet.lane - lane + packet_lane - lane
+            let (pending_first, pending_second, pending_third) = triple_pending(lane)
+            view.data[usize(lane)] = pending_first + pending_second - lane + pending_third - lane
         }
     }
 }
