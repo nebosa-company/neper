@@ -4,6 +4,13 @@ use e.io
 use e.mem
 use e.os
 
+fn supports(caps: []const gpu.Cap, wanted: gpu.Cap) -> bool {
+    for capability in caps {
+        if capability == wanted { ret true }
+    }
+    ret false
+}
+
 @gpu(40, caps(.Subgroup, .Int64))
 fn subgroup_collectives(identity: []u32, flags: []u32, ballots: []u64) {
     var elected = 0u32
@@ -24,6 +31,7 @@ fn run(a: *mem.Arena, backend: gpu.Backend, index: u32, identity: []u32, flags: 
     let (device, device_error) = gpu.open(a, backend, index)
     if device_error != ok { ret device_error }
     defer let _ = gpu.close(device)
+    if backend == .Vulkan && (!gpu.has(device, .Subgroup) || !gpu.has(device, .Int64)) { ret gpu.Unsupported }
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { ret queue_error }
     let (identity_buffer, identity_error) = gpu.alloc[u32](q, identity.len)
@@ -90,7 +98,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var ran = 0usize
     var device_at = 0usize
     while device_at < found.len {
-        if found[device_at].supported {
+        if found[device_at].supported && supports(found[device_at].capabilities, .Subgroup) && supports(found[device_at].capabilities, .Int64) {
             var device_identity: [40]u32 = zero
             var device_flags: [40]u32 = zero
             var device_ballots: [40]u64 = zero

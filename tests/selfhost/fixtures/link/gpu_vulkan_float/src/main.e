@@ -6,6 +6,13 @@ use e.math
 use e.mem
 use e.os
 
+fn supports(caps: []const gpu.Cap, wanted: gpu.Cap) -> bool {
+    for capability in caps {
+        if capability == wanted { ret true }
+    }
+    ret false
+}
+
 const COUNT: usize = 8192usize
 
 @gpu(256)
@@ -88,7 +95,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var ran = 0usize
     var device_at = 0usize
     while device_at < found.len {
-        if found[device_at].supported {
+        if found[device_at].supported && supports(found[device_at].capabilities, .DenormPreserve) {
             let (answer, answer_error) = mem.alloc[f32](a, COUNT * 2usize)
             if answer_error != ok { ret answer_error }
             try run(a, .Vulkan, u32(device_at), numerators, denominators, answer)

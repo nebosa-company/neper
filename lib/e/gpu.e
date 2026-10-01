@@ -91,6 +91,7 @@ const MAX_DEVICES: usize = 16usize
 const MAX_QUEUES: usize = 64usize
 const MAX_AXIS: usize = 4294967295usize
 const SUBGROUP_PC: usize = 1073741824usize
+const CPU_CAPABILITIES: usize = 375usize
 
 // One buffer slot: the storage's bytes, the element count and size, and the
 // generation a handle has to carry.
@@ -149,16 +150,67 @@ fn subgroup_vote(kind: u32) -> u64 {
     ret result
 }
 
-fn cpu_capabilities(a: *mem.Arena) -> ([]const Cap, err) {
-    let (caps, caps_error) = mem.alloc[Cap](a, 6usize)
+fn capability_bit(capability: Cap) -> usize {
+    if capability == .Int8 { ret 1usize }
+    if capability == .Int16 { ret 2usize }
+    if capability == .Int64 { ret 4usize }
+    if capability == .Float16 { ret 8usize }
+    if capability == .Float64 { ret 16usize }
+    if capability == .Atomic64 { ret 32usize }
+    if capability == .Subgroup { ret 64usize }
+    if capability == .Ftz { ret 128usize }
+    ret 256usize
+}
+
+fn capability_list(a: *mem.Arena, bits: usize) -> ([]const Cap, err) {
+    var count = 0usize
+    var bit = 1usize
+    while bit <= 256usize {
+        if (bits & bit) != 0usize { count += 1usize }
+        bit = bit * 2usize
+    }
+    let (caps, caps_error) = mem.alloc[Cap](a, count)
     if caps_error != ok { ret (zero, caps_error) }
-    caps[0usize] = .Int8
-    caps[1usize] = .Int16
-    caps[2usize] = .Int64
-    caps[3usize] = .Float64
-    caps[4usize] = .Atomic64
-    caps[5usize] = .Subgroup
+    var at = 0usize
+    if (bits & 1usize) != 0usize {
+        caps[at] = .Int8
+        at += 1usize
+    }
+    if (bits & 2usize) != 0usize {
+        caps[at] = .Int16
+        at += 1usize
+    }
+    if (bits & 4usize) != 0usize {
+        caps[at] = .Int64
+        at += 1usize
+    }
+    if (bits & 8usize) != 0usize {
+        caps[at] = .Float16
+        at += 1usize
+    }
+    if (bits & 16usize) != 0usize {
+        caps[at] = .Float64
+        at += 1usize
+    }
+    if (bits & 32usize) != 0usize {
+        caps[at] = .Atomic64
+        at += 1usize
+    }
+    if (bits & 64usize) != 0usize {
+        caps[at] = .Subgroup
+        at += 1usize
+    }
+    if (bits & 128usize) != 0usize {
+        caps[at] = .Ftz
+        at += 1usize
+    }
+    if (bits & 256usize) != 0usize { caps[at] = .DenormPreserve }
     ret (caps, ok)
+}
+
+fn cpu_capabilities(a: *mem.Arena) -> ([]const Cap, err) {
+    let (caps, caps_error) = capability_list(a, CPU_CAPABILITIES)
+    ret (caps, caps_error)
 }
 
 fn cpu_info(a: *mem.Arena) -> (DeviceInfo, err) {
@@ -179,8 +231,10 @@ fn cpu_info(a: *mem.Arena) -> (DeviceInfo, err) {
 
 // A Vulkan device as `devices` and `info` report it (D1611): its name, kind, memory and
 // whether section 10's floor holds on it. Its key is the one D83 defers to C093.
-fn vulkan_info(physical: vulkan.Physical, index: u32) -> DeviceInfo {
+fn vulkan_info(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (DeviceInfo, err) {
     var record: DeviceInfo = zero
+    let (caps, caps_error) = capability_list(a, physical.caps)
+    if caps_error != ok { ret (record, caps_error) }
     record.key.backend = .Vulkan
     record.key_valid = false
     record.index = index
@@ -192,8 +246,9 @@ fn vulkan_info(physical: vulkan.Physical, index: u32) -> DeviceInfo {
     if physical.device_type == 4u32 { record.kind = .Cpu }
     record.memory_bytes = physical.memory_bytes
     record.memory_known = true
+    record.capabilities = caps
     record.supported = physical.floor
-    ret record
+    ret (record, ok)
 }
 
 fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo, err) {
@@ -205,7 +260,9 @@ fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo
         if records_error != ok { ret (zero, records_error) }
         var at = 0usize
         while at < found.len {
-            records[at] = vulkan_info(found[at], u32(at))
+            let (record, record_error) = vulkan_info(a, found[at], u32(at))
+            if record_error != ok { ret (zero, record_error) }
+            records[at] = record
             at += 1usize
         }
         ret (records, ok)
@@ -312,7 +369,10 @@ fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err) {
 fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
     let (state, state_error) = state_of(device)
     if state_error != ok { ret (zero, state_error) }
-    if state.backend == .Vulkan { ret (vulkan_info(state.physical, 0u32), ok) }
+    if state.backend == .Vulkan {
+        let (record, record_error) = vulkan_info(a, state.physical, 0u32)
+        ret (record, record_error)
+    }
     let (record, record_error) = cpu_info(a)
     ret (record, record_error)
 }
@@ -342,9 +402,11 @@ fn close(device: *Device) -> err {
 }
 
 fn has(device: *Device, capability: Cap) -> bool {
-    let (_, state_error) = state_of(device)
+    let (state, state_error) = state_of(device)
     if state_error != ok { ret false }
-    ret capability == .Int8 || capability == .Int16 || capability == .Int64 || capability == .Float64 || capability == .Atomic64 || capability == .Subgroup
+    var available = CPU_CAPABILITIES
+    if state.backend == .Vulkan { available = state.physical.caps }
+    ret (available & capability_bit(capability)) != 0usize
 }
 
 fn queue(device: *Device) -> (*Queue, err) {
@@ -1001,9 +1063,12 @@ fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local
 // SPIR-V as hex digits, its entry point, and a character per parameter -- `s` a slice,
 // `1` to `8` a scalar's size in bytes, `?` what the argument block cannot carry yet. The
 // CPU ignores them.
-fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(ctx: *void, frame: *u8, workgroup: *u8), ctx: *void, module: str, entry: str, layout: str) -> err {
+fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(opaque: *void, frame: *u8, workgroup: *u8), ctx: *void, requirements: usize, module: str, entry: str, layout: str) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    var available = CPU_CAPABILITIES
+    if state.device.backend == .Vulkan { available = state.device.physical.caps }
+    if (requirements & available) != requirements { ret Unsupported }
     if state.device.backend == .Vulkan { ret launch_device(state, grid, x, y, z, ctx, module, entry, layout) }
     if launch_active { ret Unsupported }
     if x == 0usize || y == 0usize || z == 0usize || x * y * z > 1024usize { ret Unsupported }
@@ -1232,7 +1297,7 @@ fn sort_bitonic(device: *Device, q: *Queue, buffer: Buf[u32], n: usize) -> err {
         while j > 0usize {
             args.j = u32(j)
             args.k = u32(k)
-            try launch_run(q, grid1(p), 256usize, 1usize, 1usize, 16usize, 0usize, sort_step, mem.cast[*void](&args), "", "", "")
+            try launch_run(q, grid1(p), 256usize, 1usize, 1usize, 16usize, 0usize, sort_step, mem.cast[*void](&args), 0usize, "", "", "")
             j = j >> 1u32
         }
         k = k << 1u32
@@ -1342,7 +1407,7 @@ fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], v
     let (out_view, out_error) = device_slice[f32](state, out)
     if out_error != ok { ret (0usize, out_error) }
     var args = AttentionArgs { query: query_view, key: key_view, value: value_view, out: out_view, n: u32(n), d: u32(d), tile: u32(tile), scale: scale }
-    let run_error = launch_run(q, grid1(n), 256usize, 1usize, 1usize, 16usize, 0usize, attention_step, mem.cast[*void](&args), "", "", "")
+    let run_error = launch_run(q, grid1(n), 256usize, 1usize, 1usize, 16usize, 0usize, attention_step, mem.cast[*void](&args), 0usize, "", "", "")
     if run_error != ok { ret (0usize, run_error) }
     ret (tiles, ok)
 }
