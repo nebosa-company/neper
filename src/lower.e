@@ -5494,15 +5494,30 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             tried_types[tried_at] = tried_type
             tried_at += 1usize
         }
+        var tried_slots: [16]usize = zero
+        let assignment_token = c.tokens[usize(node.token_start)]
+        let pointer_type = check.make_type(.Pointer, "", module_index)
+        if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, initializer_at, builder) {
+            tried_at = 0usize
+            while tried_at < tried_places {
+                let (slot, save_error) = frame_save_temporary(c, pointer_type, tried_addresses[tried_at], assignment_token, builder)
+                if save_error != ok { ret save_error }
+                tried_slots[tried_at] = slot
+                tried_at += 1usize
+            }
+        }
+        let barriers_before = builder.kernel_barriers
         var tried: CallResults = zero
-        try lower_try_call(c, g, tree, module_index, function, tree.nodes[initializer_at], c.tokens[usize(node.token_start)], builder, bindings, binding_count, defers, &tried)
+        try lower_try_call(c, g, tree, module_index, function, tree.nodes[initializer_at], assignment_token, builder, bindings, binding_count, defers, &tried)
         if tried.count != tried_places { ret check.ArgumentCount }
         tried_at = 0usize
         while tried_at < tried_places {
             let (tried_result, tried_result_error) = check.call_return(c, tried.call, tried_at)
             if tried_result_error != ok { ret tried_result_error }
             if !check.type_assignable(c, tried_result, tried_types[tried_at]) { ret check.InvalidType }
-            try store_assignment_value(c, tried_types[tried_at], tried_addresses[tried_at], tried.values[tried_at], c.tokens[usize(node.token_start)], builder)
+            let (address, resume_error) = frame_resume_temporary(c, pointer_type, tried_addresses[tried_at], tried_slots[tried_at], barriers_before, assignment_token, builder)
+            if resume_error != ok { ret resume_error }
+            try store_assignment_value(c, tried_types[tried_at], address, tried.values[tried_at], assignment_token, builder)
             tried_at += 1usize
         }
         ret ok
@@ -5522,6 +5537,19 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         }
         let initializer = tree.nodes[children[place_count]]
         if initializer.kind != .CallExpr { ret check.ArgumentCount }
+        var address_slots: [16]usize = zero
+        let assignment_token = c.tokens[usize(node.token_start)]
+        let pointer_type = check.make_type(.Pointer, "", module_index)
+        if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[place_count], builder) {
+            place_at = 0usize
+            while place_at < place_count {
+                let (slot, save_error) = frame_save_temporary(c, pointer_type, addresses[place_at], assignment_token, builder)
+                if save_error != ok { ret save_error }
+                address_slots[place_at] = slot
+                place_at += 1usize
+            }
+        }
+        let barriers_before = builder.kernel_barriers
         var results: CallResults = zero
         let results_error = lower_call_results(c, g, tree, module_index, initializer, builder, bindings, binding_count, &results)
         if results_error != ok { ret results_error }
@@ -5531,7 +5559,9 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             let (result_type, result_type_error) = check.call_return(c, results.call, place_at)
             if result_type_error != ok { ret result_type_error }
             if !check.type_assignable(c, result_type, place_types[place_at]) { ret check.InvalidType }
-            try store_assignment_value(c, place_types[place_at], addresses[place_at], results.values[place_at], c.tokens[usize(node.token_start)], builder)
+            let (address, resume_error) = frame_resume_temporary(c, pointer_type, addresses[place_at], address_slots[place_at], barriers_before, assignment_token, builder)
+            if resume_error != ok { ret resume_error }
+            try store_assignment_value(c, place_types[place_at], address, results.values[place_at], assignment_token, builder)
             place_at += 1usize
         }
         ret ok

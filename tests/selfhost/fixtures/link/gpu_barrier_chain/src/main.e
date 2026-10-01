@@ -150,6 +150,9 @@ fn middle(out: []u32, lane: u32) {
             let deferred_value = deferred_packet(lane)
             view.data[usize(lane)] = deferred_value.value + deferred_value.lane - lane
             deferred_capture(out, lane)
+            var assigned_lane = 0u32
+            (view.data[usize(lane)], assigned_lane) = pair(lane)
+            out[usize(lane)] = view.data[usize(lane)] + assigned_lane - lane
         }
     }
 }

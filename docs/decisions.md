@@ -32713,3 +32713,16 @@ hash; the next launch passed and replaced it with a third hash. Injected
 rebuild failure then failed as intended, and a normal launch recovered. The
 old byte-equality assertion stopped otherwise passing Windows suite runs
 intermittently. C091 remains partial pending the remaining suite gates.
+
+## D1773 — Preserve multi-target assignment addresses across a barrier
+
+**Decision.** When a CPU kernel assigns multiple destinations from a call
+that may cross a barrier, save each evaluated destination address in the
+invocation frame and reload it after the call. Apply the same rule to
+multi-target `try` assignments. Ordinary assignments without a cut keep
+their existing path.
+
+**Evidence.** An indexed destination paired with a local destination failed
+the old compiler's NIR verifier after a barrier-bearing helper call. The
+`link/gpu_barrier_chain` regression now passes in debug and release on Windows
+and Linux; `link/try_positions` still passes on Linux. C091 remains partial.
