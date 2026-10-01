@@ -3280,6 +3280,15 @@ foreach ($mode in @('debug', 'release')) {
     $gpuHelperOutput = & $gpuHelperPath
     if ($LASTEXITCODE -ne 0 -or $gpuHelperOutput -ne 'gpu barrier helper ok') { throw "a $mode barrier helper answered wrongly: exit $LASTEXITCODE" }
 }
+foreach ($mode in @('debug', 'release')) {
+    $gpuLargeHelperPath = Join-Path $testBuild "gpu-barrier-large-helper-$mode.exe"
+    $gpuLargeHelperArgs = @('emit-executable', (Join-Path $PSScriptRoot 'fixtures\link\gpu_barrier_large_helper\src\main.e'), $repo, 'x64', 'windows', $gpuLargeHelperPath)
+    if ($mode -eq 'release') { $gpuLargeHelperArgs += '--release' }
+    $gpuLargeHelperWritten = & $compiler @gpuLargeHelperArgs
+    if ($LASTEXITCODE -ne 0 -or $gpuLargeHelperWritten -ne 'executable written') { throw "gpu_barrier_large_helper $mode emission failed" }
+    $gpuLargeHelperOutput = & $gpuLargeHelperPath
+    if ($LASTEXITCODE -ne 0 -or $gpuLargeHelperOutput -ne 'gpu barrier large helper ok') { throw "a $mode large barrier helper answered wrongly: exit $LASTEXITCODE" }
+}
 $gpuFrameManyPath = Join-Path $testBuild 'gpu-frame-many-selfhost.exe'
 $gpuFrameManyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_frame_many\src\main.e') $repo 'x64' 'windows' $gpuFrameManyPath
 if ($LASTEXITCODE -ne 0 -or $gpuFrameManyWritten -ne 'executable written') { throw 'gpu_frame_many emission failed' }

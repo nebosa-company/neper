@@ -2949,6 +2949,17 @@ for mode in debug release; do
     gpu_helper_output=$("$test_build/gpu-barrier-helper-$mode")
     [ "$gpu_helper_output" = 'gpu barrier helper ok' ]
 done
+for mode in debug release; do
+    if [ "$mode" = release ]; then
+        gpu_large_helper_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_large_helper/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-large-helper-$mode" --release)
+    else
+        gpu_large_helper_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_large_helper/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-large-helper-$mode")
+    fi
+    [ "$gpu_large_helper_written" = 'executable written' ]
+    chmod +x "$test_build/gpu-barrier-large-helper-$mode"
+    gpu_large_helper_output=$("$test_build/gpu-barrier-large-helper-$mode")
+    [ "$gpu_large_helper_output" = 'gpu barrier large helper ok' ]
+done
 gpu_frame_many_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_frame_many/src/main.e" "$repo" x64 linux "$test_build/gpu-frame-many-selfhost")
 [ "$gpu_frame_many_written" = 'executable written' ]
 chmod +x "$test_build/gpu-frame-many-selfhost"
