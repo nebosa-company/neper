@@ -32611,3 +32611,20 @@ their self-hosted builds on both hosts, and three further sequential Windows
 self-builds passed after two intermittent access violations. The full suites
 still stop at the shared tree's stale library-fixture manifest. Captured
 defer arguments and other pending-expression helper shapes remain unverified.
+
+## D1766 — Capture deferred call arguments in the CPU invocation frame
+
+**Decision.** A deferred call still evaluates and snapshots its arguments at
+declaration, but a CPU kernel step stores their values in invocation-frame
+slots and reloads them on each exit path. Aggregate arguments keep the address
+of their already captured copy. Host and SPIR-V defer lowering are unchanged.
+
+**Evidence.** A deferred store after a barrier previously failed NIR
+verification. `link/gpu_barrier_chain` now captures a device slice, index and
+computed value, mutates the source variable, crosses two barriers and writes
+the original value; debug and release pass on Windows and WSL. Ordinary
+`link/try_positions` passes on both hosts. Bootstrapped, self-hosted and next
+compiler stages are byte-identical on both hosts; Windows needed retries after
+two intermittent access violations while building the compiler. The full
+suites remain gated by the shared tree's stale library-fixture manifest. Other
+pending-expression helper shapes remain unverified.

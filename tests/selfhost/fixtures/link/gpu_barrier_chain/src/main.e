@@ -87,6 +87,16 @@ fn deferred_packet(lane: u32) -> Packet {
     ret Packet { value: lane + 44u32, lane: lane }
 }
 
+fn store_captured(out: []u32, at: usize, value: u32) { out[at] = value }
+
+fn deferred_capture(out: []u32, lane: u32) {
+    var value = lane + 44u32
+    defer store_captured(out, usize(lane), value)
+    value = 0u32
+    defer gpu.barrier()
+    gpu.barrier()
+}
+
 fn middle(out: []u32, lane: u32) {
     for pass in 0u32..1u32 {
         // The store address, binary left operand and first call argument precede inner's barriers.
@@ -127,6 +137,7 @@ fn middle(out: []u32, lane: u32) {
             view.data[usize(lane)] = after_defer + deferred_lane - lane
             let deferred_value = deferred_packet(lane)
             view.data[usize(lane)] = deferred_value.value + deferred_value.lane - lane
+            deferred_capture(out, lane)
         }
     }
 }

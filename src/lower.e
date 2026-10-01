@@ -7607,6 +7607,19 @@ fn lower_defer(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         entry.kind = .Call
         let arguments_error = lower_call_arguments(c, g, tree, module_index, tree.nodes[call_index], builder, bindings, binding_count, true, &entry.call, &entry.callee, entry.arguments[..], &entry.argument_count)
         if arguments_error != ok { ret arguments_error }
+        if (builder.frame_mode || builder.frame_locals) && !builder.spirv {
+            var argument_at = 0usize
+            while argument_at < entry.argument_count {
+                let (argument_type, type_error) = call_parameter_type(c, entry.call, argument_at)
+                if type_error != ok { ret type_error }
+                var storage_type = argument_type
+                if aggregate_value(c, argument_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+                let (slot, save_error) = frame_save_temporary(c, storage_type, entry.arguments[argument_at], entry.token, builder)
+                if save_error != ok { ret save_error }
+                entry.arguments[argument_at] = slot
+                argument_at += 1usize
+            }
+        }
     } else {
         entry.node_index = child_index
         if child.kind == .Block { entry.kind = .Block } else { entry.kind = .Statement }
@@ -7623,6 +7636,22 @@ fn emit_deferred_from(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         at = at - 1usize
         var entry = defers.entries[at]
         if entry.kind == .Call {
+            if (builder.frame_mode || builder.frame_locals) && !builder.spirv {
+                var argument_at = 0usize
+                while argument_at < entry.argument_count {
+                    let (argument_type, type_error) = call_parameter_type(c, entry.call, argument_at)
+                    if type_error != ok { ret type_error }
+                    var storage_type = argument_type
+                    if aggregate_value(c, argument_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+                    let (info, info_error) = layout.type_info(c, storage_type)
+                    if info_error != ok { ret info_error }
+                    let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, storage_type, true, info.size, entry.token)
+                    if load_error != ok { ret load_error }
+                    try nir.add_operand(builder, load_instruction, entry.arguments[argument_at])
+                    entry.arguments[argument_at] = loaded
+                    argument_at += 1usize
+                }
+            }
             var results: CallResults = zero
             try emit_call_results(c, g, entry.call, entry.callee, entry.arguments[..], entry.argument_count, builder, entry.token, &results)
         } else {
