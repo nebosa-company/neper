@@ -6712,7 +6712,11 @@ fn emit_device_overflow_guard(builder: *nir.Builder, opcode: nir.Opcode, ty: che
     var holds = 0usize
     if ty.name.len != 0usize && ty.name[0usize] == 117u8 {
         if opcode == .Add {
-            let (fits, fits_error) = emit_supplied_compare(builder, .GreaterEqual, boolean, result, left, token)
+            let (not_instruction, room, not_error) = nir.emit(builder, .BitNot, ty, true, 0usize, token)
+            if not_error != ok { ret not_error }
+            let not_operand_error = nir.add_operand(builder, not_instruction, left)
+            if not_operand_error != ok { ret not_operand_error }
+            let (fits, fits_error) = emit_supplied_compare(builder, .LessEqual, boolean, right, room, token)
             if fits_error != ok { ret fits_error }
             holds = fits
         } else {

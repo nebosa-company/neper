@@ -32674,3 +32674,17 @@ the two corrections, PowerShell 7 passed 226 exact source surfaces, the
 library link fixtures. The next gate, `link/gpu_tensor`, exits 58 because a
 Vulkan `u32` matmul result differs from the CPU backend. C091 remains partial
 until that parity failure is resolved and the remaining suite passes.
+
+## D1770 — Check device unsigned addition against the remaining range
+
+**Decision.** In checked SPIR-V lowering, unsigned addition now tests
+`right <= ~left` instead of comparing the wrapped result with `left`. The
+existing NIR fault guard and loop structure remain in place.
+
+**Evidence.** The old guard made `link/gpu_tensor` differ from CPU on both
+Windows Vulkan devices. The new guard passes that fixture, `link/gpu_vulkan_loop`
+and `link/gpu_fault_bounds`, including its overflow fault. All five affected
+conformance SPIR-V modules validate for Vulkan 1.2. In an isolated worktree,
+the Windows self-host suite passes its surface, manifest, library, pinned
+SPIR-V and tensor gates, then stops at `link/gpu_shared_address_spaces` with
+`e.gpu.Unsupported`; C091 remains partial.
