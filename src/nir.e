@@ -1356,7 +1356,9 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
     ret (instruction_index, result, ok)
 }
 
-const FRAME_WORDS: usize = 128usize
+// ponytail: 256 preaddressed words (+ pc) cover 2 KB frames; allocate entry
+// addresses on demand if kernels need substantially larger private arrays.
+const FRAME_WORDS: usize = 256usize
 
 const TRAP_DATA: usize = 256usize
 

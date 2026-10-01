@@ -57,6 +57,14 @@ fn collection_rounds(out: []u32, weights: []u32) {
     }
 }
 
+@gpu(8)
+fn large_frame(out: []u32) {
+    var local: [96]u64 = zero
+    local[0usize] = u64(gpu.lid.x) + 41u64
+    gpu.barrier()
+    out[usize(gpu.lid.x)] = u32(local[0usize])
+}
+
 @gpu(16)
 fn plain(n: u32, out: []u32) {
     if gpu.gid.x >= n { ret }
@@ -122,6 +130,20 @@ fn run(a: *mem.Arena, backend: gpu.Backend, index: u32, relay_out: []u32, round_
     while collection_at < collection_out.len {
         if collection_out[collection_at] != 6u32 { os.exit(16i32) }
         collection_at += 1usize
+    }
+    if backend == .Cpu {
+        var large_values: [8]u32 = zero
+        let (large_buf, large_error) = gpu.upload[u32](q, large_values[0..])
+        if large_error != ok { ret large_error }
+        defer let _ = gpu.release(q, large_buf)
+        try gpu.launch[large_frame](q, gpu.grid1(8usize), large_buf)
+        var large_out: [8]u32 = zero
+        try gpu.download[u32](q, large_buf, large_out[0..])
+        var large_at = 0usize
+        while large_at < large_out.len {
+            if large_out[large_at] != u32(large_at) + 41u32 { os.exit(18i32) }
+            large_at += 1usize
+        }
     }
 
     // A kernel without a barrier under the same model.

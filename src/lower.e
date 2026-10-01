@@ -7476,9 +7476,9 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         if shared_parameter_error != ok { ret shared_parameter_error }
         shared_base = shared_value
         hidden_parameters = 2usize
-        let (frame_values, frame_values_error) = mem.alloc[usize](c.arena, 128usize)
+        let (frame_values, frame_values_error) = mem.alloc[usize](c.arena, 256usize)
         if frame_values_error != ok { ret frame_values_error }
-        let (frame_instructions, frame_instructions_error) = mem.alloc[usize](c.arena, 128usize)
+        let (frame_instructions, frame_instructions_error) = mem.alloc[usize](c.arena, 256usize)
         if frame_instructions_error != ok { ret frame_instructions_error }
         let (resume_blocks, resume_blocks_error) = mem.alloc[usize](c.arena, 64usize)
         if resume_blocks_error != ok { ret resume_blocks_error }
