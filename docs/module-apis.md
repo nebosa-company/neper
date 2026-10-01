@@ -14898,6 +14898,34 @@ every node: `gcn_layer` (symmetric degree normalization), `gat_layer`
 edge score) and `mpnn_step` (sum aggregation with separate message and update
 maps), each ending in `relu`.
 
+### `e.ml.fingerprint`
+
+```neper
+error TooSmall
+error Invalid
+
+type Graph = struct { atoms: []const u32, n: usize, src: []const usize, dst: []const usize, order: []const u8, m: usize }
+fn splitmix64(state: u64) -> u64
+fn mix(h: u64, x: u64) -> u64
+fn morgan_fingerprint(atoms: []const u32, n: usize, src: []const usize, dst: []const usize, order: []const u8, m: usize, radius: u32, bits: []u8, scratch: []u64) -> err
+fn bad_endpoints(src: []const usize, dst: []const usize, m: usize, n: usize) -> bool
+fn collect_bits(ids: []const u64, n: usize, bits: []u8)
+fn path_fingerprint(atoms: []const u32, n: usize, src: []const usize, dst: []const usize, order: []const u8, m: usize, max_length: u32, bits: []u8, scratch: []usize) -> err
+fn tanimoto(a: []const u8, b: []const u8, n: usize) -> (f64, err)
+fn dice(a: []const u8, b: []const u8, n: usize) -> (f64, err)
+fn bit_distance(a: []const u8, b: []const u8, n: usize) -> (f64, err)
+fn butina(fp: []const u8, k: usize, w: usize, cutoff: f64, labels: []usize, order: []usize, scratch: []usize) -> (usize, err)
+fn fmcs(atoms_a: []const u32, na: usize, src_a: []const usize, dst_a: []const usize, order_a: []const u8, ma: usize, atoms_b: []const u32, nb: usize, src_b: []const usize, dst_b: []const usize, order_b: []const u8, mb: usize, budget: u32, map_a: []usize, scratch: []usize) -> (usize, err)
+fn fmcs_search(ga: *const Graph, gb: *const Graph, work_a: []usize, work_b: []usize, used_a: []usize, used_b: []usize, map_a: []usize, best: *usize, budget: *u32, mapped: usize, ra: usize, rb: usize)
+```
+
+Circular (Morgan) and path fingerprints over atom types and bond orders folded
+into caller-sized bit vectors (`splitmix64`/`mix` the hashing,
+`collect_bits` the folding); `tanimoto`, `dice` and `bit_distance` scoring;
+Taylor-`butina` clustering by falling neighbour count; and `fmcs`
+(McGregor branch and bound over compatible edge pairs, `fmcs_search` one
+state, budget-bounded with the best map kept).
+
 ### `e.ml.rl`
 
 ```neper

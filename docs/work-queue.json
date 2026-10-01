@@ -323,17 +323,6 @@
       "evidence": "Celvyx implements 2x2 diagnostic-table sensitivity, specificity, accuracy, predictive values, likelihood ratios, diagnostic odds ratio, and exact confidence intervals in `src/lib/core/medical/diagnostic.dart`. Neper has contingency-table tests but no diagnostic-metric API. Keep this as a small generic binary-classification/statistics module; exclude medical report grids. The catalog entry is 2258."
     },
     {
-      "id": "L010",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 108,
-      "title": "Chemical similarity and scaffold core in e.ml",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Neper estimates Jaccard similarity over `u64` sets with MinHash signatures and LSH banding in `e.ml.ann`, the direct analogue of fingerprint screening, but has no chemistry fingerprints (ECFP/Morgan, MACCS), no Tanimoto/Dice scoring, no Butina clustering for library diversity, and no maximum-common-substructure (FMCS) for scaffold matching. Keep bit-fingerprint, similarity, Butina, and MCS helpers over generic graphs; exclude vendor docking scorers (GlideScore, GoldScore, ChemPLP). The catalog entry is 2260."
-    },
-    {
       "id": "L011",
       "category": "library",
       "group": "Algorithms",

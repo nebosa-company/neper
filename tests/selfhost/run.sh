@@ -1543,6 +1543,11 @@ ml_gnn_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$ml_gnn_written" = 'executable written' ]
 chmod +x "$test_build/ml-gnn-selfhost"
 "$test_build/ml-gnn-selfhost"
+# `e.ml.fingerprint`: Morgan and path fingerprints against packed keys, Tanimoto/Dice, Butina clusters, FMCS counts with map validity, and the storage, endpoint and empty cases.
+ml_fingerprint_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_fingerprint/src/main.e" "$repo" x64 linux "$test_build/ml-fingerprint-selfhost")
+[ "$ml_fingerprint_written" = 'executable written' ]
+chmod +x "$test_build/ml-fingerprint-selfhost"
+"$test_build/ml-fingerprint-selfhost"
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 ml_hmm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hmm/src/main.e" "$repo" x64 linux "$test_build/ml-hmm-selfhost")
 [ "$ml_hmm_written" = 'executable written' ]

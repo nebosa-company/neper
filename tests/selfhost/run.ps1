@@ -1693,6 +1693,12 @@ $mlGnnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $mlGnnWritten -ne 'executable written') { throw 'ml_gnn emission failed' }
 & $mlGnnPath
 if ($LASTEXITCODE -ne 0) { throw "a ml_gnn check failed: exit $LASTEXITCODE" }
+# `e.ml.fingerprint`: Morgan and path fingerprints against packed keys, Tanimoto/Dice, Butina clusters, FMCS counts with map validity, and the storage, endpoint and empty cases.
+$mlFingerprintPath = Join-Path $testBuild 'ml-fingerprint-selfhost.exe'
+$mlFingerprintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_fingerprint\src\main.e') $repo 'x64' 'windows' $mlFingerprintPath
+if ($LASTEXITCODE -ne 0 -or $mlFingerprintWritten -ne 'executable written') { throw 'ml_fingerprint emission failed' }
+& $mlFingerprintPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_fingerprint check failed: exit $LASTEXITCODE" }
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 $mlHmmPath = Join-Path $testBuild 'ml-hmm-selfhost.exe'
 $mlHmmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_hmm\src\main.e') $repo 'x64' 'windows' $mlHmmPath
