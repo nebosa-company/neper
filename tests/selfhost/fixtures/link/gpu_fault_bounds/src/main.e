@@ -46,6 +46,24 @@ fn null_pointer(out: []u32) {
     out[0usize] = pointed(p)
 }
 
+@gpu(1)
+fn arithmetic_unsigned(mode: u32, left: u32, right: u32, out: []u32) {
+    if mode == 0u32 { out[0usize] = left + right }
+    if mode == 1u32 { out[0usize] = left - right }
+    if mode == 2u32 { out[0usize] = left * right }
+    if mode == 3u32 { out[0usize] = left / right }
+    if mode == 4u32 { out[0usize] = left % right }
+}
+
+@gpu(1)
+fn arithmetic_signed(mode: u32, left: i32, right: i32, out: []u32) {
+    if mode == 0u32 { out[0usize] = u32(left + right) }
+    if mode == 1u32 { out[0usize] = u32(left - right) }
+    if mode == 2u32 { out[0usize] = u32(left * right) }
+    if mode == 3u32 { out[0usize] = u32(left / right) }
+    if mode == 4u32 { out[0usize] = u32(left % right) }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -97,6 +115,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     ret ok
 }
 
+fn expect_device_fault(q: *gpu.Queue, kernel: u32, kind: gpu.FaultKind, site: u32, code: i32) {
+    if gpu.sync(q) != gpu.Fault { os.exit(code) }
+    let (record, found) = gpu.last_fault(q)
+    if !found || record.kernel != kernel || record.kind != kind || record.site != site || record.gid.x != 0u32 { os.exit(code) }
+}
+
 // The device path reports the same record, reports it once, and remains usable.
 fn vulkan_fault(a: *mem.Arena, index: u32) -> err {
     let (device, device_error) = gpu.open(a, .Vulkan, index)
@@ -128,6 +152,28 @@ fn vulkan_fault(a: *mem.Arena, index: u32) -> err {
     if gpu.sync(q) != gpu.Fault { os.exit(38i32) }
     let (null_record, null_found) = gpu.last_fault(q)
     if !null_found || null_record.kernel != 4u32 || null_record.kind != .Null || null_record.site != 41u32 || null_record.gid.x != 0u32 { os.exit(39i32) }
+    try gpu.launch[arithmetic_unsigned](q, gpu.grid1(1usize), 0u32, 4294967295u32, 1u32, buffer)
+    expect_device_fault(q, 5u32, .Overflow, 51u32, 40i32)
+    try gpu.launch[arithmetic_unsigned](q, gpu.grid1(1usize), 1u32, 0u32, 1u32, buffer)
+    expect_device_fault(q, 6u32, .Overflow, 52u32, 41i32)
+    try gpu.launch[arithmetic_unsigned](q, gpu.grid1(1usize), 2u32, 4294967295u32, 2u32, buffer)
+    expect_device_fault(q, 7u32, .Overflow, 53u32, 42i32)
+    try gpu.launch[arithmetic_unsigned](q, gpu.grid1(1usize), 3u32, 1u32, 0u32, buffer)
+    expect_device_fault(q, 8u32, .DivideByZero, 54u32, 43i32)
+    try gpu.launch[arithmetic_unsigned](q, gpu.grid1(1usize), 4u32, 1u32, 0u32, buffer)
+    expect_device_fault(q, 9u32, .DivideByZero, 55u32, 44i32)
+    let greatest = 2147483647i32
+    let least = 0i32 - greatest - 1i32
+    try gpu.launch[arithmetic_signed](q, gpu.grid1(1usize), 0u32, greatest, 1i32, buffer)
+    expect_device_fault(q, 10u32, .Overflow, 60u32, 45i32)
+    try gpu.launch[arithmetic_signed](q, gpu.grid1(1usize), 1u32, least, 1i32, buffer)
+    expect_device_fault(q, 11u32, .Overflow, 61u32, 46i32)
+    try gpu.launch[arithmetic_signed](q, gpu.grid1(1usize), 2u32, least, -1i32, buffer)
+    expect_device_fault(q, 12u32, .Overflow, 62u32, 47i32)
+    try gpu.launch[arithmetic_signed](q, gpu.grid1(1usize), 3u32, least, -1i32, buffer)
+    expect_device_fault(q, 13u32, .DivideByZero, 63u32, 48i32)
+    try gpu.launch[arithmetic_signed](q, gpu.grid1(1usize), 4u32, least, -1i32, buffer)
+    expect_device_fault(q, 14u32, .DivideByZero, 64u32, 49i32)
     ret ok
 }
 

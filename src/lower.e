@@ -5992,6 +5992,181 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
 // Split out of `lower_expression`, which sits at the bootstrap's per-function local
 // limit -- every binding below would otherwise be one of its. The short-circuit
 // operators alone account for a third of them.
+fn emit_device_binary(builder: *nir.Builder, opcode: nir.Opcode, ty: check.Type, left: usize, right: usize, token: lex.Token) -> (usize, err) {
+    let (instruction, value, emit_error) = nir.emit(builder, opcode, ty, true, 0usize, token)
+    if emit_error != ok { ret (0usize, emit_error) }
+    let left_error = nir.add_operand(builder, instruction, left)
+    if left_error != ok { ret (0usize, left_error) }
+    let right_error = nir.add_operand(builder, instruction, right)
+    ret (value, right_error)
+}
+
+fn emit_device_constant(builder: *nir.Builder, ty: check.Type, value: usize, token: lex.Token) -> (usize, err) {
+    let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, ty, true, value, token)
+    ret (result, emit_error)
+}
+
+// A device arithmetic check is ordinary NIR control flow, so SPIR-V's loop and
+// selection planner sees every block before assigning structured merges.
+fn emit_device_fault_guard(builder: *nir.Builder, holds: usize, kind: str, ty: check.Type, operand: usize, token: lex.Token) -> err {
+    let fault_block = builder.block_count
+    let after_block = builder.block_count + 1usize
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, check.invalid_type(), false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, holds)
+    try nir.set_branch_targets(builder, decision, after_block, fault_block)
+    let (fault_index, fault_error) = nir.begin_block(builder)
+    if fault_error != ok || fault_index != fault_block { ret nir.InvalidControlFlow }
+    let (trap, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, kind, ty.module_index), false, 0usize, token)
+    if trap_error != ok { ret trap_error }
+    try nir.add_operand(builder, trap, operand)
+    let (after_index, after_error) = nir.begin_block(builder)
+    if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
+    ret ok
+}
+
+fn emit_device_multiply_guard(builder: *nir.Builder, ty: check.Type, left: usize, right: usize, result: usize, token: lex.Token) -> err {
+    let boolean = check.make_type(.Bool, "bool", ty.module_index)
+    let (zero_value, zero_error) = emit_device_constant(builder, ty, 0usize, token)
+    if zero_error != ok { ret zero_error }
+    let (left_zero, left_zero_error) = emit_supplied_compare(builder, .Equal, boolean, left, zero_value, token)
+    if left_zero_error != ok { ret left_zero_error }
+    let nonzero_block = builder.block_count
+    let (entry_branch, entry_ignored, entry_error) = nir.emit(builder, .BranchIf, check.invalid_type(), false, 0usize, token)
+    if entry_error != ok { ret entry_error }
+    try nir.add_operand(builder, entry_branch, left_zero)
+    let (nonzero_index, nonzero_error) = nir.begin_block(builder)
+    if nonzero_error != ok || nonzero_index != nonzero_block { ret nir.InvalidControlFlow }
+    if ty.name.len != 0usize && ty.name[0usize] == 117u8 {
+        let (quotient, quotient_error) = emit_device_binary(builder, .Divide, ty, result, left, token)
+        if quotient_error != ok { ret quotient_error }
+        let (roundtrip, roundtrip_error) = emit_supplied_compare(builder, .Equal, boolean, quotient, right, token)
+        if roundtrip_error != ok { ret roundtrip_error }
+        try emit_device_fault_guard(builder, roundtrip, "overflow", ty, result, token)
+        let (checked_exit, checked_exit_error) = emit_branch(builder, token)
+        if checked_exit_error != ok { ret checked_exit_error }
+        let done_block = builder.block_count
+        let (done_index, done_error) = nir.begin_block(builder)
+        if done_error != ok || done_index != done_block { ret nir.InvalidControlFlow }
+        builder.instructions[entry_branch].immediate = done_block + 1usize
+        try nir.set_branch_targets(builder, entry_branch, done_block, nonzero_block)
+        ret nir.set_branch_targets(builder, checked_exit, done_block, 0usize)
+    }
+    let width = check.integer_width(ty)
+    var minus_one_bits = 18446744073709551615usize
+    if width != 64usize { minus_one_bits = (1usize << width) - 1usize }
+    let (minus_one, minus_one_error) = emit_device_constant(builder, ty, minus_one_bits, token)
+    if minus_one_error != ok { ret minus_one_error }
+    let (left_minus_one, left_minus_one_error) = emit_supplied_compare(builder, .Equal, boolean, left, minus_one, token)
+    if left_minus_one_error != ok { ret left_minus_one_error }
+    let special_block = builder.block_count
+    let (kind_branch, kind_ignored, kind_error) = nir.emit(builder, .BranchIf, check.invalid_type(), false, 0usize, token)
+    if kind_error != ok { ret kind_error }
+    try nir.add_operand(builder, kind_branch, left_minus_one)
+    let (special_index, special_error) = nir.begin_block(builder)
+    if special_error != ok || special_index != special_block { ret nir.InvalidControlFlow }
+    let (minimum, minimum_error) = emit_device_constant(builder, ty, 1usize << (width - 1usize), token)
+    if minimum_error != ok { ret minimum_error }
+    let (special_holds, special_holds_error) = emit_supplied_compare(builder, .NotEqual, boolean, right, minimum, token)
+    if special_holds_error != ok { ret special_holds_error }
+    try emit_device_fault_guard(builder, special_holds, "overflow", ty, result, token)
+    let (special_exit, special_exit_error) = emit_branch(builder, token)
+    if special_exit_error != ok { ret special_exit_error }
+    let ordinary_block = builder.block_count
+    let (ordinary_index, ordinary_error) = nir.begin_block(builder)
+    if ordinary_error != ok || ordinary_index != ordinary_block { ret nir.InvalidControlFlow }
+    let (quotient, quotient_error) = emit_device_binary(builder, .Divide, ty, result, left, token)
+    if quotient_error != ok { ret quotient_error }
+    let (ordinary_holds, ordinary_holds_error) = emit_supplied_compare(builder, .Equal, boolean, quotient, right, token)
+    if ordinary_holds_error != ok { ret ordinary_holds_error }
+    try emit_device_fault_guard(builder, ordinary_holds, "overflow", ty, result, token)
+    let (ordinary_exit, ordinary_exit_error) = emit_branch(builder, token)
+    if ordinary_exit_error != ok { ret ordinary_exit_error }
+    let kind_done_block = builder.block_count
+    let (kind_done_index, kind_done_error) = nir.begin_block(builder)
+    if kind_done_error != ok || kind_done_index != kind_done_block { ret nir.InvalidControlFlow }
+    let (kind_exit, kind_exit_error) = emit_branch(builder, token)
+    if kind_exit_error != ok { ret kind_exit_error }
+    let done_block = builder.block_count
+    let (done_index, done_error) = nir.begin_block(builder)
+    if done_error != ok || done_index != done_block { ret nir.InvalidControlFlow }
+    builder.instructions[entry_branch].immediate = done_block + 1usize
+    builder.instructions[kind_branch].immediate = kind_done_block + 1usize
+    try nir.set_branch_targets(builder, entry_branch, done_block, nonzero_block)
+    try nir.set_branch_targets(builder, kind_branch, special_block, ordinary_block)
+    try nir.set_branch_targets(builder, special_exit, kind_done_block, 0usize)
+    try nir.set_branch_targets(builder, ordinary_exit, kind_done_block, 0usize)
+    ret nir.set_branch_targets(builder, kind_exit, done_block, 0usize)
+}
+
+fn emit_device_divide_guards(builder: *nir.Builder, ty: check.Type, left: usize, right: usize, token: lex.Token) -> err {
+    let boolean = check.make_type(.Bool, "bool", ty.module_index)
+    let (zero_value, zero_error) = emit_device_constant(builder, ty, 0usize, token)
+    if zero_error != ok { ret zero_error }
+    let (nonzero, nonzero_error) = emit_supplied_compare(builder, .NotEqual, boolean, right, zero_value, token)
+    if nonzero_error != ok { ret nonzero_error }
+    try emit_device_fault_guard(builder, nonzero, "divide", ty, right, token)
+    if ty.name.len != 0usize && ty.name[0usize] == 117u8 { ret ok }
+    let width = check.integer_width(ty)
+    var minus_one_bits = 18446744073709551615usize
+    if width != 64usize { minus_one_bits = (1usize << width) - 1usize }
+    let (minimum, minimum_error) = emit_device_constant(builder, ty, 1usize << (width - 1usize), token)
+    if minimum_error != ok { ret minimum_error }
+    let (minus_one, minus_one_error) = emit_device_constant(builder, ty, minus_one_bits, token)
+    if minus_one_error != ok { ret minus_one_error }
+    let (left_differs, left_differs_error) = emit_device_binary(builder, .BitXor, ty, left, minimum, token)
+    if left_differs_error != ok { ret left_differs_error }
+    let (right_differs, right_differs_error) = emit_device_binary(builder, .BitXor, ty, right, minus_one, token)
+    if right_differs_error != ok { ret right_differs_error }
+    let (either_differs, either_differs_error) = emit_device_binary(builder, .BitOr, ty, left_differs, right_differs, token)
+    if either_differs_error != ok { ret either_differs_error }
+    let (fits, fits_error) = emit_supplied_compare(builder, .NotEqual, boolean, either_differs, zero_value, token)
+    if fits_error != ok { ret fits_error }
+    ret emit_device_fault_guard(builder, fits, "divide", ty, right, token)
+}
+
+fn emit_device_overflow_guard(builder: *nir.Builder, opcode: nir.Opcode, ty: check.Type, left: usize, right: usize, result: usize, token: lex.Token) -> err {
+    if opcode == .Multiply { ret emit_device_multiply_guard(builder, ty, left, right, result, token) }
+    let boolean = check.make_type(.Bool, "bool", ty.module_index)
+    var holds = 0usize
+    if ty.name.len != 0usize && ty.name[0usize] == 117u8 {
+        if opcode == .Add {
+            let (fits, fits_error) = emit_supplied_compare(builder, .GreaterEqual, boolean, result, left, token)
+            if fits_error != ok { ret fits_error }
+            holds = fits
+        } else {
+            let (fits, fits_error) = emit_supplied_compare(builder, .GreaterEqual, boolean, left, right, token)
+            if fits_error != ok { ret fits_error }
+            holds = fits
+        }
+    } else {
+        let width = check.integer_width(ty)
+        let (sign, sign_error) = emit_device_constant(builder, ty, 1usize << (width - 1usize), token)
+        if sign_error != ok { ret sign_error }
+        let (operands_differ, operands_differ_error) = emit_device_binary(builder, .BitXor, ty, left, right, token)
+        if operands_differ_error != ok { ret operands_differ_error }
+        var first = operands_differ
+        if opcode == .Add {
+            let (not_instruction, inverted, not_error) = nir.emit(builder, .BitNot, ty, true, 0usize, token)
+            if not_error != ok { ret not_error }
+            try nir.add_operand(builder, not_instruction, operands_differ)
+            first = inverted
+        }
+        let (result_differs, result_differs_error) = emit_device_binary(builder, .BitXor, ty, left, result, token)
+        if result_differs_error != ok { ret result_differs_error }
+        let (changed, changed_error) = emit_device_binary(builder, .BitAnd, ty, first, result_differs, token)
+        if changed_error != ok { ret changed_error }
+        let (bad, bad_error) = emit_device_binary(builder, .BitAnd, ty, changed, sign, token)
+        if bad_error != ok { ret bad_error }
+        let (zero_value, zero_error) = emit_device_constant(builder, ty, 0usize, token)
+        if zero_error != ok { ret zero_error }
+        let (fits, fits_error) = emit_supplied_compare(builder, .Equal, boolean, bad, zero_value, token)
+        if fits_error != ok { ret fits_error }
+        holds = fits
+    }
+    ret emit_device_fault_guard(builder, holds, "overflow", ty, result, token)
+}
+
 fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
     let node = tree.nodes[node_index]
     var children: [2]usize = zero
@@ -6110,12 +6285,21 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         left_ordered = left_operand
         right_ordered = right_operand
     }
-    let (instruction, result, emit_error) = nir.emit(builder, opcode, result_type, true, 0usize, c.tokens[usize(node.token_start)])
+    let operation_token = c.tokens[usize(node.token_start)]
+    if builder.spirv && result_type.kind == .Integer && (opcode == .Divide || opcode == .Remainder) {
+        let divide_error = emit_device_divide_guards(builder, result_type, left_ordered, right_ordered, operation_token)
+        if divide_error != ok { ret (0usize, result_type, divide_error) }
+    }
+    let (instruction, result, emit_error) = nir.emit(builder, opcode, result_type, true, 0usize, operation_token)
     if emit_error != ok { ret (0usize, result_type, emit_error) }
     let left_operand_error = nir.add_operand(builder, instruction, left_ordered)
     if left_operand_error != ok { ret (0usize, result_type, left_operand_error) }
     let right_operand_error = nir.add_operand(builder, instruction, right_ordered)
     if right_operand_error != ok { ret (0usize, result_type, right_operand_error) }
+    if builder.spirv && !builder.nocheck && !builder.release && result_type.kind == .Integer && (opcode == .Add || opcode == .Subtract || opcode == .Multiply) {
+        let overflow_error = emit_device_overflow_guard(builder, opcode, result_type, left_ordered, right_ordered, result, operation_token)
+        if overflow_error != ok { ret (0usize, result_type, overflow_error) }
+    }
     ret (result, result_type, ok)
     ret (0usize, check.invalid_type(), check.Unsupported)
 }

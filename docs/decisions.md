@@ -31967,3 +31967,24 @@ through the existing device fault writer and returns.
 exact `Null` record on two Windows Vulkan devices and WSL's Vulkan device.
 `spirv-val --target-env vulkan1.2` accepts the generated fault module, and the complete
 Windows self-host suite passes.
+
+## D1729 — SPIR-V guards integer arithmetic before it can fault
+
+**Decision.** Debug `+`, `-` and `*` compute their wrapped result, then prove it fits
+at the operation's width before continuing. Unsigned add/subtract use order checks and
+multiply divides the result by a selected nonzero operand; signed add/subtract inspect
+the sign bit and multiply uses a safe signed round trip, with `-1 * MIN` handled
+separately. Release and wrapping operators omit those overflow guards.
+
+Integer `/` and `%` always guard a zero divisor and signed `MIN / -1` before emitting
+the SPIR-V operation, matching their always-checked language rule. Failed guards use
+the existing fault writer with `Overflow` or `DivideByZero` and the operation's source
+line. The guards are ordinary NIR control flow, so the structured-flow planner sees
+them. A guard in a loop condition gets a synthetic SPIR-V loop header; terminal trap
+paths do not replace the merge shared by paths that continue.
+
+**Evidence.** `gpu_fault_bounds` checks all five unsigned and signed u32/i32 forms and
+their exact fault records on two Windows Vulkan devices and WSL's Vulkan device. A
+release probe wraps addition but still reports division by zero.
+`spirv-val --target-env vulkan1.2` accepts the generated module, and the complete
+Windows self-host suite passes.
