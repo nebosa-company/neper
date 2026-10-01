@@ -945,6 +945,23 @@ fn declare_function_type(m: *Module, c: *check.Checker, function_at: usize) -> (
         }
         at += 1usize
     }
+    // SPIR-V requires structurally identical non-aggregate types to share one id.
+    var declaration_at = 0usize
+    while declaration_at < m.types.count {
+        let declaration = usize(m.types.data[declaration_at])
+        let declaration_words = declaration >> 16usize
+        if declaration_words == 0usize { ret (0usize, fail(m, "a SPIR-V type has no words")) }
+        if (declaration & 65535usize) == OP_TYPE_FUNCTION && declaration_words == parameter_words + 3usize && usize(m.types.data[declaration_at + 2usize]) == returned {
+            var matches = true
+            var parameter_at = 0usize
+            while parameter_at < parameter_words {
+                if usize(m.types.data[declaration_at + 3usize + parameter_at]) != parameters[parameter_at] { matches = false }
+                parameter_at += 1usize
+            }
+            if matches { ret (usize(m.types.data[declaration_at + 1usize]), ok) }
+        }
+        declaration_at += declaration_words
+    }
     let id = fresh(m)
     head(&m.types, OP_TYPE_FUNCTION, 3usize + parameter_words)
     put(&m.types, id)
@@ -1822,6 +1839,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         var kind = 99usize
         if same(instruction.ty.name, "null") { kind = 1usize }
         if same(instruction.ty.name, "tag") || same(instruction.ty.name, "enum") || same(instruction.ty.name, "invalid") { kind = 2usize }
+        if same(instruction.ty.name, "align") { kind = 3usize }
         if same(instruction.ty.name, "overflow") { kind = 4usize }
         if same(instruction.ty.name, "divide") { kind = 5usize }
         if kind == 99usize { ret fail(m, "this trap kind is not yet written as a device fault") }

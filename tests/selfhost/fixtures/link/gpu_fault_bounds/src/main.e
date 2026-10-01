@@ -9,7 +9,7 @@ use e.gpu
 use e.io
 use e.mem
 use e.os
-
+use e.simd
 // Invocation `bad` reads past the end; every other doubles its element.
 @gpu(4)
 fn poke(bad: u32, xs: []u32) {
@@ -62,6 +62,12 @@ fn arithmetic_signed(mode: u32, left: i32, right: i32, out: []u32) {
     if mode == 2u32 { out[0usize] = u32(left * right) }
     if mode == 3u32 { out[0usize] = u32(left / right) }
     if mode == 4u32 { out[0usize] = u32(left % right) }
+}
+
+@gpu(1)
+fn alignment(out: []u32) {
+    var value: Vec[u32, 4] = zero
+    simd.store_aligned[Vec[u32, 4]](out, 1usize, value)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -174,6 +180,8 @@ fn vulkan_fault(a: *mem.Arena, index: u32) -> err {
     expect_device_fault(q, 13u32, .DivideByZero, 63u32, 48i32)
     try gpu.launch[arithmetic_signed](q, gpu.grid1(1usize), 4u32, least, -1i32, buffer)
     expect_device_fault(q, 14u32, .DivideByZero, 64u32, 49i32)
+    try gpu.launch[alignment](q, gpu.grid1(1usize), buffer)
+    expect_device_fault(q, 15u32, .Alignment, 70u32, 50i32)
     ret ok
 }
 

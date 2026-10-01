@@ -18132,14 +18132,15 @@ fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                 if called_named && called_local { device_found(walk, "a call through the function pointer", called) }
             }
         }
-        // The callee's own name is a call, not a function used as a value.
+        // The resolved callee expression -- including `f[T]` -- is a call, not a
+        // function used as a value. Its arguments still need the device walk.
         let end = usize(node.first_child) + usize(node.child_count)
         var at = usize(node.first_child)
         var first = true
         while at < end {
             if parse.child_is_node_at(tree, at) {
                 let child_index = parse.child_index_at(tree, at)
-                if !(first && tree.nodes[child_index].kind == .NameExpr) { try device_nodes(c, g, tree, module_index, text, child_index, names, walk) }
+                if !(first && callee_found) { try device_nodes(c, g, tree, module_index, text, child_index, names, walk) }
                 first = false
             }
             at += 1usize

@@ -31988,3 +31988,24 @@ their exact fault records on two Windows Vulkan devices and WSL's Vulkan device.
 release probe wraps addition but still reports division by zero.
 `spirv-val --target-env vulkan1.2` accepts the generated module, and the complete
 Windows self-host suite passes.
+
+## D1730 — Aligned SIMD stores report device faults
+
+**Decision.** A checked `simd.store_aligned` keeps the existing call-site address check
+in a device build. Its `align` trap writes fault kind `Alignment` and returns the
+invocation, exactly as the CPU kernel path does. `load_aligned` remains under the
+existing restriction on aggregate helper returns; this change does not add that
+separate capability.
+
+The device reachability walk treats a resolved generic callee expression such as
+`store[V]` as the call it is, while still walking its arguments. SPIR-V function types
+are interned by their flattened parameter and return types, as the validator requires;
+the aligned wrapper and its ordinary store helper have the same flattened signature.
+
+**Evidence.** `gpu_fault_bounds` launches a four-lane aligned store one element off a
+device buffer and checks the exact `Alignment` record on two Windows Vulkan devices
+and WSL's Vulkan device. `spirv-val --target-env vulkan1.2` accepts the multi-kernel
+fault module and all six pinned modules, which remain byte-identical across Windows
+and Linux. The self-hosted compiler builds; the complete Windows suite currently stops
+at the stale `docs/library-fixtures.json` produced by unrelated shared-tree library
+edits, before compiler fixtures run.
