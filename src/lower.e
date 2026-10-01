@@ -8713,8 +8713,14 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     run_arguments[11usize] = entry_value
     // A character per parameter, printable so the artifact's strings stay UTF-8: `s` a
     // slice, `1` to `8` a scalar's size, `?` what the argument block cannot carry yet.
-    var layout_bytes: [18]u8 = zero
+    // A checked build starts with `!`, whose hidden u64 slot is the fault address.
+    var layout_bytes: [20]u8 = zero
     layout_bytes[0usize] = 34u8
+    var layout_prefix = 0usize
+    if !builder.nocheck {
+        layout_bytes[1usize] = 33u8
+        layout_prefix = 1usize
+    }
     var layout_at = 0usize
     while layout_at < kernel.parameter_count {
         let parameter_type = c.parameters[kernel.first_parameter + layout_at].ty
@@ -8725,18 +8731,19 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
             if parameter_info_error != ok { ret parameter_info_error }
             if parameter_info.size >= 1usize && parameter_info.size <= 8usize { code = u8(48usize + parameter_info.size) }
         }
-        layout_bytes[1usize + layout_at] = code
+        layout_bytes[1usize + layout_prefix + layout_at] = code
         layout_at += 1usize
     }
-    layout_bytes[1usize + kernel.parameter_count] = 34u8
-    let (layout_storage, layout_storage_error) = mem.alloc[u8](c.arena, kernel.parameter_count + 2usize)
+    layout_bytes[1usize + layout_prefix + kernel.parameter_count] = 34u8
+    let layout_length = kernel.parameter_count + layout_prefix + 2usize
+    let (layout_storage, layout_storage_error) = mem.alloc[u8](c.arena, layout_length)
     if layout_storage_error != ok { ret layout_storage_error }
     var copy_at = 0usize
-    while copy_at < kernel.parameter_count + 2usize {
+    while copy_at < layout_length {
         layout_storage[copy_at] = layout_bytes[copy_at]
         copy_at += 1usize
     }
-    let layout_spelling = layout_storage[0usize..kernel.parameter_count + 2usize]
+    let layout_spelling = layout_storage[0usize..layout_length]
     let (layout_index, layout_index_error) = nir.intern_string(builder, layout_spelling)
     if layout_index_error != ok { ret layout_index_error }
     let (layout_instruction, layout_value, layout_error) = nir.emit(builder, .ConstString, text_type, true, layout_index, token)

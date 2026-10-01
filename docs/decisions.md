@@ -31917,3 +31917,23 @@ i32 and u64 plus the three f32 reductions, byte-identically from the Windows and
 self-hosted compilers. `gpu_subgroup_reduce` checks full and partial subgroups on the
 CPU, a Windows Vulkan adapter, and WSL's Vulkan device. A direct checker probe rejects
 `subgroup_and(f32)`. The complete Windows self-host suite passes.
+
+## D1726 — Checked Vulkan argument blocks start with the fault address
+
+**Decision.** A checked Vulkan launch reserves the first eight bytes of its argument
+block for the mapped fault buffer's device address and shifts ordinary parameters by
+eight; the generated layout marks that ABI with `!`. A whole-image `--unchecked`
+build keeps the parameter-only ABI. The synchronous Vulkan runtime uses one cleared
+buffer per dispatch, seeds its launch serial, then folds any returned record into the
+queue's retained fault state before freeing it.
+
+A failing SPIR-V bounds or slice guard compares-and-swaps `count` from zero to one.
+That first invocation writes kind, source line and global invocation id; later
+failures atomically increment `count`, and every failing invocation returns. This
+keeps the public `sync`/`download`/`last_fault` behavior identical to the CPU path
+without adding parameters to every device helper.
+
+**Evidence.** `gpu_fault_bounds` checks the exact bounds record, one-shot reporting
+and queue reuse on the CPU, two Windows Vulkan devices and WSL's Vulkan device. The
+six pinned SPIR-V modules are byte-identical from Windows and Linux, and the complete
+Windows self-host suite passes.
