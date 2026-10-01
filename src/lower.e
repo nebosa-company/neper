@@ -2405,6 +2405,54 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
         try oracle_module(c, g, oracle, signatures, bindings, entries, entry_count, module_index, &entry_cursor, &oracle_defers)
         order_at += 1usize
     }
+    if oracle.barrier_oracle {
+        // A concrete generic instance owns code in its calling module, but its
+        // body is the template's declaration; the ordinary oracle skips it.
+        var instance_at = c.signature_function_count
+        while instance_at < c.function_count {
+            let function = c.functions[instance_at]
+            let generic = c.function_generics[instance_at]
+            var reached = instance_at < oracle.barrier_reachable.len && oracle.barrier_reachable[instance_at]
+            if generic.instance && generic.template_index < oracle.barrier_reachable.len && oracle.barrier_reachable[generic.template_index] { reached = true }
+            if generic.instance && !function.generic && !generic.formatter && !generic.launcher && reached && check.device_only(c, g, instance_at) {
+                var wanted = true
+                if oracle.has_oracle {
+                    let (previous, found) = find_inline_entry(oracle, function.owner_module_index, function.name, function.instance_id)
+                    wanted = found && oracle.inline_entries[previous].mandatory
+                }
+                if wanted && function.return_count <= 1usize {
+                    var hidden = false
+                    if function.return_count == 1usize {
+                        var function_call: check.CallInfo = zero
+                        function_call.function = function
+                        var return_layout: ReturnLayout = zero
+                        try call_return_layout(c, function_call, &return_layout)
+                        hidden = return_layout.via_slot
+                    }
+                    if !hidden {
+                        let before = oracle.function_count
+                        var tree: parse.Tree = zero
+                        try graph.parse_module(g, function.module_index, &tree)
+                        try check.tokenize_module(c, g, function.module_index)
+                        try lower_instance(c, g, &tree, function.module_index, instance_at, oracle, signatures, bindings, &oracle_defers)
+                        c.failure_has_token = false
+                        if *entry_count == entries.len { ret check.Capacity }
+                        var entry: nir.InlineEntry = zero
+                        entry.module_index = function.owner_module_index
+                        entry.name = function.name
+                        entry.instance = function.instance_id
+                        entry.function_index = before
+                        entry.walked_in = function.module_index
+                        entry.oracle = oracle
+                        entry.checker = c
+                        entries[*entry_count] = entry
+                        *entry_count += 1usize
+                    }
+                }
+            }
+            instance_at += 1usize
+        }
+    }
     ret ok
 }
 
@@ -2510,9 +2558,8 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     }
                     if lower_error != ok { ret lower_error }
                     let lowered = oracle.functions[before]
-                    // A body that calls a generic instance stays out: an instance is the
-                    // instantiating module's own copy, not the target of anyone's edge,
-                    // and a copy of the call in another module would name it anyway.
+                    // Ordinary release inlining excludes a body that calls an instance;
+                    // the barrier oracle also holds the reached concrete instance.
                     var calls_instance = false
                     var scan_at = lowered.first_instruction
                     while scan_at < lowered.first_instruction + lowered.instruction_count {
@@ -2521,9 +2568,9 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         scan_at += 1usize
                     }
                     if oracle.explain {
-                        if calls_instance { explain_inline(oracle, g, module_index, name, "rejected: it calls a generic instance") } else { explain_inline(oracle, g, module_index, name, "inlinable: at or under the cap") }
+                        if calls_instance && !oracle.barrier_oracle { explain_inline(oracle, g, module_index, name, "rejected: it calls a generic instance") } else { explain_inline(oracle, g, module_index, name, "inlinable: at or under the cap") }
                     }
-                    if (lowered.instruction_count <= inline_cap(oracle) || barrier_helper || oracle.barrier_oracle) && !calls_instance {
+                    if (lowered.instruction_count <= inline_cap(oracle) || barrier_helper || oracle.barrier_oracle) && (!calls_instance || oracle.barrier_oracle) {
                         let entry_at = *entry_count
                         if entry_at == entries.len { ret check.Capacity }
                         var entry: nir.InlineEntry = zero
@@ -5232,9 +5279,9 @@ fn frame_save_temporary(c: *check.Checker, ty: check.Type, value: usize, token: 
     if slot_error != ok { ret (0usize, slot_error) }
     let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, ty, false, info.size, token)
     if store_error != ok { ret (0usize, store_error) }
-    try nir.add_operand(builder, store_instruction, slot)
-    try nir.add_operand(builder, store_instruction, value)
-    ret (slot, ok)
+    let operand_error = nir.add_operand(builder, store_instruction, slot)
+    if operand_error != ok { ret (0usize, operand_error) }
+    ret (slot, nir.add_operand(builder, store_instruction, value))
 }
 
 fn frame_resume_temporary(c: *check.Checker, ty: check.Type, value: usize, slot: usize, before: usize, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
@@ -5243,8 +5290,7 @@ fn frame_resume_temporary(c: *check.Checker, ty: check.Type, value: usize, slot:
     if info_error != ok { ret (0usize, info_error) }
     let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, ty, true, info.size, token)
     if load_error != ok { ret (0usize, load_error) }
-    try nir.add_operand(builder, load_instruction, slot)
-    ret (loaded, ok)
+    ret (loaded, nir.add_operand(builder, load_instruction, slot))
 }
 
 fn expression_may_cut(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, builder: *nir.Builder) -> bool {

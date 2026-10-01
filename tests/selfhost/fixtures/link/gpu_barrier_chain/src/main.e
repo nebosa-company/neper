@@ -25,6 +25,11 @@ fn unused(n: u32) {
 
 fn combine(view: []u32, left: u32, right: u32) -> u32 { ret right + left - left + u32(view.len) - 8u32 }
 
+fn passthrough[T: type](value: T) -> T {
+    gpu.barrier()
+    ret value
+}
+
 fn middle(out: []u32, lane: u32) {
     for pass in 0u32..1u32 {
         // The store address, binary left operand and first call argument precede inner's barriers.
@@ -33,6 +38,7 @@ fn middle(out: []u32, lane: u32) {
             let view = View { data: out }
             view.data[usize(inner(lane) - 44u32)] = lane + 44u32
             view.data[usize(lane)] += inner(lane) - (lane + 44u32)
+            view.data[usize(lane)] = passthrough(lane + 44u32)
         }
     }
 }

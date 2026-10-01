@@ -32469,3 +32469,33 @@ shared, subgroup-width and gaps fixtures pass on Windows. Sequential
 self-hosted compiler stages are byte-identical on Windows and WSL. A generic
 barrier helper remains refused by the checker before lowering, so C091 is
 still partial.
+
+## D1758 — Inline reached generic barrier instances into CPU kernel steps
+
+**Decision.** Treat a generic template with `gpu.barrier()` as device-only,
+just like a non-generic helper. For the CPU barrier oracle, lower each concrete
+instance reached from a kernel under its owner module and inline its body;
+allow a barrier-reachable ordinary helper to call that instance. Keep the
+ordinary release oracle's generic-call exclusion unchanged.
+
+**Evidence.** `link/gpu_barrier_chain` now passes a value through a generic
+barrier helper in debug and release on Windows and WSL. A CPU host call to the
+same shape is refused by `check/gpu_generic_device_only`. Sequential
+self-hosted compiler stages are byte-identical on both hosts. Aggregate-return,
+indirect and other pending-expression helper shapes remain unverified;
+C091 is partial.
+
+## D1759 — Keep the C bootstrap large enough to build its current compiler
+
+**Decision.** Raise the bootstrap's type-member limit from 160 to 161 for
+`Checker` and its local limit from 256 to 272 for `dispatch`. Return operand
+errors explicitly from the two `(usize, err)` frame-temporary helpers, because
+the C bootstrap does not accept `try` in a tuple-returning function.
+
+**Evidence.** Before these changes, the Windows suite stopped building
+`neper-self` on the 161st `Checker` field, then on `dispatch`'s locals and the
+three `try` expressions. The Windows and Linux suites now build `neper-self`
+and pass 226 source-surface checks; both stop at the pre-existing stale
+`docs/library-fixtures.json` gate in the shared dirty tree. Focused generic
+barrier fixtures pass with the freshly bootstrapped compilers on both hosts;
+`lint_bootstrap.py` reports zero findings.

@@ -2912,7 +2912,7 @@ done
 # (D1589) A device-only helper called from CPU code, a `gpu.Buf` of `usize`, a
 # capability outside `caps(...)` and a repeated `caps` member are refused; a kernel
 # within its `caps(...)` and `ftz` is not.
-for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-GPU-9999]: `lane` is device-only' 'gpu_buf_element|main.e:5:5: error[E-GPU-9999]: a `gpu.Buf[T]` holds device memory' 'gpu_caps_bound|main.e:14:1: error[E-GPU-9999]: `fill` needs `.Float64` through fill -> scaled -> widen' 'gpu_caps_duplicate|main.e:5:1: error[E-GPU-9999]: `fill` carries `@gpu` without a usable workgroup size' 'gpu_shared_elsewhere|main.e:6:8: error[E-GPU-9999]: `plain` is device-only'; do
+for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-GPU-9999]: `lane` is device-only' 'gpu_generic_device_only|main.e:9:9: error[E-GPU-9999]: `passthrough` is device-only' 'gpu_buf_element|main.e:5:5: error[E-GPU-9999]: a `gpu.Buf[T]` holds device memory' 'gpu_caps_bound|main.e:14:1: error[E-GPU-9999]: `fill` needs `.Float64` through fill -> scaled -> widen' 'gpu_caps_duplicate|main.e:5:1: error[E-GPU-9999]: `fill` carries `@gpu` without a usable workgroup size' 'gpu_shared_elsewhere|main.e:6:8: error[E-GPU-9999]: `plain` is device-only'; do
     gpu_rule_name=${gpu_rule_case%%|*}
     gpu_rule_expected=${gpu_rule_case#*|}
     gpu_rule=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$gpu_rule_name/src/main.e" "$repo" x64 linux 2>&1 || true)

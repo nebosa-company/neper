@@ -3253,6 +3253,7 @@ if ($LASTEXITCODE -ne 0 -or ($gpuProfileValid -join "`n") -ne 'module check ok')
 # within its `caps(...)` and `ftz` is not.
 foreach ($gpuRuleCase in @(
     @('gpu_device_only', 'main.e:15:9: error[E-GPU-9999]: `lane` is device-only'),
+    @('gpu_generic_device_only', 'main.e:9:9: error[E-GPU-9999]: `passthrough` is device-only'),
     @('gpu_buf_element', 'main.e:5:5: error[E-GPU-9999]: a `gpu.Buf[T]` holds device memory'),
     @('gpu_caps_bound', 'main.e:14:1: error[E-GPU-9999]: `fill` needs `.Float64` through fill -> scaled -> widen'),
     @('gpu_caps_duplicate', 'main.e:5:1: error[E-GPU-9999]: `fill` carries `@gpu` without a usable workgroup size'),

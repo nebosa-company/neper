@@ -45,7 +45,7 @@
    costs 8 bytes and this can grow; the struct and error tables are still by value. */
 #define MAX_DECLS 4096
 #define MAX_PARAMS 32
-#define MAX_LOCALS 256
+#define MAX_LOCALS 272
 #define MAX_ARGS 16
 #define MAX_USES 256
 /* Program-wide string literals, held by pointer. Raised from 4096 (D361): the
@@ -58,7 +58,7 @@
 #define MAX_LOOP_DEPTH 64
 #define MAX_NESTING 1024
 #define MAX_ARRAY_ELEMENTS 4096
-#define MAX_FIELDS 160
+#define MAX_FIELDS 161
 #define MAX_FIELD_PATH 32
 #define MAX_SOURCES 128
 

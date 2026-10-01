@@ -16035,7 +16035,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     c.body_is_kernel = function.gpu
     c.body_is_main = same(function.name, "main")
     c.body_device_only = false
-    if !function.gpu && !function.generic {
+    if !function.gpu {
         let (self_index, self_named) = find_function(c, function.module_index, function.name)
         if self_named { c.body_device_only = device_only(c, g, self_index) }
     }
