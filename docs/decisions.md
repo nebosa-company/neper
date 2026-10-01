@@ -32431,3 +32431,23 @@ subgroup-width and gaps fixtures pass on Windows; frame-many and shared also
 pass on WSL. Consecutive self-hosted compiler stages are byte-identical on
 both hosts. Other pending-expression shapes, including earlier call arguments
 and a computed index base, remain to be checked.
+
+## D1756 — Keep earlier arguments and index bases across helper cuts
+
+**Decision.** Use the same invocation-frame spill for already-evaluated call
+arguments (including aggregate addresses) before a later argument can cut,
+and for an indexed expression's base before its index can cut. Reload them
+after a cut without changing left-to-right evaluation. Only a barrier-reachable
+call or subgroup operation warrants the spill; a cast is not one. This avoids
+copying speculative CPU frame stores from a helper oracle into the Vulkan
+kernel's SPIR-V build.
+
+**Evidence.** The expanded `link/gpu_barrier_chain` failed on the old compiler
+at a call operand and then at an indexed field base. It now passes in debug
+and release on Windows and WSL, including a slice argument before the barrier
+call. `link/gpu_barrier_helper` again runs on CPU and available Vulkan devices
+on both hosts; barrier, large-helper, frame-many, shared, subgroup-width and
+gaps fixtures pass on Windows. Five repeated Windows self-builds passed, and
+consecutive Windows and WSL compiler stages are byte-identical. Generic,
+aggregate-return, indirect and other pending-expression helper shapes remain
+unverified.

@@ -4,6 +4,8 @@ use e.mem
 
 error WrongValue
 
+type View = struct { data: []u32 }
+
 fn inner(lane: u32) -> u32 {
     var saved = lane + 41u32
     var round = 0u32
@@ -21,10 +23,16 @@ fn unused(n: u32) {
     if n != 0u32 { unused(n - 1u32) }
 }
 
+fn combine(view: []u32, left: u32, right: u32) -> u32 { ret right + left - left + u32(view.len) - 8u32 }
+
 fn middle(out: []u32, lane: u32) {
     for pass in 0u32..1u32 {
-        // The store address and binary left operand precede inner's barriers.
-        if gpu.lid.x < 8u32 { out[usize(lane)] = lane + inner(lane) - lane }
+        // The store address, binary left operand and first call argument precede inner's barriers.
+        if gpu.lid.x < 8u32 {
+            out[usize(lane)] = lane + combine(out, lane, inner(lane)) - lane
+            let view = View { data: out }
+            view.data[usize(inner(lane) - 44u32)] = lane + 44u32
+        }
     }
 }
 

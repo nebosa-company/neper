@@ -3715,6 +3715,32 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             }
             if child_position > 0usize {
                 if *argument_count == arguments.len { ret check.ArgumentCount }
+                let child_index = parse.child_index_at(tree, at)
+                var saved: [33]usize = zero
+                var saved_callee = 0usize
+                var pending = false
+                if !into_c && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, child_index, builder) {
+                    pending = true
+                    let pointer_type = check.make_type(.Pointer, "", module_index)
+                    let token = c.tokens[usize(node.token_start)]
+                    if call.indirect {
+                        let (slot, slot_error) = frame_save_temporary(c, pointer_type, *callee_out, token, builder)
+                        if slot_error != ok { ret slot_error }
+                        saved_callee = slot
+                    }
+                    var previous = 0usize
+                    while previous < *argument_count {
+                        let (previous_type, type_error) = call_parameter_type(c, call, previous)
+                        if type_error != ok { ret type_error }
+                        var storage_type = previous_type
+                        if aggregate_value(c, previous_type) { storage_type = pointer_type }
+                        let (slot, slot_error) = frame_save_temporary(c, storage_type, arguments[previous], token, builder)
+                        if slot_error != ok { ret slot_error }
+                        saved[previous] = slot
+                        previous += 1usize
+                    }
+                }
+                let before = builder.kernel_barriers
                 var parameter_type = check.invalid_type()
                 let variadic_extra = lowered >= call.function.parameter_count
                 if variadic_extra {
@@ -3727,8 +3753,28 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
                     if parameter_type_error != ok { ret parameter_type_error }
                     parameter_type = declared_type
                 }
-                let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), parameter_type, builder, bindings, binding_count)
+                let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, child_index, parameter_type, builder, bindings, binding_count)
                 if value_error != ok { ret value_error }
+                if pending && builder.kernel_barriers != before {
+                    let pointer_type = check.make_type(.Pointer, "", module_index)
+                    let token = c.tokens[usize(node.token_start)]
+                    if call.indirect {
+                        let (restored, restore_error) = frame_resume_temporary(c, pointer_type, *callee_out, saved_callee, before, token, builder)
+                        if restore_error != ok { ret restore_error }
+                        *callee_out = restored
+                    }
+                    var previous = 0usize
+                    while previous < *argument_count {
+                        let (previous_type, type_error) = call_parameter_type(c, call, previous)
+                        if type_error != ok { ret type_error }
+                        var storage_type = previous_type
+                        if aggregate_value(c, previous_type) { storage_type = pointer_type }
+                        let (restored, restore_error) = frame_resume_temporary(c, storage_type, arguments[previous], saved[previous], before, token, builder)
+                        if restore_error != ok { ret restore_error }
+                        arguments[previous] = restored
+                        previous += 1usize
+                    }
+                }
                 lowered += 1usize
                 if into_c {
                     var crossing_type = parameter_type
@@ -3964,10 +4010,21 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     if element_type_error != ok { ret (0usize, element_type, element_type_error) }
     let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, children[0usize], base_type, builder, bindings, binding_count)
     if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+    let saved_pointer_type = check.make_type(.Pointer, "", module_index)
+    let token = c.tokens[usize(node.token_start)]
+    var base_slot = 0usize
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[1usize], builder) {
+        let (saved, save_error) = frame_save_temporary(c, saved_pointer_type, base, token, builder)
+        if save_error != ok { ret (0usize, element_type, save_error) }
+        base_slot = saved
+    }
+    let before = builder.kernel_barriers
     let usize_type = check.make_type(.Integer, "usize", module_index)
     let (index, index_type, index_error) = lower_expression(c, g, tree, module_index, children[1usize], usize_type, builder, bindings, binding_count)
     if index_error != ok { ret (0usize, index_type, index_error) }
-    var data = base
+    let (resumed_base, resume_error) = frame_resume_temporary(c, saved_pointer_type, base, base_slot, before, token, builder)
+    if resume_error != ok { ret (0usize, element_type, resume_error) }
+    var data = resumed_base
     var length = 0usize
     let (vector_lanes, is_vector) = check.vector_lanes(c, base_type)
     if base_type.kind == .Array || is_vector {
@@ -3982,7 +4039,7 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
         pointer_type.in_shared = base_type.in_shared
         let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, c.tokens[usize(node.token_start)])
         if data_address_error != ok { ret (0usize, element_type, data_address_error) }
-        let data_address_operand_error = nir.add_operand(builder, data_address_instruction, base)
+        let data_address_operand_error = nir.add_operand(builder, data_address_instruction, resumed_base)
         if data_address_operand_error != ok { ret (0usize, element_type, data_address_operand_error) }
         let (data_load, data_result, data_load_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, c.tokens[usize(node.token_start)])
         if data_load_error != ok { ret (0usize, element_type, data_load_error) }
@@ -3991,7 +4048,7 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
         data = data_result
         let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, usize_type, true, 8usize, c.tokens[usize(node.token_start)])
         if length_address_error != ok { ret (0usize, element_type, length_address_error) }
-        let length_address_operand_error = nir.add_operand(builder, length_address_instruction, base)
+        let length_address_operand_error = nir.add_operand(builder, length_address_instruction, resumed_base)
         if length_address_operand_error != ok { ret (0usize, element_type, length_address_operand_error) }
         let (length_load, length_result, length_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, c.tokens[usize(node.token_start)])
         if length_load_error != ok { ret (0usize, element_type, length_load_error) }
@@ -5190,13 +5247,23 @@ fn frame_resume_temporary(c: *check.Checker, ty: check.Type, value: usize, slot:
     ret (loaded, ok)
 }
 
-fn expression_has_call(tree: *parse.Tree, node_index: usize) -> bool {
+fn expression_may_cut(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, builder: *nir.Builder) -> bool {
     let node = tree.nodes[node_index]
-    if node.kind == .CallExpr { ret true }
+    if node.kind == .CallExpr {
+        let (call, call_error) = check.check_call(c, g, tree, module_index, node)
+        if call_error != ok { ret true }
+        if call.gpu_barrier || call.subgroup_op != .None || call.indirect { ret true }
+        if !call.is_cast && !call.function.intrinsic && !call.function.external {
+            let (entry_index, found) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
+            if found && builder.inline_entries[entry_index].mandatory { ret true }
+            let (direct, barrier_error) = helper_has_barrier(c, g, call.function)
+            if barrier_error != ok || direct { ret true }
+        }
+    }
     var at = usize(node.first_child)
     let end = at + usize(node.child_count)
     while at < end {
-        if parse.child_is_node_at(tree, at) && expression_has_call(tree, parse.child_index_at(tree, at)) { ret true }
+        if parse.child_is_node_at(tree, at) && expression_may_cut(c, g, tree, module_index, parse.child_index_at(tree, at), builder) { ret true }
         at += 1usize
     }
     ret false
@@ -5300,7 +5367,7 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     let pointer_type = check.make_type(.Pointer, "", module_index)
     let token = c.tokens[usize(node.token_start)]
     var address_slot = 0usize
-    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_has_call(tree, children[1usize]) {
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[1usize], builder) {
         let (saved, save_error) = frame_save_temporary(c, pointer_type, address, token, builder)
         if save_error != ok { ret save_error }
         address_slot = saved
@@ -6581,7 +6648,7 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     if left_error != ok { ret (0usize, lowered_left_type, left_error) }
     var left_slot = 0usize
     let expression_token = c.tokens[usize(node.token_start)]
-    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_has_call(tree, children[1usize]) {
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[1usize], builder) {
         let (saved, save_error) = frame_save_temporary(c, lowered_left_type, left, expression_token, builder)
         if save_error != ok { ret (0usize, result_type, save_error) }
         left_slot = saved
