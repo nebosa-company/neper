@@ -1717,6 +1717,12 @@ $survivalTrialWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $survivalTrialWritten -ne 'executable written') { throw 'algo_survival_trial emission failed' }
 & $survivalTrialPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_survival_trial check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.causal`: propensity scores feeding IPTW and doubly robust effects, hand-checkable units, a MICE mean imputation with determinism and interval checks, and the storage and degenerate cases.
+$causalPath = Join-Path $testBuild 'causal-selfhost.exe'
+$causalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_causal\src\main.e') $repo 'x64' 'windows' $causalPath
+if ($LASTEXITCODE -ne 0 -or $causalWritten -ne 'executable written') { throw 'algo_causal emission failed' }
+& $causalPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_causal check failed: exit $LASTEXITCODE" }
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 $mlHmmPath = Join-Path $testBuild 'ml-hmm-selfhost.exe'
 $mlHmmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_hmm\src\main.e') $repo 'x64' 'windows' $mlHmmPath

@@ -168,6 +168,7 @@
     "e.algo.stat.test",
     "e.algo.stat.mixed",
     "e.algo.stat.survival_trial",
+    "e.algo.stat.causal",
     "e.algo.graph.flow",
     "e.algo.graph.match",
     "e.algo.graph.path",
@@ -3556,6 +3557,19 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.causal",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
     "e.math",
     "e.math.special"
    ],

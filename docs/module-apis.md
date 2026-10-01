@@ -3119,6 +3119,32 @@ designs by exact exhaustive search (`simon_optimal` smallest expectation,
 finding by golden section, and `farrington_manning` non-inferiority with
 `fm_mle` constrained estimates.
 
+### `e.algo.stat.causal`
+
+```neper
+error TooSmall
+error Singular
+error Invalid
+
+fn causal_solve(matrix: []f64, rhs: []f64, n: usize) -> err
+fn causal_chol(matrix: []f64, n: usize) -> err
+fn causal_chol_solve(l: []const f64, rhs: []f64, n: usize) -> err
+fn causal_at(x: []const f64, d: usize, i: usize, j: usize) -> f64
+fn propensity_scores(x: []const f64, treated: []const u8, n: usize, d: usize, tolerance: f64, max_iterations: u32, scores: []f64, scratch: []f64) -> (u32, err)
+fn iptw_ate(y: []const f64, treated: []const u8, scores: []const f64, n: usize) -> (f64, f64, f64, err)
+fn doubly_robust(y: []const f64, treated: []const u8, scores: []const f64, mu1: []const f64, mu0: []const f64, n: usize) -> (f64, f64, f64, err)
+fn mice_impute(data: []const f64, missing: []const u8, n: usize, d: usize, cycles: u32, r: *rand.Pcg64, completed: []f64, scratch: []f64) -> err
+fn mice_pool(estimates: []const f64, variances: []const f64, m: usize) -> (f64, f64, f64, err)
+fn mice[Ctx: type](data: []const f64, missing: []const u8, n: usize, d: usize, cycles: u32, m: usize, r: *rand.Pcg64, ctx: *Ctx, estimate: fn(*Ctx, []const f64, usize, usize) -> (f64, f64), completed: []f64, pooled: []f64, scratch: []f64) -> err
+```
+
+Causal and missing-data methods over caller storage: `propensity_scores` by
+Newton's method (fixed 1e-8 ridge), Hajek `iptw_ate` with the known-weights
+sandwich, `doubly_robust` augmentation over caller outcome predictions, and
+Bayesian `mice_impute` chained equations for continuous variables with
+`mice_pool` Rubin's rules behind the generic `mice` driver. Treatments and
+missingness are `u8` flags; scores must stay inside (0, 1).
+
 ### `e.algo.stat`
 
 ```neper

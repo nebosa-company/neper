@@ -1563,6 +1563,11 @@ survival_trial_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$survival_trial_written" = 'executable written' ]
 chmod +x "$test_build/survival-trial-selfhost"
 "$test_build/survival-trial-selfhost"
+# `e.algo.stat.causal`: propensity scores feeding IPTW and doubly robust effects, hand-checkable units, a MICE mean imputation with determinism and interval checks, and the storage and degenerate cases.
+causal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_causal/src/main.e" "$repo" x64 linux "$test_build/causal-selfhost")
+[ "$causal_written" = 'executable written' ]
+chmod +x "$test_build/causal-selfhost"
+"$test_build/causal-selfhost"
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 ml_hmm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hmm/src/main.e" "$repo" x64 linux "$test_build/ml-hmm-selfhost")
 [ "$ml_hmm_written" = 'executable written' ]
