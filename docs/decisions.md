@@ -32260,3 +32260,16 @@ remain live; the GPU kernel cannot persist a pointer into its temporary frame.
 **Evidence.** `gpu_barrier` checks that a CPU launch leaves the arena mark unchanged.
 It and `gpu_gaps` (which calls the scheduler from sort and attention) pass on
 Windows and WSL. The Vulkan path allocates no CPU frames and is unchanged.
+
+## D1745 — Widen the preaddressed CPU invocation frame to 256 words
+
+**Decision.** The CPU kernel frame has 256 eight-byte words after its `pc`, up
+from 128. The same table of entry-block `FieldAddress` values still dominates
+barrier resumes, so no new resume path is needed. This is a bounded extension,
+not arbitrary-size private storage.
+
+**Evidence.** A kernel with a 96-element `u64` local live across a barrier failed
+NIR lowering at the old cap and now runs on Windows and WSL. The compiler
+self-hosts byte-for-byte; an unchanged `gpu_gaps` executable is byte-identical
+before and after the wider table. That array-heavy kernel's SPIR-V remains
+unsupported, so its new runtime assertion covers the CPU path only.
