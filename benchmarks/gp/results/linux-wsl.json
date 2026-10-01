@@ -1,0 +1,585 @@
+{
+ "schema": "neper-gp-performance-v1",
+ "version": 1,
+ "host": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+ "machine": "x86_64",
+ "cpu": "12th Gen Intel(R) Core(TM) i5-12500H",
+ "runs": 7,
+ "workloads": {
+  "gp09": {
+   "algorithm": "lower-case Base16 encode then decode",
+   "bytes": 4194317,
+   "iterations": 8
+  },
+  "gp10": {
+   "algorithm": "y[i] = 3*x[i] + y[i]",
+   "elements": 1048576,
+   "iterations": 16
+  }
+ },
+ "toolchains": {
+  "c": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "cpp": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "go": "go version go1.27.1 linux/amd64",
+  "neper": "/mnt/d/repos/neper/build/windows/gp-neper-linux"
+ },
+ "revision": "5d482bdaed27445e96349c1a22ee4e2cfd8fcf3e",
+ "cells": [
+  {
+   "workload": "gp09",
+   "implementation": "c",
+   "compile_ms": {
+    "p50": 163.681,
+    "p95": 177.123,
+    "min": 153.331,
+    "max": 181.795,
+    "samples": [
+     162.534,
+     181.795,
+     166.22,
+     153.331,
+     160.877,
+     163.681,
+     165.085
+    ]
+   },
+   "runtime_ms": {
+    "p50": 50.431,
+    "p95": 54.584,
+    "min": 49.691,
+    "max": 54.849,
+    "samples": [
+     53.967,
+     54.849,
+     49.691,
+     50.431,
+     49.813,
+     51.629,
+     49.825
+    ]
+   },
+   "peak_rss_kib": 17768,
+   "image_bytes": 16128,
+   "output": "gp09 534775349",
+   "build_command": [
+    "/usr/bin/cc",
+    "-std=c11",
+    "-O3",
+    "-march=x86-64-v3",
+    "/mnt/d/repos/neper/benchmarks/gp/c/gp09.c",
+    "-o",
+    "/tmp/neper-gp-publish/gp09-c"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp09-c"
+   ]
+  },
+  {
+   "workload": "gp09",
+   "implementation": "cpp",
+   "compile_ms": {
+    "p50": 255.341,
+    "p95": 298.288,
+    "min": 253.147,
+    "max": 303.402,
+    "samples": [
+     255.341,
+     286.354,
+     303.402,
+     253.147,
+     254.003,
+     253.517,
+     268.096
+    ]
+   },
+   "runtime_ms": {
+    "p50": 51.417,
+    "p95": 55.062,
+    "min": 50.574,
+    "max": 55.283,
+    "samples": [
+     55.283,
+     54.546,
+     52.461,
+     50.574,
+     50.635,
+     51.417,
+     50.761
+    ]
+   },
+   "peak_rss_kib": 19792,
+   "image_bytes": 16704,
+   "output": "gp09 534775349",
+   "build_command": [
+    "/usr/bin/c++",
+    "-std=c++17",
+    "-O3",
+    "-march=x86-64-v3",
+    "/mnt/d/repos/neper/benchmarks/gp/cpp/gp09.cpp",
+    "-o",
+    "/tmp/neper-gp-publish/gp09-cpp"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp09-cpp"
+   ]
+  },
+  {
+   "workload": "gp09",
+   "implementation": "rust",
+   "compile_ms": {
+    "p50": 291.457,
+    "p95": 337.037,
+    "min": 280.93,
+    "max": 355.187,
+    "samples": [
+     294.689,
+     293.588,
+     291.457,
+     283.097,
+     280.93,
+     285.548,
+     355.187
+    ]
+   },
+   "runtime_ms": {
+    "p50": 42.753,
+    "p95": 46.953,
+    "min": 39.312,
+    "max": 47.573,
+    "samples": [
+     47.573,
+     45.508,
+     42.078,
+     42.753,
+     39.312,
+     43.855,
+     41.131
+    ]
+   },
+   "peak_rss_kib": 18340,
+   "image_bytes": 4370360,
+   "output": "gp09 534775349",
+   "build_command": [
+    "/home/gaddl/.cargo/bin/rustc",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-cpu=x86-64-v3",
+    "/mnt/d/repos/neper/benchmarks/gp/rust/gp09.rs",
+    "-o",
+    "/tmp/neper-gp-publish/gp09-rust"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp09-rust"
+   ]
+  },
+  {
+   "workload": "gp09",
+   "implementation": "go",
+   "compile_ms": {
+    "p50": 1513.83,
+    "p95": 1749.693,
+    "min": 1471.855,
+    "max": 1839.242,
+    "samples": [
+     1538.414,
+     1839.242,
+     1494.897,
+     1504.944,
+     1540.745,
+     1513.83,
+     1471.855
+    ]
+   },
+   "runtime_ms": {
+    "p50": 69.671,
+    "p95": 77.374,
+    "min": 68.953,
+    "max": 78.065,
+    "samples": [
+     78.065,
+     75.762,
+     68.953,
+     70.472,
+     69.203,
+     69.671,
+     69.495
+    ]
+   },
+   "peak_rss_kib": 19016,
+   "image_bytes": 1519776,
+   "output": "gp09 534775349",
+   "build_command": [
+    "/mnt/d/repos/neper/build/gp-toolchain/go/bin/go",
+    "build",
+    "-trimpath",
+    "-ldflags=-s",
+    "-o",
+    "/tmp/neper-gp-publish/gp09-go",
+    "/mnt/d/repos/neper/benchmarks/gp/go/gp09.go"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp09-go"
+   ]
+  },
+  {
+   "workload": "gp09",
+   "implementation": "neper",
+   "compile_ms": {
+    "p50": 178.403,
+    "p95": 183.377,
+    "min": 168.918,
+    "max": 184.816,
+    "samples": [
+     179.043,
+     175.674,
+     180.019,
+     184.816,
+     175.772,
+     168.918,
+     178.403
+    ]
+   },
+   "runtime_ms": {
+    "p50": 1576.243,
+    "p95": 1692.859,
+    "min": 1555.04,
+    "max": 1694.574,
+    "samples": [
+     1694.574,
+     1688.858,
+     1555.04,
+     1594.21,
+     1576.243,
+     1558.867,
+     1555.093
+    ]
+   },
+   "peak_rss_kib": 16384,
+   "image_bytes": 29096,
+   "output": "gp09 534775349",
+   "build_command": [
+    "/mnt/d/repos/neper/build/windows/gp-neper-linux",
+    "emit-executable",
+    "/mnt/d/repos/neper/benchmarks/gp/neper/gp09.e",
+    "/mnt/d/repos/neper",
+    "x64",
+    "linux",
+    "/tmp/neper-gp-publish/gp09-neper",
+    "--release",
+    "--unchecked",
+    "--cpu",
+    "x64-v3"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp09-neper"
+   ]
+  },
+  {
+   "workload": "gp10",
+   "implementation": "c",
+   "compile_ms": {
+    "p50": 159.774,
+    "p95": 165.714,
+    "min": 153.129,
+    "max": 165.755,
+    "samples": [
+     161.855,
+     159.774,
+     165.619,
+     165.755,
+     153.129,
+     157.667,
+     155.062
+    ]
+   },
+   "runtime_ms": {
+    "p50": 3.656,
+    "p95": 5.027,
+    "min": 3.408,
+    "max": 5.349,
+    "samples": [
+     5.349,
+     3.781,
+     3.656,
+     3.44,
+     4.275,
+     3.521,
+     3.408
+    ]
+   },
+   "peak_rss_kib": 9576,
+   "image_bytes": 16048,
+   "output": "gp10 25745686528",
+   "build_command": [
+    "/usr/bin/cc",
+    "-std=c11",
+    "-O3",
+    "-march=x86-64-v3",
+    "/mnt/d/repos/neper/benchmarks/gp/c/gp10.c",
+    "-o",
+    "/tmp/neper-gp-publish/gp10-c"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp10-c"
+   ]
+  },
+  {
+   "workload": "gp10",
+   "implementation": "cpp",
+   "compile_ms": {
+    "p50": 254.468,
+    "p95": 306.212,
+    "min": 244.017,
+    "max": 318.387,
+    "samples": [
+     277.806,
+     256.008,
+     248.02,
+     254.468,
+     244.017,
+     250.793,
+     318.387
+    ]
+   },
+   "runtime_ms": {
+    "p50": 4.381,
+    "p95": 4.593,
+    "min": 3.314,
+    "max": 4.61,
+    "samples": [
+     4.555,
+     4.61,
+     3.893,
+     3.314,
+     4.381,
+     4.091,
+     4.446
+    ]
+   },
+   "peak_rss_kib": 11608,
+   "image_bytes": 16528,
+   "output": "gp10 25745686528",
+   "build_command": [
+    "/usr/bin/c++",
+    "-std=c++17",
+    "-O3",
+    "-march=x86-64-v3",
+    "/mnt/d/repos/neper/benchmarks/gp/cpp/gp10.cpp",
+    "-o",
+    "/tmp/neper-gp-publish/gp10-cpp"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp10-cpp"
+   ]
+  },
+  {
+   "workload": "gp10",
+   "implementation": "rust",
+   "compile_ms": {
+    "p50": 219.021,
+    "p95": 240.434,
+    "min": 204.405,
+    "max": 246.225,
+    "samples": [
+     226.92,
+     246.225,
+     217.769,
+     219.021,
+     220.436,
+     204.405,
+     215.825
+    ]
+   },
+   "runtime_ms": {
+    "p50": 6.444,
+    "p95": 6.985,
+    "min": 6.134,
+    "max": 7.014,
+    "samples": [
+     6.918,
+     6.87,
+     6.237,
+     6.444,
+     6.134,
+     6.417,
+     7.014
+    ]
+   },
+   "peak_rss_kib": 10168,
+   "image_bytes": 4359120,
+   "output": "gp10 25745686528",
+   "build_command": [
+    "/home/gaddl/.cargo/bin/rustc",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-cpu=x86-64-v3",
+    "/mnt/d/repos/neper/benchmarks/gp/rust/gp10.rs",
+    "-o",
+    "/tmp/neper-gp-publish/gp10-rust"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp10-rust"
+   ]
+  },
+  {
+   "workload": "gp10",
+   "implementation": "go",
+   "compile_ms": {
+    "p50": 1552.074,
+    "p95": 1601.119,
+    "min": 1514.55,
+    "max": 1606.764,
+    "samples": [
+     1548.38,
+     1524.127,
+     1587.948,
+     1552.074,
+     1606.764,
+     1514.55,
+     1580.71
+    ]
+   },
+   "runtime_ms": {
+    "p50": 11.297,
+    "p95": 12.385,
+    "min": 10.383,
+    "max": 12.69,
+    "samples": [
+     11.593,
+     11.297,
+     11.671,
+     12.69,
+     10.383,
+     10.91,
+     10.601
+    ]
+   },
+   "peak_rss_kib": 10568,
+   "image_bytes": 1519776,
+   "output": "gp10 25745686528",
+   "build_command": [
+    "/mnt/d/repos/neper/build/gp-toolchain/go/bin/go",
+    "build",
+    "-trimpath",
+    "-ldflags=-s",
+    "-o",
+    "/tmp/neper-gp-publish/gp10-go",
+    "/mnt/d/repos/neper/benchmarks/gp/go/gp10.go"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp10-go"
+   ]
+  },
+  {
+   "workload": "gp10",
+   "implementation": "neper-cpu",
+   "compile_ms": {
+    "p50": 201.477,
+    "p95": 204.997,
+    "min": 190.803,
+    "max": 205.074,
+    "samples": [
+     198.926,
+     205.074,
+     203.513,
+     198.386,
+     204.818,
+     201.477,
+     190.803
+    ]
+   },
+   "runtime_ms": {
+    "p50": 1910.895,
+    "p95": 1992.775,
+    "min": 1858.601,
+    "max": 2026.115,
+    "samples": [
+     2026.115,
+     1914.982,
+     1858.601,
+     1865.027,
+     1913.455,
+     1874.031,
+     1910.895
+    ]
+   },
+   "peak_rss_kib": 18068,
+   "image_bytes": 286480,
+   "output": "gp10 25745686528",
+   "build_command": [
+    "/mnt/d/repos/neper/build/windows/gp-neper-linux",
+    "emit-executable",
+    "/mnt/d/repos/neper/benchmarks/gp/neper/gp10.e",
+    "/mnt/d/repos/neper",
+    "x64",
+    "linux",
+    "/tmp/neper-gp-publish/gp10-neper",
+    "--release",
+    "--unchecked",
+    "--cpu",
+    "x64-v3"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp10-neper",
+    "cpu"
+   ]
+  },
+  {
+   "workload": "gp10",
+   "implementation": "neper-vulkan",
+   "compile_ms": {
+    "p50": 201.477,
+    "p95": 204.997,
+    "min": 190.803,
+    "max": 205.074,
+    "samples": [
+     198.926,
+     205.074,
+     203.513,
+     198.386,
+     204.818,
+     201.477,
+     190.803
+    ]
+   },
+   "runtime_ms": {
+    "p50": 59.764,
+    "p95": 66.156,
+    "min": 56.924,
+    "max": 68.199,
+    "samples": [
+     61.389,
+     59.091,
+     57.506,
+     59.764,
+     56.924,
+     68.199,
+     60.922
+    ]
+   },
+   "peak_rss_kib": 105492,
+   "image_bytes": 286480,
+   "output": "gp10 25745686528",
+   "build_command": [
+    "/mnt/d/repos/neper/build/windows/gp-neper-linux",
+    "emit-executable",
+    "/mnt/d/repos/neper/benchmarks/gp/neper/gp10.e",
+    "/mnt/d/repos/neper",
+    "x64",
+    "linux",
+    "/tmp/neper-gp-publish/gp10-neper",
+    "--release",
+    "--unchecked",
+    "--cpu",
+    "x64-v3"
+   ],
+   "run_command": [
+    "/tmp/neper-gp-publish/gp10-neper",
+    "vulkan"
+   ]
+  }
+ ]
+}
