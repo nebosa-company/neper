@@ -97,6 +97,7 @@ type Opcode = enum u8 {
     // the kernel at the same source call instead.
     Barrier = 59,
     MemoryBarrier = 60,
+    Subgroup = 61,
 }
 
 // `operation` is the rank below, `lane` the lane shape (0, 1, 2, 3 for an integer of

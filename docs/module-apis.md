@@ -7206,6 +7206,10 @@ var launch_size: [3]usize = zero
 var launch_groups: [3]usize = zero
 var launch_active: bool = zero
 var launch_queue: *QueueState = zero
+var launch_local: usize = 0usize
+var subgroup_values: [1024]bool = zero
+var subgroup_snapshot: [1024]bool = zero
+var subgroup_active: [1024]bool = zero
 type SortArgs = struct { keys: []u32, n: u32, j: u32, k: u32 }
 type AttentionArgs = struct { query: []const f32, key: []const f32, value: []const f32, out: []f32, n: u32, d: u32, tile: u32, scale: f32 }
 error NoDevice
@@ -7222,6 +7226,7 @@ const MAX_BUFFERS: usize = 4096usize
 const MAX_DEVICES: usize = 16usize
 const MAX_QUEUES: usize = 64usize
 const MAX_AXIS: usize = 4294967295usize
+const SUBGROUP_PC: usize = 1073741824usize
 const MAX_IMAGE_SIDE: u32 = 16384u32
 const DONE: usize = 4294967295usize
 const FAULTED: usize = 4294967294usize
@@ -7276,7 +7281,13 @@ fn presented(t: *Target) -> (Image, err)
 fn close_target(t: *Target) -> err
 fn groups_along(invocations: usize, size: usize) -> (usize, err)
 fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usize, err)
+fn subgroup_record(value: bool)
+fn subgroup_vote(kind: u32) -> u64
 fn set_ids(group: usize, local: usize)
+fn subgroup_wait(pc: usize) -> bool
+fn subgroup_ready(frames: []u8, base: usize, bytes_per_frame: usize, per_group: usize, local: usize, pc: usize) -> bool
+fn workgroup_ready(frames: []u8, base: usize, bytes_per_frame: usize, per_group: usize, pc: usize) -> bool
+fn barrier_number(pc: usize) -> usize
 fn frame_pc(frames: []u8, at: usize) -> usize
 fn write_decimal(out: []u8, at: usize, v: usize) -> usize
 fn write_text(out: []u8, at: usize, text: str) -> usize
@@ -7303,6 +7314,9 @@ fn barrier()
 fn memory_barrier(scope: Scope)
 fn subgroup_size() -> u32
 fn subgroup_elect() -> bool
+fn subgroup_all(value: bool) -> bool
+fn subgroup_any(value: bool) -> bool
+fn subgroup_ballot(value: bool) -> u64
 fn atomic_load[T: type](p: *Atomic[T], order: atomic.Ordering, scope: Scope) -> T
 fn atomic_store[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope)
 fn atomic_xchg[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope) -> T
@@ -7346,9 +7360,9 @@ waits. A kernel the SPIR-V emitter cannot write yet has no module there, and its
 launch answers `Unsupported`; the CPU device still runs it.
 
 The landed device-only intrinsics are `gid`, `lid`, `wgid`, `sid`, `barrier`,
-`memory_barrier`, `subgroup_size`, `subgroup_elect` and the scoped atomic family above.
-The remaining planned intrinsics are `subgroup_ballot`, `subgroup_any`, `subgroup_all`,
-`subgroup_broadcast`, `subgroup_add`, `subgroup_min` and `subgroup_max`.
+`memory_barrier`, `subgroup_size`, `subgroup_elect`, `subgroup_all`, `subgroup_any`,
+`subgroup_ballot` and the scoped atomic family above. The remaining planned intrinsics
+are `subgroup_broadcast`, `subgroup_add`, `subgroup_min` and `subgroup_max`.
 
 ### `e.gpu.vulkan`
 
