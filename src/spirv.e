@@ -1776,7 +1776,20 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
     if opcode == .Bitcast { ret fail(m, "a bitcast operation is not yet written as SPIR-V") }
     if opcode == .AtomicFence { ret fail(m, "an atomic fence is not yet written as SPIR-V") }
     if opcode == .Switch { ret fail(m, "a switch is not yet written as SPIR-V") }
-    if opcode == .Trap || opcode == .Unreachable { ret fail(m, "a trap is not yet written as SPIR-V") }
+    if opcode == .Trap {
+        var kind = 99usize
+        if same(instruction.ty.name, "tag") || same(instruction.ty.name, "enum") || same(instruction.ty.name, "invalid") { kind = 2usize }
+        if kind == 99usize { ret fail(m, "this trap kind is not yet written as a device fault") }
+        write_fault(m, kind, instruction.site.line)
+        if m.function_return == m.t_void {
+            head(&m.code, OP_RETURN, 1usize)
+        } else {
+            head(&m.code, OP_RETURN_VALUE, 2usize)
+            put(&m.code, constant(m, m.function_return, 0usize))
+        }
+        ret ok
+    }
+    if opcode == .Unreachable { ret fail(m, "an unreachable operation is not yet written as SPIR-V") }
     if opcode == .FunctionAddress || opcode == .IndirectCall { ret fail(m, "an indirect call is not yet written as SPIR-V") }
     ret fail(m, "an operation in this kernel is not yet written as SPIR-V")
 }

@@ -31937,3 +31937,16 @@ without adding parameters to every device helper.
 and queue reuse on the CPU, two Windows Vulkan devices and WSL's Vulkan device. The
 six pinned SPIR-V modules are byte-identical from Windows and Linux, and the complete
 Windows self-host suite passes.
+
+## D1727 — Device tag traps reuse the fault writer
+
+**Decision.** A SPIR-V NIR `Trap` whose check kind is `tag`, `enum` or `invalid`
+writes fault kind `Tag` with its source line and invocation, then returns from the
+entry point or helper. Other trap kinds remain unsupported until their preceding
+device checks are valid; accepting the terminal instruction alone would turn a null
+dereference or alignment failure into invalid SPIR-V rather than a fault report.
+
+**Evidence.** `gpu_fault_bounds` now also reads a payload under the wrong local union
+tag and checks the exact `Tag` record on two Windows Vulkan devices and WSL's Vulkan
+device. Existing pinned modules remain byte-identical, and the complete Windows
+self-host suite passes.

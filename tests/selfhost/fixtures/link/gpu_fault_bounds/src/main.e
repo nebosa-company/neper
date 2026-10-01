@@ -30,6 +30,14 @@ fn relay(xs: []u32) {
     xs[usize((i + 1u32) % 4u32)] = mine + 10u32
 }
 
+type Node = union enum u8 { Nil, Lit: u32 }
+
+@gpu(1)
+fn tagged(out: []u32) {
+    var node: Node = .Nil
+    out[0usize] = node.Lit
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -104,6 +112,10 @@ fn vulkan_fault(a: *mem.Arena, index: u32) -> err {
     if gpu.download(q, buffer, seen[0..]) != gpu.Fault || gpu.download(q, buffer, seen[0..]) != ok { os.exit(34i32) }
     let (again, again_found) = gpu.last_fault(q)
     if !again_found || again.kernel != 2u32 || again.gid.x != 0u32 { os.exit(35i32) }
+    try gpu.launch[tagged](q, gpu.grid1(1usize), buffer)
+    if gpu.sync(q) != gpu.Fault { os.exit(36i32) }
+    let (tagged_record, tagged_found) = gpu.last_fault(q)
+    if !tagged_found || tagged_record.kernel != 3u32 || tagged_record.kind != .Tag || tagged_record.site != 38u32 || tagged_record.gid.x != 0u32 { os.exit(37i32) }
     ret ok
 }
 
