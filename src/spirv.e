@@ -2465,13 +2465,17 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         ret ok
     }
     if KIND_PRIVATE == values.kind[address] || KIND_SHARED == values.kind[address] {
-        if ty == m.t_bool { ret fail(m, "a private bool is not yet written as SPIR-V") }
         let low = load_word(m, private_word(m, values, address, 0usize))
         var value = low
-        if ty == m.t_u8 || ty == m.t_u16 {
+        if ty == m.t_bool || ty == m.t_u8 || ty == m.t_u16 {
             let bytes = private_bytes(m, values, address, 0usize)
             let shift = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, bytes, constant(m, m.t_u32, 3usize)), constant(m, m.t_u32, 3usize))
-            value = convert(m, OP_U_CONVERT, ty, binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, low, shift))
+            let narrowed = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, low, shift)
+            if ty == m.t_bool {
+                value = binary(m, OP_I_NOT_EQUAL, m.t_bool, narrowed, constant(m, m.t_u32, 0usize))
+            } else {
+                value = convert(m, OP_U_CONVERT, ty, narrowed)
+            }
         }
         if ty == m.t_f32 { value = convert(m, OP_BITCAST, m.t_f32, low) }
         if ty == m.t_v2u32 { value = pair(m, low, load_word(m, private_word(m, values, address, 4usize))) }
@@ -2495,8 +2499,7 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     if KIND_SCALAR != values.kind[value] { ret fail(m, "a store of an aggregate is not yet written as SPIR-V") }
     let ty = values.ty[value]
     if KIND_PRIVATE == values.kind[address] || KIND_SHARED == values.kind[address] {
-        if ty == m.t_bool { ret fail(m, "a private bool is not yet written as SPIR-V") }
-        if ty == m.t_u8 || ty == m.t_u16 {
+        if ty == m.t_bool || ty == m.t_u8 || ty == m.t_u16 {
             let pointer = private_word(m, values, address, 0usize)
             let old = load_word(m, pointer)
             let bytes = private_bytes(m, values, address, 0usize)
@@ -2505,7 +2508,12 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
             if ty == m.t_u16 { mask = 65535usize }
             let shifted_mask = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, constant(m, m.t_u32, mask), shift)
             let cleared = binary(m, OP_BITWISE_AND, m.t_u32, old, convert(m, OP_NOT, m.t_u32, shifted_mask))
-            let widened = convert(m, OP_U_CONVERT, m.t_u32, values.id[value])
+            var widened = 0usize
+            if ty == m.t_bool {
+                widened = select_u32(m, values.id[value], constant(m, m.t_u32, 1usize), constant(m, m.t_u32, 0usize))
+            } else {
+                widened = convert(m, OP_U_CONVERT, m.t_u32, values.id[value])
+            }
             let placed = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, widened, shift)
             store_word(m, pointer, binary(m, OP_BITWISE_OR, m.t_u32, cleared, placed))
             ret ok

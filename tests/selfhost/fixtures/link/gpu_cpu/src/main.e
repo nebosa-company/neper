@@ -37,6 +37,70 @@ fn near(x: f32, y: f32) -> bool {
     ret d < 0.0001 && d > -0.0001
 }
 
+fn run_vulkan(a: *mem.Arena, index: u32, x: []f32, y: []f32, cpu_saxpy: []const f32, cpu_ids: []const u32) -> err {
+    let (device, open_error) = gpu.open(a, .Vulkan, index)
+    if open_error != ok { ret open_error }
+    defer let _ = gpu.close(device)
+    let (q, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret queue_error }
+
+    let (tile, tile_error) = gpu.alloc[u32](q, 256usize)
+    if tile_error != ok { ret tile_error }
+    defer let _ = gpu.release(q, tile)
+    let ids_error = gpu.launch[ids](q, gpu.grid2(16usize, 16usize), 16u32, tile)
+    if ids_error != ok { ret ids_error }
+    var device_ids: [256]u32 = zero
+    try gpu.download[u32](q, tile, device_ids[0..])
+    var i = 0usize
+    while i < device_ids.len {
+        if device_ids[i] != cpu_ids[i] { os.exit(44i32) }
+        i += 1usize
+    }
+
+    let (ftz_buf, ftz_buf_error) = gpu.alloc[u32](q, 1usize)
+    if ftz_buf_error != ok { ret ftz_buf_error }
+    defer let _ = gpu.release(q, ftz_buf)
+    let ftz_error = gpu.launch[needs_ftz](q, gpu.grid1(1usize), ftz_buf)
+    if gpu.has(device, .Ftz) {
+        if ftz_error != ok { ret ftz_error }
+        var one: [1]u32 = zero
+        try gpu.download[u32](q, ftz_buf, one[0..])
+        if one[0] != 1u32 { os.exit(45i32) }
+    } else {
+        if ftz_error != gpu.Unsupported { os.exit(45i32) }
+    }
+
+    let (dx, dx_error) = gpu.upload[f32](q, x)
+    if dx_error != ok { ret dx_error }
+    defer let _ = gpu.release(q, dx)
+    let (dy, dy_error) = gpu.upload[f32](q, y)
+    if dy_error != ok { ret dy_error }
+    defer let _ = gpu.release(q, dy)
+    let launch_error = gpu.launch[saxpy](q, gpu.grid1(1000usize), 1000u32, 2.0, dx, dy)
+    if launch_error == gpu.Unsupported { ret ok }
+    if launch_error != ok { ret launch_error }
+    var device_saxpy: [1000]f32 = zero
+    try gpu.download[f32](q, dy, device_saxpy[0..])
+    i = 0usize
+    while i < device_saxpy.len {
+        if device_saxpy[i] != cpu_saxpy[i] { os.exit(46i32) }
+        i += 1usize
+    }
+    ret ok
+}
+
+fn compare_vulkan(a: *mem.Arena, x: []f32, y: []f32, cpu_saxpy: []const f32, cpu_ids: []const u32) -> err {
+    let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
+    if found_error == gpu.NoDevice || found_error == gpu.Unsupported { ret ok }
+    if found_error != ok { ret found_error }
+    var at = 0usize
+    while at < found.len {
+        if found[at].supported { try run_vulkan(a, u32(at), x, y, cpu_saxpy, cpu_ids) }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // Discovery: one CPU device, supported, no stable key; other backends absent.
     let (found, found_error) = gpu.devices(a, .Cpu, 4usize)
@@ -92,6 +156,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !near(result[i], 2.0 * f32(i) + 1.0) { os.exit(18i32) }
         i += 1usize
     }
+    var cpu_saxpy: [1000]f32 = result
     // The source is untouched: device memory is its own.
     if !near(y[999], 1.0) { os.exit(19i32) }
     // A zero grid is an ordered no-op.
@@ -117,6 +182,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // (x 2, y 13): workgroup (0, 1), local (2, 5).
     if seen[13usize * 16usize + 2usize] != ((1u32 << 24u32) | (5u32 << 8u32) | 2u32) { os.exit(30i32) }
     if seen[0] != 0u32 || seen[255] != ((1u32 << 24u32) | (1u32 << 16u32) | (7u32 << 8u32) | 7u32) { os.exit(31i32) }
+    try compare_vulkan(a, x[0..], y[0..], cpu_saxpy[0..], seen[0..])
     if gpu.launch[needs_ftz](q, gpu.grid1(1usize), tile) != gpu.Unsupported { os.exit(31i32) }
 
     // Release: the handle is stale afterwards, and its slot is reused.
