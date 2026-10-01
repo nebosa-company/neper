@@ -1,6 +1,7 @@
 use e.gpu
 use e.io
 use e.mem
+use e.simd
 
 error WrongValue
 
@@ -132,6 +133,14 @@ fn middle(out: []u32, lane: u32) {
             view.data[usize(lane)] = head[usize(lane)]
             let single = out[passthrough(usize(lane))..passthrough(usize(lane) + 1usize)]
             view.data[usize(lane)] = single[0usize]
+            if true && passthrough(true) { view.data[usize(lane)] = lane + 44u32 }
+            if false || passthrough(true) { view.data[usize(lane)] = lane + 44u32 }
+            var vector: Vec[u32, 4] = zero
+            vector.lanes[0usize] = lane + 44u32
+            var vectors: [8]Vec[u32, 4] = zero
+            vectors[usize(lane)] = vector
+            let added = vectors[usize(lane)] +% passthrough(vector)
+            view.data[usize(lane)] = added.lanes[0usize] - (lane + 44u32)
             view.data[usize(lane)] = deferred_barrier(lane)
             let (after_defer, deferred_lane) = deferred_pair(lane)
             view.data[usize(lane)] = after_defer + deferred_lane - lane

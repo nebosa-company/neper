@@ -32628,3 +32628,20 @@ compiler stages are byte-identical on both hosts; Windows needed retries after
 two intermittent access violations while building the compiler. The full
 suites remain gated by the shared tree's stale library-fixture manifest. Other
 pending-expression helper shapes remain unverified.
+
+## D1767 — Retain a computed vector operand across a barrier helper
+
+**Decision.** Vector binary lowering saves the left operand's address in the
+invocation frame when evaluating the right operand may cut at a barrier, then
+reloads it if a cut occurred. This uses the existing frame-temporary path; a
+plain frame-slot address needs no special case.
+
+**Evidence.** A vector loaded through a computed array index on the left of
+`+%` failed NIR verification when the right side called a barrier helper.
+`link/gpu_barrier_chain` now covers that case, plus short-circuit expressions
+with barrier-bearing right sides, in debug and release on Windows and WSL.
+Consecutive self-hosted compiler stages are byte-identical on both hosts.
+The Vulkan raw SAXPY test passes on two Windows devices and one WSL device,
+and emitted SPIR-V still matches the pinned conformance file on both hosts.
+The full suites remain gated by
+the shared tree's stale library-fixture manifest.

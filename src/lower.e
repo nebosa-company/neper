@@ -7070,6 +7070,14 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     let shifting = opcode == .ShiftLeft || opcode == .ShiftRight
     let (left, left_type, left_error) = lower_expression(c, g, tree, module_index, left_index, result_type, builder, bindings, binding_count)
     if left_error != ok { ret (0usize, left_error) }
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    var left_slot = 0usize
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, right_index, builder) {
+        let (saved, save_error) = frame_save_temporary(c, pointer_type, left, token, builder)
+        if save_error != ok { ret (0usize, save_error) }
+        left_slot = saved
+    }
+    let before = builder.kernel_barriers
     var right_expected = result_type
     if shifting {
         let (count_type, count_error) = check.check_expr(c, g, tree, module_index, right_index, check.invalid_type())
@@ -7079,6 +7087,8 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     }
     let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, right_index, right_expected, builder, bindings, binding_count)
     if right_error != ok { ret (0usize, right_error) }
+    let (resumed_left, resume_error) = frame_resume_temporary(c, pointer_type, left, left_slot, before, token, builder)
+    if resume_error != ok { ret (0usize, resume_error) }
     // The count is peeked here, before the slot below writes an instruction of its own
     // and leaves the constant no longer the last one emitted.
     let (count, count_known) = constant_lowered(builder, right)
@@ -7099,14 +7109,14 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
         is_packed = binary_is_packed
     }
     if is_packed {
-        let packed_error = emit_packed_vector(c, result_type, packed, chunks, stack, left, right, builder, token)
+        let packed_error = emit_packed_vector(c, result_type, packed, chunks, stack, resumed_left, right, builder, token)
         if packed_error != ok { ret (0usize, packed_error) }
         ret (stack, ok)
     }
     var at = 0usize
     while at < lanes.array_length {
         let offset = at * lane_info.size
-        let (left_lane, left_lane_error) = component_at(c, lane, left, offset, builder, token)
+        let (left_lane, left_lane_error) = component_at(c, lane, resumed_left, offset, builder, token)
         if left_lane_error != ok { ret (0usize, left_lane_error) }
         var right_lane = right
         if !shifting {
