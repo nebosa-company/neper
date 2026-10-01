@@ -32659,3 +32659,18 @@ release on Windows and WSL. Consecutive self-hosted compiler stages match
 byte-for-byte on both hosts; Windows SAXPY SPIR-V still matches the pinned
 conformance file. The full suites remain gated by the shared tree's stale
 library-fixture manifest.
+
+## D1769 — Keep the self-host gate runnable after C091 fixture additions
+
+**Decision.** Regenerate the committed library-fixture manifest for the GPU and
+SIMD fixtures already in the tree, and close the Windows device-profile test
+table's `foreach` expression. These are test-harness corrections, not a
+change to compiler semantics.
+
+**Evidence.** In a clean worktree at `3f9c448`, the manifest check initially
+failed and Windows PowerShell could not parse `tests/selfhost/run.ps1`. After
+the two corrections, PowerShell 7 passed 226 exact source surfaces, the
+123-module fixture-manifest check and bootstrap lint, then ran through the
+library link fixtures. The next gate, `link/gpu_tensor`, exits 58 because a
+Vulkan `u32` matmul result differs from the CPU backend. C091 remains partial
+until that parity failure is resolved and the remaining suite passes.

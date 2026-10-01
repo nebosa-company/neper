@@ -150,7 +150,8 @@
     "bytes_plan",
     "differential",
     "fmt_jwt",
-    "gfx_phash256"
+    "gfx_phash256",
+    "gp09_simd_hex"
    ]
   },
   {
@@ -1191,10 +1192,17 @@
     "front_counts",
     "gfx_scene",
     "gpu_barrier",
+    "gpu_barrier_chain",
+    "gpu_barrier_helper",
+    "gpu_barrier_helper_occurrence",
+    "gpu_barrier_large_helper",
+    "gpu_barrier_occurrence",
     "gpu_cpu",
     "gpu_divergence",
     "gpu_fault_bounds",
     "gpu_fault_nocheck",
+    "gpu_fault_unchecked",
+    "gpu_frame_many",
     "gpu_gaps",
     "gpu_present",
     "gpu_reshape",
@@ -1202,6 +1210,7 @@
     "gpu_spaces",
     "gpu_subgroup_identity",
     "gpu_subgroup_reduce",
+    "gpu_subgroup_width",
     "gpu_tensor",
     "gpu_vulkan_float",
     "gpu_vulkan_loop",
@@ -1517,6 +1526,9 @@
    "delivered": 27,
    "pending": [],
    "fixtures": [
+    "gp09_simd_hex",
+    "gpu_barrier_chain",
+    "gpu_fault_bounds",
     "simd_lanes",
     "trap_align",
     "trap_arithmetic"
