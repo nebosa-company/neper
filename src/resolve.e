@@ -408,6 +408,8 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.gpu", "subgroup_all", .Value, .Intrinsic)
     try seed(r, g, "e.gpu", "subgroup_any", .Value, .Intrinsic)
     try seed(r, g, "e.gpu", "subgroup_ballot", .Value, .Intrinsic)
+    try seed(r, g, "e.gpu", "subgroup_broadcast", .Value, .Intrinsic)
+    try seed(r, g, "e.gpu", "subgroup_shuffle", .Value, .Intrinsic)
     try seed(r, g, "e.gpu", "atomic_load", .Value, .Intrinsic)
     try seed(r, g, "e.gpu", "atomic_store", .Value, .Intrinsic)
     try seed(r, g, "e.gpu", "atomic_xchg", .Value, .Intrinsic)
