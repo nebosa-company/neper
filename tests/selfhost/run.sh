@@ -2751,6 +2751,8 @@ cmp "$test_build/loop.spv" "$repo/tests/conformance/spirv/loop.spv"
 gpu_vulkan_loop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_loop/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-loop-selfhost")
 [ "$gpu_vulkan_loop_written" = 'executable written' ]
 chmod +x "$test_build/gpu-vulkan-loop-selfhost"
+# gpu_cache_corrupt (D1733-D1735): durable hit, driver-level corruption recovery,
+# failed rebuild preservation, and compiler-identity separation.
 previous_gpu_cache=${NEPER_GPU_CACHE-}
 gpu_cache=$test_build/gpu-cache
 mkdir -p "$gpu_cache"
@@ -2774,6 +2776,16 @@ if [ "$gpu_vulkan_loop_output" != 'gpu loop cpu only' ]; then
     rebuilt_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
     [ "$corrupt_cache_hash" != "$rebuilt_cache_hash" ]
     [ "$valid_cache_hash" = "$rebuilt_cache_hash" ]
+    if NEPER_GPU_CACHE_FAIL_REBUILD=1 "$test_build/gpu-vulkan-loop-selfhost" >/dev/null 2>&1; then
+        printf '%s\n' 'the Vulkan cache rebuild failure was not injected' >&2
+        exit 1
+    fi
+    [ "$(sha256sum "$cache_file" | cut -d ' ' -f 1)" = "$valid_cache_hash" ]
+    gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
+    case "$gpu_vulkan_loop_output" in
+        'gpu loop vulkan ok on '[1-9]' devices'|'gpu loop vulkan ok on '1[0-6]' devices') ;;
+        *) printf '%s\n' 'the Vulkan cache was unusable after an injected rebuild failure' >&2; exit 1 ;;
+    esac
     cache_count=$(find "$gpu_cache" -type f -name '*.bin' | wc -l)
     capped_loop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_loop/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-loop-capped-selfhost" --inline-cap 39)
     [ "$capped_loop_written" = 'executable written' ]

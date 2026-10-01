@@ -3113,6 +3113,8 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $loopSpirv).Hash -ne (Get-FileH
 $gpuVulkanLoopPath = Join-Path $testBuild 'gpu-vulkan-loop-selfhost.exe'
 $gpuVulkanLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $gpuVulkanLoopPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopWritten -ne 'executable written') { throw 'gpu_vulkan_loop emission failed' }
+# gpu_cache_corrupt (D1733-D1735): durable hit, driver-level corruption recovery,
+# failed rebuild preservation, and compiler-identity separation.
 $previousGpuCache = $env:NEPER_GPU_CACHE
 $gpuCache = Join-Path $testBuild 'gpu-cache'
 New-Item -ItemType Directory -Force -Path $gpuCache | Out-Null
@@ -3130,6 +3132,14 @@ if ($gpuVulkanLoopOutput -ne 'gpu loop cpu only') {
     if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop vulkan ok on [1-9][0-9]* devices$') { throw 'the Vulkan runtime did not recover from a corrupt pipeline cache' }
     $rebuiltCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
     if ($corruptCacheHash -eq $rebuiltCacheHash -or $validCacheHash -ne $rebuiltCacheHash) { throw 'the Vulkan runtime did not replace the corrupt pipeline cache atomically' }
+    $env:NEPER_GPU_CACHE_FAIL_REBUILD = '1'
+    & $gpuVulkanLoopPath 2>$null | Out-Null
+    $failedRebuildExit = $LASTEXITCODE
+    Remove-Item Env:NEPER_GPU_CACHE_FAIL_REBUILD
+    if ($failedRebuildExit -eq 0) { throw 'the Vulkan cache rebuild failure was not injected' }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash -ne $validCacheHash) { throw 'a failed Vulkan cache rebuild replaced the last valid entry' }
+    $gpuVulkanLoopOutput = & $gpuVulkanLoopPath
+    if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop vulkan ok on [1-9][0-9]* devices$') { throw 'the Vulkan cache was unusable after an injected rebuild failure' }
     $cacheCount = @(Get-ChildItem -File -Recurse $gpuCache -Filter '*.bin').Count
     $cappedLoopPath = Join-Path $testBuild 'gpu-vulkan-loop-capped-selfhost.exe'
     $cappedLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $cappedLoopPath --inline-cap 39
