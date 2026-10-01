@@ -2420,7 +2420,7 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
                     let (previous, found) = find_inline_entry(oracle, function.owner_module_index, function.name, function.instance_id)
                     wanted = found && oracle.inline_entries[previous].mandatory
                 }
-                if wanted && function.return_count <= 1usize {
+                if wanted {
                     let before = oracle.function_count
                     var tree: parse.Tree = zero
                     try graph.parse_module(g, function.module_index, &tree)
@@ -2504,13 +2504,13 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         }
                     }
                 }
-                if oracle.explain && wanted && (function.generic || function.external || function.intrinsic || check.same(name, "main") || function.return_count > 1usize) {
+                if oracle.explain && wanted && (function.generic || function.external || function.intrinsic || check.same(name, "main") || (function.return_count > 1usize && !oracle.barrier_oracle)) {
                     if function.generic { explain_inline(oracle, g, module_index, name, "not a candidate: generic, an instance is its instantiating module's own") }
                     if function.external || function.intrinsic { explain_inline(oracle, g, module_index, name, "not a candidate: no body of its own") }
                     if check.same(name, "main") { explain_inline(oracle, g, module_index, name, "not a candidate: the program root") }
-                    if function.return_count > 1usize { explain_inline(oracle, g, module_index, name, "not a candidate: more than one result") }
+                    if function.return_count > 1usize && !oracle.barrier_oracle { explain_inline(oracle, g, module_index, name, "not a candidate: more than one result") }
                 }
-                if wanted && !function.gpu && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
+                if wanted && !function.gpu && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && (function.return_count <= 1usize || oracle.barrier_oracle) {
                     // A result that comes back through a slot is decided before any lowering.
                     var hidden = false
                     if function.return_count == 1usize {
@@ -2776,8 +2776,11 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     var return_layout: ReturnLayout = zero
     try call_return_layout(c, call, &return_layout)
     let hidden_return = return_layout.via_slot && results.count != 0usize
+    // ponytail: multi-result copies use one slot even for a single return;
+    // map values directly if a hot kernel makes the extra stores measurable.
+    let slot_results = hidden_return || results.count > 1usize
     var return_slot = 0usize
-    if hidden_return {
+    if slot_results {
         let (slots_aligned, slots_error) = layout.align_up(return_layout.size, 8usize)
         if slots_error != ok { ret slots_error }
         var slots = slots_aligned / 8usize
@@ -2920,16 +2923,37 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                     }
                 } else {
                 if instruction.opcode == .Return {
-                    if instruction.operand_count == 1usize {
-                        let returned = value_map[oracle.operands[instruction.first_operand]]
-                        if return_sites == 1usize {
-                            single_result = returned
-                        } else {
-                            let (store_instruction, store_ignored, store_error) = nir.emit_at(builder, .Store, result_type, false, slot_size, instruction.site)
+                    if !hidden_return && results.count > 1usize {
+                        if instruction.operand_count != results.count { ret check.InvalidReturn }
+                        var result_at = 0usize
+                        while result_at < results.count {
+                            let (returned_type, returned_error) = check.call_return(c, call, result_at)
+                            if returned_error != ok { ret returned_error }
+                            let (info, info_error) = layout.type_info(c, returned_type)
+                            if info_error != ok { ret info_error }
+                            let (address_instruction, address, address_error) = nir.emit_at(builder, .FieldAddress, returned_type, true, return_layout.offsets[result_at], instruction.site)
+                            if address_error != ok { ret address_error }
+                            builder.instructions[address_instruction].inline_origin = copied_origin
+                            try nir.add_operand(builder, address_instruction, return_slot)
+                            let (store_instruction, store_ignored, store_error) = nir.emit_at(builder, .Store, returned_type, false, info.size, instruction.site)
                             if store_error != ok { ret store_error }
                             builder.instructions[store_instruction].inline_origin = copied_origin
-                            try nir.add_operand(builder, store_instruction, slot)
-                            try nir.add_operand(builder, store_instruction, returned)
+                            try nir.add_operand(builder, store_instruction, address)
+                            try nir.add_operand(builder, store_instruction, value_map[oracle.operands[instruction.first_operand + result_at]])
+                            result_at += 1usize
+                        }
+                    } else {
+                        if instruction.operand_count == 1usize {
+                            let returned = value_map[oracle.operands[instruction.first_operand]]
+                            if return_sites == 1usize {
+                                single_result = returned
+                            } else {
+                                let (store_instruction, store_ignored, store_error) = nir.emit_at(builder, .Store, result_type, false, slot_size, instruction.site)
+                                if store_error != ok { ret store_error }
+                                builder.instructions[store_instruction].inline_origin = copied_origin
+                                try nir.add_operand(builder, store_instruction, slot)
+                                try nir.add_operand(builder, store_instruction, returned)
+                            }
                         }
                     }
                     let (leave, leave_error) = emit_branch_at(builder, instruction.site)
@@ -2999,7 +3023,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     builder.current_path = caller_path
     let (continuation_index, continuation_error) = nir.begin_block(builder)
     if continuation_error != ok || continuation_index != continuation { ret nir.InvalidControlFlow }
-    if hidden_return { ret read_return_slot(c, call, &return_layout, return_slot, builder, token, results) }
+    if slot_results { ret read_return_slot(c, call, &return_layout, return_slot, builder, token, results) }
     if results.count == 1usize {
         if return_sites == 1usize {
             results.values[0usize] = single_result
@@ -3566,7 +3590,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
             if returned_error != ok { ret returned_error }
             if aggregate_value(c, returned) { inline_shape = false }
         }
-        if builder.inline_only_mandatory && return_layout.via_slot && results.count == 1usize { inline_shape = true }
+        if builder.inline_only_mandatory && (results.count > 1usize || (return_layout.via_slot && results.count == 1usize)) { inline_shape = true }
         if inline_shape {
             let (entry_index, inlinable) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
             if inlinable && (!builder.inline_only_mandatory || builder.inline_entries[entry_index].mandatory) { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }

@@ -32522,3 +32522,25 @@ reported ENOMEM under this WSL host's 4.9 GB memory limit; its existing
 self-hosted compiler built the change and ran the fixture. The full suites
 remain gated by the shared tree's stale library-fixture manifest. Multi-result,
 indirect and other pending-expression helper shapes remain unverified.
+
+## D1761 — Keep every result of a copied barrier helper
+
+**Decision.** The barrier-only oracle admits multi-result helpers. A copied
+helper with two register results writes both into a caller-owned temporary
+slot at each return, then reloads them at the continuation; a helper with a
+hidden result slot already writes there and uses the same reader. Ordinary
+release inlining keeps its prior scalar-only eligibility. The C bootstrap now
+allocates its `Function.locals` table only while checking each body and trims
+it to the actual local count afterward; `MAX_LOCALS` remains 265. This keeps
+the current compiler within the bootstrap's memory budget without reducing
+the language's parameter or local limits.
+
+**Evidence.** `link/gpu_barrier_chain` previously reached `pair` as a native
+barrier call and trapped. Single-return and branched two-scalar results,
+generic two-scalar results, and three-result hidden-slot returns now pass in
+debug and release on Windows and WSL. `link/by_value_snapshot` still passes
+on both hosts. Both C bootstraps build the current compiler, both bootstrapped
+compilers run the fixture, and consecutive self-hosted stages are byte-identical
+on both hosts. The full suites still stop at the shared tree's stale
+`docs/library-fixtures.json` gate. Indirect and other pending-expression
+helper shapes remain unverified.

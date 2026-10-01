@@ -443,7 +443,7 @@ typedef struct Function {
     size_t return_offsets[MAX_ARGS];
     size_t return_storage_size;
     Stmt *body;
-    Local locals[MAX_LOCALS];
+    Local *locals; /* full MAX_LOCALS while checked, then trimmed to local_count */
     int local_count;
     int frame_size;
     int return_slot_local_index;
@@ -5237,8 +5237,17 @@ static void check_program(Compiler *c) {
             resolve_type_constants(c, &fn->return_types[j], &fn->token);
         }
         if (fn->return_count) fn->return_type = fn->return_types[0];
+        fn->locals = (Local *)calloc(MAX_LOCALS, sizeof(Local));
+        if (!fn->locals) {
+            fprintf(stderr, "error: out of memory allocating function locals\n");
+            exit(1);
+        }
         prepare_return_convention(c, fn);
-        if (fn->is_intrinsic) continue;
+        if (fn->is_intrinsic) {
+            Local *used = (Local *)realloc(fn->locals, (size_t)(fn->local_count ? fn->local_count : 1) * sizeof(Local));
+            if (used) fn->locals = used;
+            continue;
+        }
         for (j = 0; j < fn->param_count; ++j) {
             Local *local = &fn->locals[fn->local_count];
             qualify_type_for_module(c, &fn->params[j].type, fn->module);
@@ -5260,6 +5269,10 @@ static void check_program(Compiler *c) {
             char message[256];
             snprintf(message, sizeof(message), "fn %s needs more than %d locals", fn->name, MAX_LOCALS);
             diagnostic_at(c, &fn->token, "E-TOOL-9999", message);
+        }
+        {
+            Local *used = (Local *)realloc(fn->locals, (size_t)(fn->local_count ? fn->local_count : 1) * sizeof(Local));
+            if (used) fn->locals = used;
         }
         if (strcmp(fn->name, "main") == 0) main_fn = fn;
     }

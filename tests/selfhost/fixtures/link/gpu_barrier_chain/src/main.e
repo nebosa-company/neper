@@ -36,6 +36,27 @@ fn packed(lane: u32) -> Packet {
     ret Packet { value: lane + 44u32, lane: lane }
 }
 
+fn pair(lane: u32) -> (u32, u32) {
+    gpu.barrier()
+    ret (lane + 44u32, lane)
+}
+
+fn pair_branch(lane: u32) -> (u32, u32) {
+    gpu.barrier()
+    if lane % 2u32 == 0u32 { ret (lane + 44u32, lane) }
+    ret (lane + 43u32, lane + 1u32)
+}
+
+fn duplicate[T: type](value: T) -> (T, T) {
+    gpu.barrier()
+    ret (value, value)
+}
+
+fn triple(lane: u32) -> (u32, u32, u32) {
+    gpu.barrier()
+    ret (lane + 44u32, lane, lane)
+}
+
 fn middle(out: []u32, lane: u32) {
     for pass in 0u32..1u32 {
         // The store address, binary left operand and first call argument precede inner's barriers.
@@ -49,6 +70,14 @@ fn middle(out: []u32, lane: u32) {
             view.data[usize(lane)] = packet.value + packet.lane - lane
             let copied = passthrough(packet)
             view.data[usize(lane)] = copied.value + copied.lane - lane
+            let (first, first_lane) = pair(lane)
+            view.data[usize(lane)] = first + first_lane - lane
+            let (second, second_lane) = pair_branch(lane)
+            view.data[usize(lane)] = second + second_lane - lane
+            let (third, third_lane) = duplicate(lane)
+            view.data[usize(lane)] = third + 44u32 + third_lane - lane
+            let (wide, wide_lane, last_lane) = triple(lane)
+            view.data[usize(lane)] = wide + wide_lane - lane + last_lane - lane
         }
     }
 }
