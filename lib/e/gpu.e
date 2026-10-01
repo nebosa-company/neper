@@ -1066,8 +1066,10 @@ fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usi
 
 // A launch on a Vulkan device (D1611): the launcher's block -- sixteen bytes a parameter,
 // a scalar's bytes or a slice's device address and length -- laid out again as D1610's
-// argument block in a buffer of its own. A checked layout starts with `!`: its hidden
-// first u64 is a mapped fault buffer's device address. A kernel the emitter could not
+// argument block in a buffer of its own. Checked embedded module text starts with `!`:
+// its hidden first u64 is a mapped fault buffer's device address; the pipeline sees the
+// hex after it.
+// A kernel the emitter could not
 // write has no module and is `Unsupported` here; the CPU still runs it.
 fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, ctx: *void, module: str, entry: str, layout: str) -> err {
     if module.len == 0usize { ret Unsupported }
@@ -1081,13 +1083,10 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, c
     if gx == 0usize || gy == 0usize || gz == 0usize { ret ok }
     let device = state.device
     let a = device.arena
-    var checked = false
-    var first = 0usize
-    if layout.len != 0usize && layout[0usize] == 33u8 {
-        checked = true
-        first = 1usize
-    }
-    let parameter_count = layout.len - first
+    let checked = module[0usize] == 33u8
+    var module_code = module
+    if checked { module_code = module[1usize..] }
+    let parameter_count = layout.len
     var over: mem.Arena = zero
     over.base = mem.cast[*u8](ctx)
     over.cap = 16usize * parameter_count
@@ -1113,7 +1112,7 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, c
         *mem.cast[*u32](&fault_buffer.bytes[4usize]) = u32(state.serial)
         offset = 8usize
     }
-    var at = first
+    var at = 0usize
     var source_at = 0usize
     while at < layout.len {
         if layout[at] != 115u8 && (layout[at] < 49u8 || layout[at] > 56u8) {
@@ -1135,7 +1134,7 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, c
         at += 1usize
         source_at += 1usize
     }
-    let (made, made_error) = device_pipeline(device, module, entry)
+    let (made, made_error) = device_pipeline(device, module_code, entry)
     if made_error != ok {
         if checked { vulkan.free(device.context, fault_buffer) }
         vulkan.free(device.context, block)

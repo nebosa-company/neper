@@ -7558,9 +7558,10 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     var spelling = "\"\""
     if lowered == ok {
         var message = ""
-        let (bytes, emit_error) = spirv.emit(c.arena, c, g, builder, signatures, at.function_count, &message)
+        var checked = false
+        let (bytes, emit_error) = spirv.emit(c.arena, c, g, builder, signatures, at.function_count, &message, &checked)
         if emit_error == ok {
-            let (escaped, escaped_error) = hex_string(c.arena, bytes)
+            let (escaped, escaped_error) = hex_string(c.arena, bytes, checked)
             if escaped_error != ok { ret escaped_error }
             spelling = escaped
         }
@@ -7609,12 +7610,16 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // Bytes as a string literal's spelling, two hex digits a byte (D1611): an artifact's
 // strings are UTF-8, which a SPIR-V module's bytes are not, and `e.gpu` decodes them once
 // per pipeline.
-fn hex_string(a: *mem.Arena, bytes: []const u8) -> (str, err) {
-    let (storage, storage_error) = mem.alloc[u8](a, bytes.len * 2usize + 2usize)
+fn hex_string(a: *mem.Arena, bytes: []const u8, checked: bool) -> (str, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, bytes.len * 2usize + 3usize)
     if storage_error != ok { ret ("", storage_error) }
     let digits = "0123456789abcdef"
     storage[0usize] = 34u8
     var at = 1usize
+    if checked {
+        storage[at] = 33u8
+        at += 1usize
+    }
     var index = 0usize
     while index < bytes.len {
         storage[at] = digits[usize(bytes[index]) / 16usize]
@@ -8897,14 +8902,8 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     run_arguments[11usize] = entry_value
     // A character per parameter, printable so the artifact's strings stay UTF-8: `s` a
     // slice, `1` to `8` a scalar's size, `?` what the argument block cannot carry yet.
-    // A checked build starts with `!`, whose hidden u64 slot is the fault address.
     var layout_bytes: [20]u8 = zero
     layout_bytes[0usize] = 34u8
-    var layout_prefix = 0usize
-    if !builder.nocheck {
-        layout_bytes[1usize] = 33u8
-        layout_prefix = 1usize
-    }
     var layout_at = 0usize
     while layout_at < kernel.parameter_count {
         let parameter_type = c.parameters[kernel.first_parameter + layout_at].ty
@@ -8915,11 +8914,11 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
             if parameter_info_error != ok { ret parameter_info_error }
             if parameter_info.size >= 1usize && parameter_info.size <= 8usize { code = u8(48usize + parameter_info.size) }
         }
-        layout_bytes[1usize + layout_prefix + layout_at] = code
+        layout_bytes[1usize + layout_at] = code
         layout_at += 1usize
     }
-    layout_bytes[1usize + layout_prefix + kernel.parameter_count] = 34u8
-    let layout_length = kernel.parameter_count + layout_prefix + 2usize
+    layout_bytes[1usize + kernel.parameter_count] = 34u8
+    let layout_length = kernel.parameter_count + 2usize
     let (layout_storage, layout_storage_error) = mem.alloc[u8](c.arena, layout_length)
     if layout_storage_error != ok { ret layout_storage_error }
     var copy_at = 0usize

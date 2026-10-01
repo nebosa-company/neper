@@ -1560,7 +1560,8 @@ fn spirv_command(a: *mem.Arena, args: []str) -> err {
         module_at += 1usize
     }
     var failure = "the kernels cannot be written as SPIR-V"
-    let (words, emit_error) = spirv.emit(a, &checker, &loaded, &builder, &signatures, 0usize, &failure)
+    var checked = false
+    let (words, emit_error) = spirv.emit(a, &checker, &loaded, &builder, &signatures, 0usize, &failure, &checked)
     if emit_error != ok {
         try emit_command_diagnostic(&report, "E-GPU-9999", failure)
         os.exit(1i32)

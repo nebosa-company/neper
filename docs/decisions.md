@@ -32009,3 +32009,20 @@ fault module and all six pinned modules, which remain byte-identical across Wind
 and Linux. The self-hosted compiler builds; the complete Windows suite currently stops
 at the stale `docs/library-fixtures.json` produced by unrelated shared-tree library
 edits, before compiler fixtures run.
+
+## D1731 — A module without reachable checks has no fault slot
+
+**Decision.** The SPIR-V emitter reserves the hidden fault-buffer address only when a
+reachable instruction can use it: a checked index or slice, or a trap block. Its
+embedded hex companion carries `!` when that ABI is present. The Vulkan runtime strips
+the marker before pipeline creation and derives the argument layout from it, so the
+emitter and launcher cannot disagree. An all-`@nocheck` kernel therefore starts its
+ordinary parameters at byte zero; a checked module keeps the D1726 eight-byte prefix.
+
+**Evidence.** `gpu_fault_nocheck` keeps the CPU's unchecked out-of-bounds/no-record
+case, then runs the same check-free module with defined inputs and exact 11, 12, 13, 14
+output on two Windows Vulkan devices and WSL's Vulkan device. `gpu_fault_bounds` still
+reports its checked records on all three. Vulkan 1.2 validation accepts both raw
+modules, their bytes are identical across Windows and Linux, and the six pinned modules
+remain unchanged. The complete suite remains blocked before these fixtures by the
+unrelated stale library-fixture catalog recorded in D1730.
