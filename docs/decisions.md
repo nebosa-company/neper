@@ -32154,3 +32154,19 @@ toolchain and the self-hosted Linux Neper compiler. Every GP-09 program printed
 `534775349`; every GP-10 program, including Neper CPU and WSL Vulkan, printed
 `25745686528`. The JSON held compile and runtime distributions and peak RSS for all
 eleven cells. The seven-run publication is the remaining step.
+
+## D1738 — The first GP performance-language result is published without disguising the gaps
+
+**Decision.** The D1737 corpus is published as raw JSON and the readable table in
+`docs/gp-performance.md`. A cell is the whole public workload: Neper Vulkan therefore
+includes process startup, device creation, transfers and download; Neper CPU is D38's
+serial checked debugger, not relabelled as an optimised backend. GP-09's slow scalar
+interleave remains visible and belongs to M4's workload-backed vector optimisation.
+
+**Evidence.** On WSL2 and the Core i5-12500H, all eleven cells completed seven
+alternated runs with identical checksums. The record contains every sample, p50/p95
+compile and runtime, peak RSS, image size, commands and GCC/G++, Rust, Go and Neper
+toolchain identities. Neper Vulkan completed GP-10 at 59.8 ms p50 against 3.7 ms C;
+Neper GP-09 completed at 1,576.2 ms against 50.4 ms C. These are measurements, not
+isolated best cases. The completion audit keeps C090 open: older CPU-only kernel
+fixtures still need the literal CPU/Vulkan exact-output sweep required by the roadmap.
