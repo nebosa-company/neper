@@ -38,6 +38,14 @@ fn tagged(out: []u32) {
     out[0usize] = node.Lit
 }
 
+fn pointed(p: *u32) -> u32 { ret *p }
+
+@gpu(1)
+fn null_pointer(out: []u32) {
+    var p: *u32 = nil
+    out[0usize] = pointed(p)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -116,6 +124,10 @@ fn vulkan_fault(a: *mem.Arena, index: u32) -> err {
     if gpu.sync(q) != gpu.Fault { os.exit(36i32) }
     let (tagged_record, tagged_found) = gpu.last_fault(q)
     if !tagged_found || tagged_record.kernel != 3u32 || tagged_record.kind != .Tag || tagged_record.site != 38u32 || tagged_record.gid.x != 0u32 { os.exit(37i32) }
+    try gpu.launch[null_pointer](q, gpu.grid1(1usize), buffer)
+    if gpu.sync(q) != gpu.Fault { os.exit(38i32) }
+    let (null_record, null_found) = gpu.last_fault(q)
+    if !null_found || null_record.kernel != 4u32 || null_record.kind != .Null || null_record.site != 41u32 || null_record.gid.x != 0u32 { os.exit(39i32) }
     ret ok
 }
 

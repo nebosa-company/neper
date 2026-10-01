@@ -31950,3 +31950,20 @@ dereference or alignment failure into invalid SPIR-V rather than a fault report.
 tag and checks the exact `Tag` record on two Windows Vulkan devices and WSL's Vulkan
 device. Existing pinned modules remain byte-identical, and the complete Windows
 self-host suite passes.
+
+## D1728 — Pointer conditions are scalar before the structured branch header
+
+**Problem.** A device pointer is a two-word vector, while `OpBranchConditional`
+requires one scalar boolean. Scalarising the pointer after `OpSelectionMerge` made an
+invalid block: SPIR-V requires the merge instruction immediately before its branch.
+NVIDIA accepted it, but the Intel driver crashed when compiling a null check.
+
+**Decision.** A pointer constant is an `OpConstantComposite` of its low and high
+words. A pointer branch extracts and ORs those words and compares the result with zero
+before emitting the loop or selection merge. A `null` trap writes fault kind `Null`
+through the existing device fault writer and returns.
+
+**Evidence.** `gpu_fault_bounds` passes a nil pointer through a helper and checks the
+exact `Null` record on two Windows Vulkan devices and WSL's Vulkan device.
+`spirv-val --target-env vulkan1.2` accepts the generated fault module, and the complete
+Windows self-host suite passes.
