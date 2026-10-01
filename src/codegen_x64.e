@@ -3172,6 +3172,11 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 *context.line_count = line_count + 1usize
             }
         }
+        if instruction.opcode == .Barrier {
+            // This body exists for the link table and SPIR-V. A CPU kernel must
+            // inline it; reaching the native helper cannot synchronize the group.
+            try emit_trap(builder, current, instruction.site, instruction.path, "barrier", "GPU barrier helper reached as a native call", "", "", 0usize, false, 10usize, 11usize, "", context)
+        } else {
         if instruction.opcode == .Bitcast {
             try select_bitcast(builder, instruction, allocations, context)
         } else {
@@ -3653,6 +3658,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
             }
             }
             }
+        }
         }
         }
         }

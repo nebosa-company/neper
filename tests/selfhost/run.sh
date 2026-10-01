@@ -2938,6 +2938,17 @@ gpu_barrier_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/gpu-barrier-selfhost"
 gpu_barrier_output=$("$test_build/gpu-barrier-selfhost")
 [ "$gpu_barrier_output" = 'gpu barrier ok' ]
+for mode in debug release; do
+    if [ "$mode" = release ]; then
+        gpu_helper_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_helper/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-helper-$mode" --release)
+    else
+        gpu_helper_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_helper/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-helper-$mode")
+    fi
+    [ "$gpu_helper_written" = 'executable written' ]
+    chmod +x "$test_build/gpu-barrier-helper-$mode"
+    gpu_helper_output=$("$test_build/gpu-barrier-helper-$mode")
+    [ "$gpu_helper_output" = 'gpu barrier helper ok' ]
+done
 gpu_frame_many_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_frame_many/src/main.e" "$repo" x64 linux "$test_build/gpu-frame-many-selfhost")
 [ "$gpu_frame_many_written" = 'executable written' ]
 chmod +x "$test_build/gpu-frame-many-selfhost"
@@ -2963,8 +2974,8 @@ for variant in while for; do
 done
 gpu_outside=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_barrier_outside/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_outside" in
-    *'main.e:4:5: error[E-GPU-9999]: `gpu.barrier()` is written outside a kernel'*) ;;
-    *) printf '%s\n' "a barrier outside a kernel was not refused: $gpu_outside" >&2; exit 1 ;;
+    *'main.e:4:5: error[E-GPU-9999]: `gpu.barrier()` is written outside device code'*) ;;
+    *) printf '%s\n' "a barrier in main was not refused: $gpu_outside" >&2; exit 1 ;;
 esac
 # `shared var` on the CPU backend (D781): the spec's block sum through workgroup memory
 # over three workgroups, a struct-typed shared var, the 0xCD fill before the publishing

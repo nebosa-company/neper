@@ -835,6 +835,7 @@ type Checker = struct {
     active_owner_set: bool,
     // The body being checked carries `@gpu` (D780): where `gpu.barrier()` is legal.
     body_is_kernel: bool,
+    body_is_main: bool,
     // (D1589) The body being checked is a device-only helper's; whether the program has
     // `e.gpu` at all (0 unasked, 1 no, 2 yes); and device-only answers by function,
     // each slot the function's index plus one times two plus the answer.
@@ -9388,17 +9389,15 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 // direction none of that applies to -- nothing comes back, and the `usize` is a number
 // with no way to be dereferenced -- and it is what an operating system interface needs,
 // because a system call takes a buffer as an integer.
-// `gpu.barrier()` (spec section 10, D780): legal only directly in a kernel's body,
-// where the CPU build cuts it into a resumable step; a helper a kernel reaches
-// cannot carry one yet, since its frame is not the invocation's.
+// `gpu.barrier()` (spec section 10): a kernel or device-only helper owns the cut.
 fn barrier_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, receiver: syntax.Node) -> (CastInfo, err) {
     var info: CastInfo = zero
     if receiver.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, receiver)
     if !found_member || !same(g.modules[target_module].name, "e.gpu") || !same(member, "barrier") { ret (info, ok) }
     info.matched = true
-    if !c.body_is_kernel {
-        record_failure(c, module_index, node, .GpuLaunch, "", "`gpu.barrier()` is written outside a kernel's own body, where no workgroup exists to synchronise")
+    if !c.body_is_kernel && (!c.body_device_only || c.body_is_main) {
+        record_failure(c, module_index, node, .GpuLaunch, "", "`gpu.barrier()` is written outside device code, where no workgroup exists to synchronise")
         ret (info, InvalidType)
     }
     var function: Function = zero
@@ -16034,6 +16033,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     c.active_noescape = function.import_symbol
     c.body_returns_err = function.return_count == 1usize && c.return_types[function.first_return].kind == .Err
     c.body_is_kernel = function.gpu
+    c.body_is_main = same(function.name, "main")
     c.body_device_only = false
     if !function.gpu && !function.generic {
         let (self_index, self_named) = find_function(c, function.module_index, function.name)

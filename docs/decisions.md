@@ -32362,3 +32362,21 @@ NIR and arena capacities remain, not a private-allocation-specific ceiling.
 one kernel and reads their retained sum after a barrier; it passes on Windows
 and WSL. `link/gpu_barrier` still passes on both hosts, including Vulkan, and
 consecutive self-hosted Windows compiler stages are byte-identical.
+
+## D1752 — Inline a direct barrier helper into each CPU kernel step
+
+**Decision.** A device-only helper may contain `gpu.barrier()`. Its locals and
+parameters lower to stack slots, so a copy of the helper body into a CPU kernel
+uses that invocation's frame. The copy turns each barrier into the kernel's
+resume cut; the SPIR-V copy retains the barrier instruction. Debug builds make
+a barrier-only oracle instead of enabling general inlining, preserving ordinary
+call frames. A native call into a barrier helper traps rather than pretending
+to synchronize. The limited oracle still has its 128-value/64-block map and
+does not promise arbitrary-depth helper chains.
+
+**Evidence.** `link/gpu_barrier_helper` preserves a helper local across the
+barrier and checks all lanes on CPU and each supported Vulkan device, in debug
+and release, on Windows and WSL. A host call to the helper is rejected by the
+device-only checker. The existing barrier, shared-memory, subgroup and large-
+frame fixtures pass on Windows; consecutive self-hosted compiler stages are
+byte-identical on both hosts.

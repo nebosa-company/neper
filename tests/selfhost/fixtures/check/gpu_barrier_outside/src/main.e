@@ -1,6 +1,5 @@
 use e.gpu
 
-fn helper(v: []u32) {
+fn main() {
     gpu.barrier()
-    v[0] = 1u32
 }
