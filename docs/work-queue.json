@@ -323,17 +323,6 @@
       "evidence": "Celvyx implements 2x2 diagnostic-table sensitivity, specificity, accuracy, predictive values, likelihood ratios, diagnostic odds ratio, and exact confidence intervals in `src/lib/core/medical/diagnostic.dart`. Neper has contingency-table tests but no diagnostic-metric API. Keep this as a small generic binary-classification/statistics module; exclude medical report grids. The catalog entry is 2258."
     },
     {
-      "id": "L013",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 111,
-      "title": "Time-to-event trial extensions in e.algo.stat",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "`e.algo.stat.test` covers t, Welch, Mann-Whitney, Wilcoxon, chi-squared, Fisher exact, two-sample and one-sample KS, ANOVA, Kruskal-Wallis, permutation, Bonferroni, and Benjamini-Hochberg, and L005 adds Nelson-Aalen, competing risks, RMST, and weighted log-rank, but there is no Kaplan-Meier estimator, unweighted log-rank test, Cox proportional-hazards fit, group-sequential alpha spending (O'Brien-Fleming/Pocock), Simon two-stage Phase-II design, continual-reassessment dose escalation, or Farrington-Manning non-inferiority. Keep estimators, tests, and designs; exclude trial-management workflows. The catalog entry is 2263."
-    },
-    {
       "id": "L014",
       "category": "library",
       "group": "Algorithms",

@@ -1558,6 +1558,11 @@ ml_mixed_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$ml_mixed_written" = 'executable written' ]
 chmod +x "$test_build/ml-mixed-selfhost"
 "$test_build/ml-mixed-selfhost"
+# `e.algo.stat.survival_trial`: Kaplan-Meier curves, the log-rank test and a Cox fit, spending functions, Simon optimal and minimax designs with operating characteristics, likelihood CRM dose finding, Farrington-Manning non-inferiority, and the storage and degenerate cases.
+survival_trial_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_survival_trial/src/main.e" "$repo" x64 linux "$test_build/survival-trial-selfhost")
+[ "$survival_trial_written" = 'executable written' ]
+chmod +x "$test_build/survival-trial-selfhost"
+"$test_build/survival-trial-selfhost"
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 ml_hmm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hmm/src/main.e" "$repo" x64 linux "$test_build/ml-hmm-selfhost")
 [ "$ml_hmm_written" = 'executable written' ]

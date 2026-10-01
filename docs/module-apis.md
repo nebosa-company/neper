@@ -3081,6 +3081,44 @@ with BLUPs; `wald_p` and `mixed_contrast` for inference. Scratch: `gee`
 `4d² + d + n + 2·mmax`, `mmrm_un` `(m+1)² + 5m + 2v² + p² + p + 2v` with
 `m = v(v+1)/2`, `lmm_intercept` `19 + 2d² + d`.
 
+### `e.algo.stat.survival_trial`
+
+```neper
+error TooSmall
+error Singular
+error Invalid
+
+type Result = struct { statistic: f64, p_value: f64 }
+type SimonDesign = struct { n1: usize, r1: usize, n: usize, r: usize }
+fn survival_solve(matrix: []f64, rhs: []f64, n: usize) -> err
+fn kaplan_meier(times: []const f64, events: []const u8, n: usize, out_times: []f64, out_survival: []f64, out_risk: []usize, order: []usize) -> (usize, err)
+fn log_rank(ta: []const f64, ea: []const u8, na: usize, tb: []const f64, eb: []const u8, nb: usize) -> (Result, err)
+fn cox_ph(times: []const f64, events: []const u8, x: []const f64, n: usize, p: usize, beta: []f64, covariance: []f64, fscratch: []f64, iscratch: []usize) -> (u32, err)
+fn spending_obrien_fleming(t: f64, alpha: f64) -> (f64, err)
+fn spending_pocock(t: f64, alpha: f64) -> (f64, err)
+fn binom_sf(n: usize, k: usize, p: f64) -> (f64, err)
+fn simon_pmf(n: usize, p: f64, pmf: []f64) -> err
+fn simon_oc(n1: usize, r1: usize, n: usize, r: usize, p: f64, scratch: []f64) -> (f64, f64, err)
+fn simon_tail(sf: []const f64, n2: usize, r: usize, x: usize) -> f64
+fn simon_fill(n1: usize, n2: usize, p0: f64, p1: f64, b1_0: []f64, b1_1: []f64, b2_0: []f64, b2_1: []f64, sf_0: []f64, sf_1: []f64) -> err
+fn simon_search(p0: f64, p1: f64, alpha: f64, beta: f64, minimax: bool, scratch: []f64) -> (SimonDesign, err)
+fn simon_optimal(p0: f64, p1: f64, alpha: f64, beta: f64, scratch: []f64) -> (SimonDesign, err)
+fn simon_minimax(p0: f64, p1: f64, alpha: f64, beta: f64, scratch: []f64) -> (SimonDesign, err)
+fn crm_objective(skeleton: []const f64, doses: usize, assigned: []const usize, outcomes: []const u8, patients: usize, a: f64) -> f64
+fn crm_next(skeleton: []const f64, doses: usize, goal: f64, assigned: []const usize, outcomes: []const u8, patients: usize, means: []f64) -> (usize, err)
+fn fm_score(x1: u64, n1: u64, x2: u64, n2: u64, d: f64, pc: f64) -> f64
+fn fm_mle(x1: u64, n1: u64, x2: u64, n2: u64, margin: f64) -> (f64, f64, err)
+fn farrington_manning(x1: u64, n1: u64, x2: u64, n2: u64, margin: f64) -> (Result, err)
+```
+
+Time-to-event trial methods over observed cases: `kaplan_meier` curves,
+unweighted `log_rank`, Cox `cox_ph` by Newton-Raphson (Breslow ties),
+Lan-DeMets `spending_obrien_fleming`/`spending_pocock`, Simon two-stage
+designs by exact exhaustive search (`simon_optimal` smallest expectation,
+`simon_minimax` smallest total; totals to 60), likelihood `crm_next` dose
+finding by golden section, and `farrington_manning` non-inferiority with
+`fm_mle` constrained estimates.
+
 ### `e.algo.stat`
 
 ```neper

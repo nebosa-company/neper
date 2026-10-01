@@ -1711,6 +1711,12 @@ $mlMixedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $mlMixedWritten -ne 'executable written') { throw 'ml_mixed emission failed' }
 & $mlMixedPath
 if ($LASTEXITCODE -ne 0) { throw "a ml_mixed check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.survival_trial`: Kaplan-Meier curves, the log-rank test and a Cox fit, spending functions, Simon optimal and minimax designs with operating characteristics, likelihood CRM dose finding, Farrington-Manning non-inferiority, and the storage and degenerate cases.
+$survivalTrialPath = Join-Path $testBuild 'survival-trial-selfhost.exe'
+$survivalTrialWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_survival_trial\src\main.e') $repo 'x64' 'windows' $survivalTrialPath
+if ($LASTEXITCODE -ne 0 -or $survivalTrialWritten -ne 'executable written') { throw 'algo_survival_trial emission failed' }
+& $survivalTrialPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_survival_trial check failed: exit $LASTEXITCODE" }
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 $mlHmmPath = Join-Path $testBuild 'ml-hmm-selfhost.exe'
 $mlHmmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_hmm\src\main.e') $repo 'x64' 'windows' $mlHmmPath
