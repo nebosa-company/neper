@@ -32238,3 +32238,14 @@ the literal audit covers `gpu_spaces`, `gpu_barrier`, `gpu_shared`, `gpu_cpu`,
 `gpu_present`, and `gpu_tensor`; D1720-D1736 cover the Vulkan-first subgroup, fault,
 sync, types, loop and float corpus. C090's correctness and performance rows are
 complete.
+
+## D1743 — Frame-spill invariant for resumable CPU `for` loops
+
+**Decision.** A CPU kernel's `for` counter already lives in its invocation frame.
+Its loop-invariant bound and collection data pointer must live there too: the
+barrier resume dispatch bypasses their original expressions. Load them in the
+condition block, which every new iteration reaches. Device lowering is unchanged.
+
+**Evidence.** A runtime-bound `for` containing `gpu.barrier()` previously failed
+NIR verification. `gpu_barrier` now runs that form and a slice-collection form,
+checking the exact result on CPU and supported Vulkan devices on Windows and WSL.
