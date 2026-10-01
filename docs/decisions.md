@@ -32273,3 +32273,15 @@ NIR lowering at the old cap and now runs on Windows and WSL. The compiler
 self-hosts byte-for-byte; an unchanged `gpu_gaps` executable is byte-identical
 before and after the wider table. That array-heavy kernel's SPIR-V remains
 unsupported, so its new runtime assertion covers the CPU path only.
+
+## D1746 — The large-frame parity probe uses floor-width integers
+
+**Decision.** D1745's last sentence was an incorrect diagnosis: the `u64`
+probe's Vulkan launch asked for optional Int64 capability, not an unsupported
+SPIR-V array. A 192-element `u32` local still makes the CPU frame exceed 1 KB
+without that capability requirement. Run it on both CPU and Vulkan.
+
+**Evidence.** `gpu_barrier` checks the exact post-barrier value on CPU, on two
+supported Windows Vulkan devices, and on one WSL Vulkan device. The standalone
+SPIR-V emitter accepted the fixture; no compiler or runtime source change was
+needed beyond using a floor-profile probe. Temporary diagnostics were removed.
