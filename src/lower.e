@@ -824,6 +824,7 @@ fn call_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) ->
         if index == 0usize { ret (call.cast, ok) }
         ret (check.make_type(.Integer, "u32", call.function.module_index), ok)
     }
+    if call.subgroup_op == .Add || call.subgroup_op == .Min || call.subgroup_op == .Max || call.subgroup_op == .And || call.subgroup_op == .Or || call.subgroup_op == .Xor { ret (call.cast, ok) }
     if call.indirect {
         let (signature, has_signature) = check.function_signature_of(c, call.indirect_type)
         if !has_signature { ret (check.invalid_type(), check.InvalidType) }
@@ -3108,15 +3109,25 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
     if call.subgroup_op != .None {
         results.call = call
         results.count = 1usize
-        if call.subgroup_op == .Broadcast || call.subgroup_op == .Shuffle {
-            if argument_count != 2usize { ret check.ArgumentCount }
+        let exchange = call.subgroup_op == .Broadcast || call.subgroup_op == .Shuffle
+        let reduction = call.subgroup_op == .Add || call.subgroup_op == .Min || call.subgroup_op == .Max || call.subgroup_op == .And || call.subgroup_op == .Or || call.subgroup_op == .Xor
+        if exchange || reduction {
             var kind = 3usize
             if call.subgroup_op == .Shuffle { kind = 4usize }
+            if call.subgroup_op == .Add { kind = 5usize }
+            if call.subgroup_op == .Min { kind = 6usize }
+            if call.subgroup_op == .Max { kind = 7usize }
+            if call.subgroup_op == .And { kind = 8usize }
+            if call.subgroup_op == .Or { kind = 9usize }
+            if call.subgroup_op == .Xor { kind = 10usize }
+            var wanted = 1usize
+            if exchange { wanted = 2usize }
+            if argument_count != wanted { ret check.ArgumentCount }
             if builder.spirv {
                 let (instruction, value, emit_error) = nir.emit(builder, .Subgroup, call.cast, true, kind, token)
                 if emit_error != ok { ret emit_error }
                 try nir.add_operand(builder, instruction, arguments[0usize])
-                try nir.add_operand(builder, instruction, arguments[1usize])
+                if exchange { try nir.add_operand(builder, instruction, arguments[1usize]) }
                 results.values[0usize] = value
                 ret ok
             }
@@ -3132,22 +3143,43 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
             }
             var record_arguments: [2]usize = zero
             record_arguments[0usize] = bits
-            record_arguments[1usize] = arguments[1usize]
+            if exchange {
+                record_arguments[1usize] = arguments[1usize]
+            } else {
+                let u32_type = check.make_type(.Integer, "u32", call.function.module_index)
+                let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, u32_type, true, 0usize, token)
+                if zero_error != ok { ret zero_error }
+                record_arguments[1usize] = zero_value
+            }
             var helper_results: CallResults = zero
             try emit_library_call(c, g, "e.gpu", record_name, record_arguments[..], 2usize, builder, token, &helper_results)
             if helper_results.count != 0usize { ret check.InvalidReturn }
             try emit_kernel_subgroup(builder, call.function.module_index, token)
             let u32_type = check.make_type(.Integer, "u32", call.function.module_index)
-            let (kind_instruction, kind_value, kind_error) = nir.emit(builder, .ConstInteger, u32_type, true, kind - 3usize, token)
+            var runtime_kind = kind - 3usize
+            if reduction { runtime_kind = kind - 5usize }
+            let (kind_instruction, kind_value, kind_error) = nir.emit(builder, .ConstInteger, u32_type, true, runtime_kind, token)
             if kind_error != ok { ret kind_error }
-            var exchange_arguments: [1]usize = zero
-            exchange_arguments[0usize] = kind_value
-            var exchange_results: CallResults = zero
-            try emit_library_call(c, g, "e.gpu", exchange_name, exchange_arguments[..], 1usize, builder, token, &exchange_results)
-            if exchange_results.count != 1usize { ret check.InvalidReturn }
-            let (moved, moved_error) = lower_bitcast(c, exchange_results.values[0usize], bits_type, call.cast, builder, token)
-            if moved_error != ok { ret moved_error }
-            results.values[0usize] = moved
+            var collective_arguments: [1]usize = zero
+            collective_arguments[0usize] = kind_value
+            var collective_results: CallResults = zero
+            if exchange {
+                try emit_library_call(c, g, "e.gpu", exchange_name, collective_arguments[..], 1usize, builder, token, &collective_results)
+                if collective_results.count != 1usize { ret check.InvalidReturn }
+                let (moved, moved_error) = lower_bitcast(c, collective_results.values[0usize], bits_type, call.cast, builder, token)
+                if moved_error != ok { ret moved_error }
+                results.values[0usize] = moved
+                ret ok
+            }
+            var reduce_name = "subgroup_reduce_u32"
+            if check.same(call.cast.name, "i32") { reduce_name = "subgroup_reduce_i32" }
+            if check.same(call.cast.name, "u64") { reduce_name = "subgroup_reduce_u64" }
+            if check.same(call.cast.name, "i64") { reduce_name = "subgroup_reduce_i64" }
+            if check.same(call.cast.name, "f32") { reduce_name = "subgroup_reduce_f32" }
+            if check.same(call.cast.name, "f64") { reduce_name = "subgroup_reduce_f64" }
+            try emit_library_call(c, g, "e.gpu", reduce_name, collective_arguments[..], 1usize, builder, token, &collective_results)
+            if collective_results.count != 1usize { ret check.InvalidReturn }
+            results.values[0usize] = collective_results.values[0usize]
             ret ok
         }
         if call.subgroup_op == .All || call.subgroup_op == .Any || call.subgroup_op == .Ballot {

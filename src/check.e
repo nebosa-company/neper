@@ -4958,6 +4958,12 @@ fn intrinsic_signature(module: str, name: str) -> str {
     if same(module, "e.gpu") && same(name, "subgroup_ballot") { ret "fn subgroup_ballot(value: bool) -> u64" }
     if same(module, "e.gpu") && same(name, "subgroup_broadcast") { ret "fn subgroup_broadcast[T: type](value: T, lane: u32) -> T" }
     if same(module, "e.gpu") && same(name, "subgroup_shuffle") { ret "fn subgroup_shuffle[T: type](value: T, lane: u32) -> T" }
+    if same(module, "e.gpu") && same(name, "subgroup_add") { ret "fn subgroup_add[T: type](value: T) -> T" }
+    if same(module, "e.gpu") && same(name, "subgroup_min") { ret "fn subgroup_min[T: type](value: T) -> T" }
+    if same(module, "e.gpu") && same(name, "subgroup_max") { ret "fn subgroup_max[T: type](value: T) -> T" }
+    if same(module, "e.gpu") && same(name, "subgroup_and") { ret "fn subgroup_and[T: type](value: T) -> T" }
+    if same(module, "e.gpu") && same(name, "subgroup_or") { ret "fn subgroup_or[T: type](value: T) -> T" }
+    if same(module, "e.gpu") && same(name, "subgroup_xor") { ret "fn subgroup_xor[T: type](value: T) -> T" }
     if same(module, "e.gpu") {
         if same(name, "atomic_load") { ret "fn atomic_load[T: type](p: *Atomic[T], order: atomic.Ordering, scope: Scope) -> T" }
         if same(name, "atomic_store") { ret "fn atomic_store[T: type](p: *Atomic[T], value: T, order: atomic.Ordering, scope: Scope)" }
@@ -9076,7 +9082,7 @@ type AtomicInfo = struct {
 }
 
 type GpuScope = enum u8 { Workgroup, Device, Dynamic }
-type SubgroupOp = enum u8 { None, Size, Elect, All, Any, Ballot, Broadcast, Shuffle }
+type SubgroupOp = enum u8 { None, Size, Elect, All, Any, Ballot, Broadcast, Shuffle, Add, Min, Max, And, Or, Xor }
 
 // The compile-time questions that answer with a constant and emit nothing. Three of
 // them are `e.meta`'s reflection; the last two are `e.mem`'s layout, which is the same
@@ -9438,6 +9444,12 @@ fn subgroup_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     if same(member, "subgroup_ballot") { op = .Ballot }
     if same(member, "subgroup_broadcast") { op = .Broadcast }
     if same(member, "subgroup_shuffle") { op = .Shuffle }
+    if same(member, "subgroup_add") { op = .Add }
+    if same(member, "subgroup_min") { op = .Min }
+    if same(member, "subgroup_max") { op = .Max }
+    if same(member, "subgroup_and") { op = .And }
+    if same(member, "subgroup_or") { op = .Or }
+    if same(member, "subgroup_xor") { op = .Xor }
     if op == .None { ret (info, op, ok) }
     info.matched = true
     if !c.body_is_kernel && !c.body_device_only {
@@ -9450,6 +9462,7 @@ fn subgroup_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     function.parameter_count = 0usize
     if op == .All || op == .Any || op == .Ballot { function.parameter_count = 1usize }
     if op == .Broadcast || op == .Shuffle { function.parameter_count = 2usize }
+    if op == .Add || op == .Min || op == .Max || op == .And || op == .Or || op == .Xor { function.parameter_count = 1usize }
     function.return_count = 1usize
     function.intrinsic = true
     info.function = function
@@ -11849,6 +11862,19 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         at += 1usize
                         continue
                     }
+                    if info.subgroup_op == .Add || info.subgroup_op == .Min || info.subgroup_op == .Max || info.subgroup_op == .And || info.subgroup_op == .Or || info.subgroup_op == .Xor {
+                        let (value, value_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                        if value_error != ok { ret (info, value_error) }
+                        let (canonical, canonical_error) = canonical_type(c, value)
+                        if canonical_error != ok { ret (info, canonical_error) }
+                        let bytes = scalar_size(canonical)
+                        if (canonical.kind != .Integer && canonical.kind != .Float) || (bytes != 4usize && bytes != 8usize) { ret (info, InvalidType) }
+                        if canonical.kind == .Float && (info.subgroup_op == .And || info.subgroup_op == .Or || info.subgroup_op == .Xor) { ret (info, InvalidType) }
+                        info.cast = canonical
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
                     if info.atomic_op != .None {
                         let atomic_error = check_atomic_argument(c, g, tree, module_index, child_index, child_position - 1usize, &info)
                         if atomic_error != ok { ret (info, atomic_error) }
@@ -12615,7 +12641,7 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         if call.subgroup_op == .Elect || call.subgroup_op == .All || call.subgroup_op == .Any { ret (make_type(.Bool, "bool", call.function.module_index), ok) }
         if call.subgroup_op == .Ballot { ret (make_type(.Integer, "u64", call.function.module_index), ok) }
-        if call.subgroup_op == .Broadcast || call.subgroup_op == .Shuffle { ret (call.cast, ok) }
+        if call.subgroup_op == .Broadcast || call.subgroup_op == .Shuffle || call.subgroup_op == .Add || call.subgroup_op == .Min || call.subgroup_op == .Max || call.subgroup_op == .And || call.subgroup_op == .Or || call.subgroup_op == .Xor { ret (call.cast, ok) }
         ret (make_type(.Integer, "u32", call.function.module_index), ok)
     }
 

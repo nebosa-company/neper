@@ -1183,8 +1183,8 @@
    "module": "e.gpu",
    "milestone": "M3",
    "schedule": "scheduled",
-   "catalogue": 173,
-   "delivered": 173,
+   "catalogue": 188,
+   "delivered": 188,
    "pending": [],
    "fixtures": [
     "device_only_edge",
@@ -1201,6 +1201,7 @@
     "gpu_shared",
     "gpu_spaces",
     "gpu_subgroup_identity",
+    "gpu_subgroup_reduce",
     "gpu_tensor",
     "gpu_vulkan_float",
     "gpu_vulkan_loop",

@@ -2809,6 +2809,14 @@ case "$gpu_subgroup_output" in
     'gpu subgroup identity cpu only'|'gpu subgroup identity vulkan ok on '[1-9]' devices'|'gpu subgroup identity vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the subgroup identity runtime failed: $gpu_subgroup_output" >&2; exit 1 ;;
 esac
+gpu_subgroup_reduce_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_subgroup_reduce/src/main.e" "$repo" x64 linux "$test_build/gpu-subgroup-reduce-selfhost")
+[ "$gpu_subgroup_reduce_written" = 'executable written' ]
+chmod +x "$test_build/gpu-subgroup-reduce-selfhost"
+gpu_subgroup_reduce_output=$("$test_build/gpu-subgroup-reduce-selfhost")
+case "$gpu_subgroup_reduce_output" in
+    'gpu subgroup reduce cpu only'|'gpu subgroup reduce vulkan ok on '[1-9]' devices'|'gpu subgroup reduce vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the subgroup reduction runtime failed: $gpu_subgroup_reduce_output" >&2; exit 1 ;;
+esac
 gpu_direct=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_direct_call/src/main.e" "$repo" x64 linux 2>&1 || true)
 case "$gpu_direct" in
     *'main.e:9:5: error[E-GPU-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;

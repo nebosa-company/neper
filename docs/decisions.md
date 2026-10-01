@@ -31896,3 +31896,24 @@ general-purpose e.lib algorithms.
 `protocol/lib/src/crypto/psi.dart`, and
 `protocol/lib/src/crypto/crypto_session.dart`. The catalog entries are 2253 and
 2254; backlog items are L003 and L004.
+
+## D1725 — Subgroup reductions reuse the exchange snapshot
+
+**Problem.** The six subgroup reductions need the same uniform-control cut and active
+lane set as votes and exchanges. A second scheduler protocol would duplicate that
+state, while reducing values before every lane reaches the collective would read an
+incomplete subgroup.
+
+**Decision.** CPU lowering records the scalar's unsigned representation through the
+existing subgroup word snapshot, cuts once, then reduces only active lanes. Integer
+add wraps at its width and integer min, max, and bitwise operations are exact; f32 add,
+min, and max use a fixed pairwise tree. SPIR-V emits the native
+`OpGroupNonUniformIAdd`/`FAdd`, signed or unsigned min/max, and bitwise operations with
+`Reduce` under `GroupNonUniformArithmetic`. The checker accepts bitwise reductions only
+for integers.
+
+**Evidence.** `tests/conformance/spirv/subgroup.spv` pins all six operations for u32,
+i32 and u64 plus the three f32 reductions, byte-identically from the Windows and Linux
+self-hosted compilers. `gpu_subgroup_reduce` checks full and partial subgroups on the
+CPU, a Windows Vulkan adapter, and WSL's Vulkan device. A direct checker probe rejects
+`subgroup_and(f32)`. The complete Windows self-host suite passes.
