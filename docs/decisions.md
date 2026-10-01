@@ -32026,3 +32026,19 @@ reports its checked records on all three. Vulkan 1.2 validation accepts both raw
 modules, their bytes are identical across Windows and Linux, and the six pinned modules
 remain unchanged. The complete suite remains blocked before these fixtures by the
 unrelated stale library-fixture catalog recorded in D1730.
+
+## D1732 — Whole-image unchecked Vulkan has no fault ABI
+
+**Decision.** `--unchecked` applies to device lowering as it does to CPU lowering: a
+syntactically checked index carries no guard, fault buffer or hidden argument slot.
+D1731's embedded marker therefore stays absent without a separate launcher rule. The
+build manifest remains the durable declaration of that unsafe whole-image policy with
+`options.checks: "off"`.
+
+**Evidence.** `gpu_fault_unchecked` performs an out-of-range access on the CPU and
+observes no fault, then launches the same module with defined inputs on every supported
+Vulkan device and checks exact 11, 12, 13, 14 output and no fault record. Debug
+unchecked manifests say `checks: off` on Windows and Linux. The PowerShell and shell
+suite scripts parse, and the fixture passes on two Windows devices and WSL's device.
+The complete suite remains blocked before this fixture by the unrelated stale
+library-fixture catalog recorded in D1730.

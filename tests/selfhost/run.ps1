@@ -3264,7 +3264,7 @@ $formatGenericWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $formatGenericWritten -ne 'executable written') { throw 'format_generic emission failed' }
 $formatGenericOutput = & $formatGenericPath
 if ($LASTEXITCODE -ne 0 -or ($formatGenericOutput -join "`n") -ne 'n=42;m=-7;x=2.5;format generic ok') { throw "a formatter in a cross-module generic answered wrongly: $($formatGenericOutput -join "`n")" }
-# The fault buffer (D785): a kernel's failed bounds check is a record `sync` and
+# The fault buffer (D785, D1731): a kernel's failed bounds check is a record `sync` and
 # `download` answer as `Fault` once, the invocation gone and the others finished;
 # a `@nocheck` block carries no check and no record.
 foreach ($faultCase in @(@('gpu_fault_bounds', 'gpu fault ok'), @('gpu_fault_nocheck', 'gpu nocheck ok'))) {
@@ -3274,6 +3274,14 @@ foreach ($faultCase in @(@('gpu_fault_bounds', 'gpu fault ok'), @('gpu_fault_noc
     $faultOutput = & $faultPath
     if ($LASTEXITCODE -ne 0 -or $faultOutput -ne $faultCase[1]) { throw "$($faultCase[0]) answered wrongly: exit $LASTEXITCODE" }
 }
+$uncheckedSource = Join-Path $PSScriptRoot 'fixtures\link\gpu_fault_unchecked\src\main.e'
+$uncheckedPath = Join-Path $testBuild 'gpu-fault-unchecked-selfhost.exe'
+$uncheckedWritten = & $compiler emit-executable $uncheckedSource $repo 'x64' 'windows' $uncheckedPath --unchecked
+if ($LASTEXITCODE -ne 0 -or $uncheckedWritten -ne 'executable written') { throw 'gpu_fault_unchecked emission failed' }
+$uncheckedOutput = & $uncheckedPath
+if ($LASTEXITCODE -ne 0 -or $uncheckedOutput -ne 'gpu unchecked ok') { throw "gpu_fault_unchecked answered wrongly: exit $LASTEXITCODE" }
+$uncheckedManifest = Get-Content -Raw (Join-Path $PSScriptRoot 'fixtures\link\gpu_fault_unchecked\.neper\debug\build-manifest.json') | ConvertFrom-Json
+if ($uncheckedManifest.options.checks -ne 'off') { throw 'gpu_fault_unchecked manifest retained checks' }
 # Presentation (D791): images a kernel writes, an offscreen target's frames acquired,
 # presented and read back as the snapshot, resize, and the refusals.
 $gpuPresentPath = Join-Path $testBuild 'gpu-present-selfhost.exe'

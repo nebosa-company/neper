@@ -2937,7 +2937,7 @@ format_generic_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/format-generic-selfhost"
 format_generic_output=$("$test_build/format-generic-selfhost")
 [ "$format_generic_output" = 'n=42;m=-7;x=2.5;format generic ok' ]
-# The fault buffer (D785): a kernel's failed bounds check is a record `sync` and
+# The fault buffer (D785, D1731): a kernel's failed bounds check is a record `sync` and
 # `download` answer as `Fault` once, the invocation gone and the others finished;
 # a `@nocheck` block carries no check and no record.
 for fault_case in 'gpu_fault_bounds:gpu fault ok' 'gpu_fault_nocheck:gpu nocheck ok'; do
@@ -2949,6 +2949,12 @@ for fault_case in 'gpu_fault_bounds:gpu fault ok' 'gpu_fault_nocheck:gpu nocheck
     fault_output=$("$test_build/$fault_name-selfhost")
     [ "$fault_output" = "$fault_expected" ]
 done
+unchecked_source="$repo/tests/selfhost/fixtures/link/gpu_fault_unchecked/src/main.e"
+unchecked_written=$($test_build/neper-self emit-executable "$unchecked_source" "$repo" x64 linux "$test_build/gpu-fault-unchecked-selfhost" --unchecked)
+[ "$unchecked_written" = 'executable written' ]
+chmod +x "$test_build/gpu-fault-unchecked-selfhost"
+[ "$("$test_build/gpu-fault-unchecked-selfhost")" = 'gpu unchecked ok' ]
+python3 -c "import json,sys; assert json.load(open(sys.argv[1]))['options']['checks'] == 'off'" "$repo/tests/selfhost/fixtures/link/gpu_fault_unchecked/.neper/debug/build-manifest.json"
 # Presentation (D791): images a kernel writes, an offscreen target's frames acquired,
 # presented and read back as the snapshot, resize, and the refusals.
 gpu_present_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_present/src/main.e" "$repo" x64 linux "$test_build/gpu-present-selfhost")
