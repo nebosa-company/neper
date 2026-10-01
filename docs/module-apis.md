@@ -7406,7 +7406,7 @@ error Unsupported
 error OutOfMemory
 error Failed
 
-type Physical = struct { handle: usize, name: str, device_type: u32, vendor: u32, device: u32, api_version: u32, memory_bytes: u64, caps: usize, subgroup_size: u32, floor: bool, compute_family: u32, uuid: [16]u8 }
+type Physical = struct { handle: usize, name: str, device_type: u32, vendor: u32, device: u32, api_version: u32, driver_version: u32, memory_bytes: u64, caps: usize, subgroup_size: u32, floor: bool, compute_family: u32, uuid: [16]u8 }
 type Context = struct { physical: usize, device: usize, queue: usize, family: u32, memory_type: u32 }
 type Buffer = struct { handle: usize, memory: usize, address: u64, bytes: []u8 }
 type Pipeline = struct { module: usize, layout: usize, pipeline: usize }
@@ -7418,10 +7418,19 @@ fn open(a: *mem.Arena, physical: Physical) -> (Context, err)
 fn close(context: Context)
 fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err)
 fn free(context: Context, made: Buffer)
-fn pipeline(a: *mem.Arena, context: Context, code: []const u8, entry: str) -> (Pipeline, err)
+fn pipeline(a: *mem.Arena, context: Context, code: []const u8, entry: str, cached: []const u8) -> (Pipeline, []u8, err)
 fn destroy(context: Context, made: Pipeline)
 fn dispatch(a: *mem.Arena, context: Context, made: Pipeline, block: u64, x: u32, y: u32, z: u32) -> err
 ```
+
+`e.gpu` keys one opaque driver cache blob by the embedded SPIR-V content hash,
+entry point, device UUID, driver/API versions, vendor/device IDs and capability
+set (D1733). Code-affecting launch, numeric, safety and build choices are already
+represented by the SPIR-V bytes. The record is CRC-32C checked, a checksum-valid
+driver rejection is retried from an empty cache, and refreshed bytes replace the
+old record durably only after a successful pipeline build. `NEPER_GPU_CACHE`
+selects an existing cache root for CI; otherwise the platform user cache is used.
+Cache I/O failure never fails a launch.
 
 The Vulkan compute runtime `e.gpu` stands on (D1610, D1611): the loader opened at run time
 through `os.dlopen` and every entry point through `os.dlsym`, so a program that never opens

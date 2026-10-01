@@ -49,6 +49,9 @@ type Api = struct {
     destroy_shader_module: fn(usize, usize, usize),
     create_pipeline_layout: fn(usize, *u8, usize, *usize) -> i32,
     destroy_pipeline_layout: fn(usize, usize, usize),
+    create_pipeline_cache: fn(usize, *u8, usize, *usize) -> i32,
+    get_pipeline_cache_data: fn(usize, usize, *usize, *u8) -> i32,
+    destroy_pipeline_cache: fn(usize, usize, usize),
     create_compute_pipelines: fn(usize, usize, u32, *u8, usize, *usize) -> i32,
     destroy_pipeline: fn(usize, usize, usize),
     create_command_pool: fn(usize, *u8, usize, *usize) -> i32,
@@ -79,6 +82,7 @@ type Physical = struct {
     vendor: u32,
     device: u32,
     api_version: u32,
+    driver_version: u32,
     memory_bytes: u64,
     // `gpu.Cap`'s members as bits (Int8 Int16 Int64 Float16 Float64 Atomic64 ...).
     caps: usize,
@@ -162,6 +166,10 @@ fn put_pointer(bytes: []u8, at: usize, pointee: []u8) {
     put64(bytes, at, mem.address_of(&pointee[0usize]))
 }
 
+fn put_const_pointer(bytes: []u8, at: usize, pointee: []const u8) {
+    put64(bytes, at, mem.address_of(&pointee[0usize]))
+}
+
 // The loader and every entry point this runtime calls, once per process.
 fn load(a: *mem.Arena) -> err {
     if loaded { ret ok }
@@ -191,10 +199,15 @@ fn load(a: *mem.Arena) -> err {
         let closed = os.dlclose(library)
         ret dispatch_error
     }
+    let cache_error = load_pipeline_cache(a, library)
+    if cache_error != ok {
+        let closed = os.dlclose(library)
+        ret cache_error
+    }
     loader = library
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret NoLoader }
     if e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok { ret NoLoader }
-    api = Api { create_instance: p1, destroy_instance: p2, enumerate_physical_devices: p3, get_physical_device_properties2: p4, get_physical_device_features2: p5, get_physical_device_memory_properties: p6, get_physical_device_queue_family_properties: p7, create_device: p8, destroy_device: p9, get_device_queue: p10, create_buffer: p11, destroy_buffer: p12, get_buffer_memory_requirements: p13, allocate_memory: p14, free_memory: p15, bind_buffer_memory: p16, map_memory: p17, get_buffer_device_address: p18, device_wait_idle: p19, create_shader_module: api.create_shader_module, destroy_shader_module: api.destroy_shader_module, create_pipeline_layout: api.create_pipeline_layout, destroy_pipeline_layout: api.destroy_pipeline_layout, create_compute_pipelines: api.create_compute_pipelines, destroy_pipeline: api.destroy_pipeline, create_command_pool: api.create_command_pool, destroy_command_pool: api.destroy_command_pool, allocate_command_buffers: api.allocate_command_buffers, begin_command_buffer: api.begin_command_buffer, end_command_buffer: api.end_command_buffer, cmd_bind_pipeline: api.cmd_bind_pipeline, cmd_push_constants: api.cmd_push_constants, cmd_dispatch: api.cmd_dispatch, queue_submit: api.queue_submit, queue_wait_idle: api.queue_wait_idle }
+    api = Api { create_instance: p1, destroy_instance: p2, enumerate_physical_devices: p3, get_physical_device_properties2: p4, get_physical_device_features2: p5, get_physical_device_memory_properties: p6, get_physical_device_queue_family_properties: p7, create_device: p8, destroy_device: p9, get_device_queue: p10, create_buffer: p11, destroy_buffer: p12, get_buffer_memory_requirements: p13, allocate_memory: p14, free_memory: p15, bind_buffer_memory: p16, map_memory: p17, get_buffer_device_address: p18, device_wait_idle: p19, create_shader_module: api.create_shader_module, destroy_shader_module: api.destroy_shader_module, create_pipeline_layout: api.create_pipeline_layout, destroy_pipeline_layout: api.destroy_pipeline_layout, create_pipeline_cache: api.create_pipeline_cache, get_pipeline_cache_data: api.get_pipeline_cache_data, destroy_pipeline_cache: api.destroy_pipeline_cache, create_compute_pipelines: api.create_compute_pipelines, destroy_pipeline: api.destroy_pipeline, create_command_pool: api.create_command_pool, destroy_command_pool: api.destroy_command_pool, allocate_command_buffers: api.allocate_command_buffers, begin_command_buffer: api.begin_command_buffer, end_command_buffer: api.end_command_buffer, cmd_bind_pipeline: api.cmd_bind_pipeline, cmd_push_constants: api.cmd_push_constants, cmd_dispatch: api.cmd_dispatch, queue_submit: api.queue_submit, queue_wait_idle: api.queue_wait_idle }
     // One instance for the process: the application record, then the instance's.
     let (application, application_error) = record(a, 48usize)
     if application_error != ok { ret application_error }
@@ -256,6 +269,7 @@ fn describe(a: *mem.Arena, handle: usize) -> (Physical, err) {
     put32(floats, 0usize, 1000197000usize)
     api.get_physical_device_properties2(handle, &properties[0usize])
     described.api_version = u32(get32(properties, 16usize))
+    described.driver_version = u32(get32(properties, 20usize))
     described.vendor = u32(get32(properties, 24usize))
     described.device = u32(get32(properties, 28usize))
     described.device_type = u32(get32(properties, 32usize))
@@ -421,9 +435,84 @@ fn load_dispatch(a: *mem.Arena, library: os.Lib) -> err {
     ret ok
 }
 
-// A SPIR-V module's `entry` made into a compute pipeline whose one push constant is eight
-// bytes, the argument block's device address (D1610's launch ABI).
-fn pipeline(a: *mem.Arena, context: Context, code: []const u8, entry: str) -> (Pipeline, err) {
+fn load_pipeline_cache(a: *mem.Arena, library: os.Lib) -> err {
+    let (create, create_error) = os.dlsym[fn(usize, *u8, usize, *usize) -> i32](a, library, "vkCreatePipelineCache")
+    let (data, data_error) = os.dlsym[fn(usize, usize, *usize, *u8) -> i32](a, library, "vkGetPipelineCacheData")
+    let (destroy_cache, destroy_error) = os.dlsym[fn(usize, usize, usize)](a, library, "vkDestroyPipelineCache")
+    if create_error != ok || data_error != ok || destroy_error != ok { ret NoLoader }
+    api.create_pipeline_cache = create
+    api.get_pipeline_cache_data = data
+    api.destroy_pipeline_cache = destroy_cache
+    ret ok
+}
+
+// A SPIR-V module's `entry` made into a compute pipeline, seeded from the driver's
+// opaque cache bytes when it accepts them. A bad seed is retried empty; cache support
+// itself is only an optimisation and never makes an otherwise valid launch fail.
+fn pipeline(a: *mem.Arena, context: Context, code: []const u8, entry: str, cached: []const u8) -> (Pipeline, []u8, err) {
+    var none: []u8 = zero
+    var empty: []const u8 = zero
+    var cache = 0usize
+    var seeded = cached.len != 0usize
+    let (first, first_error) = make_pipeline_cache(a, context, cached)
+    if first_error == ok { cache = first }
+    if first_error != ok && seeded {
+        seeded = false
+        let (fresh, fresh_error) = make_pipeline_cache(a, context, empty)
+        if fresh_error == ok { cache = fresh }
+    }
+    let (made, made_error) = pipeline_with_cache(a, context, code, entry, cache)
+    if made_error != ok && seeded {
+        api.destroy_pipeline_cache(context.device, cache, 0usize)
+        let (fresh, fresh_error) = make_pipeline_cache(a, context, empty)
+        var fresh_cache = 0usize
+        if fresh_error == ok { fresh_cache = fresh }
+        let (retried, retry_error) = pipeline_with_cache(a, context, code, entry, fresh_cache)
+        if retry_error != ok {
+            if fresh_cache != 0usize { api.destroy_pipeline_cache(context.device, fresh_cache, 0usize) }
+            ret (retried, none, retry_error)
+        }
+        let (refreshed, refresh_error) = pipeline_cache_data(a, context, fresh_cache)
+        if fresh_cache != 0usize { api.destroy_pipeline_cache(context.device, fresh_cache, 0usize) }
+        if refresh_error != ok { ret (retried, none, ok) }
+        ret (retried, refreshed, ok)
+    }
+    if made_error != ok {
+        if cache != 0usize { api.destroy_pipeline_cache(context.device, cache, 0usize) }
+        ret (made, none, made_error)
+    }
+    let (refreshed, refresh_error) = pipeline_cache_data(a, context, cache)
+    if cache != 0usize { api.destroy_pipeline_cache(context.device, cache, 0usize) }
+    if refresh_error != ok { ret (made, none, ok) }
+    ret (made, refreshed, ok)
+}
+
+fn make_pipeline_cache(a: *mem.Arena, context: Context, cached: []const u8) -> (usize, err) {
+    let (create, create_error) = record(a, 40usize)
+    if create_error != ok { ret (0usize, create_error) }
+    put32(create, 0usize, 17usize)
+    put64(create, 24usize, cached.len)
+    if cached.len != 0usize { put_const_pointer(create, 32usize, cached) }
+    var cache = 0usize
+    if api.create_pipeline_cache(context.device, &create[0usize], 0usize, &cache) != 0i32 { ret (0usize, Failed) }
+    ret (cache, ok)
+}
+
+fn pipeline_cache_data(a: *mem.Arena, context: Context, cache: usize) -> ([]u8, err) {
+    var none: []u8 = zero
+    if cache == 0usize { ret (none, Failed) }
+    var size = 0usize
+    var no_data: *u8 = zero
+    if api.get_pipeline_cache_data(context.device, cache, &size, no_data) != 0i32 || size == 0usize { ret (none, Failed) }
+    let (bytes, bytes_error) = mem.alloc[u8](a, size)
+    if bytes_error != ok { ret (none, bytes_error) }
+    var written = size
+    if api.get_pipeline_cache_data(context.device, cache, &written, &bytes[0usize]) != 0i32 || written > size { ret (none, Failed) }
+    ret (bytes[0usize..written], ok)
+}
+
+// The push-constant layout is one eight-byte device address (D1610's launch ABI).
+fn pipeline_with_cache(a: *mem.Arena, context: Context, code: []const u8, entry: str, cache: usize) -> (Pipeline, err) {
     var made: Pipeline = zero
     if code.len == 0usize || code.len % 4usize != 0usize { ret (made, Unsupported) }
     let (words, words_error) = record(a, code.len)
@@ -475,7 +564,7 @@ fn pipeline(a: *mem.Arena, context: Context, code: []const u8, entry: str) -> (P
     put64(pipeline_create, 72usize, layout)
     put32(pipeline_create, 88usize, 4294967295usize)
     var compute = 0usize
-    if api.create_compute_pipelines(context.device, 0usize, 1u32, &pipeline_create[0usize], 0usize, &compute) != 0i32 {
+    if api.create_compute_pipelines(context.device, cache, 1u32, &pipeline_create[0usize], 0usize, &compute) != 0i32 {
         destroy(context, made)
         ret (made, Failed)
     }

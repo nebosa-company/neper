@@ -2249,11 +2249,14 @@
    "milestone": "M3",
    "schedule": "scheduled",
    "direct_dependencies": [
+    "e.algo.hash",
     "e.atomic",
+    "e.fs",
     "e.gpu.vulkan",
     "e.math",
     "e.mem",
-    "e.os"
+    "e.os",
+    "e.str"
    ],
    "blocked_by": []
   },

@@ -44,9 +44,12 @@
 // its traps for overflow, divide, shift, narrow and slice bounds -- the checks a
 // release device build has no record for either.
 
+use e.algo.hash
+use e.fs
 use e.math
 use e.mem
 use e.os
+use e.str
 use e.atomic
 use e.gpu.vulkan
 
@@ -1195,13 +1198,138 @@ fn device_pipeline(device: *DeviceState, module: str, entry: str) -> (vulkan.Pip
     if device.pipeline_count >= 16usize { ret (zero, TooLarge) }
     let (code, code_error) = hex_bytes(device.arena, module)
     if code_error != ok { ret (zero, code_error) }
-    let (made, made_error) = vulkan.pipeline(device.arena, device.context, code, entry)
+    let cache_key = pipeline_cache_key(device.physical, code, entry)
+    var cached: []u8 = zero
+    let (cache_path, path_error) = pipeline_cache_path(device.arena, cache_key)
+    if path_error == ok { cached = pipeline_cache_read(device.arena, cache_path, cache_key) }
+    let (made, refreshed, made_error) = vulkan.pipeline(device.arena, device.context, code, entry, cached)
     if made_error != ok { ret (made, Unsupported) }
+    if path_error == ok { pipeline_cache_publish(device.arena, cache_path, cache_key, refreshed) }
     device.pipeline_modules[device.pipeline_count] = key
     device.pipeline_entries[device.pipeline_count] = entry
     device.pipelines[device.pipeline_count] = made
     device.pipeline_count += 1usize
     ret (made, ok)
+}
+
+// Vulkan's blob is local optimisation state. The embedded SPIR-V hash carries the
+// launch specialisation, capability, numerical, safety and build-mode choices that
+// changed its code; the remaining bytes distinguish the entry and driver device.
+fn pipeline_cache_key(physical: vulkan.Physical, code: []const u8, entry: str) -> u64 {
+    let kernel = hash.xxhash64(code, 0u64)
+    var fields: [40]u8 = zero
+    cache_put_u64(fields[..], 0usize, kernel)
+    cache_put_u64(fields[..], 8usize, u64(entry.len))
+    cache_put_u32(fields[..], 16usize, physical.driver_version)
+    cache_put_u32(fields[..], 20usize, physical.api_version)
+    cache_put_u32(fields[..], 24usize, physical.vendor)
+    cache_put_u32(fields[..], 28usize, physical.device)
+    cache_put_u64(fields[..], 32usize, u64(physical.caps))
+    var identity = hash.xxhash64_init(0u64)
+    hash.xxhash64_update(&identity, "vulkan")
+    hash.xxhash64_update(&identity, fields[..])
+    hash.xxhash64_update(&identity, physical.uuid[..])
+    hash.xxhash64_update(&identity, entry)
+    ret hash.xxhash64_done(&identity)
+}
+
+fn pipeline_cache_path(a: *mem.Arena, key: u64) -> (str, err) {
+    let (override_root, overridden) = fs.env_directory(a, "NEPER_GPU_CACHE")
+    var base = override_root
+    var suffix = "/v1"
+    if !overridden {
+        var variable = "XDG_CACHE_HOME"
+        if os.NATIVE_SEPARATOR == 92u8 { variable = "LOCALAPPDATA" }
+        let (platform_root, platform_found) = fs.env_directory(a, variable)
+        base = platform_root
+        suffix = "/neper/gpu/v1"
+        if !platform_found {
+            let (home, home_error) = fs.home_dir(a)
+            if home_error != ok { ret ("", home_error) }
+            base = home
+            suffix = "/.cache/neper/gpu/v1"
+        }
+    }
+    let (directory, directory_error) = str.concat(a, base, suffix)
+    if directory_error != ok { ret ("", directory_error) }
+    let made_error = fs.make_dirs(a, directory)
+    if made_error != ok { ret ("", made_error) }
+    var (path, builder_error) = str.builder(a, directory.len + 22usize)
+    if builder_error != ok { ret ("", builder_error) }
+    try str.push(&path, directory)
+    try str.push(&path, "/")
+    try str.push_hex_u64(&path, key)
+    try str.push(&path, ".bin")
+    ret (str.done(&path), ok)
+}
+
+fn pipeline_cache_read(a: *mem.Arena, path: str, key: u64) -> []u8 {
+    var none: []u8 = zero
+    let (file, file_error) = fs.read_file(a, path, 67108892usize)
+    if file_error != ok || file.len < 28usize { ret none }
+    let magic = "NEPGPU01"
+    var at = 0usize
+    while at < magic.len {
+        if file[at] != magic[at] { ret none }
+        at += 1usize
+    }
+    let blob = file[28usize..]
+    if cache_u64(file, 8usize) != key || cache_u64(file, 16usize) != u64(blob.len) { ret none }
+    if cache_u32(file, 24usize) != hash.crc32c(blob) { ret none }
+    ret blob
+}
+
+fn pipeline_cache_publish(a: *mem.Arena, path: str, key: u64, blob: []const u8) {
+    if blob.len == 0usize || blob.len > 67108864usize { ret }
+    let (file, file_error) = mem.alloc[u8](a, 28usize + blob.len)
+    if file_error != ok { ret }
+    copy_bytes(file[0usize..8usize], "NEPGPU01")
+    cache_put_u64(file, 8usize, key)
+    cache_put_u64(file, 16usize, u64(blob.len))
+    cache_put_u32(file, 24usize, hash.crc32c(blob))
+    copy_bytes(file[28usize..], blob)
+    var (temporary, temporary_error) = str.builder(a, path.len + 32usize)
+    if temporary_error != ok { ret }
+    if str.push(&temporary, path) != ok || str.push(&temporary, ".tmp-") != ok || str.push_usize(&temporary, os.current_thread_id()) != ok { ret }
+    let temporary_path = str.done(&temporary)
+    if fs.write_file(a, temporary_path, file) != ok {
+        let removed = fs.remove_file(a, temporary_path)
+        ret
+    }
+    var options: fs.ReplaceOptions = zero
+    options.overwrite = true
+    options.durable = true
+    if fs.replace(a, temporary_path, path, options) != ok {
+        let removed = fs.remove_file(a, temporary_path)
+    }
+}
+
+fn cache_put_u32(bytes: []u8, at: usize, value: u32) {
+    var rest = value
+    var k = 0usize
+    while k < 4usize {
+        bytes[at + k] = u8(rest & 255u32)
+        rest = rest >> 8u32
+        k += 1usize
+    }
+}
+
+fn cache_put_u64(bytes: []u8, at: usize, value: u64) {
+    var rest = value
+    var k = 0usize
+    while k < 8usize {
+        bytes[at + k] = u8(rest & 255u64)
+        rest = rest >> 8u32
+        k += 1usize
+    }
+}
+
+fn cache_u32(bytes: []const u8, at: usize) -> u32 {
+    ret u32(bytes[at]) | (u32(bytes[at + 1usize]) << 8u32) | (u32(bytes[at + 2usize]) << 16u32) | (u32(bytes[at + 3usize]) << 24u32)
+}
+
+fn cache_u64(bytes: []const u8, at: usize) -> u64 {
+    ret u64(cache_u32(bytes, at)) | (u64(cache_u32(bytes, at + 4usize)) << 32u32)
 }
 
 // A kernel's module back from its hex digits (D1611).
