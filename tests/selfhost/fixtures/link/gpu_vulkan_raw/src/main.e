@@ -60,7 +60,8 @@ fn run(a: *mem.Arena, physical: vk.Physical, code: []const u8, n: u32) -> err {
     put_word(block.bytes, 24usize, 4096u32)
     put_address(block.bytes, 32usize, y.address)
     put_word(block.bytes, 40usize, 4096u32)
-    let (made, made_error) = vk.pipeline(a, context, code, "saxpy.saxpy")
+    var no_cache: []const u8 = zero
+    let (made, cache_ignored, made_error) = vk.pipeline(a, context, code, "saxpy.saxpy", no_cache)
     if made_error != ok { ret made_error }
     defer vk.destroy(context, made)
     try vk.dispatch(a, context, made, block.address, 16u32, 1u32, 1u32)

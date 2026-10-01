@@ -2774,6 +2774,16 @@ if [ "$gpu_vulkan_loop_output" != 'gpu loop cpu only' ]; then
     rebuilt_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
     [ "$corrupt_cache_hash" != "$rebuilt_cache_hash" ]
     [ "$valid_cache_hash" = "$rebuilt_cache_hash" ]
+    cache_count=$(find "$gpu_cache" -type f -name '*.bin' | wc -l)
+    capped_loop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_loop/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-loop-capped-selfhost" --inline-cap 39)
+    [ "$capped_loop_written" = 'executable written' ]
+    chmod +x "$test_build/gpu-vulkan-loop-capped-selfhost"
+    capped_loop_output=$("$test_build/gpu-vulkan-loop-capped-selfhost")
+    case "$capped_loop_output" in
+        'gpu loop vulkan ok on '[1-9]' devices'|'gpu loop vulkan ok on '1[0-6]' devices') ;;
+        *) printf '%s\n' 'the alternate compiler-identity Vulkan fixture failed' >&2; exit 1 ;;
+    esac
+    [ "$(find "$gpu_cache" -type f -name '*.bin' | wc -l)" -eq $((2 * cache_count)) ]
 fi
 if [ -n "$previous_gpu_cache" ]; then export NEPER_GPU_CACHE=$previous_gpu_cache; else unset NEPER_GPU_CACHE; fi
 # (D1613) Correctly rounded f32 division and square root, pinned as SPIR-V and
