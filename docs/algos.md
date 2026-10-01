@@ -7,7 +7,7 @@ Numbering is global; the ranges in the headings are the transcript's own.
 
 ## Standard library plan
 
-Every entry below carries a verdict. 1239 entries map to a library function, 214 are duplicates of one of those (`see #N`), and 797 are skipped with a one-word reason.
+Every entry below carries a verdict. 1250 entries map to a library function, 214 are duplicates of one of those (`see #N`), and 797 are skipped with a one-word reason.
 
 - **`→ e.mod.fn`** — implementable; the proposed module and function name. Names follow the existing conventions in `docs/module-apis.md`: `snake_case`, arena-first for allocating calls, `[T: type]` generics.
 - **→ see #N** — the same algorithm already appears at #N; implement it once, there.
@@ -2710,3 +2710,65 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 2249. **Dead Code Detection via Call Graph** – Flagging functions unreachable from entry points. → skip: belongs in the Neper compiler, not the library
 2250. **Static Taint Analysis** – Tracking untrusted data from sources to sensitive sinks. → skip: belongs in the toolchain (build, test runner, pacman)
 
+## 41. MTG Studio-derived candidates (2251-2252)
+
+These two candidates were identified by comparing `mtg.studio.src` and
+`mtg.studio.web` with the existing Neper library. They are backlog proposals,
+not landed APIs.
+
+2251. **Hypergeometric Probability and Tails** - Computing the exact, at-least, and at-most probabilities of successes in a sample drawn without replacement. -> `e.algo.stat.hypergeometric_pmf`, `e.algo.stat.hypergeometric_at_least`, `e.algo.stat.hypergeometric_at_most`
+2252. **Robust Total-Least-Squares Line Fit** - Fitting an orthogonal 2D line with one outlier-rejection pass for sub-pixel edge refinement. -> `e.gfx.vision.fit_line_tls`
+
+## 42. Chit-chat-derived candidates (2253-2254)
+
+These candidates were identified by comparing `chit-chat` with the existing
+Neper library. They are backlog proposals, not landed APIs.
+
+2253. **Ristretto255 Hash-to-Group Primitives** - Standardized prime-order group operations, point encoding, scalar multiplication, and hash-to-group for privacy protocols such as PSI and OPRF. -> `e.crypto.ristretto255`
+2254. **Padme Length Bucketing** - Rounds payload sizes into logarithmic buckets to reduce traffic-analysis leakage while bounding padding overhead. -> `e.algo.privacy.padme_ceil`
+
+## 43. Celvyx-derived statistical and medical candidates (2255-2258)
+
+These candidates were identified by comparing Celvyx's reusable statistical
+engines with Neper's existing `e.algo.stat` and `e.ml` coverage. Spreadsheet
+grids, clinical presentation wrappers, and finance-domain formulas are not
+included.
+
+2255. **Survival-Analysis Extensions** - Nelson-Aalen cumulative hazard, Aalen-Johansen competing-risks cumulative incidence, restricted mean survival time, and weighted log-rank tests. -> `e.algo.stat.survival_extensions`
+2256. **Meta-Analysis Core** - Effect sizes for odds ratios, risk ratios, standardized means, and correlations, with fixed/random-effects pooling, Q, I-squared, tau-squared, subgroup analysis, and meta-regression. -> `e.algo.stat.meta`
+2257. **Generalized Regression Extensions** - Poisson rate regression with offsets, negative-binomial regression, conditional logistic regression for matched sets, and ordinal logistic regression. -> `e.algo.stat.glm`
+2258. **Diagnostic-Test Statistics** - Sensitivity, specificity, accuracy, predictive values, likelihood ratios, diagnostic odds ratio, and exact confidence intervals for 2x2 tables. -> `e.algo.stat.diagnostic`
+
+## 44. Pharma-derived candidates (2259-2267)
+
+These candidates were identified by checking a 100-algorithm pharmaceutical
+survey against the existing Neper library (`lib/e`). About 45 of the 100
+already exist as generic primitives: trees/forests/boosting (`e.ml.tree`),
+SVM (`e.ml.svm`), k-NN (`e.ml.knn`), Naive Bayes (`e.ml.bayes`),
+OLS/ridge/lasso/logistic (`e.ml.linear`), PCA/t-SNE (`e.ml.reduce`),
+k-means/k-medoids/agglomerative/DBSCAN/OPTICS/BIRCH/GMM
+(`e.ml.cluster`), MinHash/LSH/HNSW/IVF-PQ (`e.ml.ann`),
+HMM/Viterbi/Baum-Welch (`e.ml.hmm`), Q-learning/SARSA (`e.ml.rl`),
+Needleman-Wunsch/Smith-Waterman/Gotoh/Hirschberg (`e.algo.align`),
+BWT (`e.algo.coding`) and FM-index (`e.data.succinct`),
+PageRank/Louvain/Leiden (`e.algo.graph`), Kabsch (`e.algo.geom3`),
+A*/MCTS/TSP/VRP-savings (`e.algo.combopt`, `e.algo.graph.path`,
+`e.game.ai`), PID/LQR/Kalman (`e.control`, `e.math.filter`),
+Verlet/RK steppers (`e.math.ode`), Holt-Winters/GARCH/CUSUM
+(`e.algo.timeseries`), and SHA/Merkle (`e.crypto`). The nine below are
+the reusable gaps; they are backlog proposals, not landed APIs.
+Domain products are not queued: trained models (ChemBERTa, BioBERT,
+MolGAN, JT-VAE, diffusion dockers, AlphaFold, U-Net) → skip: model;
+docking scores, free-energy perturbation, force fields, and enhanced
+sampling → skip: physics; NONMEM/Simcyp, MedDRA/Derek, BLAST/BWA
+tools, DESeq2/DSSP/GSEA → skip: bio/system/product.
+
+2259. **Neural Layers for Molecules and Sequences** - Recurrent layers (LSTM/GRU) for SMILES and graph layers (GCN/GAT/MPNN, ChemProp-style message passing) for molecular property and drug-target prediction; trained weights excluded. -> `e.ml.gnn`, `e.ml.recurrent`
+2260. **Chemical Similarity and Scaffold Core** - Bit fingerprints (ECFP/Morgan, MACCS), Tanimoto/Dice scoring, Butina clustering for library diversity, and maximum-common-substructure (FMCS) scaffold matching. -> `e.ml.fingerprint`
+2261. **Chemometric Extensions** - Partial-least-squares regression for classical QSAR and PAT/NIR calibration, and UMAP for chemical and single-cell visualization. -> `e.ml.linear.pls`, `e.ml.reduce.umap`
+2262. **Longitudinal and Mixed-Model Core** - Linear mixed models and MMRM for repeated-measures efficacy plus GEE for population-averaged effects. -> `e.algo.stat.mixed`
+2263. **Time-to-Event Trial Extensions** - Kaplan-Meier estimator, log-rank test, Cox proportional-hazards fit, group-sequential alpha spending (O'Brien-Fleming/Pocock), Simon two-stage design, continual-reassessment dose escalation, and Farrington-Manning non-inferiority. -> `e.algo.stat.survival_trial`
+2264. **Causal and Missing-Data Core** - Propensity scores with IPTW, doubly-robust treatment-effect estimators, and multiple imputation by chained equations (MICE) for real-world evidence. -> `e.algo.stat.causal`
+2265. **PK/PD Mathematics** - Non-compartmental analysis (trapezoidal AUC/Cmax), Emax/Hill dose-response fits, and Michaelis-Menten enzyme-kinetics fits over the existing optimizers. -> `e.math.pkpd`
+2266. **Safety-Signal Detection** - Disproportionality scores (ROR, PRR, BCPNN information component) and frequent-itemset rule mining (Apriori/FP-growth) for drug-drug interactions. -> `e.algo.stat.safety`
+2267. **Forecast and Inventory Extensions** - ARIMA for surveillance and demand series plus EOQ and newsvendor inventory policies for supply planning. -> `e.algo.timeseries.arima`, `e.algo.combopt.inventory`
