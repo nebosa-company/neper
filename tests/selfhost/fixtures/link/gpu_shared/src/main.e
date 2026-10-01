@@ -65,11 +65,12 @@ fn near(x: f32, y: f32) -> bool {
     ret d < 0.001 && d > -0.001
 }
 
-fn main(a: *mem.Arena, args: []str) -> err {
-    let (device, open_error) = gpu.open(a, .Cpu, 0u32)
-    if open_error != ok { os.exit(1i32) }
+fn run_exact(a: *mem.Arena, backend: gpu.Backend, index: u32, sums_out: []f32, tallies_out: []u32) -> err {
+    let (device, open_error) = gpu.open(a, backend, index)
+    if open_error != ok { ret open_error }
+    defer let _ = gpu.close(device)
     let (q, queue_error) = gpu.queue(device)
-    if queue_error != ok { os.exit(2i32) }
+    if queue_error != ok { ret queue_error }
 
     // block_sum over 192 inputs: three workgroups.
     var xs: [192]f32 = zero
@@ -79,32 +80,86 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     let (dx, dx_error) = gpu.upload[f32](q, xs[0..])
-    if dx_error != ok { os.exit(3i32) }
+    if dx_error != ok { ret dx_error }
+    defer let _ = gpu.release(q, dx)
     let (sums, sums_error) = gpu.alloc[f32](q, 3usize)
-    if sums_error != ok { os.exit(4i32) }
-    if gpu.launch[block_sum](q, gpu.grid1(192usize), dx, sums) != ok { os.exit(5i32) }
-    var out: [3]f32 = zero
-    if gpu.download[f32](q, sums, out[0..]) != ok { os.exit(6i32) }
-    // Each workgroup sums 0.5 + 1.5 + ... + 63.5 = 2048.
-    if !near(out[0], 2048.0) || !near(out[1], 2048.0) || !near(out[2], 2048.0) { os.exit(7i32) }
+    if sums_error != ok { ret sums_error }
+    defer let _ = gpu.release(q, sums)
+    let block_error = gpu.launch[block_sum](q, gpu.grid1(192usize), dx, sums)
+    if block_error != ok && block_error != gpu.Unsupported { ret block_error }
+    if block_error == ok { try gpu.download[f32](q, sums, sums_out) }
 
     // tally over 16 values: two workgroups, each with its own largest.
     var values: [16]u32 = [16]u32{ 3u32, 9u32, 1u32, 4u32, 7u32, 2u32, 8u32, 5u32, 10u32, 20u32, 30u32, 40u32, 50u32, 60u32, 70u32, 80u32 }
     let (dv, dv_error) = gpu.upload[u32](q, values[0..])
-    if dv_error != ok { os.exit(8i32) }
+    if dv_error != ok { ret dv_error }
+    defer let _ = gpu.release(q, dv)
     let (dt, dt_error) = gpu.alloc[u32](q, 16usize)
-    if dt_error != ok { os.exit(9i32) }
-    if gpu.launch[tally](q, gpu.grid1(16usize), dv, dt) != ok { os.exit(10i32) }
+    if dt_error != ok { ret dt_error }
+    defer let _ = gpu.release(q, dt)
+    let tally_error = gpu.launch[tally](q, gpu.grid1(16usize), dv, dt)
+    if tally_error != ok { ret tally_error }
+    try gpu.download[u32](q, dt, tallies_out)
+    ret block_error
+}
+
+fn same_f32(a: []const f32, b: []const f32) -> bool {
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret a.len == b.len
+}
+
+fn same_u32(a: []const u32, b: []const u32) -> bool {
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret a.len == b.len
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    var out: [3]f32 = zero
     var tallies: [16]u32 = zero
-    if gpu.download[u32](q, dt, tallies[0..]) != ok { os.exit(11i32) }
+    let cpu_error = run_exact(a, .Cpu, 0u32, out[0..], tallies[0..])
+    if cpu_error != ok { os.exit(50i32) }
+    // Each workgroup sums 0.5 + 1.5 + ... + 63.5 = 2048.
+    if !near(out[0], 2048.0) || !near(out[1], 2048.0) || !near(out[2], 2048.0) { os.exit(7i32) }
     // Group 0: largest 9, times 8, plus the next slot's value.
     if tallies[0] != 72u32 + 9u32 || tallies[7] != 72u32 + 3u32 { os.exit(12i32) }
     // Group 1: largest 80.
     if tallies[8] != 640u32 + 20u32 || tallies[15] != 640u32 + 10u32 { os.exit(13i32) }
 
-    // early_read: the 0xCD fill.
+    let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
+    if found_error != gpu.NoDevice && found_error != gpu.Unsupported {
+        if found_error != ok { ret found_error }
+        var at = 0usize
+        while at < found.len {
+            if found[at].supported {
+                var device_out: [3]f32 = zero
+                var device_tallies: [16]u32 = zero
+                let exact_error = run_exact(a, .Vulkan, u32(at), device_out[0..], device_tallies[0..])
+                if exact_error != ok && exact_error != gpu.Unsupported { ret exact_error }
+                if !same_u32(tallies[0..], device_tallies[0..]) { os.exit(18i32) }
+                if exact_error == ok && !same_f32(out[0..], device_out[0..]) { os.exit(18i32) }
+            }
+            at += 1usize
+        }
+    }
+
+    // early_read intentionally observes the CPU backend's specified 0xCD fill;
+    // Vulkan leaves uninitialized workgroup memory undefined.
+    let (device, open_error) = gpu.open(a, .Cpu, 0u32)
+    if open_error != ok { ret open_error }
+    defer let _ = gpu.close(device)
+    let (q, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret queue_error }
     let (dm, dm_error) = gpu.alloc[u8](q, 4usize)
     if dm_error != ok { os.exit(14i32) }
+    defer let _ = gpu.release(q, dm)
     if gpu.launch[early_read](q, gpu.grid1(4usize), dm) != ok { os.exit(15i32) }
     var marks: [4]u8 = zero
     if gpu.download[u8](q, dm, marks[0..]) != ok { os.exit(16i32) }

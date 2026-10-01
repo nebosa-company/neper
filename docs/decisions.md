@@ -32186,3 +32186,19 @@ Vulkan device and compares all eight words. Its shared slice helper, generic hel
 specialized for shared and device slices, and `*shared` helper agree on both Windows
 adapters and WSL's Vulkan device. The raw module passes `spirv-val --target-env
 vulkan1.2`.
+
+## D1740 — Shared expression temporaries are private, not workgroup allocations
+
+**Decision.** The sole SPIR-V `Stack` value that owns Workgroup storage is the
+synthetic shared-block integer marker emitted once for a kernel. A slice header or
+aggregate expression can inherit `in_shared` from its destination, but remains a
+Function variable. Treating every such stack value as Workgroup storage made a
+struct literal overwrite the first words of an earlier `shared var` before the
+literal was copied to its actual destination.
+
+**Evidence.** `gpu_shared` now compares the exact `tally` output on every supported
+Vulkan device and compares `block_sum` wherever its f32 denormal requirement is
+available; the intentionally uninitialized `early_read` remains CPU-only. The sweep
+found the old overwrite at lane 7 (`80` instead of `75`) and the narrowed allocation
+rule removes it on two Windows adapters and WSL. `gpu_barrier` likewise compares its
+`relay`, looped `rounds`, and barrier-free `plain` outputs on those devices.
