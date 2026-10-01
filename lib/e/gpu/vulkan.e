@@ -461,6 +461,14 @@ fn pipeline(a: *mem.Arena, context: Context, code: []const u8, entry: str, cache
         let (fresh, fresh_error) = make_pipeline_cache(a, context, empty)
         if fresh_error == ok { cache = fresh }
     }
+    // The cache fixture's one injected driver failure: the valid entry must stay on
+    // disk because `e.gpu` publishes only the refreshed bytes returned after success.
+    let (failure, failure_error) = os.env(a, "NEPER_GPU_CACHE_FAIL_REBUILD")
+    if cached.len != 0usize && failure_error == ok && failure.len == 1usize && failure[0usize] == 49u8 {
+        if cache != 0usize { api.destroy_pipeline_cache(context.device, cache, 0usize) }
+        var failed: Pipeline = zero
+        ret (failed, none, Failed)
+    }
     let (made, made_error) = pipeline_with_cache(a, context, code, entry, cache)
     if made_error != ok && seeded {
         api.destroy_pipeline_cache(context.device, cache, 0usize)

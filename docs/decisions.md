@@ -32064,8 +32064,8 @@ failure is a miss and never changes launch correctness.
 Iris Xe. Both write driver blobs to an isolated root. The suite corrupts Vulkan's own
 cache header, recomputes the outer CRC-32C, reruns the executable and requires the
 CPU-identical result plus byte-for-byte restoration of the prior valid cache. Both
-suite scripts parse. The failed-rebuild preservation injection remains for the
-completed cache row.
+suite scripts parse. D1735 adds the failed-rebuild preservation injection that
+completes this cache row.
 
 ## D1734 — Embedded device code carries its writing compiler identity
 
@@ -32082,3 +32082,18 @@ identity in the durable pipeline-cache key. Raw SPIR-V output is unchanged.
 same CPU-identical output: two to four files across the NVIDIA and Intel adapters on
 Windows, and one to two on WSL. The bootstrap builds the compiler with the widened
 companion format, both runtime modules check, and the suite scripts parse.
+
+## D1735 — A failed Vulkan cache rebuild leaves the valid entry intact
+
+**Decision.** `NEPER_GPU_CACHE_FAIL_REBUILD=1` is the cache fixture's one fault
+injection. When a driver cache seed exists, `e.gpu.vulkan.pipeline` destroys its
+temporary Vulkan cache and answers `Failed` before pipeline creation. `e.gpu` therefore
+has no refreshed bytes to publish, and the existing durable file is untouched. The
+hook is ignored without a seed, so it cannot manufacture a cache hit.
+
+**Evidence.** The `gpu_cache_corrupt` suite block first restores a deliberately
+corrupted driver header, hashes that valid entry, injects the rebuild failure and
+requires a nonzero launch exit plus the exact same file hash. After removing the
+injection, the same executable succeeds again with CPU-identical output. This passes
+on the NVIDIA RTX 3080 and Intel Iris Xe on Windows and on WSL's Vulkan device; both
+suite scripts parse and `e.gpu.vulkan` checks.
