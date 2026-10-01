@@ -7439,9 +7439,18 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         if check.is_untyped(first_type) { counter_type = second_type }
         let (first_value, lowered_first_type, first_error) = lower_expression(c, g, tree, module_index, expressions[0usize], counter_type, builder, bindings, *binding_count)
         if first_error != ok { ret first_error }
+        var first_slot = 0usize
+        if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, expressions[1usize], builder) {
+            let (saved, save_error) = frame_save_temporary(c, counter_type, first_value, token, builder)
+            if save_error != ok { ret save_error }
+            first_slot = saved
+        }
+        let before = builder.kernel_barriers
         let (second_value, lowered_second_type, second_error) = lower_expression(c, g, tree, module_index, expressions[1usize], counter_type, builder, bindings, *binding_count)
         if second_error != ok { ret second_error }
-        initial = first_value
+        let (resumed_first, resume_error) = frame_resume_temporary(c, counter_type, first_value, first_slot, before, token, builder)
+        if resume_error != ok { ret resume_error }
+        initial = resumed_first
         limit = second_value
     }
     // The dispatch can resume inside the body, bypassing the expressions above.

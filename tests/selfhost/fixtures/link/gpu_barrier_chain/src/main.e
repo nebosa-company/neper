@@ -141,6 +141,9 @@ fn middle(out: []u32, lane: u32) {
             vectors[usize(lane)] = vector
             let added = vectors[usize(lane)] +% passthrough(vector)
             view.data[usize(lane)] = added.lanes[0usize] - (lane + 44u32)
+            for step in lane..passthrough(lane + 1u32) {
+                view.data[usize(lane)] = step + 44u32
+            }
             view.data[usize(lane)] = deferred_barrier(lane)
             let (after_defer, deferred_lane) = deferred_pair(lane)
             view.data[usize(lane)] = after_defer + deferred_lane - lane

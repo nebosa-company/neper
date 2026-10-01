@@ -32645,3 +32645,17 @@ The Vulkan raw SAXPY test passes on two Windows devices and one WSL device,
 and emitted SPIR-V still matches the pinned conformance file on both hosts.
 The full suites remain gated by
 the shared tree's stale library-fixture manifest.
+
+## D1768 — Retain a range loop's start across a barrier-bearing end
+
+**Decision.** Runtime range lowering saves the computed start in the CPU
+invocation frame when the end expression may call a barrier helper, then
+reloads it if that evaluation cuts the step. Ordinary host and SPIR-V range
+lowering remain unchanged.
+
+**Evidence.** `for step in lane..passthrough(lane + 1u32)` previously failed
+NIR verification. `link/gpu_barrier_chain` now executes it in debug and
+release on Windows and WSL. Consecutive self-hosted compiler stages match
+byte-for-byte on both hosts; Windows SAXPY SPIR-V still matches the pinned
+conformance file. The full suites remain gated by the shared tree's stale
+library-fixture manifest.
