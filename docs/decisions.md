@@ -32170,3 +32170,19 @@ toolchain identities. Neper Vulkan completed GP-10 at 59.8 ms p50 against 3.7 ms
 Neper GP-09 completed at 1,576.2 ms against 50.4 ms C. These are measurements, not
 isolated best cases. The completion audit keeps C090 open: older CPU-only kernel
 fixtures still need the literal CPU/Vulkan exact-output sweep required by the roadmap.
+
+## D1739 — Shared slice headers keep their address space through NIR
+
+**Decision.** A slice value remains a private four-word header in SPIR-V even when
+its data lives in workgroup storage. Every lowering path that reads that header's
+data pointer copies the slice's `in_shared` qualifier onto the synthesized pointer
+type. The SPIR-V emitter then reconstructs a workgroup offset instead of a physical
+device address. A shared pointer's zero offset is the first byte of its declared
+workgroup block, so its lowered null guard is true rather than comparing that offset
+with zero.
+
+**Evidence.** `gpu_spaces` runs the same kernel through CPU and every compatible
+Vulkan device and compares all eight words. Its shared slice helper, generic helper
+specialized for shared and device slices, and `*shared` helper agree on both Windows
+adapters and WSL's Vulkan device. The raw module passes `spirv-val --target-env
+vulkan1.2`.

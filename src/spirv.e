@@ -1266,7 +1266,7 @@ fn declare_privates(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         var bytes = 0usize
         // A slot is counted in eight-byte words, and none means one scalar's.
         if instruction.opcode == .Stack {
-            if instruction.ty.in_shared && instruction.immediate == 0usize {
+            if instruction.ty.in_shared && instruction.ty.kind != .Slice && instruction.immediate == 0usize {
                 at += 1usize
                 continue
             }
@@ -1279,7 +1279,9 @@ fn declare_privates(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
             bytes = words * 4usize
         }
         if bytes != 0usize && instruction.has_result {
-            if instruction.ty.in_shared {
+            // A `[]shared T` value is a private four-word header naming workgroup
+            // storage; only the pointee lives in Workgroup storage.
+            if instruction.ty.in_shared && instruction.ty.kind != .Slice {
                 if m.v_shared == 0usize { ret fail(m, "a shared stack has no workgroup block") }
                 values.kind[instruction.result] = KIND_SHARED
                 values.id[instruction.result] = m.v_shared
@@ -1830,7 +1832,11 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         var condition_id = values.id[condition]
         // Lowering branches directly on a pointer for the null check. A device
         // address is two words, so collapse it before the structured branch header.
-        if values.ty[condition] == m.t_v2u32 {
+        // A workgroup pointer represented here is always derived from a `shared var`;
+        // offset zero is its first byte, not null.
+        if values.kind[condition] == KIND_SHARED {
+            condition_id = constant(m, m.t_bool, 1usize)
+        } else if values.ty[condition] == m.t_v2u32 {
             let bits = binary(m, OP_BITWISE_OR, m.t_u32, extract(m, condition_id, 0usize), extract(m, condition_id, 1usize))
             condition_id = binary(m, OP_I_NOT_EQUAL, m.t_bool, bits, constant(m, m.t_u32, 0usize))
         }
@@ -2300,7 +2306,9 @@ fn emit_slice(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     let length = operand(builder, instruction, 2usize)
     let lower = operand(builder, instruction, 3usize)
     let upper = operand(builder, instruction, 4usize)
-    if KIND_PRIVATE != values.kind[destination] || KIND_SCALAR != values.kind[length] || KIND_SCALAR != values.kind[lower] || KIND_SCALAR != values.kind[upper] { ret fail(m, "a slice has no header or bounds") }
+    if KIND_PRIVATE != values.kind[destination] { ret fail(m, "a slice has no private header") }
+    if KIND_SCALAR != values.kind[length] { ret fail(m, "a slice has no length") }
+    if KIND_SCALAR != values.kind[lower] || KIND_SCALAR != values.kind[upper] { ret fail(m, "a slice has no bounds") }
     if !instruction.nocheck {
         guard(m, binary(m, OP_U_LESS_THAN_EQUAL, m.t_bool, values.id[lower], values.id[upper]), 0usize, instruction.site.line)
         guard(m, binary(m, OP_U_LESS_THAN_EQUAL, m.t_bool, values.id[upper], values.id[length]), 0usize, instruction.site.line)

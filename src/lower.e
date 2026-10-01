@@ -960,7 +960,8 @@ fn sequence_parts(c: *check.Checker, ty: check.Type, subject: usize, builder: *n
         ret (subject, length_value, ok)
     }
     if ty.kind != .Slice && ty.kind != .String { ret (0usize, 0usize, check.Unsupported) }
-    let pointer_type = check.make_type(.Pointer, "", ty.module_index)
+    var pointer_type = check.make_type(.Pointer, "", ty.module_index)
+    pointer_type.in_shared = ty.in_shared
     let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, token)
     if data_address_error != ok { ret (0usize, 0usize, data_address_error) }
     let data_address_operand_error = nir.add_operand(builder, data_address_instruction, subject)
@@ -3665,7 +3666,8 @@ fn lower_slice(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if element_info_error != ok { ret (0usize, result_type, element_info_error) }
     let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, bracket.base, base_type, builder, bindings, binding_count)
     if base_error != ok { ret (0usize, lowered_base_type, base_error) }
-    let pointer_type = check.make_type(.Pointer, "", module_index)
+    var pointer_type = check.make_type(.Pointer, "", module_index)
+    pointer_type.in_shared = base_type.in_shared
     let length_type = check.make_type(.Integer, "usize", module_index)
     var data = base
     var length = 0usize
@@ -3766,7 +3768,8 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
         length = length_result
     } else {
         if base_type.kind != .Slice && base_type.kind != .String { ret (0usize, element_type, check.Unsupported) }
-        let pointer_type = check.make_type(.Pointer, "", module_index)
+        var pointer_type = check.make_type(.Pointer, "", module_index)
+        pointer_type.in_shared = base_type.in_shared
         let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, c.tokens[usize(node.token_start)])
         if data_address_error != ok { ret (0usize, element_type, data_address_error) }
         let data_address_operand_error = nir.add_operand(builder, data_address_instruction, base)
@@ -5883,7 +5886,8 @@ fn lower_iterable_parts(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         *length = length_value
         ret ok
     }
-    let pointer_type = check.make_type(.Pointer, "", module_index)
+    var pointer_type = check.make_type(.Pointer, "", module_index)
+    pointer_type.in_shared = subject_type.in_shared
     let token = c.tokens[usize(tree.nodes[expression_index].token_start)]
     let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, token)
     if data_address_error != ok { ret data_address_error }
