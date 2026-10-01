@@ -59,10 +59,12 @@ fn collection_rounds(out: []u32, weights: []u32) {
 
 @gpu(8)
 fn large_frame(out: []u32) {
-    var local: [192]u32 = zero
+    var local: [640]u32 = zero
     local[0usize] = gpu.lid.x + 41u32
+    local[639usize] = gpu.lid.x + 41u32
+    var tail = gpu.lid.x + 83u32
     gpu.barrier()
-    out[usize(gpu.lid.x)] = local[0usize]
+    out[usize(gpu.lid.x)] = local[0usize] + local[639usize] + tail
 }
 
 @gpu(16)
@@ -140,7 +142,7 @@ fn run(a: *mem.Arena, backend: gpu.Backend, index: u32, relay_out: []u32, round_
     try gpu.download[u32](q, large_buf, large_out[0..])
     var large_at = 0usize
     while large_at < large_out.len {
-        if large_out[large_at] != u32(large_at) + 41u32 { os.exit(18i32) }
+        if large_out[large_at] != u32(large_at) * 3u32 + 165u32 { os.exit(18i32) }
         large_at += 1usize
     }
 
