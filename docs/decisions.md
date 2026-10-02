@@ -33087,3 +33087,14 @@ The gallery writes one SVG beside each of its eighteen PNG previews, including
 the faceted matrix. `gfx_chart_svg` checks escaped metadata, series and matrix
 elements and refusal paths. Gradient brushes, font/layout-backed labels and
 PDF are separate later adapters rather than hidden SVG-only analysis.
+
+## D1800 — Share facet scales by borrowing explicit Cartesian domains
+
+`chart.layout_with_limits` takes zero- or two-value x/y limit slices alongside
+the existing borrowed columns and caller-owned output. Empty limits retain the
+original per-panel auto-domain; explicit limits make an axis shareable across
+panels, without storing facet data or copying observations. Limits must be
+finite, ordered, valid for the selected scale and contain the data and baseline;
+clipping is deferred to a separate out-of-bounds policy. The original `layout`
+calls this path with empty limits. `gfx_chart_facet` checks shared/free x and y,
+constant data and rejection paths. The gallery adds a four-panel PNG/SVG pair.

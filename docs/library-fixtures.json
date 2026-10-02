@@ -846,6 +846,7 @@
    "fixtures": [
     "gfx_chart",
     "gfx_chart_cartesian",
+    "gfx_chart_facet",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_chart_scale",
@@ -947,12 +948,13 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 26,
-   "delivered": 26,
+   "catalogue": 27,
+   "delivered": 27,
    "pending": [],
    "fixtures": [
     "gfx_chart",
     "gfx_chart_cartesian",
+    "gfx_chart_facet",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_chart_scale",

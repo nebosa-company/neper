@@ -2699,6 +2699,11 @@ gfx_chart_scale_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/gfx-chart-scale-selfhost"
 gfx_chart_scale_output=$("$test_build/gfx-chart-scale-selfhost")
 [ "$gfx_chart_scale_output" = 'gfx chart scale ok' ]
+gfx_chart_facet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_facet/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-facet-selfhost")
+[ "$gfx_chart_facet_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-facet-selfhost"
+gfx_chart_facet_output=$("$test_build/gfx-chart-facet-selfhost")
+[ "$gfx_chart_facet_output" = 'gfx chart facet ok' ]
 gfx_chart_svg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_svg/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-svg-selfhost")
 [ "$gfx_chart_svg_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-svg-selfhost"

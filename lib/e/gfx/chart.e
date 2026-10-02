@@ -124,9 +124,17 @@ fn ticks(scale: Scale, lo: f32, hi: f32, out: []Tick) -> ([]Tick, err) {
 // Produces marks in screen coordinates. Y is inverted because graphics bounds
 // use a top-left origin; the returned domain remains in data coordinates.
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err) {
+    let (marks, marks_error) = layout_with_limits(s, coords, segments, bars, s.x[..0usize], s.y[..0usize])
+    ret (marks, marks_error)
+}
+
+// Empty limits use each series' own domain; two values fix the domain so
+// multiple facet panels can share x, y, or both without copying their columns.
+fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err) {
     if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
+    if (x_limits.len != 0usize && x_limits.len != 2usize) || (y_limits.len != 0usize && y_limits.len != 2usize) { ret (zero, Invalid) }
     if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) { ret (zero, Invalid) }
     let (x0, x1, x_error) = extent(s.x)
     if x_error != ok { ret (zero, x_error) }
@@ -141,7 +149,7 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
     }
     var xmin = x0
     var xmax = x1
-    if s.kind == .Bar && s.x_scale.kind == .Linear && s.x.len > 1usize {
+    if s.kind == .Bar && s.x_scale.kind == .Linear && s.x.len > 1usize && x_limits.len == 0usize {
         let pad = f32((f64(x1) - f64(x0)) / f64(s.x.len - 1usize) / 2.0f64)
         let left = x0 - pad
         let right = x1 + pad
@@ -149,6 +157,16 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
             xmin = left
             xmax = right
         }
+    }
+    if x_limits.len == 2usize {
+        if !valid_scale(s.x_scale, x_limits[0usize], x_limits[1usize]) || x_limits[0usize] > x0 || x_limits[1usize] < x1 { ret (zero, Invalid) }
+        xmin = x_limits[0usize]
+        xmax = x_limits[1usize]
+    }
+    if y_limits.len == 2usize {
+        if !valid_scale(s.y_scale, y_limits[0usize], y_limits[1usize]) || y_limits[0usize] > y0 || y_limits[1usize] < y1 { ret (zero, Invalid) }
+        y0 = y_limits[0usize]
+        y1 = y_limits[1usize]
     }
     if xmin == xmax {
         if s.x_scale.kind == .Log10 {

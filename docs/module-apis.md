@@ -15895,6 +15895,7 @@ error TooLarge
 fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Spec
 fn ticks(scale: Scale, lo: f32, hi: f32, out: []Tick) -> ([]Tick, err)
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
+fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 fn ecdf(sorted: []const f32, bounds: geometry.Rect, segments: []Segment) -> (Layout, err)

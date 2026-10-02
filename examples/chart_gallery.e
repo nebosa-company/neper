@@ -147,6 +147,57 @@ fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     ret export_svg_matrix(a, marks, path)
 }
 
+// Top row shares both data domains; bottom row lets each facet use its own.
+fn render_facet_scales(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/facet_scales.png"
+    var panels: [4]geometry.Rect = zero
+    let (placed, panel_error) = chart.facet_grid(geometry.rect(32.0, 20.0, 296.0, 202.0), 2usize, 4usize, 14.0, panels[..])
+    if panel_error != ok { ret panel_error }
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    let white = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) }
+    let grid_color = paint.rgba(0.88, 0.91, 0.95, 1.0)
+    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    let ink_color = paint.rgba(0.07, 0.35, 0.76, 1.0)
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), white)
+    let low = [3]f32{ 0.0, 0.5, 1.0 }
+    let high = [3]f32{ 10.0, 10.5, 11.0 }
+    let common = [2]f32{ 0.0, 11.0 }
+    var points: [3]chart.Coord = zero
+    var lines: [2]chart.Segment = zero
+    var bars: [3]geometry.Rect = zero
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var i = 0usize
+    while i < placed.len {
+        var values: []const f32 = low[..]
+        if i % 2usize == 1usize { values = high[..] }
+        var limits: []const f32 = low[..0usize]
+        if i < 2usize { limits = common[..] }
+        let plot = chart.spec(.Scatter, placed[i], values, values)
+        let (marks, marks_error) = chart.layout_with_limits(&plot, points[..], lines[..], bars[..], limits, limits)
+        if marks_error != ok { ret marks_error }
+        var x_ticks: [2]chart.Tick = zero
+        var y_ticks: [2]chart.Tick = zero
+        let (_, x_error) = chart.ticks(linear, marks.x_min, marks.x_max, x_ticks[..])
+        if x_error != ok { ret x_error }
+        let (_, y_error) = chart.ticks(linear, marks.y_min, marks.y_max, y_ticks[..])
+        if y_error != ok { ret y_error }
+        try chart_scene.append_guides(&builder, placed[i], x_ticks[..], y_ticks[..], paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
+        try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: ink_color })
+        try chart_svg.append_guides(&writer, placed[i], x_ticks[..], y_ticks[..], grid_color, axis_color)
+        try chart_svg.append(&writer, &marks, ink_color)
+        i += 1usize
+    }
+    try chart_svg.finish(&writer)
+    try fs.write_file(a, "docs/chart-previews/facet_scales.svg", io.memory_bytes(&svg_state))
+    ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret device_error }
@@ -293,6 +344,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     try chart_svg.finish(&facet_svg_writer)
     try fs.write_file(a, "docs/chart-previews/facet_heatmap.svg", io.memory_bytes(&facet_svg_held))
+    try render_facet_scales(a, queue, output_target, canvas, &renderer)
     try scene.close(&renderer)
     try gpu.close_target(output_target)
     try gpu.close(device)

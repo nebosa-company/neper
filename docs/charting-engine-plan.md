@@ -3,8 +3,8 @@
 Status: scatter, line, bar, histogram, step, area, lollipop, error bars, ECDF,
 box, density, normal Q-Q, violin, heatmap and correlation matrix are delivered,
 with linear/log10/symmetric-log and reverse Cartesian scales, caller-owned tick
-metadata, grid/axis passes, facet panel geometry and eighteen PNG plus eighteen
-SVG previews from Neper. L061 remains partial
+metadata, grid/axis passes, facet panel geometry, explicit Cartesian limits
+for shared/free facet scales and nineteen PNG plus nineteen SVG previews from Neper. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -77,12 +77,17 @@ columns, validate containment and emit a stem, two caps and a point per row.
 Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
-sharing and strips remain future work.
+sharing/freeing each numeric axis is available through explicit limits;
+categorical facet mapping and strips remain future work.
 `Spec` now carries independent x/y scale configurations for Cartesian marks.
 Log10 refuses non-positive domains, symmetric-log has an explicit linear
 threshold, and reverse maps fractions without copying columns. `ticks` returns
 caller-owned data values and normalized positions; the scene guide pass draws
-grid and axis strokes. Text labels and layout-aware margins remain planned.
+grid and axis strokes. `layout_with_limits` borrows optional two-value x/y
+domains: an empty pair keeps a panel free, while explicit limits let facets
+share either or both scales without copying columns. Limits must contain the
+data (and any baseline); clipping/out-of-bounds policy remains planned. Text
+labels and layout-aware margins remain planned.
 `e.gfx.chart.svg` streams the same mark and matrix layouts as SVG with escaped
 title/description metadata, current CPU-renderer channel packing for solid colours, and axis/grid
 strokes from the same tick positions. The gallery exports a vector companion
@@ -137,11 +142,12 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    variants in the catalogue remain planned.
 3. **Matrix and facets (partial):** heatmap and Pearson correlation matrix have
    executable fixtures and PNG previews; `facet_grid` places panels and a
-   four-panel heatmap preview exercises it. Shared/free x/y scales, strips and
-   legend metadata remain.
+   four-panel heatmap preview exercises it. Optional x/y limits let each panel
+   share or free its scale independently, exercised by a second four-panel
+   preview. Strips, legend metadata and categorical facet mapping remain.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with eighteen vector previews are delivered; text labels and
+   adapter with nineteen vector previews are delivered; text labels and
    margins, a production PNG API, PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.
 5. **Specialized calculators:** ROC, survival, SPC, capability, Bland–Altman,
