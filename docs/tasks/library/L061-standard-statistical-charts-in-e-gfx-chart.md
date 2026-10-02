@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | category | library / Algorithms |
-| score | 0.23 of 1 |
+| score | 0.32 of 1 |
 | queue position | 1 (the active capability; only position 1 is eligible for the next session) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
@@ -15,17 +15,18 @@ See `docs/roadmap.md`, `docs/stats-coverage.md` §2 and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Foundation now exists in `lib/e/gfx/chart.e`: borrowed numeric x/y columns, caller-owned output, domain validation/padding, and scatter/line/bar screen-space marks. Equal-width histogram binning produces caller-owned counts and contiguous bars; the fixture checks bin boundaries, geometry and refusal paths. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work is box, violin, density, ECDF, QQ, heatmap, correlation matrix, facets, scene/PNG/widget adapters, specialized diagrams and benchmark evidence against ggplot2/base/lattice/matplot. Full evaluation: `docs/stats-coverage.md` §2.
+> Foundation now exists in `lib/e/gfx/chart.e`: borrowed numeric x/y columns, caller-owned output, domain validation/padding, and scatter/line/bar/step screen-space marks. Equal-width histogram and sorted-sample ECDF produce caller-owned marks. `e.gfx.chart.scene` appends the marks to Neper scenes, and `examples/chart_gallery.e` generated six inspected PNG previews. The fixture checks bins, CDF ties, geometry, adapter commands and refusal paths. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work includes box, violin, density, QQ, heatmap, correlation matrix, facets, axes/guides, production PNG/SVG/PDF/widget adapters, specialized diagrams and benchmark evidence against ggplot2/base/lattice/matplot. Full evaluation: `docs/stats-coverage.md` §2.
 
 ## Remaining work
 
 - [x] **Foundation grammar and marks** — typed `Spec`, numeric Cartesian domain,
-  caller-owned `Layout`, scatter/line/bar marks and refusal paths.
-- [ ] **Distribution families** — histogram delivered; box, violin, density,
-  ECDF and QQ remain.
+  caller-owned `Layout`, scatter/line/bar/step marks and refusal paths.
+- [ ] **Distribution families** — histogram and ECDF delivered; box, violin,
+  density and QQ remain.
 - [ ] **Matrix and facets** — heatmap, correlation matrix, shared/free scales and
   trellis panels.
-- [ ] **Backends** — `e.gfx.scene`, PNG/SVG/PDF export and `e.ui.widget` embed.
+- [ ] **Backends** — scene mark adapter and PNG preview gallery delivered;
+  axes/guides, production PNG/SVG/PDF export and `e.ui.widget` embed remain.
 - [ ] **Specialized diagrams** — ROC, survival, SPC, scientific, finance, quality,
   operations and network families from `docs/charting-engine-plan.md`.
 

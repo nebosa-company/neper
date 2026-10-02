@@ -6,7 +6,7 @@
 
 use e.gfx.geometry
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf }
 type Coord = struct { x: f32, y: f32 }
 type Segment = struct { from: Coord, to: Coord }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32 }
@@ -45,7 +45,7 @@ fn mapped(value: f32, lo: f32, hi: f32, start: f32, size: f32) -> f32 {
 // Produces marks in screen coordinates. Y is inverted because graphics bounds
 // use a top-left origin; the returned domain remains in data coordinates.
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err) {
-    if s.kind == .Histogram { ret (zero, Invalid) }
+    if s.kind == .Histogram || s.kind == .Ecdf { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) { ret (zero, Invalid) }
@@ -62,6 +62,15 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
     }
     var xmin = x0
     var xmax = x1
+    if s.kind == .Bar && s.x.len > 1usize {
+        let pad = f32((f64(x1) - f64(x0)) / f64(s.x.len - 1usize) / 2.0f64)
+        let left = x0 - pad
+        let right = x1 + pad
+        if finite(left) && finite(right) {
+            xmin = left
+            xmax = right
+        }
+    }
     if xmin == xmax {
         xmin -= 0.5
         xmax += 0.5
@@ -99,6 +108,28 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
                 segments[segment_count] = Segment { from: from, to: to }
                 segment_count += 1usize
             }
+        }
+    } else if s.kind == .Step {
+        if s.x.len > 1usize && segments.len / 2usize < s.x.len - 1usize { ret (zero, TooLarge) }
+        var i = 0usize
+        while i + 1usize < s.x.len {
+            if s.x[i + 1usize] < s.x[i] { ret (zero, Invalid) }
+            let left = Coord {
+                x: mapped(s.x[i], xmin, xmax, s.bounds.x, s.bounds.width),
+                y: s.bounds.y + s.bounds.height - mapped(s.y[i], y0, y1, 0.0, s.bounds.height),
+            }
+            let right = Coord {
+                x: mapped(s.x[i + 1usize], xmin, xmax, s.bounds.x, s.bounds.width),
+                y: left.y,
+            }
+            let next = Coord {
+                x: right.x,
+                y: s.bounds.y + s.bounds.height - mapped(s.y[i + 1usize], y0, y1, 0.0, s.bounds.height),
+            }
+            segments[segment_count] = Segment { from: left, to: right }
+            segments[segment_count + 1usize] = Segment { from: right, to: next }
+            segment_count += 2usize
+            i += 1usize
         }
     } else {
         if bars.len < s.x.len { ret (zero, TooLarge) }
@@ -171,4 +202,40 @@ fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []
         i += 1usize
     }
     ret (Layout { kind: .Histogram, coords: zero, segments: zero, bars: bars, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: f32(tallest) }, ok)
+}
+
+// Empirical CDF of an ascending sample. Each observation raises the step by
+// 1/n; repeated values produce coincident rises at the same x coordinate.
+fn ecdf(sorted: []const f32, bounds: geometry.Rect, segments: []Segment) -> (Layout, err) {
+    if sorted.len == 0usize { ret (zero, Empty) }
+    if !finite(bounds.x) || !finite(bounds.y) || !finite(bounds.width) || !finite(bounds.height) || bounds.width <= 0.0 || bounds.height <= 0.0 { ret (zero, Invalid) }
+    if segments.len < sorted.len || segments.len - sorted.len < sorted.len - 1usize { ret (zero, TooLarge) }
+    let (raw_min, raw_max, range_error) = extent(sorted)
+    if range_error != ok { ret (zero, range_error) }
+    var xmin = raw_min
+    var xmax = raw_max
+    if xmin == xmax {
+        xmin -= 0.5
+        xmax += 0.5
+        if xmin == xmax {
+            if xmin > 0.0 { xmin *= 0.5 } else { xmax *= 0.5 }
+        }
+    }
+    var count = 0usize
+    var i = 0usize
+    while i < sorted.len {
+        if i > 0usize && sorted[i] < sorted[i - 1usize] { ret (zero, Invalid) }
+        let x = mapped(sorted[i], xmin, xmax, bounds.x, bounds.width)
+        let previous_y = bounds.y + bounds.height * (1.0 - f32(i) / f32(sorted.len))
+        let next_y = bounds.y + bounds.height * (1.0 - f32(i + 1usize) / f32(sorted.len))
+        if i > 0usize {
+            let old_x = mapped(sorted[i - 1usize], xmin, xmax, bounds.x, bounds.width)
+            segments[count] = Segment { from: Coord { x: old_x, y: previous_y }, to: Coord { x: x, y: previous_y } }
+            count += 1usize
+        }
+        segments[count] = Segment { from: Coord { x: x, y: previous_y }, to: Coord { x: x, y: next_y } }
+        count += 1usize
+        i += 1usize
+    }
+    ret (Layout { kind: .Ecdf, coords: zero, segments: segments[..count], bars: zero, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: 1.0 }, ok)
 }

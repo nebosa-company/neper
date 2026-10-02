@@ -9,10 +9,10 @@
       "group": "Algorithms",
       "order": 159,
       "title": "Standard statistical charts in e.gfx.chart",
-      "score": 0.23,
+      "score": 0.32,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Foundation delivered in `lib/e/gfx/chart.e`: borrowed numeric x/y columns, caller-owned output, domain padding and validation, plus scatter/line/bar screen-space marks. Equal-width `histogram` now produces caller-owned counts and contiguous bars; the `gfx_chart` fixture checks exact bins, maximum-edge inclusion, constant samples, geometry and refusal paths. Detailed registry, R-package analysis and staged plan: `docs/charting-engine-plan.md`. Not yet: box/violin/density/ECDF/QQ, heatmap/correlation/facets, scene/PNG/widget adapters, specialized statistical/domain diagrams, and benchmark evidence against ggplot2/base/lattice/matplot."
+      "evidence": "Foundation in `lib/e/gfx/chart.e` now covers borrowed numeric x/y columns, caller-owned scatter/line/bar/step screen-space marks, histogram bins/rectangles and sorted-sample ECDF segments. `e.gfx.chart.scene` appends those marks to the scene display list. `gfx_chart` checks geometry, CDF ties and refusal paths; `examples/chart_gallery.e` rendered six inspected PNG previews through Neper's CPU scene and PNG encoder in `docs/chart-previews/`. Detailed registry and staged plan: `docs/charting-engine-plan.md`. Not yet: box/violin/density/QQ, heatmap/correlation/facets, axes/guides, production PNG/SVG/PDF/widget adapters, specialized diagrams, or benchmark evidence against ggplot2/base/lattice/matplot."
     },
     {
       "id": "C092",

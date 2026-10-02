@@ -32977,3 +32977,21 @@ bin. `chart.histogram` fills caller-provided counts and screen-space rectangles;
 no allocation or renderer is introduced. The readiness generator embeds the
 maintained chart plan and unfinished queue so `docs/progress.html` stays
 generated while exposing planned charts and backlog evidence.
+
+## D1791 — Keep chart marks separate from scene rendering
+
+`e.gfx.chart` adds ordered step segments and pads categorical bar domains so
+the first and last bars stay inside plot bounds. `e.gfx.chart.scene` translates
+caller-owned scatter, line, bar, histogram and step marks into an existing scene
+builder. The chart core stays renderer-neutral. The gallery example uses that
+adapter with Neper's CPU scene and PNG encoder, producing one inspected PNG per
+delivered chart kind; axes, guides and export APIs remain separate work.
+
+## D1792 — Treat ECDF input as a sorted numeric view
+
+`chart.ecdf` borrows an ascending sample, validates its order and finite values,
+and emits one vertical 1/n rise per observation with horizontal steps between
+them. Equal values share an x coordinate, so their rises coincide without a
+separate grouping allocation. The first and last CDF ordinates are exactly zero
+and one. Sorting remains the caller's responsibility, consistent with the
+existing `e.algo.stat.quantile` sorted-sample contract.

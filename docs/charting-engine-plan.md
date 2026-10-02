@@ -1,8 +1,9 @@
 # Neper charting engine plan
 
-Status: foundation and equal-width histogram slices delivered; L061 remains
-partial until the standard families, scene/PNG output, and widget integration
-are evidenced.
+Status: scatter, line, bar, histogram, step and ECDF marks are delivered, with a
+scene adapter and six PNG previews from Neper's CPU renderer. L061 remains partial
+until the remaining families, production export API and widget integration are
+evidenced.
 
 ## What the references say
 
@@ -58,12 +59,17 @@ and bar marks, including empty/mismatched/non-finite input refusal, constant-dom
 padding, inverted screen Y, bar baseline inclusion and caller-storage bounds.
 The first distribution slice adds equal-width histograms with caller-owned counts
 and contiguous rectangles. Its final bin includes the maximum, and a constant
-sample is centered in a padded domain.
+sample is centered in a padded domain. Step/stairs maps ordered x/y columns
+into horizontal then vertical segments. `e.gfx.chart.scene` appends the same
+marks to a scene display list; `examples/chart_gallery.e` renders the delivered
+kinds through the CPU renderer and PNG encoder. ECDF accepts an ascending sample
+and emits exact 1/n rises, including tied observations.
 
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
-Scatter, line, bar and histogram are delivered; every other entry remains planned.
+Scatter, line, bar, histogram, step/stairs and ECDF are delivered; every other entry
+remains planned.
 
 ### General-purpose statistical and business charts
 
@@ -99,15 +105,16 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 ## Delivery order and gates
 
 1. **Foundation (delivered now):** typed spec, borrowed data, scale-to-bounds,
-   scatter/line/bar marks, constant-domain handling, executable fixture.
-2. **Core distributions (partial):** equal-width histogram and its bin policy
-   delivered; box/violin, density, ECDF and QQ remain. Fixtures compare exact
+   scatter/line/bar/step marks, constant-domain handling, executable fixture.
+2. **Core distributions (partial):** equal-width histogram and ECDF delivered;
+   box/violin, density and QQ remain. Fixtures compare exact
    bins/quantiles against small hand oracles.
 3. **Matrix and facets:** heatmap, correlation matrix, panel layout, shared/free
    scales, strips and legend metadata.
-4. **Rendering adapters:** scene display-list marks, axes/text/guides, PNG output,
-   SVG/PDF serialization and a widget embed; pixel fixtures follow existing gfx
-   renderer practice.
+4. **Rendering adapters (partial):** scene display-list marks and a Neper-rendered
+   PNG gallery are delivered; axes/text/guides, a production PNG export API,
+   SVG/PDF serialization and a widget embed remain. Pixel fixtures follow
+   existing gfx renderer practice.
 5. **Specialized calculators:** ROC, survival, SPC, capability, Bland–Altman,
    forest/funnel, contour/surface and domain diagrams, each in the owning stats or
    operations module and consumed by chart marks.

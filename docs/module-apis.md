@@ -4351,13 +4351,19 @@ error TooLarge
 
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Template, err)
 fn execute(template: *const Template, writer: *io.Writer, bindings: []const Binding) -> err
+fn execute_with_limits(template: *const Template, writer: *io.Writer, bindings: []const Binding, max_steps: u64, max_output: u64) -> err
 fn validate[T: type](template: *const Template) -> err
 fn execute_typed[T: type](template: *const Template, writer: *io.Writer, value: *const T) -> err
+fn execute_typed_with_limits[T: type](template: *const Template, writer: *io.Writer, value: *const T, max_steps: u64, max_output: u64) -> err
 ```
 
 Templates provide deterministic interpolation, conditionals and bounded iteration
 over explicit values or compile-time-inspected structs. The core engine performs no
 contextual escaping; specialized output modules such as `e.fmt.html.template` own it.
+Execution defaults to 100,000 node/iteration steps and 16 MiB of output. Every nested
+block shares these budgets; empty repeats consume steps and oversized writes fail
+before reaching the sink. The explicit-limit APIs accept larger budgets; zero selects
+the defaults. A `TooLarge` error can leave already-written output in the caller's sink.
 
 ### `e.text.regex`
 
@@ -12424,7 +12430,9 @@ error Unsupported
 const NONE: NodeId = 4294967295u32
 
 fn slurp(a: *mem.Arena, source: io.Reader) -> ([]u8, err)
+fn slurp_with_limit(a: *mem.Arena, source: io.Reader, limit: usize) -> ([]u8, err)
 fn reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Reader, err)
+fn reader_with_limit(a: *mem.Arena, source: io.Reader, options: Options, limit: usize) -> (Reader, err)
 fn is_space(c: u8) -> bool
 fn is_name_byte(c: u8) -> bool
 fn name_end(source: []const u8, at: usize) -> usize
@@ -12566,13 +12574,17 @@ error TooLarge
 
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Template, err)
 fn execute(value: *const Template, writer: *io.Writer, bindings: []const template.Binding) -> err
+fn execute_with_limits(value: *const Template, writer: *io.Writer, bindings: []const template.Binding, max_steps: u64, max_output: u64) -> err
 fn validate[T: type](value: *const Template) -> err
 fn execute_typed[T: type](value: *const Template, writer: *io.Writer, data: *const T) -> err
+fn execute_typed_with_limits[T: type](value: *const Template, writer: *io.Writer, data: *const T, max_steps: u64, max_output: u64) -> err
 ```
 
 HTML templates track text, attribute, URI, CSS and script contexts and apply the
 matching escaping rules. Ambiguous or unsafe context transitions fail at parse time;
 trusted raw insertion is intentionally absent from version 1.
+Execution uses the text engine's shared work and output budgets, counting the final
+escaped bytes. The same defaults and explicit-limit APIs apply to typed rendering.
 
 ### `e.fmt.opus`
 
@@ -12893,6 +12905,10 @@ fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -
 PNG decoding supports the standard grayscale, RGB, indexed and alpha color types and
 rejects dimensions before pixel allocation. Encoding is deterministic for identical
 pixels and options.
+For PNG, JPEG and WebP, each zero dimension limit selects 16,384 and a zero pixel
+limit selects 16,777,216. Explicit nonzero limits can raise or lower these bounds;
+raising one field does not disable defaults in the others. Encoded input buffering
+and codec workspace are separate costs; these limits bound decoded dimensions.
 
 ### `e.fmt.jpeg`
 
@@ -15852,7 +15868,7 @@ fn step_cues(cues: []Cue) -> err
 ### `e.gfx.chart`
 
 ```neper
-type Kind = enum u8 { Scatter, Line, Bar, Histogram }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf }
 type Coord = struct { x: f32, y: f32 }
 type Segment = struct { from: Coord, to: Coord }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32 }
@@ -15864,4 +15880,11 @@ error TooLarge
 fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Spec
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
+fn ecdf(sorted: []const f32, bounds: geometry.Rect, segments: []Segment) -> (Layout, err)
+```
+
+### `e.gfx.chart.scene`
+
+```neper
+fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, brush: paint.Brush) -> err
 ```

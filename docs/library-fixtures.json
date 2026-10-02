@@ -942,8 +942,19 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 11,
-   "delivered": 11,
+   "catalogue": 12,
+   "delivered": 12,
+   "pending": [],
+   "fixtures": [
+    "gfx_chart"
+   ]
+  },
+  {
+   "module": "e.gfx.chart.scene",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 1,
+   "delivered": 1,
    "pending": [],
    "fixtures": [
     "gfx_chart"
@@ -1021,6 +1032,7 @@
    "delivered": 37,
    "pending": [],
    "fixtures": [
+    "gfx_chart",
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
@@ -1099,6 +1111,7 @@
    "delivered": 145,
    "pending": [],
    "fixtures": [
+    "gfx_chart",
     "gfx_scene",
     "gfx_scene_plan",
     "ui_a11y_controls",

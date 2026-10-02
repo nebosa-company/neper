@@ -220,11 +220,18 @@ backlog = '\n'.join(
         score=float(item['score']), evidence=html.escape(item['evidence']))
     for item in queue_items
 )
+previews = ''.join(
+    '<figure><img src="chart-previews/{name}" alt="Neper {title} chart preview" '
+    'width="360" height="240"><figcaption>{title}</figcaption></figure>'.format(
+        name=html.escape(path.name), title=html.escape(path.stem.title()))
+    for path in sorted(Path('docs/chart-previews').glob('*.png'))
+)
 chart_section = (
     '<section class="tools" aria-label="Charting engine plan">'
     '<h2>Charting engine</h2>'
     '<p>Chart capability <code>L061</code>: {score:.0%} complete. {evidence}</p>'
     '<h3>Delivery roadmap</h3><ol>{roadmap}</ol>'
+    '<h3>Rendered previews</h3><div class="previews">{previews}</div>'
     '<details><summary>Full chart plan and chart/diagram catalogue</summary>'
     '<pre class="plan">{plan}</pre></details></section>'
     '<section class="tools" aria-label="Unfinished work queue">'
@@ -233,7 +240,7 @@ chart_section = (
     '<table><thead><tr><th>ID</th><th>Capability</th><th>Progress</th><th>Evidence and remaining work</th></tr></thead>'
     '<tbody>{backlog}</tbody></table></div></details></section>'
 ).format(score=float(chart_item['score']), evidence=html.escape(chart_item['evidence']),
-         roadmap=''.join(roadmap), plan=html.escape(chart_plan),
+         roadmap=''.join(roadmap), previews=previews, plan=html.escape(chart_plan),
          count=len(queue_items), backlog=backlog)
 
 page_html = """<!doctype html>
@@ -259,6 +266,7 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 .tools th{text-align:left;padding:.45rem .6rem}.tools details{margin:1rem 0}.tools summary{cursor:pointer;font-weight:600}
 .tools ol{padding-left:1.5rem}.tools li{margin:.3rem 0}.plan{white-space:pre-wrap;overflow-wrap:anywhere;font: .82rem/1.55 ui-monospace,"Cascadia Mono",Consolas,monospace}
 .table-scroll{overflow-x:auto}.table-scroll table{min-width:48rem}.table-scroll td:first-child{width:auto}.table-scroll td{overflow-wrap:anywhere}
+.previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:1rem}.previews figure{margin:0;border:1px solid var(--rule);border-radius:.75rem;overflow:hidden}.previews img{display:block;width:100%;height:auto}.previews figcaption{padding:.5rem .75rem;font-weight:600}
 @media(max-width:40rem){.tools td{display:block;width:auto}.tools td:first-child{width:auto;border-top:1px solid var(--rule);padding-bottom:0}.tools td+td{border-top:0}}
 </style>
 </head>
