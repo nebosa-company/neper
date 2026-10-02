@@ -33053,3 +33053,14 @@ zero-centred diverging for correlations. `chart.facet_grid` supplies equal
 row-major panel rectangles without binding scales or labels; shared/free scales,
 strips and legends remain separate work. `gfx_chart_matrix` verifies geometry,
 exact positive/negative correlations, refusal paths and scene command counts.
+
+## D1797 — Reuse Cartesian marks for area, lollipop and error bars
+
+Area and lollipop use the existing `Spec` baseline and shared Cartesian mapping.
+Area requires ordered x values and emits a closed caller-owned polygon;
+lollipop emits a baseline stem and point for each observation. `error_bars`
+borrows x, center, lower and upper columns, refuses intervals that do not
+contain their center, and emits independent stems, caps and points. The scene
+adapter reuses its polygon and disconnected-segment branches. A separate
+`gfx_chart_cartesian` fixture keeps the self-host compiler arena bounded and
+checks geometry, refusal paths and scene command counts.

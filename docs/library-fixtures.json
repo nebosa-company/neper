@@ -845,6 +845,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_cartesian",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_core",
@@ -944,11 +945,12 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 21,
-   "delivered": 21,
+   "catalogue": 22,
+   "delivered": 22,
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_cartesian",
     "gfx_chart_matrix",
     "gfx_chart_qq"
    ]
@@ -962,6 +964,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_cartesian",
     "gfx_chart_matrix",
     "gfx_chart_qq"
    ]
@@ -1039,6 +1042,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_cartesian",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_core",
@@ -1120,6 +1124,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_cartesian",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_scene",

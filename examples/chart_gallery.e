@@ -59,7 +59,8 @@ fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     let white = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) }
     let grid = paint.Brush { Solid: paint.rgba(0.88, 0.91, 0.95, 1.0) }
     let axis = paint.Brush { Solid: paint.rgba(0.32, 0.38, 0.48, 1.0) }
-    let ink = paint.Brush { Solid: paint.rgba(0.07, 0.35, 0.76, 1.0) }
+    var ink = paint.Brush { Solid: paint.rgba(0.07, 0.35, 0.76, 1.0) }
+    if marks.kind == .Area { ink = paint.Brush { Solid: paint.rgba(0.25, 0.55, 0.88, 0.82) } }
     try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), white)
     var i = 1usize
     while i < 4usize {
@@ -95,12 +96,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var renderer = made_renderer
     let x = [8]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0 }
     let y = [8]f32{ 1.0, 4.0, 3.0, 6.0, 4.0, 5.0, 2.0, 7.0 }
-    var points: [8]chart.Coord = zero
+    var points: [16]chart.Coord = zero
     var segments: [14]chart.Segment = zero
     var bars: [8]geometry.Rect = zero
     let bounds = geometry.rect(44.0, 30.0, 286.0, 174.0)
-    let kinds = [4]chart.Kind{ .Scatter, .Line, .Bar, .Step }
-    let paths = [4]str{ "docs/chart-previews/scatter.png", "docs/chart-previews/line.png", "docs/chart-previews/bar.png", "docs/chart-previews/step.png" }
+    let kinds = [6]chart.Kind{ .Scatter, .Line, .Bar, .Step, .Area, .Lollipop }
+    let paths = [6]str{ "docs/chart-previews/scatter.png", "docs/chart-previews/line.png", "docs/chart-previews/bar.png", "docs/chart-previews/step.png", "docs/chart-previews/area.png", "docs/chart-previews/lollipop.png" }
     var i = 0usize
     while i < kinds.len {
         var spec = chart.spec(kinds[i], bounds, x[..], y[..])
@@ -109,6 +110,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try render_chart(a, queue, output_target, canvas, &renderer, &marks, paths[i])
         i += 1usize
     }
+    let lower = [8]f32{ 0.0, 2.0, 1.5, 4.0, 2.0, 3.0, 0.5, 5.0 }
+    let upper = [8]f32{ 2.0, 6.0, 5.0, 7.0, 6.0, 7.0, 4.0, 8.0 }
+    var interval_points: [8]chart.Coord = zero
+    var interval_lines: [24]chart.Segment = zero
+    let (intervals, interval_error) = chart.error_bars(x[..], y[..], lower[..], upper[..], bounds, interval_points[..], interval_lines[..])
+    if interval_error != ok { ret interval_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &intervals, "docs/chart-previews/errorbar.png")
     let values = [16]f32{ 1.0, 2.0, 2.0, 2.5, 3.0, 3.5, 4.0, 4.0, 4.0, 5.0, 5.5, 6.0, 6.0, 7.0, 8.0, 8.5 }
     var counts: [8]u64 = zero
     var hist_bars: [8]geometry.Rect = zero

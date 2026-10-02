@@ -8,7 +8,7 @@ use e.algo.stat
 use e.gfx.geometry
 use e.math.special
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar }
 type Coord = struct { x: f32, y: f32 }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
@@ -57,7 +57,7 @@ fn mapped(value: f32, lo: f32, hi: f32, start: f32, size: f32) -> f32 {
 // Produces marks in screen coordinates. Y is inverted because graphics bounds
 // use a top-left origin; the returned domain remains in data coordinates.
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err) {
-    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation { ret (zero, Invalid) }
+    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) { ret (zero, Invalid) }
@@ -67,7 +67,7 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
     if y_error != ok { ret (zero, y_error) }
     var y0 = raw_y0
     var y1 = raw_y1
-    if s.kind == .Bar {
+    if s.kind == .Bar || s.kind == .Area || s.kind == .Lollipop {
         if !finite(s.baseline) { ret (zero, Invalid) }
         if s.baseline < y0 { y0 = s.baseline }
         if s.baseline > y1 { y1 = s.baseline }
@@ -121,6 +121,29 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
                 segment_count += 1usize
             }
         }
+    } else if s.kind == .Area {
+        if s.x.len < 2usize { ret (zero, Empty) }
+        if coords.len / 2usize < s.x.len { ret (zero, TooLarge) }
+        let baseline_y = s.bounds.y + s.bounds.height - mapped(s.baseline, y0, y1, 0.0, s.bounds.height)
+        var i = 0usize
+        while i < s.x.len {
+            if i > 0usize && s.x[i] < s.x[i - 1usize] { ret (zero, Invalid) }
+            let x = mapped(s.x[i], xmin, xmax, s.bounds.x, s.bounds.width)
+            coords[i] = Coord { x: x, y: s.bounds.y + s.bounds.height - mapped(s.y[i], y0, y1, 0.0, s.bounds.height) }
+            coords[2usize * s.x.len - 1usize - i] = Coord { x: x, y: baseline_y }
+            i += 1usize
+        }
+        coord_count = 2usize * s.x.len
+    } else if s.kind == .Lollipop {
+        if coords.len < s.x.len || segments.len < s.x.len { ret (zero, TooLarge) }
+        let baseline_y = s.bounds.y + s.bounds.height - mapped(s.baseline, y0, y1, 0.0, s.bounds.height)
+        while coord_count < s.x.len {
+            let p = Coord { x: mapped(s.x[coord_count], xmin, xmax, s.bounds.x, s.bounds.width), y: s.bounds.y + s.bounds.height - mapped(s.y[coord_count], y0, y1, 0.0, s.bounds.height) }
+            coords[coord_count] = p
+            segments[coord_count] = Segment { from: Coord { x: p.x, y: baseline_y }, to: p }
+            coord_count += 1usize
+        }
+        segment_count = s.x.len
     } else if s.kind == .Step {
         if s.x.len > 1usize && segments.len / 2usize < s.x.len - 1usize { ret (zero, TooLarge) }
         var i = 0usize
@@ -161,6 +184,48 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
         }
     }
     ret (Layout { kind: s.kind, coords: coords[..coord_count], segments: segments[..segment_count], bars: bars[..bar_count], x_min: xmin, x_max: xmax, y_min: y0, y_max: y1 }, ok)
+}
+
+// Vertical intervals with a point estimate and two caps per observation.
+// Lower/upper values must enclose each estimate; all output is caller-owned.
+fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err) {
+    if x.len == 0usize { ret (zero, Empty) }
+    if center.len != x.len || lower.len != x.len || upper.len != x.len || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if points.len < x.len || lines.len / 3usize < x.len { ret (zero, TooLarge) }
+    let (raw_xmin, raw_xmax, x_error) = extent(x)
+    if x_error != ok { ret (zero, x_error) }
+    var ymin = lower[0usize]
+    var ymax = upper[0usize]
+    var i = 0usize
+    while i < x.len {
+        if !finite(center[i]) || !finite(lower[i]) || !finite(upper[i]) || lower[i] > center[i] || center[i] > upper[i] { ret (zero, Invalid) }
+        if lower[i] < ymin { ymin = lower[i] }
+        if upper[i] > ymax { ymax = upper[i] }
+        i += 1usize
+    }
+    var xmin = raw_xmin
+    var xmax = raw_xmax
+    if xmin == xmax {
+        xmin -= 0.5
+        xmax += 0.5
+    }
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+    }
+    i = 0usize
+    while i < x.len {
+        let px = mapped(x[i], xmin, xmax, bounds.x, bounds.width)
+        let top = bounds.y + bounds.height - mapped(upper[i], ymin, ymax, 0.0, bounds.height)
+        let bottom = bounds.y + bounds.height - mapped(lower[i], ymin, ymax, 0.0, bounds.height)
+        let middle = bounds.y + bounds.height - mapped(center[i], ymin, ymax, 0.0, bounds.height)
+        points[i] = Coord { x: px, y: middle }
+        lines[3usize * i] = Segment { from: Coord { x: px, y: top }, to: Coord { x: px, y: bottom } }
+        lines[3usize * i + 1usize] = Segment { from: Coord { x: px - 5.0, y: top }, to: Coord { x: px + 5.0, y: top } }
+        lines[3usize * i + 2usize] = Segment { from: Coord { x: px - 5.0, y: bottom }, to: Coord { x: px + 5.0, y: bottom } }
+        i += 1usize
+    }
+    ret (Layout { kind: .ErrorBar, coords: points[..x.len], segments: lines[..3usize * x.len], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
 }
 
 // Equal-width bins, left-closed/right-open except the last bin (which includes

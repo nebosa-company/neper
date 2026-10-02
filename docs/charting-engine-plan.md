@@ -1,8 +1,9 @@
 # Neper charting engine plan
 
-Status: scatter, line, bar, histogram, step, ECDF, box, density, normal Q-Q,
-violin, heatmap and correlation matrix are delivered, with a scene adapter,
-facet panel geometry and thirteen PNG previews from Neper's CPU renderer. L061 remains partial
+Status: scatter, line, bar, histogram, step, area, lollipop, error bars, ECDF,
+box, density, normal Q-Q, violin, heatmap and correlation matrix are delivered,
+with a scene adapter, facet panel geometry and sixteen PNG previews from Neper's
+CPU renderer. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -68,6 +69,9 @@ and emits exact 1/n rises, including tied observations. Box plots reuse R7
 quartiles for Tukey whiskers; density reuses Gaussian KDE with an explicit or
 Scott bandwidth; Q-Q plots reuse normal quantiles and an R7 quartile reference.
 Violin plots mirror that same Gaussian estimate into a filled outline.
+Area plots close ordered x/y points against an explicit baseline; lollipops
+reuse the same baseline and point mapping. Error bars borrow center/lower/upper
+columns, validate containment and emit a stem, two caps and a point per row.
 Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
@@ -76,8 +80,8 @@ sharing and strips remain future work.
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
-Scatter, line, bar, histogram, step/stairs, ECDF, box, density, Q-Q, violin,
-heatmap and correlation matrix are delivered; every other entry
+Scatter, line, bar, histogram, step/stairs, area, lollipop, error bars, ECDF,
+box, density, Q-Q, violin, heatmap and correlation matrix are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -114,7 +118,8 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 ## Delivery order and gates
 
 1. **Foundation (delivered now):** typed spec, borrowed data, scale-to-bounds,
-   scatter/line/bar/step marks, constant-domain handling, executable fixture.
+   scatter/line/bar/step/area/lollipop/error-bar marks, constant-domain handling,
+   executable fixtures.
 2. **Core distributions (delivered):** histogram, box, violin, density, ECDF and
    normal Q-Q have executable fixtures and PNG previews. Other distribution
    variants in the catalogue remain planned.
