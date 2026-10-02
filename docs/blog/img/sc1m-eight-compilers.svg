@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0c0e14"/>
+  <rect x="60" y="60" width="1080" height="510" rx="28" fill="none" stroke="#39475f" stroke-width="2"/>
+  <text x="120" y="180" font-family="Segoe UI, system-ui, sans-serif" font-size="44" fill="#8d909e" letter-spacing="2">BLOG // MEASUREMENT</text>
+  <text x="120" y="280" font-family="Segoe UI, system-ui, sans-serif" font-size="84" font-weight="600" fill="#ffffff">A million lines,</text>
+  <text x="120" y="380" font-family="Segoe UI, system-ui, sans-serif" font-size="84" font-weight="600" fill="#ffffff">eight compilers</text>
+  <text x="120" y="460" font-family="Cascadia Code, Consolas, monospace" font-size="36" fill="#b3c5ff">920,554 lines &#183; 8 languages &#183; answers checked</text>
+  <text x="120" y="515" font-family="Cascadia Code, Consolas, monospace" font-size="36" fill="#ffb692">Neper run: 47 ms &#183; warm rebuild: 5,700 ms</text>
+</svg>
