@@ -32739,3 +32739,17 @@ the test corrupted the first file, which the current two-device launch did
 not use. A fresh directory held exactly two entries, and corruption,
 replacement and injected failure passed on both Windows devices and one
 Linux device. The isolated Windows self-host suite then passed end-to-end.
+
+## D1775 — Preserve earlier assignment places across later place cuts
+
+**Decision.** In a CPU kernel's multi-target assignment, save each earlier
+destination address before evaluating a later place that may cross a barrier.
+Reuse those frame slots if the right-side call may also cut; reload only when
+a barrier actually occurred. Apply this to ordinary and `try` assignments.
+
+**Evidence.** A second indexed destination using a barrier-bearing helper
+made the previous compiler fail NIR verification. The extended
+`link/gpu_barrier_chain` fixture passes in debug and release on Windows and
+Linux. `link/try_positions` passes on both hosts, and consecutive self-hosted
+compiler stages are byte-identical on both hosts. The full Linux suite's C
+bootstrap still terminates its WSL host during compiler build.

@@ -153,6 +153,8 @@ fn middle(out: []u32, lane: u32) {
             var assigned_lane = 0u32
             (view.data[usize(lane)], assigned_lane) = pair(lane)
             out[usize(lane)] = view.data[usize(lane)] + assigned_lane - lane
+            (view.data[usize(lane)], view.data[usize(passthrough(lane))]) = pair(lane)
+            out[usize(lane)] = view.data[usize(lane)] + 44u32
         }
     }
 }

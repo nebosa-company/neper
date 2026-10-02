@@ -5486,27 +5486,40 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if tried_places > 16usize { ret check.ArgumentCount }
         var tried_addresses: [16]usize = zero
         var tried_types: [16]check.Type = zero
+        var tried_slots: [16]usize = zero
+        let assignment_token = c.tokens[usize(node.token_start)]
+        let pointer_type = check.make_type(.Pointer, "", module_index)
+        let barriers_before = builder.kernel_barriers
         var tried_at = 0usize
         while tried_at < tried_places {
+            if tried_at != 0usize && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[tried_at], builder) {
+                var previous = 0usize
+                while previous < tried_at {
+                    if tried_slots[previous] == 0usize {
+                        let (slot, save_error) = frame_save_temporary(c, pointer_type, tried_addresses[previous], assignment_token, builder)
+                        if save_error != ok { ret save_error }
+                        tried_slots[previous] = slot
+                    }
+                    previous += 1usize
+                }
+            }
             let (tried_address, tried_type, tried_error) = lower_place(c, g, tree, module_index, children[tried_at], builder, bindings, binding_count)
             if tried_error != ok { ret tried_error }
             tried_addresses[tried_at] = tried_address
             tried_types[tried_at] = tried_type
             tried_at += 1usize
         }
-        var tried_slots: [16]usize = zero
-        let assignment_token = c.tokens[usize(node.token_start)]
-        let pointer_type = check.make_type(.Pointer, "", module_index)
         if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, initializer_at, builder) {
             tried_at = 0usize
             while tried_at < tried_places {
-                let (slot, save_error) = frame_save_temporary(c, pointer_type, tried_addresses[tried_at], assignment_token, builder)
-                if save_error != ok { ret save_error }
-                tried_slots[tried_at] = slot
+                if tried_slots[tried_at] == 0usize {
+                    let (slot, save_error) = frame_save_temporary(c, pointer_type, tried_addresses[tried_at], assignment_token, builder)
+                    if save_error != ok { ret save_error }
+                    tried_slots[tried_at] = slot
+                }
                 tried_at += 1usize
             }
         }
-        let barriers_before = builder.kernel_barriers
         var tried: CallResults = zero
         try lower_try_call(c, g, tree, module_index, function, tree.nodes[initializer_at], assignment_token, builder, bindings, binding_count, defers, &tried)
         if tried.count != tried_places { ret check.ArgumentCount }
@@ -5527,8 +5540,23 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if place_count > 16usize { ret check.ArgumentCount }
         var addresses: [16]usize = zero
         var place_types: [16]check.Type = zero
+        var address_slots: [16]usize = zero
+        let assignment_token = c.tokens[usize(node.token_start)]
+        let pointer_type = check.make_type(.Pointer, "", module_index)
+        let barriers_before = builder.kernel_barriers
         var place_at = 0usize
         while place_at < place_count {
+            if place_at != 0usize && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[place_at], builder) {
+                var previous = 0usize
+                while previous < place_at {
+                    if address_slots[previous] == 0usize {
+                        let (slot, save_error) = frame_save_temporary(c, pointer_type, addresses[previous], assignment_token, builder)
+                        if save_error != ok { ret save_error }
+                        address_slots[previous] = slot
+                    }
+                    previous += 1usize
+                }
+            }
             let (address, place_type, address_error) = lower_place(c, g, tree, module_index, children[place_at], builder, bindings, binding_count)
             if address_error != ok { ret address_error }
             addresses[place_at] = address
@@ -5537,19 +5565,17 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         }
         let initializer = tree.nodes[children[place_count]]
         if initializer.kind != .CallExpr { ret check.ArgumentCount }
-        var address_slots: [16]usize = zero
-        let assignment_token = c.tokens[usize(node.token_start)]
-        let pointer_type = check.make_type(.Pointer, "", module_index)
         if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[place_count], builder) {
             place_at = 0usize
             while place_at < place_count {
-                let (slot, save_error) = frame_save_temporary(c, pointer_type, addresses[place_at], assignment_token, builder)
-                if save_error != ok { ret save_error }
-                address_slots[place_at] = slot
+                if address_slots[place_at] == 0usize {
+                    let (slot, save_error) = frame_save_temporary(c, pointer_type, addresses[place_at], assignment_token, builder)
+                    if save_error != ok { ret save_error }
+                    address_slots[place_at] = slot
+                }
                 place_at += 1usize
             }
         }
-        let barriers_before = builder.kernel_barriers
         var results: CallResults = zero
         let results_error = lower_call_results(c, g, tree, module_index, initializer, builder, bindings, binding_count, &results)
         if results_error != ok { ret results_error }
