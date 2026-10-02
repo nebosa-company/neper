@@ -951,8 +951,8 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 33,
-   "delivered": 33,
+   "catalogue": 35,
+   "delivered": 35,
    "pending": [],
    "fixtures": [
     "gfx_chart",
@@ -961,6 +961,7 @@
     "gfx_chart_intervals",
     "gfx_chart_labels",
     "gfx_chart_matrix",
+    "gfx_chart_nice_ticks",
     "gfx_chart_qq",
     "gfx_chart_scale",
     "gfx_chart_svg"

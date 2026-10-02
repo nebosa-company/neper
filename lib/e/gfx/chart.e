@@ -8,6 +8,8 @@ use e.algo.stat
 use e.gfx.geometry
 use e.math
 use e.math.special
+use e.mem
+use e.str
 
 type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
@@ -121,6 +123,112 @@ fn ticks(scale: Scale, lo: f32, hi: f32, out: []Tick) -> ([]Tick, err) {
     out[0usize].value = lo
     out[out.len - 1usize].value = hi
     ret (out, ok)
+}
+
+// Prefer human-scale linear breaks and 1/2/5 decades on log axes. Symlog
+// retains equal transformed-space positions until a symmetric break policy exists.
+fn nice_ticks(scale: Scale, lo: f32, hi: f32, wanted: usize, out: []Tick) -> ([]Tick, err) {
+    if wanted < 2usize { ret (zero, Invalid) }
+    if out.len < wanted { ret (zero, TooLarge) }
+    if !valid_scale(scale, lo, hi) { ret (zero, Invalid) }
+    if scale.kind == .Symlog {
+        let (made, tick_error) = ticks(scale, lo, hi, out[..wanted])
+        ret (made, tick_error)
+    }
+    var count = 0usize
+    if scale.kind == .Linear {
+        let raw = (f64(hi) - f64(lo)) / f64(wanted - 1usize)
+        let unit = math.pow[f64](10.0f64, math.floor[f64](math.log10[f64](raw)))
+        let ratio = raw / unit
+        var factor = 10.0f64
+        if ratio <= 1.0f64 {
+            factor = 1.0f64
+        } else if ratio <= 2.0f64 {
+            factor = 2.0f64
+        } else if ratio <= 5.0f64 {
+            factor = 5.0f64
+        }
+        let step = factor * unit
+        var value = math.ceil[f64](f64(lo) / step) * step
+        var attempts = 0usize
+        while value <= f64(hi) + step * 0.000000001f64 && attempts < wanted + 2usize {
+            let rounded = f32(value)
+            if count < wanted && rounded >= lo && rounded <= hi && (count == 0usize || rounded > out[count - 1usize].value) {
+                var at = fraction(rounded, lo, hi, scale)
+                if at < 0.0 { at = 0.0 }
+                if at > 1.0 { at = 1.0 }
+                out[count] = Tick { value: rounded, fraction: at }
+                count += 1usize
+            }
+            value += step
+            attempts += 1usize
+        }
+    } else {
+        let multipliers = [3]f64{ 1.0f64, 2.0f64, 5.0f64 }
+        var candidates: [256]f32 = zero
+        var candidate_count = 0usize
+        var exponent = math.floor[f64](math.log10[f64](f64(lo)))
+        let last = math.ceil[f64](math.log10[f64](f64(hi)))
+        while exponent <= last {
+            let unit = math.pow[f64](10.0f64, exponent)
+            var m = 0usize
+            while m < multipliers.len {
+                let raw = multipliers[m] * unit
+                if raw >= f64(lo) && raw <= f64(hi) {
+                    let rounded = f32(raw)
+                    if rounded >= lo && rounded <= hi && (candidate_count == 0usize || rounded > candidates[candidate_count - 1usize]) {
+                        if candidate_count >= candidates.len { ret (zero, TooLarge) }
+                        candidates[candidate_count] = rounded
+                        candidate_count += 1usize
+                    }
+                }
+                m += 1usize
+            }
+            exponent += 1.0f64
+        }
+        if candidate_count >= 2usize {
+            count = candidate_count
+            if count > wanted { count = wanted }
+            var i = 0usize
+            while i < count {
+                let index = (i * (candidate_count - 1usize) + (count - 1usize) / 2usize) / (count - 1usize)
+                let value = candidates[index]
+                var at = fraction(value, lo, hi, scale)
+                if at < 0.0 { at = 0.0 }
+                if at > 1.0 { at = 1.0 }
+                out[i] = Tick { value: value, fraction: at }
+                i += 1usize
+            }
+        }
+    }
+    if count < 2usize {
+        let (fallback, fallback_error) = ticks(scale, lo, hi, out[..2usize])
+        ret (fallback, fallback_error)
+    }
+    ret (out[..count], ok)
+}
+
+// Text slices point into caller-owned storage, which must outlive the labels.
+fn format_ticks(values: []const Tick, out: []str, storage: []u8) -> ([]str, err) {
+    if out.len < values.len { ret (zero, TooLarge) }
+    var used = 0usize
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i].value) { ret (zero, Invalid) }
+        if used == storage.len { ret (zero, TooLarge) }
+        var arena = mem.arena_from(storage[used..])
+        let (made, builder_error) = str.builder(&arena, 0usize)
+        if builder_error != ok { ret (zero, builder_error) }
+        var builder = made
+        var value = values[i].value
+        if value == 0.0 { value = 0.0 }
+        try str.push_f32(&builder, value)
+        let label = str.done(&builder)
+        out[i] = label
+        used += label.len
+        i += 1usize
+    }
+    ret (out[..values.len], ok)
 }
 
 fn valid_label(label: *const Label) -> bool {

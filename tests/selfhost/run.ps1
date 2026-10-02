@@ -3092,6 +3092,11 @@ $gfxChartLabelsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $gfxChartLabelsWritten -ne 'executable written') { throw 'gfx_chart_labels emission failed' }
 $gfxChartLabelsOutput = & $gfxChartLabelsPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
 if ($LASTEXITCODE -ne 0 -or $gfxChartLabelsOutput -ne 'gfx chart labels ok') { throw "the e.gfx.chart labels answered wrongly: exit $LASTEXITCODE" }
+$gfxChartNiceTicksPath = Join-Path $testBuild 'gfx-chart-nice-ticks-selfhost.exe'
+$gfxChartNiceTicksWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_nice_ticks\src\main.e') $repo 'x64' 'windows' $gfxChartNiceTicksPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartNiceTicksWritten -ne 'executable written') { throw 'gfx_chart_nice_ticks emission failed' }
+$gfxChartNiceTicksOutput = & $gfxChartNiceTicksPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartNiceTicksOutput -ne 'gfx chart nice ticks ok') { throw "the e.gfx.chart automatic ticks answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSvgPath = Join-Path $testBuild 'gfx-chart-svg-selfhost.exe'
 $gfxChartSvgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_svg\src\main.e') $repo 'x64' 'windows' $gfxChartSvgPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSvgWritten -ne 'executable written') { throw 'gfx_chart_svg emission failed' }

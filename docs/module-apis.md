@@ -15896,6 +15896,8 @@ error TooLarge
 
 fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Spec
 fn ticks(scale: Scale, lo: f32, hi: f32, out: []Tick) -> ([]Tick, err)
+fn nice_ticks(scale: Scale, lo: f32, hi: f32, wanted: usize, out: []Tick) -> ([]Tick, err)
+fn format_ticks(values: []const Tick, out: []str, storage: []u8) -> ([]str, err)
 fn valid_label(label: *const Label) -> bool
 fn guide_labels(bounds: geometry.Rect, x_ticks: []const Tick, x_text: []const str, y_ticks: []const Tick, y_text: []const str, size: f32, out: []Label) -> ([]Label, err)
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)

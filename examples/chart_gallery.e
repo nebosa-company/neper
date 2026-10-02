@@ -199,8 +199,7 @@ fn render_facet_scales(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
 }
 
-fn render_labeled_line(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
-    let path = "docs/chart-previews/labeled_line.png"
+fn render_labeled_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, variant: u8) -> err {
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
     if font_error != ok { ret font_error }
     let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
@@ -208,25 +207,54 @@ fn render_labeled_line(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     let bounds = geometry.rect(44.0, 40.0, 286.0, 150.0)
     let x = [4]f32{ 0.0, 1.0, 2.0, 3.0 }
     let y = [4]f32{ 0.0, 2.0, 1.0, 3.0 }
+    let log_x = [4]f32{ 1.0, 10.0, 100.0, 1000.0 }
+    let log_y = [4]f32{ 1.0, 5.0, 50.0, 1000.0 }
+    let signed_y = [4]f32{ -99.0, -9.0, 9.0, 99.0 }
     var points: [4]chart.Coord = zero
     var segments: [3]chart.Segment = zero
     var bars: [4]geometry.Rect = zero
-    let plot = chart.spec(.Line, bounds, x[..], y[..])
+    var plot = chart.spec(.Line, bounds, x[..], y[..])
+    var path = "docs/chart-previews/labeled_line.png"
+    var title = "Response over time"
+    var axis_name = "Time"
+    if variant == 1u8 {
+        plot = chart.spec(.Scatter, bounds, log_x[..], log_y[..])
+        plot.x_scale.kind = .Log10
+        plot.y_scale.kind = .Log10
+        path = "docs/chart-previews/labeled_log_scatter.png"
+        title = "Logarithmic response"
+        axis_name = "Dose"
+    } else if variant == 2u8 {
+        plot = chart.spec(.Line, bounds, x[..], signed_y[..])
+        plot.y_scale.kind = .Symlog
+        path = "docs/chart-previews/labeled_symlog_line.png"
+        title = "Symmetric-log response"
+        axis_name = "Index"
+    }
     let (marks, marks_error) = chart.layout(&plot, points[..], segments[..], bars[..])
     if marks_error != ok { ret marks_error }
-    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
     var x_ticks: [4]chart.Tick = zero
-    var y_ticks: [4]chart.Tick = zero
-    let (_, x_error) = chart.ticks(linear, marks.x_min, marks.x_max, x_ticks[..])
+    var y_ticks: [5]chart.Tick = zero
+    let (x_breaks, x_error) = chart.nice_ticks(plot.x_scale, marks.x_min, marks.x_max, 4usize, x_ticks[..])
     if x_error != ok { ret x_error }
-    let (_, y_error) = chart.ticks(linear, marks.y_min, marks.y_max, y_ticks[..])
+    var wanted_y = 4usize
+    if variant == 2u8 { wanted_y = 5usize }
+    let (y_breaks, y_error) = chart.nice_ticks(plot.y_scale, marks.y_min, marks.y_max, wanted_y, y_ticks[..])
     if y_error != ok { ret y_error }
-    let tick_text = [4]str{ "0", "1", "2", "3" }
-    var labels: [10]chart.Label = zero
-    let (_, labels_error) = chart.guide_labels(bounds, x_ticks[..], tick_text[..], y_ticks[..], tick_text[..], 10.0, labels[..8usize])
+    var x_text: [4]str = zero
+    var y_text: [5]str = zero
+    var x_storage: [128]u8 = zero
+    var y_storage: [128]u8 = zero
+    let (x_words, x_text_error) = chart.format_ticks(x_breaks, x_text[..], x_storage[..])
+    if x_text_error != ok { ret x_text_error }
+    let (y_words, y_text_error) = chart.format_ticks(y_breaks, y_text[..], y_storage[..])
+    if y_text_error != ok { ret y_text_error }
+    var labels: [11]chart.Label = zero
+    let tick_count = x_breaks.len + y_breaks.len
+    let (_, labels_error) = chart.guide_labels(bounds, x_breaks, x_words, y_breaks, y_words, 10.0, labels[..tick_count])
     if labels_error != ok { ret labels_error }
-    labels[8usize] = chart.Label { text: "Response over time", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
-    labels[9usize] = chart.Label { text: "Time", anchor: chart.Coord { x: 187.0, y: 232.0 }, align: .Center }
+    labels[tick_count] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[tick_count + 1usize] = chart.Label { text: axis_name, anchor: chart.Coord { x: 187.0, y: 232.0 }, align: .Center }
     let grid_color = paint.rgba(0.88, 0.91, 0.95, 1.0)
     let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
     let ink_color = paint.rgba(0.07, 0.35, 0.76, 1.0)
@@ -234,22 +262,24 @@ fn render_labeled_line(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     if builder_error != ok { ret builder_error }
     var builder = made
     try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
-    try chart_scene.append_guides(&builder, bounds, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
+    try chart_scene.append_guides(&builder, bounds, x_breaks, y_breaks, paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
     try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: ink_color })
-    try chart_scene.append_labels(a, &builder, labels[..8usize], font, 10.0, paint.Brush { Solid: axis_color })
-    try chart_scene.append_labels(a, &builder, labels[8usize..9usize], font, 14.0, paint.Brush { Solid: axis_color })
-    try chart_scene.append_labels(a, &builder, labels[9usize..10usize], font, 11.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, labels[..tick_count], font, 10.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, labels[tick_count..tick_count + 1usize], font, 14.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, labels[tick_count + 1usize..tick_count + 2usize], font, 11.0, paint.Brush { Solid: axis_color })
     let (svg_held, svg_error) = svg_start(a, path)
     if svg_error != ok { ret svg_error }
     var svg_state = svg_held
     var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
-    try chart_svg.append_guides(&writer, bounds, x_ticks[..], y_ticks[..], grid_color, axis_color)
+    try chart_svg.append_guides(&writer, bounds, x_breaks, y_breaks, grid_color, axis_color)
     try chart_svg.append(&writer, &marks, ink_color)
-    try chart_svg.append_labels(&writer, labels[..8usize], axis_color, 10.0)
-    try chart_svg.append_labels(&writer, labels[8usize..9usize], axis_color, 14.0)
-    try chart_svg.append_labels(&writer, labels[9usize..10usize], axis_color, 11.0)
+    try chart_svg.append_labels(&writer, labels[..tick_count], axis_color, 10.0)
+    try chart_svg.append_labels(&writer, labels[tick_count..tick_count + 1usize], axis_color, 14.0)
+    try chart_svg.append_labels(&writer, labels[tick_count + 1usize..tick_count + 2usize], axis_color, 11.0)
     try chart_svg.finish(&writer)
-    try fs.write_file(a, "docs/chart-previews/labeled_line.svg", io.memory_bytes(&svg_state))
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    try fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
     ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
 }
 
@@ -409,7 +439,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try chart_svg.finish(&facet_svg_writer)
     try fs.write_file(a, "docs/chart-previews/facet_heatmap.svg", io.memory_bytes(&facet_svg_held))
     try render_facet_scales(a, queue, output_target, canvas, &renderer)
-    try render_labeled_line(a, queue, output_target, canvas, &renderer)
+    try render_labeled_chart(a, queue, output_target, canvas, &renderer, 0u8)
+    try render_labeled_chart(a, queue, output_target, canvas, &renderer, 1u8)
+    try render_labeled_chart(a, queue, output_target, canvas, &renderer, 2u8)
     try scene.close(&renderer)
     try gpu.close_target(output_target)
     try gpu.close(device)

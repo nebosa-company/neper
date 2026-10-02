@@ -33122,3 +33122,15 @@ same strings into `<text>` elements. The gallery's labeled line uses a checked-i
 TrueType font for its PNG and a generic sans-serif fallback for SVG; font
 embedding, collision handling, automatic formatting and theme margins remain
 future work. `gfx_chart_labels` checks positioning, escaping and refusal paths.
+
+## D1803 — Derive readable numeric ticks without owning text storage
+
+`chart.nice_ticks` uses 1/2/5 steps inside linear domains and samples ordered
+1/2/5 decade candidates inside log10 domains, preserving reversed fractions.
+Symmetric-log continues to use the existing equal transformed-space ticks;
+their strings are automatic, but a separate symmetric break policy remains.
+`format_ticks` reuses `e.str.push_f32` for shortest-round-trip labels and writes
+them into a caller-supplied byte buffer. An empty buffer returns `TooLarge`
+before `mem.arena_from` can read its first element. The gallery's labeled
+linear, log and symmetric-log previews exercise the shared guide and text
+adapters; `gfx_chart_nice_ticks` checks break values, reversal and refusals.

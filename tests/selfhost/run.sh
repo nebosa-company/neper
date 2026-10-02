@@ -2714,6 +2714,11 @@ gfx_chart_labels_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/gfx-chart-labels-selfhost"
 gfx_chart_labels_output=$("$test_build/gfx-chart-labels-selfhost" "$repo/docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf")
 [ "$gfx_chart_labels_output" = 'gfx chart labels ok' ]
+gfx_chart_nice_ticks_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_nice_ticks/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-nice-ticks-selfhost")
+[ "$gfx_chart_nice_ticks_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-nice-ticks-selfhost"
+gfx_chart_nice_ticks_output=$("$test_build/gfx-chart-nice-ticks-selfhost")
+[ "$gfx_chart_nice_ticks_output" = 'gfx chart nice ticks ok' ]
 gfx_chart_svg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_svg/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-svg-selfhost")
 [ "$gfx_chart_svg_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-svg-selfhost"
