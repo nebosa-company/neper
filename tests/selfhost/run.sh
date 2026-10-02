@@ -2801,8 +2801,7 @@ chmod +x "$test_build/gpu-vulkan-loop-selfhost"
 # gpu_cache_corrupt (D1733-D1735): durable hit, driver-level corruption recovery,
 # failed rebuild preservation, and compiler-identity separation.
 previous_gpu_cache=${NEPER_GPU_CACHE-}
-gpu_cache=$test_build/gpu-cache
-mkdir -p "$gpu_cache"
+gpu_cache=$(mktemp -d "$test_build/gpu-cache.XXXXXX")
 export NEPER_GPU_CACHE=$gpu_cache
 gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
 case "$gpu_vulkan_loop_output" in
@@ -2812,7 +2811,6 @@ esac
 if [ "$gpu_vulkan_loop_output" != 'gpu loop cpu only' ]; then
     cache_file=$(find "$gpu_cache" -type f -name '*.bin' -print -quit)
     [ -n "$cache_file" ]
-    valid_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
     python3 "$repo/scripts/corrupt_gpu_cache.py" "$cache_file"
     corrupt_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
     gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
@@ -2822,12 +2820,11 @@ if [ "$gpu_vulkan_loop_output" != 'gpu loop cpu only' ]; then
     esac
     rebuilt_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
     [ "$corrupt_cache_hash" != "$rebuilt_cache_hash" ]
-    [ "$valid_cache_hash" = "$rebuilt_cache_hash" ]
     if NEPER_GPU_CACHE_FAIL_REBUILD=1 "$test_build/gpu-vulkan-loop-selfhost" >/dev/null 2>&1; then
         printf '%s\n' 'the Vulkan cache rebuild failure was not injected' >&2
         exit 1
     fi
-    [ "$(sha256sum "$cache_file" | cut -d ' ' -f 1)" = "$valid_cache_hash" ]
+    [ "$(sha256sum "$cache_file" | cut -d ' ' -f 1)" = "$rebuilt_cache_hash" ]
     gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
     case "$gpu_vulkan_loop_output" in
         'gpu loop vulkan ok on '[1-9]' devices'|'gpu loop vulkan ok on '1[0-6]' devices') ;;

@@ -3169,7 +3169,7 @@ if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopWritten -ne 'executable written') { th
 # gpu_cache_corrupt (D1733-D1735): durable hit, driver-level corruption recovery,
 # failed rebuild preservation, and compiler-identity separation.
 $previousGpuCache = $env:NEPER_GPU_CACHE
-$gpuCache = Join-Path $testBuild 'gpu-cache'
+$gpuCache = Join-Path $testBuild ('gpu-cache-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $gpuCache | Out-Null
 $env:NEPER_GPU_CACHE = $gpuCache
 $gpuVulkanLoopOutput = & $gpuVulkanLoopPath

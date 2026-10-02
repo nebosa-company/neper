@@ -32726,3 +32726,16 @@ their existing path.
 the old compiler's NIR verifier after a barrier-bearing helper call. The
 `link/gpu_barrier_chain` regression now passes in debug and release on Windows
 and Linux; `link/try_positions` still passes on Linux. C091 remains partial.
+
+## D1774 — Isolate the Vulkan cache-recovery suite per run
+
+**Decision.** Each self-host suite run uses a new cache directory for its
+corruption and compiler-identity checks. The Linux gate, like the Windows
+gate, verifies replacement and failed-rebuild preservation without demanding
+byte-identical opaque driver blobs.
+
+**Evidence.** A reused Windows cache held six entries, including stale keys;
+the test corrupted the first file, which the current two-device launch did
+not use. A fresh directory held exactly two entries, and corruption,
+replacement and injected failure passed on both Windows devices and one
+Linux device. The isolated Windows self-host suite then passed end-to-end.
