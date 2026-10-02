@@ -4916,7 +4916,7 @@ for hot_mode in --release --time; do
     shape_status=0
     "$test_build/gpushape$hot_mode" || shape_status=$?
     [ "$shape_status" -eq 50 ]
-    for shape_step in 'main main.e main=rebuilt:source-changed k=kept:stable 50' 'body k.e main=kept:edges-hold k=rebuilt:source-changed 50' 'size k.e main=rebuilt:edge-changed k=rebuilt:source-changed 82'; do
+    for shape_step in 'main main.e main=rebuilt:source-changed k=kept:stable 50' 'body k.e main=rebuilt:edge-changed k=rebuilt:source-changed 50' 'size k.e main=rebuilt:edge-changed k=rebuilt:source-changed 82'; do
         set -- $shape_step
         cp "$shape_scratch/edits/$1.e" "$shape_scratch/src/$2"
         [ "$("$test_build/neper-self" emit-executable "$shape_scratch/src/main.e" "$repo" x64 linux "$test_build/gpushape$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]

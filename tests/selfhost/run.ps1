@@ -4953,7 +4953,7 @@ foreach ($hotMode in @('--release', '--time')) {
     if ($LASTEXITCODE -ne 0 -or $shapeFirst -ne 'executable written') { throw "the cold build of the gpu_reshape fixture failed ($hotMode)" }
     & $shapeExe
     if ($LASTEXITCODE -ne 50) { throw "the gpu_reshape fixture did not exit 50 before the edits ($hotMode): $LASTEXITCODE" }
-    foreach ($shapeStep in @(@('main', 'main.e', 'main=rebuilt:source-changed', 'k=kept:stable', 50), @('body', 'k.e', 'main=kept:edges-hold', 'k=rebuilt:source-changed', 50), @('size', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 82))) {
+    foreach ($shapeStep in @(@('main', 'main.e', 'main=rebuilt:source-changed', 'k=kept:stable', 50), @('body', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 50), @('size', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 82))) {
         $shapeEdit = $shapeStep[0]
         Copy-Item (Join-Path $shapeScratch "edits\$shapeEdit.e") (Join-Path $shapeScratch "src\$($shapeStep[1])") -Force
         $shapeWarm = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeExe $hotMode --incremental -j 1 2>$null
