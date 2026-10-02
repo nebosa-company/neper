@@ -13876,7 +13876,13 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         let (device_reachable, device_reachable_error) = mem.alloc[bool](a, checker.function_count)
         if device_reachable_error != ok { ret device_reachable_error }
-        try check.device_reachable_functions(&checker, &loaded, device_reachable)
+        check_error = check.device_reachable_functions(&checker, &loaded, device_reachable)
+        if check_error != ok {
+            try print_check_diagnostic(&report, &loaded, &checker, check_error)
+            try finish_report(&report)
+            os.exit(1i32)
+            ret ok
+        }
         let (needs_barrier_oracle, needs_barrier_error) = lower.barrier_helper_present(&checker, &loaded, device_reachable)
         if needs_barrier_error != ok { ret needs_barrier_error }
         if needs_barrier_oracle {

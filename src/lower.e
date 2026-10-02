@@ -2295,7 +2295,7 @@ fn barrier_helper_present(c: *check.Checker, g: *graph.Graph, reachable: []bool)
     var at = 0usize
     while at < c.function_count {
         let function = c.functions[at]
-        if at < reachable.len && reachable[at] && !function.gpu && check.device_only(c, g, at) {
+        if at < reachable.len && reachable[at] && !function.gpu {
             let (present, present_error) = helper_has_barrier(c, g, function)
             if present_error != ok { ret (false, present_error) }
             if present { ret (true, ok) }
@@ -2414,7 +2414,7 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
             let generic = c.function_generics[instance_at]
             var reached = instance_at < oracle.barrier_reachable.len && oracle.barrier_reachable[instance_at]
             if generic.instance && generic.template_index < oracle.barrier_reachable.len && oracle.barrier_reachable[generic.template_index] { reached = true }
-            if generic.instance && !function.generic && !generic.formatter && !generic.launcher && reached && check.device_only(c, g, instance_at) {
+            if generic.instance && !function.generic && !generic.formatter && !generic.launcher && reached {
                 var wanted = true
                 if oracle.has_oracle {
                     let (previous, found) = find_inline_entry(oracle, function.owner_module_index, function.name, function.instance_id)
@@ -2492,7 +2492,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                 // entries were recorded in this same walk order, so a cursor finds them.
                 var wanted = usize(node.token_end) - usize(node.token_start) <= oracle_candidate_tokens() || barrier_helper
                 if !oracle.release { wanted = barrier_helper }
-                if oracle.barrier_oracle { wanted = device_helper && function_index < oracle.barrier_reachable.len && oracle.barrier_reachable[function_index] }
+                if oracle.barrier_oracle { wanted = function_index < oracle.barrier_reachable.len && oracle.barrier_reachable[function_index] }
                 if oracle.has_oracle {
                     wanted = false
                     if entry_cursor < oracle.inline_entry_count {
@@ -3584,6 +3584,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
     // Section 12's ordinary oracle keeps scalar-only calls; the barrier oracle
     // also copies a single result returned through a hidden slot.
     if builder.has_oracle && !call.indirect && !call.mem_alloc && !call.function.intrinsic && !call.function.external && !call.function.generic && !call.function.gpu {
+        let (entry_index, inlinable) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
         var inline_shape = !return_layout.via_slot && results.count <= 1usize
         if results.count == 1usize {
             let (returned, returned_error) = check.call_return(c, call, 0usize)
@@ -3591,10 +3592,8 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
             if aggregate_value(c, returned) { inline_shape = false }
         }
         if builder.inline_only_mandatory && (results.count > 1usize || (return_layout.via_slot && results.count == 1usize)) { inline_shape = true }
-        if inline_shape {
-            let (entry_index, inlinable) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
-            if inlinable && (!builder.inline_only_mandatory || builder.inline_entries[entry_index].mandatory) { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
-        }
+        if builder.frame_mode && inlinable && builder.inline_entries[entry_index].mandatory { inline_shape = true }
+        if inline_shape && inlinable && (!builder.inline_only_mandatory || builder.inline_entries[entry_index].mandatory) { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
     }
     // A barrier helper cannot fall back to a native call: it must be copied into
     // the kernel so its cut stores that invocation's pc and returns to the scheduler.
@@ -8154,7 +8153,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     // whatever body this checker checked last, so the call was refused on some schedules.
     c.body_device_only = check.device_only(c, g, function_index)
     c.body_is_main = check.same(function.name, "main")
-    builder.frame_locals = c.body_device_only && !function.gpu
+    builder.frame_locals = (c.body_device_only || builder.barrier_oracle) && !function.gpu
     if builder.frame_locals {
         let helper_depth = kernel_loop_nesting(tree, node, 0usize)
         let (helper_slots, helper_slots_error) = mem.alloc[usize](c.arena, helper_depth)

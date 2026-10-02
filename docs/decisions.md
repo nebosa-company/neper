@@ -32792,3 +32792,21 @@ slots and switch lowering need no change for these shapes.
 lane-specific result in debug and release on Windows and Linux. It checks
 both the earlier aggregate field and the later field after the cut, plus
 the aggregate again after the switch subject cuts.
+
+## D1779 — Discover implicit iterator calls before CPU barrier fission
+
+**Decision.** Recheck device-reachable loop bodies with dispatch recording to
+find the concrete protocol `next` call hidden behind each `for`. Extend device
+reachability through that call and include the reached body in the CPU barrier
+oracle, even when its caller has no explicit GPU primitive. A mandatory
+barrier-bearing `next` returning `(value, bool)` is inlined into the resumable
+kernel step. Discard generic instances created only by this discovery recheck;
+the completed body sweep already owns the real instances.
+
+**Evidence.** Adding a barrier to `iter_next` in `link/gpu_barrier_chain` made
+the prior compiler's executable trap on a native barrier-helper call. The new
+compiler runs the fixture in debug and release on Windows and Linux. Ten
+other GPU fixtures passed on Windows and six on Linux; consecutive self-hosted
+compiler stages are byte-identical on both hosts. Full suites were not rerun
+for this increment: the C: drive has less than 2 MB free. The clean full Linux
+suite and the remaining pending-expression audit are still open.

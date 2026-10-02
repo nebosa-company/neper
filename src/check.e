@@ -18237,6 +18237,115 @@ fn device_walk(c: *Checker, g: *graph.Graph, function_index: usize, walk: *Devic
     ret walk_error
 }
 
+fn device_implicit_next(c: *Checker, g: *graph.Graph, function_index: usize, records: *[]Explain, reachable: []bool) -> err {
+    let function = c.functions[function_index]
+    if function.source_end <= function.source_start || function.generic || function.external || function.intrinsic { ret ok }
+    let (_, parse_error) = interp_module(c, g, function.module_index)
+    if parse_error != ok { ret parse_error }
+    let saved_tokens = c.tokens
+    let saved_token_count = c.token_count
+    let saved_explains = c.explains
+    let saved_explain_count = c.explain_count
+    let saved_explain_overflow = c.explain_overflow
+    let saved_local_count = c.local_count
+    let saved_kernel_options = c.kernel_options
+    let saved_failure = failure_state(c)
+    c.tokens = c.interp_tokens[function.module_index]
+    c.token_count = c.interp_token_counts[function.module_index]
+    let tree = &c.interp_trees[function.module_index]
+    let (declaration, found) = declaration_at(c, tree, function.source_start)
+    if !found {
+        c.tokens = saved_tokens
+        c.token_count = saved_token_count
+        ret ok
+    }
+    var has_for = false
+    var token_at = usize(tree.nodes[declaration].token_start)
+    while token_at < usize(tree.nodes[declaration].token_end) && token_at < c.token_count {
+        if c.tokens[token_at].kind == .KwFor { has_for = true }
+        token_at += 1usize
+    }
+    if !has_for {
+        c.tokens = saved_tokens
+        c.token_count = saved_token_count
+        ret ok
+    }
+    if (*records).len == 0usize {
+        // ponytail: one bounded scratch buffer per device walk; grow it only if a real body exceeds 8192 dispatch records.
+        let (storage, storage_error) = mem.alloc[Explain](c.arena, 8192usize)
+        if storage_error != ok {
+            c.tokens = saved_tokens
+            c.token_count = saved_token_count
+            ret storage_error
+        }
+        *records = storage
+    }
+    c.explains = *records
+    c.explain_count = 0usize
+    c.explain_overflow = false
+    let saved_function_count = c.function_count
+    let saved_parameter_count = c.parameter_count
+    let saved_return_type_count = c.return_type_count
+    var checked = ok
+    if c.function_generics[function_index].instance {
+        checked = check_instance(c, c.resolver, g, function_index)
+    } else {
+        c.kernel_options = declaration_gpu_options(c, g, tree, function.module_index, declaration)
+        checked = check_function_swept(c, c.resolver, g, tree, function.module_index, tree.nodes[declaration])
+    }
+    let count = c.explain_count
+    let overflow = c.explain_overflow
+    c.tokens = saved_tokens
+    c.token_count = saved_token_count
+    c.explains = saved_explains
+    c.explain_count = saved_explain_count
+    c.explain_overflow = saved_explain_overflow
+    c.local_count = saved_local_count
+    c.kernel_options = saved_kernel_options
+    // Rechecking discovers protocol dispatches, but its duplicate generic instances
+    // are not part of the already completed body sweep.
+    c.function_count = saved_function_count
+    c.parameter_count = saved_parameter_count
+    c.return_type_count = saved_return_type_count
+    if checked != ok {
+        c.tokens = c.interp_tokens[function.module_index]
+        c.token_count = c.interp_token_counts[function.module_index]
+        record_failure(c, function.module_index, tree.nodes[declaration], .GpuLaunch, function.name, "device iterator discovery failed while rechecking this function")
+        c.tokens = saved_tokens
+        c.token_count = saved_token_count
+        ret checked
+    }
+    restore_failure(c, saved_failure)
+    if overflow { ret Capacity }
+    var at = 0usize
+    while at < count {
+        let record = (*records)[at]
+        if record.kind == 1u8 && record.found && same(record.protocol, "next") && record.function_index < c.function_count {
+            var walk: DeviceWalk = zero
+            walk.bound = 1023usize
+            try device_walk(c, g, record.function_index, &walk)
+            if walk.found {
+                c.tokens = c.interp_tokens[function.module_index]
+                c.token_count = c.interp_token_counts[function.module_index]
+                var subject = ""
+                if walk.subject.len != 0usize { subject = device_text(c, " `", walk.subject, "`", "") }
+                record_failure(c, function.module_index, tree.nodes[declaration], .GpuLaunch, function.name, device_text(c, "implicit iterator `next` reaches ", walk.reason, subject, ", which device code cannot run"))
+                c.tokens = saved_tokens
+                c.token_count = saved_token_count
+                ret InvalidType
+            }
+            var visited = 0usize
+            while visited < walk.visited_count {
+                let callee = walk.visited[visited]
+                if callee < reachable.len { reachable[callee] = true }
+                visited += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn device_reachable_functions(c: *Checker, g: *graph.Graph, reachable: []bool) -> err {
     if reachable.len < c.function_count { ret Capacity }
     var at = 0usize
@@ -18257,6 +18366,34 @@ fn device_reachable_functions(c: *Checker, g: *graph.Graph, reachable: []bool) -
             }
         }
         at += 1usize
+    }
+    var any_kernel = false
+    at = 0usize
+    while at < c.function_count {
+        if c.functions[at].gpu { any_kernel = true }
+        at += 1usize
+    }
+    if !any_kernel { ret ok }
+    var records: []Explain = zero
+    let (visited, visited_error) = mem.alloc[bool](c.arena, c.function_count)
+    if visited_error != ok { ret visited_error }
+    at = 0usize
+    while at < visited.len {
+        visited[at] = false
+        at += 1usize
+    }
+    var changed = true
+    while changed {
+        changed = false
+        at = 0usize
+        while at < c.function_count {
+            if at < reachable.len && at < visited.len && reachable[at] && !visited[at] {
+                visited[at] = true
+                try device_implicit_next(c, g, at, &records, reachable)
+                changed = true
+            }
+            at += 1usize
+        }
     }
     ret ok
 }
