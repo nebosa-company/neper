@@ -18237,7 +18237,7 @@ fn device_walk(c: *Checker, g: *graph.Graph, function_index: usize, walk: *Devic
     ret walk_error
 }
 
-fn device_implicit_next(c: *Checker, g: *graph.Graph, function_index: usize, records: *[]Explain, reachable: []bool) -> err {
+fn device_implicit_next(c: *Checker, g: *graph.Graph, function_index: usize, records: []Explain, reachable: []bool) -> err {
     let function = c.functions[function_index]
     if function.source_end <= function.source_start || function.generic || function.external || function.intrinsic { ret ok }
     let (_, parse_error) = interp_module(c, g, function.module_index)
@@ -18270,17 +18270,7 @@ fn device_implicit_next(c: *Checker, g: *graph.Graph, function_index: usize, rec
         c.token_count = saved_token_count
         ret ok
     }
-    if (*records).len == 0usize {
-        // ponytail: one bounded scratch buffer per device walk; grow it only if a real body exceeds 8192 dispatch records.
-        let (storage, storage_error) = mem.alloc[Explain](c.arena, 8192usize)
-        if storage_error != ok {
-            c.tokens = saved_tokens
-            c.token_count = saved_token_count
-            ret storage_error
-        }
-        *records = storage
-    }
-    c.explains = *records
+    c.explains = records
     c.explain_count = 0usize
     c.explain_overflow = false
     let saved_function_count = c.function_count
@@ -18319,7 +18309,7 @@ fn device_implicit_next(c: *Checker, g: *graph.Graph, function_index: usize, rec
     if overflow { ret Capacity }
     var at = 0usize
     while at < count {
-        let record = (*records)[at]
+        let record = records[at]
         if record.kind == 1u8 && record.found && same(record.protocol, "next") && record.function_index < c.function_count {
             var walk: DeviceWalk = zero
             walk.bound = 1023usize
@@ -18374,7 +18364,9 @@ fn device_reachable_functions(c: *Checker, g: *graph.Graph, reachable: []bool) -
         at += 1usize
     }
     if !any_kernel { ret ok }
-    var records: []Explain = zero
+    // ponytail: one bounded scratch buffer per device walk; grow it only if a real body exceeds 8192 dispatch records.
+    let (records, records_error) = mem.alloc[Explain](c.arena, 8192usize)
+    if records_error != ok { ret records_error }
     let (visited, visited_error) = mem.alloc[bool](c.arena, c.function_count)
     if visited_error != ok { ret visited_error }
     at = 0usize
@@ -18389,7 +18381,7 @@ fn device_reachable_functions(c: *Checker, g: *graph.Graph, reachable: []bool) -
         while at < c.function_count {
             if at < reachable.len && at < visited.len && reachable[at] && !visited[at] {
                 visited[at] = true
-                try device_implicit_next(c, g, at, &records, reachable)
+                try device_implicit_next(c, g, at, records, reachable)
                 changed = true
             }
             at += 1usize

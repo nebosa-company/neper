@@ -150,6 +150,8 @@ fn middle(out: []u32, lane: u32) {
             vectors[usize(lane)] = vector
             let added = vectors[usize(lane)] +% passthrough(vector)
             view.data[usize(lane)] = added.lanes[0usize] - (lane + 44u32)
+            let saved_array = [2]u32 { lane, passthrough(lane + 44u32) }
+            view.data[usize(lane)] = saved_array[0usize] + saved_array[1usize] - lane
             for step in lane..passthrough(lane + 1u32) {
                 view.data[usize(lane)] = step + 44u32
             }

@@ -32810,3 +32810,20 @@ other GPU fixtures passed on Windows and six on Linux; consecutive self-hosted
 compiler stages are byte-identical on both hosts. Full suites were not rerun
 for this increment: the C: drive has less than 2 MB free. The clean full Linux
 suite and the remaining pending-expression audit are still open.
+
+## D1780 — Keep iterator discovery compatible with the C bootstrap
+
+**Decision.** Pass the iterator-discovery scratch buffer as a plain slice,
+allocated once by the reachability walk. The C bootstrap parser rejects
+`(*pointer_to_slice).len` and `(*pointer_to_slice)[index]` even though the
+self-hosted compiler accepts them. This also removes the lazy allocation
+branch. Add an array-literal regression whose later element calls a barrier
+helper, preserving its earlier element across the cut.
+
+**Evidence.** The Windows C bootstrap builds the compiler at a 512 MB arena;
+that compiler builds the next self-hosted stage, which runs the expanded
+`link/gpu_barrier_chain` in debug and release. The Linux self-hosted compiler
+also runs both modes; consecutive self-hosted stages match byte-for-byte on
+both hosts. The clean Linux suite stopped during its C-bootstrap
+build and WSL restarted; a separate 512 MB Linux bootstrap attempt did the
+same. Neither is a full-suite pass.
