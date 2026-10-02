@@ -2,8 +2,9 @@
 
 Status: scatter, line, bar, histogram, step, area, lollipop, error bars, ECDF,
 box, density, normal Q-Q, violin, heatmap and correlation matrix are delivered,
-with a scene adapter, facet panel geometry and sixteen PNG previews from Neper's
-CPU renderer. L061 remains partial
+with linear/log10/symmetric-log and reverse Cartesian scales, caller-owned tick
+metadata, a grid/axis scene pass, facet panel geometry and eighteen PNG previews
+from Neper's CPU renderer. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -46,8 +47,9 @@ The stable sequence is:
 2. **Mapping** — x/y plus colour, fill, size, shape, group, weight and facet keys.
 3. **Statistics** — binning, summaries, smoothing and model overlays, each pure and
    independently testable.
-4. **Scales** — continuous, discrete, date/time, log, symlog, reverse and
-   transformed domains; breaks, labels, limits and out-of-bounds policy.
+4. **Scales** — linear, log10, symmetric-log and reverse Cartesian mapping are
+   delivered, with equal transformed-space tick metadata. Discrete, date/time,
+   nice breaks, labels, limits and out-of-bounds policy remain.
 5. **Coordinates** — Cartesian first; polar, flipped, fixed-aspect, map and 3-D
    projections later.
 6. **Geometries** — marks only; no data analysis hidden in a painter.
@@ -76,6 +78,11 @@ Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
 sharing and strips remain future work.
+`Spec` now carries independent x/y scale configurations for Cartesian marks.
+Log10 refuses non-positive domains, symmetric-log has an explicit linear
+threshold, and reverse maps fractions without copying columns. `ticks` returns
+caller-owned data values and normalized positions; the scene guide pass draws
+grid and axis strokes. Text labels and layout-aware margins remain planned.
 
 ## Chart and diagram catalogue
 
@@ -127,8 +134,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    executable fixtures and PNG previews; `facet_grid` places panels and a
    four-panel heatmap preview exercises it. Shared/free x/y scales, strips and
    legend metadata remain.
-4. **Rendering adapters (partial):** scene display-list marks and a Neper-rendered
-   PNG gallery are delivered; axes/text/guides, a production PNG export API,
+4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
+   strokes and a Neper-rendered PNG gallery are delivered; text labels and
+   margins, a production PNG export API,
    SVG/PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.
 5. **Specialized calculators:** ROC, survival, SPC, capability, Bland–Altman,

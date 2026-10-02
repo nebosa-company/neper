@@ -52,8 +52,8 @@ fn render_builder(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canv
     ret ok
 }
 
-fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, path: str) -> err {
-    let (made, builder_error) = scene.builder(a, 48usize)
+fn render_chart_scaled(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, x_scale: chart.Scale, y_scale: chart.Scale, path: str) -> err {
+    let (made, builder_error) = scene.builder(a, 64usize)
     if builder_error != ok { ret builder_error }
     var builder = made
     let white = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) }
@@ -62,15 +62,20 @@ fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     var ink = paint.Brush { Solid: paint.rgba(0.07, 0.35, 0.76, 1.0) }
     if marks.kind == .Area { ink = paint.Brush { Solid: paint.rgba(0.25, 0.55, 0.88, 0.82) } }
     try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), white)
-    var i = 1usize
-    while i < 4usize {
-        try fill(&builder, geometry.rect(44.0, 30.0 + f32(i) * 43.5, 286.0, 1.0), grid)
-        i += 1usize
-    }
-    try fill(&builder, geometry.rect(44.0, 30.0, 1.0, 175.0), axis)
-    try fill(&builder, geometry.rect(44.0, 204.0, 287.0, 1.0), axis)
+    var x_ticks: [4]chart.Tick = zero
+    var y_ticks: [4]chart.Tick = zero
+    let (_, x_error) = chart.ticks(x_scale, marks.x_min, marks.x_max, x_ticks[..])
+    if x_error != ok { ret x_error }
+    let (_, y_error) = chart.ticks(y_scale, marks.y_min, marks.y_max, y_ticks[..])
+    if y_error != ok { ret y_error }
+    try chart_scene.append_guides(&builder, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_ticks[..], grid, axis)
     try chart_scene.append(a, &builder, marks, ink)
     ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
+}
+
+fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, path: str) -> err {
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    ret render_chart_scaled(a, q, output_target, canvas, renderer, marks, linear, linear, path)
 }
 
 fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
@@ -110,6 +115,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try render_chart(a, queue, output_target, canvas, &renderer, &marks, paths[i])
         i += 1usize
     }
+    let log_x = [8]f32{ 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 1000.0 }
+    let log_y = [8]f32{ 1.0, 3.0, 5.0, 10.0, 25.0, 40.0, 80.0, 100.0 }
+    var log_plot = chart.spec(.Scatter, bounds, log_x[..], log_y[..])
+    log_plot.x_scale = chart.Scale { kind: .Log10, reverse: false, linthresh: 1.0 }
+    log_plot.y_scale = chart.Scale { kind: .Log10, reverse: false, linthresh: 1.0 }
+    let (log_marks, log_error) = chart.layout(&log_plot, points[..], segments[..], bars[..])
+    if log_error != ok { ret log_error }
+    try render_chart_scaled(a, queue, output_target, canvas, &renderer, &log_marks, log_plot.x_scale, log_plot.y_scale, "docs/chart-previews/log_scatter.png")
+    let symmetric_y = [8]f32{ -100.0, -30.0, -10.0, -1.0, 1.0, 10.0, 30.0, 100.0 }
+    var symmetric_plot = chart.spec(.Line, bounds, x[..], symmetric_y[..])
+    symmetric_plot.y_scale = chart.Scale { kind: .Symlog, reverse: false, linthresh: 5.0 }
+    let (symmetric_marks, symmetric_error) = chart.layout(&symmetric_plot, points[..], segments[..], bars[..])
+    if symmetric_error != ok { ret symmetric_error }
+    try render_chart_scaled(a, queue, output_target, canvas, &renderer, &symmetric_marks, symmetric_plot.x_scale, symmetric_plot.y_scale, "docs/chart-previews/symlog_line.png")
     let lower = [8]f32{ 0.0, 2.0, 1.5, 4.0, 2.0, 3.0, 0.5, 5.0 }
     let upper = [8]f32{ 2.0, 6.0, 5.0, 7.0, 6.0, 7.0, 4.0, 8.0 }
     var interval_points: [8]chart.Coord = zero

@@ -33064,3 +33064,15 @@ contain their center, and emits independent stems, caps and points. The scene
 adapter reuses its polygon and disconnected-segment branches. A separate
 `gfx_chart_cartesian` fixture keeps the self-host compiler arena bounded and
 checks geometry, refusal paths and scene command counts.
+
+## D1798 — Transform Cartesian domains without copying data columns
+
+`chart.Spec` carries independent x/y scales. Linear, log10 and symmetric-log
+mapping use the same borrowed input columns and caller-owned mark outputs;
+log10 refuses non-positive domains and symmetric-log exposes its linear
+threshold. Reverse changes the normalized fraction, not input order. The
+`ticks` result retains both data values and normalized fractions for adapters;
+the scene pass draws grid, axis and tick strokes from those fractions, leaving
+text shaping and label margins for a later guide stage. `gfx_chart_scale`
+checks transformed and reversed geometry, invalid domains, tick values and
+scene command counts.

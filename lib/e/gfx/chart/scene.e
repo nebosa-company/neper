@@ -128,3 +128,30 @@ fn append_matrix(builder: *scene.Builder, marks: *const chart.MatrixLayout, low:
     }
     ret ok
 }
+
+// Tick values remain metadata for a text adapter; this scene pass draws the
+// grid, axis rules and small ticks at their normalized positions.
+fn append_guides(builder: *scene.Builder, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Brush, axis: paint.Brush) -> err {
+    if !chart.valid_bounds(bounds) { ret chart.Invalid }
+    var i = 0usize
+    while i < x_ticks.len {
+        let t = x_ticks[i].fraction
+        if !(t >= 0.0 && t <= 1.0) { ret chart.Invalid }
+        let x = bounds.x + bounds.width * t
+        try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, bounds.y, 1.0, bounds.height), brush: grid } })
+        try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, bounds.y + bounds.height, 1.0, 5.0), brush: axis } })
+        i += 1usize
+    }
+    i = 0usize
+    while i < y_ticks.len {
+        let t = y_ticks[i].fraction
+        if !(t >= 0.0 && t <= 1.0) { ret chart.Invalid }
+        let y = bounds.y + bounds.height * (1.0 - t)
+        try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(bounds.x, y, bounds.width, 1.0), brush: grid } })
+        try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(bounds.x - 5.0, y, 5.0, 1.0), brush: axis } })
+        i += 1usize
+    }
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(bounds.x, bounds.y, 1.0, bounds.height), brush: axis } })
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(bounds.x, bounds.y + bounds.height, bounds.width, 1.0), brush: axis } })
+    ret ok
+}

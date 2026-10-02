@@ -2118,6 +2118,7 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.stat",
+    "e.math",
     "e.math.special",
     "e.gfx.geometry"
    ],

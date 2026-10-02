@@ -848,6 +848,7 @@
     "gfx_chart_cartesian",
     "gfx_chart_matrix",
     "gfx_chart_qq",
+    "gfx_chart_scale",
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
@@ -945,28 +946,30 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 22,
-   "delivered": 22,
+   "catalogue": 26,
+   "delivered": 26,
    "pending": [],
    "fixtures": [
     "gfx_chart",
     "gfx_chart_cartesian",
     "gfx_chart_matrix",
-    "gfx_chart_qq"
+    "gfx_chart_qq",
+    "gfx_chart_scale"
    ]
   },
   {
    "module": "e.gfx.chart.scene",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 2,
-   "delivered": 2,
+   "catalogue": 3,
+   "delivered": 3,
    "pending": [],
    "fixtures": [
     "gfx_chart",
     "gfx_chart_cartesian",
     "gfx_chart_matrix",
-    "gfx_chart_qq"
+    "gfx_chart_qq",
+    "gfx_chart_scale"
    ]
   },
   {
@@ -1045,6 +1048,7 @@
     "gfx_chart_cartesian",
     "gfx_chart_matrix",
     "gfx_chart_qq",
+    "gfx_chart_scale",
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
@@ -1127,6 +1131,7 @@
     "gfx_chart_cartesian",
     "gfx_chart_matrix",
     "gfx_chart_qq",
+    "gfx_chart_scale",
     "gfx_scene",
     "gfx_scene_plan",
     "ui_a11y_controls",

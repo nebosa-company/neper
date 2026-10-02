@@ -3072,6 +3072,11 @@ $gfxChartCartesianWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartCartesianWritten -ne 'executable written') { throw 'gfx_chart_cartesian emission failed' }
 $gfxChartCartesianOutput = & $gfxChartCartesianPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCartesianOutput -ne 'gfx chart cartesian ok') { throw "the e.gfx.chart Cartesian marks answered wrongly: exit $LASTEXITCODE" }
+$gfxChartScalePath = Join-Path $testBuild 'gfx-chart-scale-selfhost.exe'
+$gfxChartScaleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_scale\src\main.e') $repo 'x64' 'windows' $gfxChartScalePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartScaleWritten -ne 'executable written') { throw 'gfx_chart_scale emission failed' }
+$gfxChartScaleOutput = & $gfxChartScalePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartScaleOutput -ne 'gfx chart scale ok') { throw "the e.gfx.chart scales answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

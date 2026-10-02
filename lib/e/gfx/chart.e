@@ -6,13 +6,17 @@
 
 use e.algo.stat
 use e.gfx.geometry
+use e.math
 use e.math.special
 
 type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar }
+type ScaleKind = enum u8 { Linear, Log10, Symlog }
+type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
+type Tick = struct { value: f32, fraction: f32 }
 type Coord = struct { x: f32, y: f32 }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
-type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32 }
+type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
 error Invalid
@@ -20,7 +24,8 @@ error Empty
 error TooLarge
 
 fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Spec {
-    ret Spec { kind: kind, bounds: bounds, x: x, y: y, baseline: 0.0, bar_width: 0.0 }
+    let linear = Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    ret Spec { kind: kind, bounds: bounds, x: x, y: y, baseline: 0.0, bar_width: 0.0, x_scale: linear, y_scale: linear }
 }
 
 fn finite(v: f32) -> bool {
@@ -54,6 +59,68 @@ fn mapped(value: f32, lo: f32, hi: f32, start: f32, size: f32) -> f32 {
     ret start + (value - lo) / (hi - lo) * size
 }
 
+fn valid_scale(scale: Scale, lo: f32, hi: f32) -> bool {
+    if !finite(lo) || !finite(hi) || !(hi > lo) { ret false }
+    if scale.kind == .Log10 { ret lo > 0.0 }
+    if scale.kind == .Symlog { ret finite(scale.linthresh) && scale.linthresh > 0.0 }
+    ret true
+}
+
+fn transformed(value: f32, scale: Scale) -> f64 {
+    if scale.kind == .Log10 { ret math.log10[f64](f64(value)) }
+    if scale.kind == .Symlog {
+        let unit = f64(value) / f64(scale.linthresh)
+        if unit < 0.0f64 { ret 0.0f64 - math.log10[f64](1.0f64 - unit) }
+        ret math.log10[f64](1.0f64 + unit)
+    }
+    ret f64(value)
+}
+
+fn fraction(value: f32, lo: f32, hi: f32, scale: Scale) -> f32 {
+    let t = f32((transformed(value, scale) - transformed(lo, scale)) / (transformed(hi, scale) - transformed(lo, scale)))
+    if scale.reverse { ret 1.0 - t }
+    ret t
+}
+
+fn x_position(s: *const Spec, value: f32, lo: f32, hi: f32) -> f32 {
+    ret s.bounds.x + s.bounds.width * fraction(value, lo, hi, s.x_scale)
+}
+
+fn y_position(s: *const Spec, value: f32, lo: f32, hi: f32) -> f32 {
+    ret s.bounds.y + s.bounds.height * (1.0 - fraction(value, lo, hi, s.y_scale))
+}
+
+// Even breaks in transformed space, with data values and normalized positions
+// returned to the caller for grid, label and interaction adapters.
+fn ticks(scale: Scale, lo: f32, hi: f32, out: []Tick) -> ([]Tick, err) {
+    if out.len < 2usize { ret (zero, TooLarge) }
+    if !valid_scale(scale, lo, hi) { ret (zero, Invalid) }
+    let first = transformed(lo, scale)
+    let span = transformed(hi, scale) - first
+    var i = 0usize
+    while i < out.len {
+        let t = f64(i) / f64(out.len - 1usize)
+        let transformed_value = first + span * t
+        var value = transformed_value
+        if scale.kind == .Log10 {
+            value = math.pow[f64](10.0f64, transformed_value)
+        } else if scale.kind == .Symlog {
+            if transformed_value < 0.0f64 {
+                value = f64(scale.linthresh) * (1.0f64 - math.pow[f64](10.0f64, 0.0f64 - transformed_value))
+            } else {
+                value = f64(scale.linthresh) * (math.pow[f64](10.0f64, transformed_value) - 1.0f64)
+            }
+        }
+        var position = f32(t)
+        if scale.reverse { position = 1.0 - position }
+        out[i] = Tick { value: f32(value), fraction: position }
+        i += 1usize
+    }
+    out[0usize].value = lo
+    out[out.len - 1usize].value = hi
+    ret (out, ok)
+}
+
 // Produces marks in screen coordinates. Y is inverted because graphics bounds
 // use a top-left origin; the returned domain remains in data coordinates.
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err) {
@@ -74,7 +141,7 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
     }
     var xmin = x0
     var xmax = x1
-    if s.kind == .Bar && s.x.len > 1usize {
+    if s.kind == .Bar && s.x_scale.kind == .Linear && s.x.len > 1usize {
         let pad = f32((f64(x1) - f64(x0)) / f64(s.x.len - 1usize) / 2.0f64)
         let left = x0 - pad
         let right = x1 + pad
@@ -84,13 +151,31 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
         }
     }
     if xmin == xmax {
-        xmin -= 0.5
-        xmax += 0.5
+        if s.x_scale.kind == .Log10 {
+            if !(xmin > 0.0) { ret (zero, Invalid) }
+            xmin = x0 / 2.0
+            xmax = x0 * 2.0
+            if !(xmin > 0.0) { xmin = x0 }
+            if !finite(xmax) { xmax = x0 }
+        } else {
+            xmin -= 0.5
+            xmax += 0.5
+        }
     }
     if y0 == y1 {
-        y0 -= 0.5
-        y1 += 0.5
+        if s.y_scale.kind == .Log10 {
+            if !(y0 > 0.0) { ret (zero, Invalid) }
+            let constant = y0
+            y0 = constant / 2.0
+            y1 = constant * 2.0
+            if !(y0 > 0.0) { y0 = constant }
+            if !finite(y1) { y1 = constant }
+        } else {
+            y0 -= 0.5
+            y1 += 0.5
+        }
     }
+    if !valid_scale(s.x_scale, xmin, xmax) || !valid_scale(s.y_scale, y0, y1) { ret (zero, Invalid) }
 
     var coord_count = 0usize
     var segment_count = 0usize
@@ -99,8 +184,8 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
         if coords.len < s.x.len { ret (zero, TooLarge) }
         while coord_count < s.x.len {
             coords[coord_count] = Coord {
-                x: mapped(s.x[coord_count], xmin, xmax, s.bounds.x, s.bounds.width),
-                y: s.bounds.y + s.bounds.height - mapped(s.y[coord_count], y0, y1, 0.0, s.bounds.height),
+                x: x_position(s, s.x[coord_count], xmin, xmax),
+                y: y_position(s, s.y[coord_count], y0, y1),
             }
             coord_count += 1usize
         }
@@ -109,13 +194,13 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
         if s.x.len > 1usize {
             while segment_count + 1usize < s.x.len {
                 let from = Coord {
-                    x: mapped(s.x[segment_count], xmin, xmax, s.bounds.x, s.bounds.width),
-                    y: s.bounds.y + s.bounds.height - mapped(s.y[segment_count], y0, y1, 0.0, s.bounds.height),
+                    x: x_position(s, s.x[segment_count], xmin, xmax),
+                    y: y_position(s, s.y[segment_count], y0, y1),
                 }
                 let next = segment_count + 1usize
                 let to = Coord {
-                    x: mapped(s.x[next], xmin, xmax, s.bounds.x, s.bounds.width),
-                    y: s.bounds.y + s.bounds.height - mapped(s.y[next], y0, y1, 0.0, s.bounds.height),
+                    x: x_position(s, s.x[next], xmin, xmax),
+                    y: y_position(s, s.y[next], y0, y1),
                 }
                 segments[segment_count] = Segment { from: from, to: to }
                 segment_count += 1usize
@@ -124,21 +209,21 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
     } else if s.kind == .Area {
         if s.x.len < 2usize { ret (zero, Empty) }
         if coords.len / 2usize < s.x.len { ret (zero, TooLarge) }
-        let baseline_y = s.bounds.y + s.bounds.height - mapped(s.baseline, y0, y1, 0.0, s.bounds.height)
+        let baseline_y = y_position(s, s.baseline, y0, y1)
         var i = 0usize
         while i < s.x.len {
             if i > 0usize && s.x[i] < s.x[i - 1usize] { ret (zero, Invalid) }
-            let x = mapped(s.x[i], xmin, xmax, s.bounds.x, s.bounds.width)
-            coords[i] = Coord { x: x, y: s.bounds.y + s.bounds.height - mapped(s.y[i], y0, y1, 0.0, s.bounds.height) }
+            let x = x_position(s, s.x[i], xmin, xmax)
+            coords[i] = Coord { x: x, y: y_position(s, s.y[i], y0, y1) }
             coords[2usize * s.x.len - 1usize - i] = Coord { x: x, y: baseline_y }
             i += 1usize
         }
         coord_count = 2usize * s.x.len
     } else if s.kind == .Lollipop {
         if coords.len < s.x.len || segments.len < s.x.len { ret (zero, TooLarge) }
-        let baseline_y = s.bounds.y + s.bounds.height - mapped(s.baseline, y0, y1, 0.0, s.bounds.height)
+        let baseline_y = y_position(s, s.baseline, y0, y1)
         while coord_count < s.x.len {
-            let p = Coord { x: mapped(s.x[coord_count], xmin, xmax, s.bounds.x, s.bounds.width), y: s.bounds.y + s.bounds.height - mapped(s.y[coord_count], y0, y1, 0.0, s.bounds.height) }
+            let p = Coord { x: x_position(s, s.x[coord_count], xmin, xmax), y: y_position(s, s.y[coord_count], y0, y1) }
             coords[coord_count] = p
             segments[coord_count] = Segment { from: Coord { x: p.x, y: baseline_y }, to: p }
             coord_count += 1usize
@@ -150,16 +235,16 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
         while i + 1usize < s.x.len {
             if s.x[i + 1usize] < s.x[i] { ret (zero, Invalid) }
             let left = Coord {
-                x: mapped(s.x[i], xmin, xmax, s.bounds.x, s.bounds.width),
-                y: s.bounds.y + s.bounds.height - mapped(s.y[i], y0, y1, 0.0, s.bounds.height),
+                x: x_position(s, s.x[i], xmin, xmax),
+                y: y_position(s, s.y[i], y0, y1),
             }
             let right = Coord {
-                x: mapped(s.x[i + 1usize], xmin, xmax, s.bounds.x, s.bounds.width),
+                x: x_position(s, s.x[i + 1usize], xmin, xmax),
                 y: left.y,
             }
             let next = Coord {
                 x: right.x,
-                y: s.bounds.y + s.bounds.height - mapped(s.y[i + 1usize], y0, y1, 0.0, s.bounds.height),
+                y: y_position(s, s.y[i + 1usize], y0, y1),
             }
             segments[segment_count] = Segment { from: left, to: right }
             segments[segment_count + 1usize] = Segment { from: right, to: next }
@@ -172,13 +257,18 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
         if width <= 0.0 { width = s.bounds.width / f32(i64(s.x.len)) * 0.8 }
         if !finite(width) || width <= 0.0 { ret (zero, Invalid) }
         while bar_count < s.x.len {
-            let cx = mapped(s.x[bar_count], xmin, xmax, s.bounds.x, s.bounds.width)
+            let cx = x_position(s, s.x[bar_count], xmin, xmax)
             var top_value = s.baseline
             if s.y[bar_count] > top_value { top_value = s.y[bar_count] }
             var bottom_value = s.baseline
             if s.y[bar_count] < bottom_value { bottom_value = s.y[bar_count] }
-            let top = s.bounds.y + s.bounds.height - mapped(top_value, y0, y1, 0.0, s.bounds.height)
-            let bottom = s.bounds.y + s.bounds.height - mapped(bottom_value, y0, y1, 0.0, s.bounds.height)
+            var top = y_position(s, top_value, y0, y1)
+            var bottom = y_position(s, bottom_value, y0, y1)
+            if top > bottom {
+                let old = top
+                top = bottom
+                bottom = old
+            }
             bars[bar_count] = geometry.rect(cx - width / 2.0, top, width, bottom - top)
             bar_count += 1usize
         }
