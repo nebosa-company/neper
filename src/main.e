@@ -9550,6 +9550,14 @@ fn check_file_bodies(report: *Sink, checker: *check.Checker, resolver: *resolve.
         try finish_report(report)
         os.exit(1i32)
     }
+    let (reachable, reachable_error) = mem.alloc[bool](checker.arena, checker.function_count)
+    if reachable_error != ok { ret reachable_error }
+    let profile_error = check.device_reachable_functions(checker, loaded, reachable)
+    if profile_error != ok {
+        try print_check_diagnostic(report, loaded, checker, profile_error)
+        try finish_report(report)
+        os.exit(1i32)
+    }
     ret ok
 }
 

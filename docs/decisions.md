@@ -32827,3 +32827,19 @@ also runs both modes; consecutive self-hosted stages match byte-for-byte on
 both hosts. The clean Linux suite stopped during its C-bootstrap
 build and WSL restarted; a separate 512 MB Linux bootstrap attempt did the
 same. Neither is a full-suite pass.
+
+## D1781 — Check implicit iterator device reachability in `check-file`
+
+**Decision.** Run the existing device-reachability pass after successful
+`check-file` body checks, inside `check_file_bodies`. This makes a protocol
+`next` reached only by a GPU `for` subject obey the same device profile in
+`check-file` as in executable emission. Keep its locals out of `dispatch`,
+which is at the C bootstrap's 265-local limit.
+
+**Evidence.** Before the change, `check-file` accepted a kernel whose implicit
+`next` reads a module-scope `var`, while executable emission rejected it.
+`check/gpu_profile_implicit_next` now gets the same E-GPU diagnostic on
+Windows and Linux; the valid profile and barrier-chain checks pass. Windows C
+bootstrap builds the compiler with a 640 MB arena, the barrier-chain executable
+runs on both hosts, and consecutive self-hosted stages are byte-identical.
+The full suites remain unverified on the current host.

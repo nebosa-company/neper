@@ -2914,9 +2914,9 @@ case "$gpu_direct" in
     *) printf '%s\n' "a direct kernel call was not refused: $gpu_direct" >&2; exit 1 ;;
 esac
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
-# a private slice, a module-scope var behind a helper and a `usize` parameter are
-# refused at the kernel with the chain; slices of device and shared memory are not.
-for gpu_profile_case in 'recursion|main.e:14:1: error[E-GPU-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth' 'private|main.e:9:1: error[E-GPU-9999]: `fill` reaches a slice of the private variable `local` through fill' 'global|main.e:11:1: error[E-GPU-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump' 'param|main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type' 'indirect|main.e:10:1: error[E-GPU-9999]: `fill` reaches a call through the function pointer field `run` through fill -> through_field'; do
+# a private slice, a module-scope var behind a helper or implicit `next`, and a
+# `usize` parameter are refused; slices of device and shared memory are not.
+for gpu_profile_case in 'recursion|main.e:14:1: error[E-GPU-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth' 'private|main.e:9:1: error[E-GPU-9999]: `fill` reaches a slice of the private variable `local` through fill' 'global|main.e:11:1: error[E-GPU-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump' 'param|main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type' 'indirect|main.e:10:1: error[E-GPU-9999]: `fill` reaches a call through the function pointer field `run` through fill -> through_field' 'implicit_next|main.e:14:1: error[E-GPU-9999]: `sum` implicit iterator `next` reaches the module-scope `var` `counter`'; do
     gpu_profile_name=${gpu_profile_case%%|*}
     gpu_profile_expected=${gpu_profile_case#*|}
     gpu_profile=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_profile_$gpu_profile_name/src/main.e" "$repo" x64 linux 2>&1 || true)
