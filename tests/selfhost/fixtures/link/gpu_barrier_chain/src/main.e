@@ -155,6 +155,14 @@ fn middle(out: []u32, lane: u32) {
             out[usize(lane)] = view.data[usize(lane)] + assigned_lane - lane
             (view.data[usize(lane)], view.data[usize(passthrough(lane))]) = pair(lane)
             out[usize(lane)] = view.data[usize(lane)] + 44u32
+            var condition_round = 0u32
+            while passthrough(condition_round < 2u32) {
+                out[usize(lane)] = lane + 44u32
+                condition_round += 1u32
+            }
+            for condition_step in passthrough(lane)..passthrough(lane + 1u32) {
+                out[usize(lane)] = condition_step + 44u32
+            }
         }
     }
 }

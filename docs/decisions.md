@@ -32753,3 +32753,14 @@ made the previous compiler fail NIR verification. The extended
 Linux. `link/try_positions` passes on both hosts, and consecutive self-hosted
 compiler stages are byte-identical on both hosts. The full Linux suite's C
 bootstrap still terminates its WSL host during compiler build.
+
+## D1776 — Exercise barrier-bearing loop conditions and both bounds
+
+**Decision.** Keep a uniform barrier-bearing helper call in a `while`
+condition and in both bounds of a runtime `for` range in the existing
+barrier-chain fixture. The cases reuse the current frame and occurrence
+machinery; no new lowering path is needed.
+
+**Evidence.** The extended fixture passes in debug and release on Windows
+and Linux, returning the expected value after two `while` iterations and
+the one-step `for` range.
