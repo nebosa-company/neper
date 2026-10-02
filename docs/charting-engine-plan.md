@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet, Pareto, pie, donut,
+Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet, Pareto, pie, donut, waffle, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-thirty-eight PNG plus thirty-eight SVG previews from Neper. L061 remains partial
+forty PNG plus forty SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -123,6 +123,15 @@ Each slice is an Area layer shared by scene and SVG; callers supply colours and
 labels. Zero totals, invalid bounds/ratios and short storage are refused. A fixed
 96-segment full-circle budget is the current tessellation ceiling; adaptive
 segment selection belongs with zoom-aware rendering.
+`waffle` partitions a fixed rectangular grid among nonnegative category weights,
+rounding cumulative boundaries while preserving the exact cell count. Each
+category receives a caller-owned Bar layer; callers choose grid dimensions,
+cell gap, colours and labels. The ordered rounding can differ from ideal share
+by one cell per category; largest-remainder assignment remains an upgrade path.
+`funnel` maps nonincreasing stage counts to centered trapezoid Area layers with
+an explicit inter-stage gap. This is the business conversion funnel, not the
+statistical funnel plot. Both charts refuse invalid totals/stages and short
+caller storage and reuse the scene/SVG adapters.
 Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
@@ -165,7 +174,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, Q-Q, violin, heatmap, correlation matrix, basic waterfall, bullet, Pareto, pie and donut are delivered; every other entry
+box, density, Q-Q, violin, heatmap, correlation matrix, basic waterfall, bullet, Pareto, pie, donut, waffle and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -225,9 +234,11 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    PointLine layer and an explicit percentage axis in the gallery.
    Pie and donut reuse Area polygons, explicit colour/legend metadata and the
    common scene/SVG adapters; `gfx_chart_polar` checks both on Windows and Linux.
+   Waffle and stage funnel reuse Bar and Area layers respectively;
+   `gfx_chart_funnel_grid` checks geometry, refusals and adapters on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with thirty-eight vector previews, automatic numeric tick text and
+   adapter with forty vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

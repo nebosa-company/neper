@@ -298,7 +298,7 @@ fn render_pareto(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
-fn render_pie(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, title: str, path: str) -> err {
+fn render_share(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, title: str, path: str) -> err {
     if layers.len != 5usize || names.len != layers.len { ret chart.Invalid }
     let colors = [5]paint.Color{
         paint.rgba(0.07, 0.35, 0.76, 1.0), paint.rgba(0.94, 0.42, 0.12, 1.0),
@@ -314,7 +314,7 @@ fn render_pie(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: 
     if font_error != ok { ret font_error }
     let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
     try scene.register_font(renderer, font)
-    let (made, builder_error) = scene.builder(a, 32usize)
+    let (made, builder_error) = scene.builder(a, 160usize)
     if builder_error != ok { ret builder_error }
     var builder = made
     try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
@@ -567,10 +567,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let pie_bounds = geometry.rect(28.0, 33.0, 190.0, 190.0)
     let (pie_layers, pie_error) = chart.pie(pie_values[..], pie_bounds, 0.0, pie_points[..], pie_storage[..])
     if pie_error != ok { ret pie_error }
-    try render_pie(a, queue, output_target, canvas, &renderer, pie_layers, pie_names[..], "Category share", "docs/chart-previews/pie.png")
+    try render_share(a, queue, output_target, canvas, &renderer, pie_layers, pie_names[..], "Category share", "docs/chart-previews/pie.png")
     let (donut_layers, donut_error) = chart.pie(pie_values[..], pie_bounds, 0.54, pie_points[..], pie_storage[..])
     if donut_error != ok { ret donut_error }
-    try render_pie(a, queue, output_target, canvas, &renderer, donut_layers, pie_names[..], "Category share", "docs/chart-previews/donut.png")
+    try render_share(a, queue, output_target, canvas, &renderer, donut_layers, pie_names[..], "Category share", "docs/chart-previews/donut.png")
+    var waffle_bars: [100]geometry.Rect = zero
+    let (waffle_layers, waffle_error) = chart.waffle(pie_values[..], pie_bounds, 10usize, 10usize, 2.0, waffle_bars[..], pie_storage[..])
+    if waffle_error != ok { ret waffle_error }
+    try render_share(a, queue, output_target, canvas, &renderer, waffle_layers, pie_names[..], "100-cell composition", "docs/chart-previews/waffle.png")
+    let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
+    let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
+    var funnel_points: [20]chart.Coord = zero
+    let (funnel_layers, funnel_error) = chart.funnel(funnel_values[..], pie_bounds, 4.0, funnel_points[..], pie_storage[..])
+    if funnel_error != ok { ret funnel_error }
+    try render_share(a, queue, output_target, canvas, &renderer, funnel_layers, funnel_names[..], "Conversion funnel", "docs/chart-previews/funnel.png")
     let waterfall_values = [6]f32{ 12.0, 5.0, -3.0, 4.0, -6.0, 2.0 }
     var waterfall_bars: [7]geometry.Rect = zero
     var waterfall_links: [6]chart.Segment = zero

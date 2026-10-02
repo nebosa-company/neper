@@ -808,6 +808,83 @@ fn pie(values: []const f32, bounds: geometry.Rect, hole: f32, points: []Coord, l
     ret (layers[..values.len], ok)
 }
 
+// Ordered categories occupy a fixed grid, rounded at cumulative boundaries.
+fn waffle(values: []const f32, bounds: geometry.Rect, columns: usize, rows: usize, gap: f32, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if values.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || columns == 0usize || rows == 0usize || !finite(gap) || gap < 0.0 { ret (zero, Invalid) }
+    if columns > bars.len / rows || layers.len < values.len { ret (zero, TooLarge) }
+    let count = columns * rows
+    let width = bounds.width / f32(columns)
+    let height = bounds.height / f32(rows)
+    if !finite(width) || !finite(height) || gap >= width || gap >= height { ret (zero, Invalid) }
+    var total = 0.0f64
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) || values[i] < 0.0 { ret (zero, Invalid) }
+        total += f64(values[i])
+        i += 1usize
+    }
+    if total <= 0.0f64 { ret (zero, Invalid) }
+    var cumulative = 0.0f64
+    var used = 0usize
+    i = 0usize
+    while i < values.len {
+        cumulative += f64(values[i])
+        var end_cell = count
+        if i + 1usize < values.len {
+            // ponytail: ordered cumulative rounding can bias a category by one cell;
+            // use caller-scratch largest remainders if per-category fairness matters.
+            end_cell = usize(cumulative / total * f64(count) + 0.5f64)
+            if end_cell > count { end_cell = count }
+        }
+        let first = used
+        while used < end_cell {
+            let column = used % columns
+            let row = used / columns
+            bars[used] = geometry.rect(bounds.x + width * f32(column) + gap * 0.5,
+                bounds.y + bounds.height - height * f32(row + 1usize) + gap * 0.5,
+                width - gap, height - gap)
+            used += 1usize
+        }
+        layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[first..used], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    ret (layers[..values.len], ok)
+}
+
+// A stage funnel tapers each segment to the next nonincreasing value.
+fn funnel(values: []const f32, bounds: geometry.Rect, gap: f32, points: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if values.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(gap) || gap < 0.0 { ret (zero, Invalid) }
+    if values.len > points.len / 4usize || layers.len < values.len { ret (zero, TooLarge) }
+    if !finite(values[0usize]) || values[0usize] <= 0.0 { ret (zero, Invalid) }
+    let slot = bounds.height / f32(values.len)
+    if !finite(slot) || gap >= slot { ret (zero, Invalid) }
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) || values[i] < 0.0 || (i > 0usize && values[i] > values[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < values.len {
+        var lower = values[i]
+        if i + 1usize < values.len { lower = values[i + 1usize] }
+        let top_width = bounds.width * (values[i] / values[0usize])
+        let bottom_width = bounds.width * (lower / values[0usize])
+        let center = bounds.x + bounds.width * 0.5
+        let top = bounds.y + slot * f32(i)
+        let bottom = top + slot - gap
+        let first = 4usize * i
+        points[first] = Coord { x: center - top_width * 0.5, y: top }
+        points[first + 1usize] = Coord { x: center + top_width * 0.5, y: top }
+        points[first + 2usize] = Coord { x: center + bottom_width * 0.5, y: bottom }
+        points[first + 3usize] = Coord { x: center - bottom_width * 0.5, y: bottom }
+        layers[i] = Layout { kind: .Area, coords: points[first..first + 4usize], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    ret (layers[..values.len], ok)
+}
+
 fn grouped_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
     if categories == 0usize || series == 0usize { ret (zero, Invalid) }
     if !bar_grid_ok(values, categories, series, bounds) { ret (zero, Invalid) }

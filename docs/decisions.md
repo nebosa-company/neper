@@ -33259,3 +33259,15 @@ The fixed 96-segment full-circle tessellation is a deliberate ceiling;
 adaptive segments can follow when zoom-aware rendering needs them.
 `gfx_chart_polar` checks geometry, refusals and both backends on Windows and
 Linux; the gallery adds two paired previews with category legends.
+
+## D1823 — Reuse rectangular and polygon marks for grid and stage compositions
+
+`chart.waffle` borrows nonnegative category weights and allocates a caller-sized
+grid by rounded cumulative boundaries, returning one Bar layer per category.
+The exact grid count is preserved, though ordered rounding can shift a category
+by one cell; use caller-scratch largest remainders if that precision matters.
+`chart.funnel` requires nonincreasing stage counts and returns centered Area
+trapezoids, tapering each stage to the next. It represents conversion stages,
+not a statistical funnel plot. Both keep geometry caller-owned and reuse scene
+and SVG adapters. `gfx_chart_funnel_grid` checks geometry and refusals on
+Windows and Linux; the gallery adds two paired previews.
