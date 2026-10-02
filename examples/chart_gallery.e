@@ -224,6 +224,80 @@ fn render_bullet(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_pareto(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, path: str) -> err {
+    if layers.len != 2usize || categories.len != layers[0].bars.len { ret chart.Invalid }
+    let plot = geometry.rect(48.0, 36.0, 246.0, 158.0)
+    let bar_color = paint.rgba(0.07, 0.35, 0.76, 1.0)
+    let line_color = paint.rgba(0.94, 0.42, 0.12, 1.0)
+    let grid_color = paint.rgba(0.88, 0.91, 0.95, 1.0)
+    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var x_storage: [5]chart.Tick = zero
+    var y_storage: [5]chart.Tick = zero
+    var percent_storage: [5]chart.Tick = zero
+    let (x_ticks, x_error) = chart.category_ticks(categories.len, x_storage[..])
+    if x_error != ok { ret x_error }
+    let (y_ticks, y_error) = chart.ticks(linear, 0.0, layers[0].y_max, y_storage[..])
+    if y_error != ok { ret y_error }
+    let (percent_ticks, percent_error) = chart.ticks(linear, 0.0, 1.0, percent_storage[..])
+    if percent_error != ok { ret percent_error }
+    var y_words: [5]str = zero
+    var text_storage: [128]u8 = zero
+    let (count_words, count_error) = chart.format_ticks(y_ticks, y_words[..], text_storage[..])
+    if count_error != ok { ret count_error }
+    var labels: [16]chart.Label = zero
+    let (base_labels, label_error) = chart.guide_labels(plot, x_ticks, categories, y_ticks, count_words, 9.0, labels[..10usize])
+    if label_error != ok { ret label_error }
+    let percent_words = [5]str{ "0%", "25%", "50%", "75%", "100%" }
+    var i = 0usize
+    while i < percent_ticks.len {
+        labels[base_labels.len + i] = chart.Label { text: percent_words[i], anchor: chart.Coord { x: plot.x + plot.width + 9.0, y: plot.y + plot.height * (1.0 - percent_ticks[i].fraction) + 3.0 }, align: .Left }
+        i += 1usize
+    }
+    labels[15usize] = chart.Label { text: "Pareto frequency and cumulative share", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, plot, x_ticks, y_ticks, paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
+    try fill(&builder, geometry.rect(plot.x + plot.width, plot.y, 1.0, plot.height), paint.Brush { Solid: axis_color })
+    i = 0usize
+    while i < percent_ticks.len {
+        let y = plot.y + plot.height * (1.0 - percent_ticks[i].fraction)
+        try fill(&builder, geometry.rect(plot.x + plot.width, y, 5.0, 1.0), paint.Brush { Solid: axis_color })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &layers[0], paint.Brush { Solid: bar_color })
+    try chart_scene.append(a, &builder, &layers[1], paint.Brush { Solid: line_color })
+    try chart_scene.append_labels(a, &builder, labels[..15usize], font, 9.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, labels[15usize..], font, 11.0, paint.Brush { Solid: axis_color })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_guides(&writer, plot, x_ticks, y_ticks, grid_color, axis_color)
+    try chart_svg.rect(&writer, geometry.rect(plot.x + plot.width, plot.y, 1.0, plot.height), axis_color, false)
+    i = 0usize
+    while i < percent_ticks.len {
+        let y = plot.y + plot.height * (1.0 - percent_ticks[i].fraction)
+        try chart_svg.rect(&writer, geometry.rect(plot.x + plot.width, y, 5.0, 1.0), axis_color, false)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &layers[0], bar_color)
+    try chart_svg.append(&writer, &layers[1], line_color)
+    try chart_svg.append_labels(&writer, labels[..15usize], axis_color, 9.0)
+    try chart_svg.append_labels(&writer, labels[15usize..], axis_color, 11.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
     let (made, builder_error) = scene.builder(a, marks.cells.len + 1usize)
     if builder_error != ok { ret builder_error }
@@ -420,6 +494,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (bullet_layers, bullet_error) = chart.bullet(62.0, 80.0, bullet_ranges[..], geometry.rect(44.0, 86.0, 286.0, 66.0), bullet_bars[..], bullet_target[..], bullet_storage[..])
     if bullet_error != ok { ret bullet_error }
     try render_bullet(a, queue, output_target, canvas, &renderer, bullet_layers, "docs/chart-previews/bullet.png")
+    let pareto_values = [5]f32{ 3.0, 8.0, 5.0, 2.0, 6.0 }
+    let pareto_names = [5]str{ "North", "South", "East", "West", "Central" }
+    var pareto_order: [5]usize = zero
+    var pareto_bars: [5]geometry.Rect = zero
+    var pareto_points: [5]chart.Coord = zero
+    var pareto_lines: [4]chart.Segment = zero
+    var pareto_storage: [2]chart.Layout = zero
+    let pareto_bounds = geometry.rect(48.0, 36.0, 246.0, 158.0)
+    let (pareto_layers, pareto_error) = chart.pareto(pareto_values[..], pareto_bounds, pareto_order[..], pareto_bars[..], pareto_points[..], pareto_lines[..], pareto_storage[..])
+    if pareto_error != ok { ret pareto_error }
+    var ordered_names: [5]str = zero
+    i = 0usize
+    while i < pareto_order.len {
+        ordered_names[i] = pareto_names[pareto_order[i]]
+        i += 1usize
+    }
+    try render_pareto(a, queue, output_target, canvas, &renderer, pareto_layers, ordered_names[..], "docs/chart-previews/pareto.png")
     let waterfall_values = [6]f32{ 12.0, 5.0, -3.0, 4.0, -6.0, 2.0 }
     var waterfall_bars: [7]geometry.Rect = zero
     var waterfall_links: [6]chart.Segment = zero

@@ -33236,3 +33236,14 @@ paint code. Thresholds must be strictly ascending and both values within the
 last threshold. `gfx_chart_composition` checks geometry, capacity, invalid
 domains and adapter commands on Windows and Linux, and the gallery adds a
 PNG/SVG pair. Multi-row labels and palette defaults remain guide work.
+
+## D1820 — Keep Pareto counts and cumulative share as separate layers
+
+`chart.pareto` borrows nonnegative category counts, stably sorts caller-owned
+indices, and emits descending Bar rectangles plus a PointLine at cumulative
+fractions. The two layers share category centers but retain independent count
+and 0–1 percentage domains; the gallery draws both labeled axes. Zero totals,
+negative/non-finite input and short storage are refused. A quadratic insertion
+sort is the present ceiling; replace it with caller-scratch mergesort for large
+category sets. `gfx_chart_composition` checks geometry and scene/SVG adapters
+on Windows and Linux, and the gallery adds a paired preview.

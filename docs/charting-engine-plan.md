@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet,
+Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet, Pareto,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-thirty-five PNG plus thirty-five SVG previews from Neper. L061 remains partial
+thirty-six PNG plus thirty-six SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -112,6 +112,11 @@ legend placement, wrapping and collision handling remain planned.
 and a target rule as separate caller-owned layers sharing one zero-to-maximum
 scale. Existing Bar and Rug adapters paint them; category labels and automatic
 palette selection remain caller/guide work.
+`pareto` stably orders nonnegative category counts, exposes that order for labels,
+and returns frequency Bar and cumulative-fraction PointLine layers with independent
+left count and right percentage domains. It refuses zero totals; the gallery
+labels both axes. The insertion sort is quadratic until category counts warrant
+a caller-scratch mergesort.
 Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
@@ -154,7 +159,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, Q-Q, violin, heatmap, correlation matrix, basic waterfall and bullet are delivered; every other entry
+box, density, Q-Q, violin, heatmap, correlation matrix, basic waterfall, bullet and Pareto are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -162,7 +167,7 @@ remains planned.
 | Family | Charts |
 |---|---|
 | Cartesian series | scatter, line, points+line, step/stairs, lollipop, dot/dumbbell, rug, stem-and-leaf, area, range/interval, error bars, confidence bands |
-| Bars and composition | bar, column, grouped, dodged, stacked, 100% stacked, diverging, waterfall/bridge (basic), bullet (basic), Pareto, funnel, population pyramid |
+| Bars and composition | bar, column, grouped, dodged, stacked, 100% stacked, diverging, waterfall/bridge (basic), bullet (basic), Pareto (basic), funnel, population pyramid |
 | Distributions | histogram, frequency polygon, binned dot plot, density/KDE, ridgeline, box-and-whisker, violin, boxen, beeswarm, strip/jitter, ECDF, QQ, PP, probability plot |
 | Matrix and categorical | heatmap, tile, correlation matrix, mosaic, spine, fourfold, association, parallel coordinates, scatterplot matrix/pairs |
 | Composition and hierarchy | pie, donut, ring, waffle, treemap, sunburst/icicle, circle packing, Sankey, alluvial, chord, streamgraph |
@@ -210,9 +215,11 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    Bullet charts now compose qualitative bands, an actual bar and a target
    rule from existing layers; `gfx_chart_composition` checks geometry,
    refusals and both adapters on Windows and Linux.
+   Pareto composes stable descending frequency bars with a cumulative-share
+   PointLine layer and an explicit percentage axis in the gallery.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with thirty-five vector previews, automatic numeric tick text and
+   adapter with thirty-six vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

@@ -700,6 +700,55 @@ fn bullet(actual: f32, target_value: f32, ranges: []const f32, bounds: geometry.
     ret (layers[..ranges.len + 2usize], ok)
 }
 
+// Descending frequency bars and a cumulative fraction line share category
+// centres. `order` maps rendered positions back to the borrowed input.
+fn pareto(values: []const f32, bounds: geometry.Rect, order: []usize, bars: []geometry.Rect, points: []Coord, lines: []Segment, layers: []Layout) -> ([]Layout, err) {
+    if values.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    if order.len < values.len || bars.len < values.len || points.len < values.len || (values.len > 1usize && lines.len < values.len - 1usize) || layers.len < 2usize { ret (zero, TooLarge) }
+    var total = 0.0f64
+    var maximum = 0.0f32
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) || values[i] < 0.0 { ret (zero, Invalid) }
+        total += f64(values[i])
+        if values[i] > maximum { maximum = values[i] }
+        order[i] = i
+        i += 1usize
+    }
+    if total <= 0.0f64 { ret (zero, Invalid) }
+    // ponytail: insertion sort is quadratic; use caller-scratch mergesort for very wide category sets.
+    i = 1usize
+    while i < values.len {
+        let selected = order[i]
+        var j = i
+        while j > 0usize && values[order[j - 1usize]] < values[selected] {
+            order[j] = order[j - 1usize]
+            j -= 1usize
+        }
+        order[j] = selected
+        i += 1usize
+    }
+    let cell = bounds.width / f32(values.len)
+    let width = cell * 0.8
+    if !finite(width) || width <= 0.0 { ret (zero, Invalid) }
+    var cumulative = 0.0f64
+    i = 0usize
+    while i < values.len {
+        let value = values[order[i]]
+        cumulative += f64(value)
+        let x = bounds.x + cell * f32(i)
+        let height = bounds.height * (value / maximum)
+        bars[i] = geometry.rect(x + cell * 0.1, bounds.y + bounds.height - height, width, height)
+        points[i] = Coord { x: x + cell * 0.5, y: bounds.y + bounds.height * (1.0 - f32(cumulative / total)) }
+        if i > 0usize { lines[i - 1usize] = Segment { from: points[i - 1usize], to: points[i] } }
+        i += 1usize
+    }
+    layers[0usize] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[..values.len], x_min: 0.0, x_max: f32(values.len), y_min: 0.0, y_max: maximum }
+    layers[1usize] = Layout { kind: .PointLine, coords: points[..values.len], segments: lines[..values.len - 1usize], bars: zero, x_min: 0.0, x_max: f32(values.len), y_min: 0.0, y_max: 1.0 }
+    ret (layers[..2usize], ok)
+}
+
 fn grouped_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
     if categories == 0usize || series == 0usize { ret (zero, Invalid) }
     if !bar_grid_ok(values, categories, series, bounds) { ret (zero, Invalid) }

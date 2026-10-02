@@ -136,6 +136,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
         bullet_i += 1usize
     }
     if !str.contains(io.memory_bytes(&bullet_held), "<line") { ret chart.Invalid }
+    let pareto_values = [4]f32{ 3.0, 7.0, 7.0, 2.0 }
+    var pareto_order: [4]usize = zero
+    var pareto_bars: [4]geometry.Rect = zero
+    var pareto_points: [4]chart.Coord = zero
+    var pareto_lines: [3]chart.Segment = zero
+    var pareto_layers: [2]chart.Layout = zero
+    let (pareto, pareto_error) = chart.pareto(pareto_values[..], bounds, pareto_order[..], pareto_bars[..], pareto_points[..], pareto_lines[..], pareto_layers[..])
+    if pareto_error != ok || pareto.len != 2usize || pareto[0].kind != .Bar || pareto[1].kind != .PointLine || pareto[0].y_max != 7.0 || pareto[1].y_max != 1.0 || pareto_order[0] != 1usize || pareto_order[1] != 2usize || pareto_order[2] != 0usize || pareto_order[3] != 3usize || !near(pareto_bars[0].height, 100.0) || !near(pareto_points[3].y, 0.0) { ret chart.Invalid }
+    let (_, pareto_short) = chart.pareto(pareto_values[..], bounds, pareto_order[..3usize], pareto_bars[..], pareto_points[..], pareto_lines[..], pareto_layers[..])
+    if pareto_short != chart.TooLarge { ret chart.Invalid }
+    let zero_counts = [2]f32{ 0.0, 0.0 }
+    let (_, pareto_zero) = chart.pareto(zero_counts[..], bounds, pareto_order[..], pareto_bars[..], pareto_points[..], pareto_lines[..], pareto_layers[..])
+    if pareto_zero != chart.Invalid { ret chart.Invalid }
+    let negative_counts = [2]f32{ 1.0, -1.0 }
+    let (_, pareto_negative) = chart.pareto(negative_counts[..], bounds, pareto_order[..], pareto_bars[..], pareto_points[..], pareto_lines[..], pareto_layers[..])
+    if pareto_negative != chart.Invalid { ret chart.Invalid }
+    let (pareto_builder_made, pareto_builder_error) = scene.builder(a, 12usize)
+    if pareto_builder_error != ok { ret pareto_builder_error }
+    var pareto_builder = pareto_builder_made
+    try chart_scene.append(a, &pareto_builder, &pareto[0], paint.Brush { Solid: blue })
+    try chart_scene.append(a, &pareto_builder, &pareto[1], paint.Brush { Solid: orange })
+    if scene.builder_count(&pareto_builder) != 9usize { ret chart.Invalid }
+    let (pareto_state, pareto_unused, pareto_writer_error) = io.memory_writer(a, 0usize)
+    if pareto_writer_error != ok { ret pareto_writer_error }
+    var pareto_held = pareto_state
+    var pareto_writer = io.writer(mem.cast[*void](&pareto_held), io.memory_write)
+    try chart_svg.append(&pareto_writer, &pareto[0], blue)
+    try chart_svg.append(&pareto_writer, &pareto[1], orange)
+    if !str.contains(io.memory_bytes(&pareto_held), "<path") || !str.contains(io.memory_bytes(&pareto_held), "<rect") { ret chart.Invalid }
     let (_, short_ticks) = chart.category_ticks(4usize, category_ticks[..3usize])
     if short_ticks != chart.TooLarge { ret chart.Invalid }
     let (_, no_ticks) = chart.category_ticks(0usize, category_ticks[..])
