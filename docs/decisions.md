@@ -32857,3 +32857,17 @@ A separate Vulkan probe from
 the same temporary source path runs a plain kernel, but a protocol-iterator
 kernel returns `e.gpu.Unsupported` with or without a barrier in `next`; that
 is not evidence about CPU loop-fission and is not claimed as C091 support.
+
+## D1783 — Keep nested iterator barrier helpers in the CPU regression
+
+**Decision.** Have the protocol `next` method call a separate barrier helper
+after its own barrier. This exercises the device reachability walk and
+mandatory inlining through the implicit `next` call and another helper,
+without widening the language's current device-only calling rule.
+
+**Evidence.** The expanded `link/gpu_barrier_chain` passes in debug and
+release on Windows and Linux. A temporary probe where `next` calls the
+barrier helper but contains no direct GPU use is rejected by the checker as
+an ordinary helper calling a device-only helper; adding a `gpu.lid` read to
+`next` makes the same chain run. Inferring device-callability for such pure
+wrappers is separate from C091's CPU barrier fission.

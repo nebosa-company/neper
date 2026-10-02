@@ -10,8 +10,11 @@ type Packet = struct { value: u32, lane: u32 }
 type Iter = struct { next: u32 }
 type State = struct { iter: Iter }
 
+fn iter_sync() { gpu.barrier() }
+
 fn iter_next(it: *Iter) -> (u32, bool) {
     gpu.barrier()
+    iter_sync()
     let value = it.next
     it.next += 1u32
     ret (value, value < 2u32)
