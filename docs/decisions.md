@@ -32780,3 +32780,15 @@ lane; debug and release builds pass on Windows and Linux, and the isolated
 Windows self-host suite passes end-to-end with the patched compiler. A
 barrier inside the implicit `iter_next` method is a separate reachability
 gap: the device walk does not yet see that generated call.
+
+## D1778 — Audit aggregate fields and switch subjects across barrier cuts
+
+**Decision.** Extend the barrier-chain regression with an aggregate literal
+whose later field calls a barrier helper, then switch on another barrier-
+bearing helper result while retaining that aggregate. The existing frame
+slots and switch lowering need no change for these shapes.
+
+**Evidence.** The extended `link/gpu_barrier_chain` fixture returns the
+lane-specific result in debug and release on Windows and Linux. It checks
+both the earlier aggregate field and the later field after the cut, plus
+the aggregate again after the switch subject cuts.

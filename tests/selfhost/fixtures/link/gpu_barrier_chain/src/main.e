@@ -178,6 +178,13 @@ fn middle(out: []u32, lane: u32) {
                 total += value
             }
             out[usize(lane)] = lane + total + 43u32
+            let fields = Packet { value: lane + 44u32, lane: passthrough(lane) }
+            switch passthrough(fields.lane) {
+            case 0u32:
+                out[usize(lane)] = fields.value
+            default:
+                out[usize(lane)] = fields.value + fields.lane - lane
+            }
         }
     }
 }
