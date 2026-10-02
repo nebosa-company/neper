@@ -783,6 +783,17 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "e.net.http plus e.fmt.html/xml and e.text.regex cover web-test transport and parsing, but the wfuzz/gobuster pattern (payload encoders, concurrent sweep runner, finding records) is rebuilt by every scanner. Add e.net.http extensions plus a recipe: payload-encoder table, sweep runner over e.task with e.ratelimit and e.cancel, stable-ID finding records via e.algo.hash; fixtures use fake HTTP only, target authorization stays caller policy. Plan: docs/ethical-hacking.md S4."
+    },
+    {
+      "id": "L055",
+      "category": "library",
+      "group": "Drivers",
+      "order": 153,
+      "title": "Certificate issuance for authorized TLS-intercept testing (e.crypto.x509)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "e.crypto.x509 parses and verifies only (parse/parse_pem/pool/verify_signature in lib/e/crypto/x509.e) -- the auto-CA plus forged-leaf half of the intercept-proxy story has no issuance path. Add CA generation plus leaf issuance/signing over e.crypto.sign (no new crypto primitives) with fixtures: issued chain verifies under a pinned CA, expiry/SAN/DNS-name goldens, fail-closed on wrong issuer. Plan: docs/ethical-hacking.md S5."
     }
   ]
 }

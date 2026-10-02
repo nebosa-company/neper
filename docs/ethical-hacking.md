@@ -61,3 +61,41 @@ Order: S1 → S2 → S3 → S4.
 - No `unsafe`, no new native deps, no network in `e.*` tests (fake transports/HTTP only).
 - Docs: module API rows in `docs/module-apis.md` + `docs/modules.json` surface flags;
   this plan file tracks intent, `docs/progress.html` (generated) tracks readiness.
+
+## 5. Architecture-spec review (infosec-language proposal, 2026-10-02)
+
+Verdict per proposal: **covered** (exists), **adapt** (Neper's existing pattern serves it),
+**queued** (new backlog item below), **deferred** (legitimate, not now), **rejected**
+(never `e.*`, with reason). Only S5 is queued; everything else resolves to existing
+surface, a recipe, or an explicit no.
+
+| # | Proposal | Verdict | Rationale |
+|---|---|---|---|
+| P1 | Invisible ownership / no GC | covered | D3 arenas + explicit ownership already give deterministic memory with no GC pauses. |
+| P2 | First-class `u32_le`/`u32_be` endian types | adapt | `e.bytes` load/store take an explicit `Endian`; S1/S2 codecs follow that pattern. No new type family. |
+| P3 | Arbitrary bit-width `u7`/`u12`/`u24` | adapt | Integer widths are closed (`spec.md` §4); sub-byte fields decode via shifts/masks over `e.bytes`. Keeps codegen and D11 casing closed. |
+| P4 | `#[packed]` zero-padding structs | covered | `@packed` exists (`spec.md:544,590-597`); direct byte→struct casts go through fail-closed codecs, not aliasing. |
+| P5 | LLVM backend | rejected | D1 own direct emitter is locked; LLVM contradicts the 1M-lines/sec and hermetic-build goals. |
+| P6 | `--emit=exe` | covered | Static native executables via the own linker (D13). |
+| P7 | `--emit=dll` shared libraries | deferred | General linker work, not security-specific; no backlog item until a non-security consumer needs it. |
+| P8 | `--emit=pic`/`shellcode` + PEB-walk import resolution | rejected | Raw position-independent payload emission is a weaponization path and contradicts the complete-unsafe-inventory and deterministic-artifact guarantees. |
+| P9 | PE/ELF/Mach-O *modification* (IAT/EAT carve, code caves, PLT/GOT hooking, sig-strip) | rejected | Write/hook side stays out; the read-only triage side is S2/L052. Mach-O read-only slicing is an S2 follow-up, not queued. |
+| P10 | APK/IPA backdooring (dex inject, resign, sign-bypass) | rejected | Payload injection plus signature bypass is offensive; read-only manifest/plist triage stays a deferred candidate over `e.fmt.zip`, not queued. |
+| P11 | DMG/HFS+/APFS parsing | deferred | Forensics value but large scope and no demander yet; not queued. |
+| P12 | Intercept proxy + auto-CA + forged leaf certs | adapt + queued (S5) | Proxy runner is user code over `tcp_listen` + `read_request` + `e.net.tls` (recipe under S4); the gap is cert *issuance* — `e.crypto.x509` parses/verifies only (`lib/e/crypto/x509.e:242,601`) — queued as S5. |
+| P13 | Cookie jar, JWT none-alg / RS256→HS256 confusion | covered | Jar is L046; confusion testing is user code over `e.fmt.jwt` (`algorithm` + `verify` with expected alg, `lib/e/fmt/jwt.e:240,330`). |
+| P14 | WebSocket frame mutate, GraphQL introspect/fuzz | covered | User code over `e.net.ws` + `e.net.http` + `e.fmt.json`. |
+| P15 | `std::evasion` (indirect syscalls, `obf_str!`, CFG flattening) | rejected | EDR-bypass and obfuscation primitives defeat auditors as well as detectors and contradict the auditable-build guarantees; `extern fn` (D32) already reaches native APIs openly. |
+| P16 | `std::asm` JIT, gadget discovery, lifter/IR taint | deferred | Needs a disassembler Neper deliberately does not ship (see S2); gadget search follows S2, lifter is research scope. Not queued. |
+| P17 | Bit-flip protocol fuzzing | covered | `e.test.fuzz` mutation over S1 packet codecs; no new primitive. |
+| P18 | eBPF/AF_PACKET stateless scanners | deferred | Privileged, platform-specific capture path; user code via `extern fn`, not stdlib. |
+| P19 | Malleable C2 sockets (HTTP/DNS/ICMP wrapping) | rejected | C2 transport is never `e.*`. |
+| P20 | `pattern_create`/`pattern_offset` | adapt | Recipe: one-liner over `e.algo.rand` + `e.bytes` + `e.str` for crash triage; no module. |
+| P21 | Heap Feng Shui visualization | deferred | glibc/LFH internals are allocator-specific and version-fragile; not queued. |
+| P22 | Python-like REPL | deferred | Neper is ahead-of-time native with no runtime JIT; a REPL needs an interpretive mode that contradicts the build model. Large scope, not queued. |
+| P23 | Air-gapped package bundles | covered | `docs/pacman.md:275` project-relative path deps for air-gapped use, immutable cache, script-free hash-verified packages. |
+| P24 | Headless scriptable debugging | deferred | Input to M4 `neper dap` scope (D9), not a new item. |
+
+| # | Capability | neper home | Notes / acceptance |
+|---|---|---|---|
+| S5 | Certificate issuance for authorized TLS-intercept testing | `e.crypto.x509` extensions | CA generation plus leaf issuance/signing over `e.crypto.sign` (the `mitmproxy` pattern: one lab CA, per-host leaves). Fixtures: issued-chain verifies under a pinned CA, expiry/SAN/DNS-name goldens, fail-closed on wrong-issuer. No new crypto primitives. Follows S4's fake-transport test rule. |
