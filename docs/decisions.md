@@ -32871,3 +32871,37 @@ barrier helper but contains no direct GPU use is rejected by the checker as
 an ordinary helper calling a device-only helper; adding a `gpu.lid` read to
 `next` makes the same chain run. Inferring device-callability for such pure
 wrappers is separate from C091's CPU barrier fission.
+
+## D1784 — Reconcile the fixture manifest before judging C091 suites
+
+**Decision.** Keep the generated M1 fixture list in `docs/library-fixtures.json`
+current when running the full self-host suites. Treat the unrelated
+`algo_survival_trial` executable failure separately from CPU barrier
+fission; do not modify that fixture in this shared tree for C091.
+
+**Evidence.** `python scripts/library_fixtures.py --write` added only
+`algo_causal`, `algo_survival_trial`, and `ml_mixed`, and the manifest check
+then passed with 123 partial modules and 123 executable fixtures. An isolated
+Windows suite passed end-to-end with only the survival-trial execution
+skipped; the same fixture exits 2 when built by an earlier compiler binary.
+
+## D1785 — Queue the R/Python statistics gaps as L056-L064, exclude trained stacks and dashboards
+
+**Decision.** The `stats.md` catalogue evaluation lands as `docs/stats-coverage.md`
+with nine backlog items: L056 elementary inference (z-tests, chi-square
+independence, Levene/Bartlett, Tukey HSD, power, mode), L057 elastic net plus
+quantile/robust regression and polynomial features, L058 factor/CCA/MANOVA/
+LDA-QDA, L059 VAR and structural time-series, L060 variational inference, L061
+standard charts in a new `e.gfx.chart`, L062 specialized visualization
+(interactive, geographic, network, 3D), L063 histogram GBM plus CV/pipeline/
+calibration, L064 tidy-data verbs atop L032. Already-queued L005 (survival
+extensions), L007 (GLM), L017 (ARIMA) and L032 (table query) are referenced,
+not duplicated. Non-goals: Prophet (composable from STL plus regression),
+TensorFlow/PyTorch/transformer/NLP stacks (no trained models per the catalog
+policy), shiny/streamlit/dash-style dashboard frameworks (hand-build on
+`e.ui.app` plus `e.net.http`), Spark, finance/bio/quantum domains.
+
+**Evidence.** `docs/stats-coverage.md` §1–§4 maps every catalogue entry to its
+implementing module or to one of L056–L064; `docs/work-queue.json` carries the
+nine items with orders 154–162 and one task file each under
+`docs/tasks/library/`.

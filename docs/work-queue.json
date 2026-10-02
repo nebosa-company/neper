@@ -794,6 +794,105 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "e.crypto.x509 parses and verifies only (parse/parse_pem/pool/verify_signature in lib/e/crypto/x509.e) -- the auto-CA plus forged-leaf half of the intercept-proxy story has no issuance path. Add CA generation plus leaf issuance/signing over e.crypto.sign (no new crypto primitives) with fixtures: issued chain verifies under a pinned CA, expiry/SAN/DNS-name goldens, fail-closed on wrong issuer. Plan: docs/ethical-hacking.md S5."
+    },
+    {
+      "id": "L056",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 154,
+      "title": "Elementary inferential completions in e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "lib/e/algo/stat/test.e covers t-tests, chi-squared goodness of fit, Mann-Whitney, Wilcoxon, ANOVA, Kruskal-Wallis, Fisher, KS, Anderson-Darling, Shapiro-Wilk, permutation and Bonferroni/BH, and lib/e/algo/stat.e covers means, Hyndman-Fan quantiles, G1/G2 skewness/kurtosis, Ledoit-Wolf covariance, rank correlations, KDE, bootstrap/jackknife and distribution fits -- the R/Python inferential gap is an explicit z-test, a chi-square independence/contingency wrapper, Levene/Bartlett homogeneity, Tukey HSD post-hoc, power/sample-size analysis, a mode and weighted descriptives. Keep caller-storage conventions; fixtures against R/SciPy values. Plan: docs/stats-coverage.md rows L056 (D1785)."
+    },
+    {
+      "id": "L057",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 155,
+      "title": "Regularized and robust regression in e.ml.linear",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "lib/e/ml/linear.e covers OLS, ridge, lasso, binary logistic and PLS -- the R/Python regression gap is a polynomial-feature helper, elastic net, quantile regression and robust (Huber) regression. Poisson/negative-binomial/matched-conditional/ordinal GLM is already L007 and out of scope here. Keep caller-storage conventions; fixtures against sklearn/R values. Plan: docs/stats-coverage.md rows L057 (D1785)."
+    },
+    {
+      "id": "L058",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 156,
+      "title": "Multivariate core in e.ml.reduce / e.algo.stat",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "lib/e/ml/reduce.e covers PCA, streaming PCA, t-SNE and UMAP, lib/e/ml/cluster.e covers the k-means family, DBSCAN, OPTICS, BIRCH and GMM, and lib/e/ml/bayes.e covers naive Bayes only -- the R/Python multivariate gap is factor analysis, CCA, MANOVA and LDA/QDA discriminant analysis. Keep caller-storage conventions; fixtures against R/sklearn values. Plan: docs/stats-coverage.md rows L058 (D1785)."
+    },
+    {
+      "id": "L059",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 157,
+      "title": "VAR and structural time-series in e.algo.timeseries",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "lib/e/algo/timeseries.e covers Holt-Winters, STL/LOESS, CUSUM/Page-Hinkley/ADWIN, GARCH(1,1) and Hawkes, and lib/e/math/filter.e covers Kalman/EKF/UKF -- the R/Python time-series gap is VAR(p) estimation and forecasting plus a structural/state-space bridge onto the existing Kalman filter. ARIMA is already L017 and out of scope here; Prophet is a non-goal (D1785). Keep caller-storage conventions; fixtures against statsmodels values. Plan: docs/stats-coverage.md rows L059 (D1785)."
+    },
+    {
+      "id": "L060",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 158,
+      "title": "Variational inference in e.math.mcmc",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "lib/e/math/mcmc.e covers Metropolis-Hastings, Gibbs, HMC and NUTS with e.algo.rand.dist families and an autodiff tape in lib/e/ml/nn.e -- the R/Python Bayesian gap is variational inference: an ELBO helper with SVI/BBVI or an ADVI-lite over the existing autodiff. Keep caller-storage conventions; fixtures against analytic Gaussian targets and Stan/ADVI references. Plan: docs/stats-coverage.md rows L060 (D1785)."
+    },
+    {
+      "id": "L061",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 159,
+      "title": "Standard statistical charts in e.gfx.chart",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "No chart module exists (grep-verified): only e.gfx.paint rasterize/fill_path/composite, e.gfx.scene, e.gfx.image PNG/JPEG/WebP encode and e.ui.widget primitives -- the ggplot2/matplotlib/seaborn gap. Build a declarative e.gfx.chart spec (data mapping, scales, geometries) rendering scatter, line, bar, histogram, box, violin, density, heatmap, correlation matrix and facet/trellis views into e.gfx.scene with PNG output and an e.ui.widget embed; one chart family per session with golden-image fixtures. Plan: docs/stats-coverage.md rows L061 (D1785)."
+    },
+    {
+      "id": "L062",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 160,
+      "title": "Specialized visualization (interactive, geographic, network, 3D)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Standard charts are L061; the specialized layers are all missing: no plotly/bokeh-style interactive layer (e.ui widgets plus animation/input are the base for hover/select/zoom), geographic math without a renderer (e.algo.geo S2/haversine), graph algorithms without layout/draw (e.algo.graph plus centrality/community), low-level 3D only (e.gfx.mesh/scene/trace/shade, e.gpu). Build interactive selection/zoom over L061 charts, a geographic renderer atop e.algo.geo, a network layout atop e.algo.graph and 3D surfaces atop e.gfx.mesh/scene. Dashboards are a non-goal (D1785). Plan: docs/stats-coverage.md rows L062 (D1785)."
+    },
+    {
+      "id": "L063",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 161,
+      "title": "ML production core (histogram GBM, CV, pipeline, calibration)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "lib/e/ml/tree.e covers CART, random forest and a generic gradient_boost, with optimizers in lib/e/ml/optim.e and losses in lib/e/ml/loss.e -- the xgboost/lightgbm/caret/sklearn gap at production level is a histogram/leafwise gradient booster with sparsity handling, k-fold CV with grid/random search and a pipeline abstraction, plus probability calibration. Keep caller-storage conventions; fixtures against sklearn/xgboost values on open datasets. Plan: docs/stats-coverage.md rows L063 (D1785)."
+    },
+    {
+      "id": "L064",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 162,
+      "title": "Tidy-data verbs atop L032",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "L032 covers filter/sort/group/summarize/pivot and lib/e/db/query.e covers nested-loop/hash/sort-merge/semi/anti joins plus a cost-based optimizer, with e.fmt.csv/parquet/arrow and e.db.storage underneath -- the dplyr/tidyr/pandas gap on top is mutate/select/relocate with tidy-select semantics, joins reused from e.db.query, pivot wider/longer, window functions and missing-value verbs. Build on L032 without re-implementing its filter/sort/group/pivot. Plan: docs/stats-coverage.md rows L064 (D1785)."
     }
   ]
 }
