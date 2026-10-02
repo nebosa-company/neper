@@ -147,6 +147,28 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
         try append(a, builder, &line, brush)
         let dots = chart.Layout { kind: .Scatter, coords: marks.coords, segments: zero, bars: zero, x_min: marks.x_min, x_max: marks.x_max, y_min: marks.y_min, y_max: marks.y_max }
         try append(a, builder, &dots, brush)
+    } else if marks.kind == .Bubble {
+        var i = 0usize
+        while i < marks.bars.len {
+            let box = marks.bars[i]
+            if box.width > 0.0 && box.height > 0.0 {
+                let (made, path_error) = geometry.path_builder(a, 6usize, 13usize)
+                if path_error != ok { ret path_error }
+                var path = made
+                let cx = box.x + box.width * 0.5
+                let cy = box.y + box.height * 0.5
+                let r = box.width * 0.5
+                let k = r * 0.55228475
+                try geometry.move_to(&path, geometry.Point { x: cx + r, y: cy })
+                try geometry.cubic_to(&path, geometry.Point { x: cx + r, y: cy + k }, geometry.Point { x: cx + k, y: cy + r }, geometry.Point { x: cx, y: cy + r })
+                try geometry.cubic_to(&path, geometry.Point { x: cx - k, y: cy + r }, geometry.Point { x: cx - r, y: cy + k }, geometry.Point { x: cx - r, y: cy })
+                try geometry.cubic_to(&path, geometry.Point { x: cx - r, y: cy - k }, geometry.Point { x: cx - k, y: cy - r }, geometry.Point { x: cx, y: cy - r })
+                try geometry.cubic_to(&path, geometry.Point { x: cx + k, y: cy - r }, geometry.Point { x: cx + r, y: cy - k }, geometry.Point { x: cx + r, y: cy })
+                try geometry.close_path(&path)
+                try scene.push(builder, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&path), brush: brush } })
+            }
+            i += 1usize
+        }
     } else if marks.kind == .Bar || marks.kind == .Histogram || marks.kind == .Waterfall {
         var i = 0usize
         while i < marks.bars.len {

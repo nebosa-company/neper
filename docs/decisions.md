@@ -33271,3 +33271,15 @@ trapezoids, tapering each stage to the next. It represents conversion stages,
 not a statistical funnel plot. Both keep geometry caller-owned and reuse scene
 and SVG adapters. `gfx_chart_funnel_grid` checks geometry and refusals on
 Windows and Linux; the gallery adds two paired previews.
+
+## D1825 — Map bubble values to circle area on scatter scales
+
+`chart.bubble` borrows x/y and nonnegative size columns, reuses scatter's
+independent x/y scale mapping, and returns caller-owned circle bounds. Radius
+is proportional to the square root of size, so circle area represents the
+value; a zero value emits no visible mark. Scene uses cubic-circle paths and
+SVG uses circle elements without a new global painter. All-zero sizes,
+negative/non-finite values, invalid radius and short output are refused.
+`gfx_chart_bubble` checks size ratios, log mapping and both backends on Windows
+and Linux; the gallery adds a paired preview. A quantitative size legend and
+overlap policy remain guide work.

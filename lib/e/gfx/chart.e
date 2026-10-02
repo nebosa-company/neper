@@ -11,7 +11,7 @@ use e.math.special
 use e.mem
 use e.str
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
@@ -317,7 +317,7 @@ fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars
         if line_error != ok { ret (zero, line_error) }
         ret (Layout { kind: .PointLine, coords: points.coords, segments: line.segments, bars: zero, x_min: points.x_min, x_max: points.x_max, y_min: points.y_min, y_max: points.y_max }, ok)
     }
-    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell || s.kind == .FrequencyPolygon || s.kind == .Rug || s.kind == .Strip || s.kind == .Beeswarm || s.kind == .DotPlot { ret (zero, Invalid) }
+    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell || s.kind == .FrequencyPolygon || s.kind == .Rug || s.kind == .Strip || s.kind == .Beeswarm || s.kind == .DotPlot || s.kind == .Bubble { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if (x_limits.len != 0usize && x_limits.len != 2usize) || (y_limits.len != 0usize && y_limits.len != 2usize) { ret (zero, Invalid) }
@@ -478,6 +478,36 @@ fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars
         }
     }
     ret (Layout { kind: s.kind, coords: coords[..coord_count], segments: segments[..segment_count], bars: bars[..bar_count], x_min: xmin, x_max: xmax, y_min: y0, y_max: y1 }, ok)
+}
+
+// Size encodes circle area, not diameter. Zero-sized observations stay in the
+// borrowed data but emit no visible mark; x/y use the ordinary scatter scales.
+fn bubble(s: *const Spec, sizes: []const f32, max_radius: f32, coords: []Coord, circles: []geometry.Rect) -> (Layout, err) {
+    if s.kind != .Bubble || sizes.len != s.x.len || sizes.len != s.y.len { ret (zero, Invalid) }
+    if sizes.len == 0usize { ret (zero, Empty) }
+    if !finite(max_radius) || max_radius <= 0.0 || !finite(max_radius * 2.0) { ret (zero, Invalid) }
+    if circles.len < sizes.len { ret (zero, TooLarge) }
+    var maximum = 0.0f32
+    var i = 0usize
+    while i < sizes.len {
+        if !finite(sizes[i]) || sizes[i] < 0.0 { ret (zero, Invalid) }
+        if sizes[i] > maximum { maximum = sizes[i] }
+        i += 1usize
+    }
+    if maximum == 0.0 { ret (zero, Invalid) }
+    var dots = *s
+    dots.kind = .Scatter
+    let (positions, positions_error) = layout(&dots, coords, zero, circles[..0usize])
+    if positions_error != ok { ret (zero, positions_error) }
+    i = 0usize
+    while i < sizes.len {
+        let radius = max_radius * f32(math.sqrt[f64](f64(sizes[i]) / f64(maximum)))
+        let center = positions.coords[i]
+        if !finite(center.x) || !finite(center.y) || !finite(center.x - radius) || !finite(center.y - radius) { ret (zero, Invalid) }
+        circles[i] = geometry.rect(center.x - radius, center.y - radius, radius * 2.0, radius * 2.0)
+        i += 1usize
+    }
+    ret (Layout { kind: .Bubble, coords: positions.coords, segments: zero, bars: circles[..sizes.len], x_min: positions.x_min, x_max: positions.x_max, y_min: positions.y_min, y_max: positions.y_max }, ok)
 }
 
 // Vertical intervals with a point estimate and two caps per observation.

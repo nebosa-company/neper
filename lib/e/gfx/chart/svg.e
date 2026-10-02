@@ -179,6 +179,23 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
             try dot(w, marks.coords[i], ink)
             i += 1usize
         }
+    } else if marks.kind == .Bubble {
+        var i = 0usize
+        while i < marks.bars.len {
+            let box = marks.bars[i]
+            if box.width > 0.0 && box.height > 0.0 {
+                try io.write_all(w, "<circle cx=\"")
+                try number(w, box.x + box.width * 0.5)
+                try io.write_all(w, "\" cy=\"")
+                try number(w, box.y + box.height * 0.5)
+                try io.write_all(w, "\" r=\"")
+                try number(w, box.width * 0.5)
+                try io.write_all(w, "\"")
+                try color(w, ink, false)
+                try io.write_all(w, "/>\n")
+            }
+            i += 1usize
+        }
     } else if marks.kind == .Bar || marks.kind == .Histogram || marks.kind == .Waterfall {
         var i = 0usize
         while i < marks.bars.len {

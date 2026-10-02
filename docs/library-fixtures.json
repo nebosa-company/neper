@@ -848,6 +848,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_composition",
     "gfx_chart_distribution",
@@ -963,6 +964,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_composition",
     "gfx_chart_distribution",
@@ -988,6 +990,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_composition",
     "gfx_chart_distribution",
@@ -1009,6 +1012,7 @@
    "delivered": 7,
    "pending": [],
    "fixtures": [
+    "gfx_chart_bubble",
     "gfx_chart_composition",
     "gfx_chart_distribution",
     "gfx_chart_funnel_grid",
@@ -1091,6 +1095,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_composition",
     "gfx_chart_distribution",
@@ -1182,6 +1187,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_composition",
     "gfx_chart_distribution",

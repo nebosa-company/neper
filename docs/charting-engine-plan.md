@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet, Pareto, pie, donut, waffle, stage funnel,
+Status: scatter, line, points+line, bubble, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet, Pareto, pie, donut, waffle, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-forty PNG plus forty SVG previews from Neper. L061 remains partial
+forty-one PNG plus forty-one SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -87,6 +87,11 @@ Points+line combines the existing Cartesian scatter and line layouts with one
 domain and paints the line before its points. Strip plots map observations to
 numeric x positions and add repeatable vertical jitter, preserving ties; both
 use caller-owned coordinates and the existing scene/SVG mark paths.
+`bubble` reuses the scatter mapping and independent x/y scales, then maps a
+nonnegative size column to circle area via square-root radius. Circle bounds
+remain caller-owned; scene paints cubic-circle paths and SVG emits circle marks.
+Zero-sized observations stay in the data but are invisible. A quantitative
+size legend, overlap policy and alternate area transforms remain guide work.
 Beeswarm starts from strip's exact numeric x mapping and packs overlapping
 six-pixel square marks into free vertical lanes. The current candidate scan is
 cubic in the worst case and refuses a panel too short to fit every observation.
@@ -174,7 +179,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, Q-Q, violin, heatmap, correlation matrix, basic waterfall, bullet, Pareto, pie, donut, waffle and basic stage funnel are delivered; every other entry
+box, density, Q-Q, violin, heatmap, correlation matrix, bubble, basic waterfall, bullet, Pareto, pie, donut, waffle and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -211,7 +216,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 ## Delivery order and gates
 
 1. **Foundation (delivered now):** typed spec, borrowed data, scale-to-bounds,
-   scatter/line/points+line/bar/step/area/lollipop/error-bar/band/dumbbell marks, constant-domain handling,
+   scatter/line/points+line/bubble/bar/step/area/lollipop/error-bar/band/dumbbell marks, constant-domain handling,
    executable fixtures.
 2. **Core distributions (delivered):** histogram, frequency polygon, rug, strip,
    beeswarm, binned dot plot, box,
@@ -238,7 +243,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    `gfx_chart_funnel_grid` checks geometry, refusals and adapters on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with forty vector previews, automatic numeric tick text and
+   adapter with forty-one vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

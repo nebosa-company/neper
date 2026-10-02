@@ -520,6 +520,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try render_chart(a, queue, output_target, canvas, &renderer, &marks, paths[i])
         i += 1usize
     }
+    let bubble_sizes = [8]f32{ 4.0, 9.0, 16.0, 25.0, 36.0, 49.0, 64.0, 100.0 }
+    var bubble_spec = chart.spec(.Bubble, bounds, x[..], y[..])
+    let (bubble_marks, bubble_error) = chart.bubble(&bubble_spec, bubble_sizes[..], 18.0, points[..], bars[..])
+    if bubble_error != ok { ret bubble_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &bubble_marks, "docs/chart-previews/bubble.png")
     let grouped_values = [8]f32{ 3.0, 2.0, 5.0, 4.0, 2.0, 6.0, 4.0, 3.0 }
     let category_names = [4]str{ "North", "South", "East", "West" }
     let series_names = [2]str{ "Alpha", "Beta" }
