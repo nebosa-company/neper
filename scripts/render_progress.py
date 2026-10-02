@@ -222,8 +222,11 @@ backlog = '\n'.join(
 )
 previews = ''.join(
     '<figure><img src="chart-previews/{name}" alt="Neper {title} chart preview" '
-    'width="360" height="240"><figcaption>{title}</figcaption></figure>'.format(
-        name=html.escape(path.name), title=html.escape(path.stem.title()))
+    'width="360" height="240"><figcaption>{title}{vector}</figcaption></figure>'.format(
+        name=html.escape(path.name), title=html.escape(path.stem.title()),
+        vector=(' <a href="chart-previews/{name}">SVG</a>'.format(
+            name=html.escape(path.with_suffix('.svg').name))
+            if path.with_suffix('.svg').exists() else ''))
     for path in sorted(Path('docs/chart-previews').glob('*.png'))
 )
 chart_section = (

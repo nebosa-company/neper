@@ -4,9 +4,11 @@ use e.fs
 use e.gpu
 use e.io
 use e.mem
+use e.str
 use e.fmt.png
 use e.gfx.chart
 use e.gfx.chart.scene as chart_scene
+use e.gfx.chart.svg as chart_svg
 use e.gfx.geometry
 use e.gfx.image
 use e.gfx.paint
@@ -52,6 +54,62 @@ fn render_builder(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canv
     ret ok
 }
 
+fn vector_path(a: *mem.Arena, png_path: str) -> (str, err) {
+    if !str.ends_with(png_path, ".png") { ret (zero, chart.Invalid) }
+    let (made, builder_error) = str.builder(a, png_path.len)
+    if builder_error != ok { ret (zero, builder_error) }
+    var built = made
+    try str.push(&built, png_path[..png_path.len - 4usize])
+    try str.push(&built, ".svg")
+    ret (str.done(&built), ok)
+}
+
+fn svg_start(a: *mem.Arena, png_path: str) -> (io.MemoryWriter, err) {
+    let (state, unused, writer_error) = io.memory_writer(a, 0usize)
+    if writer_error != ok { ret (zero, writer_error) }
+    var held = state
+    var writer = io.writer(mem.cast[*void](&held), io.memory_write)
+    let (slash, found) = str.rfind(png_path, "/")
+    var start = 0usize
+    if found { start = slash + 1usize }
+    try chart_svg.begin(&writer, f32(WIDTH), f32(HEIGHT), png_path[start..png_path.len - 4usize], "Neper chart rendered from caller-owned geometry")
+    try chart_svg.rect(&writer, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.rgba(1.0, 1.0, 1.0, 1.0), false)
+    ret (held, ok)
+}
+
+fn export_svg_chart(a: *mem.Arena, marks: *const chart.Layout, x_scale: chart.Scale, y_scale: chart.Scale, png_path: str) -> err {
+    let (held, start_error) = svg_start(a, png_path)
+    if start_error != ok { ret start_error }
+    var state = held
+    var writer = io.writer(mem.cast[*void](&state), io.memory_write)
+    var x_ticks: [4]chart.Tick = zero
+    var y_ticks: [4]chart.Tick = zero
+    let (_, x_error) = chart.ticks(x_scale, marks.x_min, marks.x_max, x_ticks[..])
+    if x_error != ok { ret x_error }
+    let (_, y_error) = chart.ticks(y_scale, marks.y_min, marks.y_max, y_ticks[..])
+    if y_error != ok { ret y_error }
+    try chart_svg.append_guides(&writer, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_ticks[..], paint.rgba(0.88, 0.91, 0.95, 1.0), paint.rgba(0.32, 0.38, 0.48, 1.0))
+    var ink = paint.rgba(0.07, 0.35, 0.76, 1.0)
+    if marks.kind == .Area { ink = paint.rgba(0.25, 0.55, 0.88, 0.82) }
+    try chart_svg.append(&writer, marks, ink)
+    try chart_svg.finish(&writer)
+    let (path, path_error) = vector_path(a, png_path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, path, io.memory_bytes(&state))
+}
+
+fn export_svg_matrix(a: *mem.Arena, marks: *const chart.MatrixLayout, png_path: str) -> err {
+    let (held, start_error) = svg_start(a, png_path)
+    if start_error != ok { ret start_error }
+    var state = held
+    var writer = io.writer(mem.cast[*void](&state), io.memory_write)
+    try chart_svg.append_matrix(&writer, marks, paint.rgba(0.11, 0.30, 0.72, 1.0), paint.rgba(0.97, 0.97, 0.94, 1.0), paint.rgba(0.93, 0.28, 0.12, 1.0))
+    try chart_svg.finish(&writer)
+    let (path, path_error) = vector_path(a, png_path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, path, io.memory_bytes(&state))
+}
+
 fn render_chart_scaled(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, x_scale: chart.Scale, y_scale: chart.Scale, path: str) -> err {
     let (made, builder_error) = scene.builder(a, 64usize)
     if builder_error != ok { ret builder_error }
@@ -70,7 +128,8 @@ fn render_chart_scaled(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     if y_error != ok { ret y_error }
     try chart_scene.append_guides(&builder, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_ticks[..], grid, axis)
     try chart_scene.append(a, &builder, marks, ink)
-    ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    ret export_svg_chart(a, marks, x_scale, y_scale, path)
 }
 
 fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, path: str) -> err {
@@ -84,7 +143,8 @@ fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     var builder = made
     try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
     try chart_scene.append_matrix(&builder, marks, paint.rgba(0.11, 0.30, 0.72, 1.0), paint.rgba(0.97, 0.97, 0.94, 1.0), paint.rgba(0.93, 0.28, 0.12, 1.0))
-    ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    ret export_svg_matrix(a, marks, path)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -219,6 +279,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     try render_builder(a, queue, output_target, canvas, &renderer, &facet_builder, "docs/chart-previews/facet_heatmap.png")
+    let (facet_svg_state, facet_svg_error) = svg_start(a, "docs/chart-previews/facet_heatmap.png")
+    if facet_svg_error != ok { ret facet_svg_error }
+    var facet_svg_held = facet_svg_state
+    var facet_svg_writer = io.writer(mem.cast[*void](&facet_svg_held), io.memory_write)
+    i = 0usize
+    while i < 4usize {
+        let start = i * 9usize
+        let (panel, panel_error) = chart.heatmap(facet_values[start..start + 9usize], 3usize, facet_bounds[i], facet_cells[start..start + 9usize])
+        if panel_error != ok { ret panel_error }
+        try chart_svg.append_matrix(&facet_svg_writer, &panel, paint.rgba(0.11, 0.30, 0.72, 1.0), paint.rgba(0.97, 0.97, 0.94, 1.0), paint.rgba(0.93, 0.28, 0.12, 1.0))
+        i += 1usize
+    }
+    try chart_svg.finish(&facet_svg_writer)
+    try fs.write_file(a, "docs/chart-previews/facet_heatmap.svg", io.memory_bytes(&facet_svg_held))
     try scene.close(&renderer)
     try gpu.close_target(output_target)
     try gpu.close(device)

@@ -15914,3 +15914,14 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
 fn append_matrix(builder: *scene.Builder, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
 fn append_guides(builder: *scene.Builder, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Brush, axis: paint.Brush) -> err
 ```
+
+### `e.gfx.chart.svg`
+
+```neper
+error Invalid
+fn begin(w: *io.Writer, width: f32, height: f32, title: str, description: str) -> err
+fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err
+fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
+fn append_guides(w: *io.Writer, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Color, axis: paint.Color) -> err
+fn finish(w: *io.Writer) -> err
+```

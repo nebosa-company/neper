@@ -33076,3 +33076,14 @@ the scene pass draws grid, axis and tick strokes from those fractions, leaving
 text shaping and label margins for a later guide stage. `gfx_chart_scale`
 checks transformed and reversed geometry, invalid domains, tick values and
 scene command counts.
+
+## D1799 — Stream SVG from the chart layout contract
+
+`e.gfx.chart.svg` consumes the same caller-owned series and matrix layouts as
+the scene adapter. It streams XML to `io.Writer`, reuses `e.fmt.xml` escaping for
+title and description, packs solid-colour channels like the current CPU scene
+renderer for visual parity, and emits marks plus tick/grid/axis strokes.
+The gallery writes one SVG beside each of its eighteen PNG previews, including
+the faceted matrix. `gfx_chart_svg` checks escaped metadata, series and matrix
+elements and refusal paths. Gradient brushes, font/layout-backed labels and
+PDF are separate later adapters rather than hidden SVG-only analysis.

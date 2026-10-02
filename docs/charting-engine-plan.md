@@ -3,8 +3,8 @@
 Status: scatter, line, bar, histogram, step, area, lollipop, error bars, ECDF,
 box, density, normal Q-Q, violin, heatmap and correlation matrix are delivered,
 with linear/log10/symmetric-log and reverse Cartesian scales, caller-owned tick
-metadata, a grid/axis scene pass, facet panel geometry and eighteen PNG previews
-from Neper's CPU renderer. L061 remains partial
+metadata, grid/axis passes, facet panel geometry and eighteen PNG plus eighteen
+SVG previews from Neper. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -83,6 +83,11 @@ Log10 refuses non-positive domains, symmetric-log has an explicit linear
 threshold, and reverse maps fractions without copying columns. `ticks` returns
 caller-owned data values and normalized positions; the scene guide pass draws
 grid and axis strokes. Text labels and layout-aware margins remain planned.
+`e.gfx.chart.svg` streams the same mark and matrix layouts as SVG with escaped
+title/description metadata, current CPU-renderer channel packing for solid colours, and axis/grid
+strokes from the same tick positions. The gallery exports a vector companion
+for every PNG; gradient brushes, text labels, production PNG/PDF/widget APIs
+and backend-parity measurements remain planned.
 
 ## Chart and diagram catalogue
 
@@ -135,9 +140,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    four-panel heatmap preview exercises it. Shared/free x/y scales, strips and
    legend metadata remain.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
-   strokes and a Neper-rendered PNG gallery are delivered; text labels and
-   margins, a production PNG export API,
-   SVG/PDF serialization and a widget embed remain. Pixel fixtures follow
+   strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
+   adapter with eighteen vector previews are delivered; text labels and
+   margins, a production PNG API, PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.
 5. **Specialized calculators:** ROC, survival, SPC, capability, Bland–Altman,
    forest/funnel, contour/surface and domain diagrams, each in the owning stats or

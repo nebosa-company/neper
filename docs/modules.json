@@ -364,6 +364,7 @@
     "e.ui.layout",
     "e.gfx.scene",
     "e.gfx.chart.scene",
+    "e.gfx.chart.svg",
     "e.ui.asset",
     "e.ui.window",
     "e.ui.input",
@@ -2136,6 +2137,23 @@
     "e.gfx.geometry",
     "e.gfx.paint",
     "e.gfx.scene"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.chart.svg",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.xml",
+    "e.gfx.chart",
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.io",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

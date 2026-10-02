@@ -3077,6 +3077,11 @@ $gfxChartScaleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gfxChartScaleWritten -ne 'executable written') { throw 'gfx_chart_scale emission failed' }
 $gfxChartScaleOutput = & $gfxChartScalePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartScaleOutput -ne 'gfx chart scale ok') { throw "the e.gfx.chart scales answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSvgPath = Join-Path $testBuild 'gfx-chart-svg-selfhost.exe'
+$gfxChartSvgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_svg\src\main.e') $repo 'x64' 'windows' $gfxChartSvgPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSvgWritten -ne 'executable written') { throw 'gfx_chart_svg emission failed' }
+$gfxChartSvgOutput = & $gfxChartSvgPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSvgOutput -ne 'gfx chart svg ok') { throw "the e.gfx.chart SVG adapter answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

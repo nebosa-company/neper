@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | category | library / Algorithms |
-| score | 0.64 of 1 |
+| score | 0.68 of 1 |
 | queue position | 1 (the active capability; only position 1 is eligible for the next session) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
@@ -15,7 +15,7 @@ See `docs/roadmap.md`, `docs/stats-coverage.md` §2 and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> `e.gfx.chart` maps borrowed numeric columns into caller-owned scatter, line, bar, step, area, lollipop, error-bar and distribution marks, row-major heatmap and Pearson correlation cells, plus equal facet-panel rectangles. Cartesian `Spec` has independent linear, log10, symmetric-log and reverse scales; caller-owned ticks drive scene grid/axis strokes. `e.gfx.chart.scene` appends those marks and colour-mapped matrix tiles to Neper scenes. `gfx_chart`, `gfx_chart_qq`, `gfx_chart_matrix`, `gfx_chart_cartesian` and `gfx_chart_scale` check statistics, geometry, scales, scene commands and refusal paths; `examples/chart_gallery.e` generated eighteen inspected PNG previews. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work includes discrete/date scales, labels, shared/free facet scales, strips, production PNG/SVG/PDF/widget adapters, specialized diagrams and comparative benchmarks. Full evaluation: `docs/stats-coverage.md` §2.
+> `e.gfx.chart` maps borrowed numeric columns into caller-owned scatter, line, bar, step, area, lollipop, error-bar and distribution marks, row-major heatmap and Pearson correlation cells, plus equal facet-panel rectangles. Cartesian `Spec` has independent linear, log10, symmetric-log and reverse scales; caller-owned ticks drive scene and SVG grid/axis strokes. `e.gfx.chart.svg` streams solid-colour marks and matrix tiles with escaped title/description metadata. `gfx_chart`, `gfx_chart_qq`, `gfx_chart_matrix`, `gfx_chart_cartesian`, `gfx_chart_scale` and `gfx_chart_svg` check statistics, geometry, scales, scene/SVG commands and refusal paths; `examples/chart_gallery.e` generated eighteen inspected PNG previews and eighteen XML-parsed SVG companions. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work includes discrete/date scales, labels, shared/free facet scales, strips, production PNG/PDF/widget adapters, specialized diagrams and comparative benchmarks. Full evaluation: `docs/stats-coverage.md` §2.
 
 ## Remaining work
 
@@ -25,8 +25,8 @@ Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.m
   and normal Q-Q have executable fixtures and PNG previews.
 - [ ] **Matrix and facets** — heatmap, Pearson correlation matrix and equal-panel
   facet geometry delivered; shared/free scales, strips and legends remain.
-- [ ] **Backends** — scene mark adapter and PNG preview gallery delivered;
-  tick/grid/axis strokes delivered; labels, production PNG/SVG/PDF export and
+- [ ] **Backends** — scene marks, PNG gallery and streaming solid-colour SVG delivered;
+  tick/grid/axis strokes delivered; labels, production PNG/PDF export and
   `e.ui.widget` embed remain.
 - [ ] **Specialized diagrams** — ROC, survival, SPC, scientific, finance, quality,
   operations and network families from `docs/charting-engine-plan.md`.
