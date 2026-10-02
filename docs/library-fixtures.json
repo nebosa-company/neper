@@ -1208,6 +1208,7 @@
     "gpu_reshape",
     "gpu_shared",
     "gpu_spaces",
+    "gpu_staging",
     "gpu_subgroup_identity",
     "gpu_subgroup_reduce",
     "gpu_subgroup_width",
