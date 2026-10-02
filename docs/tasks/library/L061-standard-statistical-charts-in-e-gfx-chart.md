@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | category | library / Algorithms |
-| score | 0.84 of 1 |
+| score | 0.86 of 1 |
 | queue position | 1 (the active capability; only position 1 is eligible for the next session) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
@@ -15,7 +15,7 @@ See `docs/roadmap.md`, `docs/stats-coverage.md` §2 and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> `e.gfx.chart` maps borrowed numeric columns into caller-owned scatter, line, bar, grouped/dodged bar, signed stacked bar, 100% stacked bar, step, area, lollipop, error-bar, confidence-band, dumbbell and distribution marks, row-major heatmap and Pearson correlation cells, plus equal facet-panel rectangles. Cartesian `Spec` has independent linear, log10, symmetric-log and reverse scales; caller-owned ticks drive scene and SVG grid/axis strokes. `nice_ticks` selects 1/2/5 linear and logarithmic breaks, falling back to equal transformed-space positions for symmetric-log; `format_ticks` writes shortest-round-trip numeric labels into caller-owned storage. `layout_with_limits` accepts optional caller-borrowed x/y domains for shared or free numeric facet scales, rejecting limits that exclude data. `guide_labels` positions tick strings and the scene/SVG adapters render them alongside title labels, with escaped SVG text and a caller-registered TrueType font for scene replay. `e.gfx.chart.svg` streams solid-colour marks and matrix tiles with escaped title/description metadata. `gfx_chart`, `gfx_chart_qq`, `gfx_chart_matrix`, `gfx_chart_cartesian`, `gfx_chart_scale`, `gfx_chart_facet`, `gfx_chart_intervals`, `gfx_chart_labels`, `gfx_chart_nice_ticks`, `gfx_chart_composition` and `gfx_chart_svg` check statistics, geometry, scales, text, scene/SVG commands and refusal paths; `examples/chart_gallery.e` generated twenty-seven inspected PNG previews and twenty-seven XML-parsed SVG companions. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work includes discrete/date scales, locale/date formatting and label collision/margins, facet strips/legends and categorical mapping, production PNG/PDF/widget adapters, specialized diagrams and comparative benchmarks. Full evaluation: `docs/stats-coverage.md` §2.
+> `e.gfx.chart` maps borrowed numeric columns into caller-owned scatter, line, bar, grouped/dodged bar, signed stacked bar, 100% stacked bar, step, area, lollipop, error-bar, confidence-band, dumbbell and distribution marks, row-major heatmap and Pearson correlation cells, plus equal facet-panel rectangles. Cartesian `Spec` has independent linear, log10, symmetric-log and reverse scales; caller-owned ticks drive scene and SVG grid/axis strokes. `nice_ticks` selects 1/2/5 linear and logarithmic breaks, falling back to equal transformed-space positions for symmetric-log; `format_ticks` writes shortest-round-trip numeric labels into caller-owned storage. `layout_with_limits` accepts optional caller-borrowed x/y domains for shared or free numeric facet scales, rejecting limits that exclude data. `category_ticks` supplies ordinal bar centers and `legend_items` pairs swatches with borrowed series names; the three bar previews now include category labels and a two-series legend in both formats. `guide_labels` positions tick strings and the scene/SVG adapters render them alongside title labels, with escaped SVG text and a caller-registered TrueType font for scene replay. `e.gfx.chart.svg` streams solid-colour marks and matrix tiles with escaped title/description metadata. `gfx_chart`, `gfx_chart_qq`, `gfx_chart_matrix`, `gfx_chart_cartesian`, `gfx_chart_scale`, `gfx_chart_facet`, `gfx_chart_intervals`, `gfx_chart_labels`, `gfx_chart_nice_ticks`, `gfx_chart_composition` and `gfx_chart_svg` check statistics, geometry, scales, text, scene/SVG commands and refusal paths; `examples/chart_gallery.e` generated twenty-seven inspected PNG previews and twenty-seven XML-parsed SVG companions. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work includes discrete/date scales, locale/date formatting and label collision/margins, facet strips/automated legend layout and categorical mapping, production PNG/PDF/widget adapters, specialized diagrams and comparative benchmarks. Full evaluation: `docs/stats-coverage.md` §2.
 
 ## Remaining work
 
@@ -25,8 +25,9 @@ Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.m
 - [x] **Core distribution families** — histogram, box, violin, density, ECDF
   and normal Q-Q have executable fixtures and PNG previews.
 - [ ] **Matrix and facets** — heatmap, Pearson correlation matrix, equal-panel
-  facet geometry and shared/free numeric x/y domains delivered; categorical
-  facet mapping, strips and legends remain.
+  facet geometry and shared/free numeric x/y domains delivered; ordinal bar
+  labels and series-legend geometry delivered; categorical facet mapping,
+  strips and automated legend layout remain.
 - [ ] **Backends** — scene marks, PNG gallery and streaming solid-colour SVG delivered;
   tick/grid/axis strokes, automatic numeric tick text and caller-supplied titles
   delivered; locale/date formatting and collision-safe margins, production PNG/PDF export and

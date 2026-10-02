@@ -1,29 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>stacked_100</title><desc>Neper chart rendered from caller-owned geometry</desc>
 <rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="30" x2="139.33334350585938" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="204" x2="139.33334350585938" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="30" x2="234.6666717529297" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="204" x2="234.6666717529297" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="51.150001525878906" y="99.5999984741211" width="57.20000076293945" height="104.4000015258789" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="122.6500015258789" y="107.33332824707031" width="57.20000076293945" height="96.66667175292969" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="194.14999389648438" y="160.5" width="57.20000076293945" height="43.5" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="265.6499938964844" y="104.57142639160156" width="57.20000076293945" height="99.42857360839844" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="51.150001525878906" y="30" width="57.20000076293945" height="69.5999984741211" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="122.6500015258789" y="30" width="57.20000076293945" height="77.33332824707031" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="194.14999389648438" y="30" width="57.20000076293945" height="130.5" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="265.6499938964844" y="30" width="57.20000076293945" height="74.57142639160156" fill="rgb(240,107,31)" fill-opacity="1"/>
+<line x1="76.5" y1="42" x2="76.5" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="76.5" y1="182" x2="76.5" y2="187" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="133.5" y1="42" x2="133.5" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="133.5" y1="182" x2="133.5" y2="187" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="190.5" y1="42" x2="190.5" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="190.5" y1="182" x2="190.5" y2="187" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="247.5" y1="42" x2="247.5" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="247.5" y1="182" x2="247.5" y2="187" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="182" x2="276" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="182" x2="48" y2="182" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="112" x2="276" y2="112" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="112" x2="48" y2="112" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="42" x2="276" y2="42" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="42" x2="48" y2="42" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="42" x2="48" y2="182" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="182" x2="276" y2="182" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<rect x="53.70000076293945" y="98" width="45.60000228881836" height="84" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="110.69999694824219" y="104.22222137451172" width="45.60000228881836" height="77.77777862548828" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="167.6999969482422" y="147" width="45.60000228881836" height="35" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="224.6999969482422" y="102" width="45.60000228881836" height="80" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="284" y="64" width="10" height="10" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="53.70000076293945" y="42" width="45.60000228881836" height="56" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="110.69999694824219" y="42" width="45.60000228881836" height="62.22222137451172" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="167.6999969482422" y="42" width="45.60000228881836" height="105" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="224.6999969482422" y="42" width="45.60000228881836" height="60" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="284" y="87" width="10" height="10" fill="rgb(240,107,31)" fill-opacity="1"/>
+<text x="76.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">North</text>
+<text x="133.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">South</text>
+<text x="190.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">East</text>
+<text x="247.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">West</text>
+<text x="39" y="185.14999389648438" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">0</text>
+<text x="39" y="115.1500015258789" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">0.5</text>
+<text x="39" y="45.150001525878906" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">1</text>
+<text x="180" y="24" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">Share by category</text>
+<text x="300" y="74" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">Alpha</text>
+<text x="300" y="97" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">Beta</text>
 </svg>

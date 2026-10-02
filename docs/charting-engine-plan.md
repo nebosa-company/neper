@@ -6,7 +6,8 @@ confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
 reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
-facet panel geometry, explicit limits for shared/free facet scales, and
+basic category-center labels and per-series legend metadata, facet panel
+geometry, explicit limits for shared/free facet scales, and
 twenty-seven PNG plus twenty-seven SVG previews from Neper. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
@@ -53,7 +54,8 @@ The stable sequence is:
 4. **Scales** — linear, log10, symmetric-log and reverse Cartesian mapping are
    delivered, with equal transformed-space tick metadata. `nice_ticks` adds
    1/2/5 linear steps and sampled 1/2/5 log decades; symmetric-log retains
-   equal transformed-space positions. Discrete/date scales, locale/date label
+   equal transformed-space positions. `category_ticks` places ordinal category
+   centers for bar labels, without a full discrete scale. Date scales, locale/date label
    formatting and out-of-bounds policy remain.
 5. **Coordinates** — Cartesian first; polar, flipped, fixed-aspect, map and 3-D
    projections later.
@@ -87,7 +89,10 @@ Grouped bars borrow category-major values and return per-series `Bar` layouts
 over caller-owned rectangles, so the scene/SVG adapters can colour each series
 without a new mark type. Stacked bars accumulate positives and negatives away
 from zero; the normalized variant requires a positive, nonnegative total in
-every category. Legend metadata and category labels remain planned.
+every category. `category_ticks` drives the existing label pass at each bar
+center; `legend_items` borrows series names and emits swatch/label positions.
+The caller supplies colours and decides where the legend fits. Automatic
+legend placement, wrapping and collision handling remain planned.
 Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
@@ -168,7 +173,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    executable fixtures and PNG previews; `facet_grid` places panels and a
    four-panel heatmap preview exercises it. Optional x/y limits let each panel
    share or free its scale independently, exercised by a second four-panel
-   preview. Strips, legend metadata and categorical facet mapping remain.
+   preview. Basic category-center labels and per-series legend geometry are
+   delivered for bar compositions; strips, automated legend layout and
+   categorical facet mapping remain.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
    adapter with twenty-seven vector previews, automatic numeric tick text and

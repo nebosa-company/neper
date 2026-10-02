@@ -33145,3 +33145,16 @@ positive and negative values separately around zero; normalization requires a
 positive nonnegative total in every category. `gfx_chart_composition` checks
 geometry, both adapters and refusal paths; the gallery adds three PNG/SVG
 pairs. Category labels, legends and more composition types remain planned.
+
+## D1805 — Reuse chart labels for category centers and series legends
+
+`category_ticks` emits caller-owned ordinal centers that pass directly into
+`guide_labels`; `legend_items` emits caller-owned swatch rectangles and borrowed
+text labels, indexed with the caller's series colours. The scene and SVG
+adapters already draw text and filled rectangles, so neither needs a new mark
+kind or legend painter. Grouped and stacked previews now include the same
+category labels and two-series legend in PNG and SVG. The gallery finishes its
+scene render before opening the SVG memory writer to keep its buffer intact.
+Automatic placement, wrapping, palette policy and collision avoidance remain
+planned. `gfx_chart_composition` checks centers, legend positions, escaping and
+capacity refusals on both hosts.

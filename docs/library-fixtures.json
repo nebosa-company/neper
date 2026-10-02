@@ -672,6 +672,7 @@
     "differential",
     "error_detail",
     "fs_basics",
+    "gfx_chart_composition",
     "gfx_chart_labels",
     "gpu_vulkan_raw",
     "grep",
@@ -952,8 +953,8 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 37,
-   "delivered": 37,
+   "catalogue": 40,
+   "delivered": 40,
    "pending": [],
    "fixtures": [
     "gfx_chart",
@@ -1777,6 +1778,7 @@
    "delivered": 64,
    "pending": [],
    "fixtures": [
+    "gfx_chart_composition",
     "gfx_chart_labels",
     "gfx_scene",
     "text_gaps",

@@ -3100,7 +3100,7 @@ if ($LASTEXITCODE -ne 0 -or $gfxChartNiceTicksOutput -ne 'gfx chart nice ticks o
 $gfxChartCompositionPath = Join-Path $testBuild 'gfx-chart-composition-selfhost.exe'
 $gfxChartCompositionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_composition\src\main.e') $repo 'x64' 'windows' $gfxChartCompositionPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCompositionWritten -ne 'executable written') { throw 'gfx_chart_composition emission failed' }
-$gfxChartCompositionOutput = & $gfxChartCompositionPath
+$gfxChartCompositionOutput = & $gfxChartCompositionPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
 if ($LASTEXITCODE -ne 0 -or $gfxChartCompositionOutput -ne 'gfx chart composition ok') { throw "the e.gfx.chart composed bars answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSvgPath = Join-Path $testBuild 'gfx-chart-svg-selfhost.exe'
 $gfxChartSvgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_svg\src\main.e') $repo 'x64' 'windows' $gfxChartSvgPath

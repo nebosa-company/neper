@@ -138,39 +138,69 @@ fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     ret render_chart_scaled(a, q, output_target, canvas, renderer, marks, linear, linear, path)
 }
 
-fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, path: str) -> err {
-    let (made, builder_error) = scene.builder(a, 32usize)
+fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, title: str, path: str) -> err {
+    if layers.len != 2usize || names.len != layers.len { ret chart.Invalid }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
     if builder_error != ok { ret builder_error }
     var builder = made
+    let colors = [2]paint.Color{ paint.rgba(0.07, 0.35, 0.76, 1.0), paint.rgba(0.94, 0.42, 0.12, 1.0) }
+    let grid_color = paint.rgba(0.88, 0.91, 0.95, 1.0)
+    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    let plot = geometry.rect(48.0, 42.0, 228.0, 140.0)
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var x_ticks: [4]chart.Tick = zero
+    var y_ticks: [5]chart.Tick = zero
+    let (x_breaks, x_error) = chart.category_ticks(categories.len, x_ticks[..])
+    if x_error != ok { ret x_error }
+    let (y_breaks, y_error) = chart.nice_ticks(linear, layers[0].y_min, layers[0].y_max, 5usize, y_ticks[..])
+    if y_error != ok { ret y_error }
+    var y_text: [5]str = zero
+    var y_storage: [128]u8 = zero
+    let (y_words, text_error) = chart.format_ticks(y_breaks, y_text[..], y_storage[..])
+    if text_error != ok { ret text_error }
+    var labels: [10]chart.Label = zero
+    let (guides, label_error) = chart.guide_labels(plot, x_breaks, categories, y_breaks, y_words, 9.0, labels[..9usize])
+    if label_error != ok { ret label_error }
+    labels[guides.len] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center }
+    var legend: [2]chart.LegendItem = zero
+    let (entries, legend_error) = chart.legend_items(names, chart.Coord { x: 284.0, y: 64.0 }, 10.0, 23.0, legend[..])
+    if legend_error != ok { ret legend_error }
+    var legend_labels: [2]chart.Label = zero
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, plot, x_breaks, y_breaks, paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
+    var i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        try fill(&builder, entries[i].swatch, paint.Brush { Solid: colors[i] })
+        legend_labels[i] = entries[i].label
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, guides, font, 9.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, labels[guides.len..guides.len + 1usize], font, 13.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, legend_labels[..], font, 9.0, paint.Brush { Solid: axis_color })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
     let (svg_held, svg_error) = svg_start(a, path)
     if svg_error != ok { ret svg_error }
     var svg_state = svg_held
     var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
-    let colors = [2]paint.Color{ paint.rgba(0.07, 0.35, 0.76, 1.0), paint.rgba(0.94, 0.42, 0.12, 1.0) }
-    let grid_color = paint.rgba(0.88, 0.91, 0.95, 1.0)
-    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
-    let plot = geometry.rect(44.0, 30.0, 286.0, 174.0)
-    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
-    var x_ticks: [4]chart.Tick = zero
-    var y_ticks: [4]chart.Tick = zero
-    let (_, x_error) = chart.ticks(linear, layers[0].x_min, layers[0].x_max, x_ticks[..])
-    if x_error != ok { ret x_error }
-    let (_, y_error) = chart.ticks(linear, layers[0].y_min, layers[0].y_max, y_ticks[..])
-    if y_error != ok { ret y_error }
-    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
-    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
-    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid_color, axis_color)
-    var i = 0usize
+    try chart_svg.append_guides(&writer, plot, x_breaks, y_breaks, grid_color, axis_color)
+    i = 0usize
     while i < layers.len {
-        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
         try chart_svg.append(&writer, &layers[i], colors[i])
+        try chart_svg.rect(&writer, entries[i].swatch, colors[i], false)
         i += 1usize
     }
+    try chart_svg.append_labels(&writer, guides, axis_color, 9.0)
+    try chart_svg.append_labels(&writer, labels[guides.len..guides.len + 1usize], axis_color, 13.0)
+    try chart_svg.append_labels(&writer, legend_labels[..], axis_color, 9.0)
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
-    try fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
-    ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
 fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
@@ -347,18 +377,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     let grouped_values = [8]f32{ 3.0, 2.0, 5.0, 4.0, 2.0, 6.0, 4.0, 3.0 }
+    let category_names = [4]str{ "North", "South", "East", "West" }
+    let series_names = [2]str{ "Alpha", "Beta" }
+    let bar_bounds = geometry.rect(48.0, 42.0, 228.0, 140.0)
     var series_bars: [8]geometry.Rect = zero
     var series_layers: [2]chart.Layout = zero
-    let (grouped, grouped_error) = chart.grouped_bars(grouped_values[..], 4usize, 2usize, bounds, series_bars[..], series_layers[..])
+    let (grouped, grouped_error) = chart.grouped_bars(grouped_values[..], 4usize, 2usize, bar_bounds, series_bars[..], series_layers[..])
     if grouped_error != ok { ret grouped_error }
-    try render_bar_layers(a, queue, output_target, canvas, &renderer, grouped, "docs/chart-previews/grouped_bar.png")
+    try render_bar_layers(a, queue, output_target, canvas, &renderer, grouped, category_names[..], series_names[..], "Grouped comparison", "docs/chart-previews/grouped_bar.png")
     let signed_values = [8]f32{ 3.0, 2.0, 5.0, -2.0, 2.0, 6.0, 4.0, -1.0 }
-    let (stacked, stacked_error) = chart.stacked_bars(signed_values[..], 4usize, 2usize, bounds, false, series_bars[..], series_layers[..])
+    let (stacked, stacked_error) = chart.stacked_bars(signed_values[..], 4usize, 2usize, bar_bounds, false, series_bars[..], series_layers[..])
     if stacked_error != ok { ret stacked_error }
-    try render_bar_layers(a, queue, output_target, canvas, &renderer, stacked, "docs/chart-previews/stacked_bar.png")
-    let (normalized, normalized_error) = chart.stacked_bars(grouped_values[..], 4usize, 2usize, bounds, true, series_bars[..], series_layers[..])
+    try render_bar_layers(a, queue, output_target, canvas, &renderer, stacked, category_names[..], series_names[..], "Signed totals", "docs/chart-previews/stacked_bar.png")
+    let (normalized, normalized_error) = chart.stacked_bars(grouped_values[..], 4usize, 2usize, bar_bounds, true, series_bars[..], series_layers[..])
     if normalized_error != ok { ret normalized_error }
-    try render_bar_layers(a, queue, output_target, canvas, &renderer, normalized, "docs/chart-previews/stacked_100.png")
+    try render_bar_layers(a, queue, output_target, canvas, &renderer, normalized, category_names[..], series_names[..], "Share by category", "docs/chart-previews/stacked_100.png")
     let log_x = [8]f32{ 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 1000.0 }
     let log_y = [8]f32{ 1.0, 3.0, 5.0, 10.0, 25.0, 40.0, 80.0, 100.0 }
     var log_plot = chart.spec(.Scatter, bounds, log_x[..], log_y[..])

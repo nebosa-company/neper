@@ -18,6 +18,7 @@ type Tick = struct { value: f32, fraction: f32 }
 type Coord = struct { x: f32, y: f32 }
 type LabelAlign = enum u8 { Left, Center, Right }
 type Label = struct { text: str, anchor: Coord, align: LabelAlign }
+type LegendItem = struct { swatch: geometry.Rect, label: Label }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
@@ -265,6 +266,33 @@ fn guide_labels(bounds: geometry.Rect, x_ticks: []const Tick, x_text: []const st
         i += 1usize
     }
     ret (out[..x_ticks.len + y_ticks.len], ok)
+}
+
+// Category centers use the same guide-label contract as numeric tick marks.
+fn category_ticks(count: usize, out: []Tick) -> ([]Tick, err) {
+    if count == 0usize { ret (zero, Empty) }
+    if out.len < count { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < count {
+        out[i] = Tick { value: f32(i), fraction: f32((f64(i) + 0.5f64) / f64(count)) }
+        i += 1usize
+    }
+    ret (out[..count], ok)
+}
+
+// Palette stays with the caller; each swatch and label shares its series index.
+fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32, out: []LegendItem) -> ([]LegendItem, err) {
+    if !finite(origin.x) || !finite(origin.y) || !finite(swatch) || !finite(row_height) || swatch <= 0.0 || row_height < swatch { ret (zero, Invalid) }
+    if out.len < names.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < names.len {
+        let y = origin.y + f32(i) * row_height
+        let label = Label { text: names[i], anchor: Coord { x: origin.x + swatch + 6.0, y: y + swatch }, align: .Left }
+        if !finite(y) || !valid_label(&label) { ret (zero, Invalid) }
+        out[i] = LegendItem { swatch: geometry.rect(origin.x, y, swatch, swatch), label: label }
+        i += 1usize
+    }
+    ret (out[..names.len], ok)
 }
 
 // Produces marks in screen coordinates. Y is inverted because graphics bounds

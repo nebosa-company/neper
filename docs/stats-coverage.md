@@ -121,7 +121,8 @@ histogram, step, area, lollipop, error bars, confidence bands,
 dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap and correlation
 matrix, with numeric scales and facet-panel geometry. Its scene and SVG
 adapters produce twenty-seven paired previews in `docs/chart-previews/`, including
-automatic linear/log tick text and caller-supplied title labels. The
+automatic linear/log tick text, caller-supplied titles, and bar category/series
+legends. The
 complete registry, remaining grammar stages and export/widget/benchmark gates
 are tracked in `docs/charting-engine-plan.md` and L061; the original R/Python
 gap remains open rather than being inferred closed from these first charts.
