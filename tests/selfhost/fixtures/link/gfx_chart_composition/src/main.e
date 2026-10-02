@@ -80,6 +80,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let zeros = [2]f32{ 0.0, 0.0 }
     let (_, zero_normalized) = chart.stacked_bars(zeros[..], 1usize, 2usize, bounds, true, bars[..], layers[..])
     if zero_normalized != chart.Invalid { ret chart.Invalid }
+    let bridge_values = [4]f32{ 10.0, 4.0, -6.0, 3.0 }
+    var bridge_bars: [5]geometry.Rect = zero
+    var bridge_links: [4]chart.Segment = zero
+    let (bridge, bridge_error) = chart.waterfall(bridge_values[..], bounds, bridge_bars[..], bridge_links[..])
+    if bridge_error != ok || bridge.kind != .Waterfall || bridge.bars.len != 5usize || bridge.segments.len != 4usize || !near(bridge.y_max, 14.0) || !near(bridge_bars[2].y, 0.0) || !near(bridge_bars[2].height, 42.86) || !near(bridge_bars[4].height, 78.57) || !near(bridge_links[2].from.y, bridge_links[2].to.y) { ret chart.Invalid }
+    let (bridge_short, bridge_short_error) = chart.waterfall(bridge_values[..], bounds, bridge_bars[..4usize], bridge_links[..])
+    if bridge_short_error != chart.TooLarge { ret chart.Invalid }
+    let (_, bridge_links_error) = chart.waterfall(bridge_values[..], bounds, bridge_bars[..], bridge_links[..3usize])
+    if bridge_links_error != chart.TooLarge { ret chart.Invalid }
+    let invalid_bridge = [2]f32{ 10.0, 1.0 / 0.0 }
+    let (_, bridge_invalid_error) = chart.waterfall(invalid_bridge[..], bounds, bridge_bars[..], bridge_links[..])
+    if bridge_invalid_error != chart.Invalid { ret chart.Invalid }
+    let (bridge_builder_made, bridge_builder_error) = scene.builder(a, 16usize)
+    if bridge_builder_error != ok { ret bridge_builder_error }
+    var bridge_builder = bridge_builder_made
+    try chart_scene.append(a, &bridge_builder, &bridge, paint.Brush { Solid: blue })
+    if scene.builder_count(&bridge_builder) != 9usize { ret chart.Invalid }
+    let (bridge_state, bridge_writer_error_unused, bridge_writer_error) = io.memory_writer(a, 0usize)
+    if bridge_writer_error != ok { ret bridge_writer_error }
+    var bridge_held = bridge_state
+    var bridge_writer = io.writer(mem.cast[*void](&bridge_held), io.memory_write)
+    try chart_svg.append(&bridge_writer, &bridge, blue)
+    let bridge_svg = io.memory_bytes(&bridge_held)
+    if !str.contains(bridge_svg, "<rect") || !str.contains(bridge_svg, "<line") { ret chart.Invalid }
     let (_, short_ticks) = chart.category_ticks(4usize, category_ticks[..3usize])
     if short_ticks != chart.TooLarge { ret chart.Invalid }
     let (_, no_ticks) = chart.category_ticks(0usize, category_ticks[..])

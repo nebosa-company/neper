@@ -179,11 +179,18 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
             try dot(w, marks.coords[i], ink)
             i += 1usize
         }
-    } else if marks.kind == .Bar || marks.kind == .Histogram {
+    } else if marks.kind == .Bar || marks.kind == .Histogram || marks.kind == .Waterfall {
         var i = 0usize
         while i < marks.bars.len {
             if marks.bars[i].width > 0.0 && marks.bars[i].height > 0.0 { try rect(w, marks.bars[i], ink, false) }
             i += 1usize
+        }
+        if marks.kind == .Waterfall {
+            i = 0usize
+            while i < marks.segments.len {
+                try line(w, marks.segments[i].from, marks.segments[i].to, ink)
+                i += 1usize
+            }
         }
     } else {
         ret Invalid

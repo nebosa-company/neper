@@ -103,13 +103,17 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
         try append(a, builder, &line, brush)
         let dots = chart.Layout { kind: .Scatter, coords: marks.coords, segments: zero, bars: zero, x_min: marks.x_min, x_max: marks.x_max, y_min: marks.y_min, y_max: marks.y_max }
         try append(a, builder, &dots, brush)
-    } else if marks.kind == .Bar || marks.kind == .Histogram {
+    } else if marks.kind == .Bar || marks.kind == .Histogram || marks.kind == .Waterfall {
         var i = 0usize
         while i < marks.bars.len {
             if marks.bars[i].width > 0.0 && marks.bars[i].height > 0.0 {
                 try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: marks.bars[i], brush: brush } })
             }
             i += 1usize
+        }
+        if marks.kind == .Waterfall {
+            let links = chart.Layout { kind: .Rug, coords: zero, segments: marks.segments, bars: zero, x_min: marks.x_min, x_max: marks.x_max, y_min: marks.y_min, y_max: marks.y_max }
+            try append(a, builder, &links, brush)
         }
     } else {
         ret chart.Invalid

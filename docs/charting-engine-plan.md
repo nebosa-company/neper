@@ -153,7 +153,7 @@ remains planned.
 | Family | Charts |
 |---|---|
 | Cartesian series | scatter, line, points+line, step/stairs, lollipop, dot/dumbbell, rug, stem-and-leaf, area, range/interval, error bars, confidence bands |
-| Bars and composition | bar, column, grouped, dodged, stacked, 100% stacked, diverging, waterfall/bridge, bullet, Pareto, funnel, population pyramid |
+| Bars and composition | bar, column, grouped, dodged, stacked, 100% stacked, diverging, waterfall/bridge (basic), bullet, Pareto, funnel, population pyramid |
 | Distributions | histogram, frequency polygon, binned dot plot, density/KDE, ridgeline, box-and-whisker, violin, boxen, beeswarm, strip/jitter, ECDF, QQ, PP, probability plot |
 | Matrix and categorical | heatmap, tile, correlation matrix, mosaic, spine, fourfold, association, parallel coordinates, scatterplot matrix/pairs |
 | Composition and hierarchy | pie, donut, ring, waffle, treemap, sunburst/icicle, circle packing, Sankey, alluvial, chord, streamgraph |
@@ -195,9 +195,12 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    preview. Basic category-center labels and per-series legend geometry are
    delivered for bar compositions; strips, automated legend layout and
    categorical facet mapping remain.
+   A basic waterfall/bridge layout now accepts an opening total and signed
+   changes, adds the closing total and level connectors, and reuses the bar
+   scene/SVG paths. Per-step semantic colouring and category labels remain.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with thirty-three vector previews, automatic numeric tick text and
+   adapter with thirty-four vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered; collision-safe margins, a production PNG
    API, PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.

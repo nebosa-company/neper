@@ -396,6 +396,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (normalized, normalized_error) = chart.stacked_bars(grouped_values[..], 4usize, 2usize, bar_bounds, true, series_bars[..], series_layers[..])
     if normalized_error != ok { ret normalized_error }
     try render_bar_layers(a, queue, output_target, canvas, &renderer, normalized, category_names[..], series_names[..], "Share by category", "docs/chart-previews/stacked_100.png")
+    let waterfall_values = [6]f32{ 12.0, 5.0, -3.0, 4.0, -6.0, 2.0 }
+    var waterfall_bars: [7]geometry.Rect = zero
+    var waterfall_links: [6]chart.Segment = zero
+    let (waterfall_marks, waterfall_error) = chart.waterfall(waterfall_values[..], bounds, waterfall_bars[..], waterfall_links[..])
+    if waterfall_error != ok { ret waterfall_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &waterfall_marks, "docs/chart-previews/waterfall.png")
     let log_x = [8]f32{ 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 1000.0 }
     let log_y = [8]f32{ 1.0, 3.0, 5.0, 10.0, 25.0, 40.0, 80.0, 100.0 }
     var log_plot = chart.spec(.Scatter, bounds, log_x[..], log_y[..])

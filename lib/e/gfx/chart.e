@@ -11,7 +11,7 @@ use e.math.special
 use e.mem
 use e.str
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
@@ -610,6 +610,66 @@ fn bar_layers(categories: usize, series: usize, bars: []geometry.Rect, layers: [
         i += 1usize
     }
     ret layers[..series]
+}
+
+// The first value is an absolute starting total; later values are signed
+// changes. The final bar is the resulting total, with level connectors.
+fn waterfall(values: []const f32, bounds: geometry.Rect, bars: []geometry.Rect, connectors: []Segment) -> (Layout, err) {
+    if values.len < 2usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    if bars.len <= values.len || connectors.len < values.len { ret (zero, TooLarge) }
+    var low = 0.0f64
+    var high = 0.0f64
+    var total = 0.0f64
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) { ret (zero, Invalid) }
+        let before = total
+        if i == 0usize { total = f64(values[i]) } else { total += f64(values[i]) }
+        if !finite(f32(total)) { ret (zero, Invalid) }
+        if before < low { low = before }
+        if before > high { high = before }
+        if total < low { low = total }
+        if total > high { high = total }
+        i += 1usize
+    }
+    var ymin = f32(low)
+    var ymax = f32(high)
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+    }
+    let count = values.len + 1usize
+    let cell = bounds.width / f32(count)
+    let width = cell * 0.72
+    if !finite(width) || width <= 0.0 { ret (zero, Invalid) }
+    let offset = (cell - width) * 0.5
+    total = 0.0f64
+    i = 0usize
+    while i < count {
+        let before = total
+        if i < values.len {
+            if i == 0usize { total = f64(values[i]) } else { total += f64(values[i]) }
+        }
+        var from = f32(before)
+        if i == 0usize || i == values.len { from = 0.0 }
+        let y0 = bounds.y + bounds.height - mapped(from, ymin, ymax, 0.0, bounds.height)
+        let y1 = bounds.y + bounds.height - mapped(f32(total), ymin, ymax, 0.0, bounds.height)
+        var top = y0
+        var bottom = y1
+        if top > bottom {
+            top = y1
+            bottom = y0
+        }
+        let x = bounds.x + cell * f32(i) + offset
+        bars[i] = geometry.rect(x, top, width, bottom - top)
+        if i < values.len {
+            let level = bounds.y + bounds.height - mapped(f32(total), ymin, ymax, 0.0, bounds.height)
+            connectors[i] = Segment { from: Coord { x: x + width, y: level }, to: Coord { x: x + cell, y: level } }
+        }
+        i += 1usize
+    }
+    ret (Layout { kind: .Waterfall, coords: zero, segments: connectors[..values.len], bars: bars[..count], x_min: 0.0, x_max: f32(count), y_min: ymin, y_max: ymax }, ok)
 }
 
 fn grouped_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {

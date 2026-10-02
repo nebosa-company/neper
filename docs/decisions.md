@@ -33204,3 +33204,14 @@ The targeted scene transition in `gfx_chart_distribution` fails without this
 guard and passes with it on both hosts. This conservatively costs the scroll
 shortcut for scenes with fixed paint; tracking its exact repaint bounds is the
 later optimization. The gallery's existing PNGs re-render without guide ghosts.
+
+## D1814 — Derive waterfall bars and connectors from cumulative levels
+
+`chart.waterfall` treats the first value as an absolute opening amount and
+remaining values as signed changes. It emits floating intermediate bars, a
+closing-total bar and one connector per step into caller-owned arrays. The
+bar renderer draws the rectangles and reuses the existing segment adapter for
+connectors; no separate mark grammar is needed. Zero-height steps remain
+level connectors. The focused composition fixture checks signed geometry,
+capacity and scene/SVG emission on Windows and Linux. Step colours and
+category labels remain a gallery/guide composition concern.
