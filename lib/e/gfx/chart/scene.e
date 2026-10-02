@@ -8,7 +8,15 @@ use e.text.layout as text_layout
 use e.text.shape
 
 fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, brush: paint.Brush) -> err {
-    if marks.kind == .Scatter {
+    if marks.kind == .PointLine {
+        var line_marks = *marks
+        line_marks.kind = .Line
+        try append(a, builder, &line_marks, brush)
+        var points = *marks
+        points.kind = .Scatter
+        ret append(a, builder, &points, brush)
+    }
+    if marks.kind == .Scatter || marks.kind == .Strip {
         var i = 0usize
         while i < marks.coords.len {
             let p = marks.coords[i]

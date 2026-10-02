@@ -129,7 +129,15 @@ fn dot(w: *io.Writer, p: chart.Coord, ink: paint.Color) -> err {
 
 fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
     if !paint.color_ok(ink) { ret Invalid }
-    if marks.kind == .Scatter {
+    if marks.kind == .PointLine {
+        var line_marks = *marks
+        line_marks.kind = .Line
+        try append(w, &line_marks, ink)
+        var points = *marks
+        points.kind = .Scatter
+        ret append(w, &points, ink)
+    }
+    if marks.kind == .Scatter || marks.kind == .Strip {
         var i = 0usize
         while i < marks.coords.len {
             try dot(w, marks.coords[i], ink)

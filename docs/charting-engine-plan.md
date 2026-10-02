@@ -1,14 +1,14 @@
 # Neper charting engine plan
 
-Status: scatter, line, bar, grouped bar, signed stacked bar, 100% stacked bar,
-histogram, frequency polygon, rug, step, area, lollipop, error bars,
+Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar,
+histogram, frequency polygon, rug, strip/jitter, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
 reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-twenty-nine PNG plus twenty-nine SVG previews from Neper. L061 remains partial
+thirty-one PNG plus thirty-one SVG previews from Neper. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -82,6 +82,10 @@ Frequency polygons reuse histogram counts and join bin centers to zero at the
 outer edges. Rugs map every observation to an independent short x-axis stroke,
 preserving ties rather than binning them. Both reuse the existing line/stroke
 adapters and keep output storage with the caller.
+Points+line combines the existing Cartesian scatter and line layouts with one
+domain and paints the line before its points. Strip plots map observations to
+numeric x positions and add repeatable vertical jitter, preserving ties; both
+use caller-owned coordinates and the existing scene/SVG mark paths.
 Area plots close ordered x/y points against an explicit baseline; lollipops
 reuse the same baseline and point mapping. Error bars borrow center/lower/upper
 columns, validate containment and emit a stem, two caps and a point per row.
@@ -128,8 +132,8 @@ and backend-parity measurements remain planned.
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
-Scatter, line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
-histogram, frequency polygon, rug, step/stairs, area, lollipop, error bars,
+Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
+histogram, frequency polygon, rug, strip/jitter, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
 box, density, Q-Q, violin, heatmap and correlation matrix are delivered; every other entry
 remains planned.
@@ -168,9 +172,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 ## Delivery order and gates
 
 1. **Foundation (delivered now):** typed spec, borrowed data, scale-to-bounds,
-   scatter/line/bar/step/area/lollipop/error-bar/band/dumbbell marks, constant-domain handling,
+   scatter/line/points+line/bar/step/area/lollipop/error-bar/band/dumbbell marks, constant-domain handling,
    executable fixtures.
-2. **Core distributions (delivered):** histogram, frequency polygon, rug, box,
+2. **Core distributions (delivered):** histogram, frequency polygon, rug, strip, box,
    violin, density, ECDF and normal Q-Q have executable fixtures and PNG previews. Other distribution
    variants in the catalogue remain planned.
 3. **Matrix and facets (partial):** heatmap and Pearson correlation matrix have
@@ -182,7 +186,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    categorical facet mapping remain.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with twenty-nine vector previews, automatic numeric tick text and
+   adapter with thirty-one vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered; collision-safe margins, a production PNG
    API, PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.

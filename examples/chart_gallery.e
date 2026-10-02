@@ -90,7 +90,7 @@ fn export_svg_chart(a: *mem.Arena, marks: *const chart.Layout, x_scale: chart.Sc
     let (_, y_error) = chart.ticks(y_scale, marks.y_min, marks.y_max, y_ticks[..])
     if y_error != ok { ret y_error }
     var y_guides = y_ticks[..]
-    if marks.kind == .Rug { y_guides = y_ticks[..0usize] }
+    if marks.kind == .Rug || marks.kind == .Strip { y_guides = y_ticks[..0usize] }
     try chart_svg.append_guides(&writer, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_guides, paint.rgba(0.88, 0.91, 0.95, 1.0), paint.rgba(0.32, 0.38, 0.48, 1.0))
     var ink = paint.rgba(0.07, 0.35, 0.76, 1.0)
     if marks.kind == .Area || marks.kind == .Band { ink = paint.rgba(0.25, 0.55, 0.88, 0.82) }
@@ -130,7 +130,7 @@ fn render_chart_scaled(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     let (_, y_error) = chart.ticks(y_scale, marks.y_min, marks.y_max, y_ticks[..])
     if y_error != ok { ret y_error }
     var y_guides = y_ticks[..]
-    if marks.kind == .Rug { y_guides = y_ticks[..0usize] }
+    if marks.kind == .Rug || marks.kind == .Strip { y_guides = y_ticks[..0usize] }
     try chart_scene.append_guides(&builder, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_guides, grid, axis)
     try chart_scene.append(a, &builder, marks, ink)
     try render_builder(a, q, output_target, canvas, renderer, &builder, path)
@@ -370,8 +370,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var segments: [14]chart.Segment = zero
     var bars: [8]geometry.Rect = zero
     let bounds = geometry.rect(44.0, 30.0, 286.0, 174.0)
-    let kinds = [6]chart.Kind{ .Scatter, .Line, .Bar, .Step, .Area, .Lollipop }
-    let paths = [6]str{ "docs/chart-previews/scatter.png", "docs/chart-previews/line.png", "docs/chart-previews/bar.png", "docs/chart-previews/step.png", "docs/chart-previews/area.png", "docs/chart-previews/lollipop.png" }
+    let kinds = [7]chart.Kind{ .Scatter, .Line, .PointLine, .Bar, .Step, .Area, .Lollipop }
+    let paths = [7]str{ "docs/chart-previews/scatter.png", "docs/chart-previews/line.png", "docs/chart-previews/point_line.png", "docs/chart-previews/bar.png", "docs/chart-previews/step.png", "docs/chart-previews/area.png", "docs/chart-previews/lollipop.png" }
     var i = 0usize
     while i < kinds.len {
         var spec = chart.spec(kinds[i], bounds, x[..], y[..])
@@ -440,6 +440,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (rug_marks, rug_error) = chart.rug(values[..], bounds, 18.0, rug_segments[..])
     if rug_error != ok { ret rug_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &rug_marks, "docs/chart-previews/rug.png")
+    var strip_points: [16]chart.Coord = zero
+    let (strip_marks, strip_error) = chart.strip(values[..], bounds, 24.0, strip_points[..])
+    if strip_error != ok { ret strip_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &strip_marks, "docs/chart-previews/strip.png")
     var cdf_segments: [31]chart.Segment = zero
     let (cdf, cdf_error) = chart.ecdf(values[..], bounds, cdf_segments[..])
     if cdf_error != ok { ret cdf_error }

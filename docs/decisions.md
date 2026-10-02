@@ -33169,3 +33169,14 @@ and independent-segment branches; no binning or painter code is duplicated.
 `gfx_chart_distribution` checks geometry, refusal paths and both adapters on
 Windows and Linux. The gallery adds a PNG/SVG pair for each chart. Rug guides
 omit a meaningless y-grid; richer density-plus-rug composition remains planned.
+
+## D1808 — Compose point-line charts and jittered strips from existing marks
+
+`PointLine` combines the existing scatter and line layouts under the same
+Cartesian domain; scene and SVG paint the connected path before its points.
+`strip` maps every observation to its numeric x position and a deterministic
+eleven-offset vertical jitter. It preserves ties, but does not promise
+collision avoidance; beeswarm packing is a separate planned chart. Both use
+caller-owned storage and existing mark adapters. `gfx_chart_distribution`
+checks geometry, capacity and adapter output on Windows and Linux, and the
+gallery adds a PNG/SVG pair for each.

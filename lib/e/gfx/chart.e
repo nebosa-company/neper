@@ -11,7 +11,7 @@ use e.math.special
 use e.mem
 use e.str
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
@@ -305,7 +305,19 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
 // Empty limits use each series' own domain; two values fix the domain so
 // multiple facet panels can share x, y, or both without copying their columns.
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err) {
-    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell || s.kind == .FrequencyPolygon || s.kind == .Rug { ret (zero, Invalid) }
+    if s.kind == .PointLine {
+        if coords.len < s.x.len || (s.x.len > 1usize && segments.len < s.x.len - 1usize) { ret (zero, TooLarge) }
+        var points_spec = *s
+        points_spec.kind = .Scatter
+        let (points, points_error) = layout_with_limits(&points_spec, coords, segments, bars, x_limits, y_limits)
+        if points_error != ok { ret (zero, points_error) }
+        var line_spec = *s
+        line_spec.kind = .Line
+        let (line, line_error) = layout_with_limits(&line_spec, coords, segments, bars, x_limits, y_limits)
+        if line_error != ok { ret (zero, line_error) }
+        ret (Layout { kind: .PointLine, coords: points.coords, segments: line.segments, bars: zero, x_min: points.x_min, x_max: points.x_max, y_min: points.y_min, y_max: points.y_max }, ok)
+    }
+    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell || s.kind == .FrequencyPolygon || s.kind == .Rug || s.kind == .Strip { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if (x_limits.len != 0usize && x_limits.len != 2usize) || (y_limits.len != 0usize && y_limits.len != 2usize) { ret (zero, Invalid) }
@@ -814,6 +826,31 @@ fn rug(values: []const f32, bounds: geometry.Rect, height: f32, segments: []Segm
         i += 1usize
     }
     ret (Layout { kind: .Rug, coords: zero, segments: segments[..values.len], bars: zero, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: 1.0 }, ok)
+}
+
+// Show every observation at its numeric x value with repeatable vertical jitter.
+fn strip(values: []const f32, bounds: geometry.Rect, spread: f32, coords: []Coord) -> (Layout, err) {
+    if !valid_bounds(bounds) || !finite(spread) || spread < 0.0 || spread > bounds.height * 0.5 { ret (zero, Invalid) }
+    if coords.len < values.len { ret (zero, TooLarge) }
+    let (raw_min, raw_max, range_error) = extent(values)
+    if range_error != ok { ret (zero, range_error) }
+    var xmin = raw_min
+    var xmax = raw_max
+    if xmin == xmax {
+        xmin -= 0.5
+        xmax += 0.5
+        if xmin == xmax {
+            if xmin > 0.0 { xmin *= 0.5 } else { xmax *= 0.5 }
+        }
+    }
+    var i = 0usize
+    while i < values.len {
+        // ponytail: eleven jitter offsets repeat; use beeswarm packing when overlap matters.
+        let slot = ((i % 11usize) * 7usize) % 11usize
+        coords[i] = Coord { x: mapped(values[i], xmin, xmax, bounds.x, bounds.width), y: bounds.y + bounds.height * 0.5 + (f32(slot) - 5.0) * spread / 5.0 }
+        i += 1usize
+    }
+    ret (Layout { kind: .Strip, coords: coords[..values.len], segments: zero, bars: zero, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: 1.0 }, ok)
 }
 
 // Empirical CDF of an ascending sample. Each observation raises the step by

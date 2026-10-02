@@ -39,23 +39,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var generic = chart.spec(.Rug, bounds, rug_values[..], rug_values[..])
     let (_, generic_error) = chart.layout(&generic, zero, zero, zero)
     if generic_error != chart.Invalid { ret chart.Invalid }
-    let (made, builder_error) = scene.builder(a, 8usize)
+    var strip_points: [4]chart.Coord = zero
+    let (strip, strip_error) = chart.strip(rug_values[..], bounds, 8.0, strip_points[..])
+    if strip_error != ok || strip.kind != .Strip || strip.coords.len != 4usize || !near(strip.coords[1].x, 50.0) || !near(strip.coords[2].x, 50.0) || near(strip.coords[1].y, strip.coords[2].y) { ret chart.Invalid }
+    let (_, short_strip) = chart.strip(rug_values[..], bounds, 8.0, strip_points[..3usize])
+    if short_strip != chart.TooLarge { ret chart.Invalid }
+    let (_, wide_strip) = chart.strip(rug_values[..], bounds, 51.0, strip_points[..])
+    if wide_strip != chart.Invalid { ret chart.Invalid }
+    let (constant_strip, constant_strip_error) = chart.strip(same[..], bounds, 8.0, strip_points[..])
+    if constant_strip_error != ok || !near(constant_strip.coords[0].x, 50.0) { ret chart.Invalid }
+    generic.kind = .Strip
+    let (_, generic_strip_error) = chart.layout(&generic, zero, zero, zero)
+    if generic_strip_error != chart.Invalid { ret chart.Invalid }
+    let point_x = [4]f32{ 0.0, 1.0, 2.0, 3.0 }
+    var point_line = chart.spec(.PointLine, bounds, point_x[..], rug_values[..])
+    var line_points: [4]chart.Coord = zero
+    var line_segments: [3]chart.Segment = zero
+    let (joined, joined_error) = chart.layout(&point_line, line_points[..], line_segments[..], zero)
+    if joined_error != ok || joined.kind != .PointLine || joined.coords.len != 4usize || joined.segments.len != 3usize || !near(joined.segments[0].to.x, joined.coords[1].x) || !near(joined.segments[2].to.y, joined.coords[3].y) { ret chart.Invalid }
+    let (_, short_joined) = chart.layout(&point_line, line_points[..], line_segments[..2usize], zero)
+    if short_joined != chart.TooLarge { ret chart.Invalid }
+    let (made, builder_error) = scene.builder(a, 20usize)
     if builder_error != ok { ret builder_error }
     var builder = made
     let ink = paint.rgba(0.07, 0.35, 0.76, 1.0)
     try chart_scene.append(a, &builder, &polygon, paint.Brush { Solid: ink })
     try chart_scene.append(a, &builder, &rug, paint.Brush { Solid: ink })
-    if scene.builder_count(&builder) != 5usize { ret chart.Invalid }
+    try chart_scene.append(a, &builder, &strip, paint.Brush { Solid: ink })
+    try chart_scene.append(a, &builder, &joined, paint.Brush { Solid: ink })
+    if scene.builder_count(&builder) != 14usize { ret chart.Invalid }
     let (state, unused, writer_error) = io.memory_writer(a, 0usize)
     if writer_error != ok { ret writer_error }
     var held = state
     var writer = io.writer(mem.cast[*void](&held), io.memory_write)
-    try chart_svg.begin(&writer, 100.0, 100.0, "Distribution", "Frequency polygon and rug")
+    try chart_svg.begin(&writer, 100.0, 100.0, "Chart variants", "Distribution and point-line marks")
     try chart_svg.append(&writer, &polygon, ink)
     try chart_svg.append(&writer, &rug, ink)
+    try chart_svg.append(&writer, &strip, ink)
+    try chart_svg.append(&writer, &joined, ink)
     try chart_svg.finish(&writer)
     let svg = io.memory_bytes(&held)
-    if !str.contains(svg, "<path d=\"M") || !str.contains(svg, "<line") || !str.contains(svg, "</svg>") { ret chart.Invalid }
+    if !str.contains(svg, "<path d=\"M") || !str.contains(svg, "<line") || !str.contains(svg, "<rect") || !str.contains(svg, "</svg>") { ret chart.Invalid }
     try io.print("gfx chart distribution ok\n")
     ret ok
 }
