@@ -6570,6 +6570,13 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     if next_error != ok { ret next_error }
     var call: check.CallInfo = zero
     call.function = next
+    var iterator_slot = 0usize
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    if builder.frame_mode || builder.frame_locals {
+        let (slot, save_error) = frame_save_temporary(c, pointer_type, iterator_pointer, token, builder)
+        if save_error != ok { ret save_error }
+        iterator_slot = slot
+    }
     try kernel_loop_open(builder, module_index, token)
     let (entry_branch, entry_error) = emit_branch(builder, token)
     if entry_error != ok { ret entry_error }
@@ -6579,6 +6586,12 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     try nir.set_branch_targets(builder, entry_branch, condition_block, 0usize)
     var arguments: [1]usize = zero
     arguments[0usize] = iterator_pointer
+    if iterator_slot != 0usize {
+        let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, token)
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, iterator_slot)
+        arguments[0usize] = loaded
+    }
     var results: CallResults = zero
     try emit_call_results(c, g, call, 0usize, arguments[..], 1usize, builder, token, &results)
     if results.count != 2usize { ret check.InvalidType }

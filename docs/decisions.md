@@ -32764,3 +32764,19 @@ machinery; no new lowering path is needed.
 **Evidence.** The extended fixture passes in debug and release on Windows
 and Linux, returning the expected value after two `while` iterations and
 the one-step `for` range.
+
+## D1777 — Keep a protocol iterator address across CPU barrier resumes
+
+**Decision.** A protocol `for` saves its iterator pointer in the invocation
+frame before entering the loop and reloads it in the condition block. A
+barrier in the body can resume past the pointer-producing expression, just
+as with a slice collection's data pointer. Ordinary CPU and SPIR-V loops
+keep their existing direct pointer.
+
+**Evidence.** A computed field address for `state.iter` failed NIR
+verification on the next iteration after a body barrier. The
+`link/gpu_barrier_chain` regression now uses that shape and checks every
+lane; debug and release builds pass on Windows and Linux, and the isolated
+Windows self-host suite passes end-to-end with the patched compiler. A
+barrier inside the implicit `iter_next` method is a separate reachability
+gap: the device walk does not yet see that generated call.

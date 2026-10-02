@@ -7,6 +7,14 @@ error WrongValue
 
 type View = struct { data: []u32 }
 type Packet = struct { value: u32, lane: u32 }
+type Iter = struct { next: u32 }
+type State = struct { iter: Iter }
+
+fn iter_next(it: *Iter) -> (u32, bool) {
+    let value = it.next
+    it.next += 1u32
+    ret (value, value < 2u32)
+}
 
 fn inner(lane: u32) -> u32 {
     var saved = lane + 41u32
@@ -163,6 +171,13 @@ fn middle(out: []u32, lane: u32) {
             for condition_step in passthrough(lane)..passthrough(lane + 1u32) {
                 out[usize(lane)] = condition_step + 44u32
             }
+            var state = State { iter: Iter { next: 0u32 } }
+            var total = 0u32
+            for value in state.iter {
+                gpu.barrier()
+                total += value
+            }
+            out[usize(lane)] = lane + total + 43u32
         }
     }
 }
