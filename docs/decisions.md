@@ -32905,3 +32905,21 @@ policy), shiny/streamlit/dash-style dashboard frameworks (hand-build on
 implementing module or to one of L056–L064; `docs/work-queue.json` carries the
 nine items with orders 154–162 and one task file each under
 `docs/tasks/library/`.
+
+## D1786 — Close CPU barrier fission after the pending-expression audit
+
+**Decision.** Keep the specific frame spills for values held across a
+barrier-bearing child expression; do not add a generic spill pass. The switch
+subject needs no per-case spill because the checker requires constant case
+labels. Inferring device-callability for pure helper wrappers is a separate
+GPU-profile concern, not CPU barrier fission.
+
+**Evidence.** The `lower_expression` call sites in `src/lower.e` were audited
+for values consumed after a later child can cut: calls, slices, indexing,
+aggregate literals, returns, assignments, binary/vector operations, loop
+bounds and switches. The existing `link/gpu_barrier_chain` covers the runtime
+cases, and `check/switch_non_constant` enforces the excluded switch case.
+With the survival-trial library fix at `afdc224b`, both canonical self-host
+suites pass end-to-end, including their final compiler-image comparisons.
+Linux used `VK_ICD_FILENAMES=/dev/null` after this WSL host's llvmpipe run
+stalled; Windows exercised live Vulkan devices.
