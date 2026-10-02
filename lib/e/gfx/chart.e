@@ -11,7 +11,7 @@ use e.math.special
 use e.mem
 use e.str
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
@@ -305,7 +305,7 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
 // Empty limits use each series' own domain; two values fix the domain so
 // multiple facet panels can share x, y, or both without copying their columns.
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err) {
-    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell { ret (zero, Invalid) }
+    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell || s.kind == .FrequencyPolygon || s.kind == .Rug { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if (x_limits.len != 0usize && x_limits.len != 2usize) || (y_limits.len != 0usize && y_limits.len != 2usize) { ret (zero, Invalid) }
@@ -772,6 +772,48 @@ fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []
         i += 1usize
     }
     ret (Layout { kind: .Histogram, coords: zero, segments: zero, bars: bars, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: f32(tallest) }, ok)
+}
+
+// Connect each histogram bin center, closing at zero at the outer bin edges.
+fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err) {
+    let (hist, hist_error) = histogram(values, bounds, counts, bins)
+    if hist_error != ok { ret (zero, hist_error) }
+    if segments.len <= bins.len { ret (zero, TooLarge) }
+    let baseline = bounds.y + bounds.height
+    var previous = Coord { x: bounds.x, y: baseline }
+    var i = 0usize
+    while i < bins.len {
+        let center = Coord { x: bins[i].x + bins[i].width * 0.5, y: bins[i].y }
+        segments[i] = Segment { from: previous, to: center }
+        previous = center
+        i += 1usize
+    }
+    segments[i] = Segment { from: previous, to: Coord { x: bounds.x + bounds.width, y: baseline } }
+    ret (Layout { kind: .FrequencyPolygon, coords: zero, segments: segments[..i + 1usize], bars: zero, x_min: hist.x_min, x_max: hist.x_max, y_min: hist.y_min, y_max: hist.y_max }, ok)
+}
+
+// Each observation is a short independent mark along the bottom x axis.
+fn rug(values: []const f32, bounds: geometry.Rect, height: f32, segments: []Segment) -> (Layout, err) {
+    if !valid_bounds(bounds) || !finite(height) || height <= 0.0 || height > bounds.height { ret (zero, Invalid) }
+    if segments.len < values.len { ret (zero, TooLarge) }
+    let (raw_min, raw_max, range_error) = extent(values)
+    if range_error != ok { ret (zero, range_error) }
+    var xmin = raw_min
+    var xmax = raw_max
+    if xmin == xmax {
+        xmin -= 0.5
+        xmax += 0.5
+        if xmin == xmax {
+            if xmin > 0.0 { xmin *= 0.5 } else { xmax *= 0.5 }
+        }
+    }
+    var i = 0usize
+    while i < values.len {
+        let x = mapped(values[i], xmin, xmax, bounds.x, bounds.width)
+        segments[i] = Segment { from: Coord { x: x, y: bounds.y + bounds.height }, to: Coord { x: x, y: bounds.y + bounds.height - height } }
+        i += 1usize
+    }
+    ret (Layout { kind: .Rug, coords: zero, segments: segments[..values.len], bars: zero, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: 1.0 }, ok)
 }
 
 // Empirical CDF of an ascending sample. Each observation raises the step by

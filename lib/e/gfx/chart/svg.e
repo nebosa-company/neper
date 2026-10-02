@@ -135,7 +135,7 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
             try dot(w, marks.coords[i], ink)
             i += 1usize
         }
-    } else if marks.kind == .Line || marks.kind == .Step || marks.kind == .Ecdf || marks.kind == .Density {
+    } else if marks.kind == .Line || marks.kind == .Step || marks.kind == .Ecdf || marks.kind == .Density || marks.kind == .FrequencyPolygon {
         if marks.segments.len == 0usize { ret ok }
         try io.write_all(w, "<path d=\"M")
         try number(w, marks.segments[0usize].from.x)
@@ -155,7 +155,7 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
     } else if marks.kind == .Area || marks.kind == .Violin || marks.kind == .Band {
         if marks.coords.len < 4usize { ret Invalid }
         try path(w, marks.coords, ink, true)
-    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Qq || marks.kind == .Dumbbell {
+    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Qq || marks.kind == .Dumbbell || marks.kind == .Rug {
         var i = 0usize
         while i < marks.bars.len {
             if marks.bars[i].width > 0.0 && marks.bars[i].height > 0.0 { try rect(w, marks.bars[i], ink, true) }

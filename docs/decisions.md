@@ -33158,3 +33158,14 @@ scene render before opening the SVG memory writer to keep its buffer intact.
 Automatic placement, wrapping, palette policy and collision avoidance remain
 planned. `gfx_chart_composition` checks centers, legend positions, escaping and
 capacity refusals on both hosts.
+
+## D1806 — Derive distribution variants from histogram and axis strokes
+
+`frequency_polygon` calls the existing equal-width histogram calculation,
+then connects the caller-owned bin centers to the zero baseline at each outer
+edge. `rug` emits one disconnected short stroke per observation, preserving
+ties and the original numeric extent. Scene and SVG reuse their connected-line
+and independent-segment branches; no binning or painter code is duplicated.
+`gfx_chart_distribution` checks geometry, refusal paths and both adapters on
+Windows and Linux. The gallery adds a PNG/SVG pair for each chart. Rug guides
+omit a meaningless y-grid; richer density-plus-rug composition remains planned.

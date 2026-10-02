@@ -17,7 +17,7 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
             } })
             i += 1usize
         }
-    } else if marks.kind == .Line || marks.kind == .Step || marks.kind == .Ecdf || marks.kind == .Density {
+    } else if marks.kind == .Line || marks.kind == .Step || marks.kind == .Ecdf || marks.kind == .Density || marks.kind == .FrequencyPolygon {
         if marks.segments.len == 0usize { ret ok }
         let (made, path_error) = geometry.path_builder(a, marks.segments.len + 1usize, marks.segments.len + 1usize)
         if path_error != ok { ret path_error }
@@ -34,7 +34,7 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
             path: geometry.finish(&path), brush: brush,
             stroke: paint.Stroke { width: 2.0, cap: .Round, join: .Round, miter_limit: 4.0 },
         } })
-    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Dumbbell {
+    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Dumbbell || marks.kind == .Rug {
         var i = 0usize
         while i < marks.bars.len {
             let r = marks.bars[i]

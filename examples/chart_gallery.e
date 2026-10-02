@@ -89,7 +89,9 @@ fn export_svg_chart(a: *mem.Arena, marks: *const chart.Layout, x_scale: chart.Sc
     if x_error != ok { ret x_error }
     let (_, y_error) = chart.ticks(y_scale, marks.y_min, marks.y_max, y_ticks[..])
     if y_error != ok { ret y_error }
-    try chart_svg.append_guides(&writer, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_ticks[..], paint.rgba(0.88, 0.91, 0.95, 1.0), paint.rgba(0.32, 0.38, 0.48, 1.0))
+    var y_guides = y_ticks[..]
+    if marks.kind == .Rug { y_guides = y_ticks[..0usize] }
+    try chart_svg.append_guides(&writer, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_guides, paint.rgba(0.88, 0.91, 0.95, 1.0), paint.rgba(0.32, 0.38, 0.48, 1.0))
     var ink = paint.rgba(0.07, 0.35, 0.76, 1.0)
     if marks.kind == .Area || marks.kind == .Band { ink = paint.rgba(0.25, 0.55, 0.88, 0.82) }
     try chart_svg.append(&writer, marks, ink)
@@ -127,7 +129,9 @@ fn render_chart_scaled(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     if x_error != ok { ret x_error }
     let (_, y_error) = chart.ticks(y_scale, marks.y_min, marks.y_max, y_ticks[..])
     if y_error != ok { ret y_error }
-    try chart_scene.append_guides(&builder, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_ticks[..], grid, axis)
+    var y_guides = y_ticks[..]
+    if marks.kind == .Rug { y_guides = y_ticks[..0usize] }
+    try chart_scene.append_guides(&builder, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_guides, grid, axis)
     try chart_scene.append(a, &builder, marks, ink)
     try render_builder(a, q, output_target, canvas, renderer, &builder, path)
     ret export_svg_chart(a, marks, x_scale, y_scale, path)
@@ -428,6 +432,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (hist, hist_error) = chart.histogram(values[..], bounds, counts[..], hist_bars[..])
     if hist_error != ok { ret hist_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &hist, "docs/chart-previews/histogram.png")
+    var frequency_segments: [9]chart.Segment = zero
+    let (frequency, frequency_error) = chart.frequency_polygon(values[..], bounds, counts[..], hist_bars[..], frequency_segments[..])
+    if frequency_error != ok { ret frequency_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &frequency, "docs/chart-previews/frequency_polygon.png")
+    var rug_segments: [16]chart.Segment = zero
+    let (rug_marks, rug_error) = chart.rug(values[..], bounds, 18.0, rug_segments[..])
+    if rug_error != ok { ret rug_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &rug_marks, "docs/chart-previews/rug.png")
     var cdf_segments: [31]chart.Segment = zero
     let (cdf, cdf_error) = chart.ecdf(values[..], bounds, cdf_segments[..])
     if cdf_error != ok { ret cdf_error }

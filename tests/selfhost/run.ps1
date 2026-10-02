@@ -3102,6 +3102,11 @@ $gfxChartCompositionWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChartCompositionWritten -ne 'executable written') { throw 'gfx_chart_composition emission failed' }
 $gfxChartCompositionOutput = & $gfxChartCompositionPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
 if ($LASTEXITCODE -ne 0 -or $gfxChartCompositionOutput -ne 'gfx chart composition ok') { throw "the e.gfx.chart composed bars answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDistributionPath = Join-Path $testBuild 'gfx-chart-distribution-selfhost.exe'
+$gfxChartDistributionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_distribution\src\main.e') $repo 'x64' 'windows' $gfxChartDistributionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDistributionWritten -ne 'executable written') { throw 'gfx_chart_distribution emission failed' }
+$gfxChartDistributionOutput = & $gfxChartDistributionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDistributionOutput -ne 'gfx chart distribution ok') { throw "the e.gfx.chart distribution marks answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSvgPath = Join-Path $testBuild 'gfx-chart-svg-selfhost.exe'
 $gfxChartSvgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_svg\src\main.e') $repo 'x64' 'windows' $gfxChartSvgPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSvgWritten -ne 'executable written') { throw 'gfx_chart_svg emission failed' }
