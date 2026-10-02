@@ -119,6 +119,40 @@ fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     ret render_chart_scaled(a, q, output_target, canvas, renderer, marks, linear, linear, path)
 }
 
+fn render_scatter_overlay(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, dots: *const chart.Layout, overlay: *const chart.Layout, path: str) -> err {
+    let plot = geometry.rect(44.0, 30.0, 286.0, 174.0)
+    let grid = paint.rgba(0.88, 0.91, 0.95, 1.0)
+    let axis = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    let blue = paint.rgba(0.07, 0.35, 0.76, 1.0)
+    let orange = paint.rgba(0.94, 0.42, 0.12, 1.0)
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var x_ticks: [4]chart.Tick = zero
+    var y_ticks: [4]chart.Tick = zero
+    let (_, x_error) = chart.ticks(linear, overlay.x_min, overlay.x_max, x_ticks[..])
+    if x_error != ok { ret x_error }
+    let (_, y_error) = chart.ticks(linear, overlay.y_min, overlay.y_max, y_ticks[..])
+    if y_error != ok { ret y_error }
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: axis })
+    try chart_scene.append(a, &builder, dots, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, overlay, paint.Brush { Solid: orange })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid, axis)
+    try chart_svg.append(&writer, dots, blue)
+    try chart_svg.append(&writer, overlay, orange)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, title: str, path: str) -> err {
     if layers.len != 2usize || names.len != layers.len { ret chart.Invalid }
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
@@ -525,6 +559,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (bubble_marks, bubble_error) = chart.bubble(&bubble_spec, bubble_sizes[..], 18.0, points[..], bars[..])
     if bubble_error != ok { ret bubble_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &bubble_marks, "docs/chart-previews/bubble.png")
+    var fit_segments: [1]chart.Segment = zero
+    let (fit, fit_error) = chart.regression_line(x[..], y[..], bounds, fit_segments[..])
+    if fit_error != ok { ret fit_error }
+    let fit_x_limits = [2]f32{ fit.x_min, fit.x_max }
+    let fit_y_limits = [2]f32{ fit.y_min, fit.y_max }
+    var overlay_spec = chart.spec(.Scatter, bounds, x[..], y[..])
+    let (fit_dots, fit_dots_error) = chart.layout_with_limits(&overlay_spec, points[..], segments[..0usize], bars[..0usize], fit_x_limits[..], fit_y_limits[..])
+    if fit_dots_error != ok { ret fit_dots_error }
+    try render_scatter_overlay(a, queue, output_target, canvas, &renderer, &fit_dots, &fit, "docs/chart-previews/regression_fit.png")
+    var ellipse_segments: [64]chart.Segment = zero
+    let (ellipse, ellipse_error) = chart.covariance_ellipse(x[..], y[..], bounds, 2.4477, ellipse_segments[..])
+    if ellipse_error != ok { ret ellipse_error }
+    let ellipse_x_limits = [2]f32{ ellipse.x_min, ellipse.x_max }
+    let ellipse_y_limits = [2]f32{ ellipse.y_min, ellipse.y_max }
+    let (ellipse_dots, ellipse_dots_error) = chart.layout_with_limits(&overlay_spec, points[..], segments[..0usize], bars[..0usize], ellipse_x_limits[..], ellipse_y_limits[..])
+    if ellipse_dots_error != ok { ret ellipse_dots_error }
+    try render_scatter_overlay(a, queue, output_target, canvas, &renderer, &ellipse_dots, &ellipse, "docs/chart-previews/data_ellipse.png")
     let grouped_values = [8]f32{ 3.0, 2.0, 5.0, 4.0, 2.0, 6.0, 4.0, 3.0 }
     let category_names = [4]str{ "North", "South", "East", "West" }
     let series_names = [2]str{ "Alpha", "Beta" }

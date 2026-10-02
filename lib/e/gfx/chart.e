@@ -510,6 +510,116 @@ fn bubble(s: *const Spec, sizes: []const f32, max_radius: f32, coords: []Coord, 
     ret (Layout { kind: .Bubble, coords: positions.coords, segments: zero, bars: circles[..sizes.len], x_min: positions.x_min, x_max: positions.x_max, y_min: positions.y_min, y_max: positions.y_max }, ok)
 }
 
+type PairedStats = struct { summary: stat.Regression, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
+
+fn paired_stats(x: []const f32, y: []const f32) -> (PairedStats, err) {
+    if x.len == 0usize { ret (zero, Empty) }
+    if x.len != y.len { ret (zero, Invalid) }
+    var result = PairedStats { summary: stat.regression(), x_min: x[0usize], x_max: x[0usize], y_min: y[0usize], y_max: y[0usize] }
+    var i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || !finite(y[i]) { ret (zero, Invalid) }
+        stat.regression_add(&result.summary, f64(x[i]), f64(y[i]))
+        if x[i] < result.x_min { result.x_min = x[i] }
+        if x[i] > result.x_max { result.x_max = x[i] }
+        if y[i] < result.y_min { result.y_min = y[i] }
+        if y[i] > result.y_max { result.y_max = y[i] }
+        i += 1usize
+    }
+    ret (result, ok)
+}
+
+// Ordinary least squares in data space. The returned domain includes fitted
+// endpoints so a caller can map scatter marks with the same explicit limits.
+fn regression_line(x: []const f32, y: []const f32, bounds: geometry.Rect, segments: []Segment) -> (Layout, err) {
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    if segments.len == 0usize { ret (zero, TooLarge) }
+    let (data, data_error) = paired_stats(x, y)
+    if data_error != ok { ret (zero, data_error) }
+    let (slope, has_slope) = stat.regression_slope(&data.summary)
+    let (intercept, has_intercept) = stat.regression_intercept(&data.summary)
+    if !has_slope || !has_intercept || !finite64(slope) || !finite64(intercept) { ret (zero, Invalid) }
+    let first_y = f32(slope * f64(data.x_min) + intercept)
+    let last_y = f32(slope * f64(data.x_max) + intercept)
+    if !finite(first_y) || !finite(last_y) { ret (zero, Invalid) }
+    var low = data.y_min
+    var high = data.y_max
+    if first_y < low { low = first_y }
+    if last_y < low { low = last_y }
+    if first_y > high { high = first_y }
+    if last_y > high { high = last_y }
+    if low == high {
+        low -= 0.5
+        high += 0.5
+    }
+    let line_x = [2]f32{ data.x_min, data.x_max }
+    let line_y = [2]f32{ first_y, last_y }
+    let y_limits = [2]f32{ low, high }
+    var line_spec = spec(.Line, bounds, line_x[..], line_y[..])
+    let (marks, marks_error) = layout_with_limits(&line_spec, zero, segments, zero, line_x[..], y_limits[..])
+    ret (marks, marks_error)
+}
+
+// Covariance contour at a caller-selected Mahalanobis radius. A 95% contour
+// for bivariate normal data uses radius sqrt(chi-square(2, .95)) ~= 2.4477.
+fn covariance_ellipse(x: []const f32, y: []const f32, bounds: geometry.Rect, radius: f32, segments: []Segment) -> (Layout, err) {
+    if !valid_bounds(bounds) || !finite(radius) || radius <= 0.0 { ret (zero, Invalid) }
+    if segments.len < 8usize { ret (zero, TooLarge) }
+    let (data, data_error) = paired_stats(x, y)
+    if data_error != ok { ret (zero, data_error) }
+    if data.summary.count < 3u64 { ret (zero, Invalid) }
+    let denominator = f64(data.summary.count - 1u64)
+    let variance_x = data.summary.m2_x / denominator
+    let variance_y = data.summary.m2_y / denominator
+    let covariance = data.summary.cov / denominator
+    if !finite64(variance_x) || !finite64(variance_y) || !finite64(covariance) || variance_x <= 0.0f64 || variance_y <= 0.0f64 { ret (zero, Invalid) }
+    let spread_x = math.sqrt[f64](variance_x)
+    let tilt = covariance / spread_x
+    let remainder = variance_y - tilt * tilt
+    if !finite64(remainder) || remainder <= 0.0f64 { ret (zero, Invalid) }
+    let spread_y = math.sqrt[f64](remainder)
+    let reach_x = f64(radius) * spread_x
+    let reach_y = f64(radius) * math.sqrt[f64](variance_y)
+    var xmin = data.x_min
+    var xmax = data.x_max
+    var ymin = data.y_min
+    var ymax = data.y_max
+    let left = f32(data.summary.mean_x - reach_x)
+    let right = f32(data.summary.mean_x + reach_x)
+    let bottom = f32(data.summary.mean_y - reach_y)
+    let top = f32(data.summary.mean_y + reach_y)
+    if !finite(left) || !finite(right) || !finite(bottom) || !finite(top) { ret (zero, Invalid) }
+    if left < xmin { xmin = left }
+    if right > xmax { xmax = right }
+    if bottom < ymin { ymin = bottom }
+    if top > ymax { ymax = top }
+    let dx = f64(xmax) - f64(xmin)
+    let dy = f64(ymax) - f64(ymin)
+    if dx <= 0.0f64 || dy <= 0.0f64 { ret (zero, Invalid) }
+    let first_data_x = data.summary.mean_x + f64(radius) * spread_x
+    let first_data_y = data.summary.mean_y + f64(radius) * tilt
+    let first = Coord { x: f32(f64(bounds.x) + f64(bounds.width) * (first_data_x - f64(xmin)) / dx), y: f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (first_data_y - f64(ymin)) / dy)) }
+    if !finite(first.x) || !finite(first.y) { ret (zero, Invalid) }
+    var previous = first
+    var i = 0usize
+    while i < segments.len {
+        var next = first
+        if i + 1usize < segments.len {
+            let angle = 6.283185307179586f64 * f64(i + 1usize) / f64(segments.len)
+            let cosine = math.cos[f64](angle)
+            let sine = math.sin[f64](angle)
+            let value_x = data.summary.mean_x + f64(radius) * spread_x * cosine
+            let value_y = data.summary.mean_y + f64(radius) * (tilt * cosine + spread_y * sine)
+            next = Coord { x: f32(f64(bounds.x) + f64(bounds.width) * (value_x - f64(xmin)) / dx), y: f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (value_y - f64(ymin)) / dy)) }
+            if !finite(next.x) || !finite(next.y) { ret (zero, Invalid) }
+        }
+        segments[i] = Segment { from: previous, to: next }
+        previous = next
+        i += 1usize
+    }
+    ret (Layout { kind: .Line, coords: zero, segments: segments, bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
+}
+
 // Vertical intervals with a point estimate and two caps per observation.
 // Lower/upper values must enclose each estimate; all output is caller-owned.
 fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err) {

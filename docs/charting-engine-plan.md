@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet, Pareto, pie, donut, waffle, stage funnel,
+Status: scatter, line, points+line, bubble, OLS fitted line, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet, Pareto, pie, donut, waffle, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-forty-one PNG plus forty-one SVG previews from Neper. L061 remains partial
+forty-three PNG plus forty-three SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -92,6 +92,14 @@ nonnegative size column to circle area via square-root radius. Circle bounds
 remain caller-owned; scene paints cubic-circle paths and SVG emits circle marks.
 Zero-sized observations stay in the data but are invisible. A quantitative
 size legend, overlap policy and alternate area transforms remain guide work.
+`regression_line` uses the existing streaming bivariate accumulator for an
+ordinary-least-squares fit, then returns a Line layer and a domain covering both
+observations and fitted endpoints. `covariance_ellipse` uses its sample covariance
+and a caller-selected Mahalanobis radius to trace a data ellipse; it refuses
+singular covariance. These are linear-coordinate overlays that share explicit
+limits with scatter marks and reuse Line scene/SVG adapters. A data ellipse is
+not a confidence region for the mean. Mean-confidence regions, fitted-curve
+bands and non-linear transformed-axis overlays remain planned.
 Beeswarm starts from strip's exact numeric x mapping and packs overlapping
 six-pixel square marks into free vertical lanes. The current candidate scan is
 cubic in the worst case and refuses a panel too short to fit every observation.
@@ -179,7 +187,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, Q-Q, violin, heatmap, correlation matrix, bubble, basic waterfall, bullet, Pareto, pie, donut, waffle and basic stage funnel are delivered; every other entry
+box, density, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, covariance data ellipse, basic waterfall, bullet, Pareto, pie, donut, waffle and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -241,9 +249,11 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    common scene/SVG adapters; `gfx_chart_polar` checks both on Windows and Linux.
    Waffle and stage funnel reuse Bar and Area layers respectively;
    `gfx_chart_funnel_grid` checks geometry, refusals and adapters on both hosts.
+   OLS fit and covariance data-ellipse overlays reuse Line layers and shared
+   scatter limits; `gfx_chart_overlays` checks references and adapters on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with forty-one vector previews, automatic numeric tick text and
+   adapter with forty-three vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

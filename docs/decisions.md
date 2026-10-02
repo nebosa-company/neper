@@ -33283,3 +33283,16 @@ negative/non-finite values, invalid radius and short output are refused.
 `gfx_chart_bubble` checks size ratios, log mapping and both backends on Windows
 and Linux; the gallery adds a paired preview. A quantitative size legend and
 overlap policy remain guide work.
+
+## D1826 — Keep fitted and covariance overlays on shared scatter domains
+
+`chart.regression_line` reuses `e.algo.stat.Regression` to fit an OLS line in
+data coordinates and extends the returned domain to cover both observations and
+fitted endpoints. `chart.covariance_ellipse` uses the same accumulator's sample
+covariance, a caller-selected Mahalanobis radius and a caller-sized segment
+buffer. It rejects singular covariance. Both return existing Line layers;
+callers map scatter marks with those explicit domains before composing scene
+and SVG output. The ellipse is a data contour, not a confidence region for
+the mean. `gfx_chart_overlays` checks numeric references, refusals and adapters
+on Windows and Linux; the gallery adds two paired previews. Confidence and
+prediction bands remain later statistical work.
