@@ -4,6 +4,7 @@ use e.gfx.chart.svg as chart_svg
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
+use e.gpu
 use e.io
 use e.mem
 use e.str
@@ -11,6 +12,48 @@ use e.str
 fn near(a: f32, b: f32) -> bool {
     let difference = a - b
     ret difference > -0.01 && difference < 0.01
+}
+
+// A shifted mark must not move equal background/guide commands from the old frame.
+fn check_scene_damage(a: *mem.Arena) -> err {
+    let (device, device_error) = gpu.open(a, .Cpu, 0u32)
+    if device_error != ok { ret device_error }
+    let (queue, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret queue_error }
+    let (output_target, target_error) = gpu.open_target(queue, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 32u32, 48u32, .Rgba8)
+    if target_error != ok { ret target_error }
+    let (canvas, canvas_error) = scene.target_of(a, output_target)
+    if canvas_error != ok { ret canvas_error }
+    let (made_renderer, renderer_error) = scene.renderer(a, device, queue, 2u32, 1u32)
+    if renderer_error != ok { ret renderer_error }
+    var renderer = made_renderer
+    let white = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) }
+    let ink = paint.Brush { Solid: paint.rgba(0.1, 0.2, 0.4, 1.0) }
+    var frame = 0usize
+    while frame < 2usize {
+        let (made, builder_error) = scene.builder(a, 3usize)
+        if builder_error != ok { ret builder_error }
+        var builder = made
+        try scene.push(&builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 32.0, 48.0), brush: white } })
+        try scene.push(&builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(10.0, 10.0, 1.0, 5.0), brush: ink } })
+        var moved_y: f32 = 10.0
+        if frame == 1usize { moved_y = 36.0 }
+        try scene.push(&builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(20.0, moved_y, 4.0, 4.0), brush: ink } })
+        let (compiled, compile_error) = scene.compile(&renderer, scene.finish(&builder))
+        if compile_error != ok { ret compile_error }
+        try scene.render(&renderer, compiled, canvas, geometry.Size { width: 32.0, height: 48.0 })
+        try scene.release_scene(&renderer, compiled)
+        frame += 1usize
+    }
+    let (shown, shown_error) = gpu.presented(output_target)
+    if shown_error != ok { ret shown_error }
+    var pixels: [1536]u32 = zero
+    try gpu.read_image(queue, shown, pixels[..])
+    if pixels[36usize * 32usize + 10usize] != 4294967295u32 || pixels[12usize * 32usize + 10usize] == 4294967295u32 { ret chart.Invalid }
+    try scene.close(&renderer)
+    try gpu.close_target(output_target)
+    try gpu.close(device)
+    ret ok
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -59,7 +102,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if joined_error != ok || joined.kind != .PointLine || joined.coords.len != 4usize || joined.segments.len != 3usize || !near(joined.segments[0].to.x, joined.coords[1].x) || !near(joined.segments[2].to.y, joined.coords[3].y) { ret chart.Invalid }
     let (_, short_joined) = chart.layout(&point_line, line_points[..], line_segments[..2usize], zero)
     if short_joined != chart.TooLarge { ret chart.Invalid }
-    let (made, builder_error) = scene.builder(a, 20usize)
+    var swarm_points: [4]chart.Coord = zero
+    let (swarm, swarm_error) = chart.beeswarm(rug_values[..], bounds, 8.0, swarm_points[..])
+    if swarm_error != ok || swarm.kind != .Beeswarm || swarm.coords.len != 4usize || !near(swarm.coords[1].x, 50.0) || !near(swarm.coords[2].x, 50.0) || !near(swarm.coords[1].y, 50.0) || !near(swarm.coords[2].y, 58.0) { ret chart.Invalid }
+    let (_, short_swarm) = chart.beeswarm(rug_values[..], bounds, 8.0, swarm_points[..3usize])
+    if short_swarm != chart.TooLarge { ret chart.Invalid }
+    let (_, narrow_swarm) = chart.beeswarm(rug_values[..], geometry.rect(0.0, 0.0, 100.0, 12.0), 8.0, swarm_points[..])
+    if narrow_swarm != chart.TooLarge { ret chart.Invalid }
+    let (_, tight_swarm) = chart.beeswarm(rug_values[..], bounds, 5.0, swarm_points[..])
+    if tight_swarm != chart.Invalid { ret chart.Invalid }
+    var dot_counts: [4]u64 = zero
+    var dot_bins: [4]geometry.Rect = zero
+    var dot_points: [6]chart.Coord = zero
+    let (dots, dots_error) = chart.dot_plot(sample[..], bounds, 10.0, dot_counts[..], dot_bins[..], dot_points[..])
+    if dots_error != ok || dots.kind != .DotPlot || dots.coords.len != 6usize || dot_counts[1] != 2u64 || !near(dots.coords[1].x, dots.coords[2].x) || !near(dots.coords[1].y, 97.0) || !near(dots.coords[2].y, 87.0) { ret chart.Invalid }
+    let (_, short_dots) = chart.dot_plot(sample[..], bounds, 10.0, dot_counts[..], dot_bins[..], dot_points[..5usize])
+    if short_dots != chart.TooLarge { ret chart.Invalid }
+    let (_, tall_dots) = chart.dot_plot(sample[..], bounds, 100.0, dot_counts[..], dot_bins[..], dot_points[..])
+    if tall_dots != chart.TooLarge { ret chart.Invalid }
+    let (made, builder_error) = scene.builder(a, 32usize)
     if builder_error != ok { ret builder_error }
     var builder = made
     let ink = paint.rgba(0.07, 0.35, 0.76, 1.0)
@@ -67,7 +128,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try chart_scene.append(a, &builder, &rug, paint.Brush { Solid: ink })
     try chart_scene.append(a, &builder, &strip, paint.Brush { Solid: ink })
     try chart_scene.append(a, &builder, &joined, paint.Brush { Solid: ink })
-    if scene.builder_count(&builder) != 14usize { ret chart.Invalid }
+    try chart_scene.append(a, &builder, &swarm, paint.Brush { Solid: ink })
+    try chart_scene.append(a, &builder, &dots, paint.Brush { Solid: ink })
+    if scene.builder_count(&builder) != 24usize { ret chart.Invalid }
     let (state, unused, writer_error) = io.memory_writer(a, 0usize)
     if writer_error != ok { ret writer_error }
     var held = state
@@ -77,9 +140,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try chart_svg.append(&writer, &rug, ink)
     try chart_svg.append(&writer, &strip, ink)
     try chart_svg.append(&writer, &joined, ink)
+    try chart_svg.append(&writer, &swarm, ink)
+    try chart_svg.append(&writer, &dots, ink)
     try chart_svg.finish(&writer)
     let svg = io.memory_bytes(&held)
     if !str.contains(svg, "<path d=\"M") || !str.contains(svg, "<line") || !str.contains(svg, "<rect") || !str.contains(svg, "</svg>") { ret chart.Invalid }
+    try check_scene_damage(a)
     try io.print("gfx chart distribution ok\n")
     ret ok
 }

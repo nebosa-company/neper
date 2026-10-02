@@ -1,14 +1,14 @@
 # Neper charting engine plan
 
 Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar,
-histogram, frequency polygon, rug, strip/jitter, step, area, lollipop, error bars,
+histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
 reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-thirty-one PNG plus thirty-one SVG previews from Neper. L061 remains partial
+thirty-three PNG plus thirty-three SVG previews from Neper. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -86,6 +86,12 @@ Points+line combines the existing Cartesian scatter and line layouts with one
 domain and paints the line before its points. Strip plots map observations to
 numeric x positions and add repeatable vertical jitter, preserving ties; both
 use caller-owned coordinates and the existing scene/SVG mark paths.
+Beeswarm starts from strip's exact numeric x mapping and packs overlapping
+six-pixel square marks into free vertical lanes. The current candidate scan is
+cubic in the worst case and refuses a panel too short to fit every observation.
+Binned dot plots reuse histogram counts and place one caller-owned point per
+observation at its bin center, refusing vertical overflow. Both use the same
+scatter mark adapters, with lane height kept separate from a numeric y scale.
 Area plots close ordered x/y points against an explicit baseline; lollipops
 reuse the same baseline and point mapping. Error bars borrow center/lower/upper
 columns, validate containment and emit a stem, two caps and a point per row.
@@ -128,12 +134,16 @@ title/description metadata, current CPU-renderer channel packing for solid colou
 strokes from the same tick positions. The gallery exports a vector companion
 for every PNG; gradient brushes, production PNG/PDF/widget APIs, font embedding
 and backend-parity measurements remain planned.
+The scene renderer keeps equal-prefix/suffix guide paint stationary when a
+changed mark appears to move: the pixel-shift shortcut is refused in that case,
+preventing stale ticks in subsequent chart PNGs. The distribution fixture
+checks this frame transition on both hosts.
 
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
-histogram, frequency polygon, rug, strip/jitter, step/stairs, area, lollipop, error bars,
+histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
 box, density, Q-Q, violin, heatmap and correlation matrix are delivered; every other entry
 remains planned.
@@ -144,7 +154,7 @@ remains planned.
 |---|---|
 | Cartesian series | scatter, line, points+line, step/stairs, lollipop, dot/dumbbell, rug, stem-and-leaf, area, range/interval, error bars, confidence bands |
 | Bars and composition | bar, column, grouped, dodged, stacked, 100% stacked, diverging, waterfall/bridge, bullet, Pareto, funnel, population pyramid |
-| Distributions | histogram, frequency polygon, density/KDE, ridgeline, box-and-whisker, violin, boxen, beeswarm, strip/jitter, ECDF, QQ, PP, probability plot |
+| Distributions | histogram, frequency polygon, binned dot plot, density/KDE, ridgeline, box-and-whisker, violin, boxen, beeswarm, strip/jitter, ECDF, QQ, PP, probability plot |
 | Matrix and categorical | heatmap, tile, correlation matrix, mosaic, spine, fourfold, association, parallel coordinates, scatterplot matrix/pairs |
 | Composition and hierarchy | pie, donut, ring, waffle, treemap, sunburst/icicle, circle packing, Sankey, alluvial, chord, streamgraph |
 | Time and calendars | sparkline, calendar heatmap, horizon, seasonal, fan/forecast, decomposition, control/run chart, event timeline |
@@ -174,7 +184,8 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 1. **Foundation (delivered now):** typed spec, borrowed data, scale-to-bounds,
    scatter/line/points+line/bar/step/area/lollipop/error-bar/band/dumbbell marks, constant-domain handling,
    executable fixtures.
-2. **Core distributions (delivered):** histogram, frequency polygon, rug, strip, box,
+2. **Core distributions (delivered):** histogram, frequency polygon, rug, strip,
+   beeswarm, binned dot plot, box,
    violin, density, ECDF and normal Q-Q have executable fixtures and PNG previews. Other distribution
    variants in the catalogue remain planned.
 3. **Matrix and facets (partial):** heatmap and Pearson correlation matrix have
@@ -186,7 +197,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    categorical facet mapping remain.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with thirty-one vector previews, automatic numeric tick text and
+   adapter with thirty-three vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered; collision-safe margins, a production PNG
    API, PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.

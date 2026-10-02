@@ -1,7 +1,7 @@
 # Chart previews
 
 The scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar,
-histogram, frequency polygon, rug, strip, step, area, lollipop, error-bar, band,
+histogram, frequency polygon, rug, strip, beeswarm, binned dot plot, step, area, lollipop, error-bar, band,
 dumbbell, ECDF, box,
 density, Q-Q, violin, heatmap, correlation matrix, faceted heatmap, shared/free
 facet scales, log scatter, symmetric-log line, labeled line, labeled log scatter

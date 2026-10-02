@@ -2357,11 +2357,14 @@ fn damage_of(s: *RendererState, scene: *const Scene) -> bool {
     var clip = geometry.Rect { x: 0.0, y: 0.0, width: f32(s.width), height: f32(s.height) }
     var plain = true
     s.has_shift = false
+    var fixed_paint = false
     // The prefix: equal commands, the transform and the clip followed.
     var i = 0usize
     while !full && i < scene.count && i < old.count {
         let c = &scene.commands[i]
         if !command_eq(c, &old.commands[i]) { break }
+        let (_, drawing) = command_bounds(t, c)
+        if drawing { fixed_paint = true }
         switch *c {
         case .Save:
             if depth >= 32usize {
@@ -2409,12 +2412,15 @@ fn damage_of(s: *RendererState, scene: *const Scene) -> bool {
         var tail = 0usize
         while i + tail < scene.count && i + tail < old.count {
             if !command_eq(&scene.commands[scene.count - 1usize - tail], &old.commands[old.count - 1usize - tail]) { break }
+            let (_, drawing) = command_bounds(t, &scene.commands[scene.count - 1usize - tail])
+            if drawing { fixed_paint = true }
             tail += 1usize
         }
         // A run that is one move of what the clip already shows: the pixels move,
         // the exposed strip and what follows the run are the damage.
+        // ponytail: fixed paint blocks the shortcut; repaint its bounds if scrolling needs it.
         var after = i
-        if plain && t.m01 == 0.0 && t.m10 == 0.0 {
+        if !fixed_paint && plain && t.m01 == 0.0 && t.m10 == 0.0 {
             let (run, ux, uy) = scroll_run(scene, old, i, scene.count - tail, old.count - tail)
             if run > 0usize {
                 let fx = ux * t.m00

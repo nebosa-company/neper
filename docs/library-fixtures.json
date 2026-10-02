@@ -954,8 +954,8 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 43,
-   "delivered": 43,
+   "catalogue": 45,
+   "delivered": 45,
    "pending": [],
    "fixtures": [
     "gfx_chart",
@@ -1278,6 +1278,7 @@
    "fixtures": [
     "device_only_edge",
     "front_counts",
+    "gfx_chart_distribution",
     "gfx_scene",
     "gpu_barrier",
     "gpu_barrier_chain",

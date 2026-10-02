@@ -90,7 +90,7 @@ fn export_svg_chart(a: *mem.Arena, marks: *const chart.Layout, x_scale: chart.Sc
     let (_, y_error) = chart.ticks(y_scale, marks.y_min, marks.y_max, y_ticks[..])
     if y_error != ok { ret y_error }
     var y_guides = y_ticks[..]
-    if marks.kind == .Rug || marks.kind == .Strip { y_guides = y_ticks[..0usize] }
+    if marks.kind == .Rug || marks.kind == .Strip || marks.kind == .Beeswarm || marks.kind == .DotPlot { y_guides = y_ticks[..0usize] }
     try chart_svg.append_guides(&writer, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_guides, paint.rgba(0.88, 0.91, 0.95, 1.0), paint.rgba(0.32, 0.38, 0.48, 1.0))
     var ink = paint.rgba(0.07, 0.35, 0.76, 1.0)
     if marks.kind == .Area || marks.kind == .Band { ink = paint.rgba(0.25, 0.55, 0.88, 0.82) }
@@ -130,7 +130,7 @@ fn render_chart_scaled(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     let (_, y_error) = chart.ticks(y_scale, marks.y_min, marks.y_max, y_ticks[..])
     if y_error != ok { ret y_error }
     var y_guides = y_ticks[..]
-    if marks.kind == .Rug || marks.kind == .Strip { y_guides = y_ticks[..0usize] }
+    if marks.kind == .Rug || marks.kind == .Strip || marks.kind == .Beeswarm || marks.kind == .DotPlot { y_guides = y_ticks[..0usize] }
     try chart_scene.append_guides(&builder, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_guides, grid, axis)
     try chart_scene.append(a, &builder, marks, ink)
     try render_builder(a, q, output_target, canvas, renderer, &builder, path)
@@ -444,6 +444,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (strip_marks, strip_error) = chart.strip(values[..], bounds, 24.0, strip_points[..])
     if strip_error != ok { ret strip_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &strip_marks, "docs/chart-previews/strip.png")
+    let dot_values = [20]f32{
+        1.0, 1.0, 1.0,
+        2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
+        3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0,
+        4.0, 4.0, 4.0,
+    }
+    var swarm_points: [20]chart.Coord = zero
+    let (swarm, swarm_error) = chart.beeswarm(dot_values[..], bounds, 12.0, swarm_points[..])
+    if swarm_error != ok { ret swarm_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &swarm, "docs/chart-previews/beeswarm.png")
+    var dot_counts: [4]u64 = zero
+    var dot_bins: [4]geometry.Rect = zero
+    var dot_points: [20]chart.Coord = zero
+    let (dots, dots_error) = chart.dot_plot(dot_values[..], bounds, 16.0, dot_counts[..], dot_bins[..], dot_points[..])
+    if dots_error != ok { ret dots_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &dots, "docs/chart-previews/dot_plot.png")
     var cdf_segments: [31]chart.Segment = zero
     let (cdf, cdf_error) = chart.ecdf(values[..], bounds, cdf_segments[..])
     if cdf_error != ok { ret cdf_error }

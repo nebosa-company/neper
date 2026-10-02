@@ -137,7 +137,7 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
         points.kind = .Scatter
         ret append(w, &points, ink)
     }
-    if marks.kind == .Scatter || marks.kind == .Strip {
+    if marks.kind == .Scatter || marks.kind == .Strip || marks.kind == .Beeswarm || marks.kind == .DotPlot {
         var i = 0usize
         while i < marks.coords.len {
             try dot(w, marks.coords[i], ink)

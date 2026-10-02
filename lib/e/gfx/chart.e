@@ -11,7 +11,7 @@ use e.math.special
 use e.mem
 use e.str
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
@@ -317,7 +317,7 @@ fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars
         if line_error != ok { ret (zero, line_error) }
         ret (Layout { kind: .PointLine, coords: points.coords, segments: line.segments, bars: zero, x_min: points.x_min, x_max: points.x_max, y_min: points.y_min, y_max: points.y_max }, ok)
     }
-    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell || s.kind == .FrequencyPolygon || s.kind == .Rug || s.kind == .Strip { ret (zero, Invalid) }
+    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell || s.kind == .FrequencyPolygon || s.kind == .Rug || s.kind == .Strip || s.kind == .Beeswarm || s.kind == .DotPlot { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if (x_limits.len != 0usize && x_limits.len != 2usize) || (y_limits.len != 0usize && y_limits.len != 2usize) { ret (zero, Invalid) }
@@ -851,6 +851,66 @@ fn strip(values: []const f32, bounds: geometry.Rect, spread: f32, coords: []Coor
         i += 1usize
     }
     ret (Layout { kind: .Strip, coords: coords[..values.len], segments: zero, bars: zero, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: 1.0 }, ok)
+}
+
+// Keep exact numeric x positions while packing square marks into free y lanes.
+fn beeswarm(values: []const f32, bounds: geometry.Rect, spacing: f32, coords: []Coord) -> (Layout, err) {
+    if !valid_bounds(bounds) || bounds.height < 6.0 || !finite(spacing) || spacing < 6.0 { ret (zero, Invalid) }
+    let (base, base_error) = strip(values, bounds, 0.0, coords)
+    if base_error != ok { ret (zero, base_error) }
+    let center = bounds.y + bounds.height * 0.5
+    var i = 0usize
+    while i < values.len {
+        var placed = false
+        var slot = 0usize
+        // ponytail: cubic worst-case packing suits small plots; index x lanes for large clouds.
+        while slot <= i && !placed {
+            let distance = f32((slot + 1usize) / 2usize) * spacing
+            if distance > bounds.height * 0.5 - 3.0 { ret (zero, TooLarge) }
+            var y = center - distance
+            if slot % 2usize == 1usize { y = center + distance }
+            var blocked = false
+            var j = 0usize
+            while j < i && !blocked {
+                let dx = coords[i].x - coords[j].x
+                let dy = y - coords[j].y
+                if dx > -6.0 && dx < 6.0 && dy > -6.0 && dy < 6.0 { blocked = true }
+                j += 1usize
+            }
+            if !blocked {
+                coords[i].y = y
+                placed = true
+            }
+            slot += 1usize
+        }
+        if !placed { ret (zero, TooLarge) }
+        i += 1usize
+    }
+    var marks = base
+    marks.kind = .Beeswarm
+    ret (marks, ok)
+}
+
+// Histogram counts become one dot per observation, stacked in each bin.
+fn dot_plot(values: []const f32, bounds: geometry.Rect, spacing: f32, counts: []u64, bins: []geometry.Rect, coords: []Coord) -> (Layout, err) {
+    if !finite(spacing) || spacing < 6.0 { ret (zero, Invalid) }
+    if coords.len < values.len { ret (zero, TooLarge) }
+    let (hist, hist_error) = histogram(values, bounds, counts, bins)
+    if hist_error != ok { ret (zero, hist_error) }
+    if (hist.y_max - 1.0) * spacing + 6.0 > bounds.height { ret (zero, TooLarge) }
+    var used = 0usize
+    var bin = 0usize
+    while bin < bins.len {
+        let x = bins[bin].x + bins[bin].width * 0.5
+        var row = 0u64
+        while row < counts[bin] {
+            coords[used] = Coord { x: x, y: bounds.y + bounds.height - 3.0 - f32(row) * spacing }
+            used += 1usize
+            row += 1u64
+        }
+        bin += 1usize
+    }
+    ret (Layout { kind: .DotPlot, coords: coords[..used], segments: zero, bars: zero, x_min: hist.x_min, x_max: hist.x_max, y_min: 0.0, y_max: 1.0 }, ok)
 }
 
 // Empirical CDF of an ascending sample. Each observation raises the step by

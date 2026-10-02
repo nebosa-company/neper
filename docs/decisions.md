@@ -33180,3 +33180,27 @@ collision avoidance; beeswarm packing is a separate planned chart. Both use
 caller-owned storage and existing mark adapters. `gfx_chart_distribution`
 checks geometry, capacity and adapter output on Windows and Linux, and the
 gallery adds a PNG/SVG pair for each.
+
+## D1810 — Pack beeswarm dots and stack histogram observations
+
+`beeswarm` reuses strip's numeric x positions and tests successive vertical
+lanes against earlier six-pixel marks. It keeps ties visible and returns
+`TooLarge` when the supplied panel cannot fit them; the current scan has a
+cubic worst case, so large clouds need an x-lane index. `dot_plot` reuses
+histogram bin counts and places one square mark per observation at each bin
+center, refusing vertical overflow. Their y positions are visual lanes, not
+a numeric scale. Both use caller-owned storage and the existing scatter
+scene/SVG adapters. `gfx_chart_distribution` passes on Windows and Linux;
+the gallery adds two paired previews.
+
+## D1811 — Do not shift pixels beneath unchanged scene paint
+
+The gallery's strip-to-beeswarm transition exposed a retained-scene damage
+error: `scroll_run` recognized a moved dot and shifted the whole clip, moving
+unchanged guide pixels from the equal command prefix into the lower margin.
+`damage_of` now refuses the shift shortcut when equal prefix or suffix commands
+paint anything, leaving fixed content stationary while replaying changed marks.
+The targeted scene transition in `gfx_chart_distribution` fails without this
+guard and passes with it on both hosts. This conservatively costs the scroll
+shortcut for scenes with fixed paint; tracking its exact repaint bounds is the
+later optimization. The gallery's existing PNGs re-render without guide ghosts.

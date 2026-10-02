@@ -16,7 +16,7 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
         points.kind = .Scatter
         ret append(a, builder, &points, brush)
     }
-    if marks.kind == .Scatter || marks.kind == .Strip {
+    if marks.kind == .Scatter || marks.kind == .Strip || marks.kind == .Beeswarm || marks.kind == .DotPlot {
         var i = 0usize
         while i < marks.coords.len {
             let p = marks.coords[i]
