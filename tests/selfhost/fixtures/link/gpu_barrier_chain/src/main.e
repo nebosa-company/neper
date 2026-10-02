@@ -152,6 +152,14 @@ fn middle(out: []u32, lane: u32) {
             view.data[usize(lane)] = added.lanes[0usize] - (lane + 44u32)
             let saved_array = [2]u32 { lane, passthrough(lane + 44u32) }
             view.data[usize(lane)] = saved_array[0usize] + saved_array[1usize] - lane
+            var skipped_total = 0u32
+            for control_step in 0u32..4u32 {
+                defer gpu.barrier()
+                if control_step == 1u32 { continue }
+                if control_step == 3u32 { break }
+                skipped_total += control_step
+            }
+            view.data[usize(lane)] = lane + skipped_total + 42u32
             for step in lane..passthrough(lane + 1u32) {
                 view.data[usize(lane)] = step + 44u32
             }
@@ -188,6 +196,7 @@ fn middle(out: []u32, lane: u32) {
             default:
                 out[usize(lane)] = fields.value + fields.lane - lane
             }
+            if skipped_total != 2u32 { out[usize(lane)] = 0u32 }
         }
     }
 }

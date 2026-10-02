@@ -32843,3 +32843,17 @@ Windows and Linux; the valid profile and barrier-chain checks pass. Windows C
 bootstrap builds the compiler with a 640 MB arena, the barrier-chain executable
 runs on both hosts, and consecutive self-hosted stages are byte-identical.
 The full suites remain unverified on the current host.
+
+## D1782 — Exercise deferred barriers on uniform loop exits
+
+**Decision.** Keep C091's barrier-chain regression on a uniform `for` that
+executes a deferred barrier on its normal edge, a `continue`, and a `break`.
+The counter and accumulator must resume correctly; no lowering change is
+needed for these control-flow exits.
+
+**Evidence.** `link/gpu_barrier_chain` checks the loop's sum of two and returns
+the expected value for every lane in debug and release on Windows and Linux.
+A separate Vulkan probe from
+the same temporary source path runs a plain kernel, but a protocol-iterator
+kernel returns `e.gpu.Unsupported` with or without a barrier in `next`; that
+is not evidence about CPU loop-fission and is not claimed as C091 support.
