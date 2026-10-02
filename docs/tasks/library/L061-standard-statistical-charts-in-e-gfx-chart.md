@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | library / Algorithms |
-| score | 0.00 of 1 |
-| queue position | appended at the end (only position 1 is eligible for the next session; see README) |
+| score | 0.20 of 1 |
+| queue position | 1 (the active capability; only position 1 is eligible for the next session) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -15,11 +15,18 @@ See `docs/roadmap.md`, `docs/stats-coverage.md` §2 and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> No chart module exists: a grep for scatter/line_chart/histogram/box_plot/violin/heatmap/facet over `lib/e` finds only telemetry (`e.metrics.histogram`) and streaming counts (`e.data.window`). Drawable primitives exist (`e.gfx.paint` rasterize/fill_path/composite, `e.gfx.scene`, `e.gfx.image` PNG/JPEG/WebP encode, `e.ui.widget` layout/controls). Build a declarative `e.gfx.chart` spec (data mapping, scales, geometries) rendering scatter, line, bar, histogram, box, violin, density, heatmap, correlation matrix and facet/trellis views into `e.gfx.scene` with PNG output and an `e.ui.widget` embed. Full evaluation: `docs/stats-coverage.md` §2.
+> Foundation now exists in `lib/e/gfx/chart.e`: borrowed numeric x/y columns, caller-owned output, domain validation/padding, and scatter/line/bar screen-space marks. `tests/selfhost/fixtures/link/gfx_chart/src/main.e` checks coordinates, inverted Y, bars and refusal paths in both runners. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work is histogram, box, violin, density, heatmap, correlation matrix, facets, scene/PNG/widget adapters, specialized diagrams and benchmark evidence against ggplot2/base/lattice/matplot. Full evaluation: `docs/stats-coverage.md` §2.
 
 ## Remaining work
 
-- [ ] (no gap clause in the queue — see the notes below)
+- [x] **Foundation grammar and marks** — typed `Spec`, numeric Cartesian domain,
+  caller-owned `Layout`, scatter/line/bar marks and refusal paths.
+- [ ] **Distribution families** — histogram, box, violin, density, ECDF and QQ.
+- [ ] **Matrix and facets** — heatmap, correlation matrix, shared/free scales and
+  trellis panels.
+- [ ] **Backends** — `e.gfx.scene`, PNG/SVG/PDF export and `e.ui.widget` embed.
+- [ ] **Specialized diagrams** — ROC, survival, SPC, scientific, finance, quality,
+  operations and network families from `docs/charting-engine-plan.md`.
 
 ## Verification
 

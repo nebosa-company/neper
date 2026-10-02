@@ -4,6 +4,17 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
+      "id": "L061",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 159,
+      "title": "Standard statistical charts in e.gfx.chart",
+      "score": 0.2,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Foundation delivered in `lib/e/gfx/chart.e`: borrowed numeric x/y columns, caller-owned output, domain padding and validation, plus scatter/line/bar screen-space marks. `tests/selfhost/fixtures/link/gfx_chart/src/main.e` is registered in both self-host runners and checks coordinates, inverted Y, bars and refusal paths. Detailed registry, R-package analysis and staged plan: `docs/charting-engine-plan.md`. Not yet: histograms, box/violin/density, heatmap/correlation/facets, scene/PNG/widget adapters, specialized statistical/domain diagrams, and benchmark evidence against ggplot2/base/lattice/matplot."
+    },
+    {
       "id": "C092",
       "category": "compiler",
       "group": "Back end",
@@ -838,17 +849,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "lib/e/math/mcmc.e covers Metropolis-Hastings, Gibbs, HMC and NUTS with e.algo.rand.dist families and an autodiff tape in lib/e/ml/nn.e -- the R/Python Bayesian gap is variational inference: an ELBO helper with SVI/BBVI or an ADVI-lite over the existing autodiff. Keep caller-storage conventions; fixtures against analytic Gaussian targets and Stan/ADVI references. Plan: docs/stats-coverage.md rows L060 (D1785)."
-    },
-    {
-      "id": "L061",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 159,
-      "title": "Standard statistical charts in e.gfx.chart",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "No chart module exists (grep-verified): only e.gfx.paint rasterize/fill_path/composite, e.gfx.scene, e.gfx.image PNG/JPEG/WebP encode and e.ui.widget primitives -- the ggplot2/matplotlib/seaborn gap. Build a declarative e.gfx.chart spec (data mapping, scales, geometries) rendering scatter, line, bar, histogram, box, violin, density, heatmap, correlation matrix and facet/trellis views into e.gfx.scene with PNG output and an e.ui.widget embed; one chart family per session with golden-image fixtures. Plan: docs/stats-coverage.md rows L061 (D1785)."
     },
     {
       "id": "L062",

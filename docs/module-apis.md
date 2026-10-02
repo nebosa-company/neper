@@ -15848,3 +15848,19 @@ fn place(m: *mixer.Mixer, voice: usize, l: Listener, s: Source) -> err
 fn trigger(m: *mixer.Mixer, c: *Cue, variants: []const audio.Frames, state: *rand.Pcg64, l: Listener, s: Source) -> (usize, err)
 fn step_cues(cues: []Cue) -> err
 ```
+
+### `e.gfx.chart`
+
+```neper
+type Kind = enum u8 { Scatter, Line, Bar }
+type Coord = struct { x: f32, y: f32 }
+type Segment = struct { from: Coord, to: Coord }
+type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32 }
+type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
+error Invalid
+error Empty
+error TooLarge
+
+fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Spec
+fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
+```

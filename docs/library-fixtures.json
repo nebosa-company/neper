@@ -844,6 +844,7 @@
    "delivered": 46,
    "pending": [],
    "fixtures": [
+    "gfx_chart",
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
@@ -935,6 +936,17 @@
     "ui_widget",
     "ui_window",
     "ui_workspace"
+   ]
+  },
+  {
+   "module": "e.gfx.chart",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 10,
+   "delivered": 10,
+   "pending": [],
+   "fixtures": [
+    "gfx_chart"
    ]
   },
   {

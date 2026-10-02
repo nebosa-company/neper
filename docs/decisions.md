@@ -32957,3 +32957,13 @@ repeated uploads, launches, downloads and releases, then checks close and stale
 handles. Ten Windows runs passed on CPU and two Vulkan devices. Existing GPU
 staging, sync, CPU, gaps and presentation fixtures pass with the lock; the new
 fixture and staging pass Linux's CPU/no-device path. Full suites remain pending.
+
+## D1789 — Keep chart geometry renderer-neutral and caller-owned
+
+The first `e.gfx.chart` slice maps borrowed numeric columns into caller-provided
+screen-space marks. It does not depend on a device, window, global theme or
+implicit allocation. Scatter, line and bar layouts share one Cartesian domain;
+bar baselines participate in the y domain and screen y is explicitly inverted.
+Scene, image and widget adapters remain later layers over the same layout. This
+keeps the grammar reusable for histograms, distributions, matrices and facets
+without making every chart family own a painter or a data container.

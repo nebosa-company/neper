@@ -2673,6 +2673,12 @@ gfx_core_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/gfx-core-selfhost"
 gfx_core_output=$("$test_build/gfx-core-selfhost")
 [ "$gfx_core_output" = 'gfx core ok' ]
+# `e.gfx.chart` foundation: borrowed x/y data into caller-owned scatter, line and bar marks.
+gfx_chart_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-selfhost")
+[ "$gfx_chart_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-selfhost"
+gfx_chart_output=$("$test_build/gfx-chart-selfhost")
+[ "$gfx_chart_output" = 'gfx chart ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")
