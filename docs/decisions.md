@@ -33098,3 +33098,15 @@ finite, ordered, valid for the selected scale and contain the data and baseline;
 clipping is deferred to a separate out-of-bounds policy. The original `layout`
 calls this path with empty limits. `gfx_chart_facet` checks shared/free x and y,
 constant data and rejection paths. The gallery adds a four-panel PNG/SVG pair.
+
+## D1801 — Represent confidence bands and dumbbells as existing mark shapes
+
+`chart.band` borrows ordered x and lower/upper columns and emits one closed
+caller-owned polygon; `chart.dumbbell` borrows numeric vertical positions and
+lower/upper horizontal endpoints and emits disconnected segments plus dots.
+Both validate interval order and storage capacity before writing marks. The
+scene and SVG adapters reuse their filled-path and disconnected-segment paths,
+so no new renderer primitive or owned data frame is introduced. Their first
+slice is linear; nonlinear scales and clipping remain later grammar work.
+`gfx_chart_intervals` checks geometry, refusals and both adapters, and the
+gallery adds one PNG/SVG pair for each chart.

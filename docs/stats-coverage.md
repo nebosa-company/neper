@@ -113,15 +113,16 @@ Gap (→ L063): no histogram/leafwise gradient boosting (XGBoost/LightGBM
 class — only the generic `gradient_boost` exists), no k-fold CV + grid search
 + pipeline abstraction (caret/sklearn-lite), no probability calibration.
 
-## 2. Charts & visualizations — missing, queued
+## 2. Charts & visualizations — partial, queued
 
-No chart module exists: a grep for
-`scatter/line_chart/histogram/box_plot/violin/heatmap/facet/ridge_plot` over
-`lib/e` finds only telemetry (`e.metrics.histogram`) and streaming counts
-(`e.data.window`), plus unrelated `bar_piece` UI helpers. Drawable primitives
-exist (`e.gfx.paint` rasterize/fill_path/composite, `e.gfx.scene`,
-`e.gfx.image` PNG/JPEG/WebP encode, `e.ui.widget` layout/controls), but there
-is no statistical chart API.
+`e.gfx.chart` now has a deterministic caller-owned geometry API for scatter,
+line, bar, histogram, step, area, lollipop, error bars, confidence bands,
+dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap and correlation
+matrix, with numeric scales and facet-panel geometry. Its scene and SVG
+adapters produce twenty-one paired previews in `docs/chart-previews/`. The
+complete registry, remaining grammar stages and export/widget/benchmark gates
+are tracked in `docs/charting-engine-plan.md` and L061; the original R/Python
+gap remains open rather than being inferred closed from these first charts.
 
 - Standard plots (scatter, line, bar, histogram, box, violin, density,
   heatmap, correlation matrix, facet/trellis, paired, joint, ridge) → L061.

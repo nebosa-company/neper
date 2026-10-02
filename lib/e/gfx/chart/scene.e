@@ -32,7 +32,7 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
             path: geometry.finish(&path), brush: brush,
             stroke: paint.Stroke { width: 2.0, cap: .Round, join: .Round, miter_limit: 4.0 },
         } })
-    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar {
+    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Dumbbell {
         var i = 0usize
         while i < marks.bars.len {
             let r = marks.bars[i]
@@ -75,7 +75,7 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
             } })
             i += 1usize
         }
-    } else if marks.kind == .Violin || marks.kind == .Area {
+    } else if marks.kind == .Violin || marks.kind == .Area || marks.kind == .Band {
         if marks.coords.len < 4usize { ret chart.Invalid }
         let (made, path_error) = geometry.path_builder(a, marks.coords.len + 1usize, marks.coords.len)
         if path_error != ok { ret path_error }

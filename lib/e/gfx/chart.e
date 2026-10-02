@@ -9,7 +9,7 @@ use e.gfx.geometry
 use e.math
 use e.math.special
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
@@ -131,7 +131,7 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
 // Empty limits use each series' own domain; two values fix the domain so
 // multiple facet panels can share x, y, or both without copying their columns.
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err) {
-    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar { ret (zero, Invalid) }
+    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if (x_limits.len != 0usize && x_limits.len != 2usize) || (y_limits.len != 0usize && y_limits.len != 2usize) { ret (zero, Invalid) }
@@ -334,6 +334,80 @@ fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []
         i += 1usize
     }
     ret (Layout { kind: .ErrorBar, coords: points[..x.len], segments: lines[..3usize * x.len], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
+}
+
+// A closed ribbon between lower and upper series. Ordered x and contained
+// intervals are required; the polygon remains in caller-provided storage.
+fn band(x: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, outline: []Coord) -> (Layout, err) {
+    if x.len < 2usize { ret (zero, Empty) }
+    if lower.len != x.len || upper.len != x.len || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if outline.len / 2usize < x.len { ret (zero, TooLarge) }
+    let (xmin, xmax, x_error) = extent(x)
+    if x_error != ok { ret (zero, x_error) }
+    if xmin == xmax { ret (zero, Invalid) }
+    var ymin = lower[0usize]
+    var ymax = upper[0usize]
+    var i = 0usize
+    while i < x.len {
+        if (i > 0usize && x[i] < x[i - 1usize]) || !finite(lower[i]) || !finite(upper[i]) || lower[i] > upper[i] { ret (zero, Invalid) }
+        if lower[i] < ymin { ymin = lower[i] }
+        if upper[i] > ymax { ymax = upper[i] }
+        i += 1usize
+    }
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+    }
+    if !finite(ymin) || !finite(ymax) { ret (zero, Invalid) }
+    i = 0usize
+    while i < x.len {
+        let px = mapped(x[i], xmin, xmax, bounds.x, bounds.width)
+        outline[i] = Coord { x: px, y: bounds.y + bounds.height - mapped(upper[i], ymin, ymax, 0.0, bounds.height) }
+        outline[2usize * x.len - 1usize - i] = Coord { x: px, y: bounds.y + bounds.height - mapped(lower[i], ymin, ymax, 0.0, bounds.height) }
+        i += 1usize
+    }
+    ret (Layout { kind: .Band, coords: outline[..2usize * x.len], segments: zero, bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
+}
+
+// Horizontal intervals with a dot at each endpoint; `position` is the
+// numeric vertical axis, so repeated positions naturally overlay.
+fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err) {
+    if position.len == 0usize { ret (zero, Empty) }
+    if lower.len != position.len || upper.len != position.len || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if points.len / 2usize < position.len || lines.len < position.len { ret (zero, TooLarge) }
+    let (raw_ymin, raw_ymax, y_error) = extent(position)
+    if y_error != ok { ret (zero, y_error) }
+    var xmin = lower[0usize]
+    var xmax = upper[0usize]
+    var i = 0usize
+    while i < position.len {
+        if !finite(lower[i]) || !finite(upper[i]) || lower[i] > upper[i] { ret (zero, Invalid) }
+        if lower[i] < xmin { xmin = lower[i] }
+        if upper[i] > xmax { xmax = upper[i] }
+        i += 1usize
+    }
+    var ymin = raw_ymin
+    var ymax = raw_ymax
+    if xmin == xmax {
+        xmin -= 0.5
+        xmax += 0.5
+    }
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+    }
+    if !finite(xmin) || !finite(xmax) || !finite(ymin) || !finite(ymax) { ret (zero, Invalid) }
+    i = 0usize
+    while i < position.len {
+        let py = bounds.y + bounds.height - mapped(position[i], ymin, ymax, 0.0, bounds.height)
+        let left = Coord { x: mapped(lower[i], xmin, xmax, bounds.x, bounds.width), y: py }
+        let right = Coord { x: mapped(upper[i], xmin, xmax, bounds.x, bounds.width), y: py }
+        points[2usize * i] = left
+        points[2usize * i + 1usize] = right
+        lines[i] = Segment { from: left, to: right }
+        i += 1usize
+    }
+    ret (Layout { kind: .Dumbbell, coords: points[..2usize * position.len], segments: lines[..position.len], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
 }
 
 // Equal-width bins, left-closed/right-open except the last bin (which includes

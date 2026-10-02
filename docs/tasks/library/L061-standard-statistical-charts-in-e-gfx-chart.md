@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | category | library / Algorithms |
-| score | 0.71 of 1 |
+| score | 0.75 of 1 |
 | queue position | 1 (the active capability; only position 1 is eligible for the next session) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
@@ -15,12 +15,13 @@ See `docs/roadmap.md`, `docs/stats-coverage.md` §2 and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> `e.gfx.chart` maps borrowed numeric columns into caller-owned scatter, line, bar, step, area, lollipop, error-bar and distribution marks, row-major heatmap and Pearson correlation cells, plus equal facet-panel rectangles. Cartesian `Spec` has independent linear, log10, symmetric-log and reverse scales; caller-owned ticks drive scene and SVG grid/axis strokes. `layout_with_limits` accepts optional caller-borrowed x/y domains for shared or free numeric facet scales, rejecting limits that exclude data. `e.gfx.chart.svg` streams solid-colour marks and matrix tiles with escaped title/description metadata. `gfx_chart`, `gfx_chart_qq`, `gfx_chart_matrix`, `gfx_chart_cartesian`, `gfx_chart_scale`, `gfx_chart_facet` and `gfx_chart_svg` check statistics, geometry, scales, scene/SVG commands and refusal paths; `examples/chart_gallery.e` generated nineteen inspected PNG previews and nineteen XML-parsed SVG companions. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work includes discrete/date scales, labels, facet strips/legends and categorical mapping, production PNG/PDF/widget adapters, specialized diagrams and comparative benchmarks. Full evaluation: `docs/stats-coverage.md` §2.
+> `e.gfx.chart` maps borrowed numeric columns into caller-owned scatter, line, bar, step, area, lollipop, error-bar, confidence-band, dumbbell and distribution marks, row-major heatmap and Pearson correlation cells, plus equal facet-panel rectangles. Cartesian `Spec` has independent linear, log10, symmetric-log and reverse scales; caller-owned ticks drive scene and SVG grid/axis strokes. `layout_with_limits` accepts optional caller-borrowed x/y domains for shared or free numeric facet scales, rejecting limits that exclude data. `e.gfx.chart.svg` streams solid-colour marks and matrix tiles with escaped title/description metadata. `gfx_chart`, `gfx_chart_qq`, `gfx_chart_matrix`, `gfx_chart_cartesian`, `gfx_chart_scale`, `gfx_chart_facet`, `gfx_chart_intervals` and `gfx_chart_svg` check statistics, geometry, scales, scene/SVG commands and refusal paths; `examples/chart_gallery.e` generated twenty-one inspected PNG previews and twenty-one XML-parsed SVG companions. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work includes discrete/date scales, labels, facet strips/legends and categorical mapping, production PNG/PDF/widget adapters, specialized diagrams and comparative benchmarks. Full evaluation: `docs/stats-coverage.md` §2.
 
 ## Remaining work
 
 - [x] **Foundation grammar and marks** — typed `Spec`, numeric Cartesian domain,
-  caller-owned `Layout`, scatter/line/bar/step/area/lollipop/error-bar marks and refusal paths.
+  caller-owned `Layout`, scatter/line/bar/step/area/lollipop/error-bar/band/dumbbell
+  marks and refusal paths.
 - [x] **Core distribution families** — histogram, box, violin, density, ECDF
   and normal Q-Q have executable fixtures and PNG previews.
 - [ ] **Matrix and facets** — heatmap, Pearson correlation matrix, equal-panel

@@ -151,10 +151,10 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
         try io.write_all(w, "\" fill=\"none\"")
         try color(w, ink, true)
         try io.write_all(w, " stroke-width=\"2\" stroke-linejoin=\"round\"/>\n")
-    } else if marks.kind == .Area || marks.kind == .Violin {
+    } else if marks.kind == .Area || marks.kind == .Violin || marks.kind == .Band {
         if marks.coords.len < 4usize { ret Invalid }
         try path(w, marks.coords, ink, true)
-    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Qq {
+    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Qq || marks.kind == .Dumbbell {
         var i = 0usize
         while i < marks.bars.len {
             if marks.bars[i].width > 0.0 && marks.bars[i].height > 0.0 { try rect(w, marks.bars[i], ink, true) }

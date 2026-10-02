@@ -1,6 +1,7 @@
 # Chart previews
 
-The scatter, line, bar, histogram, step, area, lollipop, error-bar, ECDF, box,
+The scatter, line, bar, histogram, step, area, lollipop, error-bar, band,
+dumbbell, ECDF, box,
 density, Q-Q, violin, heatmap, correlation matrix, faceted heatmap, shared/free
 facet scales, log scatter and symmetric-log line PNGs are rendered by Neper's CPU scene and PNG encoder.
 Each has an SVG companion streamed from the same chart layout with title and

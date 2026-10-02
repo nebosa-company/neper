@@ -847,6 +847,7 @@
     "gfx_chart",
     "gfx_chart_cartesian",
     "gfx_chart_facet",
+    "gfx_chart_intervals",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_chart_scale",
@@ -948,13 +949,14 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 27,
-   "delivered": 27,
+   "catalogue": 29,
+   "delivered": 29,
    "pending": [],
    "fixtures": [
     "gfx_chart",
     "gfx_chart_cartesian",
     "gfx_chart_facet",
+    "gfx_chart_intervals",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_chart_scale",
@@ -971,6 +973,7 @@
    "fixtures": [
     "gfx_chart",
     "gfx_chart_cartesian",
+    "gfx_chart_intervals",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_chart_scale"
@@ -984,6 +987,7 @@
    "delivered": 6,
    "pending": [],
    "fixtures": [
+    "gfx_chart_intervals",
     "gfx_chart_svg"
    ]
   },
@@ -1061,6 +1065,7 @@
    "fixtures": [
     "gfx_chart",
     "gfx_chart_cartesian",
+    "gfx_chart_intervals",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_chart_scale",
@@ -1145,6 +1150,7 @@
    "fixtures": [
     "gfx_chart",
     "gfx_chart_cartesian",
+    "gfx_chart_intervals",
     "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_chart_scale",

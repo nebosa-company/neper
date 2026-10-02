@@ -3082,6 +3082,11 @@ $gfxChartFacetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gfxChartFacetWritten -ne 'executable written') { throw 'gfx_chart_facet emission failed' }
 $gfxChartFacetOutput = & $gfxChartFacetPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFacetOutput -ne 'gfx chart facet ok') { throw "the e.gfx.chart facet scales answered wrongly: exit $LASTEXITCODE" }
+$gfxChartIntervalsPath = Join-Path $testBuild 'gfx-chart-intervals-selfhost.exe'
+$gfxChartIntervalsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_intervals\src\main.e') $repo 'x64' 'windows' $gfxChartIntervalsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartIntervalsWritten -ne 'executable written') { throw 'gfx_chart_intervals emission failed' }
+$gfxChartIntervalsOutput = & $gfxChartIntervalsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartIntervalsOutput -ne 'gfx chart intervals ok') { throw "the e.gfx.chart interval marks answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSvgPath = Join-Path $testBuild 'gfx-chart-svg-selfhost.exe'
 $gfxChartSvgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_svg\src\main.e') $repo 'x64' 'windows' $gfxChartSvgPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSvgWritten -ne 'executable written') { throw 'gfx_chart_svg emission failed' }

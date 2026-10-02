@@ -90,7 +90,7 @@ fn export_svg_chart(a: *mem.Arena, marks: *const chart.Layout, x_scale: chart.Sc
     if y_error != ok { ret y_error }
     try chart_svg.append_guides(&writer, geometry.rect(44.0, 30.0, 286.0, 174.0), x_ticks[..], y_ticks[..], paint.rgba(0.88, 0.91, 0.95, 1.0), paint.rgba(0.32, 0.38, 0.48, 1.0))
     var ink = paint.rgba(0.07, 0.35, 0.76, 1.0)
-    if marks.kind == .Area { ink = paint.rgba(0.25, 0.55, 0.88, 0.82) }
+    if marks.kind == .Area || marks.kind == .Band { ink = paint.rgba(0.25, 0.55, 0.88, 0.82) }
     try chart_svg.append(&writer, marks, ink)
     try chart_svg.finish(&writer)
     let (path, path_error) = vector_path(a, png_path)
@@ -118,7 +118,7 @@ fn render_chart_scaled(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     let grid = paint.Brush { Solid: paint.rgba(0.88, 0.91, 0.95, 1.0) }
     let axis = paint.Brush { Solid: paint.rgba(0.32, 0.38, 0.48, 1.0) }
     var ink = paint.Brush { Solid: paint.rgba(0.07, 0.35, 0.76, 1.0) }
-    if marks.kind == .Area { ink = paint.Brush { Solid: paint.rgba(0.25, 0.55, 0.88, 0.82) } }
+    if marks.kind == .Area || marks.kind == .Band { ink = paint.Brush { Solid: paint.rgba(0.25, 0.55, 0.88, 0.82) } }
     try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), white)
     var x_ticks: [4]chart.Tick = zero
     var y_ticks: [4]chart.Tick = zero
@@ -247,6 +247,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (intervals, interval_error) = chart.error_bars(x[..], y[..], lower[..], upper[..], bounds, interval_points[..], interval_lines[..])
     if interval_error != ok { ret interval_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &intervals, "docs/chart-previews/errorbar.png")
+    var band_outline: [16]chart.Coord = zero
+    let (ribbon, ribbon_error) = chart.band(x[..], lower[..], upper[..], bounds, band_outline[..])
+    if ribbon_error != ok { ret ribbon_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &ribbon, "docs/chart-previews/band.png")
+    var dumbbell_points: [16]chart.Coord = zero
+    var dumbbell_lines: [8]chart.Segment = zero
+    let (dumbbells, dumbbell_error) = chart.dumbbell(x[..], lower[..], upper[..], bounds, dumbbell_points[..], dumbbell_lines[..])
+    if dumbbell_error != ok { ret dumbbell_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &dumbbells, "docs/chart-previews/dumbbell.png")
     let values = [16]f32{ 1.0, 2.0, 2.0, 2.5, 3.0, 3.5, 4.0, 4.0, 4.0, 5.0, 5.5, 6.0, 6.0, 7.0, 8.0, 8.5 }
     var counts: [8]u64 = zero
     var hist_bars: [8]geometry.Rect = zero

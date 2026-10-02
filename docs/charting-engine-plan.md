@@ -1,10 +1,11 @@
 # Neper charting engine plan
 
-Status: scatter, line, bar, histogram, step, area, lollipop, error bars, ECDF,
+Status: scatter, line, bar, histogram, step, area, lollipop, error bars,
+confidence bands, dumbbells, ECDF,
 box, density, normal Q-Q, violin, heatmap and correlation matrix are delivered,
 with linear/log10/symmetric-log and reverse Cartesian scales, caller-owned tick
 metadata, grid/axis passes, facet panel geometry, explicit Cartesian limits
-for shared/free facet scales and nineteen PNG plus nineteen SVG previews from Neper. L061 remains partial
+for shared/free facet scales and twenty-one PNG plus twenty-one SVG previews from Neper. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -74,6 +75,10 @@ Violin plots mirror that same Gaussian estimate into a filled outline.
 Area plots close ordered x/y points against an explicit baseline; lollipops
 reuse the same baseline and point mapping. Error bars borrow center/lower/upper
 columns, validate containment and emit a stem, two caps and a point per row.
+Confidence bands close ordered lower/upper series into a filled caller-owned
+polygon. Dumbbells use numeric vertical positions and horizontal lower/upper
+endpoints, emitting one segment and two points per row. Both reject inverted
+intervals and render through the existing scene and SVG mark branches.
 Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
@@ -97,7 +102,8 @@ and backend-parity measurements remain planned.
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
-Scatter, line, bar, histogram, step/stairs, area, lollipop, error bars, ECDF,
+Scatter, line, bar, histogram, step/stairs, area, lollipop, error bars,
+confidence bands, dumbbells, ECDF,
 box, density, Q-Q, violin, heatmap and correlation matrix are delivered; every other entry
 remains planned.
 
@@ -135,7 +141,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 ## Delivery order and gates
 
 1. **Foundation (delivered now):** typed spec, borrowed data, scale-to-bounds,
-   scatter/line/bar/step/area/lollipop/error-bar marks, constant-domain handling,
+   scatter/line/bar/step/area/lollipop/error-bar/band/dumbbell marks, constant-domain handling,
    executable fixtures.
 2. **Core distributions (delivered):** histogram, box, violin, density, ECDF and
    normal Q-Q have executable fixtures and PNG previews. Other distribution
@@ -147,7 +153,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    preview. Strips, legend metadata and categorical facet mapping remain.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with nineteen vector previews are delivered; text labels and
+   adapter with twenty-one vector previews are delivered; text labels and
    margins, a production PNG API, PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.
 5. **Specialized calculators:** ROC, survival, SPC, capability, Bland–Altman,
