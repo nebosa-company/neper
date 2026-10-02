@@ -336,6 +336,11 @@ fn cox_ph(times: []const f64, events: []const u8, x: []const f64, n: usize, p: u
             work[e] = info[e]
             e += 1usize
         }
+        var q = 0usize
+        while q < p {
+            step[q] = score[q]
+            q += 1usize
+        }
         let step_error = survival_solve(work, step, p)
         if step_error != ok { ret (iteration, step_error) }
         var largest = 0.0f64
@@ -432,7 +437,7 @@ fn simon_oc(n1: usize, r1: usize, n: usize, r: usize, p: f64, scratch: []f64) ->
     let e2 = simon_pmf(n2, p, pmf2)
     if e2 != ok { ret (0.0f64, 0.0f64, e2) }
     sf2[n2 + 1usize] = 0.0f64
-    var k = n2
+    var k = n2 + 1usize
     while k > 0usize {
         k -= 1usize
         sf2[k] = sf2[k + 1usize] + pmf2[k]
@@ -584,7 +589,7 @@ fn simon_fill(n1: usize, n2: usize, p0: f64, p1: f64, b1_0: []f64, b1_1: []f64, 
     if e4 != ok { ret e4 }
     sf_0[n2 + 1usize] = 0.0f64
     sf_1[n2 + 1usize] = 0.0f64
-    var k = n2
+    var k = n2 + 1usize
     while k > 0usize {
         k -= 1usize
         sf_0[k] = sf_0[k + 1usize] + b2_0[k]

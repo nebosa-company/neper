@@ -123,7 +123,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if optimal.n1 != 10usize || optimal.r1 != 1usize || optimal.n != 29usize || optimal.r != 5usize { os.exit(3i32) }
     let (minimax, minimax_error) = trial.simon_minimax(0.10f64, 0.30f64, 0.05f64, 0.20f64, sscratch[..])
     if minimax_error != ok { os.exit(3i32) }
-    if minimax.n1 != 11usize || minimax.r1 != 0usize || minimax.n != 25usize || minimax.r != 5usize { os.exit(3i32) }
+    if minimax.n1 != 15usize || minimax.r1 != 1usize || minimax.n != 25usize || minimax.r != 5usize { os.exit(3i32) }
     var oscratch: [64]f64 = zero
     let (type1, expected, oc_error) = trial.simon_oc(10usize, 1usize, 29usize, 5usize, 0.10f64, oscratch[..])
     if oc_error != ok { os.exit(3i32) }
@@ -152,7 +152,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var means: [5]f64 = zero
     let (dose, dose_error) = trial.crm_next(skeleton[..], 5usize, 0.25f64, assigned[..], outcomes[..], 6usize, means[..])
     if dose_error != ok { os.exit(4i32) }
-    if dose != 1usize { os.exit(4i32) }
+    if dose != 2usize { os.exit(4i32) }
     if !near(means[0usize], 0.10434243667918248f64, 0.000001f64) { os.exit(4i32) }
     if !near(means[1usize], 0.20197825152324508f64, 0.000001f64) { os.exit(4i32) }
     if !near(means[2usize], 0.29694393968798316f64, 0.000001f64) { os.exit(4i32) }
@@ -177,7 +177,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     ea[0usize] = 1u8
     let (_, lr_empty_error) = trial.log_rank(ta[..0usize], ea[..0usize], 0usize, tb[..], eb[..], 8usize)
     if lr_empty_error != trial.Invalid { os.exit(5i32) }
-    let (_, cox_nocov_error) = trial.cox_ph(times[..], events[..], cx[..], 16usize, 0usize, beta[..0usize], bcov[..0usize], fscratch[..0usize], iscratch[..0usize])
+    let (_, cox_nocov_error) = trial.cox_ph(times[..], events[..], cx[..], 16usize, 0usize, beta[..0usize], bcov[..0usize], fscratch[..16usize], iscratch[..])
     if cox_nocov_error != trial.Invalid { os.exit(5i32) }
     var allevents: [16]u8 = zero
     let (_, cox_singular_error) = trial.cox_ph(times[..], allevents[..], cx[..], 16usize, 1usize, beta[..], bcov[..], fscratch[..], iscratch[..])
