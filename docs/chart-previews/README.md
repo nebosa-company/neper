@@ -1,6 +1,7 @@
 # Chart previews
 
-The scatter, line, bar, histogram, step, area, lollipop, error-bar, band,
+The scatter, line, bar, grouped bar, signed stacked bar, 100% stacked bar,
+histogram, step, area, lollipop, error-bar, band,
 dumbbell, ECDF, box,
 density, Q-Q, violin, heatmap, correlation matrix, faceted heatmap, shared/free
 facet scales, log scatter, symmetric-log line, labeled line, labeled log scatter

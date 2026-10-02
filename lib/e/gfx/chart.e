@@ -556,6 +556,143 @@ fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bound
     ret (Layout { kind: .Dumbbell, coords: points[..2usize * position.len], segments: lines[..position.len], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
 }
 
+fn bar_grid_ok(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect) -> bool {
+    ret valid_bounds(bounds) && values.len / categories == series && values.len % categories == 0usize && finite(f32(categories))
+}
+
+// Series-major output lets each caller-owned layer be painted with its own
+// colour by the existing Bar adapter; input observations are category-major.
+fn bar_layers(categories: usize, series: usize, bars: []geometry.Rect, layers: []Layout, ymin: f32, ymax: f32) -> []Layout {
+    var i = 0usize
+    while i < series {
+        let first = i * categories
+        layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[first..first + categories], x_min: 0.0, x_max: f32(categories), y_min: ymin, y_max: ymax }
+        i += 1usize
+    }
+    ret layers[..series]
+}
+
+fn grouped_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if categories == 0usize || series == 0usize { ret (zero, Invalid) }
+    if !bar_grid_ok(values, categories, series, bounds) { ret (zero, Invalid) }
+    if bars.len < values.len || layers.len < series { ret (zero, TooLarge) }
+    var ymin = 0.0f32
+    var ymax = 0.0f32
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) { ret (zero, Invalid) }
+        if values[i] < ymin { ymin = values[i] }
+        if values[i] > ymax { ymax = values[i] }
+        i += 1usize
+    }
+    if ymin == ymax {
+        ymin = -0.5
+        ymax = 0.5
+    }
+    let cell = bounds.width / f32(categories)
+    let width = cell * 0.8 / f32(series)
+    if !finite(width) || width <= 0.0 { ret (zero, Invalid) }
+    var category = 0usize
+    while category < categories {
+        var column = 0usize
+        while column < series {
+            let value = values[category * series + column]
+            let baseline_y = bounds.y + bounds.height - mapped(0.0, ymin, ymax, 0.0, bounds.height)
+            let value_y = bounds.y + bounds.height - mapped(value, ymin, ymax, 0.0, bounds.height)
+            var top = baseline_y
+            var bottom = value_y
+            if top > bottom {
+                let old = top
+                top = bottom
+                bottom = old
+            }
+            bars[column * categories + category] = geometry.rect(bounds.x + cell * f32(category) + cell * 0.1 + width * f32(column), top, width, bottom - top)
+            column += 1usize
+        }
+        category += 1usize
+    }
+    ret (bar_layers(categories, series, bars, layers, ymin, ymax), ok)
+}
+
+// Positive and negative values stack away from zero independently. With
+// normalize=true, every category must have a positive total and no negatives.
+fn stacked_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, normalize: bool, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if categories == 0usize || series == 0usize { ret (zero, Invalid) }
+    if !bar_grid_ok(values, categories, series, bounds) { ret (zero, Invalid) }
+    if bars.len < values.len || layers.len < series { ret (zero, TooLarge) }
+    var ymin = 0.0f64
+    var ymax = 0.0f64
+    var category = 0usize
+    while category < categories {
+        var positive = 0.0f64
+        var negative = 0.0f64
+        var column = 0usize
+        while column < series {
+            let value = values[category * series + column]
+            if !finite(value) || (normalize && value < 0.0) { ret (zero, Invalid) }
+            if value >= 0.0 { positive += f64(value) } else { negative += f64(value) }
+            column += 1usize
+        }
+        if !finite(f32(positive)) || !finite(f32(negative)) || (normalize && positive <= 0.0f64) { ret (zero, Invalid) }
+        if negative < ymin { ymin = negative }
+        if positive > ymax { ymax = positive }
+        category += 1usize
+    }
+    if normalize {
+        ymin = 0.0f64
+        ymax = 1.0f64
+    }
+    if ymin == ymax {
+        ymin = -0.5f64
+        ymax = 0.5f64
+    }
+    let low = f32(ymin)
+    let high = f32(ymax)
+    let cell = bounds.width / f32(categories)
+    let width = cell * 0.8
+    if !finite(width) || width <= 0.0 { ret (zero, Invalid) }
+    category = 0usize
+    while category < categories {
+        var total = 1.0f64
+        if normalize {
+            total = 0.0f64
+            var s = 0usize
+            while s < series {
+                total += f64(values[category * series + s])
+                s += 1usize
+            }
+        }
+        var positive = 0.0f64
+        var negative = 0.0f64
+        var column = 0usize
+        while column < series {
+            let value = f64(values[category * series + column]) / total
+            var from = positive
+            if value >= 0.0f64 {
+                positive += value
+            } else {
+                from = negative
+                negative += value
+            }
+            var to = positive
+            if value < 0.0f64 { to = negative }
+            let from_y = bounds.y + bounds.height - mapped(f32(from), low, high, 0.0, bounds.height)
+            let to_y = bounds.y + bounds.height - mapped(f32(to), low, high, 0.0, bounds.height)
+            var top = from_y
+            var bottom = to_y
+            if top > bottom {
+                let old = top
+                top = bottom
+                bottom = old
+            }
+            bars[column * categories + category] = geometry.rect(bounds.x + cell * f32(category) + cell * 0.1, top, width, bottom - top)
+            column += 1usize
+        }
+        category += 1usize
+    }
+    ret (bar_layers(categories, series, bars, layers, low, high), ok)
+}
+
 // Equal-width bins, left-closed/right-open except the last bin (which includes
 // the maximum). Counts and rectangles are caller-owned; bars touch edge to edge.
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err) {

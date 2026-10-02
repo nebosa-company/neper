@@ -1,12 +1,13 @@
 # Neper charting engine plan
 
-Status: scatter, line, bar, histogram, step, area, lollipop, error bars,
+Status: scatter, line, bar, grouped bar, signed stacked bar, 100% stacked bar,
+histogram, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
 reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 facet panel geometry, explicit limits for shared/free facet scales, and
-twenty-four PNG plus twenty-four SVG previews from Neper. L061 remains partial
+twenty-seven PNG plus twenty-seven SVG previews from Neper. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -82,6 +83,11 @@ Confidence bands close ordered lower/upper series into a filled caller-owned
 polygon. Dumbbells use numeric vertical positions and horizontal lower/upper
 endpoints, emitting one segment and two points per row. Both reject inverted
 intervals and render through the existing scene and SVG mark branches.
+Grouped bars borrow category-major values and return per-series `Bar` layouts
+over caller-owned rectangles, so the scene/SVG adapters can colour each series
+without a new mark type. Stacked bars accumulate positives and negatives away
+from zero; the normalized variant requires a positive, nonnegative total in
+every category. Legend metadata and category labels remain planned.
 Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
@@ -113,7 +119,8 @@ and backend-parity measurements remain planned.
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
-Scatter, line, bar, histogram, step/stairs, area, lollipop, error bars,
+Scatter, line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
+histogram, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
 box, density, Q-Q, violin, heatmap and correlation matrix are delivered; every other entry
 remains planned.
@@ -164,7 +171,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    preview. Strips, legend metadata and categorical facet mapping remain.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with twenty-four vector previews, automatic numeric tick text and
+   adapter with twenty-seven vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered; collision-safe margins, a production PNG
    API, PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.

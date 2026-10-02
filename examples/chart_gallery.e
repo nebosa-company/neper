@@ -138,6 +138,41 @@ fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     ret render_chart_scaled(a, q, output_target, canvas, renderer, marks, linear, linear, path)
 }
 
+fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, path: str) -> err {
+    let (made, builder_error) = scene.builder(a, 32usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    let colors = [2]paint.Color{ paint.rgba(0.07, 0.35, 0.76, 1.0), paint.rgba(0.94, 0.42, 0.12, 1.0) }
+    let grid_color = paint.rgba(0.88, 0.91, 0.95, 1.0)
+    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    let plot = geometry.rect(44.0, 30.0, 286.0, 174.0)
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var x_ticks: [4]chart.Tick = zero
+    var y_ticks: [4]chart.Tick = zero
+    let (_, x_error) = chart.ticks(linear, layers[0].x_min, layers[0].x_max, x_ticks[..])
+    if x_error != ok { ret x_error }
+    let (_, y_error) = chart.ticks(linear, layers[0].y_min, layers[0].y_max, y_ticks[..])
+    if y_error != ok { ret y_error }
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid_color, axis_color)
+    var i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    try fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+    ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
+}
+
 fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
     let (made, builder_error) = scene.builder(a, marks.cells.len + 1usize)
     if builder_error != ok { ret builder_error }
@@ -311,6 +346,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try render_chart(a, queue, output_target, canvas, &renderer, &marks, paths[i])
         i += 1usize
     }
+    let grouped_values = [8]f32{ 3.0, 2.0, 5.0, 4.0, 2.0, 6.0, 4.0, 3.0 }
+    var series_bars: [8]geometry.Rect = zero
+    var series_layers: [2]chart.Layout = zero
+    let (grouped, grouped_error) = chart.grouped_bars(grouped_values[..], 4usize, 2usize, bounds, series_bars[..], series_layers[..])
+    if grouped_error != ok { ret grouped_error }
+    try render_bar_layers(a, queue, output_target, canvas, &renderer, grouped, "docs/chart-previews/grouped_bar.png")
+    let signed_values = [8]f32{ 3.0, 2.0, 5.0, -2.0, 2.0, 6.0, 4.0, -1.0 }
+    let (stacked, stacked_error) = chart.stacked_bars(signed_values[..], 4usize, 2usize, bounds, false, series_bars[..], series_layers[..])
+    if stacked_error != ok { ret stacked_error }
+    try render_bar_layers(a, queue, output_target, canvas, &renderer, stacked, "docs/chart-previews/stacked_bar.png")
+    let (normalized, normalized_error) = chart.stacked_bars(grouped_values[..], 4usize, 2usize, bounds, true, series_bars[..], series_layers[..])
+    if normalized_error != ok { ret normalized_error }
+    try render_bar_layers(a, queue, output_target, canvas, &renderer, normalized, "docs/chart-previews/stacked_100.png")
     let log_x = [8]f32{ 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 1000.0 }
     let log_y = [8]f32{ 1.0, 3.0, 5.0, 10.0, 25.0, 40.0, 80.0, 100.0 }
     var log_plot = chart.spec(.Scatter, bounds, log_x[..], log_y[..])

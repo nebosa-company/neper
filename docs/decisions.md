@@ -33134,3 +33134,14 @@ them into a caller-supplied byte buffer. An empty buffer returns `TooLarge`
 before `mem.arena_from` can read its first element. The gallery's labeled
 linear, log and symmetric-log previews exercise the shared guide and text
 adapters; `gfx_chart_nice_ticks` checks break values, reversal and refusals.
+
+## D1804 — Compose bar series from existing Bar layouts
+
+`grouped_bars` and `stacked_bars` take category-major numeric values and
+caller-owned rectangle/layer storage. Their series-major `Bar` layouts let the
+existing scene and SVG adapters paint each series independently without a new
+renderer primitive. Grouped bars dodge within each category. Stacks accumulate
+positive and negative values separately around zero; normalization requires a
+positive nonnegative total in every category. `gfx_chart_composition` checks
+geometry, both adapters and refusal paths; the gallery adds three PNG/SVG
+pairs. Category labels, legends and more composition types remain planned.

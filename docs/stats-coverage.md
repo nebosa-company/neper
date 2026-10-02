@@ -116,10 +116,11 @@ class — only the generic `gradient_boost` exists), no k-fold CV + grid search
 ## 2. Charts & visualizations — partial, queued
 
 `e.gfx.chart` now has a deterministic caller-owned geometry API for scatter,
-line, bar, histogram, step, area, lollipop, error bars, confidence bands,
+line, bar, grouped/dodged bar, signed stacked bar, 100% stacked bar,
+histogram, step, area, lollipop, error bars, confidence bands,
 dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap and correlation
 matrix, with numeric scales and facet-panel geometry. Its scene and SVG
-adapters produce twenty-four paired previews in `docs/chart-previews/`, including
+adapters produce twenty-seven paired previews in `docs/chart-previews/`, including
 automatic linear/log tick text and caller-supplied title labels. The
 complete registry, remaining grammar stages and export/widget/benchmark gates
 are tracked in `docs/charting-engine-plan.md` and L061; the original R/Python
