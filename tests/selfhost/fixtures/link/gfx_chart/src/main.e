@@ -78,8 +78,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if unordered_error != chart.Invalid { ret chart.Invalid }
     let (_, short_ecdf_error) = chart.ecdf(ordered[..], geometry.rect(0.0, 0.0, 20.0, 20.0), ecdf_lines[..4usize])
     if short_ecdf_error != chart.TooLarge { ret chart.Invalid }
-
-    let (made_builder, builder_error) = scene.builder(a, 16usize)
+    let box_values = [8]f64{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 20.0 }
+    let (box_points, box_points_error) = mem.alloc[chart.Coord](a, 2usize)
+    if box_points_error != ok { ret box_points_error }
+    let (box_lines, box_lines_error) = mem.alloc[chart.Segment](a, 5usize)
+    if box_lines_error != ok { ret box_lines_error }
+    let (box_rects, box_rects_error) = mem.alloc[geometry.Rect](a, 1usize)
+    if box_rects_error != ok { ret box_rects_error }
+    let (box_layout, box_error) = chart.box_plot(box_values[..], geometry.rect(0.0, 0.0, 100.0, 100.0), box_points[..], box_lines[..], box_rects[..])
+    if box_error != ok || box_layout.kind != .Box || box_layout.coords.len != 1usize || box_layout.segments.len != 5usize || box_layout.bars.len != 1usize { ret chart.Invalid }
+    if !near(box_layout.coords[0].x, 50.0) || !near(box_layout.coords[0].y, 0.0) || !near(box_layout.bars[0].x, 32.0) || !near(box_layout.bars[0].width, 36.0) { ret chart.Invalid }
+    if !near(box_layout.segments[0].to.y, 100.0) || !near(box_layout.segments[1].to.y, 68.42105) { ret chart.Invalid }
+    if !(box_layout.bars[0].y < box_layout.segments[4].from.y && box_layout.segments[4].from.y < box_layout.bars[0].y + box_layout.bars[0].height) { ret chart.Invalid }
+    let (_, short_box_error) = chart.box_plot(box_values[..], geometry.rect(0.0, 0.0, 100.0, 100.0), box_points[..0usize], box_lines[..], box_rects[..])
+    if short_box_error != chart.TooLarge { ret chart.Invalid }
+    let bad_box = [2]f64{ 3.0, 2.0 }
+    let (_, bad_box_error) = chart.box_plot(bad_box[..], geometry.rect(0.0, 0.0, 100.0, 100.0), box_points[..], box_lines[..], box_rects[..])
+    if bad_box_error != chart.Invalid { ret chart.Invalid }
+    let density_values = [3]f64{ -1.0, 0.0, 1.0 }
+    var density_grid: [5]f64 = zero
+    var density_estimates: [5]f64 = zero
+    var density_lines: [4]chart.Segment = zero
+    let (density_layout, density_error) = chart.density(density_values[..], geometry.rect(0.0, 0.0, 100.0, 100.0), 0.5f64, density_grid[..], density_estimates[..], density_lines[..])
+    if density_error != ok || density_layout.kind != .Density || density_layout.segments.len != 4usize { ret chart.Invalid }
+    if !near(f32(density_grid[0]), -2.5) || !near(f32(density_grid[4]), 2.5) || !near(f32(density_estimates[0]), f32(density_estimates[4])) { ret chart.Invalid }
+    if !near(density_layout.segments[1].to.y, 0.0) { ret chart.Invalid }
+    let (_, bad_bandwidth) = chart.density(density_values[..], geometry.rect(0.0, 0.0, 100.0, 100.0), -1.0f64, density_grid[..], density_estimates[..], density_lines[..])
+    if bad_bandwidth != chart.Invalid { ret chart.Invalid }
+    let (_, short_density) = chart.density(density_values[..], geometry.rect(0.0, 0.0, 100.0, 100.0), 0.5f64, density_grid[..1usize], density_estimates[..], density_lines[..])
+    if short_density != chart.TooLarge { ret chart.Invalid }
+    var violin_outline: [10]chart.Coord = zero
+    let (violin_layout, violin_error) = chart.violin(density_values[..], geometry.rect(0.0, 0.0, 100.0, 100.0), 0.5f64, density_grid[..], density_estimates[..], violin_outline[..])
+    if violin_error != ok || violin_layout.kind != .Violin || violin_layout.coords.len != 10usize { ret chart.Invalid }
+    if !(violin_layout.coords[2].x < 50.0 && violin_layout.coords[7].x > 50.0) || !near(violin_layout.coords[2].x + violin_layout.coords[7].x, 100.0) { ret chart.Invalid }
+    let (_, short_violin) = chart.violin(density_values[..], geometry.rect(0.0, 0.0, 100.0, 100.0), 0.5f64, density_grid[..], density_estimates[..], violin_outline[..9usize])
+    if short_violin != chart.TooLarge { ret chart.Invalid }
+    let (made_builder, builder_error) = scene.builder(a, 24usize)
     if builder_error != ok { ret builder_error }
     var builder = made_builder
     let blue = paint.Brush { Solid: paint.rgba(0.1, 0.3, 0.8, 1.0) }
@@ -89,7 +123,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if chart_scene.append(a, &builder, &hist_preview, blue) != ok { ret chart.Invalid }
     if chart_scene.append(a, &builder, &step_layout, blue) != ok { ret chart.Invalid }
     if chart_scene.append(a, &builder, &ecdf_layout, blue) != ok { ret chart.Invalid }
-    if scene.builder_count(&builder) != 11usize { ret chart.Invalid }
+    if chart_scene.append(a, &builder, &box_layout, blue) != ok { ret chart.Invalid }
+    if chart_scene.append(a, &builder, &density_layout, blue) != ok { ret chart.Invalid }
+    if chart_scene.append(a, &builder, &violin_layout, blue) != ok { ret chart.Invalid }
+    if scene.builder_count(&builder) != 20usize { ret chart.Invalid }
     try io.print("gfx chart ok\n")
     ret ok
 }

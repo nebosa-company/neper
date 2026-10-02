@@ -4,9 +4,11 @@
 // The contract is intentionally small: one numeric x/y mapping, one Cartesian
 // bounds rectangle, and caller-owned output. More chart families compose on it.
 
+use e.algo.stat
 use e.gfx.geometry
+use e.math.special
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin }
 type Coord = struct { x: f32, y: f32 }
 type Segment = struct { from: Coord, to: Coord }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32 }
@@ -45,7 +47,7 @@ fn mapped(value: f32, lo: f32, hi: f32, start: f32, size: f32) -> f32 {
 // Produces marks in screen coordinates. Y is inverted because graphics bounds
 // use a top-left origin; the returned domain remains in data coordinates.
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err) {
-    if s.kind == .Histogram || s.kind == .Ecdf { ret (zero, Invalid) }
+    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) { ret (zero, Invalid) }
@@ -238,4 +240,195 @@ fn ecdf(sorted: []const f32, bounds: geometry.Rect, segments: []Segment) -> (Lay
         i += 1usize
     }
     ret (Layout { kind: .Ecdf, coords: zero, segments: segments[..count], bars: zero, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: 1.0 }, ok)
+}
+
+fn box_y(value: f64, lo: f64, hi: f64, bounds: geometry.Rect) -> f32 {
+    ret bounds.y + bounds.height * f32(1.0f64 - (value - lo) / (hi - lo))
+}
+
+// One vertical Tukey box: R7 quartiles, whiskers at the most extreme sample
+// within 1.5 IQR, and caller-owned coordinates for values beyond the fences.
+fn box_plot(sorted: []const f64, bounds: geometry.Rect, outliers: []Coord, lines: []Segment, boxes: []geometry.Rect) -> (Layout, err) {
+    if sorted.len == 0usize { ret (zero, Empty) }
+    if !finite(bounds.x) || !finite(bounds.y) || !finite(bounds.width) || !finite(bounds.height) || bounds.width <= 0.0 || bounds.height <= 0.0 { ret (zero, Invalid) }
+    if lines.len < 5usize || boxes.len < 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < sorted.len {
+        if !finite(f32(sorted[i])) || (i > 0usize && sorted[i] < sorted[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let (q1, first_ok) = stat.quantile(sorted, 0.25f64, .R7)
+    let (median, middle_ok) = stat.quantile(sorted, 0.5f64, .R7)
+    let (q3, third_ok) = stat.quantile(sorted, 0.75f64, .R7)
+    if !first_ok || !middle_ok || !third_ok { ret (zero, Invalid) }
+    let spread = q3 - q1
+    let lower_fence = q1 - 1.5f64 * spread
+    let upper_fence = q3 + 1.5f64 * spread
+    var lower = sorted[0usize]
+    var upper = sorted[sorted.len - 1usize]
+    var outlier_count = 0usize
+    i = 0usize
+    while i < sorted.len {
+        if sorted[i] < lower_fence || sorted[i] > upper_fence {
+            outlier_count += 1usize
+        } else {
+            if sorted[i] < lower || lower < lower_fence { lower = sorted[i] }
+            if sorted[i] > upper || upper > upper_fence { upper = sorted[i] }
+        }
+        i += 1usize
+    }
+    if outliers.len < outlier_count { ret (zero, TooLarge) }
+    var lo = sorted[0usize]
+    var hi = sorted[sorted.len - 1usize]
+    if lo == hi {
+        lo -= 0.5f64
+        hi += 0.5f64
+    }
+    let cx = bounds.x + bounds.width / 2.0
+    let width = bounds.width * 0.36
+    let cap = width * 0.5
+    let low_y = box_y(lower, lo, hi, bounds)
+    let q1_y = box_y(q1, lo, hi, bounds)
+    let mid_y = box_y(median, lo, hi, bounds)
+    let q3_y = box_y(q3, lo, hi, bounds)
+    let high_y = box_y(upper, lo, hi, bounds)
+    boxes[0usize] = geometry.rect(cx - width / 2.0, q3_y, width, q1_y - q3_y)
+    lines[0usize] = Segment { from: Coord { x: cx, y: q1_y }, to: Coord { x: cx, y: low_y } }
+    lines[1usize] = Segment { from: Coord { x: cx, y: q3_y }, to: Coord { x: cx, y: high_y } }
+    lines[2usize] = Segment { from: Coord { x: cx - cap / 2.0, y: low_y }, to: Coord { x: cx + cap / 2.0, y: low_y } }
+    lines[3usize] = Segment { from: Coord { x: cx - cap / 2.0, y: high_y }, to: Coord { x: cx + cap / 2.0, y: high_y } }
+    lines[4usize] = Segment { from: Coord { x: cx - width / 2.0, y: mid_y }, to: Coord { x: cx + width / 2.0, y: mid_y } }
+    var placed = 0usize
+    i = 0usize
+    while i < sorted.len {
+        if sorted[i] < lower_fence || sorted[i] > upper_fence {
+            outliers[placed] = Coord { x: cx, y: box_y(sorted[i], lo, hi, bounds) }
+            placed += 1usize
+        }
+        i += 1usize
+    }
+    ret (Layout { kind: .Box, coords: outliers[..placed], segments: lines[..5usize], bars: boxes[..1usize], x_min: 0.0, x_max: 1.0, y_min: f32(lo), y_max: f32(hi) }, ok)
+}
+
+// Shared Gaussian estimate for density and violin marks. The caller owns both
+// arrays; zero bandwidth selects Scott's rule.
+fn kde_grid(values: []const f64, bandwidth: f64, grid: []f64, estimates: []f64) -> (f64, f64, f64, err) {
+    if values.len == 0usize { ret (0.0f64, 0.0f64, 0.0f64, Empty) }
+    if grid.len < 2usize || estimates.len < grid.len { ret (0.0f64, 0.0f64, 0.0f64, TooLarge) }
+    var lo = values[0usize]
+    var hi = lo
+    var i = 0usize
+    while i < values.len {
+        if !finite(f32(values[i])) { ret (0.0f64, 0.0f64, 0.0f64, Invalid) }
+        if values[i] < lo { lo = values[i] }
+        if values[i] > hi { hi = values[i] }
+        i += 1usize
+    }
+    var bw = bandwidth
+    if bw == 0.0f64 {
+        let (chosen, has_bandwidth) = stat.kde_bandwidth(values, .Scott)
+        if !has_bandwidth { ret (0.0f64, 0.0f64, 0.0f64, Invalid) }
+        bw = chosen
+    }
+    if !(bw > 0.0f64) || !finite(f32(bw)) { ret (0.0f64, 0.0f64, 0.0f64, Invalid) }
+    lo -= 3.0f64 * bw
+    hi += 3.0f64 * bw
+    if !finite(f32(lo)) || !finite(f32(hi)) || !(hi > lo) { ret (0.0f64, 0.0f64, 0.0f64, Invalid) }
+    i = 0usize
+    while i < grid.len {
+        grid[i] = lo + (hi - lo) * f64(i) / f64(grid.len - 1usize)
+        i += 1usize
+    }
+    let density_error = stat.kde(values, bw, grid, estimates)
+    if density_error != ok { ret (0.0f64, 0.0f64, 0.0f64, density_error) }
+    var peak = 0.0f64
+    i = 0usize
+    while i < grid.len {
+        if estimates[i] > peak { peak = estimates[i] }
+        i += 1usize
+    }
+    if !(peak > 0.0f64) || !finite(f32(peak)) { ret (0.0f64, 0.0f64, 0.0f64, Invalid) }
+    ret (lo, hi, peak, ok)
+}
+
+// Gaussian KDE on an equally spaced caller-owned grid. Zero bandwidth selects
+// Scott's rule; a positive bandwidth is an explicit caller calibration.
+fn density(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, segments: []Segment) -> (Layout, err) {
+    if grid.len < 2usize || segments.len < grid.len - 1usize { ret (zero, TooLarge) }
+    if !finite(bounds.x) || !finite(bounds.y) || !finite(bounds.width) || !finite(bounds.height) || bounds.width <= 0.0 || bounds.height <= 0.0 { ret (zero, Invalid) }
+    let (lo, hi, peak, grid_error) = kde_grid(values, bandwidth, grid, estimates)
+    if grid_error != ok { ret (zero, grid_error) }
+    var i = 0usize
+    while i + 1usize < grid.len {
+        segments[i] = Segment {
+            from: Coord { x: bounds.x + bounds.width * f32(i) / f32(grid.len - 1usize), y: bounds.y + bounds.height * f32(1.0f64 - estimates[i] / peak) },
+            to: Coord { x: bounds.x + bounds.width * f32(i + 1usize) / f32(grid.len - 1usize), y: bounds.y + bounds.height * f32(1.0f64 - estimates[i + 1usize] / peak) },
+        }
+        i += 1usize
+    }
+    ret (Layout { kind: .Density, coords: zero, segments: segments[..grid.len - 1usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }, ok)
+}
+
+// The same estimate mirrored around the panel center. `outline` holds the
+// closed shape's left side bottom-to-top and right side top-to-bottom.
+fn violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err) {
+    if grid.len < 2usize || outline.len / 2usize < grid.len { ret (zero, TooLarge) }
+    if !finite(bounds.x) || !finite(bounds.y) || !finite(bounds.width) || !finite(bounds.height) || bounds.width <= 0.0 || bounds.height <= 0.0 { ret (zero, Invalid) }
+    let (lo, hi, peak, grid_error) = kde_grid(values, bandwidth, grid, estimates)
+    if grid_error != ok { ret (zero, grid_error) }
+    let center = bounds.x + bounds.width / 2.0
+    let half = bounds.width * 0.35
+    var i = 0usize
+    while i < grid.len {
+        let y = bounds.y + bounds.height * f32(1.0f64 - (grid[i] - lo) / (hi - lo))
+        let side = half * f32(estimates[i] / peak)
+        outline[i] = Coord { x: center - side, y: y }
+        outline[2usize * grid.len - 1usize - i] = Coord { x: center + side, y: y }
+        i += 1usize
+    }
+    ret (Layout { kind: .Violin, coords: outline[..2usize * grid.len], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: f32(lo), y_max: f32(hi) }, ok)
+}
+
+// Normal Q-Q positions use (i + 1/2) / n. The reference joins the sample's
+// R7 quartiles against the theoretical normal quartiles.
+fn qq_normal(sorted: []const f64, bounds: geometry.Rect, points: []Coord, reference: []Segment) -> (Layout, err) {
+    if sorted.len < 2usize { ret (zero, Empty) }
+    if points.len < sorted.len || reference.len < 1usize { ret (zero, TooLarge) }
+    if !finite(bounds.x) || !finite(bounds.y) || !finite(bounds.width) || !finite(bounds.height) || bounds.width <= 0.0 || bounds.height <= 0.0 { ret (zero, Invalid) }
+    var i = 0usize
+    while i < sorted.len {
+        if !finite(f32(sorted[i])) || (i > 0usize && sorted[i] < sorted[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var ymin = f32(sorted[0usize])
+    var ymax = f32(sorted[sorted.len - 1usize])
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+        if ymin == ymax {
+            if ymin > 0.0 { ymin *= 0.5 } else { ymax *= 0.5 }
+        }
+    }
+    let n = f64(sorted.len)
+    let xmin = f32(special.normal_quantile(0.5f64 / n))
+    let xmax = f32(special.normal_quantile((n - 0.5f64) / n))
+    i = 0usize
+    while i < sorted.len {
+        let theoretical = f32(special.normal_quantile((f64(i) + 0.5f64) / n))
+        points[i] = Coord {
+            x: mapped(theoretical, xmin, xmax, bounds.x, bounds.width),
+            y: bounds.y + bounds.height - mapped(f32(sorted[i]), ymin, ymax, 0.0, bounds.height),
+        }
+        i += 1usize
+    }
+    let (q1, first_ok) = stat.quantile(sorted, 0.25f64, .R7)
+    let (q3, third_ok) = stat.quantile(sorted, 0.75f64, .R7)
+    if !first_ok || !third_ok { ret (zero, Invalid) }
+    let theory_q1 = f32(special.normal_quantile(0.25f64))
+    let theory_q3 = f32(special.normal_quantile(0.75f64))
+    reference[0usize] = Segment {
+        from: Coord { x: mapped(theory_q1, xmin, xmax, bounds.x, bounds.width), y: bounds.y + bounds.height - mapped(f32(q1), ymin, ymax, 0.0, bounds.height) },
+        to: Coord { x: mapped(theory_q3, xmin, xmax, bounds.x, bounds.width), y: bounds.y + bounds.height - mapped(f32(q3), ymin, ymax, 0.0, bounds.height) },
+    }
+    ret (Layout { kind: .Qq, coords: points[..sorted.len], segments: reference[..1usize], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
 }

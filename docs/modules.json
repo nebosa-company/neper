@@ -2117,6 +2117,8 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.algo.stat",
+    "e.math.special",
     "e.gfx.geometry"
    ],
    "blocked_by": []

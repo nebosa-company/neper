@@ -106,6 +106,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (cdf, cdf_error) = chart.ecdf(values[..], bounds, cdf_segments[..])
     if cdf_error != ok { ret cdf_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &cdf, "docs/chart-previews/ecdf.png")
+    let box_values = [8]f64{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 20.0 }
+    var box_points: [2]chart.Coord = zero
+    var box_lines: [5]chart.Segment = zero
+    var box_rects: [1]geometry.Rect = zero
+    let (box, box_error) = chart.box_plot(box_values[..], bounds, box_points[..], box_lines[..], box_rects[..])
+    if box_error != ok { ret box_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &box, "docs/chart-previews/box.png")
+    let density_values = [16]f64{ 1.0, 2.0, 2.0, 2.5, 3.0, 3.5, 4.0, 4.0, 4.0, 5.0, 5.5, 6.0, 6.0, 7.0, 8.0, 8.5 }
+    var grid: [64]f64 = zero
+    var estimates: [64]f64 = zero
+    var density_segments: [63]chart.Segment = zero
+    let (density_plot, density_error) = chart.density(density_values[..], bounds, 0.0f64, grid[..], estimates[..], density_segments[..])
+    if density_error != ok { ret density_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &density_plot, "docs/chart-previews/density.png")
+    var violin_outline: [128]chart.Coord = zero
+    let (violin_plot, violin_error) = chart.violin(density_values[..], bounds, 0.0f64, grid[..], estimates[..], violin_outline[..])
+    if violin_error != ok { ret violin_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &violin_plot, "docs/chart-previews/violin.png")
+    let qq_values = [9]f64{ -2.4, -1.5, -1.1, -0.4, 0.1, 0.5, 1.2, 1.7, 3.0 }
+    var qq_points: [9]chart.Coord = zero
+    var qq_reference: [1]chart.Segment = zero
+    let (qq_plot, qq_error) = chart.qq_normal(qq_values[..], bounds, qq_points[..], qq_reference[..])
+    if qq_error != ok { ret qq_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &qq_plot, "docs/chart-previews/qq.png")
     try scene.close(&renderer)
     try gpu.close_target(output_target)
     try gpu.close(device)

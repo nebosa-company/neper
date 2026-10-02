@@ -33030,3 +33030,15 @@ and may leave streamed output already accepted by the caller's sink.
 on Windows and Linux; Linux additionally verifies a planted staging symlink and stale
 regular file stay untouched. All pass with independently rebuilt compiler images.
 Linux filesystem fixtures run on the native Linux volume, not WSL's Windows mount.
+
+## D1794 — Reuse statistical kernels for distribution marks
+
+`chart.box_plot` borrows an ascending `f64` sample and uses `e.algo.stat`
+R7 quartiles for a Tukey box, 1.5-IQR whiskers and explicit outlier points.
+`chart.density` uses the existing Gaussian KDE with a caller-selected bandwidth
+or Scott's rule; callers own the grid, estimates and segments. `chart.qq_normal`
+uses `e.math.special.normal_quantile` at `(i + 0.5)/n` positions and the sample's
+R7 quartiles for a reference segment. The same scene adapter renders each set
+of marks. Violin mirrors the KDE estimate into a filled caller-owned outline.
+Q-Q gets a small separate fixture because the combined fixture exceeds the
+current self-host compiler arena.

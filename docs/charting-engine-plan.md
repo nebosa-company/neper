@@ -1,7 +1,8 @@
 # Neper charting engine plan
 
-Status: scatter, line, bar, histogram, step and ECDF marks are delivered, with a
-scene adapter and six PNG previews from Neper's CPU renderer. L061 remains partial
+Status: scatter, line, bar, histogram, step, ECDF, box, density, normal Q-Q and
+violin marks are delivered, with a scene adapter and ten PNG previews from Neper's CPU
+renderer. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -63,12 +64,15 @@ sample is centered in a padded domain. Step/stairs maps ordered x/y columns
 into horizontal then vertical segments. `e.gfx.chart.scene` appends the same
 marks to a scene display list; `examples/chart_gallery.e` renders the delivered
 kinds through the CPU renderer and PNG encoder. ECDF accepts an ascending sample
-and emits exact 1/n rises, including tied observations.
+and emits exact 1/n rises, including tied observations. Box plots reuse R7
+quartiles for Tukey whiskers; density reuses Gaussian KDE with an explicit or
+Scott bandwidth; Q-Q plots reuse normal quantiles and an R7 quartile reference.
+Violin plots mirror that same Gaussian estimate into a filled outline.
 
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
-Scatter, line, bar, histogram, step/stairs and ECDF are delivered; every other entry
+Scatter, line, bar, histogram, step/stairs, ECDF, box, density, Q-Q and violin are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -106,9 +110,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 1. **Foundation (delivered now):** typed spec, borrowed data, scale-to-bounds,
    scatter/line/bar/step marks, constant-domain handling, executable fixture.
-2. **Core distributions (partial):** equal-width histogram and ECDF delivered;
-   box/violin, density and QQ remain. Fixtures compare exact
-   bins/quantiles against small hand oracles.
+2. **Core distributions (delivered):** histogram, box, violin, density, ECDF and
+   normal Q-Q have executable fixtures and PNG previews. Other distribution
+   variants in the catalogue remain planned.
 3. **Matrix and facets:** heatmap, correlation matrix, panel layout, shared/free
    scales, strips and legend metadata.
 4. **Rendering adapters (partial):** scene display-list marks and a Neper-rendered

@@ -3051,12 +3051,17 @@ $gfxCoreWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $gfxCoreWritten -ne 'executable written') { throw 'gfx_core emission failed' }
 $gfxCoreOutput = & $gfxCorePath
 if ($LASTEXITCODE -ne 0 -or $gfxCoreOutput -ne 'gfx core ok') { throw "an e.gfx.geometry, e.gfx.paint or e.gfx.image answer was wrong: exit $LASTEXITCODE" }
-# `e.gfx.chart` foundation: borrowed x/y data into caller-owned scatter, line and bar marks.
+# `e.gfx.chart`: caller-owned series and distribution marks, plus scene commands.
 $gfxChartPath = Join-Path $testBuild 'gfx-chart-selfhost.exe'
 $gfxChartWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart\src\main.e') $repo 'x64' 'windows' $gfxChartPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartWritten -ne 'executable written') { throw 'gfx_chart emission failed' }
 $gfxChartOutput = & $gfxChartPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartOutput -ne 'gfx chart ok') { throw "the e.gfx.chart foundation answered wrongly: exit $LASTEXITCODE" }
+$gfxChartQqPath = Join-Path $testBuild 'gfx-chart-qq-selfhost.exe'
+$gfxChartQqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_qq\src\main.e') $repo 'x64' 'windows' $gfxChartQqPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartQqWritten -ne 'executable written') { throw 'gfx_chart_qq emission failed' }
+$gfxChartQqOutput = & $gfxChartQqPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartQqOutput -ne 'gfx chart qq ok') { throw "the e.gfx.chart Q-Q plot answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

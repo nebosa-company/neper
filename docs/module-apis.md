@@ -15878,7 +15878,7 @@ fn step_cues(cues: []Cue) -> err
 ### `e.gfx.chart`
 
 ```neper
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin }
 type Coord = struct { x: f32, y: f32 }
 type Segment = struct { from: Coord, to: Coord }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32 }
@@ -15891,6 +15891,10 @@ fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Sp
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 fn ecdf(sorted: []const f32, bounds: geometry.Rect, segments: []Segment) -> (Layout, err)
+fn box_plot(sorted: []const f64, bounds: geometry.Rect, outliers: []Coord, lines: []Segment, boxes: []geometry.Rect) -> (Layout, err)
+fn density(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, segments: []Segment) -> (Layout, err)
+fn qq_normal(sorted: []const f64, bounds: geometry.Rect, points: []Coord, reference: []Segment) -> (Layout, err)
+fn violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err)
 ```
 
 ### `e.gfx.chart.scene`

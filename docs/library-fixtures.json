@@ -845,6 +845,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_qq",
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
@@ -942,11 +943,12 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 12,
-   "delivered": 12,
+   "catalogue": 16,
+   "delivered": 16,
    "pending": [],
    "fixtures": [
-    "gfx_chart"
+    "gfx_chart",
+    "gfx_chart_qq"
    ]
   },
   {
@@ -957,7 +959,8 @@
    "delivered": 1,
    "pending": [],
    "fixtures": [
-    "gfx_chart"
+    "gfx_chart",
+    "gfx_chart_qq"
    ]
   },
   {
@@ -1033,6 +1036,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_qq",
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
@@ -1112,6 +1116,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_qq",
     "gfx_scene",
     "gfx_scene_plan",
     "ui_a11y_controls",
