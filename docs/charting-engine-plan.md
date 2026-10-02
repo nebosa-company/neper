@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar,
+Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,8 +8,8 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-thirty-three PNG plus thirty-three SVG previews from Neper. L061 remains partial
-until the remaining families, production export API and widget integration are
+thirty-four PNG plus thirty-four SVG previews from Neper. L061 remains partial
+until the remaining families, full export coverage and widget integration are
 evidenced.
 
 ## What the references say
@@ -42,8 +42,9 @@ evidenced.
 
 `e.gfx.chart` is the grammar boundary. It borrows numeric columns, maps them into
 caller-owned screen-space marks, and never owns a device, window, global theme or
-data frame. A future adapter can render the same `Layout` to `e.gfx.scene`, PNG,
-SVG, PDF, a widget, or a GPU buffer.
+data frame. The same `Layout` can be appended to `e.gfx.scene` or SVG, with
+scene output rasterized and PNG-encoded; PDF, widget and GPU-buffer adapters
+remain future work.
 
 The stable sequence is:
 
@@ -132,7 +133,11 @@ nice-break policy.
 `e.gfx.chart.svg` streams the same mark and matrix layouts as SVG with escaped
 title/description metadata, current CPU-renderer channel packing for solid colours, and axis/grid
 strokes from the same tick positions. The gallery exports a vector companion
-for every PNG; gradient brushes, production PNG/PDF/widget APIs, font embedding
+for every PNG. `e.gfx.chart.scene.rasterize` now exposes a caller-owned straight-RGBA
+image from a chart scene; callers compose it with `e.fmt.png.encode` after
+rendering, so arena-backed writers are not interleaved with render allocations.
+The gallery uses this path, and a PNG decode fixture checks transparency on both
+hosts. Gradients, PDF/widget APIs, SVG font embedding
 and backend-parity measurements remain planned.
 The scene renderer keeps equal-prefix/suffix guide paint stationary when a
 changed mark appears to move: the pixel-shift shortcut is refused in that case,
@@ -145,7 +150,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, Q-Q, violin, heatmap and correlation matrix are delivered; every other entry
+box, density, Q-Q, violin, heatmap, correlation matrix and basic waterfall are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -201,8 +206,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
    adapter with thirty-four vector previews, automatic numeric tick text and
-   caller-supplied title labels are delivered; collision-safe margins, a production PNG
-   API, PDF serialization and a widget embed remain. Pixel fixtures follow
+   caller-supplied title labels are delivered. The reusable rasterization path
+   composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
+   PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.
 5. **Specialized calculators:** ROC, survival, SPC, capability, Bland–Altman,
    forest/funnel, contour/surface and domain diagrams, each in the owning stats or

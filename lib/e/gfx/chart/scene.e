@@ -1,11 +1,55 @@
 // Draw the renderer-neutral chart marks into an existing scene display list.
 use e.mem
+use e.gpu
 use e.gfx.chart
 use e.gfx.geometry
+use e.gfx.image
 use e.gfx.paint
 use e.gfx.scene
 use e.text.layout as text_layout
 use e.text.shape
+
+fn straight_channel(premultiplied: u32, alpha: u32) -> u8 {
+    if alpha == 0u32 { ret 0u8 }
+    let value = (premultiplied * 255u32 + alpha / 2u32) / alpha
+    if value > 255u32 { ret 255u8 }
+    ret u8(value)
+}
+
+// Rasterize a finished chart display list into caller-owned straight RGBA.
+// Create any arena-backed output writer only after this returns.
+fn rasterize(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, builder: *scene.Builder, width: u32, height: u32) -> (image.ConstImage, err) {
+    if width == 0u32 || height == 0u32 { ret (zero, chart.Invalid) }
+    let (_, size_error) = image.required_bytes(width, height, .Rgba8, usize(width) * 4usize)
+    if size_error != ok { ret (zero, size_error) }
+    let (compiled, compile_error) = scene.compile(renderer, scene.finish(builder))
+    if compile_error != ok { ret (zero, compile_error) }
+    defer let _ = scene.release_scene(renderer, compiled)
+    let render_error = scene.render(renderer, compiled, canvas, geometry.Size { width: f32(width), height: f32(height) })
+    if render_error != ok { ret (zero, render_error) }
+    let (shown, shown_error) = gpu.presented(output_target)
+    if shown_error != ok { ret (zero, shown_error) }
+    if shown.width != width || shown.height != height { ret (zero, chart.Invalid) }
+    let count = usize(width) * usize(height)
+    let (pixels, pixels_error) = mem.alloc[u32](a, count)
+    if pixels_error != ok { ret (zero, pixels_error) }
+    let read_error = gpu.read_image(q, shown, pixels)
+    if read_error != ok { ret (zero, read_error) }
+    let (rgba, rgba_error) = mem.alloc[u8](a, count * 4usize)
+    if rgba_error != ok { ret (zero, rgba_error) }
+    var i = 0usize
+    while i < count {
+        let pixel = pixels[i]
+        let alpha = (pixel >> 24u32) & 255u32
+        rgba[4usize * i] = straight_channel(pixel & 255u32, alpha)
+        rgba[4usize * i + 1usize] = straight_channel((pixel >> 8u32) & 255u32, alpha)
+        rgba[4usize * i + 2usize] = straight_channel((pixel >> 16u32) & 255u32, alpha)
+        rgba[4usize * i + 3usize] = u8(alpha)
+        i += 1usize
+    }
+    let (view, view_error) = image.make_const(rgba, width, height, usize(width) * 4usize, .Rgba8, .Straight)
+    ret (view, view_error)
+}
 
 fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, brush: paint.Brush) -> err {
     if marks.kind == .PointLine {

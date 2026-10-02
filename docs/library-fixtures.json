@@ -531,7 +531,8 @@
    "delivered": 9,
    "pending": [],
    "fixtures": [
-    "fmt_png"
+    "fmt_png",
+    "gfx_chart_png"
    ]
   },
   {
@@ -854,6 +855,7 @@
     "gfx_chart_intervals",
     "gfx_chart_labels",
     "gfx_chart_matrix",
+    "gfx_chart_png",
     "gfx_chart_qq",
     "gfx_chart_scale",
     "gfx_chart_svg",
@@ -967,6 +969,7 @@
     "gfx_chart_labels",
     "gfx_chart_matrix",
     "gfx_chart_nice_ticks",
+    "gfx_chart_png",
     "gfx_chart_qq",
     "gfx_chart_scale",
     "gfx_chart_svg"
@@ -987,6 +990,7 @@
     "gfx_chart_intervals",
     "gfx_chart_labels",
     "gfx_chart_matrix",
+    "gfx_chart_png",
     "gfx_chart_qq",
     "gfx_chart_scale"
    ]
@@ -1085,6 +1089,7 @@
     "gfx_chart_intervals",
     "gfx_chart_labels",
     "gfx_chart_matrix",
+    "gfx_chart_png",
     "gfx_chart_qq",
     "gfx_chart_scale",
     "gfx_chart_svg",
@@ -1173,6 +1178,7 @@
     "gfx_chart_intervals",
     "gfx_chart_labels",
     "gfx_chart_matrix",
+    "gfx_chart_png",
     "gfx_chart_qq",
     "gfx_chart_scale",
     "gfx_scene",
@@ -1279,6 +1285,7 @@
     "device_only_edge",
     "front_counts",
     "gfx_chart_distribution",
+    "gfx_chart_png",
     "gfx_scene",
     "gpu_barrier",
     "gpu_barrier_chain",

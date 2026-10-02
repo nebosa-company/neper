@@ -10,7 +10,6 @@ use e.gfx.chart
 use e.gfx.chart.scene as chart_scene
 use e.gfx.chart.svg as chart_svg
 use e.gfx.geometry
-use e.gfx.image
 use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
@@ -23,36 +22,14 @@ fn fill(builder: *scene.Builder, rect: geometry.Rect, brush: paint.Brush) -> err
 }
 
 fn render_builder(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, builder: *scene.Builder, path: str) -> err {
-    let (compiled, compile_error) = scene.compile(renderer, scene.finish(builder))
-    if compile_error != ok { ret compile_error }
-    try scene.render(renderer, compiled, canvas, geometry.Size { width: f32(WIDTH), height: f32(HEIGHT) })
-    let (shown, shown_error) = gpu.presented(output_target)
-    if shown_error != ok { ret shown_error }
-    let count = usize(WIDTH) * usize(HEIGHT)
-    let (pixels, pixels_error) = mem.alloc[u32](a, count)
-    if pixels_error != ok { ret pixels_error }
-    try gpu.read_image(q, shown, pixels)
-    let (rgba, rgba_error) = mem.alloc[u8](a, count * 4usize)
-    if rgba_error != ok { ret rgba_error }
-    var i = 0usize
-    while i < count {
-        let pixel = pixels[i]
-        rgba[4usize * i] = u8(pixel & 255u32)
-        rgba[4usize * i + 1usize] = u8((pixel >> 8u32) & 255u32)
-        rgba[4usize * i + 2usize] = u8((pixel >> 16u32) & 255u32)
-        rgba[4usize * i + 3usize] = u8((pixel >> 24u32) & 255u32)
-        i += 1usize
-    }
-    let (view, view_error) = image.make_const(rgba, WIDTH, HEIGHT, usize(WIDTH) * 4usize, .Rgba8, .Straight)
+    let (view, view_error) = chart_scene.rasterize(a, q, output_target, canvas, renderer, builder, WIDTH, HEIGHT)
     if view_error != ok { ret view_error }
     let (state, unused, writer_error) = io.memory_writer(a, 0usize)
     if writer_error != ok { ret writer_error }
     var held = state
     var writer = io.writer(mem.cast[*void](&held), io.memory_write)
     try png.encode(&writer, view, png.EncodeOptions { compression: .Fast, interlace: false })
-    try fs.write_file(a, path, io.memory_bytes(&held))
-    try scene.release_scene(renderer, compiled)
-    ret ok
+    ret fs.write_file(a, path, io.memory_bytes(&held))
 }
 
 fn vector_path(a: *mem.Arena, png_path: str) -> (str, err) {

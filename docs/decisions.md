@@ -33215,3 +33215,14 @@ connectors; no separate mark grammar is needed. Zero-height steps remain
 level connectors. The focused composition fixture checks signed geometry,
 capacity and scene/SVG emission on Windows and Linux. Step colours and
 category labels remain a gallery/guide composition concern.
+
+## D1815 — Export chart rasters before opening arena-backed PNG writers
+
+`e.gfx.chart.scene.rasterize` renders a finished display list to caller-owned
+straight RGBA, releasing the compiled scene even on error. The caller then
+uses the existing `e.fmt.png.encode` with its chosen writer and options.
+Neper's `io.MemoryWriter` stores a contiguous span in its arena; allocating
+render scratch after creating that writer corrupts the output. Separating
+rasterization from encoding preserves this contract without another PNG codec
+or a dedicated device owner. `gfx_chart_png` decodes a transparent round trip
+on Windows and Linux; the gallery now uses the same path for all 34 PNGs.
