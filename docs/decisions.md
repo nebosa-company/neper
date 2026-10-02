@@ -33110,3 +33110,15 @@ so no new renderer primitive or owned data frame is introduced. Their first
 slice is linear; nonlinear scales and clipping remain later grammar work.
 `gfx_chart_intervals` checks geometry, refusals and both adapters, and the
 gallery adds one PNG/SVG pair for each chart.
+
+## D1802 — Keep chart text as positioned, caller-owned label metadata
+
+`chart.Label` borrows one single-line UTF-8 string, a baseline anchor and a
+horizontal alignment. `guide_labels` positions caller-supplied tick strings;
+the chart grammar does not guess numeric formatting or own a font. The scene
+adapter shapes through `e.text.layout` and emits existing `scene.DrawText`
+commands with a font registered by the caller. The SVG adapter escapes those
+same strings into `<text>` elements. The gallery's labeled line uses a checked-in
+TrueType font for its PNG and a generic sans-serif fallback for SVG; font
+embedding, collision handling, automatic formatting and theme margins remain
+future work. `gfx_chart_labels` checks positioning, escaping and refusal paths.

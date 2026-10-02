@@ -119,7 +119,8 @@ class — only the generic `gradient_boost` exists), no k-fold CV + grid search
 line, bar, histogram, step, area, lollipop, error bars, confidence bands,
 dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap and correlation
 matrix, with numeric scales and facet-panel geometry. Its scene and SVG
-adapters produce twenty-one paired previews in `docs/chart-previews/`. The
+adapters produce twenty-two paired previews in `docs/chart-previews/`, including
+caller-supplied tick and title labels. The
 complete registry, remaining grammar stages and export/widget/benchmark gates
 are tracked in `docs/charting-engine-plan.md` and L061; the original R/Python
 gap remains open rather than being inferred closed from these first charts.

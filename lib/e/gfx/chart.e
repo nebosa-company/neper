@@ -14,6 +14,8 @@ type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
 type Coord = struct { x: f32, y: f32 }
+type LabelAlign = enum u8 { Left, Center, Right }
+type Label = struct { text: str, anchor: Coord, align: LabelAlign }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
@@ -119,6 +121,42 @@ fn ticks(scale: Scale, lo: f32, hi: f32, out: []Tick) -> ([]Tick, err) {
     out[0usize].value = lo
     out[out.len - 1usize].value = hi
     ret (out, ok)
+}
+
+fn valid_label(label: *const Label) -> bool {
+    if label.text.len == 0usize || !finite(label.anchor.x) || !finite(label.anchor.y) { ret false }
+    var i = 0usize
+    while i < label.text.len {
+        if label.text[i] < 32u8 || label.text[i] == 127u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Caller supplies text (and therefore formatting); this only positions it.
+// Anchors are text baselines, not bounding-box corners.
+fn guide_labels(bounds: geometry.Rect, x_ticks: []const Tick, x_text: []const str, y_ticks: []const Tick, y_text: []const str, size: f32, out: []Label) -> ([]Label, err) {
+    if !valid_bounds(bounds) || !finite(size) || size <= 0.0 || x_ticks.len != x_text.len || y_ticks.len != y_text.len { ret (zero, Invalid) }
+    if out.len < x_ticks.len || out.len - x_ticks.len < y_ticks.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < x_ticks.len {
+        let position = x_ticks[i].fraction
+        if !finite(position) || position < 0.0 || position > 1.0 { ret (zero, Invalid) }
+        let label = Label { text: x_text[i], anchor: Coord { x: bounds.x + bounds.width * position, y: bounds.y + bounds.height + size + 6.0 }, align: .Center }
+        if !valid_label(&label) { ret (zero, Invalid) }
+        out[i] = label
+        i += 1usize
+    }
+    i = 0usize
+    while i < y_ticks.len {
+        let position = y_ticks[i].fraction
+        if !finite(position) || position < 0.0 || position > 1.0 { ret (zero, Invalid) }
+        let label = Label { text: y_text[i], anchor: Coord { x: bounds.x - 9.0, y: bounds.y + bounds.height * (1.0 - position) + size * 0.35 }, align: .Right }
+        if !valid_label(&label) { ret (zero, Invalid) }
+        out[x_ticks.len + i] = label
+        i += 1usize
+    }
+    ret (out[..x_ticks.len + y_ticks.len], ok)
 }
 
 // Produces marks in screen coordinates. Y is inverted because graphics bounds

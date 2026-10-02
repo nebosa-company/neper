@@ -4,6 +4,8 @@ use e.gfx.chart
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
+use e.text.layout as text_layout
+use e.text.shape
 
 fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, brush: paint.Brush) -> err {
     if marks.kind == .Scatter {
@@ -153,5 +155,34 @@ fn append_guides(builder: *scene.Builder, bounds: geometry.Rect, x_ticks: []cons
     }
     try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(bounds.x, bounds.y, 1.0, bounds.height), brush: axis } })
     try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(bounds.x, bounds.y + bounds.height, bounds.width, 1.0), brush: axis } })
+    ret ok
+}
+
+// The caller registers `font` with the renderer before replaying the scene.
+// Layout objects live in the caller's arena, alongside the display list.
+fn append_labels(a: *mem.Arena, builder: *scene.Builder, labels: []const chart.Label, font: shape.Font, size: f32, brush: paint.Brush) -> err {
+    if !chart.finite(size) || size <= 0.0 { ret chart.Invalid }
+    try shape.validate_font(font)
+    let fonts = [1]text_layout.FontChoice{ text_layout.FontChoice { font: font, size: size } }
+    let style = text_layout.Style { fonts: fonts[..], language: "", line_height: 0.0 }
+    let options = text_layout.Options { width: 0.0, max_lines: 1u32, align: .Start, wrap: .None, ellipsis: "", notdef: true }
+    var i = 0usize
+    while i < labels.len {
+        let label = labels[i]
+        if !chart.valid_label(&label) || !text_layout.valid_utf8(label.text) { ret chart.Invalid }
+        let (laid, layout_error) = text_layout.layout(a, label.text, style, options)
+        if layout_error != ok { ret layout_error }
+        if laid.lines.len != 1usize { ret chart.Invalid }
+        let (held, allocation_error) = mem.alloc[text_layout.Layout](a, 1usize)
+        if allocation_error != ok { ret allocation_error }
+        held[0usize] = laid
+        var x = label.anchor.x
+        if label.align == .Center { x -= laid.bounds.width / 2.0 }
+        if label.align == .Right { x -= laid.bounds.width }
+        try scene.push(builder, scene.Command { Text: scene.DrawText {
+            layout: &held[0usize], origin: geometry.Point { x: x, y: label.anchor.y - laid.lines[0usize].baseline }, brush: brush,
+        } })
+        i += 1usize
+    }
     ret ok
 }

@@ -3087,6 +3087,11 @@ $gfxChartIntervalsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartIntervalsWritten -ne 'executable written') { throw 'gfx_chart_intervals emission failed' }
 $gfxChartIntervalsOutput = & $gfxChartIntervalsPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartIntervalsOutput -ne 'gfx chart intervals ok') { throw "the e.gfx.chart interval marks answered wrongly: exit $LASTEXITCODE" }
+$gfxChartLabelsPath = Join-Path $testBuild 'gfx-chart-labels-selfhost.exe'
+$gfxChartLabelsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_labels\src\main.e') $repo 'x64' 'windows' $gfxChartLabelsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLabelsWritten -ne 'executable written') { throw 'gfx_chart_labels emission failed' }
+$gfxChartLabelsOutput = & $gfxChartLabelsPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
+if ($LASTEXITCODE -ne 0 -or $gfxChartLabelsOutput -ne 'gfx chart labels ok') { throw "the e.gfx.chart labels answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSvgPath = Join-Path $testBuild 'gfx-chart-svg-selfhost.exe'
 $gfxChartSvgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_svg\src\main.e') $repo 'x64' 'windows' $gfxChartSvgPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSvgWritten -ne 'executable written') { throw 'gfx_chart_svg emission failed' }

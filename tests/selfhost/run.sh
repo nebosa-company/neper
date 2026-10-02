@@ -2709,6 +2709,11 @@ gfx_chart_intervals_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$test_build/gfx-chart-intervals-selfhost"
 gfx_chart_intervals_output=$("$test_build/gfx-chart-intervals-selfhost")
 [ "$gfx_chart_intervals_output" = 'gfx chart intervals ok' ]
+gfx_chart_labels_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_labels/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-labels-selfhost")
+[ "$gfx_chart_labels_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-labels-selfhost"
+gfx_chart_labels_output=$("$test_build/gfx-chart-labels-selfhost" "$repo/docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf")
+[ "$gfx_chart_labels_output" = 'gfx chart labels ok' ]
 gfx_chart_svg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_svg/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-svg-selfhost")
 [ "$gfx_chart_svg_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-svg-selfhost"

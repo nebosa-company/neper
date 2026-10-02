@@ -1,11 +1,11 @@
 # Neper charting engine plan
 
 Status: scatter, line, bar, histogram, step, area, lollipop, error bars,
-confidence bands, dumbbells, ECDF,
-box, density, normal Q-Q, violin, heatmap and correlation matrix are delivered,
-with linear/log10/symmetric-log and reverse Cartesian scales, caller-owned tick
-metadata, grid/axis passes, facet panel geometry, explicit Cartesian limits
-for shared/free facet scales and twenty-one PNG plus twenty-one SVG previews from Neper. L061 remains partial
+confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
+and correlation matrix are delivered, with linear/log10/symmetric-log and
+reverse Cartesian scales, caller-owned ticks and text labels, grid/axis passes,
+facet panel geometry, explicit limits for shared/free facet scales, and
+twenty-two PNG plus twenty-two SVG previews from Neper. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -50,7 +50,7 @@ The stable sequence is:
    independently testable.
 4. **Scales** — linear, log10, symmetric-log and reverse Cartesian mapping are
    delivered, with equal transformed-space tick metadata. Discrete, date/time,
-   nice breaks, labels, limits and out-of-bounds policy remain.
+   nice breaks, automatic label formatting and out-of-bounds policy remain.
 5. **Coordinates** — Cartesian first; polar, flipped, fixed-aspect, map and 3-D
    projections later.
 6. **Geometries** — marks only; no data analysis hidden in a painter.
@@ -91,12 +91,16 @@ caller-owned data values and normalized positions; the scene guide pass draws
 grid and axis strokes. `layout_with_limits` borrows optional two-value x/y
 domains: an empty pair keeps a panel free, while explicit limits let facets
 share either or both scales without copying columns. Limits must contain the
-data (and any baseline); clipping/out-of-bounds policy remains planned. Text
-labels and layout-aware margins remain planned.
+data (and any baseline); clipping/out-of-bounds policy remains planned.
+`guide_labels` positions caller-supplied x/y tick strings in caller-owned
+metadata. The scene adapter shapes them with `e.text.layout` and a registered
+TrueType font; SVG streams escaped `<text>` elements. Titles and annotations
+use the same label contract. Automatic numeric/date formatting, collision
+avoidance and layout-aware margins remain planned.
 `e.gfx.chart.svg` streams the same mark and matrix layouts as SVG with escaped
 title/description metadata, current CPU-renderer channel packing for solid colours, and axis/grid
 strokes from the same tick positions. The gallery exports a vector companion
-for every PNG; gradient brushes, text labels, production PNG/PDF/widget APIs
+for every PNG; gradient brushes, production PNG/PDF/widget APIs, font embedding
 and backend-parity measurements remain planned.
 
 ## Chart and diagram catalogue
@@ -153,8 +157,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    preview. Strips, legend metadata and categorical facet mapping remain.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with twenty-one vector previews are delivered; text labels and
-   margins, a production PNG API, PDF serialization and a widget embed remain. Pixel fixtures follow
+   adapter with twenty-two vector previews and caller-supplied tick/title labels
+   are delivered; automatic label formatting and margins, a production PNG
+   API, PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.
 5. **Specialized calculators:** ROC, survival, SPC, capability, Bland–Altman,
    forest/funnel, contour/surface and domain diagrams, each in the owning stats or

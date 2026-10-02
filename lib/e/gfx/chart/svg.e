@@ -6,6 +6,7 @@ use e.gfx.paint
 use e.io
 use e.mem
 use e.str
+use e.text.layout as text_layout
 
 error Invalid
 
@@ -225,4 +226,34 @@ fn append_guides(w: *io.Writer, bounds: geometry.Rect, x_ticks: []const chart.Ti
     }
     try rule(w, chart.Coord { x: bounds.x, y: bounds.y }, chart.Coord { x: bounds.x, y: bounds.y + bounds.height }, axis, 1.0)
     ret rule(w, chart.Coord { x: bounds.x, y: bounds.y + bounds.height }, chart.Coord { x: bounds.x + bounds.width, y: bounds.y + bounds.height }, axis, 1.0)
+}
+
+fn append_labels(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32) -> err {
+    if !paint.color_ok(ink) || !chart.finite(size) || size <= 0.0 { ret Invalid }
+    var i = 0usize
+    while i < labels.len {
+        let label = labels[i]
+        if !chart.valid_label(&label) || !text_layout.valid_utf8(label.text) { ret Invalid }
+        try io.write_all(w, "<text x=\"")
+        try number(w, label.anchor.x)
+        try io.write_all(w, "\" y=\"")
+        try number(w, label.anchor.y)
+        try io.write_all(w, "\" font-family=\"sans-serif\" font-size=\"")
+        try number(w, size)
+        try io.write_all(w, "\" text-anchor=\"")
+        if label.align == .Center {
+            try io.write_all(w, "middle")
+        } else if label.align == .Right {
+            try io.write_all(w, "end")
+        } else {
+            try io.write_all(w, "start")
+        }
+        try io.write_all(w, "\"")
+        try color(w, ink, false)
+        try io.write_all(w, ">")
+        try xml.write_escaped(w, label.text, false)
+        try io.write_all(w, "</text>\n")
+        i += 1usize
+    }
+    ret ok
 }

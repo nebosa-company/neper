@@ -15883,6 +15883,8 @@ type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
 type Coord = struct { x: f32, y: f32 }
+type LabelAlign = enum u8 { Left, Center, Right }
+type Label = struct { text: str, anchor: Coord, align: LabelAlign }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
@@ -15894,6 +15896,8 @@ error TooLarge
 
 fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Spec
 fn ticks(scale: Scale, lo: f32, hi: f32, out: []Tick) -> ([]Tick, err)
+fn valid_label(label: *const Label) -> bool
+fn guide_labels(bounds: geometry.Rect, x_ticks: []const Tick, x_text: []const str, y_ticks: []const Tick, y_text: []const str, size: f32, out: []Label) -> ([]Label, err)
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)
@@ -15916,6 +15920,7 @@ fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, pan
 fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, brush: paint.Brush) -> err
 fn append_matrix(builder: *scene.Builder, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
 fn append_guides(builder: *scene.Builder, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Brush, axis: paint.Brush) -> err
+fn append_labels(a: *mem.Arena, builder: *scene.Builder, labels: []const chart.Label, font: shape.Font, size: f32, brush: paint.Brush) -> err
 ```
 
 ### `e.gfx.chart.svg`
@@ -15926,5 +15931,6 @@ fn begin(w: *io.Writer, width: f32, height: f32, title: str, description: str) -
 fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err
 fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
 fn append_guides(w: *io.Writer, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Color, axis: paint.Color) -> err
+fn append_labels(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32) -> err
 fn finish(w: *io.Writer) -> err
 ```

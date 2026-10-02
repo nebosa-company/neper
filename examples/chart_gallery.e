@@ -13,6 +13,7 @@ use e.gfx.geometry
 use e.gfx.image
 use e.gfx.paint
 use e.gfx.scene
+use e.text.shape
 
 const WIDTH: u32 = 360u32
 const HEIGHT: u32 = 240u32
@@ -198,6 +199,60 @@ fn render_facet_scales(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
 }
 
+fn render_labeled_line(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/labeled_line.png"
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let bounds = geometry.rect(44.0, 40.0, 286.0, 150.0)
+    let x = [4]f32{ 0.0, 1.0, 2.0, 3.0 }
+    let y = [4]f32{ 0.0, 2.0, 1.0, 3.0 }
+    var points: [4]chart.Coord = zero
+    var segments: [3]chart.Segment = zero
+    var bars: [4]geometry.Rect = zero
+    let plot = chart.spec(.Line, bounds, x[..], y[..])
+    let (marks, marks_error) = chart.layout(&plot, points[..], segments[..], bars[..])
+    if marks_error != ok { ret marks_error }
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var x_ticks: [4]chart.Tick = zero
+    var y_ticks: [4]chart.Tick = zero
+    let (_, x_error) = chart.ticks(linear, marks.x_min, marks.x_max, x_ticks[..])
+    if x_error != ok { ret x_error }
+    let (_, y_error) = chart.ticks(linear, marks.y_min, marks.y_max, y_ticks[..])
+    if y_error != ok { ret y_error }
+    let tick_text = [4]str{ "0", "1", "2", "3" }
+    var labels: [10]chart.Label = zero
+    let (_, labels_error) = chart.guide_labels(bounds, x_ticks[..], tick_text[..], y_ticks[..], tick_text[..], 10.0, labels[..8usize])
+    if labels_error != ok { ret labels_error }
+    labels[8usize] = chart.Label { text: "Response over time", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "Time", anchor: chart.Coord { x: 187.0, y: 232.0 }, align: .Center }
+    let grid_color = paint.rgba(0.88, 0.91, 0.95, 1.0)
+    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    let ink_color = paint.rgba(0.07, 0.35, 0.76, 1.0)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, bounds, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: ink_color })
+    try chart_scene.append_labels(a, &builder, labels[..8usize], font, 10.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, labels[8usize..9usize], font, 14.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, labels[9usize..10usize], font, 11.0, paint.Brush { Solid: axis_color })
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_guides(&writer, bounds, x_ticks[..], y_ticks[..], grid_color, axis_color)
+    try chart_svg.append(&writer, &marks, ink_color)
+    try chart_svg.append_labels(&writer, labels[..8usize], axis_color, 10.0)
+    try chart_svg.append_labels(&writer, labels[8usize..9usize], axis_color, 14.0)
+    try chart_svg.append_labels(&writer, labels[9usize..10usize], axis_color, 11.0)
+    try chart_svg.finish(&writer)
+    try fs.write_file(a, "docs/chart-previews/labeled_line.svg", io.memory_bytes(&svg_state))
+    ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret device_error }
@@ -354,6 +409,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try chart_svg.finish(&facet_svg_writer)
     try fs.write_file(a, "docs/chart-previews/facet_heatmap.svg", io.memory_bytes(&facet_svg_held))
     try render_facet_scales(a, queue, output_target, canvas, &renderer)
+    try render_labeled_line(a, queue, output_target, canvas, &renderer)
     try scene.close(&renderer)
     try gpu.close_target(output_target)
     try gpu.close(device)
