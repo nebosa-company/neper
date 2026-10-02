@@ -3240,6 +3240,11 @@ $gpuStagingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gpuStagingWritten -ne 'executable written') { throw 'gpu_staging emission failed' }
 $gpuStagingOutput = & $gpuStagingPath
 if ($LASTEXITCODE -ne 0 -or $gpuStagingOutput -notmatch '^gpu staging (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the GPU staging runtime failed: $gpuStagingOutput" }
+$gpuDeviceLockPath = Join-Path $testBuild 'gpu-device-lock-selfhost.exe'
+$gpuDeviceLockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_device_lock\src\main.e') $repo 'x64' 'windows' $gpuDeviceLockPath
+if ($LASTEXITCODE -ne 0 -or $gpuDeviceLockWritten -ne 'executable written') { throw 'gpu_device_lock emission failed' }
+$gpuDeviceLockOutput = & $gpuDeviceLockPath
+if ($LASTEXITCODE -ne 0 -or $gpuDeviceLockOutput -notmatch '^gpu device lock (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the GPU device lock runtime failed: $gpuDeviceLockOutput" }
 # Subgroup identity and collectives are width-dependent by contract: pin the module,
 # then check the CPU's 32-lane model and every Vulkan device, including a partial group.
 $subgroupSpirv = Join-Path $testBuild 'subgroup.spv'

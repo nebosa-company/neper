@@ -50,6 +50,7 @@ use e.math
 use e.mem
 use e.os
 use e.str
+use e.sync as locks
 use e.atomic
 use e.gpu.vulkan
 
@@ -104,7 +105,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
 
 type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
@@ -121,6 +122,28 @@ var subgroup_width: u32 = 32u32
 var next_owner: u32 = 1u32
 var open_devices: [16]*DeviceState = zero
 var open_count: usize = 0usize
+var registry_locks: [1]locks.Mutex = zero
+var cpu_launch_locks: [1]locks.Mutex = zero
+
+// A device operation may call another GPU operation on the same thread.
+fn lock_state(state: *DeviceState) {
+    let thread = os.current_thread_id()
+    if thread != 0usize && atomic.load(&state.lock_owner, .Acquire) == thread {
+        state.lock_depth += 1usize
+        ret
+    }
+    locks.mutex_lock(&state.lock)
+    state.lock_depth = 1usize
+    atomic.store(&state.lock_owner, thread, .Release)
+}
+
+fn unlock_state(state: *DeviceState) {
+    state.lock_depth -= 1usize
+    if state.lock_depth == 0usize {
+        atomic.store(&state.lock_owner, 0usize, .Release)
+        locks.mutex_unlock(&state.lock)
+    }
+}
 
 // The launch in progress: workgroup size, workgroup counts, and whether one is on.
 var launch_size: [3]usize = zero
@@ -528,16 +551,25 @@ fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo
 fn state_of(device: *Device) -> (*DeviceState, err) {
     let pointer = mem.cast[*DeviceState](device.state)
     let wanted = mem.address_of(pointer)
+    locks.mutex_lock(&registry_locks[0usize])
+    var found: *DeviceState = zero
     var i = 0usize
     while i < open_count {
         let candidate = open_devices[i]
         if mem.address_of(candidate) == wanted {
-            if candidate.closed { ret (candidate, InvalidHandle) }
-            ret (candidate, ok)
+            found = candidate
+            break
         }
         i += 1usize
     }
-    ret (zero, InvalidHandle)
+    locks.mutex_unlock(&registry_locks[0usize])
+    if mem.address_of(found) == 0usize { ret (zero, InvalidHandle) }
+    lock_state(found)
+    if found.closed {
+        unlock_state(found)
+        ret (found, InvalidHandle)
+    }
+    ret (found, ok)
 }
 
 fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
@@ -547,6 +579,8 @@ fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
     }
     if backend != .Cpu { ret (zero, Unsupported) }
     if index != 0u32 { ret (zero, NoDevice) }
+    locks.mutex_lock(&cpu_launch_locks[0usize])
+    defer locks.mutex_unlock(&cpu_launch_locks[0usize])
     subgroup_width = 32u32
     let checkpoint = mem.mark(a)
     let (configured, env_error) = os.env(a, "NEPER_SUBGROUP_WIDTH")
@@ -592,13 +626,13 @@ fn open_vulkan(a: *mem.Arena, index: u32) -> (*Device, err) {
     }
     let (state, state_error) = state_of(device)
     if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state)
     state.context = context
     state.physical = physical
     ret (device, ok)
 }
 
 fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
-    if open_count >= MAX_DEVICES { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[DeviceState](a, 1usize)
     if states_error != ok { ret (zero, states_error) }
     let (buffers, buffers_error) = mem.alloc[Buffer](a, MAX_BUFFERS)
@@ -617,7 +651,9 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
         stage_at += 1usize
     }
     state.arena = a
-    state.owner = next_owner
+    state.lock = locks.mutex()
+    state.lock_owner = atomic.init(0usize)
+    state.lock_depth = 0usize
     state.closed = false
     state.buffers = buffers
     state.queues = 0u32
@@ -627,12 +663,16 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     state.context = no_context
     state.physical = no_physical
     state.pipeline_count = 0usize
-    next_owner += 1u32
-    open_devices[open_count] = state
-    open_count += 1usize
     let (handles, handles_error) = mem.alloc[Device](a, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Device { state: mem.cast[*void](state) }
+    locks.mutex_lock(&registry_locks[0usize])
+    defer locks.mutex_unlock(&registry_locks[0usize])
+    if open_count >= MAX_DEVICES { ret (zero, TooLarge) }
+    state.owner = next_owner
+    next_owner += 1u32
+    open_devices[open_count] = state
+    open_count += 1usize
     ret (&handles[0usize], ok)
 }
 
@@ -645,6 +685,7 @@ fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err) {
 fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
     let (state, state_error) = state_of(device)
     if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state)
     if state.backend == .Vulkan {
         let (record, record_error) = vulkan_info(a, state.physical, 0u32)
         ret (record, record_error)
@@ -656,6 +697,7 @@ fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
 fn close(device: *Device) -> err {
     let (state, state_error) = state_of(device)
     if state_error != ok { ret state_error }
+    defer unlock_state(state)
     state.closed = true
     var i = 0usize
     while i < state.buffers.len {
@@ -686,6 +728,7 @@ fn close(device: *Device) -> err {
 fn has(device: *Device, capability: Cap) -> bool {
     let (state, state_error) = state_of(device)
     if state_error != ok { ret false }
+    defer unlock_state(state)
     var available = CPU_CAPABILITIES
     if state.backend == .Vulkan { available = state.physical.caps }
     ret (available & capability_bit(capability)) != 0usize
@@ -700,22 +743,27 @@ fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err) {
     if limits.blocks == 0u32 || limits.block_bytes == 0usize { ret (zero, TooLarge) }
     let (state, state_error) = state_of(device)
     if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state)
     if usize(state.queues) >= MAX_QUEUES { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[QueueState](state.arena, 1usize)
     if states_error != ok { ret (zero, states_error) }
     // ponytail: synchronous transfers reuse one block; use more only if transfers overlap.
     states[0usize] = QueueState { device: state, index: state.queues, staging_bytes: limits.block_bytes, serial: 0u64, fault_count: 0u32, fault: zero, last: zero, has_last: false }
-    state.queues += 1u32
     let (handles, handles_error) = mem.alloc[Queue](state.arena, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Queue { state: mem.cast[*void](&states[0usize]) }
+    state.queues += 1u32
     ret (&handles[0usize], ok)
 }
 
 fn queue_state(q: *Queue) -> (*QueueState, err) {
     let state = mem.cast[*QueueState](q.state)
     if mem.address_of(state) == 0usize { ret (zero, InvalidHandle) }
-    if state.device.closed { ret (state, InvalidHandle) }
+    lock_state(state.device)
+    if state.device.closed {
+        unlock_state(state.device)
+        ret (state, InvalidHandle)
+    }
     ret (state, ok)
 }
 
@@ -731,6 +779,7 @@ fn slot_of(state: *QueueState, owner: u32, slot: u32, generation: u32) -> (usize
 fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err) {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state.device)
     let elem = mem.size_of[T]()
     if elem == 0usize || n > MAX_AXIS / elem { ret (zero, TooLarge) }
     var slot = 0usize
@@ -770,10 +819,16 @@ fn upload[T: type](q: *Queue, src: []const T) -> (Buf[T], err) {
     if alloc_error != ok { ret (zero, alloc_error) }
     let write_error = write[T](q, buf, 0usize, src)
     if write_error != ok {
-        let (state, _) = queue_state(q)
-        if state.device.backend == .Vulkan { vulkan.free(state.device.context, state.device.buffers[usize(buf.slot)].device) }
-        state.device.buffers[usize(buf.slot)].live = false
-        state.device.buffers[usize(buf.slot)].generation += 1u32
+        let (state, state_error) = queue_state(q)
+        if state_error == ok {
+            defer unlock_state(state.device)
+            let slot = &state.device.buffers[usize(buf.slot)]
+            if slot.live && slot.generation == buf.generation {
+                if state.device.backend == .Vulkan { vulkan.free(state.device.context, slot.device) }
+                slot.live = false
+                slot.generation += 1u32
+            }
+        }
         ret (zero, write_error)
     }
     ret (buf, ok)
@@ -786,6 +841,7 @@ fn len[T: type](buf: Buf[T]) -> usize {
 fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    defer unlock_state(state.device)
     let (slot, slot_error) = slot_of(state, dst.owner, dst.slot, dst.generation)
     if slot_error != ok { ret slot_error }
     let buffer = state.device.buffers[slot]
@@ -818,35 +874,48 @@ fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err {
 fn token(q: *Queue) -> (Token, err) {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state.device)
     ret (Token { owner: state.device.owner, queue: state.index, serial: state.serial }, ok)
 }
 
 fn token_device(token_value: Token) -> (*DeviceState, err) {
+    locks.mutex_lock(&registry_locks[0usize])
+    var found: *DeviceState = zero
     var i = 0usize
     while i < open_count {
         if open_devices[i].owner == token_value.owner {
-            if open_devices[i].closed { ret (open_devices[i], InvalidHandle) }
-            ret (open_devices[i], ok)
+            found = open_devices[i]
+            break
         }
         i += 1usize
     }
-    ret (zero, InvalidHandle)
+    locks.mutex_unlock(&registry_locks[0usize])
+    if mem.address_of(found) == 0usize { ret (zero, InvalidHandle) }
+    lock_state(found)
+    if found.closed {
+        unlock_state(found)
+        ret (found, InvalidHandle)
+    }
+    ret (found, ok)
 }
 
 fn wait_for(q: *Queue, dependency: Token) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    defer unlock_state(state.device)
     if dependency.serial == 0u64 { ret ok }
+    if dependency.owner != state.device.owner { ret WrongDevice }
     let (device, device_error) = token_device(dependency)
     if device_error != ok { ret device_error }
-    if device.owner != state.device.owner { ret WrongDevice }
+    defer unlock_state(device)
     ret ok
 }
 
 fn done(token_value: Token) -> (bool, err) {
     if token_value.serial == 0u64 { ret (true, ok) }
-    let (_, device_error) = token_device(token_value)
+    let (device, device_error) = token_device(token_value)
     if device_error != ok { ret (false, device_error) }
+    defer unlock_state(device)
     // Every submission on the CPU backend has completed before its launch returned.
     ret (true, ok)
 }
@@ -870,7 +939,9 @@ fn report_fault(state: *QueueState) -> err {
 // The record behind the last `Fault` this queue answered; `false` before one.
 fn last_fault(q: *Queue) -> (FaultRecord, bool) {
     let (state, state_error) = queue_state(q)
-    if state_error != ok || !state.has_last { ret (zero, false) }
+    if state_error != ok { ret (zero, false) }
+    defer unlock_state(state.device)
+    if !state.has_last { ret (zero, false) }
     ret (state.last, true)
 }
 
@@ -910,6 +981,7 @@ fn copy_bytes(dst: []u8, src: []const u8) {
 fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    defer unlock_state(state.device)
     try report_fault(state)
     let (slot, slot_error) = slot_of(state, src.owner, src.slot, src.generation)
     if slot_error != ok { ret slot_error }
@@ -923,12 +995,14 @@ fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err {
 fn sync(q: *Queue) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    defer unlock_state(state.device)
     ret report_fault(state)
 }
 
 fn release[T: type](q: *Queue, buf: Buf[T]) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    defer unlock_state(state.device)
     let (slot, slot_error) = slot_of(state, buf.owner, buf.slot, buf.generation)
     if slot_error != ok { ret slot_error }
     var empty: []u8 = zero
@@ -986,14 +1060,22 @@ fn release_image(q: *Queue, img: Image) -> err {
 
 fn target_state(t: *Target) -> (*TargetState, err) {
     let state = mem.cast[*TargetState](t.state)
-    if mem.address_of(state) == 0usize || state.closed { ret (zero, InvalidHandle) }
+    if mem.address_of(state) == 0usize { ret (zero, InvalidHandle) }
     let (_, queue_error) = queue_state_of(state.queue)
     if queue_error != ok { ret (state, queue_error) }
+    if state.closed {
+        unlock_state(state.queue.device)
+        ret (state, InvalidHandle)
+    }
     ret (state, ok)
 }
 
 fn queue_state_of(state: *QueueState) -> (*QueueState, err) {
-    if state.device.closed { ret (state, InvalidHandle) }
+    lock_state(state.device)
+    if state.device.closed {
+        unlock_state(state.device)
+        ret (state, InvalidHandle)
+    }
     ret (state, ok)
 }
 
@@ -1017,6 +1099,7 @@ fn target_images(state: *TargetState, width: u32, height: u32) -> err {
 fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: Format) -> (*Target, err) {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state.device)
     if surface.kind != .Offscreen { ret (zero, Unsupported) }
     let (states, states_error) = mem.alloc[TargetState](state.device.arena, 1usize)
     if states_error != ok { ret (zero, states_error) }
@@ -1032,6 +1115,7 @@ fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: For
 fn extent(t: *Target) -> (u32, u32) {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret (0u32, 0u32) }
+    defer unlock_state(state.queue.device)
     ret (state.width, state.height)
 }
 
@@ -1039,6 +1123,7 @@ fn extent(t: *Target) -> (u32, u32) {
 fn resize(t: *Target, width: u32, height: u32) -> err {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret state_error }
+    defer unlock_state(state.queue.device)
     var handle = Queue { state: mem.cast[*void](state.queue) }
     try release_image(&handle, state.images[0usize])
     try release_image(&handle, state.images[1usize])
@@ -1051,6 +1136,7 @@ fn resize(t: *Target, width: u32, height: u32) -> err {
 fn acquire(t: *Target) -> (Frame, err) {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state.queue.device)
     if state.acquired { ret (zero, InvalidHandle) }
     state.acquired = true
     ret (Frame { image: state.images[1usize - state.front], serial: state.serial }, ok)
@@ -1061,8 +1147,13 @@ fn acquire(t: *Target) -> (Frame, err) {
 fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err) {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state.queue.device)
+    let raw_presenter = mem.cast[*QueueState](q.state)
+    if mem.address_of(raw_presenter) == 0usize { ret (zero, InvalidHandle) }
+    if mem.address_of(raw_presenter.device) != mem.address_of(state.queue.device) { ret (zero, WrongDevice) }
     let (presenter, presenter_error) = queue_state(q)
     if presenter_error != ok { ret (zero, presenter_error) }
+    defer unlock_state(presenter.device)
     if presenter.device.owner != state.queue.device.owner { ret (zero, WrongDevice) }
     if !state.acquired || frame.serial != state.serial { ret (zero, InvalidHandle) }
     let sync_error = sync(q)
@@ -1078,6 +1169,7 @@ fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err) {
 fn presented(t: *Target) -> (Image, err) {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state.queue.device)
     if state.serial == 0u64 { ret (zero, InvalidHandle) }
     ret (state.images[state.front], ok)
 }
@@ -1085,6 +1177,7 @@ fn presented(t: *Target) -> (Image, err) {
 fn close_target(t: *Target) -> err {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret state_error }
+    defer unlock_state(state.queue.device)
     var handle = Queue { state: mem.cast[*void](state.queue) }
     try release_image(&handle, state.images[0usize])
     try release_image(&handle, state.images[1usize])
@@ -1112,6 +1205,7 @@ fn groups_along(invocations: usize, size: usize) -> (usize, err) {
 fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usize, err) {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret (0usize, 0usize, state_error) }
+    defer unlock_state(state.device)
     let (index, slot_error) = slot_of(state, owner, slot, generation)
     if slot_error != ok { ret (0usize, 0usize, slot_error) }
     let buffer = state.device.buffers[index]
@@ -1575,10 +1669,13 @@ fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local
 fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(opaque: *void, frame: *u8, workgroup: *u8), ctx: *void, requirements: usize, module: str, entry: str, layout: str) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    defer unlock_state(state.device)
     var available = CPU_CAPABILITIES
     if state.device.backend == .Vulkan { available = state.device.physical.caps }
     if (requirements & available) != requirements { ret Unsupported }
     if state.device.backend == .Vulkan { ret launch_device(state, grid, x, y, z, ctx, module, entry, layout) }
+    locks.mutex_lock(&cpu_launch_locks[0usize])
+    defer locks.mutex_unlock(&cpu_launch_locks[0usize])
     if launch_active { ret Unsupported }
     if x == 0usize || y == 0usize || z == 0usize || x * y * z > 1024usize { ret Unsupported }
     let (gx, gx_error) = groups_along(grid.x, x)
@@ -1779,9 +1876,13 @@ const MAX_SORT: usize = 16777216usize
 fn sort_bitonic(device: *Device, q: *Queue, buffer: Buf[u32], n: usize) -> err {
     let (owner, owner_error) = state_of(device)
     if owner_error != ok { ret owner_error }
+    // An owner id is immutable; do not hold two different device locks together.
+    let owner_id = owner.owner
+    unlock_state(owner)
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
-    if owner.owner != state.device.owner || buffer.owner != owner.owner { ret WrongDevice }
+    defer unlock_state(state.device)
+    if owner_id != state.device.owner || buffer.owner != owner_id { ret WrongDevice }
     if n > buffer.len || n > MAX_SORT { ret TooLarge }
     if n < 2usize { ret ok }
     var p = 1usize
@@ -1903,10 +2004,13 @@ fn attention_step(ctx: *void, frame: *u8, workgroup: *u8) {
 fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], value: Buf[f32], out: Buf[f32], n: usize, d: usize, tile: usize, scale: f32) -> (usize, err) {
     let (owner, owner_error) = state_of(device)
     if owner_error != ok { ret (0usize, owner_error) }
+    let owner_id = owner.owner
+    unlock_state(owner)
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret (0usize, state_error) }
-    if owner.owner != state.device.owner { ret (0usize, WrongDevice) }
-    if query.owner != owner.owner || key.owner != owner.owner || value.owner != owner.owner || out.owner != owner.owner { ret (0usize, WrongDevice) }
+    defer unlock_state(state.device)
+    if owner_id != state.device.owner { ret (0usize, WrongDevice) }
+    if query.owner != owner_id || key.owner != owner_id || value.owner != owner_id || out.owner != owner_id { ret (0usize, WrongDevice) }
     if d == 0usize || d > MAX_HEAD || tile == 0usize || tile > MAX_HEAD || n > MAX_SORT { ret (0usize, TooLarge) }
     let total = n * d
     if query.len < total || key.len < total || value.len < total || out.len < total { ret (0usize, TooLarge) }

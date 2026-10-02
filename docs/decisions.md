@@ -32938,3 +32938,22 @@ kernel launch through three-byte staging chunks on the CPU and both Windows
 Vulkan devices. `link/gpu_vulkan_sync`, `link/gpu_cpu`, and `link/gpu_gaps`
 still pass on Windows Vulkan; the staging fixture passes Linux's CPU/no-device
 path. The full self-host suites remain to be rerun with this change.
+
+## D1788 — Serialize each GPU device's bookkeeping and close transition
+
+`DeviceState` now owns a mutex held through each operation on its queue and
+buffer table. The same thread may enter it again because `upload`, presentation,
+and the built-in kernels call other GPU functions; the owner thread and depth
+make that nesting explicit. `close` takes the same lock, marks the device
+closed, then frees resources, so an in-flight call finishes first and later
+calls reject the handle. A short registry lock protects device publication and
+token lookup; a separate lock serializes the CPU scheduler's module globals.
+The mutexes use `e.sync`; no new blocking primitive is introduced. The two
+module-global mutexes are one-element arrays because this compiler cannot
+take the address of a direct module-global struct.
+
+`link/gpu_device_lock` drives two threads with separate queues on one device,
+repeated uploads, launches, downloads and releases, then checks close and stale
+handles. Ten Windows runs passed on CPU and two Vulkan devices. Existing GPU
+staging, sync, CPU, gaps and presentation fixtures pass with the lock; the new
+fixture and staging pass Linux's CPU/no-device path. Full suites remain pending.

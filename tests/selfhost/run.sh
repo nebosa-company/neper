@@ -2890,6 +2890,14 @@ case "$gpu_staging_output" in
     'gpu staging cpu only'|'gpu staging vulkan ok on '[1-9]' devices'|'gpu staging vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the GPU staging runtime failed: $gpu_staging_output" >&2; exit 1 ;;
 esac
+gpu_device_lock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_device_lock/src/main.e" "$repo" x64 linux "$test_build/gpu-device-lock-selfhost")
+[ "$gpu_device_lock_written" = 'executable written' ]
+chmod +x "$test_build/gpu-device-lock-selfhost"
+gpu_device_lock_output=$("$test_build/gpu-device-lock-selfhost")
+case "$gpu_device_lock_output" in
+    'gpu device lock cpu only'|'gpu device lock vulkan ok on '[1-9]' devices'|'gpu device lock vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the GPU device lock runtime failed: $gpu_device_lock_output" >&2; exit 1 ;;
+esac
 # Subgroup identity and collectives are width-dependent by contract: pin the module,
 # then check the CPU's 32-lane model and every Vulkan device, including a partial group.
 subgroup_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/subgroup.e" "$repo" spv none "$test_build/subgroup.spv")

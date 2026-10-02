@@ -1198,6 +1198,7 @@
     "gpu_barrier_large_helper",
     "gpu_barrier_occurrence",
     "gpu_cpu",
+    "gpu_device_lock",
     "gpu_divergence",
     "gpu_fault_bounds",
     "gpu_fault_nocheck",
