@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Render the five headline readiness metrics to docs/progress.html.
+"""Render readiness, the charting plan, and the unfinished backlog.
 
 Usage:  python scripts/render_progress.py     (from the repository root)
 
-The page intentionally renders only five computed readiness metrics. Compiler,
-tooling and library scores come from the active queue plus the completed
-ledger; module and UI/host scores come from their machine-readable inventories.
+Compiler, tooling and library scores come from the active queue plus the
+completed ledger; module and UI/host scores come from their inventories.
 """
-import json, re, subprocess, datetime
+import json, re, subprocess, datetime, html
 from pathlib import Path
 
 from check_widget_plan import validate as validate_widget_plan
@@ -198,7 +197,46 @@ kpi = '\n'.join([
     meter('Library', L, '%.2f of %d capabilities' % (l_sum, l_n)),
 ])
 
-html = """<!doctype html>
+# Keep the full chart catalogue in its maintained Markdown source. The readiness
+# page embeds that source and shows the unfinished queue in serial pickup order.
+chart_plan = Path('docs/charting-engine-plan.md').read_text(encoding='utf-8')
+queue_items = json.loads(WORK_QUEUE.read_text(encoding='utf-8'))['items']
+chart_item = next((item for item in queue_items if item['id'] == 'L061'), None)
+if chart_item is None:
+    for line in WORK_DONE.read_text(encoding='utf-8').splitlines():
+        if line.strip():
+            item = json.loads(line)
+            if item['id'] == 'L061':
+                chart_item = item
+                break
+if chart_item is None:
+    raise SystemExit('L061 missing from work queue and completion ledger')
+roadmap = []
+for number, title in re.findall(r'^([1-9])\. \*\*(.+?):\*\*', chart_plan, re.M):
+    roadmap.append(f'<li>{html.escape(title)} <span class="sub">(phase {number})</span></li>')
+backlog = '\n'.join(
+    '<tr><td><code>{id}</code></td><td>{title}</td><td>{score:.0%}</td><td>{evidence}</td></tr>'.format(
+        id=html.escape(item['id']), title=html.escape(item['title']),
+        score=float(item['score']), evidence=html.escape(item['evidence']))
+    for item in queue_items
+)
+chart_section = (
+    '<section class="tools" aria-label="Charting engine plan">'
+    '<h2>Charting engine</h2>'
+    '<p>Chart capability <code>L061</code>: {score:.0%} complete. {evidence}</p>'
+    '<h3>Delivery roadmap</h3><ol>{roadmap}</ol>'
+    '<details><summary>Full chart plan and chart/diagram catalogue</summary>'
+    '<pre class="plan">{plan}</pre></details></section>'
+    '<section class="tools" aria-label="Unfinished work queue">'
+    '<h2>Backlog</h2><p>{count} unfinished capabilities in pickup order.</p>'
+    '<details><summary>Show the full backlog</summary><div class="table-scroll">'
+    '<table><thead><tr><th>ID</th><th>Capability</th><th>Progress</th><th>Evidence and remaining work</th></tr></thead>'
+    '<tbody>{backlog}</tbody></table></div></details></section>'
+).format(score=float(chart_item['score']), evidence=html.escape(chart_item['evidence']),
+         roadmap=''.join(roadmap), plan=html.escape(chart_plan),
+         count=len(queue_items), backlog=backlog)
+
+page_html = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -218,6 +256,9 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 .tools{margin-top:2.5rem}.tools h2{margin:0 0 .25rem;font-size:1.5rem}.tools h3{margin:1.5rem 0 .5rem;font-size:1rem}
 .tools table{width:100%;border-collapse:collapse;font-size:.85rem}.tools td{padding:.45rem .6rem;border-top:1px solid var(--rule);vertical-align:top}
 .tools td:first-child{width:45%;overflow-wrap:anywhere}.tools code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.8rem}
+.tools th{text-align:left;padding:.45rem .6rem}.tools details{margin:1rem 0}.tools summary{cursor:pointer;font-weight:600}
+.tools ol{padding-left:1.5rem}.tools li{margin:.3rem 0}.plan{white-space:pre-wrap;overflow-wrap:anywhere;font: .82rem/1.55 ui-monospace,"Cascadia Mono",Consolas,monospace}
+.table-scroll{overflow-x:auto}.table-scroll table{min-width:48rem}.table-scroll td:first-child{width:auto}.table-scroll td{overflow-wrap:anywhere}
 @media(max-width:40rem){.tools td{display:block;width:auto}.tools td:first-child{width:auto;border-top:1px solid var(--rule);padding-bottom:0}.tools td+td{border-top:0}}
 </style>
 </head>
@@ -227,6 +268,7 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 <section class="kpi" aria-label="Project readiness metrics">
 __KPI__
 </section>
+__CHART_SECTION__
 <section class="tools" aria-label="How to run the tools">
 <h2>Tools</h2>
 <p class="sub">From the repository root. PowerShell on Windows, Bash on Linux and macOS.</p>
@@ -276,7 +318,7 @@ __KPI__
 </body>
 </html>
 """
-html = html.replace('__KPI__', kpi).replace('__REV__', rev).replace('__DATE__', when)
-progress_path.write_text(html, encoding='utf-8', newline='\n')
+page_html = page_html.replace('__KPI__', kpi).replace('__CHART_SECTION__', chart_section).replace('__REV__', rev).replace('__DATE__', when)
+progress_path.write_text(page_html, encoding='utf-8', newline='\n')
 print('wrote docs/progress.html')
 print('compiler %.2f  modules %.2f  ui-host %.2f  tooling %.2f  library %.2f' % (C, M, W, T, L))

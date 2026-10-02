@@ -6,7 +6,7 @@
 
 use e.gfx.geometry
 
-type Kind = enum u8 { Scatter, Line, Bar }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram }
 type Coord = struct { x: f32, y: f32 }
 type Segment = struct { from: Coord, to: Coord }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32 }
@@ -45,6 +45,7 @@ fn mapped(value: f32, lo: f32, hi: f32, start: f32, size: f32) -> f32 {
 // Produces marks in screen coordinates. Y is inverted because graphics bounds
 // use a top-left origin; the returned domain remains in data coordinates.
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err) {
+    if s.kind == .Histogram { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) { ret (zero, Invalid) }
@@ -117,4 +118,57 @@ fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry
         }
     }
     ret (Layout { kind: s.kind, coords: coords[..coord_count], segments: segments[..segment_count], bars: bars[..bar_count], x_min: xmin, x_max: xmax, y_min: y0, y_max: y1 }, ok)
+}
+
+// Equal-width bins, left-closed/right-open except the last bin (which includes
+// the maximum). Counts and rectangles are caller-owned; bars touch edge to edge.
+fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err) {
+    if values.len == 0usize { ret (zero, Empty) }
+    if counts.len == 0usize || counts.len != bars.len { ret (zero, Invalid) }
+    if !finite(bounds.x) || !finite(bounds.y) || !finite(bounds.width) || !finite(bounds.height) || bounds.width <= 0.0 || bounds.height <= 0.0 { ret (zero, Invalid) }
+    let (raw_min, raw_max, range_error) = extent(values)
+    if range_error != ok { ret (zero, range_error) }
+    var xmin = raw_min
+    var xmax = raw_max
+    if xmin == xmax {
+        xmin -= 0.5
+        xmax += 0.5
+        if xmin == xmax {
+            if xmin > 0.0 { xmin *= 0.5 } else { xmax *= 0.5 }
+        }
+    }
+    var i = 0usize
+    while i < counts.len {
+        counts[i] = 0u64
+        i += 1usize
+    }
+    if raw_min == raw_max {
+        counts[counts.len / 2usize] = u64(values.len)
+    } else {
+        let span = f64(xmax) - f64(xmin)
+        i = 0usize
+        while i < values.len {
+            var bin = counts.len - 1usize
+            if values[i] < xmax {
+                bin = usize((f64(values[i]) - f64(xmin)) / span * f64(counts.len))
+                if bin >= counts.len { bin = counts.len - 1usize }
+            }
+            counts[bin] += 1u64
+            i += 1usize
+        }
+    }
+    var tallest = 0u64
+    i = 0usize
+    while i < counts.len {
+        if counts[i] > tallest { tallest = counts[i] }
+        i += 1usize
+    }
+    let bar_width = bounds.width / f32(counts.len)
+    i = 0usize
+    while i < counts.len {
+        let height = bounds.height * f32(counts[i]) / f32(tallest)
+        bars[i] = geometry.rect(bounds.x + f32(i) * bar_width, bounds.y + bounds.height - height, bar_width, height)
+        i += 1usize
+    }
+    ret (Layout { kind: .Histogram, coords: zero, segments: zero, bars: bars, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: f32(tallest) }, ok)
 }

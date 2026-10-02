@@ -15852,7 +15852,7 @@ fn step_cues(cues: []Cue) -> err
 ### `e.gfx.chart`
 
 ```neper
-type Kind = enum u8 { Scatter, Line, Bar }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram }
 type Coord = struct { x: f32, y: f32 }
 type Segment = struct { from: Coord, to: Coord }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32 }
@@ -15863,4 +15863,5 @@ error TooLarge
 
 fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Spec
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
+fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 ```

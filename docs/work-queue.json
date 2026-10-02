@@ -9,10 +9,10 @@
       "group": "Algorithms",
       "order": 159,
       "title": "Standard statistical charts in e.gfx.chart",
-      "score": 0.2,
+      "score": 0.23,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Foundation delivered in `lib/e/gfx/chart.e`: borrowed numeric x/y columns, caller-owned output, domain padding and validation, plus scatter/line/bar screen-space marks. `tests/selfhost/fixtures/link/gfx_chart/src/main.e` is registered in both self-host runners and checks coordinates, inverted Y, bars and refusal paths. Detailed registry, R-package analysis and staged plan: `docs/charting-engine-plan.md`. Not yet: histograms, box/violin/density, heatmap/correlation/facets, scene/PNG/widget adapters, specialized statistical/domain diagrams, and benchmark evidence against ggplot2/base/lattice/matplot."
+      "evidence": "Foundation delivered in `lib/e/gfx/chart.e`: borrowed numeric x/y columns, caller-owned output, domain padding and validation, plus scatter/line/bar screen-space marks. Equal-width `histogram` now produces caller-owned counts and contiguous bars; the `gfx_chart` fixture checks exact bins, maximum-edge inclusion, constant samples, geometry and refusal paths. Detailed registry, R-package analysis and staged plan: `docs/charting-engine-plan.md`. Not yet: box/violin/density/ECDF/QQ, heatmap/correlation/facets, scene/PNG/widget adapters, specialized statistical/domain diagrams, and benchmark evidence against ggplot2/base/lattice/matplot."
     },
     {
       "id": "C092",

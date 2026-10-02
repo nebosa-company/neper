@@ -32,6 +32,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bar_layout_error != ok || bar_layout.bars.len != 3usize || bar_layout.bars[1].height <= 0.0 { ret chart.Invalid }
     let (_, small_error) = chart.layout(&line, points[..], lines[..0usize], bars[..])
     if small_error != chart.TooLarge { ret chart.Invalid }
+
+    let samples = [6]f32{ 0.0, 1.0, 1.0, 2.0, 3.0, 4.0 }
+    let (counts, counts_error) = mem.alloc[u64](a, 4usize)
+    if counts_error != ok { ret counts_error }
+    let (hist_bars, hist_bars_error) = mem.alloc[geometry.Rect](a, 4usize)
+    if hist_bars_error != ok { ret hist_bars_error }
+    let (hist, hist_error) = chart.histogram(samples[..], geometry.rect(5.0, 10.0, 40.0, 20.0), counts[..], hist_bars[..])
+    if hist_error != ok || hist.kind != .Histogram || hist.bars.len != 4usize || hist.y_max != 2.0 { ret chart.Invalid }
+    if counts[0] != 1u64 || counts[1] != 2u64 || counts[2] != 1u64 || counts[3] != 2u64 { ret chart.Invalid }
+    if !near(hist.bars[0].x, 5.0) || !near(hist.bars[0].width, 10.0) || !near(hist.bars[0].height, 10.0) || !near(hist.bars[1].y, 10.0) { ret chart.Invalid }
+    let same = [2]f32{ 7.0, 7.0 }
+    let (_, same_error) = chart.histogram(same[..], geometry.rect(0.0, 0.0, 40.0, 20.0), counts[..], hist_bars[..])
+    if same_error != ok || counts[2] != 2u64 || counts[0] != 0u64 || counts[1] != 0u64 || counts[3] != 0u64 { ret chart.Invalid }
+    let large = [1]f32{ 1.0e30f32 }
+    let (large_hist, large_error) = chart.histogram(large[..], geometry.rect(0.0, 0.0, 40.0, 20.0), counts[..], hist_bars[..])
+    if large_error != ok || large_hist.x_min >= large_hist.x_max || counts[2] != 1u64 { ret chart.Invalid }
+    let (_, empty_error) = chart.histogram(samples[..0usize], geometry.rect(0.0, 0.0, 40.0, 20.0), counts[..], hist_bars[..])
+    if empty_error != chart.Empty { ret chart.Invalid }
+    let (_, bins_error) = chart.histogram(samples[..], geometry.rect(0.0, 0.0, 40.0, 20.0), counts[..0usize], hist_bars[..0usize])
+    if bins_error != chart.Invalid { ret chart.Invalid }
     try io.print("gfx chart ok\n")
     ret ok
 }

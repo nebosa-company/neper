@@ -32967,3 +32967,13 @@ bar baselines participate in the y domain and screen y is explicitly inverted.
 Scene, image and widget adapters remain later layers over the same layout. This
 keeps the grammar reusable for histograms, distributions, matrices and facets
 without making every chart family own a painter or a data container.
+
+## D1790 — Bin histograms into caller-owned counts and contiguous bars
+
+The first distribution statistic uses equal-width bins over the observed range.
+Every bin is left-closed and right-open except the final bin, which includes
+the maximum. A constant sample gets a padded range and lands in the central
+bin. `chart.histogram` fills caller-provided counts and screen-space rectangles;
+no allocation or renderer is introduced. The readiness generator embeds the
+maintained chart plan and unfinished queue so `docs/progress.html` stays
+generated while exposing planned charts and backlog evidence.

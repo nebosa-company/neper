@@ -942,8 +942,8 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 10,
-   "delivered": 10,
+   "catalogue": 11,
+   "delivered": 11,
    "pending": [],
    "fixtures": [
     "gfx_chart"

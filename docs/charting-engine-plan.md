@@ -1,7 +1,8 @@
 # Neper charting engine plan
 
-Status: foundation slice delivered; L061 remains partial until the standard
-families, scene/PNG output, and widget integration are evidenced.
+Status: foundation and equal-width histogram slices delivered; L061 remains
+partial until the standard families, scene/PNG output, and widget integration
+are evidenced.
 
 ## What the references say
 
@@ -55,12 +56,14 @@ The stable sequence is:
 The delivered foundation implements the first geometry contract for scatter, line
 and bar marks, including empty/mismatched/non-finite input refusal, constant-domain
 padding, inverted screen Y, bar baseline inclusion and caller-storage bounds.
+The first distribution slice adds equal-width histograms with caller-owned counts
+and contiguous rectangles. Its final bin includes the maximum, and a constant
+sample is centered in a padded domain.
 
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
-“Foundation” means the current `e.gfx.chart` slice; “planned” is not a claim of
-implementation.
+Scatter, line, bar and histogram are delivered; every other entry remains planned.
 
 ### General-purpose statistical and business charts
 
@@ -97,8 +100,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 1. **Foundation (delivered now):** typed spec, borrowed data, scale-to-bounds,
    scatter/line/bar marks, constant-domain handling, executable fixture.
-2. **Core distributions:** histogram/bin policy, box/violin, density, ECDF and QQ;
-   fixtures compare exact bins/quantiles against small hand oracles.
+2. **Core distributions (partial):** equal-width histogram and its bin policy
+   delivered; box/violin, density, ECDF and QQ remain. Fixtures compare exact
+   bins/quantiles against small hand oracles.
 3. **Matrix and facets:** heatmap, correlation matrix, panel layout, shared/free
    scales, strips and legend metadata.
 4. **Rendering adapters:** scene display-list marks, axes/text/guides, PNG output,
