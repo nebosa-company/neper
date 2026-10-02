@@ -298,6 +298,55 @@ fn render_pareto(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_pie(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, title: str, path: str) -> err {
+    if layers.len != 5usize || names.len != layers.len { ret chart.Invalid }
+    let colors = [5]paint.Color{
+        paint.rgba(0.07, 0.35, 0.76, 1.0), paint.rgba(0.94, 0.42, 0.12, 1.0),
+        paint.rgba(0.22, 0.65, 0.48, 1.0), paint.rgba(0.64, 0.40, 0.76, 1.0),
+        paint.rgba(0.93, 0.70, 0.15, 1.0),
+    }
+    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    var legend: [5]chart.LegendItem = zero
+    let (entries, legend_error) = chart.legend_items(names, chart.Coord { x: 236.0, y: 59.0 }, 11.0, 27.0, legend[..])
+    if legend_error != ok { ret legend_error }
+    var labels: [6]chart.Label = zero
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 32usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        try fill(&builder, entries[i].swatch, paint.Brush { Solid: colors[i] })
+        labels[i] = entries[i].label
+        i += 1usize
+    }
+    labels[5usize] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    try chart_scene.append_labels(a, &builder, labels[..5usize], font, 9.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, labels[5usize..], font, 13.0, paint.Brush { Solid: axis_color })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        try chart_svg.rect(&writer, entries[i].swatch, colors[i], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..5usize], axis_color, 9.0)
+    try chart_svg.append_labels(&writer, labels[5usize..], axis_color, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
     let (made, builder_error) = scene.builder(a, marks.cells.len + 1usize)
     if builder_error != ok { ret builder_error }
@@ -511,6 +560,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     try render_pareto(a, queue, output_target, canvas, &renderer, pareto_layers, ordered_names[..], "docs/chart-previews/pareto.png")
+    let pie_values = [5]f32{ 30.0, 24.0, 18.0, 16.0, 12.0 }
+    let pie_names = [5]str{ "North 30%", "South 24%", "East 18%", "West 16%", "Other 12%" }
+    var pie_points: [512]chart.Coord = zero
+    var pie_storage: [5]chart.Layout = zero
+    let pie_bounds = geometry.rect(28.0, 33.0, 190.0, 190.0)
+    let (pie_layers, pie_error) = chart.pie(pie_values[..], pie_bounds, 0.0, pie_points[..], pie_storage[..])
+    if pie_error != ok { ret pie_error }
+    try render_pie(a, queue, output_target, canvas, &renderer, pie_layers, pie_names[..], "Category share", "docs/chart-previews/pie.png")
+    let (donut_layers, donut_error) = chart.pie(pie_values[..], pie_bounds, 0.54, pie_points[..], pie_storage[..])
+    if donut_error != ok { ret donut_error }
+    try render_pie(a, queue, output_target, canvas, &renderer, donut_layers, pie_names[..], "Category share", "docs/chart-previews/donut.png")
     let waterfall_values = [6]f32{ 12.0, 5.0, -3.0, 4.0, -6.0, 2.0 }
     var waterfall_bars: [7]geometry.Rect = zero
     var waterfall_links: [6]chart.Segment = zero

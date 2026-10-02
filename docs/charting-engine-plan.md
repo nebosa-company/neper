@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet, Pareto,
+Status: scatter, line, points+line, bar, grouped bar, signed stacked bar, 100% stacked bar, waterfall, bullet, Pareto, pie, donut,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-thirty-six PNG plus thirty-six SVG previews from Neper. L061 remains partial
+thirty-eight PNG plus thirty-eight SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -117,6 +117,12 @@ and returns frequency Bar and cumulative-fraction PointLine layers with independ
 left count and right percentage domains. It refuses zero totals; the gallery
 labels both axes. The insertion sort is quadratic until category counts warrant
 a caller-scratch mergesort.
+`pie` turns nonnegative category weights into caller-owned slice polygons. A zero
+inner-radius ratio yields pie slices; a ratio between zero and one yields a donut.
+Each slice is an Area layer shared by scene and SVG; callers supply colours and
+labels. Zero totals, invalid bounds/ratios and short storage are refused. A fixed
+96-segment full-circle budget is the current tessellation ceiling; adaptive
+segment selection belongs with zoom-aware rendering.
 Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
@@ -159,7 +165,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, Q-Q, violin, heatmap, correlation matrix, basic waterfall, bullet and Pareto are delivered; every other entry
+box, density, Q-Q, violin, heatmap, correlation matrix, basic waterfall, bullet, Pareto, pie and donut are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -217,9 +223,11 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    refusals and both adapters on Windows and Linux.
    Pareto composes stable descending frequency bars with a cumulative-share
    PointLine layer and an explicit percentage axis in the gallery.
+   Pie and donut reuse Area polygons, explicit colour/legend metadata and the
+   common scene/SVG adapters; `gfx_chart_polar` checks both on Windows and Linux.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with thirty-six vector previews, automatic numeric tick text and
+   adapter with thirty-eight vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

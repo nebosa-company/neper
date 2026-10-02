@@ -749,6 +749,65 @@ fn pareto(values: []const f32, bounds: geometry.Rect, order: []usize, bars: []ge
     ret (layers[..2usize], ok)
 }
 
+// Each slice is a filled polygon; hole=0 gives a pie, 0<hole<1 a donut.
+// A fixed full-circle tessellation keeps the painter and SVG paths identical.
+fn pie(values: []const f32, bounds: geometry.Rect, hole: f32, points: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if values.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(hole) || hole < 0.0 || hole >= 1.0 { ret (zero, Invalid) }
+    if layers.len < values.len { ret (zero, TooLarge) }
+    var total = 0.0f64
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) || values[i] < 0.0 { ret (zero, Invalid) }
+        total += f64(values[i])
+        i += 1usize
+    }
+    if total <= 0.0f64 { ret (zero, Invalid) }
+    var needed = 0usize
+    i = 0usize
+    while i < values.len {
+        let steps = 2usize + usize(f64(values[i]) / total * 96.0f64)
+        let count = 2usize * (steps + 1usize)
+        if needed > points.len || count > points.len - needed { ret (zero, TooLarge) }
+        needed += count
+        i += 1usize
+    }
+    var radius = f64(bounds.width) * 0.5f64
+    if bounds.height < bounds.width { radius = f64(bounds.height) * 0.5f64 }
+    let inner = radius * f64(hole)
+    let center_x = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let center_y = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    if !finite(f32(center_x)) || !finite(f32(center_y)) { ret (zero, Invalid) }
+    var used = 0usize
+    var cumulative = 0.0f64
+    i = 0usize
+    while i < values.len {
+        let fraction_of_total = f64(values[i]) / total
+        let start = -1.5707963267948966f64 + 6.283185307179586f64 * cumulative / total
+        cumulative += f64(values[i])
+        let finish = start + 6.283185307179586f64 * fraction_of_total
+        let steps = 2usize + usize(fraction_of_total * 96.0f64)
+        let first = used
+        var j = 0usize
+        while j <= steps {
+            let angle = start + (finish - start) * f64(j) / f64(steps)
+            points[used] = Coord { x: f32(center_x + radius * math.cos[f64](angle)), y: f32(center_y + radius * math.sin[f64](angle)) }
+            used += 1usize
+            j += 1usize
+        }
+        j = 0usize
+        while j <= steps {
+            let angle = finish - (finish - start) * f64(j) / f64(steps)
+            points[used] = Coord { x: f32(center_x + inner * math.cos[f64](angle)), y: f32(center_y + inner * math.sin[f64](angle)) }
+            used += 1usize
+            j += 1usize
+        }
+        layers[i] = Layout { kind: .Area, coords: points[first..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    ret (layers[..values.len], ok)
+}
+
 fn grouped_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
     if categories == 0usize || series == 0usize { ret (zero, Invalid) }
     if !bar_grid_ok(values, categories, series, bounds) { ret (zero, Invalid) }

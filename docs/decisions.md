@@ -33247,3 +33247,15 @@ negative/non-finite input and short storage are refused. A quadratic insertion
 sort is the present ceiling; replace it with caller-scratch mergesort for large
 category sets. `gfx_chart_composition` checks geometry and scene/SVG adapters
 on Windows and Linux, and the gallery adds a paired preview.
+
+## D1822 — Compose pie and donut slices as Area polygons
+
+`chart.pie` borrows nonnegative category weights and emits one caller-owned
+closed polygon per slice. An inner-radius ratio of zero yields pie; a ratio
+strictly between zero and one yields donut. Existing Area scene/SVG adapters
+and caller-supplied colours render both without a new mark kind. Zero totals,
+invalid bounds or ratios, non-finite weights and short storage are refused.
+The fixed 96-segment full-circle tessellation is a deliberate ceiling;
+adaptive segments can follow when zoom-aware rendering needs them.
+`gfx_chart_polar` checks geometry, refusals and both backends on Windows and
+Linux; the gallery adds two paired previews with category legends.
