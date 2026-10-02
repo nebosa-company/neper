@@ -33042,3 +33042,14 @@ R7 quartiles for a reference segment. The same scene adapter renders each set
 of marks. Violin mirrors the KDE estimate into a filled caller-owned outline.
 Q-Q gets a small separate fixture because the combined fixture exceeds the
 current self-host compiler arena.
+
+## D1796 — Keep matrix values separate from palette and panel layout
+
+`chart.heatmap` maps row-major numeric values to caller-owned tiles, while
+`chart.correlation_matrix` gathers columns into caller-provided scratch arrays
+and reuses `e.algo.stat.correlation_pearson`. The scene adapter chooses colours
+from caller-provided low, neutral and high swatches: sequential for heatmaps,
+zero-centred diverging for correlations. `chart.facet_grid` supplies equal
+row-major panel rectangles without binding scales or labels; shared/free scales,
+strips and legends remain separate work. `gfx_chart_matrix` verifies geometry,
+exact positive/negative correlations, refusal paths and scene command counts.

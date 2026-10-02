@@ -8,11 +8,13 @@ use e.algo.stat
 use e.gfx.geometry
 use e.math.special
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation }
 type Coord = struct { x: f32, y: f32 }
 type Segment = struct { from: Coord, to: Coord }
+type Cell = struct { rect: geometry.Rect, value: f32 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32 }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
+type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
 error Invalid
 error Empty
 error TooLarge
@@ -23,6 +25,14 @@ fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Sp
 
 fn finite(v: f32) -> bool {
     ret v == v && v - v == 0.0
+}
+
+fn finite64(v: f64) -> bool {
+    ret v == v && v - v == 0.0f64
+}
+
+fn valid_bounds(bounds: geometry.Rect) -> bool {
+    ret finite(bounds.x) && finite(bounds.y) && finite(bounds.width) && finite(bounds.height) && bounds.width > 0.0 && bounds.height > 0.0
 }
 
 fn extent(values: []const f32) -> (f32, f32, err) {
@@ -47,7 +57,7 @@ fn mapped(value: f32, lo: f32, hi: f32, start: f32, size: f32) -> f32 {
 // Produces marks in screen coordinates. Y is inverted because graphics bounds
 // use a top-left origin; the returned domain remains in data coordinates.
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err) {
-    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin { ret (zero, Invalid) }
+    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) { ret (zero, Invalid) }
@@ -431,4 +441,89 @@ fn qq_normal(sorted: []const f64, bounds: geometry.Rect, points: []Coord, refere
         to: Coord { x: mapped(theory_q3, xmin, xmax, bounds.x, bounds.width), y: bounds.y + bounds.height - mapped(f32(q3), ymin, ymax, 0.0, bounds.height) },
     }
     ret (Layout { kind: .Qq, coords: points[..sorted.len], segments: reference[..1usize], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
+}
+
+fn cell_rect(bounds: geometry.Rect, column: usize, row: usize, columns: usize, rows: usize) -> geometry.Rect {
+    let x0 = bounds.x + bounds.width * f32(column) / f32(columns)
+    let x1 = bounds.x + bounds.width * f32(column + 1usize) / f32(columns)
+    let y0 = bounds.y + bounds.height * f32(row) / f32(rows)
+    let y1 = bounds.y + bounds.height * f32(row + 1usize) / f32(rows)
+    ret geometry.rect(x0, y0, x1 - x0, y1 - y0)
+}
+
+// Row-major values become caller-owned tiles; the renderer owns palette choice.
+fn heatmap(values: []const f64, columns: usize, bounds: geometry.Rect, cells: []Cell) -> (MatrixLayout, err) {
+    if values.len == 0usize { ret (zero, Empty) }
+    if columns == 0usize || values.len % columns != 0usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if cells.len < values.len { ret (zero, TooLarge) }
+    let rows = values.len / columns
+    var lo = values[0usize]
+    var hi = lo
+    var i = 0usize
+    while i < values.len {
+        if !finite64(values[i]) || !finite(f32(values[i])) { ret (zero, Invalid) }
+        if values[i] < lo { lo = values[i] }
+        if values[i] > hi { hi = values[i] }
+        i += 1usize
+    }
+    i = 0usize
+    while i < values.len {
+        cells[i] = Cell { rect: cell_rect(bounds, i % columns, i / columns, columns, rows), value: f32(values[i]) }
+        i += 1usize
+    }
+    ret (MatrixLayout { kind: .Heatmap, cells: cells[..values.len], columns: columns, rows: rows, value_min: f32(lo), value_max: f32(hi) }, ok)
+}
+
+// Observations are row-major. Pearson's r comes from e.algo.stat; two scratch
+// columns and the output cells belong to the caller. Constant columns refuse.
+fn correlation_matrix(observations: []const f64, columns: usize, bounds: geometry.Rect, x: []f64, y: []f64, cells: []Cell) -> (MatrixLayout, err) {
+    if observations.len == 0usize { ret (zero, Empty) }
+    if columns == 0usize || observations.len % columns != 0usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    let rows = observations.len / columns
+    if rows < 2usize { ret (zero, Invalid) }
+    if cells.len / columns < columns || x.len < rows || y.len < rows { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < observations.len {
+        if !finite64(observations[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var row = 0usize
+    while row < columns {
+        var column = 0usize
+        while column < columns {
+            i = 0usize
+            while i < rows {
+                x[i] = observations[i * columns + column]
+                y[i] = observations[i * columns + row]
+                i += 1usize
+            }
+            let (coefficient, defined) = stat.correlation_pearson(x[..rows], y[..rows])
+            if !defined || !finite(f32(coefficient)) { ret (zero, Invalid) }
+            var value = f32(coefficient)
+            if value < -1.0 { value = -1.0 }
+            if value > 1.0 { value = 1.0 }
+            cells[row * columns + column] = Cell { rect: cell_rect(bounds, column, row, columns, columns), value: value }
+            column += 1usize
+        }
+        row += 1usize
+    }
+    ret (MatrixLayout { kind: .Correlation, cells: cells[..columns * columns], columns: columns, rows: columns, value_min: -1.0, value_max: 1.0 }, ok)
+}
+
+// Row-major equal panels for a later facet mapping stage. All panels use the
+// same outer bounds; callers choose shared or independent data scales.
+fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err) {
+    if columns == 0usize || count == 0usize || !valid_bounds(bounds) || !finite(gap) || gap < 0.0 { ret (zero, Invalid) }
+    if panels.len < count { ret (zero, TooLarge) }
+    var rows = count / columns
+    if count % columns != 0usize { rows += 1usize }
+    let width = (bounds.width - gap * f32(columns - 1usize)) / f32(columns)
+    let height = (bounds.height - gap * f32(rows - 1usize)) / f32(rows)
+    if !(width > 0.0) || !(height > 0.0) { ret (zero, Invalid) }
+    var i = 0usize
+    while i < count {
+        panels[i] = geometry.rect(bounds.x + f32(i % columns) * (width + gap), bounds.y + f32(i / columns) * (height + gap), width, height)
+        i += 1usize
+    }
+    ret (panels[..count], ok)
 }

@@ -19,24 +19,8 @@ fn fill(builder: *scene.Builder, rect: geometry.Rect, brush: paint.Brush) -> err
     ret scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: rect, brush: brush } })
 }
 
-fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, path: str) -> err {
-    let (made, builder_error) = scene.builder(a, 48usize)
-    if builder_error != ok { ret builder_error }
-    var builder = made
-    let white = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) }
-    let grid = paint.Brush { Solid: paint.rgba(0.88, 0.91, 0.95, 1.0) }
-    let axis = paint.Brush { Solid: paint.rgba(0.32, 0.38, 0.48, 1.0) }
-    let ink = paint.Brush { Solid: paint.rgba(0.07, 0.35, 0.76, 1.0) }
-    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), white)
-    var i = 1usize
-    while i < 4usize {
-        try fill(&builder, geometry.rect(44.0, 30.0 + f32(i) * 43.5, 286.0, 1.0), grid)
-        i += 1usize
-    }
-    try fill(&builder, geometry.rect(44.0, 30.0, 1.0, 175.0), axis)
-    try fill(&builder, geometry.rect(44.0, 204.0, 287.0, 1.0), axis)
-    try chart_scene.append(a, &builder, marks, ink)
-    let (compiled, compile_error) = scene.compile(renderer, scene.finish(&builder))
+fn render_builder(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, builder: *scene.Builder, path: str) -> err {
+    let (compiled, compile_error) = scene.compile(renderer, scene.finish(builder))
     if compile_error != ok { ret compile_error }
     try scene.render(renderer, compiled, canvas, geometry.Size { width: f32(WIDTH), height: f32(HEIGHT) })
     let (shown, shown_error) = gpu.presented(output_target)
@@ -47,7 +31,7 @@ fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     try gpu.read_image(q, shown, pixels)
     let (rgba, rgba_error) = mem.alloc[u8](a, count * 4usize)
     if rgba_error != ok { ret rgba_error }
-    i = 0usize
+    var i = 0usize
     while i < count {
         let pixel = pixels[i]
         rgba[4usize * i] = u8(pixel & 255u32)
@@ -66,6 +50,35 @@ fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     try fs.write_file(a, path, io.memory_bytes(&held))
     try scene.release_scene(renderer, compiled)
     ret ok
+}
+
+fn render_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, path: str) -> err {
+    let (made, builder_error) = scene.builder(a, 48usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    let white = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) }
+    let grid = paint.Brush { Solid: paint.rgba(0.88, 0.91, 0.95, 1.0) }
+    let axis = paint.Brush { Solid: paint.rgba(0.32, 0.38, 0.48, 1.0) }
+    let ink = paint.Brush { Solid: paint.rgba(0.07, 0.35, 0.76, 1.0) }
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), white)
+    var i = 1usize
+    while i < 4usize {
+        try fill(&builder, geometry.rect(44.0, 30.0 + f32(i) * 43.5, 286.0, 1.0), grid)
+        i += 1usize
+    }
+    try fill(&builder, geometry.rect(44.0, 30.0, 1.0, 175.0), axis)
+    try fill(&builder, geometry.rect(44.0, 204.0, 287.0, 1.0), axis)
+    try chart_scene.append(a, &builder, marks, ink)
+    ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
+}
+
+fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
+    let (made, builder_error) = scene.builder(a, marks.cells.len + 1usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_matrix(&builder, marks, paint.rgba(0.11, 0.30, 0.72, 1.0), paint.rgba(0.97, 0.97, 0.94, 1.0), paint.rgba(0.93, 0.28, 0.12, 1.0))
+    ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -130,6 +143,55 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (qq_plot, qq_error) = chart.qq_normal(qq_values[..], bounds, qq_points[..], qq_reference[..])
     if qq_error != ok { ret qq_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &qq_plot, "docs/chart-previews/qq.png")
+    let tile_values = [36]f64{
+        0.0, 1.0, 2.0, 3.0, 2.0, 1.0,
+        1.0, 2.0, 4.0, 6.0, 4.0, 2.0,
+        2.0, 4.0, 7.0, 9.0, 7.0, 3.0,
+        2.0, 5.0, 8.0, 10.0, 6.0, 2.0,
+        1.0, 3.0, 5.0, 6.0, 4.0, 1.0,
+        0.0, 1.0, 2.0, 3.0, 1.0, 0.0,
+    }
+    var tile_cells: [36]chart.Cell = zero
+    let (tiles, tile_error) = chart.heatmap(tile_values[..], 6usize, bounds, tile_cells[..])
+    if tile_error != ok { ret tile_error }
+    try render_matrix(a, queue, output_target, canvas, &renderer, &tiles, "docs/chart-previews/heatmap.png")
+    let observations = [24]f64{
+        1.0, 1.5, 9.0, 4.0,
+        2.0, 2.1, 8.0, 7.0,
+        3.0, 3.7, 7.0, 3.0,
+        4.0, 3.8, 6.0, 8.0,
+        5.0, 5.1, 5.0, 2.0,
+        6.0, 6.4, 4.0, 5.0,
+    }
+    var corr_x: [6]f64 = zero
+    var corr_y: [6]f64 = zero
+    var corr_cells: [16]chart.Cell = zero
+    let (corr, corr_error) = chart.correlation_matrix(observations[..], 4usize, bounds, corr_x[..], corr_y[..], corr_cells[..])
+    if corr_error != ok { ret corr_error }
+    try render_matrix(a, queue, output_target, canvas, &renderer, &corr, "docs/chart-previews/correlation.png")
+    var panels: [4]geometry.Rect = zero
+    let (facet_bounds, facet_error) = chart.facet_grid(bounds, 2usize, 4usize, 12.0, panels[..])
+    if facet_error != ok { ret facet_error }
+    let facet_values = [36]f64{
+        0.0, 1.0, 2.0, 1.0, 3.0, 4.0, 2.0, 4.0, 6.0,
+        4.0, 3.0, 2.0, 3.0, 5.0, 3.0, 2.0, 3.0, 4.0,
+        6.0, 4.0, 2.0, 4.0, 3.0, 1.0, 2.0, 1.0, 0.0,
+        1.0, 4.0, 1.0, 4.0, 8.0, 4.0, 1.0, 4.0, 1.0,
+    }
+    var facet_cells: [36]chart.Cell = zero
+    let (made_facet, made_facet_error) = scene.builder(a, 40usize)
+    if made_facet_error != ok { ret made_facet_error }
+    var facet_builder = made_facet
+    try fill(&facet_builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 0usize
+    while i < 4usize {
+        let start = i * 9usize
+        let (panel, panel_error) = chart.heatmap(facet_values[start..start + 9usize], 3usize, facet_bounds[i], facet_cells[start..start + 9usize])
+        if panel_error != ok { ret panel_error }
+        try chart_scene.append_matrix(&facet_builder, &panel, paint.rgba(0.11, 0.30, 0.72, 1.0), paint.rgba(0.97, 0.97, 0.94, 1.0), paint.rgba(0.93, 0.28, 0.12, 1.0))
+        i += 1usize
+    }
+    try render_builder(a, queue, output_target, canvas, &renderer, &facet_builder, "docs/chart-previews/facet_heatmap.png")
     try scene.close(&renderer)
     try gpu.close_target(output_target)
     try gpu.close(device)

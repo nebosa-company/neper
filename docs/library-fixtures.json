@@ -845,6 +845,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_core",
     "gfx_paint_plan",
@@ -943,11 +944,12 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 16,
-   "delivered": 16,
+   "catalogue": 21,
+   "delivered": 21,
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_matrix",
     "gfx_chart_qq"
    ]
   },
@@ -955,11 +957,12 @@
    "module": "e.gfx.chart.scene",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 1,
-   "delivered": 1,
+   "catalogue": 2,
+   "delivered": 2,
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_matrix",
     "gfx_chart_qq"
    ]
   },
@@ -1036,6 +1039,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_core",
     "gfx_paint_plan",
@@ -1116,6 +1120,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_matrix",
     "gfx_chart_qq",
     "gfx_scene",
     "gfx_scene_plan",

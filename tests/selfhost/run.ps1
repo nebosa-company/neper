@@ -3062,6 +3062,11 @@ $gfxChartQqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gfxChartQqWritten -ne 'executable written') { throw 'gfx_chart_qq emission failed' }
 $gfxChartQqOutput = & $gfxChartQqPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartQqOutput -ne 'gfx chart qq ok') { throw "the e.gfx.chart Q-Q plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMatrixPath = Join-Path $testBuild 'gfx-chart-matrix-selfhost.exe'
+$gfxChartMatrixWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_matrix\src\main.e') $repo 'x64' 'windows' $gfxChartMatrixPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMatrixWritten -ne 'executable written') { throw 'gfx_chart_matrix emission failed' }
+$gfxChartMatrixOutput = & $gfxChartMatrixPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMatrixOutput -ne 'gfx chart matrix ok') { throw "the e.gfx.chart matrix answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

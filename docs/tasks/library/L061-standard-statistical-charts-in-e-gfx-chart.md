@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | category | library / Algorithms |
-| score | 0.42 of 1 |
+| score | 0.52 of 1 |
 | queue position | 1 (the active capability; only position 1 is eligible for the next session) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
@@ -15,7 +15,7 @@ See `docs/roadmap.md`, `docs/stats-coverage.md` §2 and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Foundation now exists in `lib/e/gfx/chart.e`: borrowed numeric x/y columns, caller-owned output, domain validation/padding, and scatter/line/bar/step screen-space marks. Histogram, ECDF, R7 box, Gaussian density, normal Q-Q and mirrored-KDE violin produce caller-owned marks. `e.gfx.chart.scene` appends the marks to Neper scenes, and `examples/chart_gallery.e` generated ten inspected PNG previews. The `gfx_chart` and `gfx_chart_qq` fixtures check distributions, geometry, adapter commands and refusal paths. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work includes heatmap, correlation matrix, facets, axes/guides, production PNG/SVG/PDF/widget adapters, specialized diagrams and benchmark evidence against ggplot2/base/lattice/matplot. Full evaluation: `docs/stats-coverage.md` §2.
+> `e.gfx.chart` now maps borrowed numeric columns into caller-owned Cartesian and distribution marks, row-major heatmap and Pearson correlation cells, plus equal facet-panel rectangles. `e.gfx.chart.scene` appends series marks and colour-mapped matrix tiles to Neper scenes. `gfx_chart`, `gfx_chart_qq` and `gfx_chart_matrix` check statistics, geometry, scene commands and refusal paths; `examples/chart_gallery.e` generated thirteen inspected PNG previews. The full registry and staged delivery plan are in `docs/charting-engine-plan.md`. Remaining work includes shared/free facet scales, strips, guides, production PNG/SVG/PDF/widget adapters, specialized diagrams and comparative benchmarks. Full evaluation: `docs/stats-coverage.md` §2.
 
 ## Remaining work
 
@@ -23,8 +23,8 @@ Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.m
   caller-owned `Layout`, scatter/line/bar/step marks and refusal paths.
 - [x] **Core distribution families** — histogram, box, violin, density, ECDF
   and normal Q-Q have executable fixtures and PNG previews.
-- [ ] **Matrix and facets** — heatmap, correlation matrix, shared/free scales and
-  trellis panels.
+- [ ] **Matrix and facets** — heatmap, Pearson correlation matrix and equal-panel
+  facet geometry delivered; shared/free scales, strips and legends remain.
 - [ ] **Backends** — scene mark adapter and PNG preview gallery delivered;
   axes/guides, production PNG/SVG/PDF export and `e.ui.widget` embed remain.
 - [ ] **Specialized diagrams** — ROC, survival, SPC, scientific, finance, quality,

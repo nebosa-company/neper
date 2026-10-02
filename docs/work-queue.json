@@ -9,10 +9,10 @@
       "group": "Algorithms",
       "order": 159,
       "title": "Standard statistical charts in e.gfx.chart",
-      "score": 0.42,
+      "score": 0.52,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Foundation in `lib/e/gfx/chart.e` covers borrowed numeric columns and caller-owned scatter/line/bar/step marks, histogram bins, sorted ECDF, R7 box plots, Gaussian density, normal Q-Q and mirrored-KDE violin. `e.gfx.chart.scene` appends their marks to the scene display list. `gfx_chart` and `gfx_chart_qq` check geometry, statistics, scene commands and refusal paths; `examples/chart_gallery.e` rendered ten inspected PNG previews through Neper's CPU scene and PNG encoder in `docs/chart-previews/`. Detailed registry and staged plan: `docs/charting-engine-plan.md`. Not yet: other distribution variants, heatmap/correlation/facets, axes/guides, production PNG/SVG/PDF/widget adapters, specialized diagrams, or benchmark evidence against ggplot2/base/lattice/matplot. Security maintenance (D1793) closes output-staging, XML-ingestion, image-default and template-budget findings; `scripts/check_security.py` passes on Windows and Linux. This maintenance does not advance L061's chart score."
+      "evidence": "Foundation in `lib/e/gfx/chart.e` covers borrowed numeric columns and caller-owned scatter/line/bar/step marks, histogram bins, sorted ECDF, R7 box plots, Gaussian density, normal Q-Q and mirrored-KDE violin. Row-major heatmaps, Pearson correlation matrices and equal-panel facet geometry now emit caller-owned cells/rectangles; `e.gfx.chart.scene` renders sequential or diverging matrix palettes. `gfx_chart`, `gfx_chart_qq` and `gfx_chart_matrix` check geometry, statistics, scene commands and refusal paths; `examples/chart_gallery.e` rendered thirteen inspected PNG previews through Neper's CPU scene and PNG encoder in `docs/chart-previews/`. Detailed registry and staged plan: `docs/charting-engine-plan.md`. Not yet: other distribution variants, shared/free facet scales, strips/legend metadata, axes/guides, production PNG/SVG/PDF/widget adapters, specialized diagrams, or benchmark evidence against ggplot2/base/lattice/matplot. Security maintenance (D1793) closes output-staging, XML-ingestion, image-default and template-budget findings; `scripts/check_security.py` passes on Windows and Linux. This maintenance does not advance L061's chart score."
     },
     {
       "id": "C092",

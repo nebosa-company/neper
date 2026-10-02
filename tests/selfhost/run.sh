@@ -2684,6 +2684,11 @@ gfx_chart_qq_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/gfx-chart-qq-selfhost"
 gfx_chart_qq_output=$("$test_build/gfx-chart-qq-selfhost")
 [ "$gfx_chart_qq_output" = 'gfx chart qq ok' ]
+gfx_chart_matrix_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_matrix/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-matrix-selfhost")
+[ "$gfx_chart_matrix_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-matrix-selfhost"
+gfx_chart_matrix_output=$("$test_build/gfx-chart-matrix-selfhost")
+[ "$gfx_chart_matrix_output" = 'gfx chart matrix ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

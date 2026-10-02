@@ -1,6 +1,7 @@
 # Chart previews
 
-The scatter, line, bar, histogram, step, ECDF, box, density, Q-Q and violin PNGs are rendered by Neper's
+The scatter, line, bar, histogram, step, ECDF, box, density, Q-Q, violin,
+heatmap, correlation matrix and faceted heatmap PNGs are rendered by Neper's
 CPU scene and PNG encoder from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:
 

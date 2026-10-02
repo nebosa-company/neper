@@ -1,8 +1,8 @@
 # Neper charting engine plan
 
-Status: scatter, line, bar, histogram, step, ECDF, box, density, normal Q-Q and
-violin marks are delivered, with a scene adapter and ten PNG previews from Neper's CPU
-renderer. L061 remains partial
+Status: scatter, line, bar, histogram, step, ECDF, box, density, normal Q-Q,
+violin, heatmap and correlation matrix are delivered, with a scene adapter,
+facet panel geometry and thirteen PNG previews from Neper's CPU renderer. L061 remains partial
 until the remaining families, production export API and widget integration are
 evidenced.
 
@@ -68,11 +68,16 @@ and emits exact 1/n rises, including tied observations. Box plots reuse R7
 quartiles for Tukey whiskers; density reuses Gaussian KDE with an explicit or
 Scott bandwidth; Q-Q plots reuse normal quantiles and an R7 quartile reference.
 Violin plots mirror that same Gaussian estimate into a filled outline.
+Matrix layouts map row-major values into caller-owned cells; Pearson correlation
+reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
+diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
+sharing and strips remain future work.
 
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
-Scatter, line, bar, histogram, step/stairs, ECDF, box, density, Q-Q and violin are delivered; every other entry
+Scatter, line, bar, histogram, step/stairs, ECDF, box, density, Q-Q, violin,
+heatmap and correlation matrix are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -113,8 +118,10 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 2. **Core distributions (delivered):** histogram, box, violin, density, ECDF and
    normal Q-Q have executable fixtures and PNG previews. Other distribution
    variants in the catalogue remain planned.
-3. **Matrix and facets:** heatmap, correlation matrix, panel layout, shared/free
-   scales, strips and legend metadata.
+3. **Matrix and facets (partial):** heatmap and Pearson correlation matrix have
+   executable fixtures and PNG previews; `facet_grid` places panels and a
+   four-panel heatmap preview exercises it. Shared/free x/y scales, strips and
+   legend metadata remain.
 4. **Rendering adapters (partial):** scene display-list marks and a Neper-rendered
    PNG gallery are delivered; axes/text/guides, a production PNG export API,
    SVG/PDF serialization and a widget embed remain. Pixel fixtures follow
