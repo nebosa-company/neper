@@ -5211,7 +5211,7 @@ foreach ($hotMode in @('--release', '--time')) {
     Remove-Item -LiteralPath (Join-Path $hotScratch '.neper') -Recurse -Force
     $hotFaultBuild = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --fault-write 1 2>&1
     if ($LASTEXITCODE -ne 1 -or ($hotFaultBuild -join "`n") -notmatch 'made to fail by --fault-write') { throw "a build with an injected write fault did not fail as one ($hotMode): $hotFaultBuild" }
-    if (-not (Get-ChildItem -LiteralPath (Join-Path $hotScratch ".neper\$hotManifestMode") -Filter '*.tmp' -Recurse)) { throw "the injected write fault left no staged file ($hotMode)" }
+    if (-not (Get-ChildItem -LiteralPath (Join-Path $hotScratch ".neper\$hotManifestMode") -Filter '.neper-stage-*' -Recurse)) { throw "the injected write fault left no staged file ($hotMode)" }
     $hotAfterFault = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotAfterFault -ne 'executable written') { throw "the warm hot build after an injected write fault failed ($hotMode)" }
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:invalid-artifact' 'dep=rebuilt:no-artifact'

@@ -1120,6 +1120,7 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.stderr", "neper_os_stderr"); intrinsic_returns(fn, 1, file, error);
     OS_FN("os.readdir", "neper_os_readdir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 2, entries, error);
     OS_FN("os.mkdir", "neper_os_mkdir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 1, error, error);
+    OS_FN("os.remove_file", "neper_os_remove_file"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 1, error, error);
     /* `os.replace(a, src, dst, overwrite, durable)` (D343): the atomic rename the artifacts are published by. */
     OS_FN("os.replace", "neper_os_replace"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "src", string); intrinsic_param(fn, token, "dst", string); intrinsic_param(fn, token, "overwrite", type_make(TY_BOOL, "bool")); intrinsic_param(fn, token, "durable", type_make(TY_BOOL, "bool")); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.set_mode", "neper_os_set_mode"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_param(fn, token, "mode", u32); intrinsic_returns(fn, 1, error, error);
@@ -1134,6 +1135,7 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.env", "neper_os_env"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "name", string); intrinsic_returns(fn, 2, string, error);
     OS_FN("os.random", "neper_os_random"); intrinsic_param(fn, token, "buffer", bytes); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.create_new", "neper_os_create_new"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 2, file, error);
+    OS_FN("os.create_new_with_mode", "neper_os_create_new_with_mode"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_param(fn, token, "mode", u32); intrinsic_returns(fn, 2, file, error);
     OS_FN("os.reserve", "neper_os_reserve"); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 2, byte_pointer, error);
     OS_FN("os.commit", "neper_os_commit"); intrinsic_param(fn, token, "p", byte_pointer); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 1, error, error);
     /* `os.release(p, n)` (D1665): the other half of `reserve`, in the bootstrap alone as
@@ -7447,9 +7449,9 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN CommandLineToArgvW:PROC\n"
         "EXTERN neper_os_set_args:PROC\nEXTERN neper_os_open:PROC\nEXTERN neper_os_read:PROC\n"
         "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdin:PROC\nEXTERN neper_os_stdout:PROC\n"
-        "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_replace:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\nEXTERN neper_os_spawn_with_options:PROC\n"
+        "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_remove_file:PROC\nEXTERN neper_os_replace:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\nEXTERN neper_os_spawn_with_options:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\nEXTERN neper_os_env:PROC\n"
-        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_release:PROC\nEXTERN neper_os_clock:PROC\nEXTERN neper_os_random:PROC\nEXTERN neper_os_create_new:PROC\n"
+        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_release:PROC\nEXTERN neper_os_clock:PROC\nEXTERN neper_os_random:PROC\nEXTERN neper_os_create_new:PROC\nEXTERN neper_os_create_new_with_mode:PROC\n"
         "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\nEXTERN neper_os_seek:PROC\nEXTERN neper_os_copy_bytes:PROC\nEXTERN neper_os_sha256_blocks:PROC\nEXTERN neper_os_crc32c_bytes:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"
         "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"

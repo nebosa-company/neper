@@ -77,5 +77,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e16 != html_template.UnsafeContext { os.exit(20) }
     let (u6, e17) = render(a, "<p>{{#if on}}x", bindings[0..], out[0..])
     if e17 != html_template.InvalidTemplate { os.exit(21) }
+    bindings[3].value = template.Value{ U64: 18446744073709551615u64 }
+    let (_, huge_error) = render(a, "{{#repeat n}}{{/repeat}}", bindings[0..], out[0..])
+    if huge_error != html_template.TooLarge { os.exit(22) }
+    bindings[3].value = template.Value{ I64: 3i64 }
+    let (nested, nested_error) = html_template.parse(a, "{{#repeat n}}{{#repeat n}}{{/repeat}}{{/repeat}}", options)
+    if nested_error != ok { os.exit(23) }
+    sink_state.off = 0usize
+    if html_template.execute_with_limits(&nested, &sink, bindings[0..], 10u64, 100u64) != html_template.TooLarge { os.exit(24) }
+    if html_template.execute_with_limits(&nested, &sink, bindings[0..], 100u64, 100u64) != ok { os.exit(25) }
+    let (escaped, escaped_error) = html_template.parse(a, "{{v}}", options)
+    if escaped_error != ok { os.exit(26) }
+    sink_state.off = 0usize
+    if html_template.execute_with_limits(&escaped, &sink, bindings[0..], 100u64, 10u64) != html_template.TooLarge || sink_state.off > 10usize { os.exit(27) }
+    sink_state.off = 0usize
+    if html_template.execute_typed_with_limits[Page](&typed, &sink, &page, 100u64, 10u64) != html_template.TooLarge || sink_state.off > 10usize { os.exit(28) }
+    sink_state.off = 0usize
+    if html_template.execute_typed_with_limits[Page](&typed, &sink, &page, 100u64, 100u64) != ok { os.exit(29) }
     ret ok
 }

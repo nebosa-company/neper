@@ -2622,6 +2622,11 @@ fn random(buffer: []u8) -> err {
 // is the whole point: a name checked and then opened is a name something else can take in
 // between. No share bits either, so nothing else opens it while the caller holds it.
 fn create_new(a: *mem.Arena, path: str) -> (File, err) {
+    let (file, create_error) = create_new_with_mode(a, path, 384u32)
+    ret (file, create_error)
+}
+
+fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err) {
     var file: File = zero
     let checkpoint = mem.mark(a)
     let (name, name_error) = widen(a, path)
@@ -2629,7 +2634,9 @@ fn create_new(a: *mem.Arena, path: str) -> (File, err) {
         mem.reset(a, checkpoint)
         ret (file, name_error)
     }
-    let handle = raw_create_file(&name[0usize], GENERIC_READ_WRITE, 0u32, 0usize, CREATE_NEW, ATTRIBUTE_NORMAL, 0usize)
+    var attributes = ATTRIBUTE_NORMAL
+    if mode & 146u32 == 0u32 { attributes = ATTRIBUTE_READONLY }
+    let handle = raw_create_file(&name[0usize], GENERIC_READ_WRITE, 0u32, 0usize, CREATE_NEW, attributes, 0usize)
     if handle == INVALID_HANDLE {
         let open_error = from_last_error()
         mem.reset(a, checkpoint)

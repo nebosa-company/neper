@@ -8,7 +8,7 @@
 // greyscale. Arithmetic coding (SOF9-11), lossless (SOF3), 12-bit samples, hierarchical
 // frames and CMYK answer `Unsupported`; a stream that lies about itself is `Invalid`.
 // `inspect` reads through the headers up to the first scan. Dimensions are checked
-// against the options before any plane is allocated; a zero limit is no limit.
+// against the options before any plane is allocated; zero selects finite defaults.
 //
 // Encoding writes baseline 4:4:4 YCbCr from `Rgba8` and `Bgra8` (alpha dropped) and
 // greyscale from `R8`, with the Annex K quantisation tables scaled by `quality` as
@@ -654,9 +654,13 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
 }
 
 fn within(f: Frame, options: DecodeOptions) -> err {
-    if options.max_width != 0u32 && f.width > usize(options.max_width) { ret TooLarge }
-    if options.max_height != 0u32 && f.height > usize(options.max_height) { ret TooLarge }
-    if options.max_pixels != 0u64 && u64(f.width) * u64(f.height) > options.max_pixels { ret TooLarge }
+    var width = options.max_width
+    var height = options.max_height
+    var pixels = options.max_pixels
+    if width == 0u32 { width = 16384u32 }
+    if height == 0u32 { height = 16384u32 }
+    if pixels == 0u64 { pixels = 16777216u64 }
+    if f.width > usize(width) || f.height > usize(height) || u64(f.width) * u64(f.height) > pixels { ret TooLarge }
     ret ok
 }
 

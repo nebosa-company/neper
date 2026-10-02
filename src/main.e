@@ -6617,15 +6617,58 @@ fn compare_artifacts(a: *mem.Arena, out: *Sink, differences: *usize, left: str, 
     ret ok
 }
 
-// Published, not written in place (D343, H24): the bytes go to `<path>.tmp` and the
+// Published, not written in place (D343, H24): the bytes go to a private sibling and the
 // name is taken by one atomic replace, so no reader -- a concurrent build, the next
 // build after a crash -- ever sees a file that is part of one; a write that dies
-// leaves its `.tmp`, which nothing reads, and the previous file, which is whole.
+// leaves its staging file, which nothing reads, and the previous file, which is whole.
+// Random exclusive creation ignores stale files and never opens a supplied link.
+fn stage_bytes(a: *mem.Arena, path: str, bytes: []u8) -> (str, err) {
+    // `fs.temp_file` uses this same host primitive; its library syntax is beyond
+    // the bootstrap subset that must compile main.e.
+    let (prefix, prefix_error) = with_suffix(a, dirname(path), ".neper-stage-")
+    if prefix_error != ok { ret ("", prefix_error) }
+    var attempt = 0usize
+    while attempt < 16usize {
+        var random: [12]u8 = zero
+        let random_error = os.random(random[0usize..])
+        if random_error != ok { ret ("", random_error) }
+        var hex: [24]u8 = zero
+        var at = 0usize
+        while at < random.len {
+            hex[at * 2usize] = artifact_hash.sha_hex_digit(usize(random[at] >> 4u8))
+            hex[at * 2usize + 1usize] = artifact_hash.sha_hex_digit(usize(random[at] & 15u8))
+            at += 1usize
+        }
+        let (staged, staged_error) = with_suffix(a, prefix, hex[0usize..])
+        if staged_error != ok { ret ("", staged_error) }
+        let (file, open_error) = os.create_new_with_mode(a, staged, 420u32)
+        if open_error == os.Exists {
+            attempt += 1usize
+            continue
+        }
+        if open_error != ok { ret ("", open_error) }
+        let write_error = write_bytes(file, bytes)
+        let close_error = os.close(file)
+        if write_error != ok || close_error != ok {
+            let cleanup_error = os.remove_file(a, staged)
+            if cleanup_error != ok { ret (staged, cleanup_error) }
+            if write_error != ok { ret (staged, write_error) }
+            ret (staged, close_error)
+        }
+        ret (staged, ok)
+    }
+    ret ("", os.Exists)
+}
+
 fn save_bytes(a: *mem.Arena, path: str, bytes: []u8) -> err {
-    let (staged, staged_error) = with_suffix(a, path, ".tmp")
+    let (staged, staged_error) = stage_bytes(a, path, bytes)
     if staged_error != ok { ret staged_error }
-    try write_file(a, staged, bytes)
-    ret os.replace(a, staged, path, true, false)
+    let publish_error = os.replace(a, staged, path, true, false)
+    if publish_error != ok {
+        let cleanup_error = os.remove_file(a, staged)
+        if cleanup_error != ok { ret cleanup_error }
+    }
+    ret publish_error
 }
 
 fn write_file(a: *mem.Arena, path: str, bytes: []u8) -> err {
@@ -10674,11 +10717,10 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
     if artifact_path_error != ok { ret artifact_path_error }
     if hot.fault_on && hot.fault_module == module_index {
-        // The write dies between the staging and the replace (D435): the `.tmp` is
+        // The write dies between the staging and the replace (D435): the staging file is
         // left, the previous artifact if any is whole, and the build stops here.
-        let (staged, staged_error) = with_suffix(a, artifact_path, ".tmp")
+        let (staged, staged_error) = stage_bytes(a, artifact_path, held)
         if staged_error != ok { ret staged_error }
-        try write_file(a, staged, held)
         ret ArtifactWriteFault
     }
     ret save_bytes(a, artifact_path, held)

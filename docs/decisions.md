@@ -32995,3 +32995,38 @@ them. Equal values share an x coordinate, so their rises coincide without a
 separate grouping allocation. The first and last CDF ordinates are exactly zero
 and one. Sorting remains the caller's responsibility, consistent with the
 existing `e.algo.stat.quantile` sorted-sample contract.
+
+## D1793 — Bound untrusted ingestion and execution; publish through exclusive staging
+
+Compiler publication creates a random 96-bit sibling name with `os.create_new_with_mode`,
+writes through the returned handle, closes it, and only then atomically replaces
+the destination. The injected artifact-write fault uses the same helper. Stale
+`.tmp` files and interrupted random staging files are ignored, preserving recovery
+without following a supplied symlink or deleting another writer's file. The host's
+exclusive create requests ordinary 0644 permissions subject to umask; it never
+reopens the name or follows it to change permissions. `create_new` keeps its 0600
+default for private temporary files and locks. ELF publication still applies its
+executable mode. Ordinary write, close and replacement failures remove the owned
+staging file; only deliberate fault injection or process termination leaves it.
+Directory ownership and parent-directory resolution remain
+the caller's filesystem boundary. The bootstrap cannot parse `fs.temp_file`, so
+the compiler uses its existing host primitives and hex formatter directly.
+
+XML ingestion reuses `io.read_all` with an inclusive limit and one-byte lookahead:
+16 MiB by default, explicit finite limits up to 1 GiB, and `TooLarge` with the
+partial allocation released. Existing `Options` initializers remain valid; borrowed
+`stream` input keeps the caller's own size policy. Image decoders resolve each zero
+limit independently to 16,384 per dimension and 16,777,216 pixels before allocation;
+larger limits require explicit values. Encoded buffers and codec workspace remain
+separate from decoded dimensions.
+
+Text and HTML execution share one remaining-step and remaining-output budget across
+all nested blocks: 100,000 node/iteration steps and 16 MiB by default. Empty repeats
+consume steps; the output adapter checks final escaped bytes before forwarding them.
+Explicit-limit and typed APIs retain larger-workload support. Exhaustion is `TooLarge`
+and may leave streamed output already accepted by the caller's sink.
+
+`scripts/check_security.py` runs nine nearby fixtures and interrupted-build recovery
+on Windows and Linux; Linux additionally verifies a planted staging symlink and stale
+regular file stay untouched. All pass with independently rebuilt compiler images.
+Linux filesystem fixtures run on the native Linux volume, not WSL's Windows mount.

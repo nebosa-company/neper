@@ -158,6 +158,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var w = io.slice_writer(&sink)
     if png.encode(&w, half_view, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Unsupported { os.exit(216i32) }
 
+    mem.copy[u8](corrupt, rgba8_png())
+    png.put32(corrupt, 16usize, 4097u32)
+    png.put32(corrupt, 20usize, 4096u32)
+    png.put32(corrupt, 29usize, png.crc32(corrupt[12usize..29usize]))
+    let (_, default_error) = png.decode(a, reader_of(&state, corrupt), options())
+    if default_error != png.TooLarge { os.exit(217i32) }
+    var header: png.Header = zero
+    header.width = 16385u32
+    header.height = 1u32
+    if png.within(header, options()) != png.TooLarge { os.exit(218i32) }
+    var raised = options()
+    raised.max_width = 16385u32
+    if png.within(header, raised) != ok { os.exit(219i32) }
+    header.width = 1u32
+    header.height = 16385u32
+    if png.within(header, raised) != png.TooLarge { os.exit(220i32) }
+
     try io.print("fmt png ok\n")
     ret ok
 }

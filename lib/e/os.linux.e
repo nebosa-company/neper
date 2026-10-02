@@ -820,6 +820,11 @@ fn random(buffer: []u8) -> err {
 // is the whole point: a name checked and then opened is a name something else can take in
 // between.
 fn create_new(a: *mem.Arena, path: str) -> (File, err) {
+    let (file, create_error) = create_new_with_mode(a, path, u32(CREATE_MODE))
+    ret (file, create_error)
+}
+
+fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err) {
     var file: File = zero
     let checkpoint = mem.mark(a)
     let (path_address, path_error) = c_string(a, path)
@@ -827,7 +832,7 @@ fn create_new(a: *mem.Arena, path: str) -> (File, err) {
         mem.reset(a, checkpoint)
         ret (file, path_error)
     }
-    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_CREATE_NEW, CREATE_MODE, 0usize, 0usize)
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_CREATE_NEW, usize(mode & PERMISSION_MASK), 0usize, 0usize)
     mem.reset(a, checkpoint)
     if descriptor < 0isize { ret (file, from_errno(descriptor)) }
     file.raw = usize(descriptor)

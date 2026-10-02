@@ -5922,6 +5922,7 @@ error Unsupported
 
 fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err)
 fn create_new(a: *mem.Arena, path: str) -> (File, err)
+fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err)
 fn read(f: File, buf: []u8) -> (usize, err)
 fn write(f: File, buf: []const u8) -> (usize, err)
 fn read_detail(f: File, buffer: []u8, detail: *ErrorDetail) -> (usize, err)
@@ -6072,6 +6073,9 @@ move between devices is `Unsupported` rather than a copy nothing asked for.
 for reading and writing with no sharing. It is the one call that makes a name safe to hand
 out, since the name is taken before it is returned; `OpenFlags` has no exclusive form
 because that has to be one operation, not a check and then an open.
+`create_new_with_mode` sets the initial POSIX permission bits in that same exclusive
+create, subject to the process umask; Windows maps write bits to its read-only
+attribute. `create_new` retains its owner-only default.
 
 `canonical` is absolute with every symbolic link, `.` and `..` resolved, and it requires
 the path to exist: both hosts answer it by opening the path and asking what was opened, so
@@ -12427,6 +12431,8 @@ type PathSet = struct { ids: []NodeId, count: usize }
 error Invalid
 error TooDeep
 error Unsupported
+error TooLarge
+const DEFAULT_MAX_BYTES: usize = 16777216usize
 const NONE: NodeId = 4294967295u32
 
 fn slurp(a: *mem.Arena, source: io.Reader) -> ([]u8, err)
@@ -12467,6 +12473,10 @@ fn xpath(a: *mem.Arena, document: *const Document, context: NodeId, path: str) -
 
 XML 1.0 names, namespaces and entity escaping are supported. External entities and
 DTDs are always `Unsupported`; the module never performs hidden I/O.
+`reader` and `slurp` cap ingestion at 16 MiB and return `TooLarge` without keeping
+partial input. Their explicit-limit variants accept an inclusive maximum up to
+1 GiB; zero selects the default. `stream` borrows already-buffered bytes, so its
+input budget remains the caller's responsibility.
 
 ### `e.fmt.html`
 

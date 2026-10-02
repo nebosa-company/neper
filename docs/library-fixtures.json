@@ -403,8 +403,8 @@
    "module": "e.fmt.html.template",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 10,
-   "delivered": 10,
+   "catalogue": 12,
+   "delivered": 12,
    "pending": [],
    "fixtures": [
     "fmt_html_template"
@@ -607,8 +607,8 @@
    "module": "e.fmt.xml",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 50,
-   "delivered": 50,
+   "catalogue": 54,
+   "delivered": 54,
    "pending": [],
    "fixtures": [
     "fmt_gaps_b",
@@ -1809,8 +1809,8 @@
    "module": "e.text.template",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 12,
-   "delivered": 12,
+   "catalogue": 14,
+   "delivered": 14,
    "pending": [],
    "fixtures": [
     "fmt_html_template",

@@ -437,6 +437,18 @@ void neper_os_current_dir(void *result, NpArena *arena) {
     *(NpStr *)out = (NpStr){bytes, length};
 }
 
+uint32_t neper_os_remove_file(NpArena *arena, const unsigned char *path, size_t path_len) {
+    wchar_t *wide = np_wide((NpStr){path, path_len});
+    BOOL removed;
+    DWORD error;
+    (void)arena;
+    if (!wide) return NP_OUT_OF_MEMORY;
+    removed = DeleteFileW(wide);
+    error = removed ? ERROR_SUCCESS : GetLastError();
+    HeapFree(GetProcessHeap(), 0, wide);
+    return removed ? NP_OK : np_error(error);
+}
+
 void neper_os_env(void *result, NpArena *arena, const unsigned char *name, size_t name_len) {
     unsigned char *out = (unsigned char *)result, *bytes;
     wchar_t *wide_name = np_wide((NpStr){name, name_len}), *wide_value;
@@ -468,17 +480,21 @@ uint32_t neper_os_random(unsigned char *buffer, size_t length) {
     return SystemFunction036(buffer, (ULONG)length) ? NP_OK : NP_FAILED;
 }
 
-void neper_os_create_new(void *result, NpArena *arena, const unsigned char *path, size_t path_len) {
+void neper_os_create_new_with_mode(void *result, NpArena *arena, const unsigned char *path, size_t path_len, uint32_t mode) {
     unsigned char *out = (unsigned char *)result;
     wchar_t *wide = np_wide((NpStr){path, path_len});
     HANDLE handle;
     (void)arena;
     *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
     if (!wide) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
-    handle = CreateFileW(wide, GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, 0);
+    handle = CreateFileW(wide, GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_NEW, (mode & 0222u) ? FILE_ATTRIBUTE_NORMAL : FILE_ATTRIBUTE_READONLY, 0);
     HeapFree(GetProcessHeap(), 0, wide);
     if (handle == INVALID_HANDLE_VALUE) { *(uint32_t *)(out + 8) = np_error(GetLastError()); return; }
     *(uintptr_t *)out = (uintptr_t)handle;
+}
+
+void neper_os_create_new(void *result, NpArena *arena, const unsigned char *path, size_t path_len) {
+    neper_os_create_new_with_mode(result, arena, path, path_len, 0600u);
 }
 
 void neper_os_stdin(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_INPUT_HANDLE); }
@@ -884,6 +900,17 @@ uint32_t neper_os_set_mode(NpArena *arena, const unsigned char *path, size_t pat
     return changed == 0 ? NP_OK : np_error(errno);
 }
 
+uint32_t neper_os_remove_file(NpArena *arena, const unsigned char *path, size_t path_len) {
+    size_t saved = arena ? arena->off : 0;
+    char *name = np_c_string_arena(arena, (NpStr){path, path_len});
+    int removed, error;
+    if (!name) return NP_OUT_OF_MEMORY;
+    removed = unlink(name);
+    error = errno;
+    if (arena) arena->off = saved;
+    return removed == 0 ? NP_OK : np_error(error);
+}
+
 void neper_os_current_dir(void *result, NpArena *arena) {
     unsigned char *out = (unsigned char *)result;
     size_t capacity = 256, saved = arena ? arena->off : 0, length;
@@ -929,17 +956,21 @@ uint32_t neper_os_random(unsigned char *buffer, size_t length) {
     return NP_OK;
 }
 
-void neper_os_create_new(void *result, NpArena *arena, const unsigned char *path, size_t path_len) {
+void neper_os_create_new_with_mode(void *result, NpArena *arena, const unsigned char *path, size_t path_len, uint32_t mode) {
     unsigned char *out = (unsigned char *)result;
     size_t saved = arena ? arena->off : 0;
     char *name = np_c_string_arena(arena, (NpStr){path, path_len});
     int fd;
     *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
     if (!name) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
-    fd = open(name, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    fd = open(name, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, (mode_t)(mode & 07777u));
     arena->off = saved;
     if (fd < 0) { *(uint32_t *)(out + 8) = np_error(errno); return; }
     *(uintptr_t *)out = (uintptr_t)fd;
+}
+
+void neper_os_create_new(void *result, NpArena *arena, const unsigned char *path, size_t path_len) {
+    neper_os_create_new_with_mode(result, arena, path, path_len, 0600u);
 }
 
 void neper_os_stdin(void *result) { *(uintptr_t *)result = 0; }

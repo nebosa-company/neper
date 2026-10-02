@@ -7,6 +7,7 @@
 // beforehand against a struct's fields, which `execute_typed[T]` binds by kind:
 // bool, integer, float and string fields. No escaping happens here; a text or byte
 // value is written as it is.
+// Execution shares a work and output budget across every nested block.
 use e.io
 use e.mem
 use e.meta
@@ -24,6 +25,32 @@ error TooLarge
 // Node kinds: 0 text, 1 variable, 2 if, 3 else, 4 end, 5 repeat, 6 index.
 type Node = struct { kind: u8, text: str, close: usize, other: usize }
 type State = struct { nodes: []Node }
+type Budget = struct { steps: u64, bytes: u64, sink: io.Writer }
+const DEFAULT_MAX_STEPS: u64 = 100000u64
+const DEFAULT_MAX_OUTPUT: u64 = 16777216u64
+
+fn take_step(budget: *Budget) -> err {
+    if budget.steps == 0u64 { ret TooLarge }
+    budget.steps -= 1u64
+    ret ok
+}
+
+fn budget_write(ctx: *void, source: []const u8) -> (usize, err) {
+    let budget = mem.cast[*Budget](ctx)
+    if u64(source.len) > budget.bytes { ret (0usize, TooLarge) }
+    let (count, write_error) = io.write(&budget.sink, source)
+    budget.bytes -= u64(count)
+    ret (count, write_error)
+}
+
+fn budget_flush(ctx: *void) -> err {
+    let budget = mem.cast[*Budget](ctx)
+    ret io.flush(&budget.sink)
+}
+
+fn budget_writer(budget: *Budget) -> io.Writer {
+    ret io.writer_with_flush(mem.cast[*void](budget), budget_write, budget_flush)
+}
 
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Template, err) {
     if source.len > options.max_bytes { ret (zero, TooLarge) }
@@ -189,8 +216,15 @@ fn write_value(writer: *io.Writer, value: Value) -> err {
 
 // Runs the nodes in [from, to), `index` being the innermost repeat position.
 fn run(nodes: []const Node, from: usize, to: usize, writer: *io.Writer, bindings: []const Binding, index: u64) -> err {
+    var budget = Budget { steps: DEFAULT_MAX_STEPS, bytes: DEFAULT_MAX_OUTPUT, sink: *writer }
+    var bounded = budget_writer(&budget)
+    ret run_bounded(nodes, from, to, &bounded, bindings, index, &budget)
+}
+
+fn run_bounded(nodes: []const Node, from: usize, to: usize, writer: *io.Writer, bindings: []const Binding, index: u64, budget: *Budget) -> err {
     var at = from
     while at < to {
+        try take_step(budget)
         let node = nodes[at]
         if node.kind == 0u8 {
             try io.write_all(writer, node.text)
@@ -209,9 +243,9 @@ fn run(nodes: []const Node, from: usize, to: usize, writer: *io.Writer, bindings
             if truthy(value) {
                 var stop = node.close
                 if node.other != 0usize { stop = node.other }
-                try run(nodes, at + 1usize, stop, writer, bindings, index)
+                try run_bounded(nodes, at + 1usize, stop, writer, bindings, index, budget)
             } else {
-                if node.other != 0usize { try run(nodes, node.other + 1usize, node.close, writer, bindings, index) }
+                if node.other != 0usize { try run_bounded(nodes, node.other + 1usize, node.close, writer, bindings, index, budget) }
             }
             at = node.close
         } else {
@@ -220,9 +254,11 @@ fn run(nodes: []const Node, from: usize, to: usize, writer: *io.Writer, bindings
             if !found { ret MissingValue }
             let (times, is_count) = count_of(value)
             if !is_count { ret MissingValue }
+            if times > budget.steps { ret TooLarge }
             var i = 0u64
             while i < times {
-                try run(nodes, at + 1usize, node.close, writer, bindings, i)
+                try take_step(budget)
+                try run_bounded(nodes, at + 1usize, node.close, writer, bindings, i, budget)
                 i += 1u64
             }
             at = node.close
@@ -237,8 +273,17 @@ fn run(nodes: []const Node, from: usize, to: usize, writer: *io.Writer, bindings
 }
 
 fn execute(template: *const Template, writer: *io.Writer, bindings: []const Binding) -> err {
+    ret execute_with_limits(template, writer, bindings, DEFAULT_MAX_STEPS, DEFAULT_MAX_OUTPUT)
+}
+
+// Zero selects the finite default; larger workloads need explicit budgets.
+fn execute_with_limits(template: *const Template, writer: *io.Writer, bindings: []const Binding, max_steps: u64, max_output: u64) -> err {
     let s = mem.cast[*State](template.state)
-    ret run(s.nodes, 0usize, s.nodes.len, writer, bindings, 0u64)
+    var budget = Budget { steps: max_steps, bytes: max_output, sink: *writer }
+    if budget.steps == 0u64 { budget.steps = DEFAULT_MAX_STEPS }
+    if budget.bytes == 0u64 { budget.bytes = DEFAULT_MAX_OUTPUT }
+    var bounded = budget_writer(&budget)
+    ret run_bounded(s.nodes, 0usize, s.nodes.len, &bounded, bindings, 0u64, &budget)
 }
 
 // Every name the template reads must be a field of `T`.
@@ -268,6 +313,10 @@ fn field_count[T: type]() -> usize {
 }
 
 fn execute_typed[T: type](template: *const Template, writer: *io.Writer, value: *const T) -> err {
+    ret execute_typed_with_limits[T](template, writer, value, DEFAULT_MAX_STEPS, DEFAULT_MAX_OUTPUT)
+}
+
+fn execute_typed_with_limits[T: type](template: *const Template, writer: *io.Writer, value: *const T, max_steps: u64, max_output: u64) -> err {
     try validate[T](template)
     // Bindings on the stack: a struct with more fields than this is not a template model.
     var bindings: [32]Binding = zero
@@ -296,5 +345,5 @@ fn execute_typed[T: type](template: *const Template, writer: *io.Writer, value: 
         }
         used += 1usize
     }
-    ret execute(template, writer, bindings[..used])
+    ret execute_with_limits(template, writer, bindings[..used], max_steps, max_output)
 }
