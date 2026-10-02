@@ -3235,6 +3235,11 @@ $gpuVulkanSyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanSyncWritten -ne 'executable written') { throw 'gpu_vulkan_sync emission failed' }
 $gpuVulkanSyncOutput = & $gpuVulkanSyncPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanSyncOutput -notmatch '^gpu sync (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan synchronization runtime failed: $gpuVulkanSyncOutput" }
+$gpuStagingPath = Join-Path $testBuild 'gpu-staging-selfhost.exe'
+$gpuStagingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_staging\src\main.e') $repo 'x64' 'windows' $gpuStagingPath
+if ($LASTEXITCODE -ne 0 -or $gpuStagingWritten -ne 'executable written') { throw 'gpu_staging emission failed' }
+$gpuStagingOutput = & $gpuStagingPath
+if ($LASTEXITCODE -ne 0 -or $gpuStagingOutput -notmatch '^gpu staging (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the GPU staging runtime failed: $gpuStagingOutput" }
 # Subgroup identity and collectives are width-dependent by contract: pin the module,
 # then check the CPU's 32-lane model and every Vulkan device, including a partial group.
 $subgroupSpirv = Join-Path $testBuild 'subgroup.spv'

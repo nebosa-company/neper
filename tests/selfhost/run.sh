@@ -2882,6 +2882,14 @@ case "$gpu_vulkan_sync_output" in
     'gpu sync cpu only'|'gpu sync vulkan ok on '[1-9]' devices'|'gpu sync vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the Vulkan synchronization runtime failed: $gpu_vulkan_sync_output" >&2; exit 1 ;;
 esac
+gpu_staging_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_staging/src/main.e" "$repo" x64 linux "$test_build/gpu-staging-selfhost")
+[ "$gpu_staging_written" = 'executable written' ]
+chmod +x "$test_build/gpu-staging-selfhost"
+gpu_staging_output=$("$test_build/gpu-staging-selfhost")
+case "$gpu_staging_output" in
+    'gpu staging cpu only'|'gpu staging vulkan ok on '[1-9]' devices'|'gpu staging vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the GPU staging runtime failed: $gpu_staging_output" >&2; exit 1 ;;
+esac
 # Subgroup identity and collectives are width-dependent by contract: pin the module,
 # then check the CPU's 32-lane model and every Vulkan device, including a partial group.
 subgroup_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/subgroup.e" "$repo" spv none "$test_build/subgroup.spv")

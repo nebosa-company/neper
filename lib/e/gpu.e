@@ -104,9 +104,9 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
+type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
 
-type QueueState = struct { device: *DeviceState, index: u32, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
+type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
 // An offscreen target: two images, the front one presented, the back one acquired.
 type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquired: bool, closed: bool }
@@ -610,6 +610,12 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
         i += 1usize
     }
     let state = &states[0usize]
+    var empty_stage: vulkan.Buffer = zero
+    var stage_at = 0usize
+    while stage_at < MAX_QUEUES {
+        state.staging[stage_at] = empty_stage
+        stage_at += 1usize
+    }
     state.arena = a
     state.owner = next_owner
     state.closed = false
@@ -666,6 +672,12 @@ fn close(device: *Device) -> err {
             vulkan.destroy(state.context, state.pipelines[made])
             made += 1usize
         }
+        var stage_at = 0usize
+        while stage_at < usize(state.queues) {
+            let stage = state.staging[stage_at]
+            if stage.handle != 0usize { vulkan.free(state.context, stage) }
+            stage_at += 1usize
+        }
         vulkan.close(state.context)
     }
     ret ok
@@ -680,7 +692,7 @@ fn has(device: *Device, capability: Cap) -> bool {
 }
 
 fn queue(device: *Device) -> (*Queue, err) {
-    let (q, queue_error) = queue_with(device, StagingLimits { blocks: 1u32, block_bytes: 1usize })
+    let (q, queue_error) = queue_with(device, StagingLimits { blocks: 1u32, block_bytes: 65536usize })
     ret (q, queue_error)
 }
 
@@ -691,7 +703,8 @@ fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err) {
     if usize(state.queues) >= MAX_QUEUES { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[QueueState](state.arena, 1usize)
     if states_error != ok { ret (zero, states_error) }
-    states[0usize] = QueueState { device: state, index: state.queues, serial: 0u64, fault_count: 0u32, fault: zero, last: zero, has_last: false }
+    // ponytail: synchronous transfers reuse one block; use more only if transfers overlap.
+    states[0usize] = QueueState { device: state, index: state.queues, staging_bytes: limits.block_bytes, serial: 0u64, fault_count: 0u32, fault: zero, last: zero, has_last: false }
     state.queues += 1u32
     let (handles, handles_error) = mem.alloc[Queue](state.arena, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
@@ -779,7 +792,26 @@ fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err {
     if off > buffer.count || src.len > buffer.count - off { ret TooLarge }
     if src.len == 0usize { ret ok }
     let elem = buffer.elem
-    copy_bytes(buffer.bytes[off * elem..(off + src.len) * elem], host_bytes[T](src))
+    let input = host_bytes[T](src)
+    if state.device.backend == .Vulkan {
+        let stage = &state.device.staging[usize(state.index)]
+        if stage.handle == 0usize {
+            let (made, make_error) = vulkan.buffer(state.device.arena, state.device.context, state.staging_bytes)
+            if make_error != ok { ret OutOfMemory }
+            *stage = made
+        }
+        var copied = 0usize
+        while copied < input.len {
+            var chunk = input.len - copied
+            if chunk > state.staging_bytes { chunk = state.staging_bytes }
+            copy_bytes(stage.bytes[..chunk], input[copied..copied + chunk])
+            let at = off * elem + copied
+            copy_bytes(buffer.bytes[at..at + chunk], stage.bytes[..chunk])
+            copied += chunk
+        }
+        ret ok
+    }
+    copy_bytes(buffer.bytes[off * elem..(off + src.len) * elem], input)
     ret ok
 }
 

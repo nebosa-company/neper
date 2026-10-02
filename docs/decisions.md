@@ -32923,3 +32923,18 @@ With the survival-trial library fix at `afdc224b`, both canonical self-host
 suites pass end-to-end, including their final compiler-image comparisons.
 Linux used `VK_ICD_FILENAMES=/dev/null` after this WSL host's llvmpipe run
 stalled; Windows exercised live Vulkan devices.
+
+## D1787 — Reuse one lazy staging block per synchronous Vulkan queue
+
+**Decision.** `queue_with` keeps its staging block size and allocates one
+driver-owned, host-visible block on the first nonempty upload or write. Copies
+larger than the block pass through it in chunks. Because this runtime's
+transfers complete before returning, one block is enough per queue; the
+requested block count remains an upper bound rather than eager allocation.
+CPU queues continue copying directly into their arena-backed buffers.
+
+**Evidence.** `link/gpu_staging` round-trips an upload, an offset write, and a
+kernel launch through three-byte staging chunks on the CPU and both Windows
+Vulkan devices. `link/gpu_vulkan_sync`, `link/gpu_cpu`, and `link/gpu_gaps`
+still pass on Windows Vulkan; the staging fixture passes Linux's CPU/no-device
+path. The full self-host suites remain to be rerun with this change.
