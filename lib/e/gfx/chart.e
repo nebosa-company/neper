@@ -672,6 +672,34 @@ fn waterfall(values: []const f32, bounds: geometry.Rect, bars: []geometry.Rect, 
     ret (Layout { kind: .Waterfall, coords: zero, segments: connectors[..values.len], bars: bars[..count], x_min: 0.0, x_max: f32(count), y_min: ymin, y_max: ymax }, ok)
 }
 
+// Qualitative ranges paint widest to narrowest, then actual and target.
+// The caller chooses one brush per layer; no new painter is needed.
+fn bullet(actual: f32, target_value: f32, ranges: []const f32, bounds: geometry.Rect, bars: []geometry.Rect, target_line: []Segment, layers: []Layout) -> ([]Layout, err) {
+    if ranges.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(actual) || !finite(target_value) { ret (zero, Invalid) }
+    if bars.len <= ranges.len || target_line.len == 0usize || layers.len < 2usize || layers.len - 2usize < ranges.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < ranges.len {
+        if !finite(ranges[i]) || ranges[i] <= 0.0 || (i > 0usize && ranges[i] <= ranges[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let maximum = ranges[ranges.len - 1usize]
+    if actual < 0.0 || actual > maximum || target_value < 0.0 || target_value > maximum { ret (zero, Invalid) }
+    i = 0usize
+    while i < ranges.len {
+        let endpoint = ranges[ranges.len - 1usize - i]
+        bars[i] = geometry.rect(bounds.x, bounds.y, bounds.width * (endpoint / maximum), bounds.height)
+        layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[i..i + 1usize], x_min: 0.0, x_max: maximum, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    bars[i] = geometry.rect(bounds.x, bounds.y + bounds.height * 0.325, bounds.width * (actual / maximum), bounds.height * 0.35)
+    layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[i..i + 1usize], x_min: 0.0, x_max: maximum, y_min: 0.0, y_max: 1.0 }
+    let x = bounds.x + bounds.width * (target_value / maximum)
+    target_line[0usize] = Segment { from: Coord { x: x, y: bounds.y }, to: Coord { x: x, y: bounds.y + bounds.height } }
+    layers[i + 1usize] = Layout { kind: .Rug, coords: zero, segments: target_line[..1usize], bars: zero, x_min: 0.0, x_max: maximum, y_min: 0.0, y_max: 1.0 }
+    ret (layers[..ranges.len + 2usize], ok)
+}
+
 fn grouped_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
     if categories == 0usize || series == 0usize { ret (zero, Invalid) }
     if !bar_grid_ok(values, categories, series, bounds) { ret (zero, Invalid) }

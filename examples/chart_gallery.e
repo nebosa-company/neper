@@ -184,6 +184,46 @@ fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, c
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_bullet(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, path: str) -> err {
+    if layers.len != 5usize { ret chart.Invalid }
+    let plot = geometry.rect(44.0, 86.0, 286.0, 66.0)
+    let colors = [5]paint.Color{
+        paint.rgba(0.88, 0.91, 0.95, 1.0), paint.rgba(0.73, 0.78, 0.86, 1.0),
+        paint.rgba(0.58, 0.65, 0.76, 1.0), paint.rgba(0.07, 0.35, 0.76, 1.0),
+        paint.rgba(0.95, 0.35, 0.10, 1.0),
+    }
+    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var tick_storage: [5]chart.Tick = zero
+    let (ticks, tick_error) = chart.nice_ticks(linear, 0.0, layers[0].x_max, 5usize, tick_storage[..])
+    if tick_error != ok { ret tick_error }
+    let (made, builder_error) = scene.builder(a, 32usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, plot, ticks, ticks[..0usize], paint.Brush { Solid: colors[0] }, paint.Brush { Solid: axis_color })
+    var i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_guides(&writer, plot, ticks, ticks[..0usize], colors[0], axis_color)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
     let (made, builder_error) = scene.builder(a, marks.cells.len + 1usize)
     if builder_error != ok { ret builder_error }
@@ -373,6 +413,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (normalized, normalized_error) = chart.stacked_bars(grouped_values[..], 4usize, 2usize, bar_bounds, true, series_bars[..], series_layers[..])
     if normalized_error != ok { ret normalized_error }
     try render_bar_layers(a, queue, output_target, canvas, &renderer, normalized, category_names[..], series_names[..], "Share by category", "docs/chart-previews/stacked_100.png")
+    let bullet_ranges = [3]f32{ 40.0, 70.0, 100.0 }
+    var bullet_bars: [4]geometry.Rect = zero
+    var bullet_target: [1]chart.Segment = zero
+    var bullet_storage: [5]chart.Layout = zero
+    let (bullet_layers, bullet_error) = chart.bullet(62.0, 80.0, bullet_ranges[..], geometry.rect(44.0, 86.0, 286.0, 66.0), bullet_bars[..], bullet_target[..], bullet_storage[..])
+    if bullet_error != ok { ret bullet_error }
+    try render_bullet(a, queue, output_target, canvas, &renderer, bullet_layers, "docs/chart-previews/bullet.png")
     let waterfall_values = [6]f32{ 12.0, 5.0, -3.0, 4.0, -6.0, 2.0 }
     var waterfall_bars: [7]geometry.Rect = zero
     var waterfall_links: [6]chart.Segment = zero

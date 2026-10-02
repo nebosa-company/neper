@@ -33226,3 +33226,13 @@ render scratch after creating that writer corrupts the output. Separating
 rasterization from encoding preserves this contract without another PNG codec
 or a dedicated device owner. `gfx_chart_png` decodes a transparent round trip
 on Windows and Linux; the gallery now uses the same path for all 34 PNGs.
+
+## D1818 — Compose bullet charts from existing bar and rule layers
+
+`chart.bullet` returns widest-to-narrowest qualitative bands, a thinner actual
+bar and a target rule on one zero-to-maximum domain. The caller owns storage
+and chooses each layer's colour; Bar and Rug scene/SVG branches need no new
+paint code. Thresholds must be strictly ascending and both values within the
+last threshold. `gfx_chart_composition` checks geometry, capacity, invalid
+domains and adapter commands on Windows and Linux, and the gallery adds a
+PNG/SVG pair. Multi-row labels and palette defaults remain guide work.

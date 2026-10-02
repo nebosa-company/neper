@@ -104,6 +104,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try chart_svg.append(&bridge_writer, &bridge, blue)
     let bridge_svg = io.memory_bytes(&bridge_held)
     if !str.contains(bridge_svg, "<rect") || !str.contains(bridge_svg, "<line") { ret chart.Invalid }
+    let thresholds = [3]f32{ 40.0, 70.0, 100.0 }
+    var bullet_bars: [4]geometry.Rect = zero
+    var bullet_line: [1]chart.Segment = zero
+    var bullet_layers: [5]chart.Layout = zero
+    let (bullet, bullet_error) = chart.bullet(62.0, 80.0, thresholds[..], bounds, bullet_bars[..], bullet_line[..], bullet_layers[..])
+    if bullet_error != ok || bullet.len != 5usize || bullet[4].kind != .Rug || !near(bullet_bars[0].width, 100.0) || !near(bullet_bars[1].width, 70.0) || !near(bullet_bars[2].width, 40.0) || !near(bullet_bars[3].width, 62.0) || !near(bullet_bars[3].y, 32.5) || !near(bullet_line[0].from.x, 80.0) { ret chart.Invalid }
+    let (_, bullet_short) = chart.bullet(62.0, 80.0, thresholds[..], bounds, bullet_bars[..3usize], bullet_line[..], bullet_layers[..])
+    if bullet_short != chart.TooLarge { ret chart.Invalid }
+    let (_, bullet_target_outside) = chart.bullet(62.0, 101.0, thresholds[..], bounds, bullet_bars[..], bullet_line[..], bullet_layers[..])
+    if bullet_target_outside != chart.Invalid { ret chart.Invalid }
+    let descending = [3]f32{ 40.0, 70.0, 60.0 }
+    let (_, bullet_bad_ranges) = chart.bullet(62.0, 80.0, descending[..], bounds, bullet_bars[..], bullet_line[..], bullet_layers[..])
+    if bullet_bad_ranges != chart.Invalid { ret chart.Invalid }
+    let (bullet_builder_made, bullet_builder_error) = scene.builder(a, 8usize)
+    if bullet_builder_error != ok { ret bullet_builder_error }
+    var bullet_builder = bullet_builder_made
+    var bullet_i = 0usize
+    while bullet_i < bullet.len {
+        try chart_scene.append(a, &bullet_builder, &bullet[bullet_i], paint.Brush { Solid: blue })
+        bullet_i += 1usize
+    }
+    if scene.builder_count(&bullet_builder) != 5usize { ret chart.Invalid }
+    let (bullet_state, bullet_unused, bullet_writer_error) = io.memory_writer(a, 0usize)
+    if bullet_writer_error != ok { ret bullet_writer_error }
+    var bullet_held = bullet_state
+    var bullet_writer = io.writer(mem.cast[*void](&bullet_held), io.memory_write)
+    bullet_i = 0usize
+    while bullet_i < bullet.len {
+        try chart_svg.append(&bullet_writer, &bullet[bullet_i], blue)
+        bullet_i += 1usize
+    }
+    if !str.contains(io.memory_bytes(&bullet_held), "<line") { ret chart.Invalid }
     let (_, short_ticks) = chart.category_ticks(4usize, category_ticks[..3usize])
     if short_ticks != chart.TooLarge { ret chart.Invalid }
     let (_, no_ticks) = chart.category_ticks(0usize, category_ticks[..])
