@@ -3310,6 +3310,77 @@ fn correlogram(values: []const f32, max_lag: usize, bounds: geometry.Rect, gap: 
     ret (panels[..2usize], guide_marks, ok)
 }
 
+// Classical empirical semivariogram: one half of the mean squared value
+// difference for pairs in each (lower, upper] distance bin.
+fn variogram(x: []const f32, y: []const f32, values: []const f32, cutoff: f32, bounds: geometry.Rect, pair_counts: []u64, distances: []f64, semivariances: []f64, points: []Coord) -> (Layout, err) {
+    if values.len == 0usize { ret (zero, Empty) }
+    if values.len < 2usize || x.len != values.len || y.len != values.len || pair_counts.len == 0usize || !finite(cutoff) || cutoff <= 0.0 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if distances.len < pair_counts.len || semivariances.len < pair_counts.len || points.len < pair_counts.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < values.len {
+        if !finite(x[i]) || !finite(y[i]) || !finite(values[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < pair_counts.len {
+        pair_counts[i] = 0u64
+        distances[i] = 0.0f64
+        semivariances[i] = 0.0f64
+        i += 1usize
+    }
+    // ponytail: O(n²) pair scan; add a spatial index if large point sets demand it.
+    i = 0usize
+    while i < values.len {
+        var j = i + 1usize
+        while j < values.len {
+            let dx = f64(x[i]) - f64(x[j])
+            let dy = f64(y[i]) - f64(y[j])
+            let distance = math.sqrt[f64](dx * dx + dy * dy)
+            if distance <= f64(cutoff) {
+                var bin = usize(math.ceil[f64](distance * f64(pair_counts.len) / f64(cutoff)))
+                if bin > 0usize { bin -= 1usize }
+                if bin >= pair_counts.len { bin = pair_counts.len - 1usize }
+                let difference = f64(values[i]) - f64(values[j])
+                pair_counts[bin] += 1u64
+                distances[bin] += distance
+                semivariances[bin] += 0.5f64 * difference * difference
+                if !finite64(distances[bin]) || !finite64(semivariances[bin]) { ret (zero, Invalid) }
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var maximum = 0.0f64
+    var used = 0usize
+    i = 0usize
+    while i < pair_counts.len {
+        if pair_counts[i] > 0u64 {
+            distances[i] /= f64(pair_counts[i])
+            semivariances[i] /= f64(pair_counts[i])
+            if semivariances[i] > maximum { maximum = semivariances[i] }
+            used += 1usize
+        }
+        i += 1usize
+    }
+    if used == 0usize { ret (zero, Empty) }
+    if maximum == 0.0f64 { maximum = 1.0f64 }
+    let high = f32(maximum)
+    if !finite(high) { ret (zero, Invalid) }
+    used = 0usize
+    i = 0usize
+    while i < pair_counts.len {
+        if pair_counts[i] > 0u64 {
+            let px = f32(f64(bounds.x) + f64(bounds.width) * distances[i] / f64(cutoff))
+            let py = f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - semivariances[i] / maximum))
+            if !finite(px) || !finite(py) { ret (zero, Invalid) }
+            points[used] = Coord { x: px, y: py }
+            used += 1usize
+        }
+        i += 1usize
+    }
+    ret (Layout { kind: .Scatter, coords: points[..used], segments: zero, bars: zero, x_min: 0.0, x_max: cutoff, y_min: 0.0, y_max: high }, ok)
+}
+
 // Two nonnegative age series diverge from a shared central label gutter.
 // Input rows run from youngest (bottom) to oldest (top).
 fn population_pyramid(left: []const f32, right: []const f32, bounds: geometry.Rect, gutter: f32, row_gap: f32, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {

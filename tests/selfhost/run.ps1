@@ -3137,6 +3137,11 @@ $gfxChartCorrelogramWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChartCorrelogramWritten -ne 'executable written') { throw 'gfx_chart_correlogram emission failed' }
 $gfxChartCorrelogramOutput = & $gfxChartCorrelogramPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCorrelogramOutput -ne 'gfx chart correlogram ok') { throw "the e.gfx.chart correlogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartVariogramPath = Join-Path $testBuild 'gfx-chart-variogram-selfhost.exe'
+$gfxChartVariogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_variogram\src\main.e') $repo 'x64' 'windows' $gfxChartVariogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartVariogramWritten -ne 'executable written') { throw 'gfx_chart_variogram emission failed' }
+$gfxChartVariogramOutput = & $gfxChartVariogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartVariogramOutput -ne 'gfx chart variogram ok') { throw "the e.gfx.chart empirical variogram answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

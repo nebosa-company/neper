@@ -33896,3 +33896,15 @@ geometry, refusals and both adapters on Windows and Linux. The gallery adds a
 paired-panel PNG/SVG preview. Missing-value policy, alternative confidence
 intervals and FFT acceleration for long lag windows remain planned. Reference:
 R `stats::acf` / `stats::pacf` documentation.
+
+## D1879 — Empirical variogram keeps pair statistics beside scatter geometry
+
+`variogram` accepts 2D Euclidean sites and values, a caller-selected cutoff and
+the number of equal-width bins implied by caller-owned arrays. It returns pair
+counts, mean pair distances and classical half-mean-squared semivariances for
+nonempty bins; the same values map to existing Scatter scene/SVG marks.
+`gfx_chart_variogram` checks exact distance/bin references, vertical pairs,
+empty/capacity refusals and both adapters on Windows and Linux. The gallery
+adds a PNG/SVG preview. Geographic distances, directional and robust
+estimators, trend removal and model fitting remain planned. Reference:
+`gstat::variogram` documentation.

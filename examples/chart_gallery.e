@@ -2234,6 +2234,27 @@ fn render_correlogram_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_variogram_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    var x: [25]f32 = zero
+    var y: [25]f32 = zero
+    var values: [25]f32 = zero
+    var i = 0usize
+    while i < values.len {
+        x[i] = f32(i % 5usize) * 0.25
+        y[i] = f32(i / 5usize) * 0.25
+        values[i] = 1.0 + 2.0 * x[i] + 0.8 * y[i] + f32((i * 7usize) % 5usize) * 0.11
+        i += 1usize
+    }
+    var pair_counts: [6]u64 = zero
+    var distances: [6]f64 = zero
+    var semivariances: [6]f64 = zero
+    var points: [6]chart.Coord = zero
+    let (marks, chart_error) = chart.variogram(x[..], y[..], values[..], 1.0, geometry.rect(56.0, 43.0, 252.0, 150.0), pair_counts[..], distances[..], semivariances[..], points[..])
+    if chart_error != ok { ret chart_error }
+    let empty = chart.Layout { kind: .Rug, coords: zero, segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &marks, &empty, "Empirical semivariogram", "Pair distance", "Semivariance", "docs/chart-previews/variogram.png")
+}
+
 fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
     if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
     let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
@@ -3263,6 +3284,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_fan_preview(a, queue, output_target, canvas, &renderer)
     try render_decomposition_preview(a, queue, output_target, canvas, &renderer)
     try render_correlogram_preview(a, queue, output_target, canvas, &renderer)
+    try render_variogram_preview(a, queue, output_target, canvas, &renderer)
     let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
     let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
     let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }

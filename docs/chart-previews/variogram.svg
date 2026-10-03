@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>variogram</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)" fill-opacity="1"/>
+<rect x="116" y="176.49354553222656" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="159.95249938964844" y="155.3846435546875" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="193.87228393554688" y="133.76890563964844" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="243.8941192626953" y="93.92220306396484" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="287.4586181640625" y="40" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">1</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Empirical semivariogram</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Pair distance</text>
+<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Semivariance</text>
+</svg>
