@@ -70,6 +70,12 @@ type SequenceKind = enum u8 { Call, Return, Async }
 type SequenceMessage = struct { from: usize, to: usize, kind: SequenceKind, text: str }
 type SequenceActivation = struct { participant: usize, first: usize, last: usize }
 type SequenceLayout = struct { headers: Layout, lifelines: Layout, activations: Layout, messages: []Layout, labels: []Label }
+type EntityTable = struct { name: str, center: Coord }
+type EntityKey = enum u8 { None, Primary, Foreign }
+type EntityField = struct { table: usize, name: str, key: EntityKey }
+type EntityCardinality = enum u8 { One, ZeroOne, Many, ZeroMany }
+type EntityRelation = struct { from: usize, to: usize, from_card: EntityCardinality, to_card: EntityCardinality, name: str }
+type EntityLayout = struct { tables: Layout, headers: Layout, connectors: Layout, table_labels: []Label, field_labels: []Label, key_labels: []Label, relation_labels: []Label }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -3279,6 +3285,125 @@ fn sequence_diagram(participants: []const str, messages: []const SequenceMessage
     let lifelines = Layout { kind: .Rug, coords: zero, segments: lifeline_segments[..participants.len * 10usize], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
     let active = Layout { kind: .Bar, coords: zero, segments: zero, bars: activation_boxes[..activations.len], x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
     ret (SequenceLayout { headers: headers, lifelines: lifelines, activations: active, messages: message_layers[..messages.len], labels: message_labels[..messages.len] }, ok)
+}
+
+fn entity_cardinality(card: EntityCardinality, endpoint: Coord, inward: f32, strokes: []Segment) -> usize {
+    var used = 0usize
+    if card == .One || card == .ZeroOne {
+        let x = endpoint.x + inward * 8.0
+        strokes[used] = Segment { from: Coord { x: x, y: endpoint.y - 6.0 }, to: Coord { x: x, y: endpoint.y + 6.0 } }
+        used += 1usize
+    } else {
+        strokes[used] = Segment { from: endpoint, to: Coord { x: endpoint.x + inward * 8.0, y: endpoint.y - 6.0 } }
+        strokes[used + 1usize] = Segment { from: endpoint, to: Coord { x: endpoint.x + inward * 8.0, y: endpoint.y + 6.0 } }
+        used += 2usize
+    }
+    if card == .ZeroOne || card == .ZeroMany {
+        let center = endpoint.x + inward * 16.0
+        var part = 0usize
+        while part < 8usize {
+            let a = 6.283185307179586f64 * f64(part) / 8.0f64
+            let b = 6.283185307179586f64 * f64((part + 1usize) % 8usize) / 8.0f64
+            strokes[used] = Segment {
+                from: Coord { x: center + 3.0 * f32(math.cos[f64](a)), y: endpoint.y + 3.0 * f32(math.sin[f64](a)) },
+                to: Coord { x: center + 3.0 * f32(math.cos[f64](b)), y: endpoint.y + 3.0 * f32(math.sin[f64](b)) },
+            }
+            used += 1usize
+            part += 1usize
+        }
+    }
+    ret used
+}
+
+// Explicit table centers and horizontal relationships keep schema ownership
+// separate from geometry. Crow's-foot glyphs sit outside table borders.
+fn entity_relationship(tables: []const EntityTable, fields: []const EntityField, relations: []const EntityRelation, bounds: geometry.Rect, table_width: f32, table_boxes: []geometry.Rect, header_boxes: []geometry.Rect, field_counts: []usize, field_used: []usize, table_labels: []Label, field_labels: []Label, key_labels: []Label, relation_labels: []Label, relation_segments: []Segment) -> (EntityLayout, err) {
+    if tables.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(table_width) || table_width < 68.0 { ret (zero, Invalid) }
+    if table_boxes.len < tables.len || header_boxes.len < tables.len || field_counts.len < tables.len || field_used.len < tables.len || table_labels.len < tables.len || field_labels.len < fields.len || key_labels.len < fields.len || relation_labels.len < relations.len || relation_segments.len / 24usize < relations.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < tables.len {
+        field_counts[i] = 0usize
+        field_used[i] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < fields.len {
+        if fields[i].table >= tables.len { ret (zero, Invalid) }
+        field_counts[fields[i].table] += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < tables.len {
+        let table = tables[i]
+        if !finite(table.center.x) || !finite(table.center.y) { ret (zero, Invalid) }
+        let height = 24.0 + f32(field_counts[i]) * 18.0
+        let x = table.center.x - table_width * 0.5
+        let y = table.center.y - height * 0.5
+        if !finite(height) || !finite(x) || !finite(y) || x < bounds.x || y < bounds.y || x + table_width > bounds.x + bounds.width || y + height > bounds.y + bounds.height { ret (zero, Invalid) }
+        table_boxes[i] = geometry.rect(x, y, table_width, height)
+        header_boxes[i] = geometry.rect(x, y, table_width, 24.0)
+        var earlier = 0usize
+        while earlier < i {
+            let other = table_boxes[earlier]
+            if x < other.x + other.width && x + table_width > other.x && y < other.y + other.height && y + height > other.y { ret (zero, Invalid) }
+            earlier += 1usize
+        }
+        table_labels[i] = Label { text: table.name, anchor: Coord { x: table.center.x, y: y + 15.0 }, align: .Center }
+        i += 1usize
+    }
+    var keys_used = 0usize
+    i = 0usize
+    while i < fields.len {
+        let field = fields[i]
+        let box = table_boxes[field.table]
+        let y = box.y + 24.0 + (f32(field_used[field.table]) + 0.5) * 18.0 + 3.0
+        let x = box.x + 6.0
+        if field.key == .None {
+            field_labels[i] = Label { text: field.name, anchor: Coord { x: x, y: y }, align: .Left }
+        } else {
+            var tag = "FK"
+            if field.key == .Primary { tag = "PK" }
+            key_labels[keys_used] = Label { text: tag, anchor: Coord { x: x, y: y }, align: .Left }
+            keys_used += 1usize
+            field_labels[i] = Label { text: field.name, anchor: Coord { x: x + 21.0, y: y }, align: .Left }
+        }
+        field_used[field.table] += 1usize
+        i += 1usize
+    }
+    var segments_used = 0usize
+    i = 0usize
+    while i < relations.len {
+        let relation = relations[i]
+        if relation.from >= tables.len || relation.to >= tables.len || relation.from == relation.to { ret (zero, Invalid) }
+        let from = table_boxes[relation.from]
+        let to = table_boxes[relation.to]
+        var direction = 1.0f32
+        if to.x < from.x { direction = -1.0 }
+        var x0 = from.x + from.width
+        var x1 = to.x
+        if direction < 0.0 {
+            x0 = from.x
+            x1 = to.x + to.width
+        }
+        let gap = (x1 - x0) * direction
+        if !finite(gap) || gap < 40.0 { ret (zero, TooLarge) }
+        let y0 = from.y + from.height * 0.5
+        let y1 = to.y + to.height * 0.5
+        let mid = x0 + (x1 - x0) * 0.5
+        relation_segments[segments_used] = Segment { from: Coord { x: x0, y: y0 }, to: Coord { x: mid, y: y0 } }
+        relation_segments[segments_used + 1usize] = Segment { from: Coord { x: mid, y: y0 }, to: Coord { x: mid, y: y1 } }
+        relation_segments[segments_used + 2usize] = Segment { from: Coord { x: mid, y: y1 }, to: Coord { x: x1, y: y1 } }
+        segments_used += 3usize
+        segments_used += entity_cardinality(relation.from_card, Coord { x: x0, y: y0 }, direction, relation_segments[segments_used..])
+        segments_used += entity_cardinality(relation.to_card, Coord { x: x1, y: y1 }, -direction, relation_segments[segments_used..])
+        relation_labels[i] = Label { text: relation.name, anchor: Coord { x: mid, y: y0 - 12.0 }, align: .Center }
+        i += 1usize
+    }
+    let table_layer = Layout { kind: .Bar, coords: zero, segments: zero, bars: table_boxes[..tables.len], x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    let header_layer = Layout { kind: .Bar, coords: zero, segments: zero, bars: header_boxes[..tables.len], x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    let connector_layer = Layout { kind: .Rug, coords: zero, segments: relation_segments[..segments_used], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    ret (EntityLayout { tables: table_layer, headers: header_layer, connectors: connector_layer, table_labels: table_labels[..tables.len], field_labels: field_labels[..fields.len], key_labels: key_labels[..keys_used], relation_labels: relation_labels[..relations.len] }, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

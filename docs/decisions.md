@@ -34223,3 +34223,15 @@ text anchors. Windows and Linux fixtures check rows, direction, self-calls,
 returns, invalid endpoints/spans, capacity and scene/SVG output. The gallery
 adds a PNG/SVG pair. Call-stack inference, fragments and destruction markers
 remain follow-on work.
+
+## D1913 — ER diagrams keep schema ownership and cardinality visible
+
+`entity_relationship` groups caller-supplied fields by table while retaining
+their order, lays out PK/FK tags beside names and returns table/header Bar
+layers plus Rug relationship segments. Endpoint glyphs distinguish one,
+optional one, many and optional many; both relationship directions are
+supported between horizontally separated tables. The Windows fixture checks
+interleaved fields, optional and reverse links, malformed geometry, capacity
+and scene/SVG output. The Linux runner is registered; its focused check awaits
+WSL service recovery. Automatic placement and vertical/collision-free routing
+remain follow-on work.

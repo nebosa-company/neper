@@ -2909,6 +2909,11 @@ gfx_chart_sequence_diagram_written=$($test_build/neper-self emit-executable "$re
 chmod +x "$test_build/gfx-chart-sequence-diagram-selfhost"
 gfx_chart_sequence_diagram_output=$("$test_build/gfx-chart-sequence-diagram-selfhost")
 [ "$gfx_chart_sequence_diagram_output" = 'gfx chart sequence diagram ok' ]
+gfx_chart_entity_relationship_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_entity_relationship/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-entity-relationship-selfhost")
+[ "$gfx_chart_entity_relationship_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-entity-relationship-selfhost"
+gfx_chart_entity_relationship_output=$("$test_build/gfx-chart-entity-relationship-selfhost")
+[ "$gfx_chart_entity_relationship_output" = 'gfx chart entity relationship ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

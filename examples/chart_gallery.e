@@ -1652,6 +1652,91 @@ fn render_sequence_diagram_preview(a: *mem.Arena, q: *gpu.Queue, output_target: 
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_entity_relationship_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/entity_relationship.png"
+    let plot = geometry.rect(12.0, 52.0, 336.0, 166.0)
+    let tables = [3]chart.EntityTable{
+        chart.EntityTable { name: "Customer", center: chart.Coord { x: 60.0, y: 136.0 } },
+        chart.EntityTable { name: "Order", center: chart.Coord { x: 180.0, y: 136.0 } },
+        chart.EntityTable { name: "LineItem", center: chart.Coord { x: 300.0, y: 136.0 } },
+    }
+    let fields = [9]chart.EntityField{
+        chart.EntityField { table: 0usize, name: "id", key: .Primary },
+        chart.EntityField { table: 0usize, name: "name", key: .None },
+        chart.EntityField { table: 0usize, name: "email", key: .None },
+        chart.EntityField { table: 1usize, name: "id", key: .Primary },
+        chart.EntityField { table: 1usize, name: "cust_id", key: .Foreign },
+        chart.EntityField { table: 1usize, name: "total", key: .None },
+        chart.EntityField { table: 2usize, name: "id", key: .Primary },
+        chart.EntityField { table: 2usize, name: "order_id", key: .Foreign },
+        chart.EntityField { table: 2usize, name: "qty", key: .None },
+    }
+    let relations = [2]chart.EntityRelation{
+        chart.EntityRelation { from: 0usize, to: 1usize, from_card: .One, to_card: .ZeroMany, name: "places" },
+        chart.EntityRelation { from: 1usize, to: 2usize, from_card: .One, to_card: .Many, name: "contains" },
+    }
+    var boxes: [3]geometry.Rect = zero
+    var headers: [3]geometry.Rect = zero
+    var field_counts: [3]usize = zero
+    var field_used: [3]usize = zero
+    var table_labels: [3]chart.Label = zero
+    var field_labels: [9]chart.Label = zero
+    var key_labels: [9]chart.Label = zero
+    var relation_labels: [2]chart.Label = zero
+    var segments: [48]chart.Segment = zero
+    let (diagram, layout_error) = chart.entity_relationship(tables[..], fields[..], relations[..], plot, 72.0, boxes[..], headers[..], field_counts[..], field_used[..], table_labels[..], field_labels[..], key_labels[..], relation_labels[..], segments[..])
+    if layout_error != ok || diagram.tables.bars.len != 3usize || diagram.key_labels.len != 5usize { ret chart.Invalid }
+    let blue = paint.rgba(0.16, 0.43, 0.76, 1.0)
+    let teal = paint.rgba(0.13, 0.53, 0.46, 1.0)
+    let navy = paint.rgba(0.16, 0.30, 0.54, 1.0)
+    let pale = paint.rgba(0.91, 0.95, 0.98, 1.0)
+    let gray = paint.rgba(0.48, 0.57, 0.68, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var titles: [2]chart.Label = zero
+    titles[0usize] = chart.Label { text: "Entity relationship / schema", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    titles[1usize] = chart.Label { text: "Keys and one-to-many cardinalities", anchor: chart.Coord { x: 180.0, y: 238.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &diagram.connectors, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &diagram.tables, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &diagram.headers, paint.Brush { Solid: blue })
+    try fill(&builder, headers[0usize], paint.Brush { Solid: navy })
+    try fill(&builder, headers[2usize], paint.Brush { Solid: teal })
+    try chart_scene.append_labels(a, &builder, titles[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, titles[1usize..], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, diagram.table_labels, font, 8.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, diagram.field_labels, font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, diagram.key_labels, font, 7.0, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, diagram.relation_labels, font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &diagram.connectors, gray)
+    try chart_svg.append(&writer, &diagram.tables, pale)
+    try chart_svg.append(&writer, &diagram.headers, blue)
+    try chart_svg.rect(&writer, headers[0usize], navy, false)
+    try chart_svg.rect(&writer, headers[2usize], teal, false)
+    try chart_svg.append_labels(&writer, titles[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, titles[1usize..], dark, 9.0)
+    try chart_svg.append_labels(&writer, diagram.table_labels, white, 8.0)
+    try chart_svg.append_labels(&writer, diagram.field_labels, dark, 7.0)
+    try chart_svg.append_labels(&writer, diagram.key_labels, blue, 7.0)
+    try chart_svg.append_labels(&writer, diagram.relation_labels, dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -5601,6 +5686,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_flowchart_preview(a, queue, output_target, canvas, &renderer)
     try render_state_machine_preview(a, queue, output_target, canvas, &renderer)
     try render_sequence_diagram_preview(a, queue, output_target, canvas, &renderer)
+    try render_entity_relationship_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)
