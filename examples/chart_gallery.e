@@ -3169,6 +3169,23 @@ fn render_recurrence_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_burn_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
+    let x = [7]f32{ 0.0, 0.17, 0.33, 0.5, 0.67, 0.83, 1.0 }
+    let remaining = [7]f32{ 30.0, 27.0, 25.0, 22.0, 17.0, 11.0, 5.0 }
+    let completed = [7]f32{ 0.0, 4.0, 8.0, 11.0, 16.0, 21.0, 26.0 }
+    let scope = [7]f32{ 30.0, 30.0, 30.0, 36.0, 36.0, 36.0, 36.0 }
+    var ideal: [7]f32 = zero
+    var actual_segments: [6]chart.Segment = zero
+    var reference_segments: [6]chart.Segment = zero
+    let (down, ideal_line, down_error) = chart.burndown(x[..], remaining[..], plot, ideal[..], actual_segments[..], reference_segments[..])
+    if down_error != ok { ret down_error }
+    try render_diagnostic_preview(a, q, output_target, canvas, renderer, &down, &ideal_line, "Burndown: actual vs ideal", "Sprint fraction", "Work left", "docs/chart-previews/burndown.png")
+    let (up, scope_line, up_error) = chart.burnup(x[..], completed[..], scope[..], plot, actual_segments[..], reference_segments[..])
+    if up_error != ok { ret up_error }
+    ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &up, &scope_line, "Burnup: done vs scope", "Sprint fraction", "Work done", "docs/chart-previews/burnup.png")
+}
+
 fn render_drawdown_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let x = [10]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0 }
     let prices = [10]f32{ 100.0, 120.0, 98.0, 110.0, 90.0, 140.0, 125.0, 150.0, 130.0, 160.0 }
@@ -4144,6 +4161,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_streamlines_preview(a, queue, output_target, canvas, &renderer)
     try render_phase_space_preview(a, queue, output_target, canvas, &renderer)
     try render_recurrence_preview(a, queue, output_target, canvas, &renderer)
+    try render_burn_previews(a, queue, output_target, canvas, &renderer)
     try render_drawdown_preview(a, queue, output_target, canvas, &renderer)
     try render_cohort_preview(a, queue, output_target, canvas, &renderer)
     try render_contour_preview(a, queue, output_target, canvas, &renderer)

@@ -3212,6 +3212,11 @@ $gfxChartMilestoneRoadmapWritten = & $compiler emit-executable (Join-Path $PSScr
 if ($LASTEXITCODE -ne 0 -or $gfxChartMilestoneRoadmapWritten -ne 'executable written') { throw 'gfx_chart_milestone_roadmap emission failed' }
 $gfxChartMilestoneRoadmapOutput = & $gfxChartMilestoneRoadmapPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartMilestoneRoadmapOutput -ne 'gfx chart milestone roadmap ok') { throw "the e.gfx.chart milestone diamonds answered wrongly: exit $LASTEXITCODE" }
+$gfxChartBurnPath = Join-Path $testBuild 'gfx-chart-burn-selfhost.exe'
+$gfxChartBurnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_burn\src\main.e') $repo 'x64' 'windows' $gfxChartBurnPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBurnWritten -ne 'executable written') { throw 'gfx_chart_burn emission failed' }
+$gfxChartBurnOutput = & $gfxChartBurnPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBurnOutput -ne 'gfx chart burn ok') { throw "the e.gfx.chart burndown and burnup answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

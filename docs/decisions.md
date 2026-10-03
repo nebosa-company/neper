@@ -34030,3 +34030,14 @@ is needed. Marker size is bounded by lane height, while exact time ordering,
 row/domain validation and capacity refusals follow the event contract. The
 focused fixture passes on Windows and Linux, and the gallery adds a PNG/SVG
 pair. Dependency links and calendar scheduling remain separate work.
+
+## D1894 — Burndown and burnup share explicit Line domains
+
+`burndown` derives an ideal linear descent from initial remaining work across
+the observed time span. `burnup` plots completion against a caller-provided
+scope series, which may change but must not fall below completed work. Both
+reuse the Cartesian Line layout with identical explicit x/y limits so overlay
+positions agree. The focused fixture checks irregular time steps, references,
+flat series, invalid/capacity paths and scene/SVG output on Windows and Linux.
+The gallery adds two PNG/SVG pairs. Missing observations, sprint calendars
+and forecasts remain separate planned work.

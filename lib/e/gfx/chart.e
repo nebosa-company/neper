@@ -1778,6 +1778,61 @@ fn returns_volatility(x: []const f32, prices: []const f32, window: usize, bounds
     ret (return_marks, volatility_marks, layout_error)
 }
 
+// Two nonnegative traces share the same ordered time and value domains.
+fn progress_lines(x: []const f32, actual: []const f32, reference: []const f32, bounds: geometry.Rect, actual_segments: []Segment, reference_segments: []Segment) -> (Layout, Layout, err) {
+    if x.len < 2usize { ret (zero, zero, Empty) }
+    if actual.len != x.len || reference.len != x.len || !valid_bounds(bounds) { ret (zero, zero, Invalid) }
+    if actual_segments.len < x.len - 1usize || reference_segments.len < x.len - 1usize { ret (zero, zero, TooLarge) }
+    var maximum = 0.0f32
+    var i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || (i > 0usize && x[i] <= x[i - 1usize]) || !finite(actual[i]) || actual[i] < 0.0 || !finite(reference[i]) || reference[i] < 0.0 { ret (zero, zero, Invalid) }
+        if actual[i] > maximum { maximum = actual[i] }
+        if reference[i] > maximum { maximum = reference[i] }
+        i += 1usize
+    }
+    if maximum == 0.0 { maximum = 1.0 }
+    let x_limits = [2]f32{ x[0usize], x[x.len - 1usize] }
+    let y_limits = [2]f32{ 0.0, maximum }
+    var unused_coords: [1]Coord = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let actual_spec = spec(.Line, bounds, x, actual)
+    let (actual_marks, actual_error) = layout_with_limits(&actual_spec, unused_coords[..0usize], actual_segments, unused_bars[..0usize], x_limits[..], y_limits[..])
+    if actual_error != ok { ret (zero, zero, actual_error) }
+    let reference_spec = spec(.Line, bounds, x, reference)
+    let (reference_marks, reference_error) = layout_with_limits(&reference_spec, unused_coords[..0usize], reference_segments, unused_bars[..0usize], x_limits[..], y_limits[..])
+    ret (actual_marks, reference_marks, reference_error)
+}
+
+// Ideal remaining work falls linearly from the first observation to zero at
+// the last observed time; actual increases are allowed when scope changes.
+fn burndown(x: []const f32, remaining: []const f32, bounds: geometry.Rect, ideal: []f32, remaining_segments: []Segment, ideal_segments: []Segment) -> (Layout, Layout, err) {
+    if x.len < 2usize { ret (zero, zero, Empty) }
+    if remaining.len != x.len || !finite(x[0usize]) || !finite(x[x.len - 1usize]) || x[x.len - 1usize] <= x[0usize] || !finite(remaining[0usize]) || remaining[0usize] < 0.0 { ret (zero, zero, Invalid) }
+    if ideal.len < x.len { ret (zero, zero, TooLarge) }
+    let span = f64(x[x.len - 1usize]) - f64(x[0usize])
+    var i = 0usize
+    while i < x.len {
+        ideal[i] = f32(f64(remaining[0usize]) * (1.0f64 - (f64(x[i]) - f64(x[0usize])) / span))
+        if !finite(ideal[i]) { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    let (actual_marks, ideal_marks, pair_error) = progress_lines(x, remaining, ideal[..x.len], bounds, remaining_segments, ideal_segments)
+    ret (actual_marks, ideal_marks, pair_error)
+}
+
+// Scope may change, but completed work cannot exceed it at any observation.
+fn burnup(x: []const f32, completed: []const f32, scope: []const f32, bounds: geometry.Rect, completed_segments: []Segment, scope_segments: []Segment) -> (Layout, Layout, err) {
+    if completed.len != scope.len { ret (zero, zero, Invalid) }
+    var i = 0usize
+    while i < completed.len {
+        if completed[i] > scope[i] { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    let (completed_marks, scope_marks, pair_error) = progress_lines(x, completed, scope, bounds, completed_segments, scope_segments)
+    ret (completed_marks, scope_marks, pair_error)
+}
+
 // Equal-angle rose sectors. Square-root radii make sector area proportional
 // to each nonnegative pre-binned weight, as in a circular histogram.
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {
