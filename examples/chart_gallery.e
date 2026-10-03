@@ -929,6 +929,60 @@ fn render_survival_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &hazard_marks, &rule, "Cumulative hazard", "Years", "Hazard", "docs/chart-previews/cumulative_hazard.png")
 }
 
+fn render_control_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, values: []const f64, limits: stat.ControlLimits, title: str, y_label: str, path: str) -> err {
+    if values.len < 2usize || values.len > 16usize { ret chart.Invalid }
+    let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
+    var x: [16]f32 = zero
+    var y: [16]f32 = zero
+    var low = f32(limits.lower)
+    var high = f32(limits.upper)
+    var i = 0usize
+    while i < values.len {
+        x[i] = f32(i) / f32(values.len - 1usize)
+        y[i] = f32(values[i])
+        if y[i] < low { low = y[i] }
+        if y[i] > high { high = y[i] }
+        i += 1usize
+    }
+    var padding = (high - low) * 0.08
+    if padding == 0.0 { padding = 1.0 }
+    low -= padding
+    high += padding
+    let x_limits = [2]f32{ 0.0, 1.0 }
+    let y_limits = [2]f32{ low, high }
+    var spec = chart.spec(.PointLine, plot, x[..values.len], y[..values.len])
+    var points: [16]chart.Coord = zero
+    var segments: [15]chart.Segment = zero
+    let (marks, marks_error) = chart.layout_with_limits(&spec, points[..], segments[..], zero, x_limits[..], y_limits[..])
+    if marks_error != ok { ret marks_error }
+    let levels = [3]f32{ f32(limits.lower), f32(limits.center), f32(limits.upper) }
+    var rules: [3]chart.Segment = zero
+    i = 0usize
+    while i < 3usize {
+        let pixel_y = plot.y + plot.height * (high - levels[i]) / (high - low)
+        rules[i] = chart.Segment { from: chart.Coord { x: plot.x, y: pixel_y }, to: chart.Coord { x: plot.x + plot.width, y: pixel_y } }
+        i += 1usize
+    }
+    let reference = chart.Layout { kind: .Rug, coords: zero, segments: rules[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: low, y_max: high }
+    ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &marks, &reference, title, "Run fraction", y_label, path)
+}
+
+fn render_control_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let observations = [10]f64{ 49.6, 47.6, 49.9, 51.3, 47.8, 51.2, 52.6, 52.4, 53.6, 52.1 }
+    var moving: [9]f64 = zero
+    let (individuals, mr, imr_error) = stat.imr_limits(observations[..], moving[..])
+    if imr_error != ok { ret imr_error }
+    try render_control_preview(a, q, output_target, canvas, renderer, observations[..], individuals, "Individuals chart", "Value", "docs/chart-previews/individuals_control.png")
+    try render_control_preview(a, q, output_target, canvas, renderer, moving[..], mr, "Moving range", "Range", "docs/chart-previews/moving_range_control.png")
+    let subgroup_values = [25]f64{ 10.0, 11.0, 9.0, 10.0, 10.0, 11.0, 13.0, 10.0, 11.0, 10.0, 9.0, 10.0, 8.0, 9.0, 9.0, 10.0, 12.0, 9.0, 11.0, 10.0, 12.0, 11.0, 10.0, 11.0, 11.0 }
+    var means: [5]f64 = zero
+    var ranges: [5]f64 = zero
+    let (xbar, range, subgroup_error) = stat.xbar_r_limits(subgroup_values[..], 5usize, means[..], ranges[..])
+    if subgroup_error != ok { ret subgroup_error }
+    try render_control_preview(a, q, output_target, canvas, renderer, means[..], xbar, "X-bar chart", "Mean", "docs/chart-previews/xbar_control.png")
+    ret render_control_preview(a, q, output_target, canvas, renderer, ranges[..], range, "Range chart", "Range", "docs/chart-previews/range_control.png")
+}
+
 fn render_roc_extension_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, partial: bool, path: str) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     var x: [17]f32 = zero
@@ -2493,6 +2547,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_forest_preview(a, queue, output_target, canvas, &renderer)
     try render_agreement_preview(a, queue, output_target, canvas, &renderer)
     try render_survival_previews(a, queue, output_target, canvas, &renderer)
+    try render_control_previews(a, queue, output_target, canvas, &renderer)
     let diagnostic_scores = [16]f64{ 0.98f64, 0.93f64, 0.89f64, 0.84f64, 0.78f64, 0.72f64, 0.68f64, 0.62f64, 0.56f64, 0.50f64, 0.44f64, 0.38f64, 0.32f64, 0.26f64, 0.18f64, 0.08f64 }
     let diagnostic_positive = [16]bool{ true, true, false, true, true, false, true, false, true, false, true, false, false, true, false, false }
     var diagnostic_order: [16]usize = zero

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>individuals_control</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)" fill-opacity="1"/>
+<line x1="56" y1="182.65518188476562" x2="308" y2="182.65518188476562" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="117.9999771118164" x2="308" y2="117.9999771118164" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="53.34481430053711" x2="308" y2="53.34481430053711" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<path d="M56 133.6650848388672 L84 159.55776977539062 L112 129.7811279296875 L140 111.65629577636719 L168 156.96849060058594 L196 112.95091247558594 L224 94.82606506347656 L252 97.415283203125 L280 81.87971496582031 L308 101.29924011230469" fill="none" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="53" y="130.6650848388672" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="81" y="156.55776977539062" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="109" y="126.7811279296875" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="137" y="108.65629577636719" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="165" y="153.96849060058594" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="193" y="109.95091247558594" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="221" y="91.82606506347656" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="249" y="94.415283203125" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="277" y="78.87971496582031" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="305" y="98.29924011230469" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">1</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Individuals chart</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Run fraction</text>
+<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Value</text>
+</svg>

@@ -8,7 +8,8 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-eighty-seven PNG plus eighty-seven SVG previews from Neper. Kaplan–Meier
+ninety-one PNG plus ninety-one SVG previews from Neper. Individuals, moving-range,
+X-bar and subgroup-range control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
 L061 remains partial
@@ -129,6 +130,13 @@ render the two curves and censor marks. `gfx_chart_survival` checks reference
 fractions, ties, all-censored data, malformed input and scene/SVG adapters on
 Windows and Linux. Greenwood intervals, log-rank comparisons and competing
 risks remain planned.
+`e.algo.stat.imr_limits` derives consecutive moving ranges and the standard
+three-sigma Individuals/MR limits. `xbar_r_limits` derives subgroup means,
+ranges and A2/D3/D4 limits for equal subgroups of size 2–10. Both reuse
+PointLine and Rug marks for observations and upper/center/lower rules.
+`gfx_chart_control` checks NIST numeric references, invalid/capacity paths and
+scene/SVG output on Windows and Linux. Phase separation, run rules, Xbar-S,
+attribute, CUSUM and EWMA charts remain planned.
 Binary classification diagnostics share `e.algo.stat.binary_curve`: a caller-owned
 descending score order, with tied scores advanced as one threshold. The same
 cumulative true/false-positive counts yield ROC, precision–recall, cumulative
@@ -484,7 +492,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with eighty-seven vector previews, automatic numeric tick text and
+   adapter with ninety-one vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow
@@ -492,7 +500,8 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 5. **Specialized calculators (partial):** tied-score binary threshold sweeps,
    ROC AUC, average precision, calibration bins and confusion counts, plus
    Bland–Altman limits and censor-aware survival/hazard steps are delivered in
-   `e.algo.stat`; survival intervals/comparisons, SPC, capability, pooled forest/funnel estimators,
+   `e.algo.stat`; I-MR/Xbar-R limits are also delivered. Survival intervals/comparisons,
+   further SPC, capability, pooled forest/funnel estimators,
    contour/surface and other domain diagrams remain in their owning modules.
 6. **Interaction and acceleration:** hit regions, selection, zoom/pan, animation,
    GPU batching and progressive downsampling. This is L062, not a reason to block

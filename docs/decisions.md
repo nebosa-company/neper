@@ -33616,3 +33616,15 @@ risk tables and censor markers. Existing Step and Scatter marks render two new
 PNG/SVG pairs without a survival-specific painter. A numeric tie/censor fixture
 and scene/SVG check pass on Windows and Linux. Greenwood intervals, log-rank
 comparisons and competing risks remain separate work.
+
+## D1855 — Keep Shewhart limits in statistics and reuse Cartesian marks
+
+`e.algo.stat.imr_limits` computes adjacent moving ranges and three-sigma
+Individuals limits using d2 = 1.128; MR upper limit uses D4 = 3.267.
+`xbar_r_limits` computes equal-size subgroup means and ranges using the
+standard A2/D3/D4 factors for subgroup sizes 2–10. Four previews compose
+existing PointLine and Rug layouts, so scene/SVG adapters gain no new branch.
+The numeric fixture checks NIST's Individuals example and subgroup-factor
+values on Windows and Linux. Phase-specific limits and run rules are deferred.
+References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc322.htm
+and https://itl.nist.gov/div898/handbook/pmc/section3/pmc321.htm.

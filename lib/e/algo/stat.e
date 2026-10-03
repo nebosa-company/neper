@@ -24,6 +24,7 @@ type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
 type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
 type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, at_risk: usize, events: usize, censored: usize }
+type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
@@ -391,6 +392,80 @@ fn survival_curve(times: []const f64, event: []const bool, out: []SurvivalPoint)
         risk -= events + censored
     }
     ret (out[..used], ok)
+}
+
+// Three-sigma Individuals and moving-range limits for consecutive pairs.
+fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimits, err) {
+    if values.len < 2usize { ret (zero, zero, Invalid) }
+    if moving.len < values.len - 1usize { ret (zero, zero, TooSmall) }
+    var i = 0usize
+    while i < values.len {
+        if values[i] - values[i] != 0.0f64 { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    var observations = moments()
+    var ranges = moments()
+    i = 0usize
+    while i < values.len {
+        moments_add(&observations, values[i])
+        if i > 0usize {
+            var span = values[i] - values[i - 1usize]
+            if span < 0.0f64 { span = 0.0f64 - span }
+            if span - span != 0.0f64 { ret (zero, zero, Invalid) }
+            moving[i - 1usize] = span
+            moments_add(&ranges, span)
+        }
+        i += 1usize
+    }
+    let spread = 3.0f64 * ranges.mean / 1.128f64
+    let individuals = ControlLimits { center: observations.mean, lower: observations.mean - spread, upper: observations.mean + spread }
+    let mr = ControlLimits { center: ranges.mean, lower: 0.0f64, upper: 3.267f64 * ranges.mean }
+    if individuals.lower - individuals.lower != 0.0f64 || individuals.upper - individuals.upper != 0.0f64 || mr.upper - mr.upper != 0.0f64 { ret (zero, zero, Invalid) }
+    ret (individuals, mr, ok)
+}
+
+// Subgroup-major values. Standard A2/D3/D4 factors cover sizes 2..10.
+fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err) {
+    if subgroup < 2usize || subgroup > 10usize || values.len < subgroup * 2usize || values.len % subgroup != 0usize { ret (zero, zero, Invalid) }
+    let groups = values.len / subgroup
+    if means.len < groups || ranges.len < groups { ret (zero, zero, TooSmall) }
+    var i = 0usize
+    while i < values.len {
+        if values[i] - values[i] != 0.0f64 { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    var grand = moments()
+    var range_stats = moments()
+    var group = 0usize
+    while group < groups {
+        let start = group * subgroup
+        var sample = moments()
+        var low = values[start]
+        var high = low
+        i = 0usize
+        while i < subgroup {
+            let value = values[start + i]
+            moments_add(&sample, value)
+            if value < low { low = value }
+            if value > high { high = value }
+            i += 1usize
+        }
+        let span = high - low
+        if sample.mean - sample.mean != 0.0f64 || span - span != 0.0f64 { ret (zero, zero, Invalid) }
+        means[group] = sample.mean
+        ranges[group] = span
+        moments_add(&grand, sample.mean)
+        moments_add(&range_stats, span)
+        group += 1usize
+    }
+    let a2 = [9]f64{ 1.880f64, 1.023f64, 0.729f64, 0.577f64, 0.483f64, 0.419f64, 0.373f64, 0.337f64, 0.308f64 }
+    let d3 = [9]f64{ 0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.076f64, 0.136f64, 0.184f64, 0.223f64 }
+    let d4 = [9]f64{ 3.267f64, 2.575f64, 2.282f64, 2.115f64, 2.004f64, 1.924f64, 1.864f64, 1.816f64, 1.777f64 }
+    let factor = subgroup - 2usize
+    let mean_limits = ControlLimits { center: grand.mean, lower: grand.mean - a2[factor] * range_stats.mean, upper: grand.mean + a2[factor] * range_stats.mean }
+    let range_limits = ControlLimits { center: range_stats.mean, lower: d3[factor] * range_stats.mean, upper: d4[factor] * range_stats.mean }
+    if mean_limits.lower - mean_limits.lower != 0.0f64 || mean_limits.upper - mean_limits.upper != 0.0f64 || range_limits.upper - range_limits.upper != 0.0f64 { ret (zero, zero, Invalid) }
+    ret (mean_limits, range_limits, ok)
 }
 
 fn correlation(s: *const Regression) -> (f64, bool) {
