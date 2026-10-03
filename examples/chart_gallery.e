@@ -967,6 +967,68 @@ fn render_pert_cpm_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_value_stream_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/value-stream-map.png"
+    let plot = geometry.rect(18.0, 48.0, 324.0, 162.0)
+    let steps = [3]chart.ValueStreamStep{
+        chart.ValueStreamStep { process_time: 2.0f64, value_added_time: 1.0f64, wait_before: 0.0f64, good_fraction: 0.98f64 },
+        chart.ValueStreamStep { process_time: 5.0f64, value_added_time: 4.0f64, wait_before: 4.0f64, good_fraction: 0.95f64 },
+        chart.ValueStreamStep { process_time: 3.0f64, value_added_time: 2.0f64, wait_before: 2.0f64, good_fraction: 0.99f64 },
+    }
+    var boxes: [3]geometry.Rect = zero
+    var arrows: [6]chart.Segment = zero
+    var process_bars: [3]geometry.Rect = zero
+    var wait_bars: [3]geometry.Rect = zero
+    let (map, map_error) = chart.value_stream_map(steps[..], plot, boxes[..], arrows[..], process_bars[..], wait_bars[..])
+    if map_error != ok || map.summary.lead_time != 16.0f64 || map.summary.value_added_time != 7.0f64 || map.waiting.bars.len != 2usize { ret chart.Invalid }
+    let blue = paint.rgba(0.12, 0.42, 0.76, 1.0)
+    let orange = paint.rgba(0.94, 0.54, 0.13, 1.0)
+    let gray = paint.rgba(0.54, 0.61, 0.69, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let names = [3]str{ "Intake / 2h", "Build / 5h", "Review / 3h" }
+    var labels: [6]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Value-stream map", anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Queue (amber) / processing (blue)", anchor: chart.Coord { x: 180.0, y: 148.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "Lead 16h   VA 7h   PCE 44%   yield 92%", anchor: chart.Coord { x: 180.0, y: 226.0 }, align: .Center }
+    var i = 0usize
+    while i < boxes.len {
+        labels[3usize + i] = chart.Label { text: names[i], anchor: chart.Coord { x: boxes[i].x + boxes[i].width * 0.5, y: boxes[i].y + boxes[i].height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 80usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &map.connectors, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.nodes, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.waiting, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &map.process, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..3usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[3usize..], font, 9.0, paint.Brush { Solid: white })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &map.connectors, gray)
+    try chart_svg.append(&writer, &map.nodes, blue)
+    try chart_svg.append(&writer, &map.waiting, orange)
+    try chart_svg.append(&writer, &map.process, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..3usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[3usize..], white, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -4908,6 +4970,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_swimlane_preview(a, queue, output_target, canvas, &renderer)
     try render_kanban_preview(a, queue, output_target, canvas, &renderer)
     try render_pert_cpm_preview(a, queue, output_target, canvas, &renderer)
+    try render_value_stream_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

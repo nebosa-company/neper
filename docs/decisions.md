@@ -34117,3 +34117,17 @@ adapters; the gallery adds a PNG/SVG pair. Calendars, lag constraints, resource
 levelling, multiple-path uncertainty and Monte Carlo completion forecasts are
 not implied by this slice. The forward/backward calculation follows PMI's
 critical-path description: https://www.pmi.org/learning/library/critical-path-method-calculations-scheduling-8040
+
+## D1902 — Keep value-stream metrics distinct from readable stage placement
+
+`value_stream_map` borrows an ordered single stream of process time, value-added
+time, preceding queue time and good fraction. It returns process/queue totals,
+lead time, value-added divided by lead time as process-cycle efficiency, and
+the product of good fractions as rolled yield. Stage boxes use equal spacing
+for legible names; a second time ladder uses actual duration ratios. Caller
+storage owns rectangles and arrow segments, with invalid values, short arrays
+and unrenderably narrow intervals refused. The Windows/Linux fixture checks
+numerical totals, proportional widths, single-stage/zero-wait behavior,
+refusals and scene/SVG adapters; the gallery adds a PNG/SVG pair. It is not a
+branching process simulator or a full VSM stencil: inventory and transport
+symbols, takt/capacity constraints and future-state comparison remain planned.

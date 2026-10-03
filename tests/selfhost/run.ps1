@@ -3247,6 +3247,11 @@ $gfxChartPertCpmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $gfxChartPertCpmWritten -ne 'executable written') { throw 'gfx_chart_pert_cpm emission failed' }
 $gfxChartPertCpmOutput = & $gfxChartPertCpmPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartPertCpmOutput -ne 'gfx chart pert cpm ok') { throw "the e.gfx.chart PERT/CPM network answered wrongly: exit $LASTEXITCODE" }
+$gfxChartValueStreamPath = Join-Path $testBuild 'gfx-chart-value-stream-selfhost.exe'
+$gfxChartValueStreamWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_value_stream\src\main.e') $repo 'x64' 'windows' $gfxChartValueStreamPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartValueStreamWritten -ne 'executable written') { throw 'gfx_chart_value_stream emission failed' }
+$gfxChartValueStreamOutput = & $gfxChartValueStreamPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartValueStreamOutput -ne 'gfx chart value stream ok') { throw "the e.gfx.chart value-stream map answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

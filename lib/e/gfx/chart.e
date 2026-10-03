@@ -40,6 +40,9 @@ type CpmDependency = struct { from: usize, to: usize }
 type CpmTiming = struct { expected: f64, variance: f64, earliest_start: f64, earliest_finish: f64, latest_start: f64, latest_finish: f64, slack: f64, stage: usize, critical: bool }
 type CpmSummary = struct { duration: f64, critical_count: usize, stages: usize }
 type CpmWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize }
+type ValueStreamStep = struct { process_time: f64, value_added_time: f64, wait_before: f64, good_fraction: f64 }
+type ValueStreamSummary = struct { process_time: f64, value_added_time: f64, wait_time: f64, lead_time: f64, process_cycle_efficiency: f64, rolled_yield: f64 }
+type ValueStreamLayout = struct { nodes: Layout, connectors: Layout, process: Layout, waiting: Layout, summary: ValueStreamSummary }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2421,6 +2424,85 @@ fn pert_cpm_network(dependencies: []const CpmDependency, timings: []const CpmTim
     let nodes = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..n], x_min: 0.0, x_max: f32(summary.stages), y_min: 0.0, y_max: 1.0 }
     let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..dependencies.len * 5usize], bars: zero, x_min: 0.0, x_max: f32(summary.stages), y_min: 0.0, y_max: 1.0 }
     ret (nodes, connectors, ok)
+}
+
+// A single ordered material/information flow. Queue and processing intervals
+// share a proportional time ladder below equally spaced legible stage boxes.
+// PCE uses value-added time (not all processing time) divided by lead time.
+fn value_stream_map(steps: []const ValueStreamStep, bounds: geometry.Rect, boxes: []geometry.Rect, arrows: []Segment, process_bars: []geometry.Rect, wait_bars: []geometry.Rect) -> (ValueStreamLayout, err) {
+    let n = steps.len
+    if n == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if boxes.len < n || arrows.len / 3usize < n - 1usize || process_bars.len < n || wait_bars.len < n { ret (zero, TooLarge) }
+    var process_time = 0.0f64
+    var value_added_time = 0.0f64
+    var wait_time = 0.0f64
+    var rolled_yield = 1.0f64
+    var i = 0usize
+    while i < n {
+        let step = steps[i]
+        if !finite64(step.process_time) || !finite64(step.value_added_time) || !finite64(step.wait_before) || !finite64(step.good_fraction) || step.process_time <= 0.0f64 || step.value_added_time < 0.0f64 || step.value_added_time > step.process_time || step.wait_before < 0.0f64 || step.good_fraction < 0.0f64 || step.good_fraction > 1.0f64 { ret (zero, Invalid) }
+        process_time += step.process_time
+        value_added_time += step.value_added_time
+        wait_time += step.wait_before
+        rolled_yield *= step.good_fraction
+        if !finite64(process_time) || !finite64(value_added_time) || !finite64(wait_time) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let lead_time = process_time + wait_time
+    if !finite64(lead_time) || lead_time <= 0.0f64 { ret (zero, Invalid) }
+    let cell_width = bounds.width / f32(n)
+    let box_width = cell_width * 0.70
+    let box_height = bounds.height * 0.29
+    let node_y = bounds.y + bounds.height * 0.13
+    let timeline_y = bounds.y + bounds.height * 0.70
+    let timeline_height = bounds.height * 0.15
+    if !finite(cell_width) || !finite(box_width) || !finite(node_y) || !finite(box_height) || !finite(timeline_y) || !finite(timeline_height) || box_width <= 0.0 || box_height <= 0.0 || timeline_height <= 0.0 { ret (zero, Invalid) }
+    i = 0usize
+    while i < n {
+        let x = bounds.x + (f32(i) + 0.15) * cell_width
+        if !finite(x) || !finite(x + box_width) { ret (zero, Invalid) }
+        boxes[i] = geometry.rect(x, node_y, box_width, box_height)
+        if i > 0usize {
+            let previous = boxes[i - 1usize]
+            let start = Coord { x: previous.x + previous.width, y: node_y + box_height * 0.5 }
+            let tip = Coord { x: x, y: start.y }
+            let head = (tip.x - start.x) * 0.25
+            if !finite(head) || head <= 0.0 { ret (zero, Invalid) }
+            let edge = (i - 1usize) * 3usize
+            arrows[edge] = Segment { from: start, to: tip }
+            arrows[edge + 1usize] = Segment { from: Coord { x: tip.x - head, y: tip.y - head * 0.6 }, to: tip }
+            arrows[edge + 2usize] = Segment { from: Coord { x: tip.x - head, y: tip.y + head * 0.6 }, to: tip }
+        }
+        i += 1usize
+    }
+    var elapsed = 0.0f64
+    var wait_count = 0usize
+    i = 0usize
+    while i < n {
+        let step = steps[i]
+        if step.wait_before > 0.0f64 {
+            let left = bounds.x + bounds.width * f32(elapsed / lead_time)
+            elapsed += step.wait_before
+            let right = bounds.x + bounds.width * f32(elapsed / lead_time)
+            if !finite(left) || !finite(right) || right <= left { ret (zero, TooLarge) }
+            wait_bars[wait_count] = geometry.rect(left, timeline_y, right - left, timeline_height)
+            wait_count += 1usize
+        }
+        let left = bounds.x + bounds.width * f32(elapsed / lead_time)
+        elapsed += step.process_time
+        let right = bounds.x + bounds.width * f32(elapsed / lead_time)
+        if !finite(left) || !finite(right) || right <= left { ret (zero, TooLarge) }
+        process_bars[i] = geometry.rect(left, timeline_y, right - left, timeline_height)
+        i += 1usize
+    }
+    let domain_max = 1.0f32
+    let nodes = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..n], x_min: 0.0, x_max: domain_max, y_min: 0.0, y_max: 1.0 }
+    let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..(n - 1usize) * 3usize], bars: zero, x_min: 0.0, x_max: domain_max, y_min: 0.0, y_max: 1.0 }
+    let process = Layout { kind: .Bar, coords: zero, segments: zero, bars: process_bars[..n], x_min: 0.0, x_max: domain_max, y_min: 0.0, y_max: 1.0 }
+    let waiting = Layout { kind: .Bar, coords: zero, segments: zero, bars: wait_bars[..wait_count], x_min: 0.0, x_max: domain_max, y_min: 0.0, y_max: 1.0 }
+    let summary = ValueStreamSummary { process_time: process_time, value_added_time: value_added_time, wait_time: wait_time, lead_time: lead_time, process_cycle_efficiency: value_added_time / lead_time, rolled_yield: rolled_yield }
+    ret (ValueStreamLayout { nodes: nodes, connectors: connectors, process: process, waiting: waiting, summary: summary }, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.
