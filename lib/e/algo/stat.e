@@ -625,6 +625,28 @@ fn laney_control(kind: AttributeControlKind, counts: []const usize, sizes: []con
     ret (sigma_z, ok)
 }
 
+// Each phase gets its own pooled baseline and adjacent-z dispersion estimate.
+fn laney_control_phased(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, starts: []const bool, out: []AttributeControlPoint, sigma_z: []f64) -> err {
+    if kind != .P && kind != .U { ret Invalid }
+    if sigma_z.len < counts.len { ret TooSmall }
+    let phase_error = attribute_control_phased(kind, counts, sizes, starts, out)
+    if phase_error != ok { ret phase_error }
+    var begin = 0usize
+    while begin < counts.len {
+        var end = begin + 1usize
+        while end < counts.len && !starts[end] { end += 1usize }
+        let (sigma, control_error) = laney_control(kind, counts[begin..end], sizes[begin..end], out[begin..end])
+        if control_error != ok { ret control_error }
+        var i = begin
+        while i < end {
+            sigma_z[i] = sigma
+            i += 1usize
+        }
+        begin = end
+    }
+    ret ok
+}
+
 // Interpolate adjacent geometric CDF steps, then convert trials-until to gaps-between.
 fn geometric_gap_percentile(probability: f64, fraction: f64) -> (f64, bool) {
     if !(probability > 0.0f64) || probability > 1.0f64 || fraction < 0.0f64 || !(fraction < 1.0f64) { ret (0.0f64, false) }

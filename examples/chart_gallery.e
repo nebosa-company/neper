@@ -1212,7 +1212,16 @@ fn render_laney_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
     try render_attribute_preview(a, q, output_target, canvas, renderer, samples[..], "Laney P-prime", "Fraction", "docs/chart-previews/laney_p.png")
     let (u_sigma, u_error) = stat.laney_control(.U, u_counts[..], u_sizes[..], samples[..])
     if u_error != ok { ret u_error }
-    ret render_attribute_preview(a, q, output_target, canvas, renderer, samples[..], "Laney U-prime", "Defect rate", "docs/chart-previews/laney_u.png")
+    try render_attribute_preview(a, q, output_target, canvas, renderer, samples[..], "Laney U-prime", "Defect rate", "docs/chart-previews/laney_u.png")
+    let phase_starts = [8]bool{ true, false, false, false, true, false, false, false }
+    let phase_p_counts = [8]usize{ 2usize, 10usize, 3usize, 9usize, 6usize, 18usize, 7usize, 17usize }
+    let phase_u_counts = [8]usize{ 1usize, 12usize, 0usize, 14usize, 4usize, 20usize, 3usize, 18usize }
+    let phase_u_sizes = [8]usize{ 10usize, 10usize, 10usize, 10usize, 12usize, 12usize, 12usize, 12usize }
+    var sigmas: [8]f64 = zero
+    try stat.laney_control_phased(.P, phase_p_counts[..], p_sizes[..], phase_starts[..], samples[..], sigmas[..])
+    try render_attribute_preview_phased(a, q, output_target, canvas, renderer, samples[..], phase_starts[..], "Phased Laney P-prime", "Fraction", "docs/chart-previews/phased_laney_p.png")
+    try stat.laney_control_phased(.U, phase_u_counts[..], phase_u_sizes[..], phase_starts[..], samples[..], sigmas[..])
+    ret render_attribute_preview_phased(a, q, output_target, canvas, renderer, samples[..], phase_starts[..], "Phased Laney U-prime", "Defect rate", "docs/chart-previews/phased_laney_u.png")
 }
 
 fn render_rare_event_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {

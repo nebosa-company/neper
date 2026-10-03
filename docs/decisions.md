@@ -33728,3 +33728,15 @@ a stage divider; it produces four new PNG/SVG pairs. A focused fixture checks
 all four kinds against independent phase calculations and refuses malformed
 phase declarations on Windows and Linux. Laney phase-specific dispersion
 remains planned. Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/p-chart/interpret-the-results/all-statistics-and-graphs/
+
+## D1863 — Re-estimate Laney dispersion within each phase
+
+Validate phase boundaries through `attribute_control_phased`, then invoke the
+existing Laney P-prime/U-prime calculator on each phase slice. Each slice has
+its own pooled baseline and adjacent-z moving-range Sigma Z; no boundary pair
+contributes. Return per-point Sigma Z beside the existing per-point limits so
+callers can inspect the phase estimate. Reuse the stage-aware attribute preview
+renderer for two new PNG/SVG pairs. `gfx_chart_laney_phases` compares both
+kinds with independent phase calculations and checks refusals on Windows and
+Linux. Subgroup X-bar/R/S phases remain planned. Reference:
+https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-p-chart/interpret-the-results/all-statistics-and-graphs/
