@@ -33336,3 +33336,16 @@ invalid bandwidth/overlap and short storage are refused. `gfx_chart_ridgeline`
 checks a numeric KDE reference and scene/SVG output on Windows and Linux; the
 gallery adds one labeled PNG/SVG pair. Weighted samples and transformed axes
 remain future work.
+
+## D1830 — Keep OHLC semantics in geometry, not the paint backend
+
+`chart.candlestick` and `chart.ohlc` share validation of strictly ascending
+numeric x positions and open/high/low/close price envelopes. The smallest x
+gap sets mark width and outer padding, so trading gaps retain their spacing.
+Candlesticks return existing Rug wick/doji strokes and separate rising/falling
+Bar layers; OHLC returns Rug stems and left-open/right-close ticks. This keeps
+colours with the caller and uses the existing scene/SVG adapters unchanged.
+`gfx_chart_finance` checks irregular spacing, numeric body heights, doji,
+refusals and both adapters on Windows and Linux. Two labeled PNG/SVG previews
+demonstrate the results. Date-axis formatting, adjustments and volume stay
+planned.

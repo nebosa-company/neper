@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, waterfall, bullet, Pareto, pie, donut, waffle, stage funnel,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, pie, donut, waffle, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-forty-seven PNG plus forty-seven SVG previews from Neper. L061 remains partial
+forty-nine PNG plus forty-nine SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -148,6 +148,14 @@ It rejects mismatched/non-finite columns and short storage. The gallery's
 secondary-axis preview reuses the Pareto guide renderer, with numeric right
 labels instead of percentage labels. Arbitrary x positions, more than two
 vertical scales and aligned axis tables remain planned.
+`candlestick` and `ohlc` borrow open/high/low/close columns at strictly increasing
+numeric x positions. The shared domain validates the price envelope and pads
+the first and last marks by half the smallest x interval. Candlestick emits
+wick strokes, rising bodies and falling bodies as separate caller-coloured
+Rug/Bar layers; doji bodies become horizontal strokes. OHLC emits high-low
+stems plus left-open and right-close ticks. Both use the existing scene/SVG
+adapters and have numeric/refusal fixtures on Windows and Linux. Date labels,
+corporate-action adjustment and volume companions remain separate work.
 `pie` turns nonnegative category weights into caller-owned slice polygons. A zero
 inner-radius ratio yields pie slices; a ratio between zero and one yields a donut.
 Each slice is an Area layer shared by scene and SVG; callers supply colours and
@@ -205,7 +213,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, basic waterfall, bullet, Pareto, pie, donut, waffle and basic stage funnel are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, pie, donut, waffle and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -274,9 +282,12 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    Category-centered bar+line overlays share x but expose independent left and
    right y domains; `gfx_chart_composition` checks alignment and adapters on
    both hosts.
+   Candlestick and OHLC share a validated numeric x/price domain and reuse
+   Rug/Bar strokes and rectangles; `gfx_chart_finance` checks irregular spacing,
+   doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with forty-seven vector previews, automatic numeric tick text and
+   adapter with forty-nine vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

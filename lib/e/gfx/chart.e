@@ -1108,6 +1108,106 @@ fn funnel(values: []const f32, bounds: geometry.Rect, gap: f32, points: []Coord,
     ret (layers[..values.len], ok)
 }
 
+// Numeric x positions may be irregular; the smallest interval controls mark
+// width while half an interval pads the first and last marks into the panel.
+fn ohlc_domain(x: []const f32, opens: []const f32, highs: []const f32, lows: []const f32, closes: []const f32) -> (f32, f32, f32, f32, f32, err) {
+    if x.len == 0usize { ret (0.0, 0.0, 0.0, 0.0, 0.0, Empty) }
+    if opens.len != x.len || highs.len != x.len || lows.len != x.len || closes.len != x.len { ret (0.0, 0.0, 0.0, 0.0, 0.0, Invalid) }
+    var ymin = lows[0usize]
+    var ymax = highs[0usize]
+    var step = 1.0f32
+    if x.len > 1usize { step = x[1usize] - x[0usize] }
+    var i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || !finite(opens[i]) || !finite(highs[i]) || !finite(lows[i]) || !finite(closes[i]) || lows[i] > opens[i] || lows[i] > closes[i] || highs[i] < opens[i] || highs[i] < closes[i] { ret (0.0, 0.0, 0.0, 0.0, 0.0, Invalid) }
+        if i > 0usize {
+            let gap = x[i] - x[i - 1usize]
+            if !finite(gap) || gap <= 0.0 { ret (0.0, 0.0, 0.0, 0.0, 0.0, Invalid) }
+            if gap < step { step = gap }
+        }
+        if lows[i] < ymin { ymin = lows[i] }
+        if highs[i] > ymax { ymax = highs[i] }
+        i += 1usize
+    }
+    let xmin = x[0usize] - step * 0.5
+    let xmax = x[x.len - 1usize] + step * 0.5
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+    }
+    if !finite(xmin) || !finite(xmax) || !(xmax > xmin) || !finite(ymin) || !finite(ymax) || !(ymax > ymin) { ret (0.0, 0.0, 0.0, 0.0, 0.0, Invalid) }
+    ret (xmin, xmax, ymin, ymax, step, ok)
+}
+
+fn price_y(value: f32, ymin: f32, ymax: f32, bounds: geometry.Rect) -> f32 {
+    ret bounds.y + bounds.height * (1.0 - (value - ymin) / (ymax - ymin))
+}
+
+// Wicks, rising bodies and falling bodies are separate borrowed-colour layers.
+// Zero-height (doji) bodies get a horizontal stroke instead of disappearing.
+fn candlestick(x: []const f32, opens: []const f32, highs: []const f32, lows: []const f32, closes: []const f32, bounds: geometry.Rect, body_fraction: f32, wicks: []Segment, rising: []geometry.Rect, falling: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if !valid_bounds(bounds) || !finite(body_fraction) || body_fraction <= 0.0 || body_fraction >= 1.0 { ret (zero, Invalid) }
+    let (xmin, xmax, ymin, ymax, step, domain_error) = ohlc_domain(x, opens, highs, lows, closes)
+    if domain_error != ok { ret (zero, domain_error) }
+    if wicks.len / 2usize < x.len || rising.len < x.len || falling.len < x.len || layers.len < 3usize { ret (zero, TooLarge) }
+    let width = bounds.width * step / (xmax - xmin) * body_fraction
+    if !finite(width) || width <= 0.0 { ret (zero, Invalid) }
+    var up = 0usize
+    var down = 0usize
+    var strokes = 0usize
+    var i = 0usize
+    while i < x.len {
+        let center = mapped(x[i], xmin, xmax, bounds.x, bounds.width)
+        let high_y = price_y(highs[i], ymin, ymax, bounds)
+        let low_y = price_y(lows[i], ymin, ymax, bounds)
+        let open_y = price_y(opens[i], ymin, ymax, bounds)
+        let close_y = price_y(closes[i], ymin, ymax, bounds)
+        if !finite(center) || !finite(high_y) || !finite(low_y) || !finite(open_y) || !finite(close_y) { ret (zero, Invalid) }
+        wicks[strokes] = Segment { from: Coord { x: center, y: high_y }, to: Coord { x: center, y: low_y } }
+        strokes += 1usize
+        if opens[i] == closes[i] {
+            wicks[strokes] = Segment { from: Coord { x: center - width * 0.5, y: open_y }, to: Coord { x: center + width * 0.5, y: open_y } }
+            strokes += 1usize
+        } else if closes[i] > opens[i] {
+            rising[up] = geometry.rect(center - width * 0.5, close_y, width, open_y - close_y)
+            up += 1usize
+        } else {
+            falling[down] = geometry.rect(center - width * 0.5, open_y, width, close_y - open_y)
+            down += 1usize
+        }
+        i += 1usize
+    }
+    layers[0usize] = Layout { kind: .Rug, coords: zero, segments: wicks[..strokes], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }
+    layers[1usize] = Layout { kind: .Bar, coords: zero, segments: zero, bars: rising[..up], x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }
+    layers[2usize] = Layout { kind: .Bar, coords: zero, segments: zero, bars: falling[..down], x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }
+    ret (layers[..3usize], ok)
+}
+
+// One stem plus left-open and right-close ticks per observation.
+fn ohlc(x: []const f32, opens: []const f32, highs: []const f32, lows: []const f32, closes: []const f32, bounds: geometry.Rect, tick_fraction: f32, lines: []Segment) -> (Layout, err) {
+    if !valid_bounds(bounds) || !finite(tick_fraction) || tick_fraction <= 0.0 || tick_fraction >= 1.0 { ret (zero, Invalid) }
+    let (xmin, xmax, ymin, ymax, step, domain_error) = ohlc_domain(x, opens, highs, lows, closes)
+    if domain_error != ok { ret (zero, domain_error) }
+    if lines.len / 3usize < x.len { ret (zero, TooLarge) }
+    let half = bounds.width * step / (xmax - xmin) * tick_fraction * 0.5
+    if !finite(half) || half <= 0.0 { ret (zero, Invalid) }
+    var i = 0usize
+    while i < x.len {
+        let center = mapped(x[i], xmin, xmax, bounds.x, bounds.width)
+        let high_y = price_y(highs[i], ymin, ymax, bounds)
+        let low_y = price_y(lows[i], ymin, ymax, bounds)
+        let open_y = price_y(opens[i], ymin, ymax, bounds)
+        let close_y = price_y(closes[i], ymin, ymax, bounds)
+        if !finite(center) || !finite(high_y) || !finite(low_y) || !finite(open_y) || !finite(close_y) { ret (zero, Invalid) }
+        let first = 3usize * i
+        lines[first] = Segment { from: Coord { x: center, y: high_y }, to: Coord { x: center, y: low_y } }
+        lines[first + 1usize] = Segment { from: Coord { x: center - half, y: open_y }, to: Coord { x: center, y: open_y } }
+        lines[first + 2usize] = Segment { from: Coord { x: center, y: close_y }, to: Coord { x: center + half, y: close_y } }
+        i += 1usize
+    }
+    ret (Layout { kind: .Rug, coords: zero, segments: lines[..3usize * x.len], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
+}
+
 fn grouped_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
     if categories == 0usize || series == 0usize { ret (zero, Invalid) }
     if !bar_grid_ok(values, categories, series, bounds) { ret (zero, Invalid) }

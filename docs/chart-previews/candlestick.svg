@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>candlestick</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<line x1="124.4375" y1="30" x2="124.4375" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="124.4375" y1="204" x2="124.4375" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="213.8125" y1="30" x2="213.8125" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="213.8125" y1="204" x2="213.8125" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="303.1875" y1="30" x2="303.1875" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="303.1875" y1="204" x2="303.1875" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="134.39999389648438" x2="330" y2="134.39999389648438" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="134.39999389648438" x2="44" y2="134.39999389648438" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="47.400001525878906" x2="330" y2="47.400001525878906" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="47.400001525878906" x2="44" y2="47.400001525878906" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="52.9375" y1="134.39999389648438" x2="52.9375" y2="204" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.8125" y1="134.39999389648438" x2="70.8125" y2="186.59999084472656" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="88.6875" y1="117" x2="88.6875" y2="186.59999084472656" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="106.5625" y1="117" x2="106.5625" y2="169.1999969482422" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="160.1875" y1="99.5999984741211" x2="160.1875" y2="169.1999969482422" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="178.0625" y1="82.19999694824219" x2="178.0625" y2="134.39999389648438" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="195.9375" y1="82.19999694824219" x2="195.9375" y2="134.39999389648438" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="213.8125" y1="64.80000305175781" x2="213.8125" y2="134.39999389648438" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="231.6875" y1="64.80000305175781" x2="231.6875" y2="117" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="285.3125" y1="47.400001525878906" x2="285.3125" y2="117" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="303.1875" y1="47.400001525878906" x2="303.1875" y2="99.5999984741211" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="321.0625" y1="30" x2="321.0625" y2="99.5999984741211" stroke="rgb(56,69,89)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="47.217498779296875" y="151.79998779296875" width="11.4399995803833" height="34.80000305175781" fill="rgb(28,161,112)" fill-opacity="1"/>
+<rect x="82.96749877929688" y="134.39999389648438" width="11.4399995803833" height="34.80000305175781" fill="rgb(28,161,112)" fill-opacity="1"/>
+<rect x="154.46749877929688" y="117" width="11.4399995803833" height="34.79998779296875" fill="rgb(28,161,112)" fill-opacity="1"/>
+<rect x="172.34249877929688" y="99.5999984741211" width="11.4399995803833" height="17.400001525878906" fill="rgb(28,161,112)" fill-opacity="1"/>
+<rect x="208.09249877929688" y="82.19999694824219" width="11.4399995803833" height="34.80000305175781" fill="rgb(28,161,112)" fill-opacity="1"/>
+<rect x="279.5924987792969" y="64.80000305175781" width="11.4399995803833" height="34.79999542236328" fill="rgb(28,161,112)" fill-opacity="1"/>
+<rect x="315.3424987792969" y="47.400001525878906" width="11.4399995803833" height="34.79999542236328" fill="rgb(28,161,112)" fill-opacity="1"/>
+<rect x="65.09249877929688" y="151.79998779296875" width="11.4399995803833" height="17.400009155273438" fill="rgb(232,71,64)" fill-opacity="1"/>
+<rect x="100.84249877929688" y="134.39999389648438" width="11.4399995803833" height="17.399993896484375" fill="rgb(232,71,64)" fill-opacity="1"/>
+<rect x="190.21749877929688" y="99.5999984741211" width="11.4399995803833" height="17.400001525878906" fill="rgb(232,71,64)" fill-opacity="1"/>
+<rect x="225.96749877929688" y="82.19999694824219" width="11.4399995803833" height="17.400001525878906" fill="rgb(232,71,64)" fill-opacity="1"/>
+<rect x="297.4674987792969" y="64.80000305175781" width="11.4399995803833" height="17.399993896484375" fill="rgb(232,71,64)" fill-opacity="1"/>
+<text x="124.4375" y="219" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">5</text>
+<text x="213.8125" y="219" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">10</text>
+<text x="303.1875" y="219" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">15</text>
+<text x="35" y="137.54998779296875" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">15</text>
+<text x="35" y="50.55000305175781" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">20</text>
+<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">Candlestick (OHLC)</text>
+</svg>

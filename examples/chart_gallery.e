@@ -222,6 +222,66 @@ fn render_ridgelines(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, c
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_financial(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, title: str, path: str) -> err {
+    if layers.len != 1usize && layers.len != 3usize { ret chart.Invalid }
+    let plot = geometry.rect(44.0, 30.0, 286.0, 174.0)
+    let grid_color = paint.rgba(0.88, 0.91, 0.95, 1.0)
+    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    let colors = [3]paint.Color{ paint.rgba(0.22, 0.27, 0.35, 1.0), paint.rgba(0.11, 0.63, 0.44, 1.0), paint.rgba(0.91, 0.28, 0.25, 1.0) }
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var x_storage: [5]chart.Tick = zero
+    var y_storage: [5]chart.Tick = zero
+    let (x_ticks, x_error) = chart.nice_ticks(linear, layers[0usize].x_min, layers[0usize].x_max, 5usize, x_storage[..])
+    if x_error != ok { ret x_error }
+    let (y_ticks, y_error) = chart.nice_ticks(linear, layers[0usize].y_min, layers[0usize].y_max, 5usize, y_storage[..])
+    if y_error != ok { ret y_error }
+    var x_words: [5]str = zero
+    var y_words: [5]str = zero
+    var x_text: [128]u8 = zero
+    var y_text: [128]u8 = zero
+    let (x_labels, x_label_error) = chart.format_ticks(x_ticks, x_words[..], x_text[..])
+    if x_label_error != ok { ret x_label_error }
+    let (y_labels, y_label_error) = chart.format_ticks(y_ticks, y_words[..], y_text[..])
+    if y_label_error != ok { ret y_label_error }
+    var label_storage: [11]chart.Label = zero
+    let (labels, labels_error) = chart.guide_labels(plot, x_ticks, x_labels, y_ticks, y_labels, 9.0, label_storage[..10usize])
+    if labels_error != ok { ret labels_error }
+    label_storage[labels.len] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 80usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, plot, x_ticks, y_ticks, paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
+    var i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels, font, 9.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, label_storage[labels.len..labels.len + 1usize], font, 11.0, paint.Brush { Solid: axis_color })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_guides(&writer, plot, x_ticks, y_ticks, grid_color, axis_color)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels, axis_color, 9.0)
+    try chart_svg.append_labels(&writer, label_storage[labels.len..labels.len + 1usize], axis_color, 11.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, title: str, path: str) -> err {
     if layers.len != 2usize || names.len != layers.len { ret chart.Invalid }
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
@@ -851,6 +911,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (ridges, ridge_error) = chart.ridgeline(ridge_values[..], ridge_lengths[..], bounds, 0.0f64, 1.45, ridge_grid[..], ridge_estimates[..], ridge_bandwidths[..], ridge_outline[..], ridge_storage[..])
     if ridge_error != ok { ret ridge_error }
     try render_ridgelines(a, queue, output_target, canvas, &renderer, ridges, ridge_names[..], "docs/chart-previews/ridgeline.png")
+    let finance_x = [12]f32{ 1.0, 2.0, 3.0, 4.0, 7.0, 8.0, 9.0, 10.0, 11.0, 14.0, 15.0, 16.0 }
+    let finance_open = [12]f32{ 12.0, 14.0, 13.0, 15.0, 14.0, 16.0, 17.0, 16.0, 18.0, 17.0, 19.0, 18.0 }
+    let finance_high = [12]f32{ 15.0, 15.0, 16.0, 16.0, 17.0, 18.0, 18.0, 19.0, 19.0, 20.0, 20.0, 21.0 }
+    let finance_low = [12]f32{ 11.0, 12.0, 12.0, 13.0, 13.0, 15.0, 15.0, 15.0, 16.0, 16.0, 17.0, 17.0 }
+    let finance_close = [12]f32{ 14.0, 13.0, 15.0, 14.0, 16.0, 17.0, 16.0, 18.0, 17.0, 19.0, 18.0, 20.0 }
+    var finance_wicks: [24]chart.Segment = zero
+    var finance_rising: [12]geometry.Rect = zero
+    var finance_falling: [12]geometry.Rect = zero
+    var finance_layers: [3]chart.Layout = zero
+    let (candles, candle_error) = chart.candlestick(finance_x[..], finance_open[..], finance_high[..], finance_low[..], finance_close[..], bounds, 0.64, finance_wicks[..], finance_rising[..], finance_falling[..], finance_layers[..])
+    if candle_error != ok { ret candle_error }
+    try render_financial(a, queue, output_target, canvas, &renderer, candles, "Candlestick (OHLC)", "docs/chart-previews/candlestick.png")
+    var finance_ticks: [36]chart.Segment = zero
+    let (ohlc_marks, ohlc_error) = chart.ohlc(finance_x[..], finance_open[..], finance_high[..], finance_low[..], finance_close[..], bounds, 0.64, finance_ticks[..])
+    if ohlc_error != ok { ret ohlc_error }
+    var ohlc_layers = [1]chart.Layout{ ohlc_marks }
+    try render_financial(a, queue, output_target, canvas, &renderer, ohlc_layers[..], "OHLC price bars", "docs/chart-previews/ohlc.png")
     let qq_values = [9]f64{ -2.4, -1.5, -1.1, -0.4, 0.1, 0.5, 1.2, 1.7, 3.0 }
     var qq_points: [9]chart.Coord = zero
     var qq_reference: [1]chart.Segment = zero
