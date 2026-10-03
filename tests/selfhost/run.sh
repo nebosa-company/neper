@@ -2814,6 +2814,16 @@ gfx_chart_filled_contour_written=$($test_build/neper-self emit-executable "$repo
 chmod +x "$test_build/gfx-chart-filled-contour-selfhost"
 gfx_chart_filled_contour_output=$("$test_build/gfx-chart-filled-contour-selfhost")
 [ "$gfx_chart_filled_contour_output" = 'gfx chart filled contour ok' ]
+gfx_chart_price_volume_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_price_volume/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-price-volume-selfhost")
+[ "$gfx_chart_price_volume_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-price-volume-selfhost"
+gfx_chart_price_volume_output=$("$test_build/gfx-chart-price-volume-selfhost")
+[ "$gfx_chart_price_volume_output" = 'gfx chart price volume ok' ]
+gfx_chart_returns_volatility_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_returns_volatility/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-returns-volatility-selfhost")
+[ "$gfx_chart_returns_volatility_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-returns-volatility-selfhost"
+gfx_chart_returns_volatility_output=$("$test_build/gfx-chart-returns-volatility-selfhost")
+[ "$gfx_chart_returns_volatility_output" = 'gfx chart returns volatility ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

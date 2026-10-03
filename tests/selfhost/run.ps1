@@ -3192,6 +3192,16 @@ $gfxChartFilledContourWritten = & $compiler emit-executable (Join-Path $PSScript
 if ($LASTEXITCODE -ne 0 -or $gfxChartFilledContourWritten -ne 'executable written') { throw 'gfx_chart_filled_contour emission failed' }
 $gfxChartFilledContourOutput = & $gfxChartFilledContourPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFilledContourOutput -ne 'gfx chart filled contour ok') { throw "the e.gfx.chart scalar bands answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPriceVolumePath = Join-Path $testBuild 'gfx-chart-price-volume-selfhost.exe'
+$gfxChartPriceVolumeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_price_volume\src\main.e') $repo 'x64' 'windows' $gfxChartPriceVolumePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPriceVolumeWritten -ne 'executable written') { throw 'gfx_chart_price_volume emission failed' }
+$gfxChartPriceVolumeOutput = & $gfxChartPriceVolumePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPriceVolumeOutput -ne 'gfx chart price volume ok') { throw "the e.gfx.chart price-volume alignment answered wrongly: exit $LASTEXITCODE" }
+$gfxChartReturnsVolatilityPath = Join-Path $testBuild 'gfx-chart-returns-volatility-selfhost.exe'
+$gfxChartReturnsVolatilityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_returns_volatility\src\main.e') $repo 'x64' 'windows' $gfxChartReturnsVolatilityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReturnsVolatilityWritten -ne 'executable written') { throw 'gfx_chart_returns_volatility emission failed' }
+$gfxChartReturnsVolatilityOutput = & $gfxChartReturnsVolatilityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReturnsVolatilityOutput -ne 'gfx chart returns volatility ok') { throw "the e.gfx.chart simple returns and rolling SD answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

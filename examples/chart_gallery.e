@@ -285,6 +285,77 @@ fn render_financial(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, ca
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_finance_panels(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, top: *const chart.Layout, bottom: *const chart.Layout, top_bounds: geometry.Rect, bottom_bounds: geometry.Rect, title: str, top_name: str, bottom_name: str, path: str) -> err {
+    let blue = paint.rgba(0.08, 0.39, 0.76, 1.0)
+    let green = paint.rgba(0.07, 0.55, 0.43, 1.0)
+    let pale = paint.rgba(0.97, 0.98, 0.99, 1.0)
+    let axis = paint.rgba(0.30, 0.36, 0.45, 1.0)
+    let labels = [4]chart.Label{
+        chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: top_name, anchor: chart.Coord { x: top_bounds.x, y: top_bounds.y - 3.0 }, align: .Left },
+        chart.Label { text: bottom_name, anchor: chart.Coord { x: bottom_bounds.x, y: bottom_bounds.y - 3.0 }, align: .Left },
+        chart.Label { text: "Observation", anchor: chart.Coord { x: 180.0, y: 237.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 31u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 48usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, top_bounds, paint.Brush { Solid: pale })
+    try fill(&builder, bottom_bounds, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, top, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, bottom, paint.Brush { Solid: green })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: axis })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, top_bounds, pale, false)
+    try chart_svg.rect(&writer, bottom_bounds, pale, false)
+    try chart_svg.append(&writer, top, blue)
+    try chart_svg.append(&writer, bottom, green)
+    try chart_svg.append_labels(&writer, labels[..1usize], axis, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], axis, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_finance_panel_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let plot = geometry.rect(53.0, 43.0, 270.0, 169.0)
+    let x = [10]f32{ 1.0, 2.0, 3.0, 5.0, 6.0, 8.0, 9.0, 10.0, 12.0, 13.0 }
+    let prices = [10]f32{ 100.0, 104.0, 101.0, 109.0, 108.0, 115.0, 111.0, 120.0, 118.0, 126.0 }
+    let volumes = [10]f32{ 35.0, 50.0, 42.0, 70.0, 49.0, 95.0, 80.0, 120.0, 75.0, 135.0 }
+    var price_segments: [9]chart.Segment = zero
+    var volume_bars: [10]geometry.Rect = zero
+    let (price, volume, price_error) = chart.price_volume(x[..], prices[..], volumes[..], plot, 10.0, price_segments[..], volume_bars[..])
+    if price_error != ok { ret price_error }
+    let volume_height = (plot.height - 10.0) * 0.34
+    let price_height = plot.height - 10.0 - volume_height
+    let price_bounds = geometry.rect(plot.x, plot.y, plot.width, price_height)
+    let volume_bounds = geometry.rect(plot.x, plot.y + price_height + 10.0, plot.width, volume_height)
+    try render_finance_panels(a, q, output_target, canvas, renderer, &price, &volume, price_bounds, volume_bounds, "Price and volume", "Close", "Volume", "docs/chart-previews/price_volume.png")
+
+    let time = [12]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0 }
+    let history = [12]f32{ 100.0, 108.0, 103.0, 112.0, 107.0, 117.0, 114.0, 123.0, 116.0, 128.0, 122.0, 135.0 }
+    var returns: [11]f32 = zero
+    var volatility: [9]f32 = zero
+    var return_segments: [10]chart.Segment = zero
+    var volatility_segments: [8]chart.Segment = zero
+    let (return_marks, volatility_marks, returns_error) = chart.returns_volatility(time[..], history[..], 3usize, plot, 10.0, returns[..], volatility[..], return_segments[..], volatility_segments[..])
+    if returns_error != ok { ret returns_error }
+    var panels: [2]geometry.Rect = zero
+    let (_, panel_error) = chart.facet_grid(plot, 1usize, 2usize, 10.0, panels[..])
+    if panel_error != ok { ret panel_error }
+    ret render_finance_panels(a, q, output_target, canvas, renderer, &return_marks, &volatility_marks, panels[0usize], panels[1usize], "Returns and rolling volatility", "Simple return", "Rolling SD (3)", "docs/chart-previews/returns_volatility.png")
+}
+
 fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, title: str, path: str) -> err {
     if layers.len != 2usize || names.len != layers.len { ret chart.Invalid }
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
@@ -4315,6 +4386,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ohlc_error != ok { ret ohlc_error }
     var ohlc_layers = [1]chart.Layout{ ohlc_marks }
     try render_financial(a, queue, output_target, canvas, &renderer, ohlc_layers[..], "OHLC price bars", "docs/chart-previews/ohlc.png")
+    try render_finance_panel_previews(a, queue, output_target, canvas, &renderer)
     let qq_values = [9]f64{ -2.4, -1.5, -1.1, -0.4, 0.1, 0.5, 1.2, 1.7, 3.0 }
     var qq_points: [9]chart.Coord = zero
     var qq_reference: [1]chart.Segment = zero

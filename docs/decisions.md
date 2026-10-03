@@ -33995,3 +33995,17 @@ band area conservation, refusals and both adapters on Windows and Linux; the
 gallery adds two PNG/SVG pairs. Missing masks, irregular grids, region merging
 and contour labels remain planned. References: scikit-image `find_contours`
 and Matplotlib `contourf` documentation.
+
+## D1888 — Finance panels align x and state their return semantics
+
+`price_volume` reuses the OHLC numeric-domain validation to align positive
+closing prices and nonnegative volume on one padded x axis, while Line and Bar
+retain independent vertical domains. `returns_volatility` computes simple
+per-observation price returns and trailing sample SD with a caller-selected
+window; both panels share the original x domain so the shorter volatility
+series starts at its true observation. This is not annualized volatility or
+total return: callers must provide adjusted prices or time scaling if needed.
+Focused fixtures check numeric references, irregular x positions, alignment,
+flat data, refusals and scene/SVG adapters on Windows and Linux; the gallery
+adds two PNG/SVG pairs. References: R PerformanceAnalytics `Return.calculate`
+and `roll::roll_sd` documentation.

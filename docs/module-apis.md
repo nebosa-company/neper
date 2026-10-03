@@ -15971,6 +15971,8 @@ fn streamlines(u: []const f32, v: []const f32, columns: usize, rows: usize, x_mi
 fn phase_space(values: []const f32, lag: usize, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
 fn recurrence(values: []const f32, lag: usize, radius: f32, bounds: geometry.Rect, cells: []Cell) -> (MatrixLayout, err)
 fn drawdown(x: []const f32, prices: []const f32, bounds: geometry.Rect, losses: []f32, points: []Coord) -> (Layout, err)
+fn price_volume(x: []const f32, prices: []const f32, volumes: []const f32, bounds: geometry.Rect, gap: f32, price_segments: []Segment, volume_bars: []geometry.Rect) -> (Layout, Layout, err)
+fn returns_volatility(x: []const f32, prices: []const f32, window: usize, bounds: geometry.Rect, gap: f32, returns: []f32, volatility: []f32, return_segments: []Segment, volatility_segments: []Segment) -> (Layout, Layout, err)
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err)

@@ -1682,6 +1682,101 @@ fn drawdown(x: []const f32, prices: []const f32, bounds: geometry.Rect, losses: 
     ret (marks, layout_error)
 }
 
+// One padded numeric x domain aligns closing-price Line and nonnegative volume Bar.
+fn price_volume(x: []const f32, prices: []const f32, volumes: []const f32, bounds: geometry.Rect, gap: f32, price_segments: []Segment, volume_bars: []geometry.Rect) -> (Layout, Layout, err) {
+    if prices.len < 2usize { ret (zero, zero, Empty) }
+    if x.len != prices.len || volumes.len != prices.len || !valid_bounds(bounds) || !finite(gap) || gap < 0.0 || gap >= bounds.height { ret (zero, zero, Invalid) }
+    if price_segments.len < prices.len - 1usize || volume_bars.len < prices.len { ret (zero, zero, TooLarge) }
+    var i = 0usize
+    while i < prices.len {
+        if !finite(prices[i]) || prices[i] <= 0.0 || !finite(volumes[i]) || volumes[i] < 0.0 { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    let (xmin, xmax, _, _, step, domain_error) = ohlc_domain(x, prices, prices, prices, prices)
+    if domain_error != ok { ret (zero, zero, domain_error) }
+    let volume_height = (bounds.height - gap) * 0.34
+    let price_height = bounds.height - gap - volume_height
+    let price_bounds = geometry.rect(bounds.x, bounds.y, bounds.width, price_height)
+    let volume_bounds = geometry.rect(bounds.x, bounds.y + price_height + gap, bounds.width, volume_height)
+    if !valid_bounds(price_bounds) || !valid_bounds(volume_bounds) { ret (zero, zero, Invalid) }
+    let width = bounds.width * step / (xmax - xmin) * 0.7
+    if !finite(width) || width <= 0.0 { ret (zero, zero, Invalid) }
+    let limits = [2]f32{ xmin, xmax }
+    var unused_coords: [1]Coord = zero
+    var unused_segments: [1]Segment = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let price_plot = spec(.Line, price_bounds, x, prices)
+    let (price_marks, price_error) = layout_with_limits(&price_plot, unused_coords[..0usize], price_segments, unused_bars[..0usize], limits[..], limits[..0usize])
+    if price_error != ok { ret (zero, zero, price_error) }
+    var volume_plot = spec(.Bar, volume_bounds, x, volumes)
+    volume_plot.bar_width = width
+    let (volume_marks, volume_error) = layout_with_limits(&volume_plot, unused_coords[..0usize], unused_segments[..0usize], volume_bars, limits[..], limits[..0usize])
+    ret (price_marks, volume_marks, volume_error)
+}
+
+// Simple per-observation price returns and trailing sample SD, not annualized.
+// ponytail: each window is recomputed with Welford (O(n*window)); slide the state only for long series.
+fn returns_volatility(x: []const f32, prices: []const f32, window: usize, bounds: geometry.Rect, gap: f32, returns: []f32, volatility: []f32, return_segments: []Segment, volatility_segments: []Segment) -> (Layout, Layout, err) {
+    if prices.len < 2usize { ret (zero, zero, Empty) }
+    if x.len != prices.len || window < 2usize || window > prices.len - 2usize || !valid_bounds(bounds) || !finite(gap) || gap < 0.0 { ret (zero, zero, Invalid) }
+    let return_count = prices.len - 1usize
+    let volatility_count = prices.len - window
+    if returns.len < return_count || volatility.len < volatility_count || return_segments.len < return_count - 1usize || volatility_segments.len < volatility_count - 1usize { ret (zero, zero, TooLarge) }
+    var i = 0usize
+    while i < prices.len {
+        if !finite(prices[i]) || prices[i] <= 0.0 || !finite(x[i]) || (i > 0usize && x[i] <= x[i - 1usize]) { ret (zero, zero, Invalid) }
+        if i > 0usize {
+            returns[i - 1usize] = f32(f64(prices[i]) / f64(prices[i - 1usize]) - 1.0f64)
+            if !finite(returns[i - 1usize]) { ret (zero, zero, Invalid) }
+        }
+        i += 1usize
+    }
+    var end = window - 1usize
+    while end < return_count {
+        var mean = 0.0f64
+        var sum_squares = 0.0f64
+        var j = 0usize
+        while j < window {
+            let value = f64(returns[end + 1usize - window + j])
+            let delta = value - mean
+            mean += delta / f64(j + 1usize)
+            sum_squares += delta * (value - mean)
+            j += 1usize
+        }
+        if sum_squares < 0.0f64 { sum_squares = 0.0f64 }
+        volatility[end + 1usize - window] = f32(math.sqrt[f64](sum_squares / f64(window - 1usize)))
+        if !finite(volatility[end + 1usize - window]) { ret (zero, zero, Invalid) }
+        end += 1usize
+    }
+    var panels: [2]geometry.Rect = zero
+    let (_, panel_error) = facet_grid(bounds, 1usize, 2usize, gap, panels[..])
+    if panel_error != ok { ret (zero, zero, panel_error) }
+    let (raw_min, raw_max, return_error) = extent(returns[..return_count])
+    if return_error != ok { ret (zero, zero, return_error) }
+    var low = raw_min
+    var high = raw_max
+    if low > 0.0 { low = 0.0 }
+    if high < 0.0 { high = 0.0 }
+    var return_limits = [2]f32{ low, high }
+    if low == high {
+        return_limits[0usize] = -0.5
+        return_limits[1usize] = 0.5
+    }
+    let (_, vol_max, vol_error) = extent(volatility[..volatility_count])
+    if vol_error != ok { ret (zero, zero, vol_error) }
+    var vol_limits = [2]f32{ 0.0, vol_max }
+    if vol_max == 0.0 { vol_limits[1usize] = 0.5 }
+    var unused_coords: [1]Coord = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let x_limits = [2]f32{ x[0usize], x[x.len - 1usize] }
+    let return_plot = spec(.Line, panels[0usize], x[1usize..], returns[..return_count])
+    let (return_marks, marks_error) = layout_with_limits(&return_plot, unused_coords[..0usize], return_segments, unused_bars[..0usize], x_limits[..], return_limits[..])
+    if marks_error != ok { ret (zero, zero, marks_error) }
+    let volatility_plot = spec(.Line, panels[1usize], x[window..], volatility[..volatility_count])
+    let (volatility_marks, layout_error) = layout_with_limits(&volatility_plot, unused_coords[..0usize], volatility_segments, unused_bars[..0usize], x_limits[..], vol_limits[..])
+    ret (return_marks, volatility_marks, layout_error)
+}
+
 // Equal-angle rose sectors. Square-root radii make sector area proportional
 // to each nonnegative pre-binned weight, as in a circular histogram.
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {
