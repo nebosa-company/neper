@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>decision_tree</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<line x1="99.5333251953125" y1="122" x2="123.33333587646484" y2="122" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="123.33333587646484" y1="122" x2="123.33333587646484" y2="82" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="123.33333587646484" y1="82" x2="147.1333465576172" y2="82" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="139.51734924316406" y1="76.6688003540039" x2="147.1333465576172" y2="82" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="139.51734924316406" y1="87.3311996459961" x2="147.1333465576172" y2="82" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="99.5333251953125" y1="122" x2="123.33333587646484" y2="122" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="123.33333587646484" y1="122" x2="123.33333587646484" y2="162" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="123.33333587646484" y1="162" x2="147.1333465576172" y2="162" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="139.51734924316406" y1="156.66879272460938" x2="147.1333465576172" y2="162" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="139.51734924316406" y1="167.33120727539062" x2="147.1333465576172" y2="162" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="212.86666870117188" y1="82" x2="236.6666717529297" y2="82" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236.6666717529297" y1="82" x2="236.6666717529297" y2="62" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236.6666717529297" y1="62" x2="260.4666748046875" y2="62" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="252.85067749023438" y1="56.668800354003906" x2="260.4666748046875" y2="62" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="252.85067749023438" y1="67.3311996459961" x2="260.4666748046875" y2="62" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="212.86666870117188" y1="82" x2="236.6666717529297" y2="82" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236.6666717529297" y1="82" x2="236.6666717529297" y2="102" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236.6666717529297" y1="102" x2="260.4666748046875" y2="102" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="252.85067749023438" y1="96.6688003540039" x2="260.4666748046875" y2="102" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="252.85067749023438" y1="107.3311996459961" x2="260.4666748046875" y2="102" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="212.86666870117188" y1="162" x2="236.6666717529297" y2="162" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236.6666717529297" y1="162" x2="236.6666717529297" y2="142" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236.6666717529297" y1="142" x2="260.4666748046875" y2="142" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="252.85067749023438" y1="136.66879272460938" x2="260.4666748046875" y2="142" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="252.85067749023438" y1="147.33120727539062" x2="260.4666748046875" y2="142" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="212.86666870117188" y1="162" x2="236.6666717529297" y2="162" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236.6666717529297" y1="162" x2="236.6666717529297" y2="182" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236.6666717529297" y1="182" x2="260.4666748046875" y2="182" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="252.85067749023438" y1="176.66879272460938" x2="260.4666748046875" y2="182" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="252.85067749023438" y1="187.33120727539062" x2="260.4666748046875" y2="182" stroke="rgb(143,161,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="99.5333251953125" y1="122" x2="123.33333587646484" y2="122" stroke="rgb(207,51,51)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="123.33333587646484" y1="122" x2="123.33333587646484" y2="82" stroke="rgb(207,51,51)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="123.33333587646484" y1="82" x2="147.1333465576172" y2="82" stroke="rgb(207,51,51)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="139.51734924316406" y1="76.6688003540039" x2="147.1333465576172" y2="82" stroke="rgb(207,51,51)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="139.51734924316406" y1="87.3311996459961" x2="147.1333465576172" y2="82" stroke="rgb(207,51,51)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="33.79999923706055" y="110.4000015258789" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,105,186)" fill-opacity="1"/>
+<rect x="147.1333465576172" y="70.4000015258789" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,105,186)" fill-opacity="1"/>
+<rect x="147.1333465576172" y="150.39999389648438" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,105,186)" fill-opacity="1"/>
+<rect x="260.4666748046875" y="50.400001525878906" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,105,186)" fill-opacity="1"/>
+<rect x="260.4666748046875" y="90.4000015258789" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,105,186)" fill-opacity="1"/>
+<rect x="260.4666748046875" y="130.39999389648438" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,105,186)" fill-opacity="1"/>
+<rect x="260.4666748046875" y="170.39999389648438" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,105,186)" fill-opacity="1"/>
+<rect x="147.1333465576172" y="70.4000015258789" width="65.73332977294922" height="23.19999885559082" fill="rgb(214,133,33)" fill-opacity="1"/>
+<rect x="147.1333465576172" y="150.39999389648438" width="65.73332977294922" height="23.19999885559082" fill="rgb(214,133,33)" fill-opacity="1"/>
+<rect x="260.4666748046875" y="50.400001525878906" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,143,99)" fill-opacity="1"/>
+<rect x="260.4666748046875" y="90.4000015258789" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,143,99)" fill-opacity="1"/>
+<rect x="260.4666748046875" y="130.39999389648438" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,143,99)" fill-opacity="1"/>
+<rect x="260.4666748046875" y="170.39999389648438" width="65.73332977294922" height="23.19999885559082" fill="rgb(31,143,99)" fill-opacity="1"/>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Decision tree / expected value</text>
+<text x="66.66666412353516" y="125" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Choose</text>
+<text x="180.00001525878906" y="85" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">A / 8.4</text>
+<text x="180.00001525878906" y="165" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">B / 7.0</text>
+<text x="293.3333435058594" y="65" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">+12</text>
+<text x="293.3333435058594" y="105" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">0</text>
+<text x="293.3333435058594" y="145" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">+8</text>
+<text x="293.3333435058594" y="185" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">+6</text>
+<text x="180" y="217" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">A: 70% of 12, 30% of 0 = 8.4</text>
+<text x="180" y="231" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">B: 50% of 8, 50% of 6 = 7.0</text>
+</svg>

@@ -1126,6 +1126,113 @@ fn render_sipoc_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_decision_tree_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/decision_tree.png"
+    let plot = geometry.rect(10.0, 42.0, 340.0, 160.0)
+    let nodes = [7]chart.DecisionNode{
+        chart.DecisionNode { kind: .Choice, payoff: 0.0f64 },
+        chart.DecisionNode { kind: .Chance, payoff: 0.0f64 },
+        chart.DecisionNode { kind: .Chance, payoff: 0.0f64 },
+        chart.DecisionNode { kind: .Outcome, payoff: 12.0f64 },
+        chart.DecisionNode { kind: .Outcome, payoff: 0.0f64 },
+        chart.DecisionNode { kind: .Outcome, payoff: 8.0f64 },
+        chart.DecisionNode { kind: .Outcome, payoff: 6.0f64 },
+    }
+    let edges = [6]chart.DecisionEdge{
+        chart.DecisionEdge { from: 0usize, to: 1usize, probability: 0.0f64 },
+        chart.DecisionEdge { from: 0usize, to: 2usize, probability: 0.0f64 },
+        chart.DecisionEdge { from: 1usize, to: 3usize, probability: 0.7f64 },
+        chart.DecisionEdge { from: 1usize, to: 4usize, probability: 0.3f64 },
+        chart.DecisionEdge { from: 2usize, to: 5usize, probability: 0.5f64 },
+        chart.DecisionEdge { from: 2usize, to: 6usize, probability: 0.5f64 },
+    }
+    var values: [7]chart.DecisionValue = zero
+    var indegree: [7]usize = zero
+    var head: [7]usize = zero
+    var next: [6]usize = zero
+    var order: [7]usize = zero
+    let work = chart.DecisionTreeWork { indegree: indegree[..], head: head[..], next: next[..], order: order[..] }
+    let (summary, value_error) = chart.decision_tree_values(nodes[..], edges[..], values[..], work)
+    if value_error != ok || summary.expected < 8.399f64 || summary.expected > 8.401f64 || summary.depth != 3usize || summary.leaves != 4usize || values[0usize].selected_edge != 0usize { ret chart.Invalid }
+    var boxes: [7]geometry.Rect = zero
+    var arrows: [30]chart.Segment = zero
+    var chosen: [6]bool = zero
+    let (node_layout, connectors, layout_error) = chart.decision_tree_layout(nodes[..], edges[..], values[..], summary, plot, boxes[..], arrows[..], chosen[..])
+    if layout_error != ok { ret layout_error }
+    let blue = paint.rgba(0.12, 0.41, 0.73, 1.0)
+    let amber = paint.rgba(0.84, 0.52, 0.13, 1.0)
+    let green = paint.rgba(0.12, 0.56, 0.39, 1.0)
+    let red = paint.rgba(0.81, 0.20, 0.20, 1.0)
+    let gray = paint.rgba(0.56, 0.63, 0.71, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let names = [7]str{ "Choose", "A / 8.4", "B / 7.0", "+12", "0", "+8", "+6" }
+    var labels: [10]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Decision tree / expected value", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    var i = 0usize
+    while i < boxes.len {
+        labels[i + 1usize] = chart.Label { text: names[i], anchor: chart.Coord { x: boxes[i].x + boxes[i].width * 0.5, y: boxes[i].y + boxes[i].height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[8usize] = chart.Label { text: "A: 70% of 12, 30% of 0 = 8.4", anchor: chart.Coord { x: 180.0, y: 217.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "B: 50% of 8, 50% of 6 = 7.0", anchor: chart.Coord { x: 180.0, y: 231.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &connectors, paint.Brush { Solid: gray })
+    i = 0usize
+    while i < edges.len {
+        if chosen[i] {
+            let selected = chart.Layout { kind: .Rug, coords: zero, segments: arrows[i * 5usize..i * 5usize + 5usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+            try chart_scene.append(a, &builder, &selected, paint.Brush { Solid: red })
+        }
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &node_layout, paint.Brush { Solid: blue })
+    i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Chance { try fill(&builder, boxes[i], paint.Brush { Solid: amber }) }
+        if nodes[i].kind == .Outcome { try fill(&builder, boxes[i], paint.Brush { Solid: green }) }
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..8usize], font, 9.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[8usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &connectors, gray)
+    i = 0usize
+    while i < edges.len {
+        if chosen[i] {
+            let selected = chart.Layout { kind: .Rug, coords: zero, segments: arrows[i * 5usize..i * 5usize + 5usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+            try chart_svg.append(&writer, &selected, red)
+        }
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &node_layout, blue)
+    i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Chance { try chart_svg.rect(&writer, boxes[i], amber, false) }
+        if nodes[i].kind == .Outcome { try chart_svg.rect(&writer, boxes[i], green, false) }
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..8usize], white, 9.0)
+    try chart_svg.append_labels(&writer, labels[8usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -5069,6 +5176,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_pert_cpm_preview(a, queue, output_target, canvas, &renderer)
     try render_value_stream_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
+    try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

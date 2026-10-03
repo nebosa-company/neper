@@ -34144,3 +34144,27 @@ The Windows/Linux fixture checks interleaved entries, sizing, sparse columns,
 refusals and scene/SVG adapters; the gallery adds a PNG/SVG pair. SIPOC sets a
 process boundary. It does not model decisions, handoffs, simulation or an
 entity-relationship graph; those remain separate chart families.
+
+## D1906 — Count gallery deliverables, not grouped catalogue entries
+
+The earlier `Rendered previews (x/155)` compared PNG files with 155 grouped
+catalogue entries, unlike units. `docs/chart-preview-backlog.txt` now records
+one slug per unrendered gallery target; the generator counts committed PNG/SVG
+pairs plus those slugs, refuses duplicate/invalid slugs and missing companions,
+and links the finite backlog from the page. A rendered target leaves the list.
+This denominator is a maintained delivery set, not every mathematically
+possible chart or a chart-engine readiness score. The grouped 155-entry
+catalogue remains useful for family planning but does not drive this ratio.
+
+## D1907 — Evaluate decision trees before drawing their geometry
+
+`decision_tree_values` requires a rooted single-parent tree with choice,
+chance and terminal outcome nodes. Chance probabilities sum to one, outcomes
+carry finite payoffs, and choices select the maximum expected child value,
+breaking ties by input edge order. The caller owns the adjacency/work arrays
+and per-node values. `decision_tree_layout` uses subtree leaf intervals for
+stable vertical placement and flags the chosen choice edge; scene and SVG
+consume the same Bar/Rug geometry. Windows/Linux fixtures check numerical
+references, invalid probabilities/parents/cycles, capacity and adapters. The
+gallery adds a PNG/SVG pair. Risk preferences, influence diagrams, utility
+functions and decision DAGs remain follow-on work.

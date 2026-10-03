@@ -1,0 +1,86 @@
+# Planned gallery preview slugs. One target per line; remove a slug only when
+# its Neper-rendered PNG and SVG companion are committed with a focused fixture.
+# This is a finite delivery backlog, not a claim to enumerate every possible chart.
+
+# Cartesian and distribution variants
+stem_and_leaf
+range_interval
+probability_plot
+spine_plot
+hexbin
+bin2d
+density2d
+raincloud
+half_violin
+slopegraph
+connected_scatter
+marginal_histogram
+
+# Statistical, quality, medical and scientific diagrams
+dose_response
+hazard_rate
+influence_plot
+capability_sixpack
+fishbone
+cause_effect_tree
+weibull_probability
+oc_curve
+gage_rr
+multi_vari
+main_effects
+interaction_plot
+cube_plot
+spectrogram
+waterfall_spectrum
+bode
+nyquist
+scatter3d
+histogram3d
+density_surface3d
+wireframe3d
+anom
+hotelling_t2
+generalized_variance
+mewma
+capability_normal
+capability_nonnormal
+capability_attribute
+capability_batch
+gage_bias_linearity
+attribute_agreement
+gage_run
+
+# Geographic and reporting
+choropleth
+proportional_symbol_map
+cross_tab_report
+matrix_report
+
+# Operations, finance and network diagrams
+org_chart
+dependency_graph
+flowchart
+state_machine
+sequence_diagram
+entity_relationship
+branching_process_map
+future_state_vsm
+cap_table_waterfall
+tornado
+football_field
+yield_curve
+monte_carlo_histogram
+monte_carlo_cdf
+aggregate_decomposition_tree
+
+# Additional ggplot-style compositions and engine acceptance previews
+date_axis_line
+discrete_axis_bar
+category_facet
+legend_collision
+missing_data_scatter
+clipped_annotation
+plot_grid
+shared_guide_facets
+interactive_selection
+accessible_palette

@@ -221,6 +221,16 @@ backlog = '\n'.join(
     for item in queue_items
 )
 preview_paths = sorted(Path('docs/chart-previews').glob('*.png'))
+preview_backlog = [line.strip() for line in Path('docs/chart-preview-backlog.txt').read_text(encoding='utf-8').splitlines()
+                   if line.strip() and not line.lstrip().startswith('#')]
+if len(preview_backlog) != len(set(preview_backlog)) or any(
+        re.fullmatch(r'[a-z][a-z0-9_]*', name) is None for name in preview_backlog):
+    raise SystemExit('chart preview backlog contains a duplicate or invalid slug')
+if any(not path.with_suffix('.svg').exists() for path in preview_paths):
+    raise SystemExit('a chart PNG is missing its SVG companion')
+if {path.stem for path in preview_paths} & set(preview_backlog):
+    raise SystemExit('a rendered chart remains in the preview backlog')
+chart_total = len(preview_paths) + len(preview_backlog)
 previews = ''.join(
     '<figure><img src="chart-previews/{name}" alt="Neper {title} chart preview" '
     'width="360" height="240"><figcaption>{title}{vector}</figcaption></figure>'.format(
@@ -235,7 +245,9 @@ chart_section = (
     '<h2>Charting engine</h2>'
     '<p>Chart capability <code>L061</code>: {score:.0%} complete. {evidence}</p>'
     '<h3>Delivery roadmap</h3><ol>{roadmap}</ol>'
-    '<h3>Rendered previews ({preview_count}/155)</h3><div class="previews">{previews}</div>'
+    '<h3>Rendered previews ({preview_count}/{chart_total})</h3><div class="previews">{previews}</div>'
+    '<p class="sub">The denominator is the rendered PNG/SVG pairs plus the '
+    '<a href="chart-preview-backlog.txt">planned gallery targets</a>, not an engine-readiness score.</p>'
     '<details><summary>Full chart plan and chart/diagram catalogue</summary>'
     '<pre class="plan">{plan}</pre></details></section>'
     '<section class="tools" aria-label="Unfinished work queue">'
@@ -244,7 +256,7 @@ chart_section = (
     '<table><thead><tr><th>ID</th><th>Capability</th><th>Progress</th><th>Evidence and remaining work</th></tr></thead>'
     '<tbody>{backlog}</tbody></table></div></details></section>'
 ).format(score=float(chart_item['score']), evidence=html.escape(chart_item['evidence']),
-         roadmap=''.join(roadmap), preview_count=len(preview_paths), previews=previews,
+         roadmap=''.join(roadmap), preview_count=len(preview_paths), chart_total=chart_total, previews=previews,
          plan=html.escape(chart_plan),
          count=len(queue_items), backlog=backlog)
 

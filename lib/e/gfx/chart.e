@@ -45,6 +45,12 @@ type ValueStreamSummary = struct { process_time: f64, value_added_time: f64, wai
 type ValueStreamLayout = struct { nodes: Layout, connectors: Layout, process: Layout, waiting: Layout, summary: ValueStreamSummary }
 type SipocEntry = struct { column: usize }
 type SipocLayout = struct { bands: Layout, headers: Layout, cards: Layout, connectors: Layout, max_rows: usize }
+type DecisionKind = enum u8 { Choice, Chance, Outcome }
+type DecisionNode = struct { kind: DecisionKind, payoff: f64 }
+type DecisionEdge = struct { from: usize, to: usize, probability: f64 }
+type DecisionValue = struct { expected: f64, selected_edge: usize, depth: usize, leaf_count: usize, leaf_start: usize }
+type DecisionTreeWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize }
+type DecisionTreeSummary = struct { expected: f64, depth: usize, leaves: usize }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2570,6 +2576,153 @@ fn sipoc(entries: []const SipocEntry, bounds: geometry.Rect, gutter: f32, paddin
     let items = Layout { kind: .Bar, coords: zero, segments: zero, bars: cards[..entries.len], x_min: 0.0, x_max: 5.0, y_min: 0.0, y_max: f32(max_rows) }
     let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..12usize], bars: zero, x_min: 0.0, x_max: 5.0, y_min: 0.0, y_max: f32(max_rows) }
     ret (SipocLayout { bands: bands, headers: heads, cards: items, connectors: connectors, max_rows: max_rows }, ok)
+}
+
+// A rooted tree, not a general DAG: node zero is the root and every other
+// node has exactly one parent. Chance-edge probabilities sum to one. A choice
+// selects the largest expected child value, breaking ties by input edge order.
+fn decision_tree_values(nodes: []const DecisionNode, edges: []const DecisionEdge, values: []DecisionValue, work: DecisionTreeWork) -> (DecisionTreeSummary, err) {
+    let n = nodes.len
+    if n == 0usize { ret (zero, Empty) }
+    if values.len < n || work.indegree.len < n || work.head.len < n || work.order.len < n || work.next.len < edges.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        if !finite64(nodes[i].payoff) { ret (zero, Invalid) }
+        if nodes[i].kind != .Outcome && nodes[i].payoff != 0.0f64 { ret (zero, Invalid) }
+        values[i] = DecisionValue { expected: 0.0f64, selected_edge: edges.len, depth: 0usize, leaf_count: 0usize, leaf_start: 0usize }
+        work.indegree[i] = 0usize
+        work.head[i] = 0usize
+        i += 1usize
+    }
+    i = edges.len
+    while i > 0usize {
+        i -= 1usize
+        let link = edges[i]
+        if link.from >= n || link.to >= n || link.from == link.to || !finite64(link.probability) || link.probability < 0.0f64 || link.probability > 1.0f64 || nodes[link.from].kind == .Outcome || (nodes[link.from].kind == .Choice && link.probability != 0.0f64) { ret (zero, Invalid) }
+        work.indegree[link.to] += 1usize
+        if work.indegree[link.to] > 1usize { ret (zero, Invalid) }
+        work.next[i] = work.head[link.from]
+        work.head[link.from] = i + 1usize
+    }
+    if work.indegree[0usize] != 0usize { ret (zero, Invalid) }
+    i = 1usize
+    while i < n {
+        if work.indegree[i] != 1usize { ret (zero, Invalid) }
+        i += 1usize
+    }
+    work.order[0usize] = 0usize
+    var front = 0usize
+    var tail = 1usize
+    var depth = 1usize
+    while front < tail {
+        let node = work.order[front]
+        if nodes[node].kind != .Outcome && work.head[node] == 0usize { ret (zero, Invalid) }
+        var edge = work.head[node]
+        while edge != 0usize {
+            let child = edges[edge - 1usize].to
+            values[child].depth = values[node].depth + 1usize
+            if values[child].depth + 1usize > depth { depth = values[child].depth + 1usize }
+            work.order[tail] = child
+            tail += 1usize
+            edge = work.next[edge - 1usize]
+        }
+        front += 1usize
+    }
+    if tail != n { ret (zero, Invalid) }
+    i = n
+    while i > 0usize {
+        i -= 1usize
+        let node = work.order[i]
+        if nodes[node].kind == .Outcome {
+            values[node].expected = nodes[node].payoff
+            values[node].leaf_count = 1usize
+        } else {
+            var edge = work.head[node]
+            var probability_sum = 0.0f64
+            var best = 0.0f64
+            while edge != 0usize {
+                let index = edge - 1usize
+                let child = edges[index].to
+                let candidate = values[child].expected
+                values[node].leaf_count += values[child].leaf_count
+                if nodes[node].kind == .Chance {
+                    probability_sum += edges[index].probability
+                    values[node].expected += edges[index].probability * candidate
+                } else if values[node].selected_edge == edges.len || candidate > best || (candidate == best && index < values[node].selected_edge) {
+                    best = candidate
+                    values[node].selected_edge = index
+                    values[node].expected = candidate
+                }
+                edge = work.next[index]
+            }
+            if nodes[node].kind == .Chance && (probability_sum < 0.999999f64 || probability_sum > 1.000001f64) { ret (zero, Invalid) }
+            if !finite64(values[node].expected) || values[node].leaf_count == 0usize { ret (zero, Invalid) }
+        }
+    }
+    i = 0usize
+    while i < n {
+        let node = work.order[i]
+        var start = values[node].leaf_start
+        var edge = work.head[node]
+        while edge != 0usize {
+            let child = edges[edge - 1usize].to
+            values[child].leaf_start = start
+            start += values[child].leaf_count
+            edge = work.next[edge - 1usize]
+        }
+        i += 1usize
+    }
+    ret (DecisionTreeSummary { expected: values[0usize].expected, depth: depth, leaves: values[0usize].leaf_count }, ok)
+}
+
+// Leaf intervals reserve equal vertical area. Parent centers track the middle
+// of their descendant interval, while depths give non-overlapping columns.
+fn decision_tree_layout(nodes: []const DecisionNode, edges: []const DecisionEdge, values: []const DecisionValue, summary: DecisionTreeSummary, bounds: geometry.Rect, boxes: []geometry.Rect, arrows: []Segment, chosen: []bool) -> (Layout, Layout, err) {
+    let n = nodes.len
+    if n == 0usize { ret (zero, zero, Empty) }
+    if values.len < n || summary.depth == 0usize || summary.leaves == 0usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, zero, Invalid) }
+    if boxes.len < n || arrows.len / 5usize < edges.len || chosen.len < edges.len { ret (zero, zero, TooLarge) }
+    let cell_width = bounds.width / f32(summary.depth)
+    let leaf_height = bounds.height / f32(summary.leaves)
+    let box_width = cell_width * 0.58
+    let box_height = leaf_height * 0.58
+    if !finite(cell_width) || !finite(leaf_height) || !finite(box_width) || !finite(box_height) || box_width <= 0.0 || leaf_height < 19.0 { ret (zero, zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        let node = values[i]
+        if node.depth >= summary.depth || node.leaf_count == 0usize || node.leaf_start + node.leaf_count > summary.leaves { ret (zero, zero, Invalid) }
+        let x = bounds.x + (f32(node.depth) + 0.21) * cell_width
+        let y = bounds.y + (f32(node.leaf_start) + f32(node.leaf_count) * 0.5) * leaf_height - box_height * 0.5
+        if !finite(x) || !finite(y) || !finite(x + box_width) || !finite(y + box_height) { ret (zero, zero, Invalid) }
+        boxes[i] = geometry.rect(x, y, box_width, box_height)
+        i += 1usize
+    }
+    i = 0usize
+    while i < edges.len {
+        let link = edges[i]
+        if link.from >= n || link.to >= n || values[link.from].depth + 1usize != values[link.to].depth { ret (zero, zero, Invalid) }
+        let from = boxes[link.from]
+        let to = boxes[link.to]
+        let x0 = from.x + from.width
+        let x1 = to.x
+        let y0 = from.y + from.height * 0.5
+        let y1 = to.y + to.height * 0.5
+        let middle = x0 + (x1 - x0) * 0.5
+        let head = (x1 - x0) * 0.16
+        if !finite(head) || head <= 0.0 { ret (zero, zero, Invalid) }
+        let first = i * 5usize
+        let tip = Coord { x: x1, y: y1 }
+        arrows[first] = Segment { from: Coord { x: x0, y: y0 }, to: Coord { x: middle, y: y0 } }
+        arrows[first + 1usize] = Segment { from: Coord { x: middle, y: y0 }, to: Coord { x: middle, y: y1 } }
+        arrows[first + 2usize] = Segment { from: Coord { x: middle, y: y1 }, to: tip }
+        arrows[first + 3usize] = Segment { from: Coord { x: x1 - head, y: y1 - head * 0.7 }, to: tip }
+        arrows[first + 4usize] = Segment { from: Coord { x: x1 - head, y: y1 + head * 0.7 }, to: tip }
+        chosen[i] = nodes[link.from].kind == .Choice && values[link.from].selected_edge == i
+        i += 1usize
+    }
+    let node_layout = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..n], x_min: 0.0, x_max: f32(summary.depth), y_min: 0.0, y_max: f32(summary.leaves) }
+    let connector_layout = Layout { kind: .Rug, coords: zero, segments: arrows[..edges.len * 5usize], bars: zero, x_min: 0.0, x_max: f32(summary.depth), y_min: 0.0, y_max: f32(summary.leaves) }
+    ret (node_layout, connector_layout, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

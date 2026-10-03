@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and fifty-four PNG plus one hundred and fifty-four SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map and a SIPOC overview are also delivered. Individuals, moving-range,
+one hundred and fifty-five PNG plus one hundred and fifty-five SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview and an expected-value decision tree are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -543,6 +543,10 @@ checks this frame transition on both hosts.
 ## Chart and diagram catalogue
 
 This is the planned registry, grouped by the calculation or geometry they share.
+`docs/chart-preview-backlog.txt` separately tracks individual gallery deliverables,
+including grouped-catalogue variants and acceptance previews. The progress-page
+preview denominator counts those targets plus rendered PNG/SVG pairs; it is not
+the grouped-catalogue count or a claim of full chart-engine parity.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
@@ -571,6 +575,10 @@ order while accepting caller-owned entries and labels. It lays out variable
 column counts with header flow arrows and refuses invalid or overcrowded
 geometry. Entity relationships, swimlane handoffs and process execution stay
 with their separate diagram families.
+The decision tree accepts a rooted choice/chance/outcome tree, evaluates chance
+nodes from branch probabilities, selects maximum expected value at choices and
+lays out leaf intervals with a highlighted chosen branch. Influence diagrams,
+utility functions and DAG decision networks remain planned.
 
 ### General-purpose statistical and business charts
 
@@ -735,7 +743,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and fifty-four vector previews, automatic numeric tick text and
+   adapter with one hundred and fifty-five vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow
