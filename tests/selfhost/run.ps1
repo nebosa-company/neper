@@ -3227,6 +3227,11 @@ $gfxChartRiskMatrixWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gfxChartRiskMatrixWritten -ne 'executable written') { throw 'gfx_chart_risk_matrix emission failed' }
 $gfxChartRiskMatrixOutput = & $gfxChartRiskMatrixPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartRiskMatrixOutput -ne 'gfx chart risk matrix ok') { throw "the e.gfx.chart risk matrix answered wrongly: exit $LASTEXITCODE" }
+$gfxChartResourceHistogramPath = Join-Path $testBuild 'gfx-chart-resource-histogram-selfhost.exe'
+$gfxChartResourceHistogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_resource_histogram\src\main.e') $repo 'x64' 'windows' $gfxChartResourceHistogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartResourceHistogramWritten -ne 'executable written') { throw 'gfx_chart_resource_histogram emission failed' }
+$gfxChartResourceHistogramOutput = & $gfxChartResourceHistogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartResourceHistogramOutput -ne 'gfx chart resource histogram ok') { throw "the e.gfx.chart resource histogram answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

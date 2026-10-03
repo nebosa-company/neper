@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>resource_histogram</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="53" y="134.1999969482422" width="43.833335876464844" height="58.79999923706055" fill="rgb(28,107,199)" fill-opacity="1"/>
+<rect x="96.83333587646484" y="104.79999542236328" width="43.833335876464844" height="88.20000457763672" fill="rgb(28,107,199)" fill-opacity="1"/>
+<rect x="140.6666717529297" y="104.79999542236328" width="21.916656494140625" height="88.20000457763672" fill="rgb(28,107,199)" fill-opacity="1"/>
+<rect x="162.5833282470703" y="104.79999542236328" width="43.83332824707031" height="88.20000457763672" fill="rgb(28,107,199)" fill-opacity="1"/>
+<rect x="206.41665649414062" y="148.89999389648438" width="21.91668701171875" height="44.10000228881836" fill="rgb(28,107,199)" fill-opacity="1"/>
+<rect x="228.33334350585938" y="104.79999542236328" width="21.916656494140625" height="88.20000457763672" fill="rgb(28,107,199)" fill-opacity="1"/>
+<rect x="250.25" y="134.1999969482422" width="21.916656494140625" height="58.79999923706055" fill="rgb(28,107,199)" fill-opacity="1"/>
+<rect x="272.1666564941406" y="104.79999542236328" width="43.833343505859375" height="88.20000457763672" fill="rgb(28,107,199)" fill-opacity="1"/>
+<rect x="96.83333587646484" y="46" width="43.833335876464844" height="58.79999542236328" fill="rgb(217,56,46)" fill-opacity="1"/>
+<rect x="162.5833282470703" y="60.69999694824219" width="43.83332824707031" height="44.099998474121094" fill="rgb(217,56,46)" fill-opacity="1"/>
+<rect x="228.33334350585938" y="90.0999984741211" width="21.916656494140625" height="14.699996948242188" fill="rgb(217,56,46)" fill-opacity="1"/>
+<rect x="272.1666564941406" y="60.69999694824219" width="43.833343505859375" height="44.099998474121094" fill="rgb(217,56,46)" fill-opacity="1"/>
+<line x1="53" y1="104.79999542236328" x2="316" y2="104.79999542236328" stroke="rgb(217,56,46)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="74" y="225" width="11" height="10" fill="rgb(28,107,199)" fill-opacity="1"/>
+<rect x="194" y="225" width="11" height="10" fill="rgb(217,56,46)" fill-opacity="1"/>
+<text x="53" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="96.83332824707031" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">2</text>
+<text x="140.66665649414062" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">4</text>
+<text x="184.5" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">6</text>
+<text x="228.3333282470703" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">8</text>
+<text x="272.16668701171875" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">10</text>
+<text x="316" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">12</text>
+<text x="45" y="196" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="45" y="166.60000610351562" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">1</text>
+<text x="45" y="137.1999969482422" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">2</text>
+<text x="45" y="107.80000305175781" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">3</text>
+<text x="45" y="78.4000015258789" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">4</text>
+<text x="45" y="49" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">5</text>
+<text x="312" y="117.79999542236328" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(255,255,255)" fill-opacity="1">Cap 3</text>
+<text x="91" y="233" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Assigned</text>
+<text x="211" y="233" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Excess</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Resource histogram</text>
+</svg>

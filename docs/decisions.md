@@ -34063,3 +34063,15 @@ acceptable or unacceptable: those thresholds depend on the caller's risk
 policy. The focused fixture checks orientation, duplicate counts, invalid
 ratings and coordinates, storage refusal, and scene/SVG output on Windows and
 Linux. The gallery adds a PNG/SVG pair with cell counts.
+
+## D1897 — Resource histograms preserve assignment-boundary peaks
+
+`resource_histogram` accepts half-open assignment intervals with nonnegative
+units and a positive capacity. It uses every start/end as a time boundary,
+sums concurrent units in each period and returns variable-width normal and
+excess Bar layers plus a capacity Rug rule. Thus a short peak stays visible;
+there is no arbitrary fixed bin width or calendar assumption. The fixture
+checks overlap and gap loads, over-capacity geometry, invalid/caller-storage
+paths and scene/SVG output on Windows and Linux. The gallery adds a PNG/SVG
+pair. Microsoft Project's Resource Graph documents workload bars and a maximum
+units comparison: https://support.microsoft.com/en-us/project/view-resource-workloads-and-availability-in-project-desktop

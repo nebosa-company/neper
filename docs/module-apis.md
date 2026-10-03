@@ -15935,6 +15935,7 @@ type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: us
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
+type ResourceSpan = struct { start: f64, end: f64, units: f64 }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type TimelineEvent = struct { time: f64, row: usize }
 error Invalid
@@ -15980,6 +15981,7 @@ fn burndown(x: []const f32, remaining: []const f32, bounds: geometry.Rect, ideal
 fn burnup(x: []const f32, completed: []const f32, scope: []const f32, bounds: geometry.Rect, completed_segments: []Segment, scope_segments: []Segment) -> (Layout, Layout, err)
 fn earned_value(x: []const f32, planned: []const f32, earned: []const f32, actual: []const f32, bounds: geometry.Rect, planned_segments: []Segment, earned_segments: []Segment, actual_segments: []Segment) -> (Layout, Layout, Layout, err)
 fn gantt(tasks: []const GanttTask, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, row_gap: f32, spans: []geometry.Rect, completed: []geometry.Rect) -> (Layout, Layout, err)
+fn resource_histogram(spans: []const ResourceSpan, domain_start: f64, domain_end: f64, capacity: f64, bounds: geometry.Rect, edges: []f64, loads: []f64, normal_bars: []geometry.Rect, excess_bars: []geometry.Rect, capacity_rule: []Segment) -> (Layout, Layout, Layout, err)
 fn event_timeline(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, points: []Coord, stems: []Segment) -> (Layout, err)
 fn milestone_roadmap(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, size: f32, centers: []Coord, stems: []Segment, diamonds: []Coord, layers: []Layout) -> ([]Layout, err)
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)

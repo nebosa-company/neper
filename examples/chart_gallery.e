@@ -710,6 +710,83 @@ fn render_risk_matrix_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_resource_histogram_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/resource_histogram.png"
+    let plot = geometry.rect(53.0, 46.0, 263.0, 147.0)
+    let spans = [5]chart.ResourceSpan{
+        chart.ResourceSpan { start: 0.0f64, end: 4.0f64, units: 2.0f64 },
+        chart.ResourceSpan { start: 2.0f64, end: 7.0f64, units: 3.0f64 },
+        chart.ResourceSpan { start: 5.0f64, end: 9.0f64, units: 1.5f64 },
+        chart.ResourceSpan { start: 8.0f64, end: 12.0f64, units: 2.0f64 },
+        chart.ResourceSpan { start: 10.0f64, end: 12.0f64, units: 2.5f64 },
+    }
+    var edges: [12]f64 = zero
+    var loads: [11]f64 = zero
+    var normal_bars: [11]geometry.Rect = zero
+    var excess_bars: [11]geometry.Rect = zero
+    var capacity_rule: [1]chart.Segment = zero
+    let (normal, excess, limit, layout_error) = chart.resource_histogram(spans[..], 0.0f64, 12.0f64, 3.0f64, plot, edges[..], loads[..], normal_bars[..], excess_bars[..], capacity_rule[..])
+    if layout_error != ok { ret layout_error }
+    let blue = paint.rgba(0.11, 0.42, 0.78, 1.0)
+    let red = paint.rgba(0.85, 0.22, 0.18, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let ticks_x = [7]str{ "0", "2", "4", "6", "8", "10", "12" }
+    let ticks_y = [6]str{ "0", "1", "2", "3", "4", "5" }
+    var labels: [18]chart.Label = zero
+    var i = 0usize
+    while i < 7usize {
+        labels[i] = chart.Label { text: ticks_x[i], anchor: chart.Coord { x: plot.x + plot.width * f32(i) / 6.0, y: 209.0 }, align: .Center }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 6usize {
+        labels[7usize + i] = chart.Label { text: ticks_y[i], anchor: chart.Coord { x: 45.0, y: plot.y + plot.height - plot.height * f32(i) / 5.0 + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    labels[13usize] = chart.Label { text: "Resource histogram", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[14usize] = chart.Label { text: "Cap 3", anchor: chart.Coord { x: 312.0, y: limit.segments[0usize].from.y + 13.0 }, align: .Right }
+    labels[15usize] = chart.Label { text: "Assigned", anchor: chart.Coord { x: 91.0, y: 233.0 }, align: .Left }
+    labels[16usize] = chart.Label { text: "Excess", anchor: chart.Coord { x: 211.0, y: 233.0 }, align: .Left }
+    let normal_swatch = geometry.rect(74.0, 225.0, 11.0, 10.0)
+    let excess_swatch = geometry.rect(194.0, 225.0, 11.0, 10.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append(a, &builder, &normal, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &excess, paint.Brush { Solid: red })
+    try chart_scene.append(a, &builder, &limit, paint.Brush { Solid: red })
+    try fill(&builder, normal_swatch, paint.Brush { Solid: blue })
+    try fill(&builder, excess_swatch, paint.Brush { Solid: red })
+    try chart_scene.append_labels(a, &builder, labels[..13usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[14usize..15usize], font, 9.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[15usize..17usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[13usize..14usize], font, 14.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &normal, blue)
+    try chart_svg.append(&writer, &excess, red)
+    try chart_svg.append(&writer, &limit, red)
+    try chart_svg.rect(&writer, normal_swatch, blue, false)
+    try chart_svg.rect(&writer, excess_swatch, red, false)
+    try chart_svg.append_labels(&writer, labels[..13usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[14usize..15usize], white, 9.0)
+    try chart_svg.append_labels(&writer, labels[15usize..17usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[13usize..14usize], dark, 14.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_gantt_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/gantt.png"
     let plot = geometry.rect(89.0, 52.0, 225.0, 143.0)
@@ -4556,6 +4633,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_sparklines(a, queue, output_target, canvas, &renderer)
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
     try render_risk_matrix_preview(a, queue, output_target, canvas, &renderer)
+    try render_resource_histogram_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

@@ -30,6 +30,7 @@ type TargetStatus = struct { delta: f32, achieved: bool }
 type CloudWord = struct { label: Label, size: f32, box: geometry.Rect }
 type StateSpan = struct { row: usize, start: f64, end: f64, state: usize }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
+type ResourceSpan = struct { start: f64, end: f64, units: f64 }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2064,6 +2065,87 @@ fn gantt(tasks: []const GanttTask, rows: usize, domain_start: f64, domain_end: f
     let whole = Layout { kind: .Bar, coords: zero, segments: zero, bars: spans[..tasks.len], x_min: x_min, x_max: x_max, y_min: 0.0, y_max: y_max }
     let done = Layout { kind: .Bar, coords: zero, segments: zero, bars: completed[..tasks.len], x_min: x_min, x_max: x_max, y_min: 0.0, y_max: y_max }
     ret (whole, done, ok)
+}
+
+// Exact assignment boundaries form variable-width bars. The split between
+// normal and excess height is capacity, not an averaged time-bin estimate.
+fn resource_histogram(spans: []const ResourceSpan, domain_start: f64, domain_end: f64, capacity: f64, bounds: geometry.Rect, edges: []f64, loads: []f64, normal_bars: []geometry.Rect, excess_bars: []geometry.Rect, capacity_rule: []Segment) -> (Layout, Layout, Layout, err) {
+    if spans.len == 0usize { ret (zero, zero, zero, Empty) }
+    if !finite64(domain_start) || !finite64(domain_end) || domain_end <= domain_start || !finite64(domain_end - domain_start) || !finite64(capacity) || capacity <= 0.0f64 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, zero, zero, Invalid) }
+    if !finite(f32(domain_start)) || !finite(f32(domain_end)) || f32(domain_end) <= f32(domain_start) || !finite(f32(capacity)) || f32(capacity) <= 0.0 { ret (zero, zero, zero, Invalid) }
+    if edges.len < 2usize || spans.len > (edges.len - 2usize) / 2usize || capacity_rule.len == 0usize { ret (zero, zero, zero, TooLarge) }
+    var i = 0usize
+    while i < spans.len {
+        let span = spans[i]
+        if !finite64(span.start) || !finite64(span.end) || span.start < domain_start || span.end > domain_end || span.end <= span.start || !finite64(span.units) || span.units < 0.0f64 { ret (zero, zero, zero, Invalid) }
+        i += 1usize
+    }
+    edges[0usize] = domain_start
+    edges[1usize] = domain_end
+    i = 0usize
+    while i < spans.len {
+        edges[2usize + i * 2usize] = spans[i].start
+        edges[3usize + i * 2usize] = spans[i].end
+        i += 1usize
+    }
+    let count = 2usize + spans.len * 2usize
+    i = 1usize
+    while i < count {
+        let value = edges[i]
+        var j = i
+        while j > 0usize && edges[j - 1usize] > value {
+            edges[j] = edges[j - 1usize]
+            j -= 1usize
+        }
+        edges[j] = value
+        i += 1usize
+    }
+    var distinct = 0usize
+    i = 0usize
+    while i < count {
+        if distinct == 0usize || edges[i] > edges[distinct - 1usize] {
+            edges[distinct] = edges[i]
+            distinct += 1usize
+        }
+        i += 1usize
+    }
+    let periods = distinct - 1usize
+    if loads.len < periods || normal_bars.len < periods || excess_bars.len < periods { ret (zero, zero, zero, TooLarge) }
+    var maximum = capacity
+    i = 0usize
+    while i < periods {
+        let middle = edges[i] + (edges[i + 1usize] - edges[i]) * 0.5f64
+        var demand = 0.0f64
+        var j = 0usize
+        while j < spans.len {
+            if spans[j].start <= middle && middle < spans[j].end { demand += spans[j].units }
+            if !finite64(demand) || !finite(f32(demand)) { ret (zero, zero, zero, Invalid) }
+            j += 1usize
+        }
+        loads[i] = demand
+        if demand > maximum { maximum = demand }
+        i += 1usize
+    }
+    let bottom = bounds.y + bounds.height
+    let capacity_y = bottom - bounds.height * f32(capacity / maximum)
+    if !finite(capacity_y) { ret (zero, zero, zero, Invalid) }
+    i = 0usize
+    while i < periods {
+        let left = bounds.x + bounds.width * f32((edges[i] - domain_start) / (domain_end - domain_start))
+        let right = bounds.x + bounds.width * f32((edges[i + 1usize] - domain_start) / (domain_end - domain_start))
+        let total_height = bounds.height * f32(loads[i] / maximum)
+        var normal_height = total_height
+        if loads[i] > capacity { normal_height = bounds.height * f32(capacity / maximum) }
+        if !finite(left) || !finite(right) || right <= left || !finite(total_height) || !finite(normal_height) { ret (zero, zero, zero, Invalid) }
+        normal_bars[i] = geometry.rect(left, bottom - normal_height, right - left, normal_height)
+        excess_bars[i] = geometry.rect(left, bottom - total_height, right - left, total_height - normal_height)
+        i += 1usize
+    }
+    capacity_rule[0usize] = Segment { from: Coord { x: bounds.x, y: capacity_y }, to: Coord { x: bounds.x + bounds.width, y: capacity_y } }
+    let normal = Layout { kind: .Bar, coords: zero, segments: zero, bars: normal_bars[..periods], x_min: f32(domain_start), x_max: f32(domain_end), y_min: 0.0, y_max: f32(maximum) }
+    let excess = Layout { kind: .Bar, coords: zero, segments: zero, bars: excess_bars[..periods], x_min: f32(domain_start), x_max: f32(domain_end), y_min: 0.0, y_max: f32(maximum) }
+    let limit = Layout { kind: .Rug, coords: zero, segments: capacity_rule[..1usize], bars: zero, x_min: f32(domain_start), x_max: f32(domain_end), y_min: 0.0, y_max: f32(maximum) }
+    ret (normal, excess, limit, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.
