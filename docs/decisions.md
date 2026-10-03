@@ -33657,3 +33657,17 @@ Laney dispersion adjustments remain separate work.
 References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc321.htm,
 https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc323.htm and
 https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc324.htm.
+
+## D1858 — Estimate Laney dispersion from adjacent standardized subgroups
+
+`e.algo.stat.laney_control` builds on the pooled p/u calculator. It divides
+each subgroup's deviation from its center by the binomial or Poisson sigma,
+then uses mean adjacent z-score moving range / 1.128 as Sigma Z. Limits are
+the ordinary subgroup-specific three-sigma limits scaled by Sigma Z, with
+probability bounds clipped to [0,1]. This supports over- and underdispersion
+without another renderer. Degenerate pooled rates with zero theoretical
+variance are refused because z scores are undefined. Numeric reference and
+refusal checks pass on Windows and Linux; two PNG/SVG pairs bring the gallery
+to 102. Historical baselines and special-cause run rules remain planned.
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-p-chart/methods-and-formulas/methods-and-formulas/
+and https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-u-chart/methods-and-formulas/methods-and-formulas/.

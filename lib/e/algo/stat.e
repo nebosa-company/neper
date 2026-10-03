@@ -519,6 +519,50 @@ fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: [
     ret ok
 }
 
+// Laney P'/U' widen or narrow ordinary attribute limits by the z-score MR estimate.
+fn laney_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> (f64, err) {
+    if kind != .P && kind != .U { ret (0.0f64, Invalid) }
+    let base_error = attribute_control(kind, counts, sizes, out)
+    if base_error != ok { ret (0.0f64, base_error) }
+    let center = out[0usize].center
+    if center <= 0.0f64 || (kind == .P && center >= 1.0f64) { ret (0.0f64, Invalid) }
+    var ranges = 0.0f64
+    var previous = 0.0f64
+    var i = 0usize
+    while i < counts.len {
+        let n = f64(sizes[i])
+        var variance = center / n
+        if kind == .P { variance *= 1.0f64 - center }
+        let z = (out[i].value - center) / math.sqrt[f64](variance)
+        if z - z != 0.0f64 { ret (0.0f64, Invalid) }
+        if i > 0usize {
+            var difference = z - previous
+            if difference < 0.0f64 { difference = -difference }
+            ranges += difference
+        }
+        previous = z
+        i += 1usize
+    }
+    let sigma_z = ranges / f64(counts.len - 1usize) / 1.128f64
+    if sigma_z - sigma_z != 0.0f64 { ret (0.0f64, Invalid) }
+    i = 0usize
+    while i < counts.len {
+        let n = f64(sizes[i])
+        var variance = center / n
+        if kind == .P { variance *= 1.0f64 - center }
+        let spread = 3.0f64 * math.sqrt[f64](variance) * sigma_z
+        var lower = center - spread
+        var upper = center + spread
+        if lower < 0.0f64 { lower = 0.0f64 }
+        if kind == .P && upper > 1.0f64 { upper = 1.0f64 }
+        if upper - upper != 0.0f64 { ret (0.0f64, Invalid) }
+        out[i].lower = lower
+        out[i].upper = upper
+        i += 1usize
+    }
+    ret (sigma_z, ok)
+}
+
 // Subgroup-major X-bar/S limits use sample SD and the gamma-derived c4 factor.
 fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations: []f64) -> (ControlLimits, ControlLimits, err) {
     if subgroup < 2usize || subgroup > values.len / 2usize || values.len % subgroup != 0usize { ret (zero, zero, Invalid) }

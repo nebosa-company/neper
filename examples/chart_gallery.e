@@ -1079,6 +1079,20 @@ fn render_attribute_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     ret ok
 }
 
+fn render_laney_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let p_counts = [8]usize{ 2usize, 10usize, 3usize, 9usize, 1usize, 11usize, 4usize, 8usize }
+    let u_counts = [8]usize{ 1usize, 12usize, 0usize, 14usize, 2usize, 11usize, 1usize, 13usize }
+    let p_sizes = [8]usize{ 100usize, 100usize, 100usize, 100usize, 100usize, 100usize, 100usize, 100usize }
+    let u_sizes = [8]usize{ 10usize, 10usize, 10usize, 10usize, 10usize, 10usize, 10usize, 10usize }
+    var samples: [8]stat.AttributeControlPoint = zero
+    let (p_sigma, p_error) = stat.laney_control(.P, p_counts[..], p_sizes[..], samples[..])
+    if p_error != ok { ret p_error }
+    try render_attribute_preview(a, q, output_target, canvas, renderer, samples[..], "Laney P-prime", "Fraction", "docs/chart-previews/laney_p.png")
+    let (u_sigma, u_error) = stat.laney_control(.U, u_counts[..], u_sizes[..], samples[..])
+    if u_error != ok { ret u_error }
+    ret render_attribute_preview(a, q, output_target, canvas, renderer, samples[..], "Laney U-prime", "Defect rate", "docs/chart-previews/laney_u.png")
+}
+
 fn render_roc_extension_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, partial: bool, path: str) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     var x: [17]f32 = zero
@@ -2646,6 +2660,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_control_previews(a, queue, output_target, canvas, &renderer)
     try render_weighted_control_previews(a, queue, output_target, canvas, &renderer)
     try render_attribute_previews(a, queue, output_target, canvas, &renderer)
+    try render_laney_previews(a, queue, output_target, canvas, &renderer)
     let diagnostic_scores = [16]f64{ 0.98f64, 0.93f64, 0.89f64, 0.84f64, 0.78f64, 0.72f64, 0.68f64, 0.62f64, 0.56f64, 0.50f64, 0.44f64, 0.38f64, 0.32f64, 0.26f64, 0.18f64, 0.08f64 }
     let diagnostic_positive = [16]bool{ true, true, false, true, true, false, true, false, true, false, true, false, false, true, false, false }
     var diagnostic_order: [16]usize = zero
