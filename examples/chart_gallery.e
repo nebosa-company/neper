@@ -348,6 +348,87 @@ fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, c
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_state_timeline(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, state_ids: []usize, row_names: []const str, state_names: []const str, colors: []const paint.Color, title: str, path: str) -> err {
+    if row_names.len != 4usize || state_names.len != 3usize || colors.len != state_names.len || state_ids.len < layers.len { ret chart.Invalid }
+    let plot = geometry.rect(68.0, 54.0, 188.0, 148.0)
+    let lane_height = (plot.height - 3.0 * 4.0) / 4.0
+    let pale = paint.rgba(0.93, 0.95, 0.97, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var legend: [3]chart.LegendItem = zero
+    let (entries, legend_error) = chart.legend_items(state_names, chart.Coord { x: 268.0, y: 69.0 }, 10.0, 34.0, legend[..])
+    if legend_error != ok { ret legend_error }
+    var labels: [12]chart.Label = zero
+    var i = 0usize
+    while i < 4usize {
+        labels[i] = chart.Label { text: row_names[i], anchor: chart.Coord { x: 60.0, y: plot.y + f32(i) * (lane_height + 4.0) + lane_height * 0.5 + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        labels[4usize + i] = entries[i].label
+        i += 1usize
+    }
+    let ticks = [4]str{ "0", "4", "8", "12" }
+    i = 0usize
+    while i < 4usize {
+        labels[7usize + i] = chart.Label { text: ticks[i], anchor: chart.Coord { x: plot.x + plot.width * f32(i) / 3.0, y: 220.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[11usize] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 0usize
+    while i < 4usize {
+        try fill(&builder, geometry.rect(plot.x, plot.y + f32(i) * (lane_height + 4.0), plot.width, lane_height), paint.Brush { Solid: pale })
+        i += 1usize
+    }
+    i = 0usize
+    while i < layers.len {
+        if state_ids[i] >= colors.len { ret chart.Invalid }
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[state_ids[i]] })
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        try fill(&builder, entries[i].swatch, paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..11usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[11usize..], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 4usize {
+        try chart_svg.rect(&writer, geometry.rect(plot.x, plot.y + f32(i) * (lane_height + 4.0), plot.width, lane_height), pale, false)
+        i += 1usize
+    }
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[state_ids[i]])
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        try chart_svg.rect(&writer, entries[i].swatch, colors[i], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..11usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[11usize..], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_mekko(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, path: str) -> err {
     if layers.len != 3usize || categories.len != 4usize || names.len != layers.len || layers[0usize].bars.len != categories.len { ret chart.Invalid }
     let colors = [3]paint.Color{
@@ -1614,6 +1695,57 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (rank_layers, rank_error) = chart.ribbon_rank(rank_x[..], rank_values[..], 5usize, geometry.rect(18.0, 42.0, 192.0, 176.0), 5.0, rank_points[..], rank_storage[..])
     if rank_error != ok { ret rank_error }
     try render_share(a, queue, output_target, canvas, &renderer, rank_layers, rank_names[..], "Ranks over time", "docs/chart-previews/ribbon_rank.png")
+    let timeline_rows = [4]str{ "API", "Queue", "DB", "Worker" }
+    let timeline_states = [3]str{ "Idle", "Running", "Paused" }
+    let timeline_colors = [3]paint.Color{ paint.rgba(0.48, 0.57, 0.67, 1.0), paint.rgba(0.08, 0.43, 0.78, 1.0), paint.rgba(0.91, 0.53, 0.15, 1.0) }
+    let timeline_spans = [17]chart.StateSpan{
+        chart.StateSpan { row: 0usize, start: 0.0, end: 2.0, state: 0usize },
+        chart.StateSpan { row: 0usize, start: 2.0, end: 5.0, state: 1usize },
+        chart.StateSpan { row: 0usize, start: 5.0, end: 8.0, state: 1usize },
+        chart.StateSpan { row: 0usize, start: 8.0, end: 9.0, state: 2usize },
+        chart.StateSpan { row: 0usize, start: 9.0, end: 12.0, state: 1usize },
+        chart.StateSpan { row: 1usize, start: 0.0, end: 1.0, state: 0usize },
+        chart.StateSpan { row: 1usize, start: 1.0, end: 4.0, state: 1usize },
+        chart.StateSpan { row: 1usize, start: 4.0, end: 6.0, state: 2usize },
+        chart.StateSpan { row: 1usize, start: 6.0, end: 12.0, state: 1usize },
+        chart.StateSpan { row: 2usize, start: 0.0, end: 3.0, state: 1usize },
+        chart.StateSpan { row: 2usize, start: 3.0, end: 4.0, state: 2usize },
+        chart.StateSpan { row: 2usize, start: 4.0, end: 10.0, state: 1usize },
+        chart.StateSpan { row: 2usize, start: 10.0, end: 12.0, state: 0usize },
+        chart.StateSpan { row: 3usize, start: 0.0, end: 2.0, state: 0usize },
+        chart.StateSpan { row: 3usize, start: 2.0, end: 7.0, state: 1usize },
+        chart.StateSpan { row: 3usize, start: 7.0, end: 8.0, state: 2usize },
+        chart.StateSpan { row: 3usize, start: 8.0, end: 12.0, state: 1usize },
+    }
+    var timeline_rects: [17]geometry.Rect = zero
+    var timeline_state_ids: [17]usize = zero
+    var timeline_storage: [17]chart.Layout = zero
+    let timeline_bounds = geometry.rect(68.0, 54.0, 188.0, 148.0)
+    let (timeline_layers, timeline_error) = chart.state_timeline(timeline_spans[..], 4usize, 3usize, 0.0f64, 12.0f64, timeline_bounds, 4.0, timeline_rects[..], timeline_state_ids[..], timeline_storage[..])
+    if timeline_error != ok { ret timeline_error }
+    try render_state_timeline(a, queue, output_target, canvas, &renderer, timeline_layers, timeline_state_ids[..], timeline_rows[..], timeline_states[..], timeline_colors[..], "State timeline", "docs/chart-previews/state_timeline.png")
+    let history_states = [3]str{ "Healthy", "Warning", "Down" }
+    let history_colors = [3]paint.Color{ paint.rgba(0.11, 0.61, 0.43, 1.0), paint.rgba(0.91, 0.59, 0.15, 1.0), paint.rgba(0.84, 0.25, 0.25, 1.0) }
+    let history_spans = [15]chart.StateSpan{
+        chart.StateSpan { row: 0usize, start: 0.0, end: 3.0, state: 0usize },
+        chart.StateSpan { row: 0usize, start: 3.0, end: 4.0, state: 1usize },
+        chart.StateSpan { row: 0usize, start: 4.0, end: 5.0, state: 2usize },
+        chart.StateSpan { row: 0usize, start: 5.0, end: 12.0, state: 0usize },
+        chart.StateSpan { row: 1usize, start: 0.0, end: 6.0, state: 0usize },
+        chart.StateSpan { row: 1usize, start: 6.0, end: 7.0, state: 1usize },
+        chart.StateSpan { row: 1usize, start: 8.0, end: 10.0, state: 1usize },
+        chart.StateSpan { row: 1usize, start: 10.0, end: 12.0, state: 0usize },
+        chart.StateSpan { row: 2usize, start: 0.0, end: 2.0, state: 0usize },
+        chart.StateSpan { row: 2usize, start: 2.0, end: 3.0, state: 2usize },
+        chart.StateSpan { row: 2usize, start: 3.0, end: 12.0, state: 0usize },
+        chart.StateSpan { row: 3usize, start: 0.0, end: 4.0, state: 0usize },
+        chart.StateSpan { row: 3usize, start: 4.0, end: 5.0, state: 1usize },
+        chart.StateSpan { row: 3usize, start: 5.0, end: 6.0, state: 1usize },
+        chart.StateSpan { row: 3usize, start: 6.0, end: 12.0, state: 0usize },
+    }
+    let (history_layers, history_error) = chart.state_timeline(history_spans[..], 4usize, 3usize, 0.0f64, 12.0f64, timeline_bounds, 4.0, timeline_rects[..], timeline_state_ids[..], timeline_storage[..])
+    if history_error != ok { ret history_error }
+    try render_state_timeline(a, queue, output_target, canvas, &renderer, history_layers, timeline_state_ids[..], timeline_rows[..], history_states[..], history_colors[..], "Status history", "docs/chart-previews/status_history.png")
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

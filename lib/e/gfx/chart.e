@@ -26,6 +26,7 @@ type SunburstArc = struct { start: f64, end: f64, next: f64 }
 type SankeyNode = struct { incoming: f64, outgoing: f64, in_used: f64, out_used: f64 }
 type TargetStatus = struct { delta: f32, achieved: bool }
 type CloudWord = struct { label: Label, size: f32, box: geometry.Rect }
+type StateSpan = struct { row: usize, start: f64, end: f64, state: usize }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
@@ -1264,6 +1265,48 @@ fn word_cloud(words: []const str, weights: []const f32, unit_widths: []const f32
         used += 1usize
     }
     ret (marks[..active], ok)
+}
+
+// Ordered half-open spans map to categorical rows. Uncovered time remains blank.
+// ponytail: coalescing uses exact shared endpoints; normalize jittery clocks upstream.
+fn state_timeline(spans: []const StateSpan, rows: usize, states: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, row_gap: f32, rects: []geometry.Rect, state_ids: []usize, layers: []Layout) -> ([]Layout, err) {
+    if spans.len == 0usize || rows == 0usize || states == 0usize { ret (zero, Empty) }
+    if !finite64(domain_start) || !finite64(domain_end) || domain_end <= domain_start || !valid_bounds(bounds) || !finite(row_gap) || row_gap < 0.0 { ret (zero, Invalid) }
+    if rects.len < spans.len || state_ids.len < spans.len || layers.len < spans.len { ret (zero, TooLarge) }
+    let total_gap = row_gap * f32(rows - 1usize)
+    if !finite(total_gap) || total_gap >= bounds.height { ret (zero, Invalid) }
+    let lane_height = (bounds.height - total_gap) / f32(rows)
+    if !finite(lane_height) || lane_height <= 0.0 { ret (zero, Invalid) }
+    var used = 0usize
+    var i = 0usize
+    while i < spans.len {
+        let span = spans[i]
+        if span.row >= rows || span.state >= states || !finite64(span.start) || !finite64(span.end) || span.start < domain_start || span.end > domain_end || span.end <= span.start { ret (zero, Invalid) }
+        if i > 0usize {
+            let before = spans[i - 1usize]
+            if span.row < before.row || (span.row == before.row && span.start < before.end) { ret (zero, Invalid) }
+        }
+        let left = bounds.x + bounds.width * f32((span.start - domain_start) / (domain_end - domain_start))
+        let right = bounds.x + bounds.width * f32((span.end - domain_start) / (domain_end - domain_start))
+        let top = bounds.y + f32(span.row) * (lane_height + row_gap)
+        if !finite(left) || !finite(right) || !finite(top) || right <= left { ret (zero, Invalid) }
+        var merged = false
+        if i > 0usize {
+            let before = spans[i - 1usize]
+            if span.row == before.row && span.state == before.state && span.start == before.end {
+                rects[used - 1usize].width = right - rects[used - 1usize].x
+                merged = true
+            }
+        }
+        if !merged {
+            rects[used] = geometry.rect(left, top, right - left, lane_height)
+            state_ids[used] = span.state
+            layers[used] = Layout { kind: .Bar, coords: zero, segments: zero, bars: rects[used..used + 1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: f32(rows) }
+            used += 1usize
+        }
+        i += 1usize
+    }
+    ret (layers[..used], ok)
 }
 
 fn chord_point(center: Coord, radius: f64, angle: f64) -> Coord {

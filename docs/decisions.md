@@ -33515,3 +33515,15 @@ exclusions, collisions, bounds, refusals and both adapters on Windows and
 Linux; the gallery adds one PNG/SVG pair. The quadratic collision scan and
 finite spiral search suit small clouds. Tokenization, case normalization,
 font embedding and scalable packing remain later work.
+
+## D1845 — Share ordered interval geometry across state and status histories
+
+`chart.state_timeline` accepts f64 half-open time intervals ordered by row and
+start, maps them to caller-owned Bar layers, and returns each layer's state ID
+for palette/legend binding. Equal states at exactly abutting endpoints merge;
+uncovered time remains blank. Overlap, row disorder, invalid state/domain and
+short storage are refused. `gfx_chart_state_timeline` checks large timestamp
+precision, coalescing, gaps, refusals and scene/SVG output on Windows and Linux.
+The gallery adds separate state-timeline and status-history PNG/SVG pairs with
+distinct palettes. Date/time text, timezone policy and event annotations remain
+separate work rather than being hidden in this geometry function.
