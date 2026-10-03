@@ -23,6 +23,7 @@ type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type SunburstArc = struct { start: f64, end: f64, next: f64 }
 type SankeyNode = struct { incoming: f64, outgoing: f64, in_used: f64, out_used: f64 }
+type TargetStatus = struct { delta: f32, achieved: bool }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
@@ -999,6 +1000,16 @@ fn bullet(actual: f32, target_value: f32, ranges: []const f32, bounds: geometry.
     ret (layers[..ranges.len + 2usize], ok)
 }
 
+// Signed delta is actual minus target; callers choose whether higher is better.
+fn target_status(actual: f32, target_value: f32, higher_is_better: bool) -> (TargetStatus, err) {
+    if !finite(actual) || !finite(target_value) { ret (zero, Invalid) }
+    let delta = actual - target_value
+    if !finite(delta) { ret (zero, Invalid) }
+    var achieved = actual >= target_value
+    if !higher_is_better { achieved = actual <= target_value }
+    ret (TargetStatus { delta: delta, achieved: achieved }, ok)
+}
+
 // Descending frequency bars and a cumulative fraction line share category
 // centres. `order` maps rendered positions back to the borrowed input.
 fn pareto(values: []const f32, bounds: geometry.Rect, order: []usize, bars: []geometry.Rect, points: []Coord, lines: []Segment, layers: []Layout) -> ([]Layout, err) {
@@ -1130,6 +1141,43 @@ fn pie(values: []const f32, bounds: geometry.Rect, hole: f32, points: []Coord, l
         i += 1usize
     }
     ret (layers[..values.len], ok)
+}
+
+// Half-ring gauge: background, measured value and target rule, in paint order.
+// The ring fits a semicircle inside bounds; the caller owns all three marks.
+fn gauge(value: f32, target_value: f32, maximum: f32, bounds: geometry.Rect, hole: f32, points: []Coord, target_line: []Segment, layers: []Layout) -> ([]Layout, err) {
+    if !valid_bounds(bounds) || !finite(value) || !finite(target_value) || !finite(maximum) || maximum <= 0.0 || value < 0.0 || value > maximum || target_value < 0.0 || target_value > maximum || !finite(hole) || hole < 0.0 || hole >= 1.0 { ret (zero, Invalid) }
+    if points.len < 196usize || target_line.len == 0usize || layers.len < 3usize { ret (zero, TooLarge) }
+    var radius = f64(bounds.width) * 0.5f64
+    if f64(bounds.height) < radius { radius = f64(bounds.height) }
+    if radius <= 0.0f64 { ret (zero, Invalid) }
+    let inner = radius * f64(hole)
+    let cx = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let cy = f64(bounds.y) + f64(bounds.height)
+    let pi = 3.141592653589793f64
+    let fractions = [2]f64{ 1.0f64, f64(value) / f64(maximum) }
+    var layer = 0usize
+    while layer < 2usize {
+        let first = layer * 98usize
+        var j = 0usize
+        while j <= 48usize {
+            let angle = pi + pi * fractions[layer] * f64(j) / 48.0f64
+            points[first + j] = Coord { x: f32(cx + radius * math.cos[f64](angle)), y: f32(cy + radius * math.sin[f64](angle)) }
+            let reverse = pi + pi * fractions[layer] * f64(48usize - j) / 48.0f64
+            points[first + 49usize + j] = Coord { x: f32(cx + inner * math.cos[f64](reverse)), y: f32(cy + inner * math.sin[f64](reverse)) }
+            if !finite(points[first + j].x) || !finite(points[first + j].y) || !finite(points[first + 49usize + j].x) || !finite(points[first + 49usize + j].y) { ret (zero, Invalid) }
+            j += 1usize
+        }
+        layers[layer] = Layout { kind: .Area, coords: points[first..first + 98usize], segments: zero, bars: zero, x_min: 0.0, x_max: maximum, y_min: 0.0, y_max: 1.0 }
+        layer += 1usize
+    }
+    let angle = pi + pi * f64(target_value) / f64(maximum)
+    let start = Coord { x: f32(cx + inner * 0.85f64 * math.cos[f64](angle)), y: f32(cy + inner * 0.85f64 * math.sin[f64](angle)) }
+    let end = Coord { x: f32(cx + radius * math.cos[f64](angle)), y: f32(cy + radius * math.sin[f64](angle)) }
+    if !finite(start.x) || !finite(start.y) || !finite(end.x) || !finite(end.y) { ret (zero, Invalid) }
+    target_line[0usize] = Segment { from: start, to: end }
+    layers[2usize] = Layout { kind: .Rug, coords: zero, segments: target_line[..1usize], bars: zero, x_min: 0.0, x_max: maximum, y_min: 0.0, y_max: 1.0 }
+    ret (layers[..3usize], ok)
 }
 
 fn chord_point(center: Coord, radius: f64, angle: f64) -> Coord {

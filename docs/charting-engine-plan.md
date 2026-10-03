@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-sixty-two PNG plus sixty-two SVG previews from Neper. L061 remains partial
+sixty-four PNG plus sixty-four SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -136,6 +136,13 @@ legend placement, wrapping and collision handling remain planned.
 and a target rule as separate caller-owned layers sharing one zero-to-maximum
 scale. Existing Bar and Rug adapters paint them; category labels and automatic
 palette selection remain caller/guide work.
+`gauge` returns a background half-ring, measured-value half-ring and target
+rule as Area/Rug layers over an explicit positive maximum. `target_status`
+computes signed actual-minus-target delta and threshold attainment for either
+higher- or lower-is-better metrics. The gallery composes it with the existing
+bullet layers into a KPI card. `gfx_chart_gauge` checks boundary geometry,
+range/storage refusals, target direction and both adapters on Windows and
+Linux. Dynamic labels and warning/critical thresholds remain caller work.
 `pareto` stably orders nonnegative category counts, exposes that order for labels,
 and returns frequency Bar and cumulative-fraction PointLine layers with independent
 left count and right percentage domains. It refuses zero totals; the gallery
@@ -290,7 +297,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons and basic stage funnel are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -350,6 +357,8 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    PointLine layer and an explicit percentage axis in the gallery.
    Population pyramid uses mirrored horizontal Bar layers with a shared maximum;
    `gfx_chart_population_pyramid` checks geometry and both adapters on both hosts.
+   A target gauge reuses Area arcs and a Rug rule; a KPI card composes bullet
+   layers with `target_status`. `gfx_chart_gauge` checks both hosts and adapters.
    Pie and donut reuse Area polygons, explicit colour/legend metadata and the
    common scene/SVG adapters; `gfx_chart_polar` checks both on Windows and Linux.
    Waffle and stage funnel reuse Bar and Area layers respectively;
@@ -390,7 +399,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with sixty-two vector previews, automatic numeric tick text and
+   adapter with sixty-four vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

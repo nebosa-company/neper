@@ -33490,3 +33490,15 @@ path. `gfx_chart_ribbon_rank` checks rank geometry, ties, refusals and both
 adapters on Windows and Linux; the gallery adds one PNG/SVG pair. The
 quadratic comparison scan is sufficient for small series counts; missing
 categories and smoother crossovers remain separate work.
+
+## D1843 — Compose target gauges and KPI cards from existing marks
+
+`chart.gauge` places a background and measured-value semicircular Area ring
+plus a target Rug rule on one explicit maximum. `chart.target_status` returns
+signed actual-minus-target delta and attainment under a caller-selected
+higher- or lower-is-better rule. The KPI preview composes that result with
+existing bullet layers and text, without another painter. `gfx_chart_gauge`
+checks geometric endpoints, zero/full values, invalid bounds and capacities,
+both target directions and scene/SVG output on Windows and Linux. The gallery
+adds two PNG/SVG pairs. Dynamic labels, threshold bands and widget binding
+remain future work; the existing UI gauge is a separate control surface.

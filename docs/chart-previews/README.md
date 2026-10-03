@@ -7,7 +7,7 @@ density, ridgeline, Q-Q, violin, heatmap, correlation matrix, faceted heatmap, s
 facet scales, log scatter, symmetric-log line, labeled line, labeled log scatter
 and labeled symmetric-log line PNGs, plus the bubble, OLS fit, covariance data
 ellipse, mean-confidence and prediction overlays, and categorical bar+line
-combo, candlestick, OHLC bars, a hierarchical treemap, a sunburst, an icicle, circle packing, a population pyramid, a Sankey, an alluvial diagram, a chord diagram, a streamgraph, rank-over-time ribbons, a mekko chart, a two-set area-proportional Euler diagram and a nominal three-set Venn diagram are rendered by Neper's CPU scene and PNG encoder. All 62 have an SVG
+combo, candlestick, OHLC bars, a hierarchical treemap, a sunburst, an icicle, circle packing, a population pyramid, a Sankey, an alluvial diagram, a chord diagram, a streamgraph, rank-over-time ribbons, a target gauge, a KPI/target-status card, a mekko chart, a two-set area-proportional Euler diagram and a nominal three-set Venn diagram are rendered by Neper's CPU scene and PNG encoder. All 64 have an SVG
 companion streamed from the same layout with title and
 description metadata. Grouped and stacked bars include category labels and a
 two-series legend in both formats. The labeled preview uses the repository's Montserrat

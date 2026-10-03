@@ -495,6 +495,121 @@ fn render_bullet(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_gauge(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, path: str) -> err {
+    if layers.len != 3usize { ret chart.Invalid }
+    let colors = [3]paint.Color{ paint.rgba(0.86, 0.90, 0.94, 1.0), paint.rgba(0.08, 0.40, 0.77, 1.0), paint.rgba(0.91, 0.37, 0.14, 1.0) }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let names = [2]str{ "Actual 72", "Target 80" }
+    var legend: [2]chart.LegendItem = zero
+    let (entries, legend_error) = chart.legend_items(names[..], chart.Coord { x: 238.0, y: 89.0 }, 11.0, 38.0, legend[..])
+    if legend_error != ok { ret legend_error }
+    let labels = [4]chart.Label{
+        entries[0usize].label,
+        entries[1usize].label,
+        chart.Label { text: "72%", anchor: chart.Coord { x: 123.0, y: 162.0 }, align: .Center },
+        chart.Label { text: "Target gauge", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 32usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        try fill(&builder, entries[i].swatch, paint.Brush { Solid: colors[i + 1usize] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..2usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..3usize], font, 23.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[3usize..], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        try chart_svg.rect(&writer, entries[i].swatch, colors[i + 1usize], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..2usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[2usize..3usize], dark, 23.0)
+    try chart_svg.append_labels(&writer, labels[3usize..], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_kpi(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, status: chart.TargetStatus, path: str) -> err {
+    if layers.len != 5usize { ret chart.Invalid }
+    var actual_color = paint.rgba(0.72, 0.22, 0.22, 1.0)
+    if status.achieved { actual_color = paint.rgba(0.08, 0.55, 0.38, 1.0) }
+    let colors = [5]paint.Color{
+        paint.rgba(0.89, 0.92, 0.95, 1.0), paint.rgba(0.77, 0.83, 0.88, 1.0),
+        paint.rgba(0.64, 0.72, 0.80, 1.0), actual_color, paint.rgba(0.91, 0.37, 0.14, 1.0),
+    }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let labels = [6]chart.Label{
+        chart.Label { text: "Service KPI", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "96%", anchor: chart.Coord { x: 36.0, y: 103.0 }, align: .Left },
+        chart.Label { text: "16 above target", anchor: chart.Coord { x: 38.0, y: 130.0 }, align: .Left },
+        chart.Label { text: "Target 80%", anchor: chart.Coord { x: 238.0, y: 130.0 }, align: .Left },
+        chart.Label { text: "0", anchor: chart.Coord { x: 34.0, y: 213.0 }, align: .Left },
+        chart.Label { text: "100", anchor: chart.Coord { x: 326.0, y: 213.0 }, align: .Right },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 32usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 32.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..3usize], font, 10.0, paint.Brush { Solid: actual_color })
+    try chart_scene.append_labels(a, &builder, labels[3usize..4usize], font, 9.0, paint.Brush { Solid: colors[4usize] })
+    try chart_scene.append_labels(a, &builder, labels[4usize..], font, 9.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 32.0)
+    try chart_svg.append_labels(&writer, labels[2usize..3usize], actual_color, 10.0)
+    try chart_svg.append_labels(&writer, labels[3usize..4usize], colors[4usize], 9.0)
+    try chart_svg.append_labels(&writer, labels[4usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_dual_axis(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, title: str, percent: bool, path: str) -> err {
     if layers.len != 2usize || categories.len != 5usize || categories.len != layers[0].bars.len { ret chart.Invalid }
     let plot = geometry.rect(48.0, 36.0, 246.0, 158.0)
@@ -1245,6 +1360,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (bullet_layers, bullet_error) = chart.bullet(62.0, 80.0, bullet_ranges[..], geometry.rect(44.0, 86.0, 286.0, 66.0), bullet_bars[..], bullet_target[..], bullet_storage[..])
     if bullet_error != ok { ret bullet_error }
     try render_bullet(a, queue, output_target, canvas, &renderer, bullet_layers, "docs/chart-previews/bullet.png")
+    var gauge_points: [196]chart.Coord = zero
+    var gauge_target: [1]chart.Segment = zero
+    var gauge_storage: [3]chart.Layout = zero
+    let (gauge_layers, gauge_error) = chart.gauge(72.0, 80.0, 100.0, geometry.rect(28.0, 52.0, 190.0, 122.0), 0.62, gauge_points[..], gauge_target[..], gauge_storage[..])
+    if gauge_error != ok { ret gauge_error }
+    try render_gauge(a, queue, output_target, canvas, &renderer, gauge_layers, "docs/chart-previews/gauge.png")
+    let (kpi_status, kpi_error) = chart.target_status(96.0, 80.0, true)
+    if kpi_error != ok { ret kpi_error }
+    let (kpi_layers, kpi_layout_error) = chart.bullet(96.0, 80.0, bullet_ranges[..], geometry.rect(34.0, 158.0, 292.0, 34.0), bullet_bars[..], bullet_target[..], bullet_storage[..])
+    if kpi_layout_error != ok { ret kpi_layout_error }
+    try render_kpi(a, queue, output_target, canvas, &renderer, kpi_layers, kpi_status, "docs/chart-previews/kpi_target.png")
     let pareto_values = [5]f32{ 3.0, 8.0, 5.0, 2.0, 6.0 }
     let pareto_names = [5]str{ "North", "South", "East", "West", "Central" }
     var pareto_order: [5]usize = zero
