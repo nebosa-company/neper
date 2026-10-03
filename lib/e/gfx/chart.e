@@ -83,6 +83,10 @@ type BranchSummary = struct { output_fraction: f64, expected_processing_time: f6
 type BranchLayout = struct { nodes: Layout, connectors: Layout, summary: BranchSummary }
 type FishboneCause = struct { category: usize, parent: i32, text: str }
 type FishboneLayout = struct { spine: Layout, ribs: Layout, causes: Layout, head: Layout, labels: []Label }
+type CauseTreeNode = struct { parent: i32, text: str }
+type CauseTreePlacement = struct { depth: usize, leaf_start: usize, leaf_count: usize, children: usize }
+type CauseTreeWork = struct { placements: []CauseTreePlacement, cursor: []usize }
+type CauseTreeLayout = struct { nodes: Layout, connectors: Layout, labels: []Label, levels: usize, leaves: usize }
 type StemLeafRow = struct { stem: i64, first: usize, count: usize, baseline: f32 }
 type StemLeafLayout = struct { rows: []StemLeafRow, leaves: []u8, divider: Segment, leaf_start: f32, leaf_step: f32, leaf_unit: f64 }
 type RangeInterval = struct { row: usize, lower: f64, upper: f64 }
@@ -501,6 +505,87 @@ fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause,
     let cause_layout = Layout { kind: .Rug, coords: zero, segments: branches[..causes.len], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
     let head_layout = Layout { kind: .Bar, coords: zero, segments: zero, bars: head_box[..1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
     ret (FishboneLayout { spine: spine_layout, ribs: rib_layout, causes: cause_layout, head: head_layout, labels: labels[..1usize + categories.len + causes.len] }, ok)
+}
+
+// Effect at index zero, with each later cause naming an earlier parent.
+// Subtree widths are leaf-proportional; sibling order follows node input order.
+fn cause_effect_tree(nodes: []const CauseTreeNode, bounds: geometry.Rect, work: *CauseTreeWork, boxes: []geometry.Rect, connectors: []Segment, labels: []Label) -> (CauseTreeLayout, err) {
+    let n = nodes.len
+    if n == 0usize { ret (zero, Empty) }
+    if n > 2147483647usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if work.placements.len < n || work.cursor.len < n || boxes.len < n || labels.len < n || connectors.len / 3usize < n - 1usize { ret (zero, TooLarge) }
+    if nodes[0usize].parent != -1i32 { ret (zero, Invalid) }
+    var i = 0usize
+    while i < n {
+        if i > 0usize && (nodes[i].parent < 0i32 || nodes[i].parent >= i32(i)) { ret (zero, Invalid) }
+        let probe = Label { text: nodes[i].text, anchor: Coord { x: bounds.x, y: bounds.y }, align: .Center }
+        if !valid_label(&probe) { ret (zero, Invalid) }
+        work.placements[i] = CauseTreePlacement { depth: 0usize, leaf_start: 0usize, leaf_count: 1usize, children: 0usize }
+        work.cursor[i] = 0usize
+        i += 1usize
+    }
+    var levels = 1usize
+    i = 1usize
+    while i < n {
+        let parent = usize(nodes[i].parent)
+        work.placements[i].depth = work.placements[parent].depth + 1usize
+        if work.placements[i].depth + 1usize > levels { levels = work.placements[i].depth + 1usize }
+        i += 1usize
+    }
+    i = n
+    while i > 1usize {
+        i -= 1usize
+        let parent = usize(nodes[i].parent)
+        if work.placements[parent].children == 0usize { work.placements[parent].leaf_count = 0usize }
+        work.placements[parent].children += 1usize
+        work.placements[parent].leaf_count += work.placements[i].leaf_count
+    }
+    let leaves = work.placements[0usize].leaf_count
+    i = 1usize
+    while i < n {
+        let parent = usize(nodes[i].parent)
+        work.placements[i].leaf_start = work.placements[parent].leaf_start + work.cursor[parent]
+        work.cursor[parent] += work.placements[i].leaf_count
+        i += 1usize
+    }
+    let column_width = bounds.width / f32(levels)
+    let leaf_height = bounds.height / f32(leaves)
+    var box_width = column_width * 0.72
+    if box_width > 116.0 { box_width = 116.0 }
+    var box_height = leaf_height * 0.60
+    if box_height > 34.0 { box_height = 34.0 }
+    if !finite(column_width) || !finite(leaf_height) || column_width < 55.0 || leaf_height < 23.0 || !finite(box_width) || !finite(box_height) { ret (zero, TooLarge) }
+    i = 0usize
+    while i < n {
+        let place = work.placements[i]
+        let center_x = bounds.x + bounds.width - (f32(place.depth) + 0.5) * column_width
+        let center_y = bounds.y + (f32(place.leaf_start) + f32(place.leaf_count) * 0.5) * leaf_height
+        let left = center_x - box_width * 0.5
+        let top = center_y - box_height * 0.5
+        if !finite(left) || !finite(top) || !finite(left + box_width) || !finite(top + box_height) { ret (zero, Invalid) }
+        boxes[i] = geometry.rect(left, top, box_width, box_height)
+        labels[i] = Label { text: nodes[i].text, anchor: Coord { x: center_x, y: center_y + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let from = boxes[usize(nodes[i].parent)]
+        let to = boxes[i]
+        let x0 = from.x
+        let x1 = to.x + to.width
+        let y0 = from.y + from.height * 0.5
+        let y1 = to.y + to.height * 0.5
+        let bend = (x0 + x1) * 0.5
+        if !finite(bend) || !(x0 > x1) { ret (zero, Invalid) }
+        let first = (i - 1usize) * 3usize
+        connectors[first] = Segment { from: Coord { x: x0, y: y0 }, to: Coord { x: bend, y: y0 } }
+        connectors[first + 1usize] = Segment { from: Coord { x: bend, y: y0 }, to: Coord { x: bend, y: y1 } }
+        connectors[first + 2usize] = Segment { from: Coord { x: bend, y: y1 }, to: Coord { x: x1, y: y1 } }
+        i += 1usize
+    }
+    let node_layout = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..n], x_min: 0.0, x_max: f32(levels), y_min: 0.0, y_max: f32(leaves) }
+    let link_layout = Layout { kind: .Rug, coords: zero, segments: connectors[..(n - 1usize) * 3usize], bars: zero, x_min: 0.0, x_max: f32(levels), y_min: 0.0, y_max: f32(leaves) }
+    ret (CauseTreeLayout { nodes: node_layout, connectors: link_layout, labels: labels[..n], levels: levels, leaves: leaves }, ok)
 }
 
 // Six-panel normal capability report for individuals (subgroup size one).

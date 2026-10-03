@@ -3382,6 +3382,11 @@ $gfxChartFishboneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneWritten -ne 'executable written') { throw 'gfx_chart_fishbone emission failed' }
 $gfxChartFishboneOutput = & $gfxChartFishbonePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneOutput -ne 'gfx chart fishbone ok') { throw "the e.gfx.chart fishbone answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCauseEffectTreePath = Join-Path $testBuild 'gfx-chart-cause-effect-tree-selfhost.exe'
+$gfxChartCauseEffectTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_cause_effect_tree\src\main.e') $repo 'x64' 'windows' $gfxChartCauseEffectTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCauseEffectTreeWritten -ne 'executable written') { throw 'gfx_chart_cause_effect_tree emission failed' }
+$gfxChartCauseEffectTreeOutput = & $gfxChartCauseEffectTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCauseEffectTreeOutput -ne 'gfx chart cause effect tree ok') { throw "the e.gfx.chart cause effect tree answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

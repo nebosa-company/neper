@@ -15947,6 +15947,10 @@ type DoseResponseLayout = struct { observations: Layout, curve: Layout }
 type InfluenceLayout = struct { points: Layout, bubbles: Layout, guides: Layout, max_cook: f64 }
 type FishboneCause = struct { category: usize, parent: i32, text: str }
 type FishboneLayout = struct { spine: Layout, ribs: Layout, causes: Layout, head: Layout, labels: []Label }
+type CauseTreeNode = struct { parent: i32, text: str }
+type CauseTreePlacement = struct { depth: usize, leaf_start: usize, leaf_count: usize, children: usize }
+type CauseTreeWork = struct { placements: []CauseTreePlacement, cursor: []usize }
+type CauseTreeLayout = struct { nodes: Layout, connectors: Layout, labels: []Label, levels: usize, leaves: usize }
 type CapabilitySixpackStorage = struct { moving: []f64, individual_points: []Coord, individual_lines: []Segment, range_points: []Coord, range_lines: []Segment, recent_points: []Coord, histogram_counts: []u64, histogram_bars: []geometry.Rect, within_curve: []Segment, overall_curve: []Segment, probability_points: []Coord, probability_reference: []Segment, interval_bars: []geometry.Rect, guides: []Segment }
 type CapabilitySixpackLayout = struct { individuals: Layout, moving_range: Layout, recent: Layout, histogram: Layout, within_curve: Layout, overall_curve: Layout, probability: Layout, intervals: Layout, guides: Layout, summary: stat.NormalCapability }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
@@ -15976,6 +15980,7 @@ fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, poin
 fn influence_plot(diagnostics: []const stat.RegressionDiagnostic, bounds: geometry.Rect, max_radius: f32, points: []Coord, circles: []geometry.Rect, reference_lines: []Segment) -> (InfluenceLayout, err)
 fn capability_sixpack(values: []const f64, sorted: []const f64, lsl: f64, usl: f64, panels: []const geometry.Rect, work: *CapabilitySixpackStorage) -> (CapabilitySixpackLayout, err)
 fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)
+fn cause_effect_tree(nodes: []const CauseTreeNode, bounds: geometry.Rect, work: *CauseTreeWork, boxes: []geometry.Rect, connectors: []Segment, labels: []Label) -> (CauseTreeLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

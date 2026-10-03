@@ -5,7 +5,6 @@
 # Cartesian and distribution variants
 
 # Statistical, quality, medical and scientific diagrams
-cause_effect_tree
 weibull_probability
 oc_curve
 gage_rr

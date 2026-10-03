@@ -34431,3 +34431,17 @@ the gallery adds one PNG/SVG pair. Font-measured collision avoidance, editing
 and cause prioritization remain follow-on work.
 
 References: https://asq.org/quality-resources/fishbone ; https://support.minitab.com/en-us/workspace/help-and-how-to/brainstorming/types-of-brainstorming-tools/fishbone/
+
+## D1929 — Make the cause–effect tree a distinct hierarchical layout
+
+The fishbone layout groups causes on alternating ribs; `chart.cause_effect_tree`
+instead uses a single effect root at index zero, earlier-parent cause records,
+leaf-proportional subtree spans and right-to-left columns. It returns
+caller-owned rectangles, orthogonal connectors and labels for the same scene
+and SVG adapters. This tree communicates candidate-cause hierarchy, not
+causal proof or AND/OR fault logic. A Windows/Linux fixture covers unequal
+subtrees, three cause depths, coordinate references, escaped text and refusal
+paths; the gallery adds one PNG/SVG pair. Measured label fitting and editing
+remain planned.
+
+Reference: https://asq.org/quality-resources/tree-diagram

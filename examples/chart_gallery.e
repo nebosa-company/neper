@@ -2906,6 +2906,71 @@ fn render_fishbone_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_cause_effect_tree_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/cause_effect_tree.png"
+    let nodes = [10]chart.CauseTreeNode{
+        chart.CauseTreeNode { parent: -1i32, text: "Delays" },
+        chart.CauseTreeNode { parent: 0i32, text: "Supply" },
+        chart.CauseTreeNode { parent: 0i32, text: "Process" },
+        chart.CauseTreeNode { parent: 0i32, text: "Planning" },
+        chart.CauseTreeNode { parent: 1i32, text: "Stockout" },
+        chart.CauseTreeNode { parent: 1i32, text: "Transit" },
+        chart.CauseTreeNode { parent: 2i32, text: "Rework" },
+        chart.CauseTreeNode { parent: 2i32, text: "Breakdown" },
+        chart.CauseTreeNode { parent: 3i32, text: "Forecast" },
+        chart.CauseTreeNode { parent: 4i32, text: "Vendor" },
+    }
+    var placements: [10]chart.CauseTreePlacement = zero
+    var cursor: [10]usize = zero
+    var work = chart.CauseTreeWork { placements: placements[..], cursor: cursor[..] }
+    var boxes: [10]geometry.Rect = zero
+    var links: [27]chart.Segment = zero
+    var labels: [10]chart.Label = zero
+    let (map, map_error) = chart.cause_effect_tree(nodes[..], geometry.rect(10.0, 41.0, 340.0, 176.0), &work, boxes[..], links[..], labels[..])
+    if map_error != ok { ret map_error }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let gray = paint.rgba(0.68, 0.75, 0.82, 1.0)
+    let orange = paint.rgba(0.88, 0.37, 0.18, 1.0)
+    let blue = paint.rgba(0.11, 0.43, 0.78, 1.0)
+    let pale = paint.rgba(0.83, 0.90, 0.97, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let root_marks = chart.Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let primary_marks = chart.Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[1usize..4usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let detail_marks = chart.Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[4usize..], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let title = [1]chart.Label{ chart.Label { text: "Cause-effect tree / late delivery", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center } }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 31u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &map.connectors, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &detail_marks, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &primary_marks, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &root_marks, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, title[..], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, map.labels[..4usize], font, 8.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, map.labels[4usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &map.connectors, gray)
+    try chart_svg.append(&writer, &detail_marks, pale)
+    try chart_svg.append(&writer, &primary_marks, blue)
+    try chart_svg.append(&writer, &root_marks, orange)
+    try chart_svg.append_labels(&writer, title[..], dark, 12.0)
+    try chart_svg.append_labels(&writer, map.labels[..4usize], white, 8.0)
+    try chart_svg.append_labels(&writer, map.labels[4usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -6882,6 +6947,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_influence_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
     try render_fishbone_preview(a, queue, output_target, canvas, &renderer)
+    try render_cause_effect_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

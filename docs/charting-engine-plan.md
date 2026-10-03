@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and seventy-nine PNG plus one hundred and seventy-nine SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart, an event-labeled state machine, an ordered sequence diagram, an entity-relationship diagram, a branching process map and a fishbone/Ishikawa diagram are also delivered. Individuals, moving-range,
+one hundred and eighty PNG plus one hundred and eighty SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart, an event-labeled state machine, an ordered sequence diagram, an entity-relationship diagram, a branching process map and a fishbone/Ishikawa diagram and a cause-effect tree are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -97,6 +97,14 @@ rectangle and text-label layers. Its Windows/Linux fixture checks exact rib
 placement, a three-level chain, SVG escaping, adapters and refusals; one
 PNG/SVG pair joins the gallery. Measured text collision avoidance and an
 interactive brainstorming editor remain planned.
+
+`cause_effect_tree` keeps one effect at the right and places its causes in
+leftward columns, reserving one vertical slot per terminal cause. Parent indices
+must precede children; the caller owns the placement work, box, connector and
+label storage. This is a hierarchy of candidate causes, not an AND/OR fault
+tree or proof of causation. Its Windows/Linux fixture checks unbalanced
+subtrees, exact geometry, escaping, adapters and refusals; one PNG/SVG pair
+joins the gallery. Automatic text fitting and interaction remain planned.
 
 ## What the references say
 
@@ -895,7 +903,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and seventy-nine vector previews, automatic numeric tick text and
+   adapter with one hundred and eighty vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow
