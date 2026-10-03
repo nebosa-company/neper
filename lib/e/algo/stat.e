@@ -27,6 +27,7 @@ type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, 
 type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
+type CusumPoint = struct { high: f64, low: f64, high_signal: bool, low_signal: bool }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
@@ -513,6 +514,96 @@ fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: [
         if ceiling > 0.0f64 && upper > ceiling { upper = ceiling }
         if value - value != 0.0f64 || upper - upper != 0.0f64 { ret Invalid }
         out[i] = AttributeControlPoint { value: value, center: center, lower: lower, upper: upper }
+        i += 1usize
+    }
+    ret ok
+}
+
+// Subgroup-major X-bar/S limits use sample SD and the gamma-derived c4 factor.
+fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations: []f64) -> (ControlLimits, ControlLimits, err) {
+    if subgroup < 2usize || subgroup > values.len / 2usize || values.len % subgroup != 0usize { ret (zero, zero, Invalid) }
+    let groups = values.len / subgroup
+    if means.len < groups || deviations.len < groups { ret (zero, zero, TooSmall) }
+    var i = 0usize
+    while i < values.len {
+        if values[i] - values[i] != 0.0f64 { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    var grand = moments()
+    var spread = moments()
+    var group = 0usize
+    while group < groups {
+        var sample = moments()
+        i = 0usize
+        while i < subgroup {
+            moments_add(&sample, values[group * subgroup + i])
+            i += 1usize
+        }
+        let (sd, defined) = standard_deviation_sample(&sample)
+        if !defined || sd - sd != 0.0f64 || sample.mean - sample.mean != 0.0f64 { ret (zero, zero, Invalid) }
+        means[group] = sample.mean
+        deviations[group] = sd
+        moments_add(&grand, sample.mean)
+        moments_add(&spread, sd)
+        group += 1usize
+    }
+    let n = f64(subgroup)
+    let c4 = math.sqrt[f64](2.0f64 / (n - 1.0f64)) * math.exp[f64](special.lgamma(n / 2.0f64) - special.lgamma((n - 1.0f64) / 2.0f64))
+    if !(c4 > 0.0f64) || c4 > 1.0f64 { ret (zero, zero, Invalid) }
+    let s_factor = 3.0f64 * math.sqrt[f64](1.0f64 - c4 * c4) / c4
+    let x_factor = 3.0f64 * spread.mean / (c4 * math.sqrt[f64](n))
+    var s_lower = spread.mean * (1.0f64 - s_factor)
+    if s_lower < 0.0f64 { s_lower = 0.0f64 }
+    let xbar = ControlLimits { center: grand.mean, lower: grand.mean - x_factor, upper: grand.mean + x_factor }
+    let s = ControlLimits { center: spread.mean, lower: s_lower, upper: spread.mean * (1.0f64 + s_factor) }
+    if xbar.lower - xbar.lower != 0.0f64 || xbar.upper - xbar.upper != 0.0f64 || s.upper - s.upper != 0.0f64 { ret (zero, zero, Invalid) }
+    ret (xbar, s, ok)
+}
+
+// One-sided tabular sums share the target, reference allowance and decision h.
+fn cusum_control(values: []const f64, center: f64, reference: f64, decision: f64, out: []CusumPoint) -> err {
+    if values.len == 0usize || center - center != 0.0f64 || reference - reference != 0.0f64 || decision - decision != 0.0f64 || reference < 0.0f64 || decision <= 0.0f64 { ret Invalid }
+    if out.len < values.len { ret TooSmall }
+    var i = 0usize
+    while i < values.len {
+        if values[i] - values[i] != 0.0f64 { ret Invalid }
+        i += 1usize
+    }
+    var high = 0.0f64
+    var low = 0.0f64
+    i = 0usize
+    while i < values.len {
+        high += values[i] - center - reference
+        low += center - reference - values[i]
+        if high < 0.0f64 { high = 0.0f64 }
+        if low < 0.0f64 { low = 0.0f64 }
+        if high - high != 0.0f64 || low - low != 0.0f64 { ret Invalid }
+        out[i] = CusumPoint { high: high, low: low, high_signal: high > decision, low_signal: low > decision }
+        i += 1usize
+    }
+    ret ok
+}
+
+// Startup limits use the exact geometric variance for independent observations.
+fn ewma_control(values: []const f64, center: f64, sigma: f64, lambda: f64, width: f64, out: []AttributeControlPoint) -> err {
+    if values.len == 0usize || center - center != 0.0f64 || sigma - sigma != 0.0f64 || lambda - lambda != 0.0f64 || width - width != 0.0f64 || sigma <= 0.0f64 || lambda <= 0.0f64 || width <= 0.0f64 { ret Invalid }
+    if out.len < values.len { ret TooSmall }
+    var i = 0usize
+    while i < values.len {
+        if values[i] - values[i] != 0.0f64 { ret Invalid }
+        i += 1usize
+    }
+    let remain = 1.0f64 - lambda
+    let decay = remain * remain
+    var power = 1.0f64
+    var average = center
+    i = 0usize
+    while i < values.len {
+        average = lambda * values[i] + remain * average
+        power *= decay
+        let limit = width * sigma * math.sqrt[f64](lambda / (2.0f64 - lambda) * (1.0f64 - power))
+        if average - average != 0.0f64 || limit - limit != 0.0f64 { ret Invalid }
+        out[i] = AttributeControlPoint { value: average, center: center, lower: center - limit, upper: center + limit }
         i += 1usize
     }
     ret ok

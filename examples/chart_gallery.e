@@ -980,7 +980,32 @@ fn render_control_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     let (xbar, range, subgroup_error) = stat.xbar_r_limits(subgroup_values[..], 5usize, means[..], ranges[..])
     if subgroup_error != ok { ret subgroup_error }
     try render_control_preview(a, q, output_target, canvas, renderer, means[..], xbar, "X-bar chart", "Mean", "docs/chart-previews/xbar_control.png")
-    ret render_control_preview(a, q, output_target, canvas, renderer, ranges[..], range, "Range chart", "Range", "docs/chart-previews/range_control.png")
+    try render_control_preview(a, q, output_target, canvas, renderer, ranges[..], range, "Range chart", "Range", "docs/chart-previews/range_control.png")
+    var deviations: [5]f64 = zero
+    let (xbar_s, s_limits, s_error) = stat.xbar_s_limits(subgroup_values[..], 5usize, means[..], deviations[..])
+    if s_error != ok { ret s_error }
+    try render_control_preview(a, q, output_target, canvas, renderer, means[..], xbar_s, "X-bar / S chart", "Mean", "docs/chart-previews/xbar_s_control.png")
+    ret render_control_preview(a, q, output_target, canvas, renderer, deviations[..], s_limits, "Standard deviation chart", "S", "docs/chart-previews/s_control.png")
+}
+
+fn render_weighted_control_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let observations = [10]f64{ 10.6, 11.1, 11.4, 12.0, 11.8, 9.2, 8.8, 8.5, 8.0, 8.5 }
+    var sums: [10]stat.CusumPoint = zero
+    try stat.cusum_control(observations[..], 10.0, 0.5, 4.0, sums[..])
+    var high: [10]f64 = zero
+    var low: [10]f64 = zero
+    var i = 0usize
+    while i < sums.len {
+        high[i] = sums[i].high
+        low[i] = sums[i].low
+        i += 1usize
+    }
+    let limits = stat.ControlLimits { center: 0.0, lower: 0.0, upper: 4.0 }
+    try render_control_preview(a, q, output_target, canvas, renderer, high[..], limits, "CUSUM / upper", "C+", "docs/chart-previews/cusum_high.png")
+    try render_control_preview(a, q, output_target, canvas, renderer, low[..], limits, "CUSUM / lower", "C-", "docs/chart-previews/cusum_low.png")
+    var ewma: [10]stat.AttributeControlPoint = zero
+    try stat.ewma_control(observations[..], 10.0, 1.2, 0.3, 3.0, ewma[..])
+    ret render_attribute_preview(a, q, output_target, canvas, renderer, ewma[..], "EWMA chart", "Weighted mean", "docs/chart-previews/ewma_control.png")
 }
 
 fn render_attribute_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, samples: []const stat.AttributeControlPoint, title: str, y_label: str, path: str) -> err {
@@ -2619,6 +2644,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_agreement_preview(a, queue, output_target, canvas, &renderer)
     try render_survival_previews(a, queue, output_target, canvas, &renderer)
     try render_control_previews(a, queue, output_target, canvas, &renderer)
+    try render_weighted_control_previews(a, queue, output_target, canvas, &renderer)
     try render_attribute_previews(a, queue, output_target, canvas, &renderer)
     let diagnostic_scores = [16]f64{ 0.98f64, 0.93f64, 0.89f64, 0.84f64, 0.78f64, 0.72f64, 0.68f64, 0.62f64, 0.56f64, 0.50f64, 0.44f64, 0.38f64, 0.32f64, 0.26f64, 0.18f64, 0.08f64 }
     let diagnostic_positive = [16]bool{ true, true, false, true, true, false, true, false, true, false, true, false, false, true, false, false }

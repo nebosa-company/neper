@@ -3155,6 +3155,7 @@ type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, 
 type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
+type CusumPoint = struct { high: f64, low: f64, high_signal: bool, low_signal: bool }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
@@ -3195,6 +3196,9 @@ fn survival_curve(times: []const f64, event: []const bool, out: []SurvivalPoint)
 fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimits, err)
 fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err)
 fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> err
+fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations: []f64) -> (ControlLimits, ControlLimits, err)
+fn cusum_control(values: []const f64, center: f64, reference: f64, decision: f64, out: []CusumPoint) -> err
+fn ewma_control(values: []const f64, center: f64, sigma: f64, lambda: f64, width: f64, out: []AttributeControlPoint) -> err
 fn correlation(s: *const Regression) -> (f64, bool)
 fn sum_plain(values: []const f64) -> f64
 fn mean_compensated(values: []const f64) -> (f64, bool)

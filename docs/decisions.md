@@ -33642,3 +33642,18 @@ baselines, Laney overdispersion and run rules remain planned.
 References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc332.htm,
 https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc331.htm and
 https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/u-chart/perform-the-analysis/u-chart-options/modify-the-control-limits/.
+
+## D1857 — Reuse run and limit layers for X-bar/S, CUSUM and EWMA
+
+`e.algo.stat.xbar_s_limits` uses sample subgroup deviations and the c4
+correction for three-sigma X-bar and S limits. `cusum_control` exposes both
+one-sided tabular sums and decision signals from one pass. `ewma_control`
+starts at the supplied center and retains exact startup variance rather than
+immediately using steady-state limits. All three use caller-owned output,
+finite-input checks and existing PointLine/Rug rendering. Five new PNG/SVG
+previews bring the gallery to one hundred pairs. A numeric fixture checks
+references and refusals on Windows and Linux. Phase baselines, run rules and
+Laney dispersion adjustments remain separate work.
+References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc321.htm,
+https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc323.htm and
+https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc324.htm.
