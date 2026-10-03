@@ -34168,3 +34168,14 @@ consume the same Bar/Rug geometry. Windows/Linux fixtures check numerical
 references, invalid probabilities/parents/cycles, capacity and adapters. The
 gallery adds a PNG/SVG pair. Risk preferences, influence diagrams, utility
 functions and decision DAGs remain follow-on work.
+
+## D1908 — Org charts use leaf-weighted hierarchy geometry
+
+`org_chart` accepts one rooted single-parent tree and preserves the input order
+of direct reports. A reverse-built adjacency list and breadth-first traversal
+establish depths; bottom-up leaf counts then reserve contiguous horizontal
+intervals for each subtree. Boxes and orthogonal connectors use caller-owned
+buffers and reuse Bar/Rug scene and SVG rendering. The Windows and Linux
+fixture checks hierarchy, ordering, capacity and malformed trees; the gallery
+adds one PNG/SVG pair. Multiple roots, dotted-line relationships and collapse
+behavior remain separate work.

@@ -22,6 +22,8 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertTrue(all((PREVIEWS / f"{name}.svg").is_file() for name in rendered))
         self.assertIn("decision_tree", rendered)
         self.assertNotIn("decision_tree", planned)
+        self.assertIn("org_chart", rendered)
+        self.assertNotIn("org_chart", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)

@@ -51,6 +51,10 @@ type DecisionEdge = struct { from: usize, to: usize, probability: f64 }
 type DecisionValue = struct { expected: f64, selected_edge: usize, depth: usize, leaf_count: usize, leaf_start: usize }
 type DecisionTreeWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize }
 type DecisionTreeSummary = struct { expected: f64, depth: usize, leaves: usize }
+type OrgLink = struct { manager: usize, report: usize }
+type OrgPlacement = struct { depth: usize, leaf_start: usize, leaf_count: usize, direct_reports: usize }
+type OrgWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize }
+type OrgLayout = struct { nodes: Layout, connectors: Layout, levels: usize, leaves: usize }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2723,6 +2727,117 @@ fn decision_tree_layout(nodes: []const DecisionNode, edges: []const DecisionEdge
     let node_layout = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..n], x_min: 0.0, x_max: f32(summary.depth), y_min: 0.0, y_max: f32(summary.leaves) }
     let connector_layout = Layout { kind: .Rug, coords: zero, segments: arrows[..edges.len * 5usize], bars: zero, x_min: 0.0, x_max: f32(summary.depth), y_min: 0.0, y_max: f32(summary.leaves) }
     ret (node_layout, connector_layout, ok)
+}
+
+// A single-root, solid-line reporting tree. Siblings follow link input order,
+// and each subtree reserves one horizontal slot per terminal report.
+fn org_chart(node_count: usize, links: []const OrgLink, bounds: geometry.Rect, placements: []OrgPlacement, work: OrgWork, boxes: []geometry.Rect, connectors: []Segment) -> (OrgLayout, err) {
+    if node_count == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if placements.len < node_count || work.indegree.len < node_count || work.head.len < node_count || work.order.len < node_count || work.next.len < links.len || boxes.len < node_count || connectors.len / 3usize < links.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < node_count {
+        placements[i] = OrgPlacement { depth: 0usize, leaf_start: 0usize, leaf_count: 0usize, direct_reports: 0usize }
+        work.indegree[i] = 0usize
+        work.head[i] = 0usize
+        i += 1usize
+    }
+    i = links.len
+    while i > 0usize {
+        i -= 1usize
+        let link = links[i]
+        if link.manager >= node_count || link.report >= node_count || link.manager == link.report { ret (zero, Invalid) }
+        work.indegree[link.report] += 1usize
+        if work.indegree[link.report] > 1usize { ret (zero, Invalid) }
+        placements[link.manager].direct_reports += 1usize
+        work.next[i] = work.head[link.manager]
+        work.head[link.manager] = i + 1usize
+    }
+    if work.indegree[0usize] != 0usize { ret (zero, Invalid) }
+    i = 1usize
+    while i < node_count {
+        if work.indegree[i] != 1usize { ret (zero, Invalid) }
+        i += 1usize
+    }
+    work.order[0usize] = 0usize
+    var front = 0usize
+    var tail = 1usize
+    var levels = 1usize
+    while front < tail {
+        let manager = work.order[front]
+        var edge = work.head[manager]
+        while edge != 0usize {
+            let report = links[edge - 1usize].report
+            placements[report].depth = placements[manager].depth + 1usize
+            if placements[report].depth + 1usize > levels { levels = placements[report].depth + 1usize }
+            work.order[tail] = report
+            tail += 1usize
+            edge = work.next[edge - 1usize]
+        }
+        front += 1usize
+    }
+    if tail != node_count { ret (zero, Invalid) }
+    i = node_count
+    while i > 0usize {
+        i -= 1usize
+        let manager = work.order[i]
+        if placements[manager].direct_reports == 0usize { placements[manager].leaf_count = 1usize }
+        var edge = work.head[manager]
+        while edge != 0usize {
+            placements[manager].leaf_count += placements[links[edge - 1usize].report].leaf_count
+            edge = work.next[edge - 1usize]
+        }
+    }
+    let leaves = placements[0usize].leaf_count
+    i = 0usize
+    while i < node_count {
+        let manager = work.order[i]
+        var start = placements[manager].leaf_start
+        var edge = work.head[manager]
+        while edge != 0usize {
+            let report = links[edge - 1usize].report
+            placements[report].leaf_start = start
+            start += placements[report].leaf_count
+            edge = work.next[edge - 1usize]
+        }
+        i += 1usize
+    }
+    let leaf_width = bounds.width / f32(leaves)
+    let row_height = bounds.height / f32(levels)
+    var box_width = leaf_width * 0.72
+    if box_width > 118.0 { box_width = 118.0 }
+    var box_height = row_height * 0.44
+    if box_height > 38.0 { box_height = 38.0 }
+    if !finite(leaf_width) || !finite(row_height) || leaf_width < 38.0 || row_height < 30.0 || !finite(box_width) || !finite(box_height) { ret (zero, TooLarge) }
+    i = 0usize
+    while i < node_count {
+        let place = placements[i]
+        let center = bounds.x + (f32(place.leaf_start) + f32(place.leaf_count) * 0.5) * leaf_width
+        let x = center - box_width * 0.5
+        let y = bounds.y + f32(place.depth) * row_height + (row_height - box_height) * 0.5
+        if !finite(x) || !finite(y) || !finite(x + box_width) || !finite(y + box_height) { ret (zero, Invalid) }
+        boxes[i] = geometry.rect(x, y, box_width, box_height)
+        i += 1usize
+    }
+    i = 0usize
+    while i < links.len {
+        let from = boxes[links[i].manager]
+        let to = boxes[links[i].report]
+        let x0 = from.x + from.width * 0.5
+        let x1 = to.x + to.width * 0.5
+        let y0 = from.y + from.height
+        let y1 = to.y
+        let mid_y = y0 + (y1 - y0) * 0.5
+        if !finite(mid_y) || y1 <= y0 { ret (zero, Invalid) }
+        let first = i * 3usize
+        connectors[first] = Segment { from: Coord { x: x0, y: y0 }, to: Coord { x: x0, y: mid_y } }
+        connectors[first + 1usize] = Segment { from: Coord { x: x0, y: mid_y }, to: Coord { x: x1, y: mid_y } }
+        connectors[first + 2usize] = Segment { from: Coord { x: x1, y: mid_y }, to: Coord { x: x1, y: y1 } }
+        i += 1usize
+    }
+    let people = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..node_count], x_min: 0.0, x_max: f32(leaves), y_min: 0.0, y_max: f32(levels) }
+    let reporting = Layout { kind: .Rug, coords: zero, segments: connectors[..links.len * 3usize], bars: zero, x_min: 0.0, x_max: f32(leaves), y_min: 0.0, y_max: f32(levels) }
+    ret (OrgLayout { nodes: people, connectors: reporting, levels: levels, leaves: leaves }, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

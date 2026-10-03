@@ -3262,6 +3262,11 @@ $gfxChartDecisionTreeWritten = & $compiler emit-executable (Join-Path $PSScriptR
 if ($LASTEXITCODE -ne 0 -or $gfxChartDecisionTreeWritten -ne 'executable written') { throw 'gfx_chart_decision_tree emission failed' }
 $gfxChartDecisionTreeOutput = & $gfxChartDecisionTreePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartDecisionTreeOutput -ne 'gfx chart decision tree ok') { throw "the e.gfx.chart decision tree answered wrongly: exit $LASTEXITCODE" }
+$gfxChartOrgChartPath = Join-Path $testBuild 'gfx-chart-org-chart-selfhost.exe'
+$gfxChartOrgChartWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_org_chart\src\main.e') $repo 'x64' 'windows' $gfxChartOrgChartPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartOrgChartWritten -ne 'executable written') { throw 'gfx_chart_org_chart emission failed' }
+$gfxChartOrgChartOutput = & $gfxChartOrgChartPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartOrgChartOutput -ne 'gfx chart org chart ok') { throw "the e.gfx.chart org chart answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

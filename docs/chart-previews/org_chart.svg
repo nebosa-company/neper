@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>org_chart</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<line x1="180" y1="85.83999633789062" x2="180" y2="101.33332824707031" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="101.33332824707031" x2="96.5" y2="101.33332824707031" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="96.5" y1="101.33332824707031" x2="96.5" y2="116.82666015625" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="85.83999633789062" x2="180" y2="101.33332824707031" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="101.33332824707031" x2="263.5" y2="101.33332824707031" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="263.5" y1="101.33332824707031" x2="263.5" y2="116.82666015625" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="96.5" y1="141.17332458496094" x2="96.5" y2="156.66665649414062" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="96.5" y1="156.66665649414062" x2="54.75" y2="156.66665649414062" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="54.75" y1="156.66665649414062" x2="54.75" y2="172.1599884033203" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="96.5" y1="141.17332458496094" x2="96.5" y2="156.66665649414062" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="96.5" y1="156.66665649414062" x2="138.25" y2="156.66665649414062" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="138.25" y1="156.66665649414062" x2="138.25" y2="172.1599884033203" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="263.5" y1="141.17332458496094" x2="263.5" y2="156.66665649414062" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="263.5" y1="156.66665649414062" x2="221.75" y2="156.66665649414062" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="221.75" y1="156.66665649414062" x2="221.75" y2="172.1599884033203" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="263.5" y1="141.17332458496094" x2="263.5" y2="156.66665649414062" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="263.5" y1="156.66665649414062" x2="305.25" y2="156.66665649414062" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="305.25" y1="156.66665649414062" x2="305.25" y2="172.1599884033203" stroke="rgb(148,163,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="149.94000244140625" y="61.49333190917969" width="60.12000274658203" height="24.34666633605957" fill="rgb(38,140,122)" fill-opacity="1"/>
+<rect x="66.44000244140625" y="116.82666015625" width="60.12000274658203" height="24.34666633605957" fill="rgb(38,140,122)" fill-opacity="1"/>
+<rect x="233.44000244140625" y="116.82666015625" width="60.12000274658203" height="24.34666633605957" fill="rgb(38,140,122)" fill-opacity="1"/>
+<rect x="24.689998626708984" y="172.1599884033203" width="60.12000274658203" height="24.34666633605957" fill="rgb(38,140,122)" fill-opacity="1"/>
+<rect x="108.19000244140625" y="172.1599884033203" width="60.12000274658203" height="24.34666633605957" fill="rgb(38,140,122)" fill-opacity="1"/>
+<rect x="191.69000244140625" y="172.1599884033203" width="60.12000274658203" height="24.34666633605957" fill="rgb(38,140,122)" fill-opacity="1"/>
+<rect x="275.19000244140625" y="172.1599884033203" width="60.12000274658203" height="24.34666633605957" fill="rgb(38,140,122)" fill-opacity="1"/>
+<rect x="149.94000244140625" y="61.49333190917969" width="60.12000274658203" height="24.34666633605957" fill="rgb(41,77,138)" fill-opacity="1"/>
+<rect x="66.44000244140625" y="116.82666015625" width="60.12000274658203" height="24.34666633605957" fill="rgb(41,110,194)" fill-opacity="1"/>
+<rect x="233.44000244140625" y="116.82666015625" width="60.12000274658203" height="24.34666633605957" fill="rgb(41,110,194)" fill-opacity="1"/>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Org chart / reporting lines</text>
+<text x="180" y="232" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Solid-line manager hierarchy</text>
+<text x="180" y="76.66666412353516" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Director</text>
+<text x="96.5" y="132" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Engineering</text>
+<text x="263.5" y="132" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Sales</text>
+<text x="54.75" y="187.3333282470703" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Platform</text>
+<text x="138.25" y="187.3333282470703" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Apps</text>
+<text x="221.75" y="187.3333282470703" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Accounts</text>
+<text x="305.25" y="187.3333282470703" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Field</text>
+</svg>

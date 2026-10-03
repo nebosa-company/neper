@@ -1233,6 +1233,77 @@ fn render_decision_tree_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gp
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_org_chart_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/org_chart.png"
+    let plot = geometry.rect(13.0, 46.0, 334.0, 166.0)
+    let links = [6]chart.OrgLink{
+        chart.OrgLink { manager: 0usize, report: 1usize },
+        chart.OrgLink { manager: 0usize, report: 2usize },
+        chart.OrgLink { manager: 1usize, report: 3usize },
+        chart.OrgLink { manager: 1usize, report: 4usize },
+        chart.OrgLink { manager: 2usize, report: 5usize },
+        chart.OrgLink { manager: 2usize, report: 6usize },
+    }
+    let names = [7]str{ "Director", "Engineering", "Sales", "Platform", "Apps", "Accounts", "Field" }
+    var places: [7]chart.OrgPlacement = zero
+    var indegree: [7]usize = zero
+    var head: [7]usize = zero
+    var next: [6]usize = zero
+    var order: [7]usize = zero
+    let work = chart.OrgWork { indegree: indegree[..], head: head[..], next: next[..], order: order[..] }
+    var boxes: [7]geometry.Rect = zero
+    var connectors: [18]chart.Segment = zero
+    let (chart_layout, layout_error) = chart.org_chart(7usize, links[..], plot, places[..], work, boxes[..], connectors[..])
+    if layout_error != ok || chart_layout.levels != 3usize || chart_layout.leaves != 4usize || places[0usize].direct_reports != 2usize { ret chart.Invalid }
+    let navy = paint.rgba(0.16, 0.30, 0.54, 1.0)
+    let blue = paint.rgba(0.16, 0.43, 0.76, 1.0)
+    let teal = paint.rgba(0.15, 0.55, 0.48, 1.0)
+    let gray = paint.rgba(0.58, 0.64, 0.72, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var labels: [9]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Org chart / reporting lines", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Solid-line manager hierarchy", anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center }
+    var i = 0usize
+    while i < boxes.len {
+        labels[2usize + i] = chart.Label { text: names[i], anchor: chart.Coord { x: boxes[i].x + boxes[i].width * 0.5, y: boxes[i].y + boxes[i].height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 80usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &chart_layout.connectors, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &chart_layout.nodes, paint.Brush { Solid: teal })
+    try fill(&builder, boxes[0usize], paint.Brush { Solid: navy })
+    try fill(&builder, boxes[1usize], paint.Brush { Solid: blue })
+    try fill(&builder, boxes[2usize], paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..], font, 8.0, paint.Brush { Solid: white })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &chart_layout.connectors, gray)
+    try chart_svg.append(&writer, &chart_layout.nodes, teal)
+    try chart_svg.rect(&writer, boxes[0usize], navy, false)
+    try chart_svg.rect(&writer, boxes[1usize], blue, false)
+    try chart_svg.rect(&writer, boxes[2usize], blue, false)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[2usize..], white, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -5177,6 +5248,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_value_stream_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
+    try render_org_chart_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)
