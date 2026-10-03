@@ -33310,3 +33310,15 @@ Singular/short samples, invalid critical values and inadequate storage are
 refused. `gfx_chart_overlays` checks numerical references and scene/SVG paths
 on Windows and Linux; the gallery adds two PNG/SVG pairs. Simultaneous bands,
 automatic quantiles and non-linear smoothers remain separate work.
+
+## D1828 — Compose category-centered bar and line layers with independent y axes
+
+`chart.combo_bar_line` borrows paired category series and caller-owned center,
+bar, point, segment and layer storage. It delegates geometry to the existing
+Bar and PointLine `layout_with_limits` paths, fixing a common categorical x
+domain while retaining separate baseline-inclusive bar and line y domains.
+This needs no new mark or renderer path. The gallery reuses Pareto's dual-axis
+guides but formats numeric right-hand ticks for a volume/index preview.
+`gfx_chart_composition` checks signed bars, independent domains, alignment,
+invalid data/capacity and scene/SVG output on Windows and Linux. Irregular
+x, additional axes and aligned axis tables remain planned.

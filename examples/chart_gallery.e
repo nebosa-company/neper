@@ -269,8 +269,8 @@ fn render_bullet(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
-fn render_pareto(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, path: str) -> err {
-    if layers.len != 2usize || categories.len != layers[0].bars.len { ret chart.Invalid }
+fn render_dual_axis(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, title: str, percent: bool, path: str) -> err {
+    if layers.len != 2usize || categories.len != 5usize || categories.len != layers[0].bars.len { ret chart.Invalid }
     let plot = geometry.rect(48.0, 36.0, 246.0, 158.0)
     let bar_color = paint.rgba(0.07, 0.35, 0.76, 1.0)
     let line_color = paint.rgba(0.94, 0.42, 0.12, 1.0)
@@ -282,10 +282,10 @@ fn render_pareto(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     var percent_storage: [5]chart.Tick = zero
     let (x_ticks, x_error) = chart.category_ticks(categories.len, x_storage[..])
     if x_error != ok { ret x_error }
-    let (y_ticks, y_error) = chart.ticks(linear, 0.0, layers[0].y_max, y_storage[..])
+    let (y_ticks, y_error) = chart.ticks(linear, layers[0].y_min, layers[0].y_max, y_storage[..])
     if y_error != ok { ret y_error }
-    let (percent_ticks, percent_error) = chart.ticks(linear, 0.0, 1.0, percent_storage[..])
-    if percent_error != ok { ret percent_error }
+    let (right_ticks, right_error) = chart.ticks(linear, layers[1].y_min, layers[1].y_max, percent_storage[..])
+    if right_error != ok { ret right_error }
     var y_words: [5]str = zero
     var text_storage: [128]u8 = zero
     let (count_words, count_error) = chart.format_ticks(y_ticks, y_words[..], text_storage[..])
@@ -294,12 +294,24 @@ fn render_pareto(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     let (base_labels, label_error) = chart.guide_labels(plot, x_ticks, categories, y_ticks, count_words, 9.0, labels[..10usize])
     if label_error != ok { ret label_error }
     let percent_words = [5]str{ "0%", "25%", "50%", "75%", "100%" }
+    var right_words: [5]str = zero
+    var right_text: [128]u8 = zero
+    if percent {
+        var j = 0usize
+        while j < percent_words.len {
+            right_words[j] = percent_words[j]
+            j += 1usize
+        }
+    } else {
+        let (_, right_text_error) = chart.format_ticks(right_ticks, right_words[..], right_text[..])
+        if right_text_error != ok { ret right_text_error }
+    }
     var i = 0usize
-    while i < percent_ticks.len {
-        labels[base_labels.len + i] = chart.Label { text: percent_words[i], anchor: chart.Coord { x: plot.x + plot.width + 9.0, y: plot.y + plot.height * (1.0 - percent_ticks[i].fraction) + 3.0 }, align: .Left }
+    while i < right_ticks.len {
+        labels[base_labels.len + i] = chart.Label { text: right_words[i], anchor: chart.Coord { x: plot.x + plot.width + 9.0, y: plot.y + plot.height * (1.0 - right_ticks[i].fraction) + 3.0 }, align: .Left }
         i += 1usize
     }
-    labels[15usize] = chart.Label { text: "Pareto frequency and cumulative share", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    labels[15usize] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
     if font_error != ok { ret font_error }
     let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
@@ -311,8 +323,8 @@ fn render_pareto(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     try chart_scene.append_guides(&builder, plot, x_ticks, y_ticks, paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
     try fill(&builder, geometry.rect(plot.x + plot.width, plot.y, 1.0, plot.height), paint.Brush { Solid: axis_color })
     i = 0usize
-    while i < percent_ticks.len {
-        let y = plot.y + plot.height * (1.0 - percent_ticks[i].fraction)
+    while i < right_ticks.len {
+        let y = plot.y + plot.height * (1.0 - right_ticks[i].fraction)
         try fill(&builder, geometry.rect(plot.x + plot.width, y, 5.0, 1.0), paint.Brush { Solid: axis_color })
         i += 1usize
     }
@@ -328,8 +340,8 @@ fn render_pareto(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     try chart_svg.append_guides(&writer, plot, x_ticks, y_ticks, grid_color, axis_color)
     try chart_svg.rect(&writer, geometry.rect(plot.x + plot.width, plot.y, 1.0, plot.height), axis_color, false)
     i = 0usize
-    while i < percent_ticks.len {
-        let y = plot.y + plot.height * (1.0 - percent_ticks[i].fraction)
+    while i < right_ticks.len {
+        let y = plot.y + plot.height * (1.0 - right_ticks[i].fraction)
         try chart_svg.rect(&writer, geometry.rect(plot.x + plot.width, y, 5.0, 1.0), axis_color, false)
         i += 1usize
     }
@@ -642,7 +654,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ordered_names[i] = pareto_names[pareto_order[i]]
         i += 1usize
     }
-    try render_pareto(a, queue, output_target, canvas, &renderer, pareto_layers, ordered_names[..], "docs/chart-previews/pareto.png")
+    try render_dual_axis(a, queue, output_target, canvas, &renderer, pareto_layers, ordered_names[..], "Pareto frequency and cumulative share", true, "docs/chart-previews/pareto.png")
+    let combo_columns = [5]f32{ 12.0, 15.0, 11.0, 18.0, 22.0 }
+    let combo_trend = [5]f32{ 110.0, 130.0, 125.0, 170.0, 210.0 }
+    var combo_x: [5]f32 = zero
+    var combo_bars: [5]geometry.Rect = zero
+    var combo_points: [5]chart.Coord = zero
+    var combo_segments: [4]chart.Segment = zero
+    var combo_storage: [2]chart.Layout = zero
+    let (combo_layers, combo_error) = chart.combo_bar_line(combo_columns[..], combo_trend[..], pareto_bounds, combo_x[..], combo_bars[..], combo_points[..], combo_segments[..], combo_storage[..])
+    if combo_error != ok { ret combo_error }
+    try render_dual_axis(a, queue, output_target, canvas, &renderer, combo_layers, pareto_names[..], "Volume and index (secondary axis)", false, "docs/chart-previews/combo_bar_line.png")
     let pie_values = [5]f32{ 30.0, 24.0, 18.0, 16.0, 12.0 }
     let pie_names = [5]str{ "North 30%", "South 24%", "East 18%", "West 16%", "Other 12%" }
     var pie_points: [512]chart.Coord = zero

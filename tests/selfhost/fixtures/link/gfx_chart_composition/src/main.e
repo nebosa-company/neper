@@ -165,6 +165,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try chart_svg.append(&pareto_writer, &pareto[0], blue)
     try chart_svg.append(&pareto_writer, &pareto[1], orange)
     if !str.contains(io.memory_bytes(&pareto_held), "<path") || !str.contains(io.memory_bytes(&pareto_held), "<rect") { ret chart.Invalid }
+    let columns = [4]f32{ 3.0, -2.0, 5.0, 1.0 }
+    let trend = [4]f32{ 100.0, 150.0, 200.0, 125.0 }
+    var combo_x: [4]f32 = zero
+    var combo_bars: [4]geometry.Rect = zero
+    var combo_points: [4]chart.Coord = zero
+    var combo_segments: [3]chart.Segment = zero
+    var combo_storage: [2]chart.Layout = zero
+    let (combo, combo_error) = chart.combo_bar_line(columns[..], trend[..], bounds, combo_x[..], combo_bars[..], combo_points[..], combo_segments[..], combo_storage[..])
+    if combo_error != ok || combo.len != 2usize || combo[0].kind != .Bar || combo[1].kind != .PointLine || !near(combo[0].y_min, -2.0) || !near(combo[0].y_max, 5.0) || !near(combo[1].y_min, 100.0) || !near(combo[1].y_max, 200.0) || !near(combo_x[0usize], 0.5) || !near(combo_bars[0usize].x, 2.5) || !near(combo_points[0usize].x, 12.5) || !near(combo_points[2usize].y, 0.0) { ret chart.Invalid }
+    let (_, combo_short) = chart.combo_bar_line(columns[..], trend[..], bounds, combo_x[..], combo_bars[..], combo_points[..], combo_segments[..2usize], combo_storage[..])
+    if combo_short != chart.TooLarge { ret chart.Invalid }
+    let (_, combo_mismatch) = chart.combo_bar_line(columns[..], trend[..3usize], bounds, combo_x[..], combo_bars[..], combo_points[..], combo_segments[..], combo_storage[..])
+    if combo_mismatch != chart.Invalid { ret chart.Invalid }
+    let bad_trend = [4]f32{ 100.0, 150.0, 0.0 / 0.0, 125.0 }
+    let (_, combo_nonfinite) = chart.combo_bar_line(columns[..], bad_trend[..], bounds, combo_x[..], combo_bars[..], combo_points[..], combo_segments[..], combo_storage[..])
+    if combo_nonfinite != chart.Invalid { ret chart.Invalid }
+    let (combo_builder_made, combo_builder_error) = scene.builder(a, 12usize)
+    if combo_builder_error != ok { ret combo_builder_error }
+    var combo_builder = combo_builder_made
+    try chart_scene.append(a, &combo_builder, &combo[0], paint.Brush { Solid: blue })
+    try chart_scene.append(a, &combo_builder, &combo[1], paint.Brush { Solid: orange })
+    if scene.builder_count(&combo_builder) != 9usize { ret chart.Invalid }
+    let (combo_state, combo_unused, combo_writer_error) = io.memory_writer(a, 0usize)
+    if combo_writer_error != ok { ret combo_writer_error }
+    var combo_held = combo_state
+    var combo_writer = io.writer(mem.cast[*void](&combo_held), io.memory_write)
+    try chart_svg.append(&combo_writer, &combo[0], blue)
+    try chart_svg.append(&combo_writer, &combo[1], orange)
+    if !str.contains(io.memory_bytes(&combo_held), "<path") || !str.contains(io.memory_bytes(&combo_held), "<rect") { ret chart.Invalid }
     let (_, short_ticks) = chart.category_ticks(4usize, category_ticks[..3usize])
     if short_ticks != chart.TooLarge { ret chart.Invalid }
     let (_, no_ticks) = chart.category_ticks(0usize, category_ticks[..])

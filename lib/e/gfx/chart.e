@@ -947,6 +947,31 @@ fn pareto(values: []const f32, bounds: geometry.Rect, order: []usize, bars: []ge
     ret (layers[..2usize], ok)
 }
 
+// Category-centred columns and a line share x while retaining independent
+// vertical domains. The caller owns category positions and both mark layers.
+fn combo_bar_line(columns: []const f32, line: []const f32, bounds: geometry.Rect, category_x: []f32, bars: []geometry.Rect, points: []Coord, segments: []Segment, layers: []Layout) -> ([]Layout, err) {
+    if columns.len == 0usize { ret (zero, Empty) }
+    if columns.len != line.len || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if category_x.len < columns.len || bars.len < columns.len || points.len < line.len || (line.len > 1usize && segments.len < line.len - 1usize) || layers.len < 2usize { ret (zero, TooLarge) }
+    // ponytail: f32 centres need distinct integers; wider categories need a non-f32 axis.
+    if columns.len >= 16777216usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < columns.len {
+        category_x[i] = f32(i) + 0.5
+        i += 1usize
+    }
+    let limits = [2]f32{ 0.0, f32(columns.len) }
+    var column_spec = spec(.Bar, bounds, category_x[..columns.len], columns)
+    let (column_layer, column_error) = layout_with_limits(&column_spec, zero, zero, bars, limits[..], zero)
+    if column_error != ok { ret (zero, column_error) }
+    var line_spec = spec(.PointLine, bounds, category_x[..line.len], line)
+    let (line_layer, line_error) = layout_with_limits(&line_spec, points, segments, zero, limits[..], zero)
+    if line_error != ok { ret (zero, line_error) }
+    layers[0usize] = column_layer
+    layers[1usize] = line_layer
+    ret (layers[..2usize], ok)
+}
+
 // Each slice is a filled polygon; hole=0 gives a pie, 0<hole<1 a donut.
 // A fixed full-circle tessellation keeps the painter and SVG paths identical.
 fn pie(values: []const f32, bounds: geometry.Rect, hole: f32, points: []Coord, layers: []Layout) -> ([]Layout, err) {
