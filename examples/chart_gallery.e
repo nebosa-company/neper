@@ -1737,6 +1737,96 @@ fn render_entity_relationship_preview(a: *mem.Arena, q: *gpu.Queue, output_targe
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_branching_process_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/branching_process_map.png"
+    let plot = geometry.rect(12.0, 48.0, 336.0, 165.0)
+    let steps = [6]chart.BranchStep{
+        chart.BranchStep { process_time: 1.0f64, good_fraction: 0.99f64 },
+        chart.BranchStep { process_time: 2.0f64, good_fraction: 0.98f64 },
+        chart.BranchStep { process_time: 1.0f64, good_fraction: 0.99f64 },
+        chart.BranchStep { process_time: 3.0f64, good_fraction: 0.90f64 },
+        chart.BranchStep { process_time: 2.0f64, good_fraction: 0.97f64 },
+        chart.BranchStep { process_time: 0.5f64, good_fraction: 1.0f64 },
+    }
+    let routes = [6]chart.BranchRoute{
+        chart.BranchRoute { from: 0usize, to: 1usize, fraction: 1.0f64 },
+        chart.BranchRoute { from: 1usize, to: 2usize, fraction: 0.7f64 },
+        chart.BranchRoute { from: 1usize, to: 3usize, fraction: 0.3f64 },
+        chart.BranchRoute { from: 2usize, to: 4usize, fraction: 1.0f64 },
+        chart.BranchRoute { from: 3usize, to: 4usize, fraction: 1.0f64 },
+        chart.BranchRoute { from: 4usize, to: 5usize, fraction: 1.0f64 },
+    }
+    var indegree: [6]usize = zero
+    var head: [6]usize = zero
+    var next: [6]usize = zero
+    var order: [6]usize = zero
+    var stage: [6]usize = zero
+    var stage_counts: [6]usize = zero
+    var stage_used: [6]usize = zero
+    var flow: [6]f64 = zero
+    var branch_sum: [6]f64 = zero
+    let work = chart.BranchWork { indegree: indegree[..], head: head[..], next: next[..], order: order[..], stage: stage[..], stage_counts: stage_counts[..], stage_used: stage_used[..], flow: flow[..], branch_sum: branch_sum[..] }
+    var boxes: [6]geometry.Rect = zero
+    var arrows: [30]chart.Segment = zero
+    let (map, layout_error) = chart.branching_process_map(steps[..], routes[..], plot, work, boxes[..], arrows[..])
+    if layout_error != ok || map.summary.stages != 5usize || map.summary.sinks != 1usize || map.summary.output_fraction < 0.906f64 || map.summary.output_fraction > 0.907f64 { ret chart.Invalid }
+    let names = [6]str{ "Start", "Triage", "Fast", "Manual", "Merge", "Done" }
+    let blue = paint.rgba(0.16, 0.43, 0.76, 1.0)
+    let teal = paint.rgba(0.13, 0.53, 0.46, 1.0)
+    let amber = paint.rgba(0.79, 0.43, 0.13, 1.0)
+    let navy = paint.rgba(0.16, 0.30, 0.54, 1.0)
+    let gray = paint.rgba(0.55, 0.63, 0.72, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var labels: [10]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Branching process / yield", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "90.6% output / 6.85h expected work", anchor: chart.Coord { x: 180.0, y: 238.0 }, align: .Center }
+    var i = 0usize
+    while i < boxes.len {
+        labels[i + 2usize] = chart.Label { text: names[i], anchor: chart.Coord { x: boxes[i].x + boxes[i].width * 0.5, y: boxes[i].y + boxes[i].height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[8usize] = chart.Label { text: "70%", anchor: chart.Coord { x: 143.0, y: 89.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "30%", anchor: chart.Coord { x: 143.0, y: 170.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &map.connectors, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.nodes, paint.Brush { Solid: blue })
+    try fill(&builder, boxes[0usize], paint.Brush { Solid: navy })
+    try fill(&builder, boxes[2usize], paint.Brush { Solid: teal })
+    try fill(&builder, boxes[3usize], paint.Brush { Solid: amber })
+    try fill(&builder, boxes[5usize], paint.Brush { Solid: navy })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..8usize], font, 8.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[8usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &map.connectors, gray)
+    try chart_svg.append(&writer, &map.nodes, blue)
+    try chart_svg.rect(&writer, boxes[0usize], navy, false)
+    try chart_svg.rect(&writer, boxes[2usize], teal, false)
+    try chart_svg.rect(&writer, boxes[3usize], amber, false)
+    try chart_svg.rect(&writer, boxes[5usize], navy, false)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[2usize..8usize], white, 8.0)
+    try chart_svg.append_labels(&writer, labels[8usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -5687,6 +5777,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_state_machine_preview(a, queue, output_target, canvas, &renderer)
     try render_sequence_diagram_preview(a, queue, output_target, canvas, &renderer)
     try render_entity_relationship_preview(a, queue, output_target, canvas, &renderer)
+    try render_branching_process_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

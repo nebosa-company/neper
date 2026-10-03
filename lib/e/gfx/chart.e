@@ -76,6 +76,11 @@ type EntityField = struct { table: usize, name: str, key: EntityKey }
 type EntityCardinality = enum u8 { One, ZeroOne, Many, ZeroMany }
 type EntityRelation = struct { from: usize, to: usize, from_card: EntityCardinality, to_card: EntityCardinality, name: str }
 type EntityLayout = struct { tables: Layout, headers: Layout, connectors: Layout, table_labels: []Label, field_labels: []Label, key_labels: []Label, relation_labels: []Label }
+type BranchStep = struct { process_time: f64, good_fraction: f64 }
+type BranchRoute = struct { from: usize, to: usize, fraction: f64 }
+type BranchWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize, stage: []usize, stage_counts: []usize, stage_used: []usize, flow: []f64, branch_sum: []f64 }
+type BranchSummary = struct { output_fraction: f64, expected_processing_time: f64, stages: usize, sinks: usize }
+type BranchLayout = struct { nodes: Layout, connectors: Layout, summary: BranchSummary }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -3404,6 +3409,131 @@ fn entity_relationship(tables: []const EntityTable, fields: []const EntityField,
     let header_layer = Layout { kind: .Bar, coords: zero, segments: zero, bars: header_boxes[..tables.len], x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
     let connector_layer = Layout { kind: .Rug, coords: zero, segments: relation_segments[..segments_used], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
     ret (EntityLayout { tables: table_layer, headers: header_layer, connectors: connector_layer, table_labels: table_labels[..tables.len], field_labels: field_labels[..fields.len], key_labels: key_labels[..keys_used], relation_labels: relation_labels[..relations.len] }, ok)
+}
+
+// One rooted process DAG. Every split's outgoing fractions sum to one; joins
+// add surviving flow. Expected processing time weights each stage by arrivals.
+fn branching_process_map(steps: []const BranchStep, routes: []const BranchRoute, bounds: geometry.Rect, work: BranchWork, boxes: []geometry.Rect, arrows: []Segment) -> (BranchLayout, err) {
+    let n = steps.len
+    if n == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if work.indegree.len < n || work.head.len < n || work.order.len < n || work.stage.len < n || work.stage_counts.len < n || work.stage_used.len < n || work.flow.len < n || work.branch_sum.len < n || work.next.len < routes.len || boxes.len < n || arrows.len / 5usize < routes.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        if !finite64(steps[i].process_time) || steps[i].process_time < 0.0f64 || !finite64(steps[i].good_fraction) || steps[i].good_fraction < 0.0f64 || steps[i].good_fraction > 1.0f64 { ret (zero, Invalid) }
+        work.indegree[i] = 0usize
+        work.head[i] = 0usize
+        work.stage[i] = 0usize
+        work.stage_counts[i] = 0usize
+        work.stage_used[i] = 0usize
+        work.flow[i] = 0.0f64
+        work.branch_sum[i] = 0.0f64
+        i += 1usize
+    }
+    i = routes.len
+    while i > 0usize {
+        i -= 1usize
+        let route = routes[i]
+        if route.from >= n || route.to >= n || route.from == route.to || !finite64(route.fraction) || route.fraction < 0.0f64 || route.fraction > 1.0f64 { ret (zero, Invalid) }
+        work.indegree[route.to] += 1usize
+        work.branch_sum[route.from] += route.fraction
+        if !finite64(work.branch_sum[route.from]) { ret (zero, Invalid) }
+        work.next[i] = work.head[route.from]
+        work.head[route.from] = i + 1usize
+    }
+    if work.indegree[0usize] != 0usize { ret (zero, Invalid) }
+    i = 1usize
+    while i < n {
+        if work.indegree[i] == 0usize { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if work.head[i] != 0usize && (work.branch_sum[i] < 0.999999f64 || work.branch_sum[i] > 1.000001f64) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    work.flow[0usize] = 1.0f64
+    work.order[0usize] = 0usize
+    var front = 0usize
+    var tail = 1usize
+    var stages = 1usize
+    var sinks = 0usize
+    var output_fraction = 0.0f64
+    var expected_processing_time = 0.0f64
+    while front < tail {
+        let node = work.order[front]
+        expected_processing_time += work.flow[node] * steps[node].process_time
+        let surviving = work.flow[node] * steps[node].good_fraction
+        if !finite64(expected_processing_time) || !finite64(surviving) { ret (zero, Invalid) }
+        if work.head[node] == 0usize {
+            output_fraction += surviving
+            sinks += 1usize
+        }
+        var edge = work.head[node]
+        while edge != 0usize {
+            let to = routes[edge - 1usize].to
+            let next_stage = work.stage[node] + 1usize
+            if next_stage > work.stage[to] { work.stage[to] = next_stage }
+            if next_stage + 1usize > stages { stages = next_stage + 1usize }
+            work.flow[to] += surviving * routes[edge - 1usize].fraction
+            if !finite64(work.flow[to]) { ret (zero, Invalid) }
+            work.indegree[to] -= 1usize
+            if work.indegree[to] == 0usize {
+                work.order[tail] = to
+                tail += 1usize
+            }
+            edge = work.next[edge - 1usize]
+        }
+        front += 1usize
+    }
+    if tail != n || !finite64(output_fraction) || output_fraction < 0.0f64 || output_fraction > 1.000001f64 { ret (zero, Invalid) }
+    i = 0usize
+    while i < n {
+        work.stage_counts[work.stage[i]] += 1usize
+        i += 1usize
+    }
+    let cell_width = bounds.width / f32(stages)
+    var box_width = cell_width * 0.68
+    if box_width > 96.0 { box_width = 96.0 }
+    let box_height = 30.0f32
+    if !finite(cell_width) || !finite(box_width) || box_width < 32.0 { ret (zero, TooLarge) }
+    i = 0usize
+    while i < n {
+        let rank = work.stage[i]
+        let slot_height = bounds.height / f32(work.stage_counts[rank])
+        if !finite(slot_height) || slot_height < box_height + 6.0 { ret (zero, TooLarge) }
+        let x = bounds.x + (f32(rank) + 0.5) * cell_width - box_width * 0.5
+        let y = bounds.y + (f32(work.stage_used[rank]) + 0.5) * slot_height - box_height * 0.5
+        if !finite(x) || !finite(y) || !finite(x + box_width) || !finite(y + box_height) { ret (zero, Invalid) }
+        boxes[i] = geometry.rect(x, y, box_width, box_height)
+        work.stage_used[rank] += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < routes.len {
+        let from = boxes[routes[i].from]
+        let to = boxes[routes[i].to]
+        let x0 = from.x + from.width
+        let x1 = to.x
+        let y0 = from.y + from.height * 0.5
+        let y1 = to.y + to.height * 0.5
+        let middle = x0 + (x1 - x0) * 0.5
+        var head = (x1 - x0) * 0.18
+        if head > 7.0 { head = 7.0 }
+        if !finite(middle) || !finite(head) || head <= 0.0 { ret (zero, TooLarge) }
+        let tip = Coord { x: x1, y: y1 }
+        let first = i * 5usize
+        arrows[first] = Segment { from: Coord { x: x0, y: y0 }, to: Coord { x: middle, y: y0 } }
+        arrows[first + 1usize] = Segment { from: Coord { x: middle, y: y0 }, to: Coord { x: middle, y: y1 } }
+        arrows[first + 2usize] = Segment { from: Coord { x: middle, y: y1 }, to: tip }
+        arrows[first + 3usize] = Segment { from: Coord { x: x1 - head, y: y1 - head * 0.7 }, to: tip }
+        arrows[first + 4usize] = Segment { from: Coord { x: x1 - head, y: y1 + head * 0.7 }, to: tip }
+        i += 1usize
+    }
+    let nodes = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..n], x_min: 0.0, x_max: f32(stages), y_min: 0.0, y_max: 1.0 }
+    let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..routes.len * 5usize], bars: zero, x_min: 0.0, x_max: f32(stages), y_min: 0.0, y_max: 1.0 }
+    let summary = BranchSummary { output_fraction: output_fraction, expected_processing_time: expected_processing_time, stages: stages, sinks: sinks }
+    ret (BranchLayout { nodes: nodes, connectors: connectors, summary: summary }, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

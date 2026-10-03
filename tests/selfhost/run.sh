@@ -2914,6 +2914,11 @@ gfx_chart_entity_relationship_written=$($test_build/neper-self emit-executable "
 chmod +x "$test_build/gfx-chart-entity-relationship-selfhost"
 gfx_chart_entity_relationship_output=$("$test_build/gfx-chart-entity-relationship-selfhost")
 [ "$gfx_chart_entity_relationship_output" = 'gfx chart entity relationship ok' ]
+gfx_chart_branching_process_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_branching_process/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-branching-process-selfhost")
+[ "$gfx_chart_branching_process_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-branching-process-selfhost"
+gfx_chart_branching_process_output=$("$test_build/gfx-chart-branching-process-selfhost")
+[ "$gfx_chart_branching_process_output" = 'gfx chart branching process ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

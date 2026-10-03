@@ -57,7 +57,6 @@ cross_tab_report
 matrix_report
 
 # Operations, finance and network diagrams
-branching_process_map
 future_state_vsm
 cap_table_waterfall
 tornado

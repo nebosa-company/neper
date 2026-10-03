@@ -34235,3 +34235,15 @@ interleaved fields, optional and reverse links, malformed geometry, capacity
 and scene/SVG output. The Linux runner is registered; its focused check awaits
 WSL service recovery. Automatic placement and vertical/collision-free routing
 remain follow-on work.
+
+## D1914 — Branching process maps conserve split flow and expose losses
+
+`branching_process_map` requires a single rooted acyclic process. Each
+nonterminal node's outgoing fractions sum to one; its good fraction is applied
+before flow reaches child nodes. Joins sum surviving arrivals, and the summary
+reports terminal good output plus arrival-weighted expected processing time.
+Longest-path stages produce caller-owned Bar nodes and directional Rug links.
+The Windows fixture checks numeric split/merge references, multiple sinks,
+cycles, malformed fractions, capacities and scene/SVG. Its Linux runner is
+registered pending WSL recovery. Rework loops, calendars, distributions and
+crossing minimization remain follow-on work.
