@@ -2671,6 +2671,64 @@ fn render_radar_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_ternary_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let top = [12]f32{ 65.0, 55.0, 72.0, 44.0, 80.0, 62.0, 24.0, 18.0, 36.0, 28.0, 14.0, 33.0 }
+    let left = [12]f32{ 20.0, 31.0, 12.0, 36.0, 10.0, 23.0, 59.0, 68.0, 48.0, 62.0, 72.0, 53.0 }
+    let right = [12]f32{ 15.0, 14.0, 16.0, 20.0, 10.0, 15.0, 17.0, 14.0, 16.0, 10.0, 14.0, 14.0 }
+    var points: [12]chart.Coord = zero
+    var guides: [15]chart.Segment = zero
+    let (all, grid, chart_error) = chart.ternary(top[..], left[..], right[..], geometry.rect(74.0, 48.0, 212.0, 152.0), 5usize, points[..], guides[..])
+    if chart_error != ok { ret chart_error }
+    var first = all
+    first.coords = all.coords[..6usize]
+    var second = all
+    second.coords = all.coords[6usize..]
+    let blue = paint.rgba(0.07, 0.35, 0.76, 1.0)
+    let orange = paint.rgba(0.94, 0.42, 0.12, 1.0)
+    let grid_color = paint.rgba(0.76, 0.81, 0.87, 1.0)
+    let ink = paint.rgba(0.24, 0.30, 0.40, 1.0)
+    let labels = [6]chart.Label{
+        chart.Label { text: "Three-part mixtures", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "A", anchor: chart.Coord { x: 180.0, y: 41.0 }, align: .Center },
+        chart.Label { text: "B", anchor: chart.Coord { x: 82.0, y: 216.0 }, align: .Center },
+        chart.Label { text: "C", anchor: chart.Coord { x: 278.0, y: 216.0 }, align: .Center },
+        chart.Label { text: "Blend 1", anchor: chart.Coord { x: 105.0, y: 234.0 }, align: .Left },
+        chart.Label { text: "Blend 2", anchor: chart.Coord { x: 229.0, y: 234.0 }, align: .Left },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 29u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 40usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append(a, &builder, &grid, paint.Brush { Solid: grid_color })
+    try chart_scene.append(a, &builder, &first, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &second, paint.Brush { Solid: orange })
+    try fill(&builder, geometry.rect(89.0, 228.0, 10.0, 5.0), paint.Brush { Solid: blue })
+    try fill(&builder, geometry.rect(213.0, 228.0, 10.0, 5.0), paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: ink })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: ink })
+    let path = "docs/chart-previews/ternary.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &grid, grid_color)
+    try chart_svg.append(&writer, &first, blue)
+    try chart_svg.append(&writer, &second, orange)
+    try chart_svg.rect(&writer, geometry.rect(89.0, 228.0, 10.0, 5.0), blue, false)
+    try chart_svg.rect(&writer, geometry.rect(213.0, 228.0, 10.0, 5.0), orange, false)
+    try chart_svg.append_labels(&writer, labels[..1usize], ink, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], ink, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
     if layers.len != 9usize || rects.len != layers.len || names.len != layers.len { ret chart.Invalid }
     let colors = [6]paint.Color{
@@ -3427,6 +3485,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if donut_error != ok { ret donut_error }
     try render_share(a, queue, output_target, canvas, &renderer, donut_layers, pie_names[..], "Category share", "docs/chart-previews/donut.png")
     try render_radar_preview(a, queue, output_target, canvas, &renderer)
+    try render_ternary_preview(a, queue, output_target, canvas, &renderer)
     let rose_values = [5]f32{ 10.0, 18.0, 8.0, 5.0, 14.0 }
     let rose_names = [5]str{ "0 deg", "72 deg", "144 deg", "216 deg", "288 deg" }
     var rose_points: [115]chart.Coord = zero

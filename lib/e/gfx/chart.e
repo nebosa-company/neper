@@ -1442,6 +1442,48 @@ fn radar(values: []const f32, minimum: []const f32, maximum: []const f32, bounds
     ret (polygon, guide_marks, ok)
 }
 
+// A, B and C are nonnegative parts of a composition; each row is closed to
+// unit sum before projection. Corners are A (top), B (left), C (right).
+fn ternary(a: []const f32, b: []const f32, c: []const f32, bounds: geometry.Rect, levels: usize, points: []Coord, guides: []Segment) -> (Layout, Layout, err) {
+    if a.len == 0usize { ret (zero, zero, Empty) }
+    if b.len != a.len || c.len != a.len || levels == 0usize || !valid_bounds(bounds) { ret (zero, zero, Invalid) }
+    if points.len < a.len || levels > guides.len / 3usize { ret (zero, zero, TooLarge) }
+    let root3 = 1.7320508075688772f64
+    var side = f64(bounds.width)
+    if side > f64(bounds.height) * 2.0f64 / root3 { side = f64(bounds.height) * 2.0f64 / root3 }
+    let height = side * root3 * 0.5f64
+    let x = f64(bounds.x) + (f64(bounds.width) - side) * 0.5f64
+    let y = f64(bounds.y) + (f64(bounds.height) - height) * 0.5f64
+    let top = Coord { x: f32(x + side * 0.5f64), y: f32(y) }
+    let left = Coord { x: f32(x), y: f32(y + height) }
+    let right = Coord { x: f32(x + side), y: left.y }
+    if !finite(top.x) || !finite(top.y) || !finite(left.x) || !finite(left.y) || !finite(right.x) { ret (zero, zero, Invalid) }
+    var i = 0usize
+    while i < a.len {
+        if !finite(a[i]) || !finite(b[i]) || !finite(c[i]) || a[i] < 0.0 || b[i] < 0.0 || c[i] < 0.0 { ret (zero, zero, Invalid) }
+        let total = f64(a[i]) + f64(b[i]) + f64(c[i])
+        if total <= 0.0f64 { ret (zero, zero, Invalid) }
+        let aa = f64(a[i]) / total
+        let bb = f64(b[i]) / total
+        let cc = f64(c[i]) / total
+        points[i] = Coord { x: f32(aa * f64(top.x) + bb * f64(left.x) + cc * f64(right.x)), y: f32(aa * f64(top.y) + (bb + cc) * f64(left.y)) }
+        if !finite(points[i].x) || !finite(points[i].y) { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < levels {
+        let t = f32(f64(i) / f64(levels))
+        let u = 1.0 - t
+        guides[i * 3usize] = Segment { from: Coord { x: left.x * u + top.x * t, y: left.y * u + top.y * t }, to: Coord { x: right.x * u + top.x * t, y: right.y * u + top.y * t } }
+        guides[i * 3usize + 1usize] = Segment { from: Coord { x: top.x * u + right.x * t, y: top.y * u + right.y * t }, to: Coord { x: left.x * u + right.x * t, y: left.y * u + right.y * t } }
+        guides[i * 3usize + 2usize] = Segment { from: Coord { x: top.x * u + left.x * t, y: top.y * u + left.y * t }, to: Coord { x: right.x * u + left.x * t, y: right.y * u + left.y * t } }
+        i += 1usize
+    }
+    let marks = Layout { kind: .Scatter, coords: points[..a.len], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let grid = Layout { kind: .Rug, coords: zero, segments: guides[..levels * 3usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    ret (marks, grid, ok)
+}
+
 // Equal-angle rose sectors. Square-root radii make sector area proportional
 // to each nonnegative pre-binned weight, as in a circular histogram.
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {

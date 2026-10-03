@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>ternary</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<line x1="92.24275970458984" y1="200" x2="267.7572326660156" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="48" x2="92.24275970458984" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="48" x2="267.7572326660156" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="109.7942123413086" y1="169.60000610351562" x2="250.20579528808594" y2="169.60000610351562" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="197.55145263671875" y1="78.4000015258789" x2="127.34565734863281" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="162.44854736328125" y1="78.4000015258789" x2="232.6543426513672" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.34565734863281" y1="139.20001220703125" x2="232.6543426513672" y2="139.20001220703125" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="215.1029052734375" y1="108.80000305175781" x2="162.44854736328125" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="144.89710998535156" y1="108.80000305175781" x2="197.55145263671875" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="144.89710998535156" y1="108.79999542236328" x2="215.1029052734375" y2="108.79999542236328" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="232.65432739257812" y1="139.20001220703125" x2="197.55145263671875" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.34564971923828" y1="139.20001220703125" x2="162.44854736328125" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="162.44854736328125" y1="78.39999389648438" x2="197.55145263671875" y2="78.39999389648438" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="250.20579528808594" y1="169.60000610351562" x2="232.6543426513672" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="109.79420471191406" y1="169.60000610351562" x2="127.34565734863281" y2="200" stroke="rgb(194,207,222)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="172.6121368408203" y="98.19999694824219" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="162.08126831054688" y="113.4000015258789" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="180.51028442382812" y="87.55999755859375" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="162.95884704589844" y="130.1199951171875" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="177" y="75.4000015258789" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="169.9794158935547" y="102.76000213623047" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="140.14195251464844" y="160.52000427246094" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="129.611083984375" y="169.63999938964844" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="148.9176788330078" y="142.27999877929688" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="131.36624145507812" y="154.44000244140625" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="126.10079956054688" y="175.72000122070312" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="142.77467346191406" y="146.83999633789062" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
+<rect x="89" y="228" width="10" height="5" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="213" y="228" width="10" height="5" fill="rgb(240,107,31)" fill-opacity="1"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(61,77,102)" fill-opacity="1">Three-part mixtures</text>
+<text x="180" y="41" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(61,77,102)" fill-opacity="1">A</text>
+<text x="82" y="216" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(61,77,102)" fill-opacity="1">B</text>
+<text x="278" y="216" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(61,77,102)" fill-opacity="1">C</text>
+<text x="105" y="234" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(61,77,102)" fill-opacity="1">Blend 1</text>
+<text x="229" y="234" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(61,77,102)" fill-opacity="1">Blend 2</text>
+</svg>

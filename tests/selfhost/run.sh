@@ -2769,6 +2769,11 @@ gfx_chart_radial_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/gfx-chart-radial-selfhost"
 gfx_chart_radial_output=$("$test_build/gfx-chart-radial-selfhost")
 [ "$gfx_chart_radial_output" = 'gfx chart radial ok' ]
+gfx_chart_ternary_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_ternary/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-ternary-selfhost")
+[ "$gfx_chart_ternary_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-ternary-selfhost"
+gfx_chart_ternary_output=$("$test_build/gfx-chart-ternary-selfhost")
+[ "$gfx_chart_ternary_output" = 'gfx chart ternary ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

@@ -33921,3 +33921,14 @@ weight. Its filled sectors reuse the existing pie/share renderer. The
 refusals and scene/SVG output on Windows and Linux; two PNG/SVG previews are
 added. Raw-angle binning, curved text and polar axis interaction remain planned.
 References: R `fmsb::radarchart`, `circular::rose.diag` and ggplot2 `coord_radial`.
+
+## D1882 — Ternary diagrams close three parts into reusable Scatter/Rug marks
+
+`ternary` accepts three aligned nonnegative columns and normalizes each row to
+unit sum, so equivalent compositions project to the same point. An equilateral
+triangle is centered within the caller bounds; A is top, B left and C right.
+Caller-owned Scatter coordinates and Rug grid segments work unchanged in the
+scene and SVG adapters. `gfx_chart_ternary` checks corners, mixtures, invalid
+rows, capacities and both adapters on Windows and Linux. The gallery adds one
+PNG/SVG preview. Density, contours and custom axis scales remain planned.
+Reference: R `Ternary::TernaryPoints` and `ggtern`.
