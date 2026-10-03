@@ -742,6 +742,80 @@ fn render_radial_hierarchy(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_chord(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, path: str) -> err {
+    if layers.len != 14usize || names.len != 4usize { ret chart.Invalid }
+    let ribbons = [4]paint.Color{
+        paint.rgba(0.09, 0.36, 0.74, 0.50), paint.rgba(0.87, 0.39, 0.15, 0.50),
+        paint.rgba(0.14, 0.58, 0.43, 0.50), paint.rgba(0.51, 0.36, 0.73, 0.50),
+    }
+    let rings = [4]paint.Color{
+        paint.rgba(0.09, 0.36, 0.74, 1.0), paint.rgba(0.87, 0.39, 0.15, 1.0),
+        paint.rgba(0.14, 0.58, 0.43, 1.0), paint.rgba(0.51, 0.36, 0.73, 1.0),
+    }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var legend: [4]chart.LegendItem = zero
+    let (entries, legend_error) = chart.legend_items(names, chart.Coord { x: 236.0, y: 62.0 }, 11.0, 35.0, legend[..])
+    if legend_error != ok { ret legend_error }
+    var labels: [5]chart.Label = zero
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var layer = 0usize
+    var i = 0usize
+    while i < 4usize {
+        var j = i
+        while j < 4usize {
+            try chart_scene.append(a, &builder, &layers[layer], paint.Brush { Solid: ribbons[i] })
+            layer += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 4usize {
+        try chart_scene.append(a, &builder, &layers[layer + i], paint.Brush { Solid: rings[i] })
+        try fill(&builder, entries[i].swatch, paint.Brush { Solid: rings[i] })
+        labels[i] = entries[i].label
+        i += 1usize
+    }
+    labels[4usize] = chart.Label { text: "Connections", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    try chart_scene.append_labels(a, &builder, labels[..4usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[4usize..], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    layer = 0usize
+    i = 0usize
+    while i < 4usize {
+        var j = i
+        while j < 4usize {
+            try chart_svg.append(&writer, &layers[layer], ribbons[i])
+            layer += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 4usize {
+        try chart_svg.append(&writer, &layers[layer + i], rings[i])
+        try chart_svg.rect(&writer, entries[i].swatch, rings[i], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..4usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[4usize..], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_sankey(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, colors: []const paint.Color, title: str, path: str) -> err {
     if layers.len <= rects.len || rects.len > 8usize || names.len != rects.len || colors.len != layers.len { ret chart.Invalid }
     let link_count = layers.len - rects.len
@@ -1113,6 +1187,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if circle_error != ok { ret circle_error }
     let circle_names = [7]str{ "Digital", "Operations", "Cloud 30", "Apps 20", "Data 10", "Supply 25", "Field 15" }
     try render_radial_hierarchy(a, queue, output_target, canvas, &renderer, circle_layers, circle_names[..], 1usize, false, "Circle packing", "docs/chart-previews/circle_pack.png")
+    let chord_values = [16]f32{ 0.0, 8.0, 5.0, 3.0, 4.0, 0.0, 6.0, 5.0, 7.0, 3.0, 0.0, 4.0, 2.0, 6.0, 5.0, 0.0 }
+    let chord_names = [4]str{ "Design", "Build", "Sales", "Support" }
+    var chord_totals: [4]f64 = zero
+    var chord_arcs: [4]chart.SunburstArc = zero
+    var chord_subarcs: [16]chart.SunburstArc = zero
+    var chord_points: [450]chart.Coord = zero
+    var chord_storage: [14]chart.Layout = zero
+    let (chord_layers, chord_error) = chart.chord(chord_values[..], 4usize, geometry.rect(25.0, 33.0, 190.0, 190.0), 0.78, 0.06, 12usize, chord_totals[..], chord_arcs[..], chord_subarcs[..], chord_points[..], chord_storage[..])
+    if chord_error != ok { ret chord_error }
+    try render_chord(a, queue, output_target, canvas, &renderer, chord_layers, chord_names[..], "docs/chart-previews/chord.png")
     let flow_columns = [6]usize{ 0usize, 0usize, 1usize, 1usize, 2usize, 2usize }
     let flow_sources = [8]usize{ 0usize, 0usize, 1usize, 1usize, 2usize, 2usize, 3usize, 3usize }
     let flow_targets = [8]usize{ 2usize, 3usize, 2usize, 3usize, 4usize, 5usize, 4usize, 5usize }

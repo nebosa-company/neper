@@ -33445,3 +33445,14 @@ or per-series remapping. The scene and SVG adapters are unchanged.
 and both adapters on Windows and Linux; the gallery adds one PNG/SVG pair.
 The simple silhouette offset retains input layer order. Wiggle offsets and
 automatic ordering remain separate work.
+
+## D1839 — Preserve asymmetric matrix weights in chord ribbons
+
+`chart.chord` maps each row of a directed square matrix to an outer group arc,
+then joins opposite cells in one ribbon with independently sized ends. This
+preserves directional asymmetry without a second arrow painter. Diagonal
+weights form self loops; zero pairs remain empty layers. Fixed-step curved
+polygons and outer rings reuse Area in both scene and SVG. Geometry, storage,
+invalid input and adapter output are checked by `gfx_chart_chord` on Windows
+and Linux; the gallery adds one PNG/SVG pair. Adaptive tessellation,
+direction arrows and interactive highlighting remain later work.

@@ -1085,6 +1085,174 @@ fn pie(values: []const f32, bounds: geometry.Rect, hole: f32, points: []Coord, l
     ret (layers[..values.len], ok)
 }
 
+fn chord_point(center: Coord, radius: f64, angle: f64) -> Coord {
+    ret Coord { x: center.x + f32(radius * math.cos[f64](angle)), y: center.y + f32(radius * math.sin[f64](angle)) }
+}
+
+fn chord_curve(from: Coord, to: Coord, center: Coord, t: f32) -> Coord {
+    let back = 1.0 - t
+    ret Coord { x: back * back * from.x + 2.0 * back * t * center.x + t * t * to.x, y: back * back * from.y + 2.0 * back * t * center.y + t * t * to.y }
+}
+
+// Row-major directed weights: each row owns a group arc; opposite cells form
+// one possibly tapered ribbon. Ribbons paint before the outer group rings.
+// ponytail: fixed-step curves; add adaptive tessellation for zoomed exports.
+fn chord(values: []const f32, groups: usize, bounds: geometry.Rect, hole: f32, gap: f32, steps: usize, totals: []f64, arcs: []SunburstArc, subarcs: []SunburstArc, points: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if groups == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(hole) || hole <= 0.0 || hole >= 1.0 || !finite(gap) || gap < 0.0 || steps < 2usize || values.len / groups != groups || values.len % groups != 0usize { ret (zero, Invalid) }
+    let pairs = groups * (groups + 1usize) / 2usize
+    if totals.len < groups || arcs.len < groups || subarcs.len < values.len || layers.len < pairs + groups || points.len < 2usize || steps > (points.len - 2usize) / 4usize { ret (zero, TooLarge) }
+    let turn = 6.283185307179586f64
+    let available = turn - f64(gap) * f64(groups)
+    if available <= 0.0f64 { ret (zero, Invalid) }
+    var total = 0.0f64
+    var i = 0usize
+    while i < groups {
+        var row = 0.0f64
+        var j = 0usize
+        while j < groups {
+            let value = values[i * groups + j]
+            if !finite(value) || value < 0.0 { ret (zero, Invalid) }
+            row += f64(value)
+            j += 1usize
+        }
+        if !finite(f32(row)) { ret (zero, Invalid) }
+        totals[i] = row
+        total += row
+        i += 1usize
+    }
+    if !finite(f32(total)) || total <= 0.0f64 { ret (zero, Invalid) }
+    var radius = f64(bounds.width) * 0.5f64
+    if bounds.height < bounds.width { radius = f64(bounds.height) * 0.5f64 }
+    let inner = radius * f64(hole)
+    let center = Coord { x: f32(f64(bounds.x) + f64(bounds.width) * 0.5f64), y: f32(f64(bounds.y) + f64(bounds.height) * 0.5f64) }
+    if !finite(center.x) || !finite(center.y) || !finite(f32(radius)) || !finite(f32(inner)) || inner <= 0.0f64 || inner >= radius { ret (zero, Invalid) }
+    var angle = -1.5707963267948966f64 + f64(gap) * 0.5f64
+    i = 0usize
+    while i < groups {
+        let end = angle + available * totals[i] / total
+        arcs[i] = SunburstArc { start: angle, end: end, next: angle }
+        var cursor = angle
+        var j = 0usize
+        while j < groups {
+            var subend = cursor
+            if totals[i] > 0.0f64 { subend += (end - angle) * f64(values[i * groups + j]) / totals[i] }
+            subarcs[i * groups + j] = SunburstArc { start: cursor, end: subend, next: cursor }
+            cursor = subend
+            j += 1usize
+        }
+        angle = end + f64(gap)
+        i += 1usize
+    }
+    var needed = 0usize
+    i = 0usize
+    while i < groups {
+        var j = i
+        while j < groups {
+            if values[i * groups + j] > 0.0 || values[j * groups + i] > 0.0 {
+                var count = 4usize * steps + 2usize
+                if i == j { count = 2usize * steps + 1usize }
+                if count > points.len - needed { ret (zero, TooLarge) }
+                needed += count
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < groups {
+        if totals[i] > 0.0f64 {
+            let count = 2usize * (steps + 1usize)
+            if count > points.len - needed { ret (zero, TooLarge) }
+            needed += count
+        }
+        i += 1usize
+    }
+    var used = 0usize
+    var layer = 0usize
+    i = 0usize
+    while i < groups {
+        var j = i
+        while j < groups {
+            if values[i * groups + j] == 0.0 && values[j * groups + i] == 0.0 {
+                layers[layer] = Layout { kind: .Bar, coords: zero, segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+            } else {
+                let source = subarcs[i * groups + j]
+                let destination = subarcs[j * groups + i]
+                let first = used
+                var k = 0usize
+                while k <= steps {
+                    let a = source.start + (source.end - source.start) * f64(k) / f64(steps)
+                    points[used] = chord_point(center, inner, a)
+                    used += 1usize
+                    k += 1usize
+                }
+                let source_end = points[used - 1usize]
+                let source_start = points[first]
+                var target_start = source_start
+                if i != j { target_start = chord_point(center, inner, destination.start) }
+                k = 1usize
+                while k <= steps {
+                    points[used] = chord_curve(source_end, target_start, center, f32(k) / f32(steps))
+                    used += 1usize
+                    k += 1usize
+                }
+                if i != j {
+                    k = 0usize
+                    while k <= steps {
+                        let a = destination.start + (destination.end - destination.start) * f64(k) / f64(steps)
+                        points[used] = chord_point(center, inner, a)
+                        used += 1usize
+                        k += 1usize
+                    }
+                    let target_end = points[used - 1usize]
+                    k = 1usize
+                    while k <= steps {
+                        points[used] = chord_curve(target_end, source_start, center, f32(k) / f32(steps))
+                        used += 1usize
+                        k += 1usize
+                    }
+                }
+                layers[layer] = Layout { kind: .Area, coords: points[first..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+            }
+            layer += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < groups {
+        if totals[i] == 0.0f64 {
+            layers[layer] = Layout { kind: .Bar, coords: zero, segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        } else {
+            let first = used
+            var k = 0usize
+            while k <= steps {
+                let a = arcs[i].start + (arcs[i].end - arcs[i].start) * f64(k) / f64(steps)
+                points[used] = chord_point(center, radius, a)
+                used += 1usize
+                k += 1usize
+            }
+            k = 0usize
+            while k <= steps {
+                let a = arcs[i].end - (arcs[i].end - arcs[i].start) * f64(k) / f64(steps)
+                points[used] = chord_point(center, inner, a)
+                used += 1usize
+                k += 1usize
+            }
+            layers[layer] = Layout { kind: .Area, coords: points[first..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        }
+        layer += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < used {
+        if !finite(points[i].x) || !finite(points[i].y) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    ret (layers[..layer], ok)
+}
+
 // Ordered categories occupy a fixed grid, rounded at cumulative boundaries.
 fn waffle(values: []const f32, bounds: geometry.Rect, columns: usize, rows: usize, gap: f32, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
     if values.len == 0usize { ret (zero, Empty) }
