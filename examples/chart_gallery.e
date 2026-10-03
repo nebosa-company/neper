@@ -429,6 +429,134 @@ fn render_state_timeline(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_sparklines(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/sparkline.png"
+    let samples = [32]f32{ 2.0, 3.0, 4.0, 4.0, 5.0, 7.0, 6.0, 9.0, 7.0, 6.0, 7.0, 5.0, 4.0, 5.0, 3.0, 3.0, 3.0, 4.0, 3.0, 6.0, 5.0, 7.0, 8.0, 8.0, 7.0, 7.0, 6.0, 6.0, 5.0, 5.0, 4.0, 3.0 }
+    let names = [4]str{ "Sales", "Costs", "Visits", "Churn" }
+    let colors = [4]paint.Color{ paint.rgba(0.07, 0.38, 0.76, 1.0), paint.rgba(0.86, 0.39, 0.17, 1.0), paint.rgba(0.15, 0.60, 0.46, 1.0), paint.rgba(0.48, 0.35, 0.72, 1.0) }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let pale = paint.rgba(0.95, 0.96, 0.98, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var labels: [5]chart.Label = zero
+    var x: [8]f32 = zero
+    var segments: [7]chart.Segment = zero
+    var i = 0usize
+    while i < 4usize {
+        let box = geometry.rect(120.0, 48.0 + f32(i) * 43.0, 192.0, 29.0)
+        let row = geometry.rect(110.0, box.y - 5.0, 212.0, 39.0)
+        try fill(&builder, row, paint.Brush { Solid: pale })
+        let (marks, marks_error) = chart.sparkline(samples[i * 8usize..i * 8usize + 8usize], box, x[..], segments[..])
+        if marks_error != ok { ret marks_error }
+        try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: colors[i] })
+        labels[i] = chart.Label { text: names[i], anchor: chart.Coord { x: 99.0, y: box.y + 19.0 }, align: .Right }
+        i += 1usize
+    }
+    labels[4usize] = chart.Label { text: "In-cell sparklines", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    try chart_scene.append_labels(a, &builder, labels[..4usize], font, 10.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[4usize..], font, 14.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 4usize {
+        let box = geometry.rect(120.0, 48.0 + f32(i) * 43.0, 192.0, 29.0)
+        try chart_svg.rect(&writer, geometry.rect(110.0, box.y - 5.0, 212.0, 39.0), pale, false)
+        let (marks, marks_error) = chart.sparkline(samples[i * 8usize..i * 8usize + 8usize], box, x[..], segments[..])
+        if marks_error != ok { ret marks_error }
+        try chart_svg.append(&writer, &marks, colors[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..4usize], dark, 10.0)
+    try chart_svg.append_labels(&writer, labels[4usize..], dark, 14.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_calendar_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/calendar_heatmap.png"
+    let plot = geometry.rect(62.0, 55.0, 252.0, 147.0)
+    let first_weekday = 5usize
+    let pale = paint.rgba(0.92, 0.94, 0.97, 1.0)
+    let low = paint.rgba(0.75, 0.86, 0.97, 1.0)
+    let high = paint.rgba(0.06, 0.38, 0.72, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var days: [31]chart.CalendarDay = zero
+    var count = 0usize
+    var day = 0usize
+    while day < 31usize {
+        if day != 5usize && day != 14usize && day != 22usize {
+            days[count] = chart.CalendarDay { offset: day, value: f64((day * 7usize + 3usize) % 13usize) }
+            count += 1usize
+        }
+        day += 1usize
+    }
+    var cells: [31]chart.Cell = zero
+    let (marks, marks_error) = chart.calendar_heatmap(days[..count], 31usize, first_weekday, plot, 3.0, cells[..])
+    if marks_error != ok { ret marks_error }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    day = 0usize
+    while day < 31usize {
+        let slot = first_weekday + day
+        let tile = geometry.rect(plot.x + f32(slot / 7usize) * 42.0 + 1.5, plot.y + f32(slot % 7usize) * 21.0 + 1.5, 39.0, 18.0)
+        try fill(&builder, tile, paint.Brush { Solid: pale })
+        day += 1usize
+    }
+    try chart_scene.append_matrix(&builder, &marks, low, low, high)
+    let weekdays = [7]str{ "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" }
+    let weeks = [6]str{ "W1", "W2", "W3", "W4", "W5", "W6" }
+    var labels: [14]chart.Label = zero
+    var i = 0usize
+    while i < 7usize {
+        labels[i] = chart.Label { text: weekdays[i], anchor: chart.Coord { x: 53.0, y: plot.y + f32(i) * 21.0 + 14.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 6usize {
+        labels[7usize + i] = chart.Label { text: weeks[i], anchor: chart.Coord { x: plot.x + f32(i) * 42.0 + 21.0, y: 221.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[13usize] = chart.Label { text: "Calendar heatmap", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    try chart_scene.append_labels(a, &builder, labels[..13usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[13usize..], font, 14.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    day = 0usize
+    while day < 31usize {
+        let slot = first_weekday + day
+        let tile = geometry.rect(plot.x + f32(slot / 7usize) * 42.0 + 1.5, plot.y + f32(slot % 7usize) * 21.0 + 1.5, 39.0, 18.0)
+        try chart_svg.rect(&writer, tile, pale, false)
+        day += 1usize
+    }
+    try chart_svg.append_matrix(&writer, &marks, low, low, high)
+    try chart_svg.append_labels(&writer, labels[..13usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[13usize..], dark, 14.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_mekko(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, path: str) -> err {
     if layers.len != 3usize || categories.len != 4usize || names.len != layers.len || layers[0usize].bars.len != categories.len { ret chart.Invalid }
     let colors = [3]paint.Color{
@@ -1746,6 +1874,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (history_layers, history_error) = chart.state_timeline(history_spans[..], 4usize, 3usize, 0.0f64, 12.0f64, timeline_bounds, 4.0, timeline_rects[..], timeline_state_ids[..], timeline_storage[..])
     if history_error != ok { ret history_error }
     try render_state_timeline(a, queue, output_target, canvas, &renderer, history_layers, timeline_state_ids[..], timeline_rows[..], history_states[..], history_colors[..], "Status history", "docs/chart-previews/status_history.png")
+    try render_sparklines(a, queue, output_target, canvas, &renderer)
+    try render_calendar_preview(a, queue, output_target, canvas, &renderer)
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

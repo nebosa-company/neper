@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, basic word cloud, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel, state timeline, status history,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, basic word cloud, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel, state timeline, status history, in-cell sparklines, calendar heatmap,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-sixty-seven PNG plus sixty-seven SVG previews from Neper. L061 remains partial
+sixty-nine PNG plus sixty-nine SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -264,6 +264,14 @@ times and short storage. The same layout supports an operational state timeline
 and a status-history preview with separate caller-owned legends; the focused
 fixture checks geometry and scene/SVG adapters on Windows and Linux. Date/time
 tick formatting, timezone semantics and event annotations remain planned.
+`sparkline` assigns evenly spaced x positions to dense numeric samples and
+reuses Line layout without guides; the gallery composes four in-cell rows.
+`calendar_heatmap` accepts sorted day offsets, a Monday-first weekday and a
+bounded 366-day domain, leaving missing offsets unpainted. It returns sparse
+Heatmap cells with caller-selected gaps; scene and SVG matrix adapters accept
+those sparse cells. `gfx_chart_calendar_sparkline` checks geometry, refusals
+and both adapters on Windows and Linux. Calendar/date labels, locale rules,
+missing-value policy for sparklines and shared cell scales remain planned.
 `funnel` maps nonincreasing stage counts to centered trapezoid Area layers with
 an explicit inter-stage gap. This is the business conversion funnel, not the
 statistical funnel plot. Both charts refuse invalid totals/stages and short
@@ -310,7 +318,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, basic word cloud, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons, basic stage funnel, state timeline and status history are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, basic word cloud, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons, basic stage funnel, state timeline, status history, in-cell sparklines and calendar heatmap are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -404,6 +412,8 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    `gfx_chart_word_cloud` checks bounds and scene/SVG text on both hosts.
    State timeline and status history share ordered f64 interval geometry,
    coalescing and gap handling; `gfx_chart_state_timeline` checks both adapters.
+   In-cell sparklines reuse Line layers and calendar heatmaps reuse sparse
+   Heatmap cells; `gfx_chart_calendar_sparkline` checks both adapters and hosts.
    OLS fit and covariance data-ellipse overlays reuse Line layers and shared
    scatter limits; mean-confidence and prediction ribbons add filled Band
    layers on the same domain. `gfx_chart_overlays` checks references and adapters
@@ -416,7 +426,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with sixty-seven vector previews, automatic numeric tick text and
+   adapter with sixty-nine vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

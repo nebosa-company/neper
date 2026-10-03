@@ -191,7 +191,7 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
 // midpoint at zero; ordinary heatmaps interpolate directly from low to high.
 fn append_matrix(builder: *scene.Builder, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err {
     if marks.kind != .Heatmap && marks.kind != .Correlation { ret chart.Invalid }
-    if marks.columns == 0usize || marks.rows == 0usize || marks.cells.len / marks.columns != marks.rows || marks.cells.len % marks.columns != 0usize { ret chart.Invalid }
+    if marks.columns == 0usize || marks.rows == 0usize || marks.cells.len == 0usize || (marks.cells.len - 1usize) / marks.columns >= marks.rows { ret chart.Invalid }
     var i = 0usize
     while i < marks.cells.len {
         let cell = marks.cells[i]

@@ -33527,3 +33527,15 @@ precision, coalescing, gaps, refusals and scene/SVG output on Windows and Linux.
 The gallery adds separate state-timeline and status-history PNG/SVG pairs with
 distinct palettes. Date/time text, timezone policy and event annotations remain
 separate work rather than being hidden in this geometry function.
+
+## D1846 — Reuse Line and sparse Heatmap geometry for compact time reports
+
+`chart.sparkline` generates evenly spaced x scratch and returns the existing
+Line layout, leaving guide omission and cell composition with the caller.
+`chart.calendar_heatmap` takes sorted zero-based day offsets, a Monday-first
+weekday and up to 366 days, returning only observed cells in their week/weekday
+positions. Sparse cells reuse the Heatmap palette and scene/SVG adapters;
+unobserved offsets remain visible as background, and a caller gap separates
+tiles. `gfx_chart_calendar_sparkline` checks layout, refusals and both adapters
+on Windows and Linux. Locale/date text, calendar-domain scales, null samples
+and cross-cell sparklines scales remain later work.

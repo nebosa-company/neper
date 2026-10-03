@@ -217,7 +217,7 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
 
 fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err {
     if marks.kind != .Heatmap && marks.kind != .Correlation { ret Invalid }
-    if marks.columns == 0usize || marks.rows == 0usize || marks.cells.len / marks.columns != marks.rows || marks.cells.len % marks.columns != 0usize { ret Invalid }
+    if marks.columns == 0usize || marks.rows == 0usize || marks.cells.len == 0usize || (marks.cells.len - 1usize) / marks.columns >= marks.rows { ret Invalid }
     if !paint.color_ok(low) || !paint.color_ok(middle) || !paint.color_ok(high) { ret Invalid }
     var i = 0usize
     while i < marks.cells.len {

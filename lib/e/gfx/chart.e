@@ -27,6 +27,7 @@ type SankeyNode = struct { incoming: f64, outgoing: f64, in_used: f64, out_used:
 type TargetStatus = struct { delta: f32, achieved: bool }
 type CloudWord = struct { label: Label, size: f32, box: geometry.Rect }
 type StateSpan = struct { row: usize, start: f64, end: f64, state: usize }
+type CalendarDay = struct { offset: usize, value: f64 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
@@ -305,6 +306,22 @@ fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32,
 // use a top-left origin; the returned domain remains in data coordinates.
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err) {
     let (marks, marks_error) = layout_with_limits(s, coords, segments, bars, s.x[..0usize], s.y[..0usize])
+    ret (marks, marks_error)
+}
+
+// A sparkline is an evenly spaced Line with no guide contract.
+fn sparkline(values: []const f32, bounds: geometry.Rect, x: []f32, segments: []Segment) -> (Layout, err) {
+    if values.len < 2usize { ret (zero, Empty) }
+    if x.len < values.len || segments.len < values.len - 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < values.len {
+        x[i] = f32(i)
+        i += 1usize
+    }
+    let plot = spec(.Line, bounds, x[..values.len], values)
+    var unused_coords: [1]Coord = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let (marks, marks_error) = layout(&plot, unused_coords[..0usize], segments, unused_bars[..0usize])
     ret (marks, marks_error)
 }
 
@@ -2953,6 +2970,30 @@ fn heatmap(values: []const f64, columns: usize, bounds: geometry.Rect, cells: []
         i += 1usize
     }
     ret (MatrixLayout { kind: .Heatmap, cells: cells[..values.len], columns: columns, rows: rows, value_min: f32(lo), value_max: f32(hi) }, ok)
+}
+
+// Monday is row zero. Missing offsets emit no tile, preserving a visible gap.
+fn calendar_heatmap(days: []const CalendarDay, day_count: usize, first_weekday: usize, bounds: geometry.Rect, gap: f32, cells: []Cell) -> (MatrixLayout, err) {
+    if days.len == 0usize { ret (zero, Empty) }
+    if day_count == 0usize || day_count > 366usize || first_weekday >= 7usize || !valid_bounds(bounds) || !finite(gap) || gap < 0.0 { ret (zero, Invalid) }
+    if cells.len < days.len { ret (zero, TooLarge) }
+    let columns = (first_weekday + day_count + 6usize) / 7usize
+    var lo = days[0usize].value
+    var hi = lo
+    var i = 0usize
+    while i < days.len {
+        let d = days[i]
+        if d.offset >= day_count || (i > 0usize && d.offset <= days[i - 1usize].offset) || !finite64(d.value) || !finite(f32(d.value)) { ret (zero, Invalid) }
+        if d.value < lo { lo = d.value }
+        if d.value > hi { hi = d.value }
+        let slot = first_weekday + d.offset
+        let tile = cell_rect(bounds, slot / 7usize, slot % 7usize, columns, 7usize)
+        if tile.width <= gap || tile.height <= gap { ret (zero, Invalid) }
+        cells[i] = Cell { rect: geometry.rect(tile.x + gap * 0.5, tile.y + gap * 0.5, tile.width - gap, tile.height - gap), value: f32(d.value) }
+        i += 1usize
+    }
+    if !finite(f32(hi - lo)) { ret (zero, Invalid) }
+    ret (MatrixLayout { kind: .Heatmap, cells: cells[..days.len], columns: columns, rows: 7usize, value_min: f32(lo), value_max: f32(hi) }, ok)
 }
 
 // Observations are row-major. Pearson's r comes from e.algo.stat; two scratch
