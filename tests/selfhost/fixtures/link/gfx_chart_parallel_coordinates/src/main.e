@@ -35,12 +35,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let bad = [4]f64{ 0.0, 1.0, 0.0 / 0.0, 3.0 }
     let (_, _, nonfinite) = chart.parallel_coordinates(bad[..], 2usize, bounds, minimums[..], maximums[..], segments[..], axes[..])
     if nonfinite != chart.Invalid { ret chart.Invalid }
+    var panels: [16]geometry.Rect = zero
+    var pair_points: [36]chart.Coord = zero
+    var pair_layers: [16]chart.Layout = zero
+    let (pairs, pairs_error) = chart.scatterplot_matrix(values[..], 4usize, bounds, 10.0, minimums[..], maximums[..], panels[..], pair_points[..], pair_layers[..])
+    if pairs_error != ok || pairs.len != 16usize || pairs[0usize].coords.len != 0usize || pairs[1usize].coords.len != 3usize || pairs[2usize].coords.len != 3usize { ret chart.Invalid }
+    if !near(pairs[1usize].coords[0usize].x, panels[1usize].x) || !near(pairs[1usize].coords[0usize].y, panels[1usize].y + panels[1usize].height) || !near(pairs[1usize].coords[2usize].x, panels[1usize].x + panels[1usize].width) || !near(pairs[1usize].coords[2usize].y, panels[1usize].y) { ret chart.Invalid }
+    if !near(pairs[2usize].coords[0usize].x, panels[2usize].x + panels[2usize].width / 2.0) || !near(pairs[2usize].coords[2usize].x, pairs[2usize].coords[0usize].x) { ret chart.Invalid }
+    let (_, short_pairs) = chart.scatterplot_matrix(values[..], 4usize, bounds, 10.0, minimums[..], maximums[..], panels[..], pair_points[..35usize], pair_layers[..])
+    if short_pairs != chart.TooLarge { ret chart.Invalid }
+    let (_, bad_gap) = chart.scatterplot_matrix(values[..], 4usize, bounds, 40.0, minimums[..], maximums[..], panels[..], pair_points[..], pair_layers[..])
+    if bad_gap != chart.Invalid { ret chart.Invalid }
+    let (_, bad_shape) = chart.scatterplot_matrix(values[..11usize], 4usize, bounds, 10.0, minimums[..], maximums[..], panels[..], pair_points[..], pair_layers[..])
+    if bad_shape != chart.Invalid { ret chart.Invalid }
+    let (_, bad_pairs) = chart.scatterplot_matrix(bad[..], 2usize, bounds, 10.0, minimums[..], maximums[..], panels[..], pair_points[..], pair_layers[..])
+    if bad_pairs != chart.Invalid { ret chart.Invalid }
     let (made, builder_error) = scene.builder(a, 24usize)
     if builder_error != ok { ret builder_error }
     var builder = made
     let ink = paint.rgba(0.07, 0.35, 0.76, 1.0)
     try chart_scene.append(a, &builder, &guides, paint.Brush { Solid: ink })
     try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: ink })
+    try chart_scene.append(a, &builder, &pairs[1usize], paint.Brush { Solid: ink })
     let (state, unused, writer_error) = io.memory_writer(a, 0usize)
     if writer_error != ok { ret writer_error }
     var held = state
@@ -48,9 +64,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try chart_svg.begin(&writer, 340.0, 160.0, "Parallel coordinates", "Independent axis ranges")
     try chart_svg.append(&writer, &guides, ink)
     try chart_svg.append(&writer, &marks, ink)
+    try chart_svg.append(&writer, &pairs[1usize], ink)
     try chart_svg.finish(&writer)
     let svg = io.memory_bytes(&held)
-    if !str.contains(svg, "<line") || !str.contains(svg, "</svg>") { ret chart.Invalid }
+    if !str.contains(svg, "<line") || !str.contains(svg, "<rect") || !str.contains(svg, "</svg>") { ret chart.Invalid }
     try io.print("gfx chart parallel coordinates ok\n")
     ret ok
 }

@@ -3,12 +3,12 @@
 Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, basic word cloud, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain, cumulative lift, calibration, confusion matrix, partial ROC area, Youden index and decision curve,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q and P-P, violin, heatmap,
-correlation matrix and parallel coordinates are delivered, with linear/log10/symmetric-log and
+correlation matrix, parallel coordinates and scatterplot matrix are delivered, with linear/log10/symmetric-log and
 reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and eighteen PNG plus one hundred and eighteen SVG previews from Neper. Individuals, moving-range,
+one hundred and nineteen PNG plus one hundred and nineteen SVG previews from Neper. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -391,6 +391,10 @@ reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
 sharing/freeing each numeric axis is available through explicit limits;
 categorical facet mapping and strips remain future work.
+`scatterplot_matrix` maps row-major observations into off-diagonal scatter
+panels with one range per variable and caller-owned coordinates; diagonal
+panels are reserved for caller labels. `gfx_chart_parallel_coordinates` checks
+constant columns, invalid input, storage and scene/SVG output on both hosts.
 `Spec` now carries independent x/y scale configurations for Cartesian marks.
 Log10 refuses non-positive domains, symmetric-log has an explicit linear
 threshold, and reverse maps fractions without copying columns. `ticks` returns
@@ -428,7 +432,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, P-P, violin, heatmap, correlation matrix, parallel coordinates, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, basic word cloud, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons, basic stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, basic forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain, cumulative lift, calibration, confusion matrix, partial ROC area, Youden index and decision curve are delivered; every other entry
+box, density, ridgeline, Q-Q, P-P, violin, heatmap, correlation matrix, parallel coordinates, scatterplot matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, basic word cloud, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons, basic stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, basic forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain, cumulative lift, calibration, confusion matrix, partial ROC area, Youden index and decision curve are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -476,6 +480,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    row to independent column axes using caller-owned ranges and segments;
    `gfx_chart_parallel_coordinates` checks constant axes, storage and scene/SVG
    output on Windows and Linux. Its labeled PNG/SVG preview is delivered.
+   `scatterplot_matrix` composes off-diagonal scatter panels with independent
+   per-variable ranges; its labeled PNG/SVG preview and Windows/Linux fixture
+   are delivered. Diagonal density layers and selection remain planned.
    `facet_grid` places panels and a
    four-panel heatmap preview exercises it. Optional x/y limits let each panel
    share or free its scale independently, exercised by a second four-panel
@@ -545,7 +552,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and eighteen vector previews, automatic numeric tick text and
+   adapter with one hundred and nineteen vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

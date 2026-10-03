@@ -3302,6 +3302,60 @@ fn parallel_coordinates(observations: []const f64, columns: usize, bounds: geome
     ret (data, guides, ok)
 }
 
+// Off-diagonal cells plot every variable pair; callers label the blank diagonal.
+// Inputs are row-major and each variable keeps one range across its panels.
+fn scatterplot_matrix(observations: []const f64, columns: usize, bounds: geometry.Rect, gap: f32, minimums: []f64, maximums: []f64, panels: []geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if observations.len == 0usize { ret (zero, Empty) }
+    if columns < 2usize || observations.len % columns != 0usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    let rows = observations.len / columns
+    if minimums.len < columns || maximums.len < columns || panels.len / columns < columns || layers.len / columns < columns { ret (zero, TooLarge) }
+    let count = columns * columns
+    if points.len / (count - columns) < rows { ret (zero, TooLarge) }
+    let (_, panel_error) = facet_grid(bounds, columns, count, gap, panels)
+    if panel_error != ok { ret (zero, panel_error) }
+    var column = 0usize
+    while column < columns {
+        minimums[column] = observations[column]
+        maximums[column] = observations[column]
+        var row = 0usize
+        while row < rows {
+            let value = observations[row * columns + column]
+            if !finite64(value) || !finite(f32(value)) { ret (zero, Invalid) }
+            if value < minimums[column] { minimums[column] = value }
+            if value > maximums[column] { maximums[column] = value }
+            row += 1usize
+        }
+        if !finite64(maximums[column] - minimums[column]) { ret (zero, Invalid) }
+        column += 1usize
+    }
+    var used = 0usize
+    var panel = 0usize
+    while panel < count {
+        let x_column = panel % columns
+        let y_column = panel / columns
+        let first = used
+        if x_column != y_column {
+            var row = 0usize
+            while row < rows {
+                var x = 0.5f64
+                var y = 0.5f64
+                if maximums[x_column] > minimums[x_column] { x = (observations[row * columns + x_column] - minimums[x_column]) / (maximums[x_column] - minimums[x_column]) }
+                if maximums[y_column] > minimums[y_column] { y = (observations[row * columns + y_column] - minimums[y_column]) / (maximums[y_column] - minimums[y_column]) }
+                if !finite64(x) || !finite64(y) { ret (zero, Invalid) }
+                points[used] = Coord {
+                    x: panels[panel].x + panels[panel].width * f32(x),
+                    y: panels[panel].y + panels[panel].height * f32(1.0f64 - y),
+                }
+                used += 1usize
+                row += 1usize
+            }
+        }
+        layers[panel] = Layout { kind: .Scatter, coords: points[first..used], segments: zero, bars: zero, x_min: f32(minimums[x_column]), x_max: f32(maximums[x_column]), y_min: f32(minimums[y_column]), y_max: f32(maximums[y_column]) }
+        panel += 1usize
+    }
+    ret (layers[..count], ok)
+}
+
 // Row-major equal panels for a later facet mapping stage. All panels use the
 // same outer bounds; callers choose shared or independent data scales.
 fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err) {

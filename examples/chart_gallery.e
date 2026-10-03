@@ -929,6 +929,66 @@ fn render_parallel_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_pairs_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let values = [24]f64{
+        42.0, 8.2, 3.0, 55.0, 7.0, 5.0, 63.0, 6.4, 4.0, 70.0, 5.7, 8.0,
+        76.0, 5.2, 6.0, 82.0, 4.9, 9.0, 89.0, 4.5, 11.0, 95.0, 4.2, 10.0,
+    }
+    var minimums: [3]f64 = zero
+    var maximums: [3]f64 = zero
+    var panels: [9]geometry.Rect = zero
+    var points: [48]chart.Coord = zero
+    var storage: [9]chart.Layout = zero
+    let (layers, layout_error) = chart.scatterplot_matrix(values[..], 3usize, geometry.rect(36.0, 39.0, 288.0, 177.0), 8.0, minimums[..], maximums[..], panels[..], points[..], storage[..])
+    if layout_error != ok { ret layout_error }
+    let blue = paint.rgba(0.07, 0.35, 0.76, 1.0)
+    let pale = paint.rgba(0.94, 0.96, 0.99, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 19u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let names = [3]str{ "Speed", "Fuel", "Risk" }
+    var labels: [4]chart.Label = zero
+    var i = 0usize
+    while i < 3usize {
+        let panel = panels[i * 3usize + i]
+        labels[i] = chart.Label { text: names[i], anchor: chart.Coord { x: panel.x + panel.width / 2.0, y: panel.y + panel.height / 2.0 + 4.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[3usize] = chart.Label { text: "Scatterplot matrix", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    let (made, builder_error) = scene.builder(a, 80usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 0usize
+    while i < layers.len {
+        try fill(&builder, geometry.rect(panels[i].x - 3.0, panels[i].y - 3.0, panels[i].width + 6.0, panels[i].height + 6.0), paint.Brush { Solid: pale })
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: blue })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..3usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[3usize..], font, 14.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/scatterplot_matrix.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.rect(&writer, geometry.rect(panels[i].x - 3.0, panels[i].y - 3.0, panels[i].width + 6.0, panels[i].height + 6.0), pale, false)
+        try chart_svg.append(&writer, &layers[i], blue)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..3usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, labels[3usize..], dark, 14.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_binary_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, metric: chart.BinaryMetric, title: str, x_label: str, y_label: str, path: str) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     var x: [17]f32 = zero
@@ -2896,6 +2956,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_subgroup_phase_previews(a, queue, output_target, canvas, &renderer)
     try render_run_rules_preview(a, queue, output_target, canvas, &renderer)
     try render_parallel_preview(a, queue, output_target, canvas, &renderer)
+    try render_pairs_preview(a, queue, output_target, canvas, &renderer)
     try render_phase_control_preview(a, queue, output_target, canvas, &renderer)
     try render_weighted_control_previews(a, queue, output_target, canvas, &renderer)
     try render_attribute_previews(a, queue, output_target, canvas, &renderer)

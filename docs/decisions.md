@@ -33776,3 +33776,14 @@ explicit so the plot does not silently fit parameters. Reuse the Q-Q
 point-and-reference scene/SVG paths but retain a distinct `Pp` kind and
 fixed probability axes. The `gfx_chart_qq` fixture checks numeric positions,
 refusals and both adapters; the gallery adds a PNG/SVG pair.
+
+## D1867 — Scatterplot matrices share facet and scatter geometry
+
+Map every off-diagonal variable pair into a `facet_grid` panel using one
+observed range per column. Preserve row-major input and return caller-owned
+panels, points and Scatter layers; keep the diagonal empty for application
+labels instead of embedding a new text policy in geometry. Reuse the scene
+and SVG scatter adapters. `gfx_chart_parallel_coordinates` checks constant
+columns, refusals and both adapters on Windows and Linux; the gallery adds
+a labeled 3-by-3 PNG/SVG pair. Diagonal histograms and linked brushing remain
+planned.
