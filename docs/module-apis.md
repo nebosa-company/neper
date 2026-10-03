@@ -15935,6 +15935,7 @@ type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: us
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
+type RiskPoint = struct { likelihood: usize, impact: usize }
 type TimelineEvent = struct { time: f64, row: usize }
 error Invalid
 error Empty
@@ -15996,6 +15997,7 @@ fn qq_normal(sorted: []const f64, bounds: geometry.Rect, points: []Coord, refere
 fn pp_normal(sorted: []const f64, mean: f64, deviation: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment) -> (Layout, err)
 fn violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err)
 fn heatmap(values: []const f64, columns: usize, bounds: geometry.Rect, cells: []Cell) -> (MatrixLayout, err)
+fn risk_matrix(risks: []const RiskPoint, ratings: []const f64, levels: usize, bounds: geometry.Rect, counts: []u64, cells: []Cell) -> (MatrixLayout, err)
 fn cohort_retention(counts: []const f64, periods: usize, bounds: geometry.Rect, gap: f32, cells: []Cell) -> (MatrixLayout, err)
 fn contour(values: []const f64, columns: usize, rows: usize, levels: []const f64, bounds: geometry.Rect, segments: []Segment, layers: []Layout) -> ([]Layout, err)
 fn filled_contour(values: []const f64, columns: usize, rows: usize, levels: []const f64, bounds: geometry.Rect, points: []Coord, layers: []Layout, band_ids: []usize) -> ([]Layout, err)

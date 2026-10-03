@@ -630,6 +630,86 @@ fn render_calendar_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_risk_matrix_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/risk_matrix.png"
+    let plot = geometry.rect(78.0, 47.0, 215.0, 160.0)
+    var ratings: [25]f64 = zero
+    var row = 0usize
+    while row < 5usize {
+        var col = 0usize
+        while col < 5usize {
+            ratings[row * 5usize + col] = f64((5usize - row) * (col + 1usize))
+            col += 1usize
+        }
+        row += 1usize
+    }
+    let risks = [11]chart.RiskPoint{
+        chart.RiskPoint { likelihood: 1usize, impact: 5usize },
+        chart.RiskPoint { likelihood: 2usize, impact: 4usize },
+        chart.RiskPoint { likelihood: 2usize, impact: 4usize },
+        chart.RiskPoint { likelihood: 4usize, impact: 4usize },
+        chart.RiskPoint { likelihood: 4usize, impact: 4usize },
+        chart.RiskPoint { likelihood: 4usize, impact: 4usize },
+        chart.RiskPoint { likelihood: 5usize, impact: 3usize },
+        chart.RiskPoint { likelihood: 3usize, impact: 2usize },
+        chart.RiskPoint { likelihood: 2usize, impact: 1usize },
+        chart.RiskPoint { likelihood: 5usize, impact: 1usize },
+        chart.RiskPoint { likelihood: 5usize, impact: 1usize },
+    }
+    var counts: [25]u64 = zero
+    var cells: [25]chart.Cell = zero
+    let (marks, marks_error) = chart.risk_matrix(risks[..], ratings[..], 5usize, plot, counts[..], cells[..])
+    if marks_error != ok { ret marks_error }
+    let low = paint.rgba(0.82, 0.93, 0.75, 1.0)
+    let high = paint.rgba(0.96, 0.52, 0.39, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let digits = [5]str{ "1", "2", "3", "4", "5" }
+    let count_words = [4]str{ "", "1", "2", "3" }
+    var labels: [25]chart.Label = zero
+    var used = 0usize
+    var i = 0usize
+    while i < counts.len {
+        if counts[i] > 0u64 {
+            if counts[i] >= 4u64 { ret chart.Invalid }
+            let tile = cells[i].rect
+            labels[used] = chart.Label { text: count_words[usize(counts[i])], anchor: chart.Coord { x: tile.x + tile.width * 0.5, y: tile.y + tile.height * 0.61 }, align: .Center }
+            used += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 5usize {
+        labels[used + i] = chart.Label { text: digits[4usize - i], anchor: chart.Coord { x: 71.0, y: plot.y + (f32(i) + 0.61) * 32.0 }, align: .Right }
+        labels[used + 5usize + i] = chart.Label { text: digits[i], anchor: chart.Coord { x: plot.x + (f32(i) + 0.5) * 43.0, y: 222.0 }, align: .Center }
+        i += 1usize
+    }
+    used += 10usize
+    labels[used] = chart.Label { text: "Risk matrix", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_matrix(&builder, &marks, low, low, high)
+    try chart_scene.append_labels(a, &builder, labels[..used], font, 10.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[used..used + 1usize], font, 14.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_matrix(&writer, &marks, low, low, high)
+    try chart_svg.append_labels(&writer, labels[..used], dark, 10.0)
+    try chart_svg.append_labels(&writer, labels[used..used + 1usize], dark, 14.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_gantt_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/gantt.png"
     let plot = geometry.rect(89.0, 52.0, 225.0, 143.0)
@@ -4475,6 +4555,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_state_timeline(a, queue, output_target, canvas, &renderer, history_layers, timeline_state_ids[..], timeline_rows[..], history_states[..], history_colors[..], "Status history", "docs/chart-previews/status_history.png")
     try render_sparklines(a, queue, output_target, canvas, &renderer)
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
+    try render_risk_matrix_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

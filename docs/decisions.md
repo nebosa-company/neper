@@ -34052,3 +34052,14 @@ flat series, invalid/capacity paths and scene/SVG output on Windows and Linux.
 The gallery adds a PNG/SVG pair. Variance indices and forecasts remain project
 analytics, not implicit chart calculations. Terminology follows NASA's EVM
 tutorial: https://www.nasa.gov/ocfo/ppc-corner/evm/tutorial/
+
+## D1896 — Risk matrices separate policy ratings from observed counts
+
+`risk_matrix` accepts a square caller-supplied rating grid and likelihood/impact
+pairs indexed from one. It places larger impact toward the top and larger
+likelihood toward the right, returning the existing Heatmap tiles plus a
+separate caller-owned count per cell. The chart does not classify a score as
+acceptable or unacceptable: those thresholds depend on the caller's risk
+policy. The focused fixture checks orientation, duplicate counts, invalid
+ratings and coordinates, storage refusal, and scene/SVG output on Windows and
+Linux. The gallery adds a PNG/SVG pair with cell counts.

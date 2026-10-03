@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and forty-seven PNG plus one hundred and forty-seven SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup and earned-value curves are also delivered. Individuals, moving-range,
+one hundred and forty-eight PNG plus one hundred and forty-eight SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves and a likelihood-impact risk matrix are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -456,6 +456,12 @@ capacity, then reuses three Line layouts and existing adapters.
 `gfx_chart_earned_value` checks partial-horizon alignment, numeric references,
 flat data, refusals and scene/SVG output on Windows and Linux. Forecasts,
 variance indices and earned-value estimation stay with project analytics.
+`risk_matrix` lays caller-supplied nonnegative rating values into a square
+likelihood-by-impact heatmap, with high impact at the top, and separately counts
+risks in each cell. The caller defines the rating policy and colour scale; the
+layout does not infer severity thresholds. `gfx_chart_risk_matrix` checks the
+orientation, duplicate counts, invalid input, caller capacity and scene/SVG
+output on Windows and Linux. The gallery includes a labeled PNG/SVG pair.
 `forest_plot` validates study estimates inside intervals and maps them to
 horizontal segments plus center markers on linear, log10 or symlog x scales;
 the reference line is a separate caller-colourable Rug layer. Study weights,
@@ -523,6 +529,7 @@ remains planned.
 Basic Gantt task spans and completion layers and diamond milestone roadmaps
 are delivered, as are burndown and burnup traces; dependency links remain planned.
 The planned/earned/actual-cost earned-value curve is delivered.
+The likelihood-impact risk matrix with caller-supplied ratings is delivered.
 
 ### General-purpose statistical and business charts
 
@@ -564,7 +571,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    beeswarm, binned dot plot, box, boxen,
    violin, density, ridgeline, ECDF, normal Q-Q and P-P have executable fixtures and PNG previews. Other distribution
    variants in the catalogue remain planned.
-3. **Matrix and facets (partial):** heatmap and Pearson correlation matrix have
+3. **Matrix and facets (partial):** heatmap, likelihood-impact risk matrix and Pearson correlation matrix have
    executable fixtures and PNG previews. `parallel_coordinates` maps each
    row to independent column axes using caller-owned ranges and segments;
    `gfx_chart_parallel_coordinates` checks constant axes, storage and scene/SVG
@@ -687,7 +694,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and forty-seven vector previews, automatic numeric tick text and
+   adapter with one hundred and forty-eight vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

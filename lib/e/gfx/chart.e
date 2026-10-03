@@ -30,6 +30,7 @@ type TargetStatus = struct { delta: f32, achieved: bool }
 type CloudWord = struct { label: Label, size: f32, box: geometry.Rect }
 type StateSpan = struct { row: usize, start: f64, end: f64, state: usize }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
+type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
@@ -4585,6 +4586,37 @@ fn heatmap(values: []const f64, columns: usize, bounds: geometry.Rect, cells: []
         i += 1usize
     }
     ret (MatrixLayout { kind: .Heatmap, cells: cells[..values.len], columns: columns, rows: rows, value_min: f32(lo), value_max: f32(hi) }, ok)
+}
+
+// Caller ratings define the policy; likelihood grows left-to-right and impact
+// bottom-to-top. Counts stay separate from the heatmap's rating values.
+fn risk_matrix(risks: []const RiskPoint, ratings: []const f64, levels: usize, bounds: geometry.Rect, counts: []u64, cells: []Cell) -> (MatrixLayout, err) {
+    if levels == 0usize || ratings.len / levels != levels || ratings.len % levels != 0usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if counts.len < ratings.len || cells.len < ratings.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < ratings.len {
+        if !finite64(ratings[i]) || !finite(f32(ratings[i])) || ratings[i] < 0.0f64 { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < risks.len {
+        let point = risks[i]
+        if point.likelihood == 0usize || point.likelihood > levels || point.impact == 0usize || point.impact > levels { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < ratings.len {
+        counts[i] = 0u64
+        i += 1usize
+    }
+    i = 0usize
+    while i < risks.len {
+        let point = risks[i]
+        counts[(levels - point.impact) * levels + point.likelihood - 1usize] += 1u64
+        i += 1usize
+    }
+    let (matrix, matrix_error) = heatmap(ratings, levels, bounds, cells)
+    ret (matrix, matrix_error)
 }
 
 // Compact row-major triangle: the oldest cohort has every period, the newest one.
