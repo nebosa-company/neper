@@ -2729,6 +2729,60 @@ fn render_ternary_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targ
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_quiver_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    var xs: [25]f32 = zero
+    var ys: [25]f32 = zero
+    var us: [25]f32 = zero
+    var vs: [25]f32 = zero
+    var i = 0usize
+    while i < 25usize {
+        xs[i] = f32(i % 5usize) - 2.0
+        ys[i] = 2.0 - f32(i / 5usize)
+        us[i] = 0.0 - ys[i]
+        vs[i] = xs[i]
+        i += 1usize
+    }
+    var tails: [25]chart.Coord = zero
+    var strokes: [75]chart.Segment = zero
+    let (arrows, chart_error) = chart.quiver(xs[..], ys[..], us[..], vs[..], geometry.rect(56.0, 46.0, 248.0, 156.0), 8.0, 5.0, tails[..], strokes[..])
+    if chart_error != ok { ret chart_error }
+    let ink = paint.rgba(0.08, 0.39, 0.77, 1.0)
+    let axis = paint.rgba(0.30, 0.36, 0.45, 1.0)
+    let guides = paint.rgba(0.83, 0.87, 0.92, 1.0)
+    let labels = [2]chart.Label{
+        chart.Label { text: "Rotational vector field", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "u = -y, v = x", anchor: chart.Coord { x: 180.0, y: 230.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 30u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 112usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, geometry.rect(56.0, 123.5, 248.0, 1.0), paint.Brush { Solid: guides })
+    try fill(&builder, geometry.rect(179.5, 46.0, 1.0, 156.0), paint.Brush { Solid: guides })
+    try chart_scene.append(a, &builder, &arrows, paint.Brush { Solid: ink })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 10.0, paint.Brush { Solid: axis })
+    let path = "docs/chart-previews/quiver.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, geometry.rect(56.0, 123.5, 248.0, 1.0), guides, false)
+    try chart_svg.rect(&writer, geometry.rect(179.5, 46.0, 1.0, 156.0), guides, false)
+    try chart_svg.append(&writer, &arrows, ink)
+    try chart_svg.append_labels(&writer, labels[..1usize], axis, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], axis, 10.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
     if layers.len != 9usize || rects.len != layers.len || names.len != layers.len { ret chart.Invalid }
     let colors = [6]paint.Color{
@@ -3486,6 +3540,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_share(a, queue, output_target, canvas, &renderer, donut_layers, pie_names[..], "Category share", "docs/chart-previews/donut.png")
     try render_radar_preview(a, queue, output_target, canvas, &renderer)
     try render_ternary_preview(a, queue, output_target, canvas, &renderer)
+    try render_quiver_preview(a, queue, output_target, canvas, &renderer)
     let rose_values = [5]f32{ 10.0, 18.0, 8.0, 5.0, 14.0 }
     let rose_names = [5]str{ "0 deg", "72 deg", "144 deg", "216 deg", "288 deg" }
     var rose_points: [115]chart.Coord = zero

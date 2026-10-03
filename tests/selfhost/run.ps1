@@ -3152,6 +3152,11 @@ $gfxChartTernaryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $gfxChartTernaryWritten -ne 'executable written') { throw 'gfx_chart_ternary emission failed' }
 $gfxChartTernaryOutput = & $gfxChartTernaryPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartTernaryOutput -ne 'gfx chart ternary ok') { throw "the e.gfx.chart ternary projection answered wrongly: exit $LASTEXITCODE" }
+$gfxChartQuiverPath = Join-Path $testBuild 'gfx-chart-quiver-selfhost.exe'
+$gfxChartQuiverWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_quiver\src\main.e') $repo 'x64' 'windows' $gfxChartQuiverPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartQuiverWritten -ne 'executable written') { throw 'gfx_chart_quiver emission failed' }
+$gfxChartQuiverOutput = & $gfxChartQuiverPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartQuiverOutput -ne 'gfx chart quiver ok') { throw "the e.gfx.chart vector arrows answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

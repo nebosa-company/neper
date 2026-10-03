@@ -33932,3 +33932,15 @@ scene and SVG adapters. `gfx_chart_ternary` checks corners, mixtures, invalid
 rows, capacities and both adapters on Windows and Linux. The gallery adds one
 PNG/SVG preview. Density, contours and custom axis scales remain planned.
 Reference: R `Ternary::TernaryPoints` and `ggtern`.
+
+## D1883 — Quiver arrows reuse Cartesian tail mapping and Rug segments
+
+`quiver` maps x/y tails through the existing Scatter scale, then turns each
+nonzero (u,v) vector into one shaft and two head strokes. An explicit
+pixels-per-unit factor keeps length policy with the caller; head size is
+bounded by the shaft length. Zero vectors produce no arrow because their
+direction is undefined. The `gfx_chart_quiver` fixture checks exact horizontal
+and vertical coordinates, signed and zero vectors, invalid/capacity refusals,
+and scene/SVG output on Windows and Linux. The gallery adds a PNG/SVG pair.
+Streamline integration and magnitude-colour legends remain planned. References:
+R `graphics::arrows`, `ggquiver::geom_quiver` and Matplotlib `quiver`.

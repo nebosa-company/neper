@@ -1484,6 +1484,43 @@ fn ternary(a: []const f32, b: []const f32, c: []const f32, bounds: geometry.Rect
     ret (marks, grid, ok)
 }
 
+// X/Y locate tails in data space; U/V are vector components in data units.
+// pixels_per_unit fixes their visual scale, independent of the axis domains.
+fn quiver(x: []const f32, y: []const f32, u: []const f32, v: []const f32, bounds: geometry.Rect, pixels_per_unit: f32, head_size: f32, tails: []Coord, arrows: []Segment) -> (Layout, err) {
+    if x.len == 0usize { ret (zero, Empty) }
+    if y.len != x.len || u.len != x.len || v.len != x.len || !finite(pixels_per_unit) || pixels_per_unit <= 0.0 || !finite(head_size) || head_size <= 0.0 { ret (zero, Invalid) }
+    if tails.len < x.len || x.len > arrows.len / 3usize { ret (zero, TooLarge) }
+    let plot = spec(.Scatter, bounds, x, y)
+    let (placed, place_error) = layout(&plot, tails, zero, zero)
+    if place_error != ok { ret (zero, place_error) }
+    var used = 0usize
+    var i = 0usize
+    while i < x.len {
+        if !finite(u[i]) || !finite(v[i]) || !finite(placed.coords[i].x) || !finite(placed.coords[i].y) { ret (zero, Invalid) }
+        let dx = f64(u[i]) * f64(pixels_per_unit)
+        let dy = 0.0f64 - f64(v[i]) * f64(pixels_per_unit)
+        let length = math.sqrt[f64](dx * dx + dy * dy)
+        if length > 0.0f64 {
+            let tail = placed.coords[i]
+            let tip = Coord { x: f32(f64(tail.x) + dx), y: f32(f64(tail.y) + dy) }
+            if !finite(tip.x) || !finite(tip.y) { ret (zero, Invalid) }
+            var head = f64(head_size)
+            if head > length * 0.4f64 { head = length * 0.4f64 }
+            let ux = dx / length
+            let uy = dy / length
+            let left = Coord { x: f32(f64(tip.x) - head * ux - head * 0.5f64 * uy), y: f32(f64(tip.y) - head * uy + head * 0.5f64 * ux) }
+            let right = Coord { x: f32(f64(tip.x) - head * ux + head * 0.5f64 * uy), y: f32(f64(tip.y) - head * uy - head * 0.5f64 * ux) }
+            if !finite(left.x) || !finite(left.y) || !finite(right.x) || !finite(right.y) { ret (zero, Invalid) }
+            arrows[used] = Segment { from: tail, to: tip }
+            arrows[used + 1usize] = Segment { from: tip, to: left }
+            arrows[used + 2usize] = Segment { from: tip, to: right }
+            used += 3usize
+        }
+        i += 1usize
+    }
+    ret (Layout { kind: .Rug, coords: zero, segments: arrows[..used], bars: zero, x_min: placed.x_min, x_max: placed.x_max, y_min: placed.y_min, y_max: placed.y_max }, ok)
+}
+
 // Equal-angle rose sectors. Square-root radii make sector area proportional
 // to each nonnegative pre-binned weight, as in a circular histogram.
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {
