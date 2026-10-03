@@ -33433,3 +33433,15 @@ colours to links across stages. Ordering remains input-driven, so automatic
 crossing reduction and identity tracking remain separate future work.
 `gfx_chart_alluvial` checks four-stage geometry, conservation/refusal paths
 and both adapters; the gallery adds one PNG/SVG pair.
+
+## D1838 — Center streamgraph layers on one shared scale
+
+`chart.streamgraph` borrows strictly increasing x positions and nonnegative
+sample-major values. It first finds the largest time-slice total, centers
+each stack within that shared range, and emits one caller-owned Area polygon
+per series. This keeps inter-series boundaries exact without another painter
+or per-series remapping. The scene and SVG adapters are unchanged.
+`gfx_chart_streamgraph` checks reference geometry, malformed data, storage
+and both adapters on Windows and Linux; the gallery adds one PNG/SVG pair.
+The simple silhouette offset retains input layer order. Wiggle offsets and
+automatic ordering remain separate work.

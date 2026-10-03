@@ -1153,6 +1153,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (alluvial_layers, alluvial_error) = chart.alluvial(alluvial_columns[..], 4usize, alluvial_sources[..], alluvial_targets[..], alluvial_values[..], geometry.rect(14.0, 42.0, 332.0, 176.0), 40.0, 14.0, 8usize, alluvial_nodes[..], alluvial_rects[..], alluvial_points[..], alluvial_storage[..])
     if alluvial_error != ok { ret alluvial_error }
     try render_sankey(a, queue, output_target, canvas, &renderer, alluvial_layers, alluvial_rects[..], alluvial_names[..], alluvial_colors[..], "Cohorts across stages", "docs/chart-previews/alluvial.png")
+    let stream_x = [9]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0 }
+    let stream_values = [45]f32{
+        8.0, 4.0, 2.0, 3.0, 1.0, 10.0, 6.0, 3.0, 4.0, 2.0,
+        14.0, 8.0, 4.0, 3.0, 2.0, 12.0, 11.0, 7.0, 5.0, 3.0,
+        8.0, 13.0, 10.0, 7.0, 4.0, 5.0, 11.0, 12.0, 10.0, 6.0,
+        4.0, 8.0, 10.0, 12.0, 8.0, 3.0, 6.0, 8.0, 10.0, 10.0,
+        2.0, 4.0, 6.0, 8.0, 12.0,
+    }
+    let stream_names = [5]str{ "Search", "Social", "Email", "Direct", "Partners" }
+    var stream_totals: [9]f64 = zero
+    var stream_cumulative: [9]f64 = zero
+    var stream_points: [90]chart.Coord = zero
+    var stream_storage: [5]chart.Layout = zero
+    let (stream_layers, stream_error) = chart.streamgraph(stream_x[..], stream_values[..], 5usize, geometry.rect(18.0, 42.0, 192.0, 176.0), stream_totals[..], stream_cumulative[..], stream_points[..], stream_storage[..])
+    if stream_error != ok { ret stream_error }
+    try render_share(a, queue, output_target, canvas, &renderer, stream_layers, stream_names[..], "Centered streamgraph", "docs/chart-previews/streamgraph.png")
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

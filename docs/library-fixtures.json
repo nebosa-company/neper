@@ -869,6 +869,7 @@
     "gfx_chart_ridgeline",
     "gfx_chart_sankey",
     "gfx_chart_scale",
+    "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap",
@@ -996,6 +997,7 @@
     "gfx_chart_ridgeline",
     "gfx_chart_sankey",
     "gfx_chart_scale",
+    "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap"
@@ -1030,6 +1032,7 @@
     "gfx_chart_ridgeline",
     "gfx_chart_sankey",
     "gfx_chart_scale",
+    "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
     "gfx_chart_treemap"
    ]
@@ -1057,6 +1060,7 @@
     "gfx_chart_population_pyramid",
     "gfx_chart_ridgeline",
     "gfx_chart_sankey",
+    "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap"
@@ -1155,6 +1159,7 @@
     "gfx_chart_ridgeline",
     "gfx_chart_sankey",
     "gfx_chart_scale",
+    "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap",
@@ -1257,6 +1262,7 @@
     "gfx_chart_ridgeline",
     "gfx_chart_sankey",
     "gfx_chart_scale",
+    "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
     "gfx_chart_treemap",
     "gfx_scene",

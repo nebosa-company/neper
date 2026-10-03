@@ -755,6 +755,58 @@ fn band(x: []const f32, lower: []const f32, upper: []const f32, bounds: geometry
     ret (Layout { kind: .Band, coords: outline[..2usize * x.len], segments: zero, bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
 }
 
+// Centered stacked areas share one y scale and one caller-owned polygon per series.
+// Values are sample-major: every x position carries all series in input order.
+// ponytail: silhouette centering is stable; add wiggle offsets if trend-heavy data needs them.
+fn streamgraph(x: []const f32, values: []const f32, series: usize, bounds: geometry.Rect, totals: []f64, cumulative: []f64, outline: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if x.len < 2usize || series == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || values.len / x.len != series || values.len % x.len != 0usize { ret (zero, Invalid) }
+    if totals.len < x.len || cumulative.len < x.len || outline.len / x.len / 2usize < series || layers.len < series { ret (zero, TooLarge) }
+    var max_total = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || (i > 0usize && x[i] <= x[i - 1usize]) { ret (zero, Invalid) }
+        var total = 0.0f64
+        var j = 0usize
+        while j < series {
+            let value = values[i * series + j]
+            if !finite(value) || value < 0.0 { ret (zero, Invalid) }
+            total += f64(value)
+            j += 1usize
+        }
+        if !finite(f32(total)) { ret (zero, Invalid) }
+        totals[i] = total
+        if total > max_total { max_total = total }
+        i += 1usize
+    }
+    if max_total <= 0.0f64 { ret (zero, Empty) }
+    i = 0usize
+    while i < x.len {
+        cumulative[i] = (max_total - totals[i]) * 0.5f64
+        i += 1usize
+    }
+    var layer = 0usize
+    while layer < series {
+        let first = layer * 2usize * x.len
+        i = 0usize
+        while i < x.len {
+            let lower = cumulative[i]
+            let upper = lower + f64(values[i * series + layer])
+            let px = bounds.x + bounds.width * f32((f64(x[i]) - f64(x[0usize])) / (f64(x[x.len - 1usize]) - f64(x[0usize])))
+            let top = bounds.y + bounds.height * (1.0 - f32(upper / max_total))
+            let bottom = bounds.y + bounds.height * (1.0 - f32(lower / max_total))
+            if !finite(px) || !finite(top) || !finite(bottom) { ret (zero, Invalid) }
+            outline[first + i] = Coord { x: px, y: top }
+            outline[first + 2usize * x.len - 1usize - i] = Coord { x: px, y: bottom }
+            cumulative[i] = upper
+            i += 1usize
+        }
+        layers[layer] = Layout { kind: .Area, coords: outline[first..first + 2usize * x.len], segments: zero, bars: zero, x_min: x[0usize], x_max: x[x.len - 1usize], y_min: 0.0, y_max: f32(max_total) }
+        layer += 1usize
+    }
+    ret (layers[..series], ok)
+}
+
 // Horizontal intervals with a dot at each endpoint; `position` is the
 // numeric vertical axis, so repeated positions naturally overlay.
 fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err) {
