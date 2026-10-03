@@ -71,6 +71,8 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("hazard_rate", planned)
         self.assertIn("influence_plot", rendered)
         self.assertNotIn("influence_plot", planned)
+        self.assertIn("capability_sixpack", rendered)
+        self.assertNotIn("capability_sixpack", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)

@@ -34401,3 +34401,19 @@ known OLS reference, area ratios, guide geometry, adapters and refusals; the
 gallery adds one PNG/SVG pair.
 
 Reference: https://search.r-project.org/CRAN/refmans/car/html/influencePlot.html
+
+## D1927 — Compose a normal capability sixpack for individuals
+
+`stat.normal_capability_individuals` reuses I/MR limits, estimates within
+sigma as MR-bar/1.128 and overall sigma as the sample standard deviation, and
+reports Cp/Cpk/Pp/Ppk only when both spreads and both specifications are
+defined. `chart.capability_sixpack` maps the same summary into six panels:
+individuals, moving range, last 25 observations, histogram with both fitted
+normal curves, normal Q-Q and within/overall/specification intervals. Data
+and scratch arrays are caller-owned; scene and SVG consume the returned marks.
+The gallery adds one paired preview and the Windows/Linux fixture checks
+reference indices, geometry, adapters and refusal paths. Subgroup sizes above
+one, nonnormal fits, automatic assumption-test p-values and probability
+confidence bands remain separate work; this report does not claim them.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-sixpack/normal-capability-sixpack/interpret-the-results/all-statistics-and-graphs/graphs/

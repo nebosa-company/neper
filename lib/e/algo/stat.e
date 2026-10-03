@@ -25,6 +25,11 @@ type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y
 type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
 type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, at_risk: usize, events: usize, censored: usize }
 type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
+type NormalCapability = struct {
+    mean: f64, within_sigma: f64, overall_sigma: f64,
+    cp: f64, cpk: f64, pp: f64, ppk: f64,
+    individuals: ControlLimits, moving_range: ControlLimits,
+}
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -489,6 +494,35 @@ fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimi
     let mr = ControlLimits { center: ranges.mean, lower: 0.0f64, upper: 3.267f64 * ranges.mean }
     if individuals.lower - individuals.lower != 0.0f64 || individuals.upper - individuals.upper != 0.0f64 || mr.upper - mr.upper != 0.0f64 { ret (zero, zero, Invalid) }
     ret (individuals, mr, ok)
+}
+
+// Individuals-only normal capability. Within sigma is MR-bar/d2 for pairs;
+// overall sigma is the sample standard deviation. Both specifications are required.
+fn normal_capability_individuals(values: []const f64, lsl: f64, usl: f64, moving: []f64) -> (NormalCapability, err) {
+    if lsl - lsl != 0.0f64 || usl - usl != 0.0f64 || !(usl > lsl) { ret (zero, Invalid) }
+    let (individuals, ranges, limit_error) = imr_limits(values, moving)
+    if limit_error != ok { ret (zero, limit_error) }
+    var observations = moments()
+    var i = 0usize
+    while i < values.len {
+        moments_add(&observations, values[i])
+        i += 1usize
+    }
+    let (overall, has_overall) = standard_deviation_sample(&observations)
+    let within = ranges.center / 1.128f64
+    if !has_overall || !(overall > 0.0f64) || !(within > 0.0f64) || overall - overall != 0.0f64 || within - within != 0.0f64 { ret (zero, Invalid) }
+    let width = usl - lsl
+    let lower = observations.mean - lsl
+    let upper = usl - observations.mean
+    if width - width != 0.0f64 || lower - lower != 0.0f64 || upper - upper != 0.0f64 { ret (zero, Invalid) }
+    var closest = lower
+    if upper < closest { closest = upper }
+    let cp = width / (6.0f64 * within)
+    let cpk = closest / (3.0f64 * within)
+    let pp = width / (6.0f64 * overall)
+    let ppk = closest / (3.0f64 * overall)
+    if cp - cp != 0.0f64 || cpk - cpk != 0.0f64 || pp - pp != 0.0f64 || ppk - ppk != 0.0f64 { ret (zero, Invalid) }
+    ret (NormalCapability { mean: observations.mean, within_sigma: within, overall_sigma: overall, cp: cp, cpk: cpk, pp: pp, ppk: ppk, individuals: individuals, moving_range: ranges }, ok)
 }
 
 // Each true entry starts a phase; moving ranges never span a phase boundary.

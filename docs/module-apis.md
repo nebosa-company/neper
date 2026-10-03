@@ -3153,6 +3153,7 @@ type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y
 type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
 type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, at_risk: usize, events: usize, censored: usize }
 type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
+type NormalCapability = struct { mean: f64, within_sigma: f64, overall_sigma: f64, cp: f64, cpk: f64, pp: f64, ppk: f64, individuals: ControlLimits, moving_range: ControlLimits }
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -3198,6 +3199,7 @@ fn survival_curve(times: []const f64, event: []const bool, out: []SurvivalPoint)
 fn log_logistic4(dose: f64, lower: f64, upper: f64, ec50: f64, slope: f64) -> (f64, err)
 fn interval_hazard(times: []const f64, event: []const bool, edges: []const f64, counts: []u64, exposure: []f64, rates: []f64) -> err
 fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimits, err)
+fn normal_capability_individuals(values: []const f64, lsl: f64, usl: f64, moving: []f64) -> (NormalCapability, err)
 fn imr_phase_control(values: []const f64, starts: []const bool, moving: []f64, out: []AttributeControlPoint) -> err
 fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err)
 fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> err
@@ -15943,6 +15945,8 @@ type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
 type MarginalHistogramLayout = struct { scatter: Layout, top: Layout, right: Layout }
 type DoseResponseLayout = struct { observations: Layout, curve: Layout }
 type InfluenceLayout = struct { points: Layout, bubbles: Layout, guides: Layout, max_cook: f64 }
+type CapabilitySixpackStorage = struct { moving: []f64, individual_points: []Coord, individual_lines: []Segment, range_points: []Coord, range_lines: []Segment, recent_points: []Coord, histogram_counts: []u64, histogram_bars: []geometry.Rect, within_curve: []Segment, overall_curve: []Segment, probability_points: []Coord, probability_reference: []Segment, interval_bars: []geometry.Rect, guides: []Segment }
+type CapabilitySixpackLayout = struct { individuals: Layout, moving_range: Layout, recent: Layout, histogram: Layout, within_curve: Layout, overall_curve: Layout, probability: Layout, intervals: Layout, guides: Layout, summary: stat.NormalCapability }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
@@ -15968,6 +15972,7 @@ fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32,
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
 fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
 fn influence_plot(diagnostics: []const stat.RegressionDiagnostic, bounds: geometry.Rect, max_radius: f32, points: []Coord, circles: []geometry.Rect, reference_lines: []Segment) -> (InfluenceLayout, err)
+fn capability_sixpack(values: []const f64, sorted: []const f64, lsl: f64, usl: f64, panels: []const geometry.Rect, work: *CapabilitySixpackStorage) -> (CapabilitySixpackLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

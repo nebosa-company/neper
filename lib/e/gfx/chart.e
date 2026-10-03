@@ -102,6 +102,22 @@ type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
 type MarginalHistogramLayout = struct { scatter: Layout, top: Layout, right: Layout }
 type DoseResponseLayout = struct { observations: Layout, curve: Layout }
 type InfluenceLayout = struct { points: Layout, bubbles: Layout, guides: Layout, max_cook: f64 }
+type CapabilitySixpackStorage = struct {
+    moving: []f64,
+    individual_points: []Coord, individual_lines: []Segment,
+    range_points: []Coord, range_lines: []Segment,
+    recent_points: []Coord,
+    histogram_counts: []u64, histogram_bars: []geometry.Rect,
+    within_curve: []Segment, overall_curve: []Segment,
+    probability_points: []Coord, probability_reference: []Segment,
+    interval_bars: []geometry.Rect, guides: []Segment,
+}
+type CapabilitySixpackLayout = struct {
+    individuals: Layout, moving_range: Layout, recent: Layout,
+    histogram: Layout, within_curve: Layout, overall_curve: Layout,
+    probability: Layout, intervals: Layout, guides: Layout,
+    summary: stat.NormalCapability,
+}
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -389,6 +405,179 @@ fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, poin
     let series = spec(.PointLine, bounds, x, y)
     let (marks, marks_error) = layout(&series, points, segments, zero)
     ret (marks, marks_error)
+}
+
+// Six-panel normal capability report for individuals (subgroup size one).
+// The caller supplies a sorted copy of values for the Q-Q panel and every
+// output slice. Panel order: I, MR, last 25, histogram, Q-Q, capability.
+fn capability_sixpack(values: []const f64, sorted: []const f64, lsl: f64, usl: f64, panels: []const geometry.Rect, work: *CapabilitySixpackStorage) -> (CapabilitySixpackLayout, err) {
+    let n = values.len
+    if n < 5usize || sorted.len != n || panels.len != 6usize { ret (zero, Invalid) }
+    var p = 0usize
+    while p < 6usize {
+        if !valid_bounds(panels[p]) { ret (zero, Invalid) }
+        p += 1usize
+    }
+    var recent_count = n
+    if recent_count > 25usize { recent_count = 25usize }
+    if work.moving.len < n - 1usize || work.individual_points.len < n || work.individual_lines.len < n - 1usize || work.range_points.len < n - 1usize || work.range_lines.len < n - 2usize || work.recent_points.len < recent_count || work.histogram_counts.len < 2usize || work.histogram_counts.len != work.histogram_bars.len || work.within_curve.len < 31usize || work.overall_curve.len < 31usize || work.probability_points.len < n || work.probability_reference.len < 1usize || work.interval_bars.len < 3usize || work.guides.len < 11usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        if !finite64(sorted[i]) || (i > 0usize && sorted[i] < sorted[i - 1usize]) || !finite64(values[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let (summary, summary_error) = stat.normal_capability_individuals(values, lsl, usl, work.moving)
+    if summary_error != ok { ret (zero, Invalid) }
+    let vmin = f32(sorted[0usize])
+    let vmax = f32(sorted[n - 1usize])
+    if !finite(vmin) || !finite(vmax) || vmin >= vmax { ret (zero, Invalid) }
+    let mean = f32(summary.mean)
+    let i_lo = f32(math.min[f64](sorted[0usize], summary.individuals.lower))
+    let i_hi = f32(math.max[f64](sorted[n - 1usize], summary.individuals.upper))
+    if !finite(i_lo) || !finite(i_hi) || !(i_hi > i_lo) { ret (zero, Invalid) }
+    let i_rect = panels[0usize]
+    i = 0usize
+    while i < n {
+        work.individual_points[i] = Coord { x: i_rect.x + i_rect.width * f32(i) / f32(n - 1usize), y: i_rect.y + i_rect.height * (1.0 - (f32(values[i]) - i_lo) / (i_hi - i_lo)) }
+        if i > 0usize { work.individual_lines[i - 1usize] = Segment { from: work.individual_points[i - 1usize], to: work.individual_points[i] } }
+        i += 1usize
+    }
+    let individuals = Layout { kind: .PointLine, coords: work.individual_points[..n], segments: work.individual_lines[..n - 1usize], bars: zero, x_min: 1.0, x_max: f32(n), y_min: i_lo, y_max: i_hi }
+    let mr_rect = panels[1usize]
+    var mr_hi = f32(summary.moving_range.upper)
+    i = 0usize
+    while i < n - 1usize {
+        if f32(work.moving[i]) > mr_hi { mr_hi = f32(work.moving[i]) }
+        i += 1usize
+    }
+    if !finite(mr_hi) || !(mr_hi > 0.0) { ret (zero, Invalid) }
+    mr_hi *= 1.08
+    i = 0usize
+    while i < n - 1usize {
+        work.range_points[i] = Coord { x: mr_rect.x + mr_rect.width * f32(i) / f32(n - 2usize), y: mr_rect.y + mr_rect.height * (1.0 - f32(work.moving[i]) / mr_hi) }
+        if i > 0usize { work.range_lines[i - 1usize] = Segment { from: work.range_points[i - 1usize], to: work.range_points[i] } }
+        i += 1usize
+    }
+    let moving_range = Layout { kind: .PointLine, coords: work.range_points[..n - 1usize], segments: work.range_lines[..n - 2usize], bars: zero, x_min: 2.0, x_max: f32(n), y_min: 0.0, y_max: mr_hi }
+    let recent_rect = panels[2usize]
+    let recent_lo = n - recent_count
+    i = 0usize
+    while i < recent_count {
+        work.recent_points[i] = Coord { x: recent_rect.x + recent_rect.width * f32(i) / f32(recent_count - 1usize), y: recent_rect.y + recent_rect.height * (1.0 - (f32(values[recent_lo + i]) - vmin) / (vmax - vmin)) }
+        i += 1usize
+    }
+    let recent = Layout { kind: .Scatter, coords: work.recent_points[..recent_count], segments: zero, bars: zero, x_min: f32(recent_lo + 1usize), x_max: f32(n), y_min: vmin, y_max: vmax }
+    let hist_rect = panels[3usize]
+    let wider = math.max[f64](summary.within_sigma, summary.overall_sigma)
+    let hist_lo = math.min[f64](lsl, math.min[f64](sorted[0usize], summary.mean - 3.5f64 * wider))
+    let hist_hi = math.max[f64](usl, math.max[f64](sorted[n - 1usize], summary.mean + 3.5f64 * wider))
+    if !finite(f32(hist_lo)) || !finite(f32(hist_hi)) || !(hist_hi > hist_lo) { ret (zero, Invalid) }
+    let bins = work.histogram_counts.len
+    i = 0usize
+    while i < bins {
+        work.histogram_counts[i] = 0u64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var bin = usize((values[i] - hist_lo) / (hist_hi - hist_lo) * f64(bins))
+        if bin >= bins { bin = bins - 1usize }
+        work.histogram_counts[bin] += 1u64
+        i += 1usize
+    }
+    let bin_width = (hist_hi - hist_lo) / f64(bins)
+    var peak = 0.0f64
+    i = 0usize
+    while i < bins {
+        if f64(work.histogram_counts[i]) > peak { peak = f64(work.histogram_counts[i]) }
+        i += 1usize
+    }
+    let pi = 3.14159265358979323846f64
+    let within_peak = f64(n) * bin_width / (summary.within_sigma * math.sqrt[f64](2.0f64 * pi))
+    let overall_peak = f64(n) * bin_width / (summary.overall_sigma * math.sqrt[f64](2.0f64 * pi))
+    if within_peak > peak { peak = within_peak }
+    if overall_peak > peak { peak = overall_peak }
+    if !(peak > 0.0f64) || !finite(f32(peak)) { ret (zero, Invalid) }
+    peak *= 1.08f64
+    i = 0usize
+    while i < bins {
+        let height = hist_rect.height * f32(f64(work.histogram_counts[i]) / peak)
+        work.histogram_bars[i] = geometry.rect(hist_rect.x + hist_rect.width * f32(i) / f32(bins), hist_rect.y + hist_rect.height - height, hist_rect.width / f32(bins), height)
+        i += 1usize
+    }
+    let hist_layout = Layout { kind: .Histogram, coords: zero, segments: zero, bars: work.histogram_bars[..bins], x_min: f32(hist_lo), x_max: f32(hist_hi), y_min: 0.0, y_max: f32(peak) }
+    var previous_within: Coord = zero
+    var previous_overall: Coord = zero
+    i = 0usize
+    while i < 32usize {
+        let x = hist_lo + (hist_hi - hist_lo) * f64(i) / 31.0f64
+        let within_z = (x - summary.mean) / summary.within_sigma
+        let overall_z = (x - summary.mean) / summary.overall_sigma
+        let within_y = f64(n) * bin_width * math.exp[f64](-0.5f64 * within_z * within_z) / (summary.within_sigma * math.sqrt[f64](2.0f64 * pi))
+        let overall_y = f64(n) * bin_width * math.exp[f64](-0.5f64 * overall_z * overall_z) / (summary.overall_sigma * math.sqrt[f64](2.0f64 * pi))
+        let screen_x = hist_rect.x + hist_rect.width * f32(i) / 31.0
+        let within_point = Coord { x: screen_x, y: hist_rect.y + hist_rect.height * (1.0 - f32(within_y / peak)) }
+        let overall_point = Coord { x: screen_x, y: hist_rect.y + hist_rect.height * (1.0 - f32(overall_y / peak)) }
+        if i > 0usize {
+            work.within_curve[i - 1usize] = Segment { from: previous_within, to: within_point }
+            work.overall_curve[i - 1usize] = Segment { from: previous_overall, to: overall_point }
+        }
+        previous_within = within_point
+        previous_overall = overall_point
+        i += 1usize
+    }
+    let within_curve = Layout { kind: .Line, coords: zero, segments: work.within_curve[..31usize], bars: zero, x_min: hist_layout.x_min, x_max: hist_layout.x_max, y_min: 0.0, y_max: hist_layout.y_max }
+    let overall_curve = Layout { kind: .Line, coords: zero, segments: work.overall_curve[..31usize], bars: zero, x_min: hist_layout.x_min, x_max: hist_layout.x_max, y_min: 0.0, y_max: hist_layout.y_max }
+    let (probability, qq_error) = qq_normal(sorted, panels[4usize], work.probability_points, work.probability_reference)
+    if qq_error != ok { ret (zero, qq_error) }
+    let cap_rect = panels[5usize]
+    let cap_lo = hist_lo
+    let cap_hi = hist_hi
+    let spreads = [3]f64{ summary.within_sigma, summary.overall_sigma, 0.0f64 }
+    i = 0usize
+    while i < 3usize {
+        var low = summary.mean - 3.0f64 * spreads[i]
+        var high = summary.mean + 3.0f64 * spreads[i]
+        if i == 2usize {
+            low = lsl
+            high = usl
+        }
+        let left = cap_rect.x + cap_rect.width * f32((low - cap_lo) / (cap_hi - cap_lo))
+        let right = cap_rect.x + cap_rect.width * f32((high - cap_lo) / (cap_hi - cap_lo))
+        work.interval_bars[i] = geometry.rect(left, cap_rect.y + f32(i) * cap_rect.height / 3.0 + 8.0, right - left, 9.0)
+        var center = summary.mean
+        if i == 2usize { center = (lsl + usl) * 0.5f64 }
+        let center_x = cap_rect.x + cap_rect.width * f32((center - cap_lo) / (cap_hi - cap_lo))
+        let bar_y = work.interval_bars[i].y
+        work.guides[8usize + i] = Segment { from: Coord { x: center_x, y: bar_y - 3.0 }, to: Coord { x: center_x, y: bar_y + 12.0 } }
+        i += 1usize
+    }
+    let intervals = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.interval_bars[..3usize], x_min: f32(cap_lo), x_max: f32(cap_hi), y_min: 0.0, y_max: 3.0 }
+    let i_levels = [3]f64{ summary.individuals.lower, summary.mean, summary.individuals.upper }
+    i = 0usize
+    while i < 3usize {
+        let y = i_rect.y + i_rect.height * (1.0 - (f32(i_levels[i]) - i_lo) / (i_hi - i_lo))
+        work.guides[i] = Segment { from: Coord { x: i_rect.x, y: y }, to: Coord { x: i_rect.x + i_rect.width, y: y } }
+        i += 1usize
+    }
+    let mr_levels = [2]f64{ summary.moving_range.center, summary.moving_range.upper }
+    i = 0usize
+    while i < 2usize {
+        let y = mr_rect.y + mr_rect.height * (1.0 - f32(mr_levels[i]) / mr_hi)
+        work.guides[3usize + i] = Segment { from: Coord { x: mr_rect.x, y: y }, to: Coord { x: mr_rect.x + mr_rect.width, y: y } }
+        i += 1usize
+    }
+    let recent_y = recent_rect.y + recent_rect.height * (1.0 - (mean - vmin) / (vmax - vmin))
+    work.guides[5usize] = Segment { from: Coord { x: recent_rect.x, y: recent_y }, to: Coord { x: recent_rect.x + recent_rect.width, y: recent_y } }
+    let specs = [2]f64{ lsl, usl }
+    i = 0usize
+    while i < 2usize {
+        let x = hist_rect.x + hist_rect.width * f32((specs[i] - hist_lo) / (hist_hi - hist_lo))
+        work.guides[6usize + i] = Segment { from: Coord { x: x, y: hist_rect.y }, to: Coord { x: x, y: hist_rect.y + hist_rect.height } }
+        i += 1usize
+    }
+    let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..11usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    ret (CapabilitySixpackLayout { individuals: individuals, moving_range: moving_range, recent: recent, histogram: hist_layout, within_curve: within_curve, overall_curve: overall_curve, probability: probability, intervals: intervals, guides: guides, summary: summary }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.

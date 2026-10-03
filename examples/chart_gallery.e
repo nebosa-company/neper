@@ -2716,6 +2716,137 @@ fn render_influence_plot_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *g
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_capability_sixpack_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/capability_sixpack.png"
+    let values = [30]f64{
+        9.5f64, 10.2f64, 9.8f64, 10.3f64, 9.9f64, 10.1f64, 9.7f64, 10.4f64, 10.0f64, 9.6f64,
+        10.2f64, 9.9f64, 10.5f64, 10.1f64, 9.8f64, 10.3f64, 9.7f64, 10.0f64, 10.4f64, 9.9f64,
+        10.1f64, 9.6f64, 10.2f64, 10.0f64, 9.8f64, 10.3f64, 9.7f64, 10.1f64, 9.9f64, 10.5f64,
+    }
+    var sorted = values
+    var i = 1usize
+    while i < sorted.len {
+        let held = sorted[i]
+        var j = i
+        while j > 0usize && sorted[j - 1usize] > held {
+            sorted[j] = sorted[j - 1usize]
+            j -= 1usize
+        }
+        sorted[j] = held
+        i += 1usize
+    }
+    let panels = [6]geometry.Rect{
+        geometry.rect(20.0, 44.0, 145.0, 42.0), geometry.rect(196.0, 44.0, 145.0, 42.0),
+        geometry.rect(20.0, 111.0, 145.0, 42.0), geometry.rect(196.0, 111.0, 145.0, 42.0),
+        geometry.rect(20.0, 178.0, 145.0, 42.0), geometry.rect(244.0, 174.0, 96.0, 51.0),
+    }
+    var moving: [29]f64 = zero
+    var individual_points: [30]chart.Coord = zero
+    var individual_lines: [29]chart.Segment = zero
+    var range_points: [29]chart.Coord = zero
+    var range_lines: [28]chart.Segment = zero
+    var recent_points: [25]chart.Coord = zero
+    var counts: [8]u64 = zero
+    var bars: [8]geometry.Rect = zero
+    var within_curve: [31]chart.Segment = zero
+    var overall_curve: [31]chart.Segment = zero
+    var probability_points: [30]chart.Coord = zero
+    var probability_reference: [1]chart.Segment = zero
+    var interval_bars: [3]geometry.Rect = zero
+    var guides: [11]chart.Segment = zero
+    var work = chart.CapabilitySixpackStorage {
+        moving: moving[..], individual_points: individual_points[..], individual_lines: individual_lines[..],
+        range_points: range_points[..], range_lines: range_lines[..], recent_points: recent_points[..],
+        histogram_counts: counts[..], histogram_bars: bars[..], within_curve: within_curve[..], overall_curve: overall_curve[..],
+        probability_points: probability_points[..], probability_reference: probability_reference[..],
+        interval_bars: interval_bars[..], guides: guides[..],
+    }
+    let (report, report_error) = chart.capability_sixpack(values[..], sorted[..], 9.0f64, 11.0f64, panels[..], &work)
+    if report_error != ok { ret report_error }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let pale = paint.rgba(0.96, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.10, 0.44, 0.77, 1.0)
+    let orange = paint.rgba(0.91, 0.42, 0.19, 1.0)
+    let gray = paint.rgba(0.74, 0.79, 0.83, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let names = [6]str{ "Individuals", "Moving range", "Last 25 observations", "Capability histogram", "Normal Q-Q", "Capability intervals" }
+    var labels: [10]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Normal capability sixpack / individuals", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    i = 0usize
+    while i < 6usize {
+        var x = panels[i].x + panels[i].width * 0.5
+        if i == 5usize { x = 268.0 }
+        labels[i + 1usize] = chart.Label { text: names[i], anchor: chart.Coord { x: x, y: panels[i].y - 7.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[7usize] = chart.Label { text: "Within", anchor: chart.Coord { x: 239.0, y: 187.0 }, align: .Right }
+    labels[8usize] = chart.Label { text: "Overall", anchor: chart.Coord { x: 239.0, y: 204.0 }, align: .Right }
+    labels[9usize] = chart.Label { text: "Specs", anchor: chart.Coord { x: 239.0, y: 221.0 }, align: .Right }
+    let (made_text, text_error) = str.builder(a, 96usize)
+    if text_error != ok { ret text_error }
+    var metrics = made_text
+    try str.push(&metrics, "Cp ")
+    try str.push_f64_fixed(&metrics, report.summary.cp, 2u8)
+    try str.push(&metrics, "   Cpk ")
+    try str.push_f64_fixed(&metrics, report.summary.cpk, 2u8)
+    try str.push(&metrics, "   Pp ")
+    try str.push_f64_fixed(&metrics, report.summary.pp, 2u8)
+    try str.push(&metrics, "   Ppk ")
+    try str.push_f64_fixed(&metrics, report.summary.ppk, 2u8)
+    let footer = [1]chart.Label{ chart.Label { text: str.done(&metrics), anchor: chart.Coord { x: 180.0, y: 237.0 }, align: .Center } }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 29u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 384usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    i = 0usize
+    while i < 6usize {
+        try fill(&builder, panels[i], paint.Brush { Solid: pale })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &report.guides, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.individuals, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.moving_range, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.recent, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.histogram, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.within_curve, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &report.overall_curve, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &report.probability, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.intervals, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, footer[..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 6usize {
+        try chart_svg.rect(&writer, panels[i], pale, false)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &report.guides, gray)
+    try chart_svg.append(&writer, &report.individuals, blue)
+    try chart_svg.append(&writer, &report.moving_range, blue)
+    try chart_svg.append(&writer, &report.recent, blue)
+    try chart_svg.append(&writer, &report.histogram, blue)
+    try chart_svg.append(&writer, &report.within_curve, orange)
+    try chart_svg.append(&writer, &report.overall_curve, dark)
+    try chart_svg.append(&writer, &report.probability, blue)
+    try chart_svg.append(&writer, &report.intervals, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.append_labels(&writer, footer[..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -6690,6 +6821,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_dose_response_preview(a, queue, output_target, canvas, &renderer)
     try render_hazard_rate_preview(a, queue, output_target, canvas, &renderer)
     try render_influence_plot_preview(a, queue, output_target, canvas, &renderer)
+    try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)
