@@ -576,6 +576,59 @@ fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canv
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_icicle(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
+    if layers.len != 9usize || rects.len != layers.len || names.len != layers.len { ret chart.Invalid }
+    let colors = [9]paint.Color{
+        paint.rgba(0.20, 0.25, 0.35, 1.0), paint.rgba(0.09, 0.35, 0.67, 1.0), paint.rgba(0.11, 0.48, 0.43, 1.0),
+        paint.rgba(0.07, 0.44, 0.75, 1.0), paint.rgba(0.31, 0.37, 0.70, 1.0), paint.rgba(0.08, 0.55, 0.67, 1.0),
+        paint.rgba(0.10, 0.57, 0.39, 1.0), paint.rgba(0.40, 0.57, 0.17, 1.0), paint.rgba(0.68, 0.39, 0.12, 1.0),
+    }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var labels: [10]chart.Label = zero
+    var i = 0usize
+    while i < layers.len {
+        let r = rects[i]
+        labels[i] = chart.Label { text: names[i], anchor: chart.Coord { x: r.x + r.width * 0.5, y: r.y + r.height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[9usize] = chart.Label { text: "Hierarchical icicle", anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center }
+    let border = chart.Layout { kind: .Rug, coords: zero, segments: zero, bars: rects, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 160usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &border, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[..9usize], font, 10.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[9usize..], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &border, white)
+    try chart_svg.append_labels(&writer, labels[..9usize], white, 10.0)
+    try chart_svg.append_labels(&writer, labels[9usize..], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_sunburst(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, path: str) -> err {
     if layers.len != 8usize || names.len != 5usize { ret chart.Invalid }
     let colors = [8]paint.Color{
@@ -919,6 +972,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tree_layers, tree_error) = chart.treemap(tree_parents[..], tree_weights[..], geometry.rect(24.0, 38.0, 312.0, 176.0), tree_totals[..], tree_rects[..], tree_storage[..])
     if tree_error != ok { ret tree_error }
     try render_treemap(a, queue, output_target, canvas, &renderer, tree_layers, tree_rects[..], tree_names[..], "docs/chart-previews/treemap.png")
+    var ice_depths: [9]usize = zero
+    let (ice_layers, ice_error) = chart.icicle(tree_parents[..], tree_weights[..], geometry.rect(24.0, 38.0, 312.0, 176.0), tree_totals[..], ice_depths[..], tree_rects[..], tree_storage[..])
+    if ice_error != ok { ret ice_error }
+    let ice_names = [9]str{ "All", "Digital", "Operations", "Cloud", "Apps", "Data", "Supply", "Field", "IT" }
+    try render_icicle(a, queue, output_target, canvas, &renderer, ice_layers, tree_rects[..], ice_names[..], "docs/chart-previews/icicle.png")
     let sun_parents = [8]usize{ 0usize, 0usize, 0usize, 1usize, 1usize, 1usize, 2usize, 2usize }
     let sun_weights = [8]f32{ 0.0, 0.0, 0.0, 30.0, 20.0, 10.0, 25.0, 15.0 }
     let sun_names = [5]str{ "Cloud 30", "Apps 20", "Data 10", "Supply 25", "Field 15" }

@@ -1156,6 +1156,59 @@ fn treemap(parents: []const usize, weights: []const f32, bounds: geometry.Rect, 
     ret (layers[..parents.len], ok)
 }
 
+// Depth occupies horizontal bands; each sibling keeps its subtree's width.
+// Shallow leaves extend to the bottom of the panel.
+fn icicle(parents: []const usize, weights: []const f32, bounds: geometry.Rect, totals: []f64, depths: []usize, rects: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    let total_error = hierarchy_totals(parents, weights, totals)
+    if total_error != ok { ret (zero, total_error) }
+    if depths.len < parents.len || rects.len < parents.len || layers.len < parents.len { ret (zero, TooLarge) }
+    depths[0usize] = 0usize
+    var max_depth = 0usize
+    var i = 1usize
+    while i < parents.len {
+        depths[i] = depths[parents[i]] + 1usize
+        if depths[i] > max_depth { max_depth = depths[i] }
+        i += 1usize
+    }
+    let row_height = bounds.height / f32(max_depth + 1usize)
+    if !finite(row_height) || row_height <= 0.0 { ret (zero, Invalid) }
+    rects[0usize] = geometry.rect(bounds.x, bounds.y, bounds.width, row_height)
+    i = 1usize
+    while i < parents.len {
+        let parent = parents[i]
+        var before = 0.0f64
+        var j = 1usize
+        // ponytail: preceding-sibling scans are O(n^2); use caller-owned
+        // per-parent cursors only if large hierarchies need linear layout.
+        while j < i {
+            if parents[j] == parent { before += totals[j] }
+            j += 1usize
+        }
+        var left = rects[parent].x
+        var right = left
+        if totals[parent] > 0.0f64 {
+            left += rects[parent].width * f32(before / totals[parent])
+            right = rects[parent].x + rects[parent].width * f32((before + totals[i]) / totals[parent])
+        }
+        let top = bounds.y + f32(depths[i]) * row_height
+        var bottom = top + row_height
+        if weights[i] > 0.0 { bottom = bounds.y + bounds.height }
+        if !finite(left) || !finite(right) || !finite(top) || !finite(bottom) || right < left || bottom < top { ret (zero, Invalid) }
+        rects[i] = geometry.rect(left, top, right - left, bottom - top)
+        i += 1usize
+    }
+    if weights[0usize] > 0.0 { rects[0usize] = bounds }
+    i = 0usize
+    while i < parents.len {
+        var bars: []geometry.Rect = zero
+        if totals[i] > 0.0f64 { bars = rects[i..i + 1usize] }
+        layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    ret (layers[..parents.len], ok)
+}
+
 // Root occupies the innermost ring, each generation the next. A leaf extends
 // through any remaining rings; zero-total nodes return empty Bar layers.
 fn sunburst(parents: []const usize, weights: []const f32, bounds: geometry.Rect, hole: f32, totals: []f64, depths: []usize, arcs: []SunburstArc, points: []Coord, layers: []Layout) -> ([]Layout, err) {

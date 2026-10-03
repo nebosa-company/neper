@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, pie, donut, waffle, treemap, sunburst, stage funnel,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, pie, donut, waffle, treemap, sunburst, icicle, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-fifty-one PNG plus fifty-one SVG previews from Neper. L061 remains partial
+fifty-two PNG plus fifty-two SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -181,6 +181,13 @@ layers pass through the existing scene/SVG adapters; zero-total nodes emit
 empty layers. A caller-selected center-hole ratio leaves room for a root label.
 The fixture checks shares, depths, zero leaves, refusal paths and both adapters
 on Windows and Linux. Label collision and adaptive curved tessellation remain.
+`icicle` reuses the same hierarchy totals and Bar adapter, placing each depth
+in a horizontal band and dividing parent widths by subtree share. Positive
+leaves extend to the panel bottom; zero-total nodes retain empty layers.
+Caller-owned rectangles and depths make the layout deterministic. The fixture
+checks proportions, depth, zero leaves, storage refusals and scene/SVG output
+on Windows and Linux. Preceding-sibling scans are quadratic until larger trees
+justify caller-owned cursors.
 `funnel` maps nonincreasing stage counts to centered trapezoid Area layers with
 an explicit inter-stage gap. This is the business conversion funnel, not the
 statistical funnel plot. Both charts refuse invalid totals/stages and short
@@ -227,7 +234,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, pie, donut, waffle, treemap, sunburst and basic stage funnel are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, pie, donut, waffle, treemap, sunburst, icicle and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -295,6 +302,8 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    Sunburst reuses the leaf-weight tree for angular sectors and depth rings;
    `gfx_chart_sunburst` checks numeric spans and scene/SVG adapters on both
    hosts. Curved-label placement and adaptive tessellation remain.
+   Icicle reuses those totals for proportional horizontal depth bands;
+   `gfx_chart_icicle` checks geometry and scene/SVG adapters on both hosts.
    OLS fit and covariance data-ellipse overlays reuse Line layers and shared
    scatter limits; mean-confidence and prediction ribbons add filled Band
    layers on the same domain. `gfx_chart_overlays` checks references and adapters
@@ -307,7 +316,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with fifty-one vector previews, automatic numeric tick text and
+   adapter with fifty-two vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

@@ -33374,3 +33374,14 @@ arrays belong to the caller. `gfx_chart_sunburst` checks angular shares, ring
 depths, invalid input/capacity and both adapters on Windows and Linux; the
 gallery adds one labeled PNG/SVG pair. Adaptive tessellation, curved labels
 and interactive drilldown remain planned.
+
+## D1833 — Reuse proportional hierarchy totals for an icicle
+
+`chart.icicle` assigns horizontal width by sibling subtree totals and one
+band per depth, with shallow positive leaves extending to the panel bottom.
+It borrows the same validated parent-before-child hierarchy as treemap and
+sunburst, keeps depths and rectangles caller-owned, and returns existing Bar
+layers to scene and SVG. Zero-total nodes have empty layers. A preceding-
+sibling scan stays quadratic until large-tree evidence justifies caller-owned
+cursors. `gfx_chart_icicle` checks shares, depth, invalid input/storage and
+both adapters on Windows and Linux; the gallery adds one labeled PNG/SVG pair.
