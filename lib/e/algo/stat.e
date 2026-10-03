@@ -28,6 +28,10 @@ type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
 type CusumPoint = struct { high: f64, low: f64, high_signal: bool, low_signal: bool }
+type ControlSignal = struct {
+    beyond3: bool, same_side9: bool, trend6: bool, alternating14: bool,
+    two_of_three2: bool, four_of_five1: bool, within1_15: bool, outside1_8: bool,
+}
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
@@ -617,6 +621,89 @@ fn t_exponential_control_limits(intervals: []const f64) -> (ControlLimits, err) 
     }
     if limits.upper - limits.upper != 0.0f64 { ret (zero, Invalid) }
     ret (limits, ok)
+}
+
+// Tests 1–8 mark the point that completes a special-cause pattern.
+fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const f64, out: []ControlSignal) -> err {
+    if values.len == 0usize || centers.len != values.len || sigmas.len != values.len { ret Invalid }
+    if out.len < values.len { ret TooSmall }
+    var i = 0usize
+    while i < values.len {
+        if values[i] - values[i] != 0.0f64 || centers[i] - centers[i] != 0.0f64 || !(sigmas[i] > 0.0f64) || sigmas[i] - sigmas[i] != 0.0f64 { ret Invalid }
+        let z = (values[i] - centers[i]) / sigmas[i]
+        if z - z != 0.0f64 { ret Invalid }
+        i += 1usize
+    }
+    var above = 0usize
+    var below = 0usize
+    var rising = 1usize
+    var falling = 1usize
+    var alternating = 1usize
+    i = 0usize
+    while i < values.len {
+        let z = (values[i] - centers[i]) / sigmas[i]
+        if z > 0.0f64 { above += 1usize } else { above = 0usize }
+        if z < 0.0f64 { below += 1usize } else { below = 0usize }
+        if i > 0usize {
+            if values[i] > values[i - 1usize] { rising += 1usize } else { rising = 1usize }
+            if values[i] < values[i - 1usize] { falling += 1usize } else { falling = 1usize }
+            if values[i] == values[i - 1usize] { alternating = 1usize } else if i == 1usize { alternating = 2usize } else if (values[i] > values[i - 1usize] && values[i - 1usize] < values[i - 2usize]) || (values[i] < values[i - 1usize] && values[i - 1usize] > values[i - 2usize]) {
+                alternating += 1usize
+            } else {
+                alternating = 2usize
+            }
+        }
+        var signal: ControlSignal = zero
+        signal.beyond3 = z > 3.0f64 || z < -3.0f64
+        signal.same_side9 = above >= 9usize || below >= 9usize
+        signal.trend6 = rising >= 6usize || falling >= 6usize
+        signal.alternating14 = alternating >= 14usize
+        if i >= 2usize {
+            var high2 = 0usize
+            var low2 = 0usize
+            var j = i - 2usize
+            while j <= i {
+                let zone = (values[j] - centers[j]) / sigmas[j]
+                if zone > 2.0f64 { high2 += 1usize }
+                if zone < -2.0f64 { low2 += 1usize }
+                j += 1usize
+            }
+            signal.two_of_three2 = high2 >= 2usize || low2 >= 2usize
+        }
+        if i >= 4usize {
+            var high1 = 0usize
+            var low1 = 0usize
+            var j = i - 4usize
+            while j <= i {
+                let zone = (values[j] - centers[j]) / sigmas[j]
+                if zone > 1.0f64 { high1 += 1usize }
+                if zone < -1.0f64 { low1 += 1usize }
+                j += 1usize
+            }
+            signal.four_of_five1 = high1 >= 4usize || low1 >= 4usize
+        }
+        if i >= 14usize {
+            signal.within1_15 = true
+            var j = i - 14usize
+            while j <= i {
+                let zone = (values[j] - centers[j]) / sigmas[j]
+                if zone < -1.0f64 || zone > 1.0f64 { signal.within1_15 = false }
+                j += 1usize
+            }
+        }
+        if i >= 7usize {
+            signal.outside1_8 = true
+            var j = i - 7usize
+            while j <= i {
+                let zone = (values[j] - centers[j]) / sigmas[j]
+                if zone >= -1.0f64 && zone <= 1.0f64 { signal.outside1_8 = false }
+                j += 1usize
+            }
+        }
+        out[i] = signal
+        i += 1usize
+    }
+    ret ok
 }
 
 // Subgroup-major X-bar/S limits use sample SD and the gamma-derived c4 factor.

@@ -813,7 +813,7 @@ fn render_agreement_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
-fn render_diagnostic_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, baseline: *const chart.Layout, title: str, x_label: str, y_label: str, path: str) -> err {
+fn render_diagnostic_preview_extra(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, baseline: *const chart.Layout, highlight: *const chart.Layout, title: str, x_label: str, y_label: str, path: str) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     var blue = paint.rgba(0.08, 0.40, 0.76, 1.0)
     if marks.kind == .Area { blue = paint.rgba(0.08, 0.40, 0.76, 0.38) }
@@ -831,6 +831,8 @@ fn render_diagnostic_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     try fill(&builder, plot, paint.Brush { Solid: pale })
     try chart_scene.append(a, &builder, baseline, paint.Brush { Solid: baseline_color })
     try chart_scene.append(a, &builder, marks, paint.Brush { Solid: blue })
+    let signal_color = paint.rgba(0.88, 0.24, 0.21, 1.0)
+    if highlight.coords.len > 0usize { try chart_scene.append(a, &builder, highlight, paint.Brush { Solid: signal_color }) }
     let ticks = [3]str{ "0", "0.5", "1" }
     var labels: [6]chart.Label = zero
     var i = 0usize
@@ -852,6 +854,7 @@ fn render_diagnostic_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     try chart_svg.rect(&writer, plot, pale, false)
     try chart_svg.append(&writer, baseline, baseline_color)
     try chart_svg.append(&writer, marks, blue)
+    if highlight.coords.len > 0usize { try chart_svg.append(&writer, highlight, signal_color) }
     try chart_svg.append_labels(&writer, labels[..3usize], dark, 9.0)
     try chart_svg.append_labels(&writer, labels[3usize..4usize], dark, 14.0)
     try chart_svg.append_labels(&writer, labels[4usize..], dark, 9.0)
@@ -859,6 +862,11 @@ fn render_diagnostic_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_diagnostic_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, baseline: *const chart.Layout, title: str, x_label: str, y_label: str, path: str) -> err {
+    let empty = chart.Layout { kind: .Scatter, coords: zero, segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    ret render_diagnostic_preview_extra(a, q, output_target, canvas, renderer, marks, baseline, &empty, title, x_label, y_label, path)
 }
 
 fn render_binary_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, metric: chart.BinaryMetric, title: str, x_label: str, y_label: str, path: str) -> err {
@@ -965,6 +973,53 @@ fn render_control_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targ
     }
     let reference = chart.Layout { kind: .Rug, coords: zero, segments: rules[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: low, y_max: high }
     ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &marks, &reference, title, "Run fraction", y_label, path)
+}
+
+fn render_run_rules_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let values = [16]f64{ 0.4, 0.6, 0.7, 0.8, 1.0, 0.6, 0.9, 1.1, 1.2, 1.3, -0.2, 3.4, 0.2, -0.4, 0.3, 0.1 }
+    var centers: [16]f64 = zero
+    var sigmas: [16]f64 = zero
+    var signals: [16]stat.ControlSignal = zero
+    var x: [16]f32 = zero
+    var y: [16]f32 = zero
+    var i = 0usize
+    while i < values.len {
+        sigmas[i] = 1.0
+        x[i] = f32(i) / 15.0
+        y[i] = f32(values[i])
+        i += 1usize
+    }
+    try stat.control_run_rules(values[..], centers[..], sigmas[..], signals[..])
+    let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
+    let x_limits = [2]f32{ 0.0, 1.0 }
+    let y_limits = [2]f32{ -3.5, 3.8 }
+    var spec = chart.spec(.PointLine, plot, x[..], y[..])
+    var points: [16]chart.Coord = zero
+    var segments: [15]chart.Segment = zero
+    let (series, layout_error) = chart.layout_with_limits(&spec, points[..], segments[..], zero, x_limits[..], y_limits[..])
+    if layout_error != ok { ret layout_error }
+    var rules: [3]chart.Segment = zero
+    let levels = [3]f32{ -3.0, 0.0, 3.0 }
+    i = 0usize
+    while i < 3usize {
+        let pixel_y = plot.y + plot.height * (y_limits[1usize] - levels[i]) / (y_limits[1usize] - y_limits[0usize])
+        rules[i] = chart.Segment { from: chart.Coord { x: plot.x, y: pixel_y }, to: chart.Coord { x: plot.x + plot.width, y: pixel_y } }
+        i += 1usize
+    }
+    var flagged: [16]chart.Coord = zero
+    var flagged_count = 0usize
+    i = 0usize
+    while i < 16usize {
+        let s = signals[i]
+        if s.beyond3 || s.same_side9 || s.trend6 || s.alternating14 || s.two_of_three2 || s.four_of_five1 || s.within1_15 || s.outside1_8 {
+            flagged[flagged_count] = series.coords[i]
+            flagged_count += 1usize
+        }
+        i += 1usize
+    }
+    let reference = chart.Layout { kind: .Rug, coords: zero, segments: rules[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: y_limits[0usize], y_max: y_limits[1usize] }
+    let highlight = chart.Layout { kind: .Scatter, coords: flagged[..flagged_count], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: y_limits[0usize], y_max: y_limits[1usize] }
+    ret render_diagnostic_preview_extra(a, q, output_target, canvas, renderer, &series, &reference, &highlight, "SPC run signals", "Run fraction", "Z score", "docs/chart-previews/run_rules_control.png")
 }
 
 fn render_control_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
@@ -2675,6 +2730,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_agreement_preview(a, queue, output_target, canvas, &renderer)
     try render_survival_previews(a, queue, output_target, canvas, &renderer)
     try render_control_previews(a, queue, output_target, canvas, &renderer)
+    try render_run_rules_preview(a, queue, output_target, canvas, &renderer)
     try render_weighted_control_previews(a, queue, output_target, canvas, &renderer)
     try render_attribute_previews(a, queue, output_target, canvas, &renderer)
     try render_laney_previews(a, queue, output_target, canvas, &renderer)

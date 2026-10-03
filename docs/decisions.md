@@ -33686,3 +33686,19 @@ two previews bring the gallery to 104 pairs. Date conversion, simultaneous
 events, Weibull limits and rare-event run tests remain planned.
 References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/rare-event-charts/g-chart/methods-and-formulas/methods-and-formulas/
 and https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/rare-event-charts/t-chart/methods-and-formulas/methods-and-formulas/.
+
+## D1860 — Mark the completing point for eight SPC special-cause tests
+
+`e.algo.stat.control_run_rules` accepts observed values and per-observation
+centers/sigmas, so fixed-limit and varying-limit charts can share one checker.
+It returns eight named flags per point: beyond 3 sigma; nine on one side; six
+trending; fourteen alternating; two of three beyond 2 sigma on one side;
+four of five beyond 1 sigma on one side; fifteen within 1 sigma; and eight
+outside 1 sigma. Strict boundaries apply to the beyond/outside tests; a
+value on the center breaks the same-side run. Flags mark the observation
+that completes a window, not every member of it. The focused fixture checks
+all eight rules and refusal paths on Windows and Linux. Existing PointLine,
+Rug and Scatter passes render a signal preview, bringing the gallery to 105
+pairs. Phase resets and automatic chart-specific test sets remain planned.
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/supporting-topics/basics/using-tests-for-special-causes/
+and https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/contchar.htm.

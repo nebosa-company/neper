@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and four PNG plus one hundred and four SVG previews from Neper. Individuals, moving-range,
+one hundred and five PNG plus one hundred and five SVG previews from Neper. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -140,7 +140,7 @@ standard deviations with the c4 bias correction for three-sigma mean and S
 limits. `cusum_control` computes upper/lower tabular sums and decision signals;
 `ewma_control` computes recursive weighted means with startup-adjusted limits.
 `gfx_chart_weighted_control` checks numeric references and refusal paths on
-Windows and Linux. Phase separation and run rules remain planned.
+Windows and Linux. Phase separation remains planned.
 `e.algo.stat.attribute_control` computes pooled binomial p/np and Poisson c/u
 three-sigma values and limits in caller storage. Variable subgroup sizes
 change p/u limits per observation; np requires equal size and c equal unit
@@ -151,8 +151,8 @@ and scene/SVG output on Windows and Linux. `laney_control` reuses p/u values,
 standardizes each by its subgroup-specific binomial or Poisson sigma, and
 multiplies the ordinary three-sigma limits by the adjacent z-score moving-range
 estimate divided by 1.128. `gfx_chart_laney` checks overdispersion, variable
-subgroup sizes and refusals on Windows and Linux. Run rules and phase-specific
-baseline estimates remain planned.
+subgroup sizes and refusals on Windows and Linux. Phase-specific baseline
+estimates remain planned.
 `g_control_limits` fits the geometric event probability from whole-number
 opportunities between events and interpolates the 0.135%, 50% and 99.865%
 CDF percentiles. `t_exponential_control_limits` fits positive elapsed times
@@ -161,6 +161,12 @@ PointLine/Rug rules; `gfx_chart_rare_event` checks numeric references,
 degenerate/invalid inputs and a large-gap case on Windows and Linux. Date
 conversion, Weibull T limits, simultaneous events and rare-event run tests
 remain planned.
+`control_run_rules` checks the eight standard special-cause tests with
+per-observation centers and sigmas, marking the point that completes each
+pattern. `gfx_chart_run_rules` checks every test, strict boundary behavior,
+varying sigma and refusal paths on Windows and Linux. The PNG/SVG preview
+uses PointLine, Rug and highlighted Scatter marks. Phase resets, automatic
+chart-specific test selection and false-alarm calibration remain planned.
 Binary classification diagnostics share `e.algo.stat.binary_curve`: a caller-owned
 descending score order, with tied scores advanced as one threshold. The same
 cumulative true/false-positive counts yield ROC, precision–recall, cumulative
@@ -516,7 +522,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and four vector previews, automatic numeric tick text and
+   adapter with one hundred and five vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow
@@ -524,7 +530,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 5. **Specialized calculators (partial):** tied-score binary threshold sweeps,
    ROC AUC, average precision, calibration bins and confusion counts, plus
    Bland–Altman limits and censor-aware survival/hazard steps are delivered in
-   `e.algo.stat`; I-MR/Xbar-R/Xbar-S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA limits are also delivered. Survival intervals/comparisons,
+   `e.algo.stat`; I-MR/Xbar-R/Xbar-S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM, EWMA and eight run-rule tests are also delivered. Survival intervals/comparisons,
    further SPC, capability, pooled forest/funnel estimators,
    contour/surface and other domain diagrams remain in their owning modules.
 6. **Interaction and acceleration:** hit regions, selection, zoom/pan, animation,

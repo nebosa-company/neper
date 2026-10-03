@@ -3156,6 +3156,7 @@ type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
 type CusumPoint = struct { high: f64, low: f64, high_signal: bool, low_signal: bool }
+type ControlSignal = struct { beyond3: bool, same_side9: bool, trend6: bool, alternating14: bool, two_of_three2: bool, four_of_five1: bool, within1_15: bool, outside1_8: bool }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
@@ -3200,6 +3201,7 @@ fn laney_control(kind: AttributeControlKind, counts: []const usize, sizes: []con
 fn geometric_gap_percentile(probability: f64, fraction: f64) -> (f64, bool)
 fn g_control_limits(gaps: []const usize) -> (ControlLimits, err)
 fn t_exponential_control_limits(intervals: []const f64) -> (ControlLimits, err)
+fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const f64, out: []ControlSignal) -> err
 fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations: []f64) -> (ControlLimits, ControlLimits, err)
 fn cusum_control(values: []const f64, center: f64, reference: f64, decision: f64, out: []CusumPoint) -> err
 fn ewma_control(values: []const f64, center: f64, sigma: f64, lambda: f64, width: f64, out: []AttributeControlPoint) -> err
