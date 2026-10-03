@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>fishbone</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<line x1="28.80000114440918" y1="127" x2="284.1600036621094" y2="127" stroke="rgb(26,110,196)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="275.1600036621094" y1="122" x2="284.1600036621094" y2="127" stroke="rgb(26,110,196)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="275.1600036621094" y1="132" x2="284.1600036621094" y2="127" stroke="rgb(26,110,196)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="92.63999938964844" y1="127" x2="72.84960174560547" y2="68.0999984741211" stroke="rgb(26,110,196)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="92.63999938964844" y1="127" x2="72.84960174560547" y2="185.89999389648438" stroke="rgb(26,110,196)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="156.47999572753906" y1="127" x2="136.68959045410156" y2="68.0999984741211" stroke="rgb(26,110,196)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="156.47999572753906" y1="127" x2="136.68959045410156" y2="185.89999389648438" stroke="rgb(26,110,196)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="220.32000732421875" y1="127" x2="200.52960205078125" y2="68.0999984741211" stroke="rgb(26,110,196)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="220.32000732421875" y1="127" x2="200.52960205078125" y2="185.89999389648438" stroke="rgb(26,110,196)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="86.04319763183594" y1="107.36666870117188" x2="105.19519805908203" y2="97.35366821289062" stroke="rgb(227,97,48)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="79.44640350341797" y1="87.73332977294922" x2="98.59840393066406" y2="77.72032928466797" stroke="rgb(227,97,48)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="86.04319763183594" y1="146.63333129882812" x2="105.19519805908203" y2="156.64633178710938" stroke="rgb(227,97,48)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="79.44640350341797" y1="166.26666259765625" x2="98.59840393066406" y2="176.2796630859375" stroke="rgb(227,97,48)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="146.5847930908203" y1="97.55000305175781" x2="165.73678588867188" y2="87.53700256347656" stroke="rgb(227,97,48)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="149.88319396972656" y1="146.63333129882812" x2="169.03518676757812" y2="156.64633178710938" stroke="rgb(227,97,48)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="143.28639221191406" y1="166.26666259765625" x2="162.43838500976562" y2="176.2796630859375" stroke="rgb(227,97,48)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="210.4248046875" y1="97.55000305175781" x2="229.57681274414062" y2="87.53700256347656" stroke="rgb(227,97,48)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="210.4248046875" y1="156.4499969482422" x2="229.57681274414062" y2="166.46299743652344" stroke="rgb(227,97,48)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="290.8800048828125" y="105.1500015258789" width="53.7599983215332" height="43.70000076293945" fill="rgb(227,97,48)" fill-opacity="1"/>
+<text x="180" y="20" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Fishbone / cause &amp; effect</text>
+<text x="317.760009765625" y="130" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Defects</text>
+<text x="72.84960174560547" y="61.099998474121094" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">People</text>
+<text x="72.84960174560547" y="192.89999389648438" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Process</text>
+<text x="136.68959045410156" y="61.099998474121094" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Equipment</text>
+<text x="136.68959045410156" y="192.89999389648438" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Materials</text>
+<text x="200.52960205078125" y="61.099998474121094" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Measurement</text>
+<text x="200.52960205078125" y="192.89999389648438" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Environment</text>
+<text x="108.19519805908203" y="94.35366821289062" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(46,61,82)" fill-opacity="1">Training</text>
+<text x="101.59840393066406" y="74.72032928466797" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(46,61,82)" fill-opacity="1">Staffing</text>
+<text x="108.19519805908203" y="159.64633178710938" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(46,61,82)" fill-opacity="1">Handoffs</text>
+<text x="101.59840393066406" y="179.2796630859375" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(46,61,82)" fill-opacity="1">Queue</text>
+<text x="168.73678588867188" y="84.53700256347656" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(46,61,82)" fill-opacity="1">Wear</text>
+<text x="172.03518676757812" y="159.64633178710938" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(46,61,82)" fill-opacity="1">Supplier</text>
+<text x="165.43838500976562" y="179.2796630859375" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(46,61,82)" fill-opacity="1">Mix</text>
+<text x="232.57681274414062" y="84.53700256347656" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(46,61,82)" fill-opacity="1">Sampling</text>
+<text x="232.57681274414062" y="169.46299743652344" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(46,61,82)" fill-opacity="1">Humidity</text>
+</svg>

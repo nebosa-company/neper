@@ -2847,6 +2847,65 @@ fn render_capability_sixpack_preview(a: *mem.Arena, q: *gpu.Queue, output_target
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_fishbone_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/fishbone.png"
+    let categories = [6]str{ "People", "Process", "Equipment", "Materials", "Measurement", "Environment" }
+    let causes = [9]chart.FishboneCause{
+        chart.FishboneCause { category: 0usize, parent: -1i32, text: "Training" },
+        chart.FishboneCause { category: 0usize, parent: -1i32, text: "Staffing" },
+        chart.FishboneCause { category: 1usize, parent: -1i32, text: "Handoffs" },
+        chart.FishboneCause { category: 1usize, parent: -1i32, text: "Queue" },
+        chart.FishboneCause { category: 2usize, parent: -1i32, text: "Wear" },
+        chart.FishboneCause { category: 3usize, parent: -1i32, text: "Supplier" },
+        chart.FishboneCause { category: 3usize, parent: -1i32, text: "Mix" },
+        chart.FishboneCause { category: 4usize, parent: -1i32, text: "Sampling" },
+        chart.FishboneCause { category: 5usize, parent: -1i32, text: "Humidity" },
+    }
+    var spine: [3]chart.Segment = zero
+    var ribs: [6]chart.Segment = zero
+    var branches: [9]chart.Segment = zero
+    var head_box: [1]geometry.Rect = zero
+    var labels: [16]chart.Label = zero
+    let (map, map_error) = chart.fishbone("Defects", categories[..], causes[..], geometry.rect(12.0, 32.0, 336.0, 190.0), spine[..], ribs[..], branches[..], head_box[..], labels[..])
+    if map_error != ok { ret map_error }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let blue = paint.rgba(0.10, 0.43, 0.77, 1.0)
+    let orange = paint.rgba(0.89, 0.38, 0.19, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let title = [1]chart.Label{ chart.Label { text: "Fishbone / cause & effect", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center } }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 30u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &map.spine, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.ribs, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.causes, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &map.head, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, title[..], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, map.labels[..1usize], font, 8.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, map.labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &map.spine, blue)
+    try chart_svg.append(&writer, &map.ribs, blue)
+    try chart_svg.append(&writer, &map.causes, orange)
+    try chart_svg.append(&writer, &map.head, orange)
+    try chart_svg.append_labels(&writer, title[..], dark, 12.0)
+    try chart_svg.append_labels(&writer, map.labels[..1usize], white, 8.0)
+    try chart_svg.append_labels(&writer, map.labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -6822,6 +6881,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_hazard_rate_preview(a, queue, output_target, canvas, &renderer)
     try render_influence_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
+    try render_fishbone_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

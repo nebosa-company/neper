@@ -3377,6 +3377,11 @@ $gfxChartCapabilitySixpackWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilitySixpackWritten -ne 'executable written') { throw 'gfx_chart_capability_sixpack emission failed' }
 $gfxChartCapabilitySixpackOutput = & $gfxChartCapabilitySixpackPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilitySixpackOutput -ne 'gfx chart capability sixpack ok') { throw "the e.gfx.chart capability sixpack answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFishbonePath = Join-Path $testBuild 'gfx-chart-fishbone-selfhost.exe'
+$gfxChartFishboneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_fishbone\src\main.e') $repo 'x64' 'windows' $gfxChartFishbonePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneWritten -ne 'executable written') { throw 'gfx_chart_fishbone emission failed' }
+$gfxChartFishboneOutput = & $gfxChartFishbonePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneOutput -ne 'gfx chart fishbone ok') { throw "the e.gfx.chart fishbone answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

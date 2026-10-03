@@ -81,6 +81,8 @@ type BranchRoute = struct { from: usize, to: usize, fraction: f64 }
 type BranchWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize, stage: []usize, stage_counts: []usize, stage_used: []usize, flow: []f64, branch_sum: []f64 }
 type BranchSummary = struct { output_fraction: f64, expected_processing_time: f64, stages: usize, sinks: usize }
 type BranchLayout = struct { nodes: Layout, connectors: Layout, summary: BranchSummary }
+type FishboneCause = struct { category: usize, parent: i32, text: str }
+type FishboneLayout = struct { spine: Layout, ribs: Layout, causes: Layout, head: Layout, labels: []Label }
 type StemLeafRow = struct { stem: i64, first: usize, count: usize, baseline: f32 }
 type StemLeafLayout = struct { rows: []StemLeafRow, leaves: []u8, divider: Segment, leaf_start: f32, leaf_step: f32, leaf_unit: f64 }
 type RangeInterval = struct { row: usize, lower: f64, upper: f64 }
@@ -405,6 +407,100 @@ fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, poin
     let series = spec(.PointLine, bounds, x, y)
     let (marks, marks_error) = layout(&series, points, segments, zero)
     ret (marks, marks_error)
+}
+
+// Right-facing Ishikawa diagram. A cause's parent is -1 for a direct category
+// cause, or an earlier cause index in the same category for a deeper subcause.
+// Input order is stable and defines sibling order; output never owns the text.
+fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err) {
+    if categories.len == 0usize || !valid_bounds(bounds) || causes.len > 2147483647usize { ret (zero, Invalid) }
+    if spine.len < 3usize || ribs.len < categories.len || branches.len < causes.len || head_box.len < 1usize || labels.len < 1usize + categories.len || labels.len - 1usize - categories.len < causes.len { ret (zero, TooLarge) }
+    let center_y = bounds.y + bounds.height * 0.5
+    let spine_start = bounds.x + bounds.width * 0.05
+    let spine_end = bounds.x + bounds.width * 0.81
+    let head_left = bounds.x + bounds.width * 0.83
+    let head_width = bounds.width * 0.16
+    let rib_height = bounds.height * 0.31
+    let head_height = bounds.height * 0.23
+    if !finite(center_y) || !finite(spine_start) || !finite(spine_end) || !finite(head_left) || !finite(head_width) || !finite(rib_height) || !finite(head_height) { ret (zero, Invalid) }
+    let effect_label = Label { text: effect, anchor: Coord { x: head_left + head_width * 0.5, y: center_y + 3.0 }, align: .Center }
+    if !valid_label(&effect_label) { ret (zero, Invalid) }
+    labels[0usize] = effect_label
+    var i = 0usize
+    while i < categories.len {
+        let held_label = Label { text: categories[i], anchor: Coord { x: spine_start, y: center_y }, align: .Center }
+        if !valid_label(&held_label) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < causes.len {
+        let cause = causes[i]
+        if cause.category >= categories.len || cause.parent < -1i32 || cause.parent >= i32(i) { ret (zero, Invalid) }
+        if cause.parent >= 0i32 && causes[usize(cause.parent)].category != cause.category { ret (zero, Invalid) }
+        let held_label = Label { text: cause.text, anchor: Coord { x: spine_start, y: center_y }, align: .Left }
+        if !valid_label(&held_label) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let stations = (categories.len + 1usize) / 2usize
+    let station_width = (spine_end - spine_start) / f32(stations + 1usize)
+    spine[0usize] = Segment { from: Coord { x: spine_start, y: center_y }, to: Coord { x: spine_end, y: center_y } }
+    spine[1usize] = Segment { from: Coord { x: spine_end - 9.0, y: center_y - 5.0 }, to: Coord { x: spine_end, y: center_y } }
+    spine[2usize] = Segment { from: Coord { x: spine_end - 9.0, y: center_y + 5.0 }, to: Coord { x: spine_end, y: center_y } }
+    head_box[0usize] = geometry.rect(head_left, center_y - head_height * 0.5, head_width, head_height)
+    i = 0usize
+    while i < categories.len {
+        var side = -1.0f32
+        if i % 2usize == 1usize { side = 1.0 }
+        let root_x = spine_start + station_width * f32(i / 2usize + 1usize)
+        let tip = Coord { x: root_x - station_width * 0.31, y: center_y + side * rib_height }
+        ribs[i] = Segment { from: Coord { x: root_x, y: center_y }, to: tip }
+        labels[1usize + i] = Label { text: categories[i], anchor: Coord { x: tip.x, y: tip.y + side * 7.0 }, align: .Center }
+        i += 1usize
+    }
+    i = 0usize
+    while i < causes.len {
+        let cause = causes[i]
+        var source = ribs[cause.category]
+        var depth = 0usize
+        if cause.parent >= 0i32 {
+            source = branches[usize(cause.parent)]
+            var parent = cause.parent
+            while parent >= 0i32 {
+                depth += 1usize
+                parent = causes[usize(parent)].parent
+            }
+        }
+        var total = 0usize
+        var rank = 0usize
+        var j = 0usize
+        while j < causes.len {
+            if causes[j].category == cause.category && causes[j].parent == cause.parent {
+                if j < i { rank += 1usize }
+                total += 1usize
+            }
+            j += 1usize
+        }
+        let portion = f32(rank + 1usize) / f32(total + 1usize)
+        let anchor = Coord { x: source.from.x + (source.to.x - source.from.x) * portion, y: source.from.y + (source.to.y - source.from.y) * portion }
+        var scale = 1.0f32
+        j = 0usize
+        while j < depth {
+            scale *= 0.5
+            j += 1usize
+        }
+        var side = -1.0f32
+        if cause.category % 2usize == 1usize { side = 1.0 }
+        let tip = Coord { x: anchor.x + station_width * 0.30 * scale, y: anchor.y + side * rib_height * 0.17 * scale }
+        if !finite(tip.x) || !finite(tip.y) { ret (zero, Invalid) }
+        branches[i] = Segment { from: anchor, to: tip }
+        labels[1usize + categories.len + i] = Label { text: cause.text, anchor: Coord { x: tip.x + 3.0, y: tip.y + side * 3.0 }, align: .Left }
+        i += 1usize
+    }
+    let spine_layout = Layout { kind: .Rug, coords: zero, segments: spine[..3usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let rib_layout = Layout { kind: .Rug, coords: zero, segments: ribs[..categories.len], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let cause_layout = Layout { kind: .Rug, coords: zero, segments: branches[..causes.len], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let head_layout = Layout { kind: .Bar, coords: zero, segments: zero, bars: head_box[..1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    ret (FishboneLayout { spine: spine_layout, ribs: rib_layout, causes: cause_layout, head: head_layout, labels: labels[..1usize + categories.len + causes.len] }, ok)
 }
 
 // Six-panel normal capability report for individuals (subgroup size one).

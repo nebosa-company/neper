@@ -34417,3 +34417,17 @@ one, nonnormal fits, automatic assumption-test p-values and probability
 confidence bands remain separate work; this report does not claim them.
 
 Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-sixpack/normal-capability-sixpack/interpret-the-results/all-statistics-and-graphs/graphs/
+
+## D1928 — Keep fishbone categories and nested causes in one ordered input
+
+`chart.fishbone` takes an effect label, category names and cause records whose
+parent is -1 for a direct cause or an earlier cause index in the same category.
+This preordered representation rules out cycles and lets the renderer build
+alternating ribs and nested subcauses without heap ownership or a
+separate graph pass. Segments, head rectangle and text labels are caller-owned,
+so scene and SVG adapters share geometry. A Windows/Linux fixture checks a
+three-level chain, exact anchor placement, escaped labels and refusal paths;
+the gallery adds one PNG/SVG pair. Font-measured collision avoidance, editing
+and cause prioritization remain follow-on work.
+
+References: https://asq.org/quality-resources/fishbone ; https://support.minitab.com/en-us/workspace/help-and-how-to/brainstorming/types-of-brainstorming-tools/fishbone/

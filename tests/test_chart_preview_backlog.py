@@ -73,6 +73,8 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("influence_plot", planned)
         self.assertIn("capability_sixpack", rendered)
         self.assertNotIn("capability_sixpack", planned)
+        self.assertIn("fishbone", rendered)
+        self.assertNotIn("fishbone", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)
