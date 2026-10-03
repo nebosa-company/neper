@@ -2804,6 +2804,16 @@ gfx_chart_cohort_retention_written=$($test_build/neper-self emit-executable "$re
 chmod +x "$test_build/gfx-chart-cohort-retention-selfhost"
 gfx_chart_cohort_retention_output=$("$test_build/gfx-chart-cohort-retention-selfhost")
 [ "$gfx_chart_cohort_retention_output" = 'gfx chart cohort retention ok' ]
+gfx_chart_contour_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_contour/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-contour-selfhost")
+[ "$gfx_chart_contour_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-contour-selfhost"
+gfx_chart_contour_output=$("$test_build/gfx-chart-contour-selfhost")
+[ "$gfx_chart_contour_output" = 'gfx chart contour ok' ]
+gfx_chart_filled_contour_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_filled_contour/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-filled-contour-selfhost")
+[ "$gfx_chart_filled_contour_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-filled-contour-selfhost"
+gfx_chart_filled_contour_output=$("$test_build/gfx-chart-filled-contour-selfhost")
+[ "$gfx_chart_filled_contour_output" = 'gfx chart filled contour ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

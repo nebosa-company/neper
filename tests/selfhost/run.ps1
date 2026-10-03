@@ -3182,6 +3182,16 @@ $gfxChartCohortRetentionWritten = & $compiler emit-executable (Join-Path $PSScri
 if ($LASTEXITCODE -ne 0 -or $gfxChartCohortRetentionWritten -ne 'executable written') { throw 'gfx_chart_cohort_retention emission failed' }
 $gfxChartCohortRetentionOutput = & $gfxChartCohortRetentionPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCohortRetentionOutput -ne 'gfx chart cohort retention ok') { throw "the e.gfx.chart cohort retention answered wrongly: exit $LASTEXITCODE" }
+$gfxChartContourPath = Join-Path $testBuild 'gfx-chart-contour-selfhost.exe'
+$gfxChartContourWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_contour\src\main.e') $repo 'x64' 'windows' $gfxChartContourPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartContourWritten -ne 'executable written') { throw 'gfx_chart_contour emission failed' }
+$gfxChartContourOutput = & $gfxChartContourPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartContourOutput -ne 'gfx chart contour ok') { throw "the e.gfx.chart isolines answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFilledContourPath = Join-Path $testBuild 'gfx-chart-filled-contour-selfhost.exe'
+$gfxChartFilledContourWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_filled_contour\src\main.e') $repo 'x64' 'windows' $gfxChartFilledContourPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFilledContourWritten -ne 'executable written') { throw 'gfx_chart_filled_contour emission failed' }
+$gfxChartFilledContourOutput = & $gfxChartFilledContourPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFilledContourOutput -ne 'gfx chart filled contour ok') { throw "the e.gfx.chart scalar bands answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

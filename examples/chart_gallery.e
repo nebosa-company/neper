@@ -3040,6 +3040,117 @@ fn render_cohort_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_contour_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    var values: [289]f64 = zero
+    var row = 0usize
+    while row < 17usize {
+        var col = 0usize
+        while col < 17usize {
+            let dx = f64(col) - 8.0f64
+            let dy = f64(row) - 8.0f64
+            values[row * 17usize + col] = math.sqrt[f64](dx * dx + dy * dy)
+            col += 1usize
+        }
+        row += 1usize
+    }
+    let levels = [3]f64{ 3.0f64, 5.0f64, 7.0f64 }
+    var segments: [1536]chart.Segment = zero
+    var storage: [3]chart.Layout = zero
+    let plot = geometry.rect(92.0, 42.0, 176.0, 176.0)
+    let (layers, contour_error) = chart.contour(values[..], 17usize, 17usize, levels[..], plot, segments[..], storage[..])
+    if contour_error != ok { ret contour_error }
+    let colors = [3]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.03, 0.57, 0.65, 1.0), paint.rgba(0.78, 0.24, 0.28, 1.0) }
+    let axis = paint.rgba(0.30, 0.36, 0.45, 1.0)
+    let grid = paint.rgba(0.87, 0.90, 0.94, 1.0)
+    let labels = [2]chart.Label{
+        chart.Label { text: "Interpolated contour lines", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "Levels 3, 5, 7", anchor: chart.Coord { x: 180.0, y: 238.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 31u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: paint.rgba(0.97, 0.98, 0.99, 1.0) })
+    try fill(&builder, geometry.rect(179.5, plot.y, 1.0, plot.height), paint.Brush { Solid: grid })
+    try fill(&builder, geometry.rect(plot.x, 129.5, plot.width, 1.0), paint.Brush { Solid: grid })
+    var i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: axis })
+    let path = "docs/chart-previews/contour.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, paint.rgba(0.97, 0.98, 0.99, 1.0), false)
+    try chart_svg.rect(&writer, geometry.rect(179.5, plot.y, 1.0, plot.height), grid, false)
+    try chart_svg.rect(&writer, geometry.rect(plot.x, 129.5, plot.width, 1.0), grid, false)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], axis, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], axis, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    try fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+
+    var fill_points: [16384]chart.Coord = zero
+    var fill_storage: [2048]chart.Layout = zero
+    var band_ids: [2048]usize = zero
+    let (filled, fill_error) = chart.filled_contour(values[..], 17usize, 17usize, levels[..], plot, fill_points[..], fill_storage[..], band_ids[..])
+    if fill_error != ok { ret fill_error }
+    let fills = [4]paint.Color{
+        paint.rgba(0.94, 0.97, 0.99, 1.0), paint.rgba(0.72, 0.88, 0.94, 1.0),
+        paint.rgba(0.37, 0.67, 0.82, 1.0), paint.rgba(0.12, 0.39, 0.65, 1.0),
+    }
+    let outline = paint.rgba(0.18, 0.32, 0.45, 1.0)
+    let fill_labels = [2]chart.Label{
+        chart.Label { text: "Filled contour bands", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "Levels 3, 5, 7", anchor: chart.Coord { x: 180.0, y: 238.0 }, align: .Center },
+    }
+    let (fill_made, fill_builder_error) = scene.builder(a, 2200usize)
+    if fill_builder_error != ok { ret fill_builder_error }
+    var fill_builder = fill_made
+    try fill(&fill_builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_filled_contour(a, &fill_builder, filled, band_ids[..filled.len], fills[..])
+    i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &fill_builder, &layers[i], paint.Brush { Solid: outline })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &fill_builder, fill_labels[..1usize], font, 13.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &fill_builder, fill_labels[1usize..], font, 9.0, paint.Brush { Solid: axis })
+    let fill_path = "docs/chart-previews/filled_contour.png"
+    try render_builder(a, q, output_target, canvas, renderer, &fill_builder, fill_path)
+    let (fill_svg_held, fill_svg_error) = svg_start(a, fill_path)
+    if fill_svg_error != ok { ret fill_svg_error }
+    var fill_svg_state = fill_svg_held
+    var fill_writer = io.writer(mem.cast[*void](&fill_svg_state), io.memory_write)
+    try chart_svg.append_filled_contour(&fill_writer, filled, band_ids[..filled.len], fills[..])
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&fill_writer, &layers[i], outline)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&fill_writer, fill_labels[..1usize], axis, 13.0)
+    try chart_svg.append_labels(&fill_writer, fill_labels[1usize..], axis, 9.0)
+    try chart_svg.finish(&fill_writer)
+    let (fill_svg_path, fill_path_error) = vector_path(a, fill_path)
+    if fill_path_error != ok { ret fill_path_error }
+    ret fs.write_file(a, fill_svg_path, io.memory_bytes(&fill_svg_state))
+}
+
 fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
     if layers.len != 9usize || rects.len != layers.len || names.len != layers.len { ret chart.Invalid }
     let colors = [6]paint.Color{
@@ -3803,6 +3914,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_recurrence_preview(a, queue, output_target, canvas, &renderer)
     try render_drawdown_preview(a, queue, output_target, canvas, &renderer)
     try render_cohort_preview(a, queue, output_target, canvas, &renderer)
+    try render_contour_preview(a, queue, output_target, canvas, &renderer)
     let rose_values = [5]f32{ 10.0, 18.0, 8.0, 5.0, 14.0 }
     let rose_names = [5]str{ "0 deg", "72 deg", "144 deg", "216 deg", "288 deg" }
     var rose_points: [115]chart.Coord = zero

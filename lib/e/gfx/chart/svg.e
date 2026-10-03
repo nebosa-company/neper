@@ -215,6 +215,50 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
     ret ok
 }
 
+// Keep every polygon of one band in one SVG path, matching the scene fill.
+fn append_filled_contour(w: *io.Writer, layers: []const chart.Layout, band_ids: []const usize, colors: []const paint.Color) -> err {
+    if layers.len != band_ids.len || colors.len == 0usize { ret Invalid }
+    var i = 0usize
+    while i < layers.len {
+        if layers[i].kind != .Area || layers[i].coords.len < 4usize || band_ids[i] >= colors.len { ret Invalid }
+        i += 1usize
+    }
+    var color_index = 0usize
+    while color_index < colors.len {
+        if !paint.color_ok(colors[color_index]) { ret Invalid }
+        var started = false
+        i = 0usize
+        while i < layers.len {
+            if band_ids[i] == color_index {
+                if !started {
+                    try io.write_all(w, "<path d=\"")
+                    started = true
+                } else {
+                    try io.write_all(w, " ")
+                }
+                try io.write_all(w, "M")
+                var j = 0usize
+                while j < layers[i].coords.len {
+                    if j > 0usize { try io.write_all(w, " L") }
+                    try number(w, layers[i].coords[j].x)
+                    try io.write_all(w, " ")
+                    try number(w, layers[i].coords[j].y)
+                    j += 1usize
+                }
+                try io.write_all(w, " Z")
+            }
+            i += 1usize
+        }
+        if started {
+            try io.write_all(w, "\"")
+            try color(w, colors[color_index], false)
+            try io.write_all(w, "/>\n")
+        }
+        color_index += 1usize
+    }
+    ret ok
+}
+
 fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err {
     if marks.kind != .Heatmap && marks.kind != .Correlation && marks.kind != .Mosaic && marks.kind != .Association { ret Invalid }
     if marks.columns == 0usize || marks.rows == 0usize || (marks.cells.len == 0usize && marks.kind != .Association) { ret Invalid }

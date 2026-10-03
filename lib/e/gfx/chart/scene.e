@@ -187,6 +187,53 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
     ret ok
 }
 
+// Fill each scalar band as one path so shared triangle edges do not leave
+// antialiasing seams between polygons of the same colour.
+fn append_filled_contour(a: *mem.Arena, builder: *scene.Builder, layers: []const chart.Layout, band_ids: []const usize, colors: []const paint.Color) -> err {
+    if layers.len != band_ids.len || colors.len == 0usize { ret chart.Invalid }
+    var i = 0usize
+    while i < layers.len {
+        if layers[i].kind != .Area || layers[i].coords.len < 4usize || band_ids[i] >= colors.len { ret chart.Invalid }
+        i += 1usize
+    }
+    var color_index = 0usize
+    while color_index < colors.len {
+        if !paint.color_ok(colors[color_index]) { ret chart.Invalid }
+        var vertices = 0usize
+        var verbs = 0usize
+        i = 0usize
+        while i < layers.len {
+            if band_ids[i] == color_index {
+                vertices += layers[i].coords.len
+                verbs += layers[i].coords.len + 1usize
+            }
+            i += 1usize
+        }
+        if vertices > 0usize {
+            let (made, path_error) = geometry.path_builder(a, verbs, vertices)
+            if path_error != ok { ret path_error }
+            var path = made
+            i = 0usize
+            while i < layers.len {
+                if band_ids[i] == color_index {
+                    let coords = layers[i].coords
+                    try geometry.move_to(&path, geometry.Point { x: coords[0usize].x, y: coords[0usize].y })
+                    var j = 1usize
+                    while j < coords.len {
+                        try geometry.line_to(&path, geometry.Point { x: coords[j].x, y: coords[j].y })
+                        j += 1usize
+                    }
+                    try geometry.close_path(&path)
+                }
+                i += 1usize
+            }
+            try scene.push(builder, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&path), brush: paint.Brush { Solid: colors[color_index] } } })
+        }
+        color_index += 1usize
+    }
+    ret ok
+}
+
 // Matrix palettes are supplied by the caller. Correlation uses a neutral
 // midpoint at zero; ordinary heatmaps interpolate directly from low to high.
 fn append_matrix(builder: *scene.Builder, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err {

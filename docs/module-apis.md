@@ -15987,6 +15987,8 @@ fn pp_normal(sorted: []const f64, mean: f64, deviation: f64, bounds: geometry.Re
 fn violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err)
 fn heatmap(values: []const f64, columns: usize, bounds: geometry.Rect, cells: []Cell) -> (MatrixLayout, err)
 fn cohort_retention(counts: []const f64, periods: usize, bounds: geometry.Rect, gap: f32, cells: []Cell) -> (MatrixLayout, err)
+fn contour(values: []const f64, columns: usize, rows: usize, levels: []const f64, bounds: geometry.Rect, segments: []Segment, layers: []Layout) -> ([]Layout, err)
+fn filled_contour(values: []const f64, columns: usize, rows: usize, levels: []const f64, bounds: geometry.Rect, points: []Coord, layers: []Layout, band_ids: []usize) -> ([]Layout, err)
 fn correlation_matrix(observations: []const f64, columns: usize, bounds: geometry.Rect, x: []f64, y: []f64, cells: []Cell) -> (MatrixLayout, err)
 fn parallel_coordinates(observations: []const f64, columns: usize, bounds: geometry.Rect, minimums: []f64, maximums: []f64, lines: []Segment, axes: []Segment) -> (Layout, Layout, err)
 fn scatterplot_matrix(observations: []const f64, columns: usize, bounds: geometry.Rect, gap: f32, minimums: []f64, maximums: []f64, panels: []geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
@@ -15997,6 +15999,7 @@ fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, pan
 
 ```neper
 fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, brush: paint.Brush) -> err
+fn append_filled_contour(a: *mem.Arena, builder: *scene.Builder, layers: []const chart.Layout, band_ids: []const usize, colors: []const paint.Color) -> err
 fn append_matrix(builder: *scene.Builder, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
 fn append_guides(builder: *scene.Builder, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Brush, axis: paint.Brush) -> err
 fn append_labels(a: *mem.Arena, builder: *scene.Builder, labels: []const chart.Label, font: shape.Font, size: f32, brush: paint.Brush) -> err
@@ -16008,6 +16011,7 @@ fn append_labels(a: *mem.Arena, builder: *scene.Builder, labels: []const chart.L
 error Invalid
 fn begin(w: *io.Writer, width: f32, height: f32, title: str, description: str) -> err
 fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err
+fn append_filled_contour(w: *io.Writer, layers: []const chart.Layout, band_ids: []const usize, colors: []const paint.Color) -> err
 fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
 fn append_guides(w: *io.Writer, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Color, axis: paint.Color) -> err
 fn append_labels(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32) -> err

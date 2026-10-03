@@ -33981,3 +33981,17 @@ geometry and reuse scene/SVG adapters. Focused fixtures check values, shape and
 capacity refusals, and adapters on Windows and Linux; the gallery adds two
 PNG/SVG previews. Returns/volatility, cohort date labels and automated colour
 legends remain separate work.
+
+## D1887 — Contour levels become isolines and clipped scalar bands
+
+`contour` uses marching squares on a row-major finite scalar grid, linearly
+interpolating sorted levels at cell edges. Diagonal saddles use the centre
+sample to select connectivity. `filled_contour` clips the two piecewise-linear
+triangles in each cell against the same levels into caller-owned Area polygons
+and band IDs. Independent polygons are deliberate geometry; the scene and SVG
+adapters group every band into a single path so antialiased shared triangle
+edges do not produce seams. Focused fixtures check coordinates, saddle cases,
+band area conservation, refusals and both adapters on Windows and Linux; the
+gallery adds two PNG/SVG pairs. Missing masks, irregular grids, region merging
+and contour labels remain planned. References: scikit-image `find_contours`
+and Matplotlib `contourf` documentation.

@@ -23,6 +23,7 @@ type Label = struct { text: str, anchor: Coord, align: LabelAlign }
 type LegendItem = struct { swatch: geometry.Rect, label: Label }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
+type ContourVertex = struct { point: Coord, value: f64 }
 type SunburstArc = struct { start: f64, end: f64, next: f64 }
 type SankeyNode = struct { incoming: f64, outgoing: f64, in_used: f64, out_used: f64 }
 type TargetStatus = struct { delta: f32, achieved: bool }
@@ -4377,6 +4378,247 @@ fn cohort_retention(counts: []const f64, periods: usize, bounds: geometry.Rect, 
         row += 1usize
     }
     ret (MatrixLayout { kind: .Heatmap, cells: cells[..used], columns: periods, rows: periods, value_min: 0.0, value_max: 1.0 }, ok)
+}
+
+fn contour_cross(from: Coord, to: Coord, first: f64, last: f64, level: f64) -> (Coord, err) {
+    let t = (level - first) / (last - first)
+    if !finite64(t) || t < 0.0f64 || t > 1.0f64 { ret (zero, Invalid) }
+    let point = Coord { x: from.x + f32(t) * (to.x - from.x), y: from.y + f32(t) * (to.y - from.y) }
+    if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+    ret (point, ok)
+}
+
+// Marching squares emits independent line segments for each increasing level.
+// Diagonal saddles use the cell-centre value to choose the connected side.
+// ponytail: O(levels*cells) independent segments; stitch paths if labels need continuity.
+fn contour(values: []const f64, columns: usize, rows: usize, levels: []const f64, bounds: geometry.Rect, segments: []Segment, layers: []Layout) -> ([]Layout, err) {
+    if values.len == 0usize || levels.len == 0usize { ret (zero, Empty) }
+    if columns < 2usize || rows < 2usize || columns > values.len || values.len % columns != 0usize || values.len / columns != rows || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if layers.len < levels.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < values.len {
+        if !finite64(values[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < levels.len {
+        if !finite64(levels[i]) || (i > 0usize && levels[i] <= levels[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var used = 0usize
+    var l = 0usize
+    while l < levels.len {
+        let start = used
+        let level = levels[l]
+        var row = 0usize
+        while row + 1usize < rows {
+            let y0 = bounds.y + bounds.height * f32(row) / f32(rows - 1usize)
+            let y1 = bounds.y + bounds.height * f32(row + 1usize) / f32(rows - 1usize)
+            var col = 0usize
+            while col + 1usize < columns {
+                let x0 = bounds.x + bounds.width * f32(col) / f32(columns - 1usize)
+                let x1 = bounds.x + bounds.width * f32(col + 1usize) / f32(columns - 1usize)
+                let top_left = values[row * columns + col]
+                let top_right = values[row * columns + col + 1usize]
+                let bottom_right = values[(row + 1usize) * columns + col + 1usize]
+                let bottom_left = values[(row + 1usize) * columns + col]
+                let high0 = top_left >= level
+                let high1 = top_right >= level
+                let high2 = bottom_right >= level
+                let high3 = bottom_left >= level
+                var edges: [4]Coord = zero
+                var hits: [4]bool = zero
+                var count = 0usize
+                if high0 != high1 {
+                    let (p, crossing_error) = contour_cross(Coord { x: x0, y: y0 }, Coord { x: x1, y: y0 }, top_left, top_right, level)
+                    if crossing_error != ok { ret (zero, crossing_error) }
+                    edges[0usize] = p
+                    hits[0usize] = true
+                    count += 1usize
+                }
+                if high1 != high2 {
+                    let (p, crossing_error) = contour_cross(Coord { x: x1, y: y0 }, Coord { x: x1, y: y1 }, top_right, bottom_right, level)
+                    if crossing_error != ok { ret (zero, crossing_error) }
+                    edges[1usize] = p
+                    hits[1usize] = true
+                    count += 1usize
+                }
+                if high2 != high3 {
+                    let (p, crossing_error) = contour_cross(Coord { x: x1, y: y1 }, Coord { x: x0, y: y1 }, bottom_right, bottom_left, level)
+                    if crossing_error != ok { ret (zero, crossing_error) }
+                    edges[2usize] = p
+                    hits[2usize] = true
+                    count += 1usize
+                }
+                if high3 != high0 {
+                    let (p, crossing_error) = contour_cross(Coord { x: x0, y: y1 }, Coord { x: x0, y: y0 }, bottom_left, top_left, level)
+                    if crossing_error != ok { ret (zero, crossing_error) }
+                    edges[3usize] = p
+                    hits[3usize] = true
+                    count += 1usize
+                }
+                if count == 2usize {
+                    var first: Coord = zero
+                    var last: Coord = zero
+                    var found = 0usize
+                    var edge = 0usize
+                    while edge < 4usize {
+                        if hits[edge] {
+                            if found == 0usize { first = edges[edge] } else { last = edges[edge] }
+                            found += 1usize
+                        }
+                        edge += 1usize
+                    }
+                    if first.x != last.x || first.y != last.y {
+                        if used == segments.len { ret (zero, TooLarge) }
+                        segments[used] = Segment { from: first, to: last }
+                        used += 1usize
+                    }
+                } else if count == 4usize {
+                    let center = top_left * 0.25f64 + top_right * 0.25f64 + bottom_right * 0.25f64 + bottom_left * 0.25f64
+                    if !finite64(center) { ret (zero, Invalid) }
+                    let a = 0usize
+                    var b = 1usize
+                    var c = 2usize
+                    var d = 3usize
+                    if (center >= level) != high0 {
+                        b = 3usize
+                        c = 1usize
+                        d = 2usize
+                    }
+                    if segments.len - used < 2usize { ret (zero, TooLarge) }
+                    segments[used] = Segment { from: edges[a], to: edges[b] }
+                    segments[used + 1usize] = Segment { from: edges[c], to: edges[d] }
+                    used += 2usize
+                }
+                col += 1usize
+            }
+            row += 1usize
+        }
+        layers[l] = Layout { kind: .Rug, coords: zero, segments: segments[start..used], bars: zero, x_min: 0.0, x_max: f32(columns - 1usize), y_min: 0.0, y_max: f32(rows - 1usize) }
+        l += 1usize
+    }
+    ret (layers[..levels.len], ok)
+}
+
+fn contour_clip(vertices: []const ContourVertex, cutoff: f64, above: bool, out: []ContourVertex) -> (usize, err) {
+    if vertices.len == 0usize { ret (0usize, ok) }
+    var prior = vertices[vertices.len - 1usize]
+    var prior_inside = prior.value >= cutoff
+    if !above { prior_inside = prior.value <= cutoff }
+    var used = 0usize
+    var i = 0usize
+    while i < vertices.len {
+        let current = vertices[i]
+        var inside = current.value >= cutoff
+        if !above { inside = current.value <= cutoff }
+        if inside != prior_inside {
+            if used == out.len { ret (0usize, TooLarge) }
+            let (point, crossing_error) = contour_cross(prior.point, current.point, prior.value, current.value, cutoff)
+            if crossing_error != ok { ret (0usize, crossing_error) }
+            out[used] = ContourVertex { point: point, value: cutoff }
+            used += 1usize
+        }
+        if inside {
+            if used == out.len { ret (0usize, TooLarge) }
+            out[used] = current
+            used += 1usize
+        }
+        prior = current
+        prior_inside = inside
+        i += 1usize
+    }
+    ret (used, ok)
+}
+
+// Split each grid cell into two piecewise-linear triangles, then clip each
+// triangle to successive scalar bands and emit caller-owned Area polygons.
+// ponytail: independent triangles grow with cells*bands; merge regions if size matters.
+fn filled_contour(values: []const f64, columns: usize, rows: usize, levels: []const f64, bounds: geometry.Rect, points: []Coord, layers: []Layout, band_ids: []usize) -> ([]Layout, err) {
+    if values.len == 0usize || levels.len == 0usize { ret (zero, Empty) }
+    if columns < 2usize || rows < 2usize || columns > values.len || values.len % columns != 0usize || values.len / columns != rows || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    var lo = values[0usize]
+    var hi = lo
+    var i = 0usize
+    while i < values.len {
+        if !finite64(values[i]) { ret (zero, Invalid) }
+        if values[i] < lo { lo = values[i] }
+        if values[i] > hi { hi = values[i] }
+        i += 1usize
+    }
+    if lo == hi { ret (zero, Invalid) }
+    i = 0usize
+    while i < levels.len {
+        if !finite64(levels[i]) || levels[i] <= lo || levels[i] >= hi || (i > 0usize && levels[i] <= levels[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var used_points = 0usize
+    var used_layers = 0usize
+    var row = 0usize
+    while row + 1usize < rows {
+        let y0 = bounds.y + bounds.height * f32(row) / f32(rows - 1usize)
+        let y1 = bounds.y + bounds.height * f32(row + 1usize) / f32(rows - 1usize)
+        var col = 0usize
+        while col + 1usize < columns {
+            let x0 = bounds.x + bounds.width * f32(col) / f32(columns - 1usize)
+            let x1 = bounds.x + bounds.width * f32(col + 1usize) / f32(columns - 1usize)
+            let tl = ContourVertex { point: Coord { x: x0, y: y0 }, value: values[row * columns + col] }
+            let tr = ContourVertex { point: Coord { x: x1, y: y0 }, value: values[row * columns + col + 1usize] }
+            let br = ContourVertex { point: Coord { x: x1, y: y1 }, value: values[(row + 1usize) * columns + col + 1usize] }
+            let bl = ContourVertex { point: Coord { x: x0, y: y1 }, value: values[(row + 1usize) * columns + col] }
+            var triangle = [3]ContourVertex{ tl, tr, br }
+            var part = 0usize
+            while part < 2usize {
+                if part == 1usize {
+                    triangle[1usize] = br
+                    triangle[2usize] = bl
+                }
+                var band_index = 0usize
+                while band_index <= levels.len {
+                    var lower = lo
+                    if band_index > 0usize { lower = levels[band_index - 1usize] }
+                    var upper = hi
+                    if band_index < levels.len { upper = levels[band_index] }
+                    var first: [8]ContourVertex = zero
+                    var second: [8]ContourVertex = zero
+                    let (lower_count, lower_error) = contour_clip(triangle[..], lower, true, first[..])
+                    if lower_error != ok { ret (zero, lower_error) }
+                    let (count, upper_error) = contour_clip(first[..lower_count], upper, false, second[..])
+                    if upper_error != ok { ret (zero, upper_error) }
+                    if count >= 3usize {
+                        var twice_area = 0.0f64
+                        i = 0usize
+                        while i < count {
+                            let next = (i + 1usize) % count
+                            twice_area += f64(second[i].point.x) * f64(second[next].point.y) - f64(second[next].point.x) * f64(second[i].point.y)
+                            i += 1usize
+                        }
+                        if twice_area < 0.0f64 { twice_area = 0.0f64 - twice_area }
+                        if twice_area > 0.000001f64 {
+                            if used_layers == layers.len || used_layers == band_ids.len || points.len - used_points < count + 1usize { ret (zero, TooLarge) }
+                            let start = used_points
+                            i = 0usize
+                            while i < count {
+                                points[used_points] = second[i].point
+                                used_points += 1usize
+                                i += 1usize
+                            }
+                            points[used_points] = second[0usize].point
+                            used_points += 1usize
+                            layers[used_layers] = Layout { kind: .Area, coords: points[start..used_points], segments: zero, bars: zero, x_min: 0.0, x_max: f32(columns - 1usize), y_min: 0.0, y_max: f32(rows - 1usize) }
+                            band_ids[used_layers] = band_index
+                            used_layers += 1usize
+                        }
+                    }
+                    band_index += 1usize
+                }
+                part += 1usize
+            }
+            col += 1usize
+        }
+        row += 1usize
+    }
+    ret (layers[..used_layers], ok)
 }
 
 // Monday is row zero. Missing offsets emit no tile, preserving a visible gap.
