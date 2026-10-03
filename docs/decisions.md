@@ -33422,3 +33422,14 @@ flow. Input order fixes both node and ribbon stacking, so crossings may remain
 until a separate identity-preserving ordering pass is justified.
 `gfx_chart_sankey` checks reference geometry, three-column flow, refusal paths
 and both adapters on Windows and Linux; the gallery adds one PNG/SVG pair.
+
+## D1837 — Conserve alluvial flow on adjacent stages
+
+`chart.alluvial` reuses Sankey's caller-owned ribbon and node layout, but
+rejects links that skip a stage and interior strata whose incoming and
+outgoing weights differ beyond relative numeric tolerance. This keeps the
+same Area/Bar scene and SVG adapters; callers assign consistent cohort
+colours to links across stages. Ordering remains input-driven, so automatic
+crossing reduction and identity tracking remain separate future work.
+`gfx_chart_alluvial` checks four-stage geometry, conservation/refusal paths
+and both adapters; the gallery adds one PNG/SVG pair.

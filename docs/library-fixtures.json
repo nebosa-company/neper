@@ -848,6 +848,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_circle_pack",
@@ -973,6 +974,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_circle_pack",
@@ -1008,6 +1010,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_circle_pack",
@@ -1039,6 +1042,7 @@
    "delivered": 7,
    "pending": [],
    "fixtures": [
+    "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_circle_pack",
     "gfx_chart_composition",
@@ -1131,6 +1135,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_circle_pack",
@@ -1232,6 +1237,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_cartesian",
     "gfx_chart_circle_pack",

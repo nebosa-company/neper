@@ -742,29 +742,19 @@ fn render_radial_hierarchy(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
-fn render_sankey(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
-    if layers.len != 14usize || rects.len != 6usize || names.len != rects.len { ret chart.Invalid }
-    let link_colors = [8]paint.Color{
-        paint.rgba(0.17, 0.44, 0.77, 0.50), paint.rgba(0.17, 0.44, 0.77, 0.50),
-        paint.rgba(0.84, 0.40, 0.14, 0.50), paint.rgba(0.84, 0.40, 0.14, 0.50),
-        paint.rgba(0.10, 0.54, 0.53, 0.50), paint.rgba(0.10, 0.54, 0.53, 0.50),
-        paint.rgba(0.39, 0.36, 0.70, 0.50), paint.rgba(0.39, 0.36, 0.70, 0.50),
-    }
-    let node_colors = [6]paint.Color{
-        paint.rgba(0.08, 0.31, 0.62, 1.0), paint.rgba(0.69, 0.31, 0.09, 1.0),
-        paint.rgba(0.07, 0.45, 0.44, 1.0), paint.rgba(0.34, 0.30, 0.62, 1.0),
-        paint.rgba(0.10, 0.50, 0.29, 1.0), paint.rgba(0.65, 0.21, 0.27, 1.0),
-    }
+fn render_sankey(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, colors: []const paint.Color, title: str, path: str) -> err {
+    if layers.len <= rects.len || rects.len > 8usize || names.len != rects.len || colors.len != layers.len { ret chart.Invalid }
+    let link_count = layers.len - rects.len
     let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
     let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
-    var labels: [7]chart.Label = zero
+    var labels: [9]chart.Label = zero
     var i = 0usize
     while i < rects.len {
         let r = rects[i]
         labels[i] = chart.Label { text: names[i], anchor: chart.Coord { x: r.x + r.width * 0.5, y: r.y + r.height * 0.5 + 3.0 }, align: .Center }
         i += 1usize
     }
-    labels[6usize] = chart.Label { text: "Journey flows", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[rects.len] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
     if font_error != ok { ret font_error }
     let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
@@ -774,34 +764,34 @@ fn render_sankey(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     var builder = made
     try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
     i = 0usize
-    while i < 8usize {
-        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: link_colors[i] })
+    while i < link_count {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
         i += 1usize
     }
     i = 0usize
     while i < rects.len {
-        try chart_scene.append(a, &builder, &layers[8usize + i], paint.Brush { Solid: node_colors[i] })
+        try chart_scene.append(a, &builder, &layers[link_count + i], paint.Brush { Solid: colors[link_count + i] })
         i += 1usize
     }
-    try chart_scene.append_labels(a, &builder, labels[..6usize], font, 9.0, paint.Brush { Solid: white })
-    try chart_scene.append_labels(a, &builder, labels[6usize..], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[..rects.len], font, 9.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[rects.len..rects.len + 1usize], font, 13.0, paint.Brush { Solid: dark })
     try render_builder(a, q, output_target, canvas, renderer, &builder, path)
     let (svg_held, svg_error) = svg_start(a, path)
     if svg_error != ok { ret svg_error }
     var svg_state = svg_held
     var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
     i = 0usize
-    while i < 8usize {
-        try chart_svg.append(&writer, &layers[i], link_colors[i])
+    while i < link_count {
+        try chart_svg.append(&writer, &layers[i], colors[i])
         i += 1usize
     }
     i = 0usize
     while i < rects.len {
-        try chart_svg.append(&writer, &layers[8usize + i], node_colors[i])
+        try chart_svg.append(&writer, &layers[link_count + i], colors[link_count + i])
         i += 1usize
     }
-    try chart_svg.append_labels(&writer, labels[..6usize], white, 9.0)
-    try chart_svg.append_labels(&writer, labels[6usize..], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[..rects.len], white, 9.0)
+    try chart_svg.append_labels(&writer, labels[rects.len..rects.len + 1usize], dark, 13.0)
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
@@ -1128,13 +1118,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let flow_targets = [8]usize{ 2usize, 3usize, 2usize, 3usize, 4usize, 5usize, 4usize, 5usize }
     let flow_values = [8]f32{ 35.0, 25.0, 15.0, 25.0, 30.0, 20.0, 15.0, 35.0 }
     let flow_names = [6]str{ "Search", "Referral", "Trial", "Direct", "Won", "Lost" }
+    let flow_colors = [14]paint.Color{
+        paint.rgba(0.17, 0.44, 0.77, 0.50), paint.rgba(0.17, 0.44, 0.77, 0.50),
+        paint.rgba(0.84, 0.40, 0.14, 0.50), paint.rgba(0.84, 0.40, 0.14, 0.50),
+        paint.rgba(0.10, 0.54, 0.53, 0.50), paint.rgba(0.10, 0.54, 0.53, 0.50),
+        paint.rgba(0.39, 0.36, 0.70, 0.50), paint.rgba(0.39, 0.36, 0.70, 0.50),
+        paint.rgba(0.08, 0.31, 0.62, 1.0), paint.rgba(0.69, 0.31, 0.09, 1.0),
+        paint.rgba(0.07, 0.45, 0.44, 1.0), paint.rgba(0.34, 0.30, 0.62, 1.0),
+        paint.rgba(0.10, 0.50, 0.29, 1.0), paint.rgba(0.65, 0.21, 0.27, 1.0),
+    }
     var flow_nodes: [6]chart.SankeyNode = zero
     var flow_rects: [6]geometry.Rect = zero
     var flow_points: [144]chart.Coord = zero
     var flow_storage: [14]chart.Layout = zero
     let (flow_layers, flow_error) = chart.sankey(flow_columns[..], 3usize, flow_sources[..], flow_targets[..], flow_values[..], geometry.rect(20.0, 42.0, 320.0, 176.0), 56.0, 14.0, 8usize, flow_nodes[..], flow_rects[..], flow_points[..], flow_storage[..])
     if flow_error != ok { ret flow_error }
-    try render_sankey(a, queue, output_target, canvas, &renderer, flow_layers, flow_rects[..], flow_names[..], "docs/chart-previews/sankey.png")
+    try render_sankey(a, queue, output_target, canvas, &renderer, flow_layers, flow_rects[..], flow_names[..], flow_colors[..], "Journey flows", "docs/chart-previews/sankey.png")
+    let alluvial_columns = [8]usize{ 0usize, 0usize, 1usize, 1usize, 2usize, 2usize, 3usize, 3usize }
+    let alluvial_sources = [12]usize{ 0usize, 0usize, 1usize, 1usize, 2usize, 2usize, 3usize, 3usize, 4usize, 4usize, 5usize, 5usize }
+    let alluvial_targets = [12]usize{ 2usize, 3usize, 2usize, 3usize, 4usize, 5usize, 5usize, 4usize, 6usize, 7usize, 6usize, 7usize }
+    let alluvial_values = [12]f32{ 35.0, 25.0, 15.0, 25.0, 35.0, 15.0, 25.0, 25.0, 35.0, 25.0, 15.0, 25.0 }
+    let alluvial_names = [8]str{ "North", "South", "Web", "Store", "Trial", "Paid", "Stay", "Leave" }
+    let alluvial_colors = [20]paint.Color{
+        paint.rgba(0.12, 0.40, 0.76, 0.52), paint.rgba(0.86, 0.36, 0.16, 0.52), paint.rgba(0.13, 0.58, 0.48, 0.52), paint.rgba(0.52, 0.35, 0.72, 0.52),
+        paint.rgba(0.12, 0.40, 0.76, 0.52), paint.rgba(0.13, 0.58, 0.48, 0.52), paint.rgba(0.86, 0.36, 0.16, 0.52), paint.rgba(0.52, 0.35, 0.72, 0.52),
+        paint.rgba(0.12, 0.40, 0.76, 0.52), paint.rgba(0.52, 0.35, 0.72, 0.52), paint.rgba(0.13, 0.58, 0.48, 0.52), paint.rgba(0.86, 0.36, 0.16, 0.52),
+        paint.rgba(0.08, 0.31, 0.62, 1.0), paint.rgba(0.69, 0.31, 0.09, 1.0), paint.rgba(0.07, 0.45, 0.44, 1.0), paint.rgba(0.34, 0.30, 0.62, 1.0),
+        paint.rgba(0.10, 0.50, 0.29, 1.0), paint.rgba(0.65, 0.21, 0.27, 1.0), paint.rgba(0.08, 0.31, 0.62, 1.0), paint.rgba(0.69, 0.31, 0.09, 1.0),
+    }
+    var alluvial_nodes: [8]chart.SankeyNode = zero
+    var alluvial_rects: [8]geometry.Rect = zero
+    var alluvial_points: [216]chart.Coord = zero
+    var alluvial_storage: [20]chart.Layout = zero
+    let (alluvial_layers, alluvial_error) = chart.alluvial(alluvial_columns[..], 4usize, alluvial_sources[..], alluvial_targets[..], alluvial_values[..], geometry.rect(14.0, 42.0, 332.0, 176.0), 40.0, 14.0, 8usize, alluvial_nodes[..], alluvial_rects[..], alluvial_points[..], alluvial_storage[..])
+    if alluvial_error != ok { ret alluvial_error }
+    try render_sankey(a, queue, output_target, canvas, &renderer, alluvial_layers, alluvial_rects[..], alluvial_names[..], alluvial_colors[..], "Cohorts across stages", "docs/chart-previews/alluvial.png")
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

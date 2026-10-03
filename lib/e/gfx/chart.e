@@ -1411,6 +1411,35 @@ fn sankey(node_columns: []const usize, columns: usize, sources: []const usize, t
     ret (layers[..sources.len + node_columns.len], ok)
 }
 
+// An alluvial diagram conserves each interior stratum across adjacent stages.
+// Each input link remains a separate caller-colourable ribbon.
+// ponytail: keep caller order; add crossing reduction only when real charts need it.
+fn alluvial(node_columns: []const usize, columns: usize, sources: []const usize, targets: []const usize, values: []const f32, bounds: geometry.Rect, node_width: f32, node_gap: f32, steps: usize, nodes: []SankeyNode, rects: []geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if node_columns.len == 0usize || sources.len == 0usize { ret (zero, Empty) }
+    if columns < 2usize || sources.len != targets.len || sources.len != values.len { ret (zero, Invalid) }
+    var i = 0usize
+    while i < sources.len {
+        let from = sources[i]
+        let to = targets[i]
+        if from >= node_columns.len || to >= node_columns.len || node_columns[from] >= columns || node_columns[to] >= columns || node_columns[from] + 1usize != node_columns[to] { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let (marks, layout_error) = sankey(node_columns, columns, sources, targets, values, bounds, node_width, node_gap, steps, nodes, rects, points, layers)
+    if layout_error != ok { ret (zero, layout_error) }
+    i = 0usize
+    while i < node_columns.len {
+        if node_columns[i] > 0usize && node_columns[i] + 1usize < columns {
+            var difference = nodes[i].incoming - nodes[i].outgoing
+            if difference < 0.0f64 { difference = 0.0f64 - difference }
+            var size = nodes[i].incoming
+            if nodes[i].outgoing > size { size = nodes[i].outgoing }
+            if difference > size * 0.000001f64 { ret (zero, Invalid) }
+        }
+        i += 1usize
+    }
+    ret (marks, ok)
+}
+
 // Root occupies the innermost ring, each generation the next. A leaf extends
 // through any remaining rings; zero-total nodes return empty Bar layers.
 fn sunburst(parents: []const usize, weights: []const f32, bounds: geometry.Rect, hole: f32, totals: []f64, depths: []usize, arcs: []SunburstArc, points: []Coord, layers: []Layout) -> ([]Layout, err) {
