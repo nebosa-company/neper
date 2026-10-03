@@ -2279,6 +2279,94 @@ fn render_density2d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_one_sided_distribution_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, rain: bool) -> err {
+    var path: str = "docs/chart-previews/half_violin.png"
+    var title: str = "Half violin / single-sided KDE"
+    var footer: str = "Density on one side of the value axis"
+    var font_id = 21u32
+    if rain {
+        path = "docs/chart-previews/raincloud.png"
+        title = "Raincloud / density + box + observations"
+        footer = "KDE, Tukey quartiles and every observation"
+        font_id = 22u32
+    }
+    let plot = geometry.rect(54.0, 46.0, 252.0, 160.0)
+    let sample = [24]f64{ 1.2f64, 1.8f64, 2.2f64, 2.4f64, 2.7f64, 2.9f64, 3.0f64, 3.2f64, 3.4f64, 3.6f64, 3.9f64, 4.0f64, 4.1f64, 4.2f64, 4.4f64, 4.6f64, 5.0f64, 5.4f64, 5.8f64, 6.2f64, 6.8f64, 7.2f64, 8.0f64, 9.0f64 }
+    var grid: [64]f64 = zero
+    var estimates: [64]f64 = zero
+    var outline: [66]chart.Coord = zero
+    var drops_storage: [24]chart.Coord = zero
+    var whiskers: [5]chart.Segment = zero
+    var boxes: [1]geometry.Rect = zero
+    var cloud: chart.Layout = zero
+    var drops: chart.Layout = zero
+    var summary: chart.Layout = zero
+    if rain {
+        let (map, map_error) = chart.raincloud(sample[..], plot, 0.65f64, grid[..], estimates[..], outline[..], drops_storage[..], whiskers[..], boxes[..])
+        if map_error != ok || map.drops.coords.len != sample.len || map.summary.segments.len != 5usize { ret chart.Invalid }
+        cloud = map.cloud
+        drops = map.drops
+        summary = map.summary
+    } else {
+        let (half, half_error) = chart.half_violin(sample[..], plot, 0.65f64, false, grid[..], estimates[..], outline[..])
+        if half_error != ok || half.coords.len != 66usize { ret chart.Invalid }
+        cloud = half
+    }
+    let pale = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.39, 0.68, 0.90, 0.90)
+    let deep = paint.rgba(0.08, 0.33, 0.67, 1.0)
+    let orange = paint.rgba(0.90, 0.36, 0.18, 1.0)
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let axis = geometry.rect(plot.x + plot.width * 0.5 - 0.5, plot.y, 1.0, plot.height)
+    let lo = grid[0usize]
+    let hi = grid[grid.len - 1usize]
+    let labels = [5]chart.Label{
+        chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center },
+        chart.Label { text: "0", anchor: chart.Coord { x: 45.0, y: plot.y + plot.height * f32(1.0f64 - (0.0f64 - lo) / (hi - lo)) + 3.0 }, align: .Right },
+        chart.Label { text: "5", anchor: chart.Coord { x: 45.0, y: plot.y + plot.height * f32(1.0f64 - (5.0f64 - lo) / (hi - lo)) + 3.0 }, align: .Right },
+        chart.Label { text: "10", anchor: chart.Coord { x: 45.0, y: plot.y + plot.height * f32(1.0f64 - (10.0f64 - lo) / (hi - lo)) + 3.0 }, align: .Right },
+        chart.Label { text: footer, anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: font_id, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &cloud, paint.Brush { Solid: blue })
+    try fill(&builder, axis, paint.Brush { Solid: deep })
+    if rain {
+        try chart_scene.append(a, &builder, &summary, paint.Brush { Solid: deep })
+        try chart_scene.append(a, &builder, &drops, paint.Brush { Solid: orange })
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..4usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[4usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &cloud, blue)
+    try chart_svg.rect(&writer, axis, deep, false)
+    if rain {
+        try chart_svg.append(&writer, &summary, deep)
+        try chart_svg.append(&writer, &drops, orange)
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..4usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[4usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -6245,6 +6333,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)
+    try render_one_sided_distribution_preview(a, queue, output_target, canvas, &renderer, false)
+    try render_one_sided_distribution_preview(a, queue, output_target, canvas, &renderer, true)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

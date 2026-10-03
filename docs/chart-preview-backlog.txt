@@ -3,8 +3,6 @@
 # This is a finite delivery backlog, not a claim to enumerate every possible chart.
 
 # Cartesian and distribution variants
-raincloud
-half_violin
 slopegraph
 connected_scatter
 marginal_histogram

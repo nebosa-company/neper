@@ -2954,6 +2954,16 @@ gfx_chart_density2d_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$test_build/gfx-chart-density2d-selfhost"
 gfx_chart_density2d_output=$("$test_build/gfx-chart-density2d-selfhost")
 [ "$gfx_chart_density2d_output" = 'gfx chart density2d ok' ]
+gfx_chart_half_violin_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_half_violin/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-half-violin-selfhost")
+[ "$gfx_chart_half_violin_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-half-violin-selfhost"
+gfx_chart_half_violin_output=$("$test_build/gfx-chart-half-violin-selfhost")
+[ "$gfx_chart_half_violin_output" = 'gfx chart half violin ok' ]
+gfx_chart_raincloud_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_raincloud/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-raincloud-selfhost")
+[ "$gfx_chart_raincloud_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-raincloud-selfhost"
+gfx_chart_raincloud_output=$("$test_build/gfx-chart-raincloud-selfhost")
+[ "$gfx_chart_raincloud_output" = 'gfx chart raincloud ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

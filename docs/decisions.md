@@ -34328,3 +34328,14 @@ height, not enclosed probability mass. The gallery adds a paired PNG/SVG
 preview; Windows and Linux fixtures pin the Gaussian reference value,
 contour geometry, adapters and refusal paths. Automatic bandwidth selection,
 weighted samples and probability-mass levels remain follow-on work.
+
+## D1922 — Raincloud layers share the half-violin value axis
+
+`half_violin` anchors a one-sided Gaussian KDE polygon at the panel centre;
+left and right variants use the same density scale. `raincloud` composes the
+left polygon, every raw observation and an R7 Tukey box summary against the
+KDE-extended value domain. Raw observations stay visible even beyond whisker
+fences. Their eleven deterministic x lanes may overlap on dense ties; future
+packing can improve this without changing the statistical summary. Separate
+Windows and Linux fixtures cover symmetry, quartiles, outliers, adapters and
+capacity/invalid-input refusals. Two PNG/SVG previews join the gallery.

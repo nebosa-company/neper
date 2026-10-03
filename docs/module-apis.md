@@ -15933,6 +15933,11 @@ type Cell = struct { rect: geometry.Rect, value: f32 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
+type HexCell = struct { center: Coord, count: u64 }
+type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
+type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
+type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
+type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
@@ -16005,6 +16010,11 @@ fn density(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f
 fn qq_normal(sorted: []const f64, bounds: geometry.Rect, points: []Coord, reference: []Segment) -> (Layout, err)
 fn pp_normal(sorted: []const f64, mean: f64, deviation: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment) -> (Layout, err)
 fn violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err)
+fn half_violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, right: bool, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err)
+fn raincloud(sorted: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord, drops: []Coord, whiskers: []Segment, boxes: []geometry.Rect) -> (RaincloudLayout, err)
+fn hexbin(x: []const f32, y: []const f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, bounds: geometry.Rect, columns: usize, rows: usize, cells: []HexCell, vertices: []Coord, layers: []Layout) -> (HexbinLayout, err)
+fn bin2d(x: []const f32, y: []const f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, bounds: geometry.Rect, columns: usize, rows: usize, counts: []u64, cells: []Cell) -> (Bin2dLayout, err)
+fn density2d(x: []const f64, y: []const f64, x_min: f64, x_max: f64, y_min: f64, y_max: f64, bounds: geometry.Rect, bandwidth_x: f64, bandwidth_y: f64, fractions: []const f64, grid_x: []f64, grid_y: []f64, values: []f64, cutoffs: []f64, segments: []Segment, layers: []Layout) -> (Density2dLayout, err)
 fn heatmap(values: []const f64, columns: usize, bounds: geometry.Rect, cells: []Cell) -> (MatrixLayout, err)
 fn risk_matrix(risks: []const RiskPoint, ratings: []const f64, levels: usize, bounds: geometry.Rect, counts: []u64, cells: []Cell) -> (MatrixLayout, err)
 fn cohort_retention(counts: []const f64, periods: usize, bounds: geometry.Rect, gap: f32, cells: []Cell) -> (MatrixLayout, err)

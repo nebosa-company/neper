@@ -18,6 +18,8 @@ The 2D-bin preview uses the same two clusters on a rectangular grid, with
 each tile coloured by its observation count.
 The 2D-density preview evaluates a normalized Gaussian KDE on the same sample
 and draws contours at fractions of its sampled peak density.
+The half-violin preview keeps one KDE side; raincloud adds every observation
+and a Tukey IQR/whisker summary on the same value axis.
 Both formats come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:
 

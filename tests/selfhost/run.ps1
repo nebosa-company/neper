@@ -3332,6 +3332,16 @@ $gfxChartDensity2dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartDensity2dWritten -ne 'executable written') { throw 'gfx_chart_density2d emission failed' }
 $gfxChartDensity2dOutput = & $gfxChartDensity2dPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartDensity2dOutput -ne 'gfx chart density2d ok') { throw "the e.gfx.chart density2d answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHalfViolinPath = Join-Path $testBuild 'gfx-chart-half-violin-selfhost.exe'
+$gfxChartHalfViolinWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_half_violin\src\main.e') $repo 'x64' 'windows' $gfxChartHalfViolinPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHalfViolinWritten -ne 'executable written') { throw 'gfx_chart_half_violin emission failed' }
+$gfxChartHalfViolinOutput = & $gfxChartHalfViolinPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHalfViolinOutput -ne 'gfx chart half violin ok') { throw "the e.gfx.chart half violin answered wrongly: exit $LASTEXITCODE" }
+$gfxChartRaincloudPath = Join-Path $testBuild 'gfx-chart-raincloud-selfhost.exe'
+$gfxChartRaincloudWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_raincloud\src\main.e') $repo 'x64' 'windows' $gfxChartRaincloudPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRaincloudWritten -ne 'executable written') { throw 'gfx_chart_raincloud emission failed' }
+$gfxChartRaincloudOutput = & $gfxChartRaincloudPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRaincloudOutput -ne 'gfx chart raincloud ok') { throw "the e.gfx.chart raincloud answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

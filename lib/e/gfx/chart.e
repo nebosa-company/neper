@@ -98,6 +98,7 @@ type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: [
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
 type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
 type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
+type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -6114,6 +6115,86 @@ fn violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f6
         i += 1usize
     }
     ret (Layout { kind: .Violin, coords: outline[..2usize * grid.len], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: f32(lo), y_max: f32(hi) }, ok)
+}
+
+// A one-sided KDE silhouette anchored at the panel centre. The exposed
+// baseline makes room for a box summary or raw observations on the other side.
+fn half_violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, right: bool, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err) {
+    if grid.len < 2usize || outline.len < grid.len + 2usize { ret (zero, TooLarge) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    let (lo, hi, peak, grid_error) = kde_grid(values, bandwidth, grid, estimates)
+    if grid_error != ok { ret (zero, grid_error) }
+    let center = bounds.x + bounds.width * 0.5
+    let half = bounds.width * 0.35
+    outline[0usize] = Coord { x: center, y: bounds.y + bounds.height }
+    var i = 0usize
+    while i < grid.len {
+        let y = bounds.y + bounds.height * f32(1.0f64 - (grid[i] - lo) / (hi - lo))
+        let spread = half * f32(estimates[i] / peak)
+        var x = center - spread
+        if right { x = center + spread }
+        if !finite(x) || !finite(y) { ret (zero, Invalid) }
+        outline[i + 1usize] = Coord { x: x, y: y }
+        i += 1usize
+    }
+    outline[grid.len + 1usize] = Coord { x: center, y: bounds.y }
+    ret (Layout { kind: .Violin, coords: outline[..grid.len + 2usize], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: f32(lo), y_max: f32(hi) }, ok)
+}
+
+// A half violin, all observations, and a Tukey IQR/whisker summary use the
+// same KDE-extended value domain. Raw drops repeat eleven deterministic lanes;
+// dense ties may overlap and can use beeswarm packing in a later variant.
+fn raincloud(sorted: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord, drops: []Coord, whiskers: []Segment, boxes: []geometry.Rect) -> (RaincloudLayout, err) {
+    if sorted.len == 0usize { ret (zero, Empty) }
+    if drops.len < sorted.len || whiskers.len < 5usize || boxes.len == 0usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < sorted.len {
+        if !finite(f32(sorted[i])) || (i > 0usize && sorted[i] < sorted[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let (cloud, cloud_error) = half_violin(sorted, bounds, bandwidth, false, grid, estimates, outline)
+    if cloud_error != ok { ret (zero, cloud_error) }
+    let lo = grid[0usize]
+    let hi = grid[grid.len - 1usize]
+    let (q1, first_ok) = stat.quantile(sorted, 0.25f64, .R7)
+    let (median, middle_ok) = stat.quantile(sorted, 0.5f64, .R7)
+    let (q3, third_ok) = stat.quantile(sorted, 0.75f64, .R7)
+    if !first_ok || !middle_ok || !third_ok { ret (zero, Invalid) }
+    let lower_fence = q1 - 1.5f64 * (q3 - q1)
+    let upper_fence = q3 + 1.5f64 * (q3 - q1)
+    var lower = q1
+    var upper = q3
+    i = 0usize
+    while i < sorted.len {
+        if sorted[i] >= lower_fence && sorted[i] < lower { lower = sorted[i] }
+        if sorted[i] <= upper_fence && sorted[i] > upper { upper = sorted[i] }
+        i += 1usize
+    }
+    let cx = bounds.x + bounds.width * 0.56
+    let width = bounds.width * 0.08
+    let cap = width * 0.5
+    let low_y = box_y(lower, lo, hi, bounds)
+    let q1_y = box_y(q1, lo, hi, bounds)
+    let median_y = box_y(median, lo, hi, bounds)
+    let q3_y = box_y(q3, lo, hi, bounds)
+    let high_y = box_y(upper, lo, hi, bounds)
+    boxes[0usize] = geometry.rect(cx - width * 0.5, q3_y, width, q1_y - q3_y)
+    whiskers[0usize] = Segment { from: Coord { x: cx, y: q1_y }, to: Coord { x: cx, y: low_y } }
+    whiskers[1usize] = Segment { from: Coord { x: cx, y: q3_y }, to: Coord { x: cx, y: high_y } }
+    whiskers[2usize] = Segment { from: Coord { x: cx - cap * 0.5, y: low_y }, to: Coord { x: cx + cap * 0.5, y: low_y } }
+    whiskers[3usize] = Segment { from: Coord { x: cx - cap * 0.5, y: high_y }, to: Coord { x: cx + cap * 0.5, y: high_y } }
+    whiskers[4usize] = Segment { from: Coord { x: cx - width * 0.5, y: median_y }, to: Coord { x: cx + width * 0.5, y: median_y } }
+    i = 0usize
+    while i < sorted.len {
+        let lane = ((i % 11usize) * 5usize) % 11usize
+        drops[i] = Coord { x: bounds.x + bounds.width * (0.66 + 0.25 * f32(lane) / 10.0), y: box_y(sorted[i], lo, hi, bounds) }
+        i += 1usize
+    }
+    ret (RaincloudLayout {
+        cloud: cloud,
+        drops: Layout { kind: .Strip, coords: drops[..sorted.len], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: f32(lo), y_max: f32(hi) },
+        summary: Layout { kind: .Box, coords: zero, segments: whiskers[..5usize], bars: boxes[..1usize], x_min: 0.0, x_max: 1.0, y_min: f32(lo), y_max: f32(hi) },
+    }, ok)
 }
 
 fn probability_paper_quantile(family: ProbabilityFamily, p: f64) -> f64 {

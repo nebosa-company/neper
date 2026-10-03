@@ -50,6 +50,10 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("bin2d", planned)
         self.assertIn("density2d", rendered)
         self.assertNotIn("density2d", planned)
+        self.assertIn("half_violin", rendered)
+        self.assertNotIn("half_violin", planned)
+        self.assertIn("raincloud", rendered)
+        self.assertNotIn("raincloud", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)
