@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and fifty-three PNG plus one hundred and fifty-three SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network and a single-stream value-stream map are also delivered. Individuals, moving-range,
+one hundred and fifty-four PNG plus one hundred and fifty-four SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map and a SIPOC overview are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -566,6 +566,11 @@ times, lead time, process-cycle efficiency and rolled yield. Its stage boxes
 are equally spaced for legibility, while the lower time ladder has proportional
 wait and processing intervals. Branches, inventory/transport symbols, takt and
 capacity constraints and future-state comparison remain planned.
+The SIPOC overview fixes supplier, input, process, output and customer column
+order while accepting caller-owned entries and labels. It lays out variable
+column counts with header flow arrows and refuses invalid or overcrowded
+geometry. Entity relationships, swimlane handoffs and process execution stay
+with their separate diagram families.
 
 ### General-purpose statistical and business charts
 
@@ -730,7 +735,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and fifty-three vector previews, automatic numeric tick text and
+   adapter with one hundred and fifty-four vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

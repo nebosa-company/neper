@@ -3252,6 +3252,11 @@ $gfxChartValueStreamWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChartValueStreamWritten -ne 'executable written') { throw 'gfx_chart_value_stream emission failed' }
 $gfxChartValueStreamOutput = & $gfxChartValueStreamPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartValueStreamOutput -ne 'gfx chart value stream ok') { throw "the e.gfx.chart value-stream map answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
+$gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }
+$gfxChartSipocOutput = & $gfxChartSipocPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSipocOutput -ne 'gfx chart sipoc ok') { throw "the e.gfx.chart SIPOC overview answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

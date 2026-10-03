@@ -1029,6 +1029,103 @@ fn render_value_stream_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_sipoc_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/sipoc.png"
+    let plot = geometry.rect(13.0, 49.0, 334.0, 171.0)
+    let entries = [11]chart.SipocEntry{
+        chart.SipocEntry { column: 0usize }, chart.SipocEntry { column: 0usize },
+        chart.SipocEntry { column: 1usize }, chart.SipocEntry { column: 1usize },
+        chart.SipocEntry { column: 2usize }, chart.SipocEntry { column: 2usize }, chart.SipocEntry { column: 2usize },
+        chart.SipocEntry { column: 3usize }, chart.SipocEntry { column: 3usize },
+        chart.SipocEntry { column: 4usize }, chart.SipocEntry { column: 4usize },
+    }
+    let headers = [5]str{ "Suppliers", "Inputs", "Process", "Outputs", "Customers" }
+    let names = [11]str{ "Design", "Vendor", "Brief", "Assets", "Plan", "Build", "Check", "Release", "Report", "Client", "Support" }
+    let colors = [5]paint.Color{
+        paint.rgba(0.19, 0.47, 0.77, 1.0),
+        paint.rgba(0.24, 0.55, 0.72, 1.0),
+        paint.rgba(0.15, 0.52, 0.46, 1.0),
+        paint.rgba(0.65, 0.38, 0.70, 1.0),
+        paint.rgba(0.78, 0.43, 0.22, 1.0),
+    }
+    let pale = paint.rgba(0.93, 0.95, 0.98, 1.0)
+    let gray = paint.rgba(0.56, 0.62, 0.70, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var columns: [5]geometry.Rect = zero
+    var header_boxes: [5]geometry.Rect = zero
+    var cards: [11]geometry.Rect = zero
+    var arrows: [12]chart.Segment = zero
+    var counts: [5]usize = zero
+    var used: [5]usize = zero
+    let (board, layout_error) = chart.sipoc(entries[..], plot, 6.0, 4.0, 26.0, 4.0, columns[..], header_boxes[..], cards[..], arrows[..], counts[..], used[..])
+    if layout_error != ok || board.max_rows != 3usize || counts[2usize] != 3usize { ret chart.Invalid }
+    var labels: [18]chart.Label = zero
+    var i = 0usize
+    while i < 5usize {
+        labels[i] = chart.Label { text: headers[i], anchor: chart.Coord { x: header_boxes[i].x + header_boxes[i].width * 0.5, y: header_boxes[i].y + 16.0 }, align: .Center }
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        labels[5usize + i] = chart.Label { text: names[i], anchor: chart.Coord { x: cards[i].x + cards[i].width * 0.5, y: cards[i].y + cards[i].height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[16usize] = chart.Label { text: "SIPOC process overview", anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center }
+    labels[17usize] = chart.Label { text: "Suppliers to customers / one process boundary", anchor: chart.Coord { x: 180.0, y: 234.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &board.bands, paint.Brush { Solid: pale })
+    i = 0usize
+    while i < 5usize {
+        try fill(&builder, header_boxes[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &board.connectors, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &board.cards, paint.Brush { Solid: white })
+    i = 0usize
+    while i < entries.len {
+        try fill(&builder, geometry.rect(cards[i].x, cards[i].y, 3.0, cards[i].height), paint.Brush { Solid: colors[entries[i].column] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..5usize], font, 8.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[5usize..16usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[16usize..17usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[17usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &board.bands, pale)
+    i = 0usize
+    while i < 5usize {
+        try chart_svg.rect(&writer, header_boxes[i], colors[i], false)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &board.connectors, gray)
+    try chart_svg.append(&writer, &board.cards, white)
+    i = 0usize
+    while i < entries.len {
+        try chart_svg.rect(&writer, geometry.rect(cards[i].x, cards[i].y, 3.0, cards[i].height), colors[entries[i].column], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..5usize], white, 8.0)
+    try chart_svg.append_labels(&writer, labels[5usize..16usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[16usize..17usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[17usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -4971,6 +5068,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_kanban_preview(a, queue, output_target, canvas, &renderer)
     try render_pert_cpm_preview(a, queue, output_target, canvas, &renderer)
     try render_value_stream_preview(a, queue, output_target, canvas, &renderer)
+    try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

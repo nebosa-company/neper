@@ -43,6 +43,8 @@ type CpmWork = struct { indegree: []usize, head: []usize, next: []usize, order: 
 type ValueStreamStep = struct { process_time: f64, value_added_time: f64, wait_before: f64, good_fraction: f64 }
 type ValueStreamSummary = struct { process_time: f64, value_added_time: f64, wait_time: f64, lead_time: f64, process_cycle_efficiency: f64, rolled_yield: f64 }
 type ValueStreamLayout = struct { nodes: Layout, connectors: Layout, process: Layout, waiting: Layout, summary: ValueStreamSummary }
+type SipocEntry = struct { column: usize }
+type SipocLayout = struct { bands: Layout, headers: Layout, cards: Layout, connectors: Layout, max_rows: usize }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2503,6 +2505,71 @@ fn value_stream_map(steps: []const ValueStreamStep, bounds: geometry.Rect, boxes
     let waiting = Layout { kind: .Bar, coords: zero, segments: zero, bars: wait_bars[..wait_count], x_min: 0.0, x_max: domain_max, y_min: 0.0, y_max: 1.0 }
     let summary = ValueStreamSummary { process_time: process_time, value_added_time: value_added_time, wait_time: wait_time, lead_time: lead_time, process_cycle_efficiency: value_added_time / lead_time, rolled_yield: rolled_yield }
     ret (ValueStreamLayout { nodes: nodes, connectors: connectors, process: process, waiting: waiting, summary: summary }, ok)
+}
+
+// Fixed SIPOC order: supplier, input, process, output, customer. Entries keep
+// input order within their column; the caller supplies text and palette.
+fn sipoc(entries: []const SipocEntry, bounds: geometry.Rect, gutter: f32, padding: f32, header_height: f32, card_gap: f32, columns: []geometry.Rect, headers: []geometry.Rect, cards: []geometry.Rect, arrows: []Segment, counts: []usize, used: []usize) -> (SipocLayout, err) {
+    if entries.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(gutter) || gutter <= 0.0 || !finite(padding) || padding < 0.0 || !finite(header_height) || header_height <= 0.0 || !finite(card_gap) || card_gap < 0.0 { ret (zero, Invalid) }
+    if columns.len < 5usize || headers.len < 5usize || cards.len < entries.len || arrows.len < 12usize || counts.len < 5usize || used.len < 5usize { ret (zero, TooLarge) }
+    let column_width = (bounds.width - 4.0 * gutter) / 5.0
+    let card_width = column_width - 2.0 * padding
+    let body_height = bounds.height - header_height - 2.0 * padding
+    if !finite(column_width) || !finite(card_width) || !finite(body_height) || column_width <= 0.0 || card_width <= 0.0 || body_height <= 0.0 { ret (zero, Invalid) }
+    var i = 0usize
+    while i < 5usize {
+        counts[i] = 0usize
+        used[i] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        if entries[i].column >= 5usize { ret (zero, Invalid) }
+        counts[entries[i].column] += 1usize
+        i += 1usize
+    }
+    var max_rows = 0usize
+    i = 0usize
+    while i < 5usize {
+        if counts[i] > max_rows { max_rows = counts[i] }
+        i += 1usize
+    }
+    let card_height = (body_height - card_gap * f32(max_rows - 1usize)) / f32(max_rows)
+    if !finite(card_height) || card_height < 12.0 { ret (zero, TooLarge) }
+    i = 0usize
+    while i < 5usize {
+        let x = bounds.x + f32(i) * (column_width + gutter)
+        if !finite(x) || !finite(x + column_width) { ret (zero, Invalid) }
+        columns[i] = geometry.rect(x, bounds.y, column_width, bounds.height)
+        headers[i] = geometry.rect(x, bounds.y, column_width, header_height)
+        if i > 0usize {
+            let before = headers[i - 1usize]
+            let start = Coord { x: before.x + before.width, y: bounds.y + header_height * 0.5 }
+            let tip = Coord { x: x, y: start.y }
+            let head = gutter * 0.3
+            let first = (i - 1usize) * 3usize
+            arrows[first] = Segment { from: start, to: tip }
+            arrows[first + 1usize] = Segment { from: Coord { x: tip.x - head, y: tip.y - head * 0.7 }, to: tip }
+            arrows[first + 2usize] = Segment { from: Coord { x: tip.x - head, y: tip.y + head * 0.7 }, to: tip }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        let column = entries[i].column
+        let x = columns[column].x + padding
+        let y = bounds.y + header_height + padding + f32(used[column]) * (card_height + card_gap)
+        if !finite(y) || !finite(y + card_height) { ret (zero, Invalid) }
+        cards[i] = geometry.rect(x, y, card_width, card_height)
+        used[column] += 1usize
+        i += 1usize
+    }
+    let bands = Layout { kind: .Bar, coords: zero, segments: zero, bars: columns[..5usize], x_min: 0.0, x_max: 5.0, y_min: 0.0, y_max: f32(max_rows) }
+    let heads = Layout { kind: .Bar, coords: zero, segments: zero, bars: headers[..5usize], x_min: 0.0, x_max: 5.0, y_min: 0.0, y_max: f32(max_rows) }
+    let items = Layout { kind: .Bar, coords: zero, segments: zero, bars: cards[..entries.len], x_min: 0.0, x_max: 5.0, y_min: 0.0, y_max: f32(max_rows) }
+    let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..12usize], bars: zero, x_min: 0.0, x_max: 5.0, y_min: 0.0, y_max: f32(max_rows) }
+    ret (SipocLayout { bands: bands, headers: heads, cards: items, connectors: connectors, max_rows: max_rows }, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

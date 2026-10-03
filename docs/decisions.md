@@ -34131,3 +34131,16 @@ numerical totals, proportional widths, single-stage/zero-wait behavior,
 refusals and scene/SVG adapters; the gallery adds a PNG/SVG pair. It is not a
 branching process simulator or a full VSM stencil: inventory and transport
 symbols, takt/capacity constraints and future-state comparison remain planned.
+
+## D1903 — SIPOC is a fixed five-column overview, not an executable flow
+
+`sipoc` reserves supplier, input, process, output and customer columns in that
+order. Caller-owned entries retain input order within each column; the layout
+returns five bands and headers, entry cards, directional header connectors,
+counts and the maximum row count. Labels and colours remain caller-side. The
+layout rejects invalid columns, non-finite or cramped geometry and short
+storage, but permits an empty column so incomplete overviews can be shown.
+The Windows/Linux fixture checks interleaved entries, sizing, sparse columns,
+refusals and scene/SVG adapters; the gallery adds a PNG/SVG pair. SIPOC sets a
+process boundary. It does not model decisions, handoffs, simulation or an
+entity-relationship graph; those remain separate chart families.
