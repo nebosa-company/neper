@@ -742,6 +742,72 @@ fn render_radial_hierarchy(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_sankey(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
+    if layers.len != 14usize || rects.len != 6usize || names.len != rects.len { ret chart.Invalid }
+    let link_colors = [8]paint.Color{
+        paint.rgba(0.17, 0.44, 0.77, 0.50), paint.rgba(0.17, 0.44, 0.77, 0.50),
+        paint.rgba(0.84, 0.40, 0.14, 0.50), paint.rgba(0.84, 0.40, 0.14, 0.50),
+        paint.rgba(0.10, 0.54, 0.53, 0.50), paint.rgba(0.10, 0.54, 0.53, 0.50),
+        paint.rgba(0.39, 0.36, 0.70, 0.50), paint.rgba(0.39, 0.36, 0.70, 0.50),
+    }
+    let node_colors = [6]paint.Color{
+        paint.rgba(0.08, 0.31, 0.62, 1.0), paint.rgba(0.69, 0.31, 0.09, 1.0),
+        paint.rgba(0.07, 0.45, 0.44, 1.0), paint.rgba(0.34, 0.30, 0.62, 1.0),
+        paint.rgba(0.10, 0.50, 0.29, 1.0), paint.rgba(0.65, 0.21, 0.27, 1.0),
+    }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var labels: [7]chart.Label = zero
+    var i = 0usize
+    while i < rects.len {
+        let r = rects[i]
+        labels[i] = chart.Label { text: names[i], anchor: chart.Coord { x: r.x + r.width * 0.5, y: r.y + r.height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[6usize] = chart.Label { text: "Journey flows", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    i = 0usize
+    while i < 8usize {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: link_colors[i] })
+        i += 1usize
+    }
+    i = 0usize
+    while i < rects.len {
+        try chart_scene.append(a, &builder, &layers[8usize + i], paint.Brush { Solid: node_colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..6usize], font, 9.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[6usize..], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 8usize {
+        try chart_svg.append(&writer, &layers[i], link_colors[i])
+        i += 1usize
+    }
+    i = 0usize
+    while i < rects.len {
+        try chart_svg.append(&writer, &layers[8usize + i], node_colors[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..6usize], white, 9.0)
+    try chart_svg.append_labels(&writer, labels[6usize..], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
     let (made, builder_error) = scene.builder(a, marks.cells.len + 1usize)
     if builder_error != ok { ret builder_error }
@@ -1057,6 +1123,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if circle_error != ok { ret circle_error }
     let circle_names = [7]str{ "Digital", "Operations", "Cloud 30", "Apps 20", "Data 10", "Supply 25", "Field 15" }
     try render_radial_hierarchy(a, queue, output_target, canvas, &renderer, circle_layers, circle_names[..], 1usize, false, "Circle packing", "docs/chart-previews/circle_pack.png")
+    let flow_columns = [6]usize{ 0usize, 0usize, 1usize, 1usize, 2usize, 2usize }
+    let flow_sources = [8]usize{ 0usize, 0usize, 1usize, 1usize, 2usize, 2usize, 3usize, 3usize }
+    let flow_targets = [8]usize{ 2usize, 3usize, 2usize, 3usize, 4usize, 5usize, 4usize, 5usize }
+    let flow_values = [8]f32{ 35.0, 25.0, 15.0, 25.0, 30.0, 20.0, 15.0, 35.0 }
+    let flow_names = [6]str{ "Search", "Referral", "Trial", "Direct", "Won", "Lost" }
+    var flow_nodes: [6]chart.SankeyNode = zero
+    var flow_rects: [6]geometry.Rect = zero
+    var flow_points: [144]chart.Coord = zero
+    var flow_storage: [14]chart.Layout = zero
+    let (flow_layers, flow_error) = chart.sankey(flow_columns[..], 3usize, flow_sources[..], flow_targets[..], flow_values[..], geometry.rect(20.0, 42.0, 320.0, 176.0), 56.0, 14.0, 8usize, flow_nodes[..], flow_rects[..], flow_points[..], flow_storage[..])
+    if flow_error != ok { ret flow_error }
+    try render_sankey(a, queue, output_target, canvas, &renderer, flow_layers, flow_rects[..], flow_names[..], "docs/chart-previews/sankey.png")
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

@@ -33409,3 +33409,16 @@ the caller. The common Bar scene/SVG adapters need no new painter.
 `gfx_chart_population_pyramid` checks reference geometry, malformed values,
 gaps, storage and both adapters on Windows and Linux; the gallery adds a
 labeled PNG/SVG pair.
+
+## D1836 — Keep Sankey flow scale shared across columns
+
+`chart.sankey` accepts nodes assigned to ordered columns and forward weighted
+links. Each node height is its larger incoming/outgoing total, and the smallest
+column capacity fixes one pixel-per-unit scale for nodes and ribbons. Link
+points and node rectangles belong to the caller; smoothstep Area polygons
+paint before Bar nodes through the existing scene and SVG adapters. Zero links
+are empty layers; imbalance leaves unused node space rather than inventing
+flow. Input order fixes both node and ribbon stacking, so crossings may remain
+until a separate identity-preserving ordering pass is justified.
+`gfx_chart_sankey` checks reference geometry, three-column flow, refusal paths
+and both adapters on Windows and Linux; the gallery adds one PNG/SVG pair.

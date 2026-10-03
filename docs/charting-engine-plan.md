@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, treemap, sunburst, icicle, circle packing, stage funnel,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, treemap, sunburst, icicle, circle packing, Sankey, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-fifty-four PNG plus fifty-four SVG previews from Neper. L061 remains partial
+fifty-five PNG plus fifty-five SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -200,6 +200,15 @@ Caller-owned circle bounds reuse Bubble scene and SVG adapters, and zero-total
 nodes emit empty layers. The fixture checks area ratios, containment, separation,
 invalid input and storage refusals on Windows and Linux. Ring placement is
 deterministic but not density-optimal; tangent packing remains an upgrade path.
+`sankey` takes ordered nodes in zero-based columns and nonnegative weighted
+forward links. A common pixel-per-unit scale keeps each ribbon's thickness
+constant through every column; nodes use the larger of incoming and outgoing
+flow, leaving slack for imbalance. Caller-owned node rectangles and smoothstep
+Area polygons reuse Bar and Area scene/SVG adapters, with links painted first.
+The fixture checks two- and three-column numeric geometry, zero links, refusals
+and both adapters on Windows and Linux. The current input order is stable but
+can produce crossings; automatic barycentric reordering and interactive
+highlighting remain planned.
 `funnel` maps nonincreasing stage counts to centered trapezoid Area layers with
 an explicit inter-stage gap. This is the business conversion funnel, not the
 statistical funnel plot. Both charts refuse invalid totals/stages and short
@@ -246,7 +255,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, treemap, sunburst, icicle, basic circle packing and basic stage funnel are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, treemap, sunburst, icicle, basic circle packing, basic Sankey and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -320,6 +329,8 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    `gfx_chart_icicle` checks geometry and scene/SVG adapters on both hosts.
    Circle packing reuses hierarchy totals and Bubble marks for non-overlapping
    nested circles; `gfx_chart_circle_pack` checks geometry and both adapters.
+   Sankey uses caller-owned Area ribbons and Bar nodes at one flow scale;
+   `gfx_chart_sankey` checks numeric geometry and both adapters on both hosts.
    OLS fit and covariance data-ellipse overlays reuse Line layers and shared
    scatter limits; mean-confidence and prediction ribbons add filled Band
    layers on the same domain. `gfx_chart_overlays` checks references and adapters
@@ -332,7 +343,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with fifty-four vector previews, automatic numeric tick text and
+   adapter with fifty-five vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

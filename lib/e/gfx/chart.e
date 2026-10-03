@@ -22,6 +22,7 @@ type LegendItem = struct { swatch: geometry.Rect, label: Label }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type SunburstArc = struct { start: f64, end: f64, next: f64 }
+type SankeyNode = struct { incoming: f64, outgoing: f64, in_used: f64, out_used: f64 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
@@ -1280,6 +1281,134 @@ fn circle_pack(parents: []const usize, weights: []const f32, bounds: geometry.Re
         i += 1usize
     }
     ret (layers[..parents.len], ok)
+}
+
+// Nodes are ordered within zero-based columns; links go strictly forward.
+// Link layers precede node layers so painted nodes cover ribbon endpoints.
+// ponytail: fixed input order can cross ribbons; add barycentric ordering only
+// when the caller can supply identity-preserving reorder scratch.
+fn sankey(node_columns: []const usize, columns: usize, sources: []const usize, targets: []const usize, values: []const f32, bounds: geometry.Rect, node_width: f32, node_gap: f32, steps: usize, nodes: []SankeyNode, rects: []geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if node_columns.len == 0usize || sources.len == 0usize { ret (zero, Empty) }
+    if columns < 2usize || sources.len != targets.len || sources.len != values.len || !valid_bounds(bounds) || !finite(node_width) || !finite(node_gap) || node_width <= 0.0 || node_gap < 0.0 || steps < 2usize || steps > 64usize { ret (zero, Invalid) }
+    if node_columns.len > nodes.len || node_columns.len > rects.len || sources.len > layers.len || node_columns.len > layers.len - sources.len || sources.len > points.len / (2usize * (steps + 1usize)) { ret (zero, TooLarge) }
+    let column_width = (bounds.width - node_width) / f32(columns - 1usize)
+    if !finite(column_width) || column_width <= node_width { ret (zero, Invalid) }
+    var i = 0usize
+    while i < node_columns.len {
+        if node_columns[i] >= columns { ret (zero, Invalid) }
+        nodes[i] = SankeyNode { incoming: 0.0f64, outgoing: 0.0f64, in_used: 0.0f64, out_used: 0.0f64 }
+        i += 1usize
+    }
+    i = 0usize
+    while i < sources.len {
+        let from = sources[i]
+        let to = targets[i]
+        if from >= node_columns.len || to >= node_columns.len || node_columns[from] >= node_columns[to] || !finite(values[i]) || values[i] < 0.0 { ret (zero, Invalid) }
+        nodes[from].outgoing += f64(values[i])
+        nodes[to].incoming += f64(values[i])
+        if !finite64(nodes[from].outgoing) || !finite64(nodes[to].incoming) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var scale = 0.0f64
+    var column = 0usize
+    while column < columns {
+        var count = 0usize
+        var total = 0.0f64
+        i = 0usize
+        while i < node_columns.len {
+            if node_columns[i] == column {
+                count += 1usize
+                var flow = nodes[i].incoming
+                if nodes[i].outgoing > flow { flow = nodes[i].outgoing }
+                total += flow
+            }
+            i += 1usize
+        }
+        if count == 0usize || !finite64(total) || total <= 0.0f64 { ret (zero, Invalid) }
+        let available = f64(bounds.height) - f64(node_gap) * f64(count - 1usize)
+        if !finite64(available) || available <= 0.0f64 { ret (zero, Invalid) }
+        let candidate = available / total
+        if !finite64(candidate) || candidate <= 0.0f64 { ret (zero, Invalid) }
+        if column == 0usize || candidate < scale { scale = candidate }
+        column += 1usize
+    }
+    column = 0usize
+    while column < columns {
+        var count = 0usize
+        var total = 0.0f64
+        i = 0usize
+        while i < node_columns.len {
+            if node_columns[i] == column {
+                count += 1usize
+                var flow = nodes[i].incoming
+                if nodes[i].outgoing > flow { flow = nodes[i].outgoing }
+                total += flow
+            }
+            i += 1usize
+        }
+        let used = total * scale + f64(node_gap) * f64(count - 1usize)
+        var cursor = f64(bounds.y) + (f64(bounds.height) - used) * 0.5f64
+        let x = bounds.x + column_width * f32(column)
+        i = 0usize
+        while i < node_columns.len {
+            if node_columns[i] == column {
+                var flow = nodes[i].incoming
+                if nodes[i].outgoing > flow { flow = nodes[i].outgoing }
+                let height = f32(flow * scale)
+                if !finite(x) || !finite(f32(cursor)) || !finite(height) || (flow > 0.0f64 && height <= 0.0) { ret (zero, Invalid) }
+                rects[i] = geometry.rect(x, f32(cursor), node_width, height)
+                cursor += f64(height) + f64(node_gap)
+            }
+            i += 1usize
+        }
+        column += 1usize
+    }
+    var used_points = 0usize
+    i = 0usize
+    while i < sources.len {
+        let from = sources[i]
+        let to = targets[i]
+        let value = f64(values[i])
+        if value == 0.0f64 {
+            layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        } else {
+            let x0 = rects[from].x + node_width
+            let x1 = rects[to].x
+            let top0 = rects[from].y + f32(nodes[from].out_used * scale)
+            let top1 = rects[to].y + f32(nodes[to].in_used * scale)
+            let thickness = f32(value * scale)
+            if !finite(x0) || !finite(x1) || !finite(top0) || !finite(top1) || !finite(thickness) || thickness <= 0.0 { ret (zero, Invalid) }
+            let first = used_points
+            var j = 0usize
+            while j <= steps {
+                let t = f32(j) / f32(steps)
+                let eased = t * t * (3.0 - 2.0 * t)
+                points[used_points] = Coord { x: x0 + (x1 - x0) * t, y: top0 + (top1 - top0) * eased }
+                used_points += 1usize
+                j += 1usize
+            }
+            j = 0usize
+            while j <= steps {
+                let t = 1.0 - f32(j) / f32(steps)
+                let eased = t * t * (3.0 - 2.0 * t)
+                points[used_points] = Coord { x: x0 + (x1 - x0) * t, y: top0 + thickness + (top1 - top0) * eased }
+                used_points += 1usize
+                j += 1usize
+            }
+            layers[i] = Layout { kind: .Area, coords: points[first..used_points], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        }
+        nodes[from].out_used += value
+        nodes[to].in_used += value
+        i += 1usize
+    }
+    i = 0usize
+    while i < node_columns.len {
+        var bars: []geometry.Rect = zero
+        if rects[i].height > 0.0 { bars = rects[i..i + 1usize] }
+        layers[sources.len + i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    ret (layers[..sources.len + node_columns.len], ok)
 }
 
 // Root occupies the innermost ring, each generation the next. A leaf extends
