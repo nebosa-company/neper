@@ -1107,8 +1107,9 @@ fn render_weighted_control_previews(a: *mem.Arena, q: *gpu.Queue, output_target:
     ret render_attribute_preview(a, q, output_target, canvas, renderer, ewma[..], "EWMA chart", "Weighted mean", "docs/chart-previews/ewma_control.png")
 }
 
-fn render_attribute_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, samples: []const stat.AttributeControlPoint, title: str, y_label: str, path: str) -> err {
+fn render_attribute_preview_phased(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, samples: []const stat.AttributeControlPoint, starts: []const bool, title: str, y_label: str, path: str) -> err {
     if samples.len < 2usize || samples.len > 10usize { ret chart.Invalid }
+    if starts.len != 0usize && starts.len != samples.len { ret chart.Invalid }
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     var x: [10]f32 = zero
     var y: [10]f32 = zero
@@ -1136,22 +1137,34 @@ fn render_attribute_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     let (marks, marks_error) = chart.layout_with_limits(&spec, points[..], segments[..], zero, x_limits[..], y_limits[..])
     if marks_error != ok { ret marks_error }
     var rules: [27]chart.Segment = zero
+    var used = 0usize
     i = 0usize
     while i + 1usize < samples.len {
-        let from = [3]f32{ f32(samples[i].lower), f32(samples[i].center), f32(samples[i].upper) }
-        let to = [3]f32{ f32(samples[i + 1usize].lower), f32(samples[i + 1usize].center), f32(samples[i + 1usize].upper) }
-        var j = 0usize
-        while j < 3usize {
-            rules[i * 3usize + j] = chart.Segment {
-                from: chart.Coord { x: plot.x + x[i] * plot.width, y: plot.y + plot.height * (high - from[j]) / (high - low) },
-                to: chart.Coord { x: plot.x + x[i + 1usize] * plot.width, y: plot.y + plot.height * (high - to[j]) / (high - low) },
+        if starts.len > 0usize && starts[i + 1usize] {
+            let boundary_x = plot.x + (x[i] + x[i + 1usize]) * plot.width * 0.5
+            rules[used] = chart.Segment { from: chart.Coord { x: boundary_x, y: plot.y }, to: chart.Coord { x: boundary_x, y: plot.y + plot.height } }
+            used += 1usize
+        } else {
+            let from = [3]f32{ f32(samples[i].lower), f32(samples[i].center), f32(samples[i].upper) }
+            let to = [3]f32{ f32(samples[i + 1usize].lower), f32(samples[i + 1usize].center), f32(samples[i + 1usize].upper) }
+            var j = 0usize
+            while j < 3usize {
+                rules[used] = chart.Segment {
+                    from: chart.Coord { x: plot.x + x[i] * plot.width, y: plot.y + plot.height * (high - from[j]) / (high - low) },
+                    to: chart.Coord { x: plot.x + x[i + 1usize] * plot.width, y: plot.y + plot.height * (high - to[j]) / (high - low) },
+                }
+                used += 1usize
+                j += 1usize
             }
-            j += 1usize
         }
         i += 1usize
     }
-    let reference = chart.Layout { kind: .Rug, coords: zero, segments: rules[..(samples.len - 1usize) * 3usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: low, y_max: high }
+    let reference = chart.Layout { kind: .Rug, coords: zero, segments: rules[..used], bars: zero, x_min: 0.0, x_max: 1.0, y_min: low, y_max: high }
     ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &marks, &reference, title, "Run fraction", y_label, path)
+}
+
+fn render_attribute_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, samples: []const stat.AttributeControlPoint, title: str, y_label: str, path: str) -> err {
+    ret render_attribute_preview_phased(a, q, output_target, canvas, renderer, samples, zero, title, y_label, path)
 }
 
 fn render_attribute_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
@@ -1173,6 +1186,16 @@ fn render_attribute_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
         if kinds[i] == .C { selected = counts_c[..] }
         try stat.attribute_control(kinds[i], selected, sizes[i], samples[..])
         try render_attribute_preview(a, q, output_target, canvas, renderer, samples[..], titles[i], labels[i], paths[i])
+        i += 1usize
+    }
+    let phase_counts = [8]usize{ 2usize, 3usize, 1usize, 4usize, 8usize, 9usize, 7usize, 10usize }
+    let phase_starts = [8]bool{ true, false, false, false, true, false, false, false }
+    let phase_titles = [4]str{ "Phased P chart", "Phased Np chart", "Phased C chart", "Phased U chart" }
+    let phase_paths = [4]str{ "docs/chart-previews/phased_p_control.png", "docs/chart-previews/phased_np_control.png", "docs/chart-previews/phased_c_control.png", "docs/chart-previews/phased_u_control.png" }
+    i = 0usize
+    while i < 4usize {
+        try stat.attribute_control_phased(kinds[i], phase_counts[..], sizes[i], phase_starts[..], samples[..])
+        try render_attribute_preview_phased(a, q, output_target, canvas, renderer, samples[..], phase_starts[..], phase_titles[i], labels[i], phase_paths[i])
         i += 1usize
     }
     ret ok

@@ -33716,3 +33716,15 @@ boundary resets and invalid phase declarations on Windows and Linux. A
 dedicated preview uses disconnected phase limit segments and a boundary rule.
 Subgroup/attribute phase estimators and chart-specific test selection remain
 planned. Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/supporting-topics/options/add-stages-to-show-how-a-process-changed/
+
+## D1862 — Estimate attribute-control limits independently by phase
+
+Run the existing P/Np/C/U estimator on each validated phase slice; do not
+duplicate its binomial and Poisson formulas. Each phase needs at least two
+subgroups. Np sample size may change at a phase boundary but remains fixed
+within that phase. Preserve per-point limits for variable-size P and U charts.
+The shared preview renderer skips cross-boundary limit connections and draws
+a stage divider; it produces four new PNG/SVG pairs. A focused fixture checks
+all four kinds against independent phase calculations and refuses malformed
+phase declarations on Windows and Linux. Laney phase-specific dispersion
+remains planned. Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/p-chart/interpret-the-results/all-statistics-and-graphs/

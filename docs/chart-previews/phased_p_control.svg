@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>phased_p_control</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)" fill-opacity="1"/>
+<line x1="56" y1="182.65516662597656" x2="92" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="165.26248168945312" x2="92" y2="165.26248168945312" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="125.52481842041016" x2="92" y2="137.16371154785156" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="182.65516662597656" x2="128" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="165.26248168945312" x2="128" y2="165.26248168945312" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="137.16371154785156" x2="128" y2="125.52481842041016" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="182.65516662597656" x2="164" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="165.26248168945312" x2="164" y2="165.26248168945312" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="125.52481842041016" x2="164" y2="137.16371154785156" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="182" y1="43" x2="182" y2="193" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="178.9983367919922" x2="236" y2="173.14134216308594" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="123.51998901367188" x2="236" y2="123.51998901367188" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="68.04165649414062" x2="236" y2="73.89865112304688" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="173.14134216308594" x2="272" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="123.51998901367188" x2="272" y2="123.51998901367188" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="73.89865112304688" x2="272" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="182.65516662597656" x2="308" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="123.51998901367188" x2="308" y2="123.51998901367188" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="53.344825744628906" x2="308" y2="64.21115112304688" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<path d="M56 161.783935546875 L92 167.00173950195312 L128 172.21954345703125 L164 161.783935546875 L200 130.47708129882812 L236 135.69488525390625 L272 109.60584259033203 L308 108.11502838134766" fill="none" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="53" y="158.783935546875" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="89" y="164.00173950195312" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="125" y="169.21954345703125" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="161" y="158.783935546875" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="197" y="127.47708129882812" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="233" y="132.69488525390625" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="269" y="106.60584259033203" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="305" y="105.11502838134766" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">1</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Phased P chart</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Run fraction</text>
+<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Fraction</text>
+</svg>

@@ -555,6 +555,32 @@ fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: [
     ret ok
 }
 
+// Re-estimate each P/Np/C/U baseline within its own phase.
+fn attribute_control_phased(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, starts: []const bool, out: []AttributeControlPoint) -> err {
+    if counts.len < 2usize || sizes.len != counts.len || starts.len != counts.len || !starts[0usize] { ret Invalid }
+    if out.len < counts.len { ret TooSmall }
+    var begin = 0usize
+    var i = 0usize
+    while i < counts.len {
+        if i > 0usize && starts[i] {
+            if i - begin < 2usize { ret Invalid }
+            begin = i
+        }
+        if sizes[i] == 0usize || (kind == .C && sizes[i] != 1usize) || (kind == .Np && sizes[i] != sizes[begin]) || ((kind == .P || kind == .Np) && counts[i] > sizes[i]) { ret Invalid }
+        i += 1usize
+    }
+    if counts.len - begin < 2usize { ret Invalid }
+    begin = 0usize
+    while begin < counts.len {
+        var end = begin + 1usize
+        while end < counts.len && !starts[end] { end += 1usize }
+        let phase_error = attribute_control(kind, counts[begin..end], sizes[begin..end], out[begin..end])
+        if phase_error != ok { ret phase_error }
+        begin = end
+    }
+    ret ok
+}
+
 // Laney P'/U' widen or narrow ordinary attribute limits by the z-score MR estimate.
 fn laney_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> (f64, err) {
     if kind != .P && kind != .U { ret (0.0f64, Invalid) }

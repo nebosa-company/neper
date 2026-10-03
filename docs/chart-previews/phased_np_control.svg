@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>phased_np_control</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)" fill-opacity="1"/>
+<line x1="56" y1="182.65516662597656" x2="92" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="163.48837280273438" x2="92" y2="163.48837280273438" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="127.57939910888672" x2="92" y2="127.57939910888672" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="182.65516662597656" x2="128" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="163.48837280273438" x2="128" y2="163.48837280273438" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="127.57939910888672" x2="128" y2="127.57939910888672" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="182.65516662597656" x2="164" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="163.48837280273438" x2="164" y2="163.48837280273438" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="127.57939910888672" x2="164" y2="127.57939910888672" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="182" y1="43" x2="182" y2="193" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="181.6313018798828" x2="236" y2="181.6313018798828" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="117.4880599975586" x2="236" y2="117.4880599975586" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="53.344825744628906" x2="236" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="181.6313018798828" x2="272" y2="181.6313018798828" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="117.4880599975586" x2="272" y2="117.4880599975586" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="53.344825744628906" x2="272" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="181.6313018798828" x2="308" y2="181.6313018798828" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="117.4880599975586" x2="308" y2="117.4880599975586" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="53.344825744628906" x2="308" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<path d="M56 167.3217315673828 L92 159.65499877929688 L128 174.9884490966797 L164 151.98828125 L200 121.32141876220703 L236 113.65469360351562 L272 128.98812866210938 L308 105.98797607421875" fill="none" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="53" y="164.3217315673828" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="89" y="156.65499877929688" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="125" y="171.9884490966797" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="161" y="148.98828125" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="197" y="118.32141876220703" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="233" y="110.65469360351562" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="269" y="125.98812866210938" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="305" y="102.98797607421875" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">1</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Phased Np chart</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Run fraction</text>
+<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Defectives</text>
+</svg>

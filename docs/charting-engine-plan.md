@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and six PNG plus one hundred and six SVG previews from Neper. Individuals, moving-range,
+one hundred and ten PNG plus one hundred and ten SVG previews from Neper. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -150,12 +150,17 @@ change p/u limits per observation; np requires equal size and c equal unit
 area. P limits clamp to [0,1], np to [0,n], and all lower limits to zero.
 PointLine and Rug marks draw observed values and three control-limit traces.
 `gfx_chart_attribute_control` checks reference values, malformed sizes, bounds
-and scene/SVG output on Windows and Linux. `laney_control` reuses p/u values,
+and scene/SVG output on Windows and Linux. `attribute_control_phased` reuses
+the P/Np/C/U estimator within each phase, requiring at least two subgroups
+and allowing Np subgroup size to change only at a boundary. Four phase-split
+PNG/SVG previews disconnect the limit traces; `gfx_chart_attribute_phases`
+checks numeric equivalence to independent phases and refusals on both hosts.
+`laney_control` reuses p/u values,
 standardizes each by its subgroup-specific binomial or Poisson sigma, and
 multiplies the ordinary three-sigma limits by the adjacent z-score moving-range
 estimate divided by 1.128. `gfx_chart_laney` checks overdispersion, variable
-subgroup sizes and refusals on Windows and Linux. Phase-specific baseline
-estimates remain planned.
+subgroup sizes and refusals on Windows and Linux. Laney phase-specific baseline
+and dispersion estimates remain planned.
 `g_control_limits` fits the geometric event probability from whole-number
 opportunities between events and interpolates the 0.135%, 50% and 99.865%
 CDF percentiles. `t_exponential_control_limits` fits positive elapsed times
@@ -527,7 +532,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and six vector previews, automatic numeric tick text and
+   adapter with one hundred and ten vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow
