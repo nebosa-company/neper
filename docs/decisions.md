@@ -33580,3 +33580,15 @@ cases without requiring both classes. Gallery compositions map nonempty bins to
 PointLine on fixed unit axes and the four confusion counts to a 2×2 Heatmap.
 `gfx_chart_diagnostic_tables` checks reference values, input/storage refusals
 and scene/SVG output on Windows and Linux. No new painter branch is needed.
+
+## D1851 — Extend the ROC sweep without a second threshold engine
+
+`roc_partial_auc` integrates the raw area to a caller-selected false-positive
+cutoff; `chart.roc_partial_region` interpolates the matching Area polygon on
+full ROC axes. `youden_index` returns the first point attaining maximal
+sensitivity minus false-positive rate, preserving the higher-score tie choice.
+`decision_curve` takes probability thresholds and reuses `binary_confusion` for
+model and treat-all net benefit; treat-none is zero. It deliberately scans each
+threshold, with a sorted-sweep upgrade path if large grids demand it. The
+existing Area, Rug and Line adapters render all three previews. Numeric and
+scene/SVG checks run in `gfx_chart_binary_curves` on Windows and Linux.

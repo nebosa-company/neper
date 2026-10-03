@@ -815,7 +815,8 @@ fn render_agreement_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
 
 fn render_diagnostic_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.Layout, baseline: *const chart.Layout, title: str, x_label: str, y_label: str, path: str) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
-    let blue = paint.rgba(0.08, 0.40, 0.76, 1.0)
+    var blue = paint.rgba(0.08, 0.40, 0.76, 1.0)
+    if marks.kind == .Area { blue = paint.rgba(0.08, 0.40, 0.76, 0.38) }
     let baseline_color = paint.rgba(0.64, 0.69, 0.76, 1.0)
     let pale = paint.rgba(0.96, 0.97, 0.99, 1.0)
     let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
@@ -879,6 +880,117 @@ fn render_binary_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
     }
     let baseline = chart.Layout { kind: .Rug, coords: zero, segments: baseline_segments[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: marks.y_min, y_max: marks.y_max }
     ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &marks, &baseline, title, x_label, y_label, path)
+}
+
+fn render_roc_extension_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, partial: bool, path: str) -> err {
+    let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
+    var x: [17]f32 = zero
+    var y: [17]f32 = zero
+    var segments: [16]chart.Segment = zero
+    let (roc, roc_error) = chart.binary_metric_curve(data, .Roc, plot, x[..], y[..], segments[..])
+    if roc_error != ok { ret roc_error }
+    if partial {
+        var region_points: [19]chart.Coord = zero
+        let (region, region_error) = chart.roc_partial_region(data, 0.35, plot, region_points[..])
+        if region_error != ok { ret region_error }
+        ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &region, &roc, "Partial ROC area", "False-positive rate", "TPR", path)
+    }
+    let (selected, unused, valid) = stat.youden_index(data)
+    if !valid { ret chart.Invalid }
+    var marker = roc.segments[0usize].from
+    if selected > 0usize { marker = roc.segments[selected - 1usize].to }
+    var guides = [2]chart.Segment{
+        chart.Segment { from: chart.Coord { x: marker.x, y: plot.y + plot.height }, to: marker },
+        chart.Segment { from: chart.Coord { x: plot.x, y: marker.y }, to: marker },
+    }
+    let highlight = chart.Layout { kind: .Rug, coords: zero, segments: guides[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &highlight, &roc, "Youden index", "False-positive rate", "TPR", path)
+}
+
+fn render_decision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, scores: []const f64, positive: []const bool, path: str) -> err {
+    let thresholds = [13]f64{ 0.05f64, 0.10f64, 0.15f64, 0.20f64, 0.25f64, 0.30f64, 0.35f64, 0.40f64, 0.45f64, 0.50f64, 0.55f64, 0.60f64, 0.65f64 }
+    var model_values: [13]f64 = zero
+    var all_values: [13]f64 = zero
+    try stat.decision_curve(scores, positive, thresholds[..], model_values[..], all_values[..])
+    var x: [13]f32 = zero
+    var model_y: [13]f32 = zero
+    var all_y: [13]f32 = zero
+    var i = 0usize
+    while i < thresholds.len {
+        x[i] = f32(thresholds[i])
+        model_y[i] = f32(model_values[i])
+        all_y[i] = f32(all_values[i])
+        i += 1usize
+    }
+    let plot = geometry.rect(56.0, 45.0, 252.0, 148.0)
+    let x_limits = [2]f32{ 0.0, 0.7 }
+    let y_limits = [2]f32{ -0.5, 0.6 }
+    let model_spec = chart.spec(.Line, plot, x[..], model_y[..])
+    let all_spec = chart.spec(.Line, plot, x[..], all_y[..])
+    var model_segments: [12]chart.Segment = zero
+    var all_segments: [12]chart.Segment = zero
+    var unused_coords: [1]chart.Coord = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let (model, model_error) = chart.layout_with_limits(&model_spec, unused_coords[..0usize], model_segments[..], unused_bars[..0usize], x_limits[..], y_limits[..])
+    if model_error != ok { ret model_error }
+    let (all, all_error) = chart.layout_with_limits(&all_spec, unused_coords[..0usize], all_segments[..], unused_bars[..0usize], x_limits[..], y_limits[..])
+    if all_error != ok { ret all_error }
+    let zero_y = plot.y + plot.height * 0.6 / 1.1
+    var none_segments = [1]chart.Segment{ chart.Segment { from: chart.Coord { x: plot.x, y: zero_y }, to: chart.Coord { x: plot.x + plot.width, y: zero_y } } }
+    let none = chart.Layout { kind: .Rug, coords: zero, segments: none_segments[..], bars: zero, x_min: 0.0, x_max: 0.7, y_min: -0.5, y_max: 0.6 }
+    let blue = paint.rgba(0.07, 0.38, 0.76, 1.0)
+    let orange = paint.rgba(0.88, 0.36, 0.14, 1.0)
+    let gray = paint.rgba(0.58, 0.63, 0.70, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let pale = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    var labels: [12]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Decision curve", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Threshold probability", anchor: chart.Coord { x: 180.0, y: 231.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "Net benefit", anchor: chart.Coord { x: 56.0, y: 39.0 }, align: .Left }
+    labels[3usize] = chart.Label { text: "0", anchor: chart.Coord { x: 56.0, y: 210.0 }, align: .Center }
+    labels[4usize] = chart.Label { text: "0.35", anchor: chart.Coord { x: 182.0, y: 210.0 }, align: .Center }
+    labels[5usize] = chart.Label { text: "0.7", anchor: chart.Coord { x: 308.0, y: 210.0 }, align: .Center }
+    labels[6usize] = chart.Label { text: "0.5", anchor: chart.Coord { x: 52.0, y: 59.0 }, align: .Right }
+    labels[7usize] = chart.Label { text: "0", anchor: chart.Coord { x: 52.0, y: zero_y + 3.0 }, align: .Right }
+    labels[8usize] = chart.Label { text: "-0.5", anchor: chart.Coord { x: 52.0, y: 193.0 }, align: .Right }
+    labels[9usize] = chart.Label { text: "Model", anchor: chart.Coord { x: 157.0, y: 39.0 }, align: .Center }
+    labels[10usize] = chart.Label { text: "Treat all", anchor: chart.Coord { x: 225.0, y: 39.0 }, align: .Center }
+    labels[11usize] = chart.Label { text: "Treat none", anchor: chart.Coord { x: 294.0, y: 39.0 }, align: .Center }
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &none, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &all, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &model, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..9usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[9usize..10usize], font, 8.0, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[10usize..11usize], font, 8.0, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[11usize..], font, 8.0, paint.Brush { Solid: gray })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &none, gray)
+    try chart_svg.append(&writer, &all, orange)
+    try chart_svg.append(&writer, &model, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..9usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[9usize..10usize], blue, 8.0)
+    try chart_svg.append_labels(&writer, labels[10usize..11usize], orange, 8.0)
+    try chart_svg.append_labels(&writer, labels[11usize..], gray, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
 fn render_calibration_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, bins: []const stat.CalibrationBin, path: str) -> err {
@@ -2299,6 +2411,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_binary_preview(a, queue, output_target, canvas, &renderer, &diagnostic, .PrecisionRecall, "Precision-recall", "Recall", "Precision", "docs/chart-previews/precision_recall.png")
     try render_binary_preview(a, queue, output_target, canvas, &renderer, &diagnostic, .CumulativeGain, "Cumulative gain", "Population share", "Gain", "docs/chart-previews/cumulative_gain.png")
     try render_binary_preview(a, queue, output_target, canvas, &renderer, &diagnostic, .Lift, "Cumulative lift", "Population share", "Lift", "docs/chart-previews/cumulative_lift.png")
+    try render_roc_extension_preview(a, queue, output_target, canvas, &renderer, &diagnostic, true, "docs/chart-previews/partial_auc.png")
+    try render_roc_extension_preview(a, queue, output_target, canvas, &renderer, &diagnostic, false, "docs/chart-previews/youden_index.png")
+    try render_decision_preview(a, queue, output_target, canvas, &renderer, diagnostic_scores[..], diagnostic_positive[..], "docs/chart-previews/decision_curve.png")
     var calibration_bins: [5]stat.CalibrationBin = zero
     try stat.binary_calibration(diagnostic_scores[..], diagnostic_positive[..], calibration_bins[..])
     try render_calibration_preview(a, queue, output_target, canvas, &renderer, calibration_bins[..], "docs/chart-previews/calibration.png")

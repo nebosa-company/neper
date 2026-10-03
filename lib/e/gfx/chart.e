@@ -367,6 +367,40 @@ fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds:
     ret (marks, layout_error)
 }
 
+// Fill the raw partial-AUC region on the full [0, 1] ROC axes.
+fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err) {
+    let (_, valid) = stat.roc_partial_auc(c, f64(max_fpr))
+    if !valid || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if points.len < c.points.len + 2usize { ret (zero, TooLarge) }
+    let bottom = bounds.y + bounds.height
+    points[0usize] = Coord { x: bounds.x, y: bottom }
+    var used = 1usize
+    var i = 0usize
+    while i < c.points.len {
+        let p = c.points[i]
+        let x = f32(f64(p.fp) / f64(c.negatives))
+        let y = f32(f64(p.tp) / f64(c.positives))
+        if x <= max_fpr {
+            points[used] = Coord { x: bounds.x + bounds.width * x, y: bottom - bounds.height * y }
+            used += 1usize
+        } else {
+            let before = c.points[i - 1usize]
+            let x0 = f64(before.fp) / f64(c.negatives)
+            let y0 = f64(before.tp) / f64(c.positives)
+            let x1 = f64(p.fp) / f64(c.negatives)
+            let y1 = f64(p.tp) / f64(c.positives)
+            let y_stop = y0 + (y1 - y0) * (f64(max_fpr) - x0) / (x1 - x0)
+            points[used] = Coord { x: bounds.x + bounds.width * max_fpr, y: bottom - bounds.height * f32(y_stop) }
+            used += 1usize
+            break
+        }
+        i += 1usize
+    }
+    points[used] = Coord { x: bounds.x + bounds.width * max_fpr, y: bottom }
+    used += 1usize
+    ret (Layout { kind: .Area, coords: points[..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }, ok)
+}
+
 // One bar per caller-supplied cell, all measured against the same maximum.
 fn in_cell_bars(values: []const f32, maximum: f32, cells: []const geometry.Rect, inset: f32, bars: []geometry.Rect) -> (Layout, err) {
     if values.len == 0usize { ret (zero, Empty) }

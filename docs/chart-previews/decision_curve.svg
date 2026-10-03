@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>decision_curve</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="56" y="45" width="252" height="148" fill="rgb(245,247,252)" fill-opacity="1"/>
+<line x1="56" y1="125.7272720336914" x2="308" y2="125.7272720336914" stroke="rgb(148,161,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<path d="M74 61.99521255493164 L92 65.9292984008789 L110 70.32621002197266 L128 75.27273559570312 L146 80.8787841796875 L164 87.28571319580078 L182 94.6783218383789 L200 103.30302429199219 L218 113.49586486816406 L236 125.7272720336914 L254.00001525878906 140.6767578125 L272 159.36363220214844 L290 183.3896026611328" fill="none" stroke="rgb(224,92,36)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<path d="M74 61.99521255493164 L92 64.99494934082031 L110 68.84224700927734 L128 71.06818389892578 L146 75.27273559570312 L164 88.48701477050781 L182 89.50349426269531 L200 89.28787994384766 L218 102.79339599609375 L236 108.90908813476562 L254.00001525878906 106.10606384277344 L272 121.52273559570312 L290 114.91558837890625" fill="none" stroke="rgb(18,97,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Decision curve</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Threshold probability</text>
+<text x="56" y="39" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Net benefit</text>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.35</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.7</text>
+<text x="52" y="59" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
+<text x="52" y="128.72726440429688" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="52" y="193" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">-0.5</text>
+<text x="157" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(18,97,194)" fill-opacity="1">Model</text>
+<text x="225" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(224,92,36)" fill-opacity="1">Treat all</text>
+<text x="294" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(148,161,179)" fill-opacity="1">Treat none</text>
+</svg>

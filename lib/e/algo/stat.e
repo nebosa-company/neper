@@ -156,6 +156,51 @@ fn roc_auc(c: *const BinaryCurve) -> (f64, bool) {
     ret (area, true)
 }
 
+// Raw ROC area from false-positive rate 0 to the caller's cutoff.
+fn roc_partial_auc(c: *const BinaryCurve, max_fpr: f64) -> (f64, bool) {
+    let (_, valid) = roc_auc(c)
+    if !valid || max_fpr != max_fpr || max_fpr <= 0.0f64 || max_fpr > 1.0f64 { ret (0.0f64, false) }
+    var area = 0.0f64
+    var i = 1usize
+    while i < c.points.len {
+        let before = c.points[i - 1usize]
+        let after = c.points[i]
+        let x0 = f64(before.fp) / f64(c.negatives)
+        let x1 = f64(after.fp) / f64(c.negatives)
+        if x0 >= max_fpr { break }
+        if x1 > x0 {
+            var stop = x1
+            if stop > max_fpr { stop = max_fpr }
+            let y0 = f64(before.tp) / f64(c.positives)
+            let y1 = f64(after.tp) / f64(c.positives)
+            let y_stop = y0 + (y1 - y0) * (stop - x0) / (x1 - x0)
+            area += (stop - x0) * (y0 + y_stop) * 0.5f64
+            if stop == max_fpr { break }
+        }
+        i += 1usize
+    }
+    ret (area, true)
+}
+
+// The returned point index selects the highest-score threshold on a J tie.
+fn youden_index(c: *const BinaryCurve) -> (usize, f64, bool) {
+    let (_, valid) = roc_auc(c)
+    if !valid { ret (0usize, 0.0f64, false) }
+    var best_index = 0usize
+    var best = 0.0f64
+    var i = 1usize
+    while i < c.points.len {
+        let p = c.points[i]
+        let value = f64(p.tp) / f64(c.positives) - f64(p.fp) / f64(c.negatives)
+        if value > best {
+            best = value
+            best_index = i
+        }
+        i += 1usize
+    }
+    ret (best_index, best, true)
+}
+
 fn average_precision(c: *const BinaryCurve) -> (f64, bool) {
     if c.positives == 0usize || c.negatives == 0usize || c.points.len < 2usize { ret (0.0f64, false) }
     var area = 0.0f64
@@ -217,6 +262,36 @@ fn binary_confusion(scores: []const f64, positive: []const bool, threshold: f64)
         i += 1usize
     }
     ret (counts, ok)
+}
+
+// ponytail: O(samples * thresholds); reuse the sorted sweep if large grids need it.
+fn decision_curve(scores: []const f64, positive: []const bool, thresholds: []const f64, model: []f64, treat_all: []f64) -> err {
+    if scores.len == 0usize || positive.len != scores.len || thresholds.len == 0usize { ret Invalid }
+    if model.len < thresholds.len || treat_all.len < thresholds.len { ret TooSmall }
+    var positives = 0usize
+    var i = 0usize
+    while i < scores.len {
+        let score = scores[i]
+        if score != score || score - score != 0.0f64 || score < 0.0f64 || score > 1.0f64 { ret Invalid }
+        if positive[i] { positives += 1usize }
+        i += 1usize
+    }
+    i = 0usize
+    while i < thresholds.len {
+        let threshold = thresholds[i]
+        if threshold != threshold || threshold <= 0.0f64 || threshold >= 1.0f64 || (i > 0usize && threshold <= thresholds[i - 1usize]) { ret Invalid }
+        i += 1usize
+    }
+    i = 0usize
+    while i < thresholds.len {
+        let ratio = thresholds[i] / (1.0f64 - thresholds[i])
+        let (counts, counts_error) = binary_confusion(scores, positive, thresholds[i])
+        if counts_error != ok { ret counts_error }
+        model[i] = (f64(counts.true_positive) - f64(counts.false_positive) * ratio) / f64(scores.len)
+        treat_all[i] = (f64(positives) - f64(scores.len - positives) * ratio) / f64(scores.len)
+        i += 1usize
+    }
+    ret ok
 }
 
 fn regression() -> Regression {

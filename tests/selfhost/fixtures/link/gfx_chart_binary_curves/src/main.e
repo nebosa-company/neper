@@ -31,7 +31,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if capacity_error != stat.TooSmall { ret chart.Invalid }
     let (valid_curve, valid_error) = stat.binary_curve(scores[..], positive[..], order[..], points[..])
     if valid_error != ok { ret valid_error }
+    let (partial, partial_ok) = stat.roc_partial_auc(&valid_curve, 0.75f64)
+    let (youden_point, youden_value, youden_ok) = stat.youden_index(&valid_curve)
+    if !partial_ok || !near(f32(partial), 0.416667) || !youden_ok || youden_point != 1usize || !near(f32(youden_value), 0.333333) { ret chart.Invalid }
+    let (_, bad_partial) = stat.roc_partial_auc(&valid_curve, 0.0f64)
+    if bad_partial { ret chart.Invalid }
+    let thresholds = [3]f64{ 0.25f64, 0.5f64, 0.75f64 }
+    var model_benefit: [3]f64 = zero
+    var all_benefit: [3]f64 = zero
+    try stat.decision_curve(scores[..], positive[..], thresholds[..], model_benefit[..], all_benefit[..])
+    if !near(f32(model_benefit[0usize]), 0.266667) || !near(f32(model_benefit[1usize]), 0.2) || !near(f32(model_benefit[2usize]), -0.2) || !near(f32(all_benefit[0usize]), 0.466667) || !near(f32(all_benefit[1usize]), 0.2) || !near(f32(all_benefit[2usize]), -0.6) { ret chart.Invalid }
+    let bad_thresholds = [2]f64{ 0.5f64, 0.25f64 }
+    if stat.decision_curve(scores[..], positive[..], bad_thresholds[..], model_benefit[..], all_benefit[..]) != stat.Invalid { ret chart.Invalid }
+    if stat.decision_curve(scores[..], positive[..], thresholds[..], model_benefit[..2usize], all_benefit[..]) != stat.TooSmall { ret chart.Invalid }
     let bounds = geometry.rect(10.0, 20.0, 120.0, 60.0)
+    var region_points: [7]chart.Coord = zero
+    let (region, region_error) = chart.roc_partial_region(&valid_curve, 0.75, bounds, region_points[..])
+    if region_error != ok || region.kind != .Area || region.coords.len != 6usize || !near(region.coords[2usize].x, 10.0) || !near(region.coords[2usize].y, 60.0) || !near(region.coords[4usize].x, 100.0) || !near(region.coords[4usize].y, 40.0) || !near(region.coords[5usize].y, 80.0) { ret chart.Invalid }
+    let (_, region_capacity) = chart.roc_partial_region(&valid_curve, 0.75, bounds, region_points[..6usize])
+    if region_capacity != chart.TooLarge { ret chart.Invalid }
     var x: [6]f32 = zero
     var y: [6]f32 = zero
     var lines: [5]chart.Segment = zero
@@ -53,12 +71,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let blue = paint.rgba(0.1, 0.3, 0.8, 1.0)
     try chart_scene.append(a, &builder, &roc_again, paint.Brush { Solid: blue })
     if scene.builder_count(&builder) != 1usize { ret chart.Invalid }
+    try chart_scene.append(a, &builder, &region, paint.Brush { Solid: blue })
+    if scene.builder_count(&builder) != 2usize { ret chart.Invalid }
     let (state, unused, writer_error) = io.memory_writer(a, 0usize)
     if writer_error != ok { ret writer_error }
     var held = state
     var writer = io.writer(mem.cast[*void](&held), io.memory_write)
     try chart_svg.begin(&writer, 150.0, 100.0, "Binary diagnostic", "Tie grouped")
     try chart_svg.append(&writer, &roc_again, blue)
+    try chart_svg.append(&writer, &region, blue)
     try chart_svg.finish(&writer)
     let svg = io.memory_bytes(&held)
     if !str.contains(svg, "<path") || !str.contains(svg, "</svg>") { ret chart.Invalid }

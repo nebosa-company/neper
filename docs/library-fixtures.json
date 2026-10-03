@@ -983,8 +983,8 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 47,
-   "delivered": 47,
+   "catalogue": 48,
+   "delivered": 48,
    "pending": [],
    "fixtures": [
     "gfx_chart",

@@ -3175,9 +3175,12 @@ fn standard_deviation_sample(s: *const Moments) -> (f64, bool)
 fn agreement_limits(left: []const f64, right: []const f64, critical: f64) -> (AgreementLimits, bool)
 fn binary_curve(scores: []const f64, positive: []const bool, order: []usize, out: []BinaryPoint) -> (BinaryCurve, err)
 fn roc_auc(c: *const BinaryCurve) -> (f64, bool)
+fn roc_partial_auc(c: *const BinaryCurve, max_fpr: f64) -> (f64, bool)
+fn youden_index(c: *const BinaryCurve) -> (usize, f64, bool)
 fn average_precision(c: *const BinaryCurve) -> (f64, bool)
 fn binary_calibration(scores: []const f64, positive: []const bool, bins: []CalibrationBin) -> err
 fn binary_confusion(scores: []const f64, positive: []const bool, threshold: f64) -> (BinaryConfusion, err)
+fn decision_curve(scores: []const f64, positive: []const bool, thresholds: []const f64, model: []f64, treat_all: []f64) -> err
 fn regression() -> Regression
 fn regression_add(s: *Regression, x: f64, y: f64)
 fn regression_slope(s: *const Regression) -> (f64, bool)
@@ -15918,6 +15921,7 @@ fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32,
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
+fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)
 fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)
 fn band(x: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, outline: []Coord) -> (Layout, err)
 fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)
