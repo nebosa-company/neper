@@ -33349,3 +33349,15 @@ colours with the caller and uses the existing scene/SVG adapters unchanged.
 refusals and both adapters on Windows and Linux. Two labeled PNG/SVG previews
 demonstrate the results. Date-axis formatting, adjustments and volume stay
 planned.
+
+## D1831 — Model a treemap as hierarchy layout over Bar leaves
+
+`chart.treemap` borrows parent indices in parent-before-child order, requires
+weights only on leaves and emits caller-owned rectangles for every node. Each
+parent splits its rectangle along the longer side in sibling order, so leaf
+area is proportional to weight without a new painter. Internal nodes retain
+empty Bar layers; leaves receive one Bar layer each, and group outlines and
+labels stay with the caller. The simple sibling scan is quadratic and may
+yield skinny rectangles; squarified packing is an explicit upgrade path.
+`gfx_chart_treemap` checks hierarchy, proportions, invalid data/storage and
+scene/SVG output on both hosts. The gallery adds a labeled PNG/SVG pair.

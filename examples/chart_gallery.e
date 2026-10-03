@@ -522,6 +522,60 @@ fn render_share(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
+    if layers.len != 9usize || rects.len != layers.len || names.len != layers.len { ret chart.Invalid }
+    let colors = [6]paint.Color{
+        paint.rgba(0.08, 0.33, 0.70, 1.0), paint.rgba(0.27, 0.27, 0.65, 1.0), paint.rgba(0.08, 0.49, 0.63, 1.0),
+        paint.rgba(0.10, 0.47, 0.33, 1.0), paint.rgba(0.66, 0.33, 0.08, 1.0), paint.rgba(0.69, 0.18, 0.27, 1.0),
+    }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var labels: [9]chart.Label = zero
+    var i = 3usize
+    while i < layers.len {
+        let r = rects[i]
+        labels[i - 3usize] = chart.Label { text: names[i], anchor: chart.Coord { x: r.x + r.width * 0.5, y: r.y + r.height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[6usize] = chart.Label { text: names[1usize], anchor: chart.Coord { x: rects[1usize].x + 7.0, y: rects[1usize].y + 14.0 }, align: .Left }
+    labels[7usize] = chart.Label { text: names[2usize], anchor: chart.Coord { x: rects[2usize].x + 7.0, y: rects[2usize].y + 14.0 }, align: .Left }
+    labels[8usize] = chart.Label { text: "Hierarchical treemap", anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center }
+    let border = chart.Layout { kind: .Rug, coords: zero, segments: zero, bars: rects, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 160usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    i = 3usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i - 3usize] })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &border, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[..8usize], font, 9.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[8usize..], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 3usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i - 3usize])
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &border, white)
+    try chart_svg.append_labels(&writer, labels[..8usize], white, 9.0)
+    try chart_svg.append_labels(&writer, labels[8usize..], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
     let (made, builder_error) = scene.builder(a, marks.cells.len + 1usize)
     if builder_error != ok { ret builder_error }
@@ -798,6 +852,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (waffle_layers, waffle_error) = chart.waffle(pie_values[..], pie_bounds, 10usize, 10usize, 2.0, waffle_bars[..], pie_storage[..])
     if waffle_error != ok { ret waffle_error }
     try render_share(a, queue, output_target, canvas, &renderer, waffle_layers, pie_names[..], "100-cell composition", "docs/chart-previews/waffle.png")
+    let tree_parents = [9]usize{ 0usize, 0usize, 0usize, 1usize, 1usize, 1usize, 2usize, 2usize, 2usize }
+    let tree_weights = [9]f32{ 0.0, 0.0, 0.0, 36.0, 22.0, 17.0, 20.0, 15.0, 10.0 }
+    let tree_names = [9]str{ "All", "Digital", "Operations", "Cloud", "Apps", "Data", "Supply", "Field", "Support" }
+    var tree_totals: [9]f64 = zero
+    var tree_rects: [9]geometry.Rect = zero
+    var tree_storage: [9]chart.Layout = zero
+    let (tree_layers, tree_error) = chart.treemap(tree_parents[..], tree_weights[..], geometry.rect(24.0, 38.0, 312.0, 176.0), tree_totals[..], tree_rects[..], tree_storage[..])
+    if tree_error != ok { ret tree_error }
+    try render_treemap(a, queue, output_target, canvas, &renderer, tree_layers, tree_rects[..], tree_names[..], "docs/chart-previews/treemap.png")
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

@@ -1075,6 +1075,77 @@ fn waffle(values: []const f32, bounds: geometry.Rect, columns: usize, rows: usiz
     ret (layers[..values.len], ok)
 }
 
+// Parent indices precede children; root 0 names itself. Only leaves carry
+// weights. Every node gets a rectangle, while only leaves get a Bar layer.
+fn treemap(parents: []const usize, weights: []const f32, bounds: geometry.Rect, totals: []f64, rects: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if parents.len == 0usize { ret (zero, Empty) }
+    if parents.len != weights.len || parents[0usize] != 0usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if totals.len < parents.len || rects.len < parents.len || layers.len < parents.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < parents.len {
+        if (i > 0usize && parents[i] >= i) || !finite(weights[i]) || weights[i] < 0.0 { ret (zero, Invalid) }
+        totals[i] = f64(weights[i])
+        i += 1usize
+    }
+    i = parents.len
+    while i > 1usize {
+        i -= 1usize
+        totals[parents[i]] += totals[i]
+        if !finite64(totals[parents[i]]) { ret (zero, Invalid) }
+    }
+    if !(totals[0usize] > 0.0f64) { ret (zero, Invalid) }
+    rects[0usize] = bounds
+    i = 0usize
+    while i < parents.len {
+        var children = 0usize
+        var j = 1usize
+        while j < parents.len {
+            if parents[j] == i { children += 1usize }
+            j += 1usize
+        }
+        if children > 0usize {
+            if weights[i] != 0.0 { ret (zero, Invalid) }
+            let parent = rects[i]
+            let across = parent.width >= parent.height
+            var cumulative = 0.0f64
+            var placed = 0usize
+            // ponytail: sibling scans are O(n^2) and long strips are possible;
+            // use caller-scratch squarification if very large trees need it.
+            j = 1usize
+            while j < parents.len {
+                if parents[j] == i {
+                    placed += 1usize
+                    var start = 0.0f64
+                    var finish = 0.0f64
+                    if totals[i] > 0.0f64 {
+                        start = cumulative / totals[i]
+                        cumulative += totals[j]
+                        finish = cumulative / totals[i]
+                    }
+                    if placed == children { finish = 1.0f64 }
+                    if across {
+                        let left = parent.x + parent.width * f32(start)
+                        let right = parent.x + parent.width * f32(finish)
+                        if !finite(left) || !finite(right) || right < left { ret (zero, Invalid) }
+                        rects[j] = geometry.rect(left, parent.y, right - left, parent.height)
+                    } else {
+                        let top = parent.y + parent.height * f32(start)
+                        let bottom = parent.y + parent.height * f32(finish)
+                        if !finite(top) || !finite(bottom) || bottom < top { ret (zero, Invalid) }
+                        rects[j] = geometry.rect(parent.x, top, parent.width, bottom - top)
+                    }
+                }
+                j += 1usize
+            }
+            layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        } else {
+            layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: rects[i..i + 1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        }
+        i += 1usize
+    }
+    ret (layers[..parents.len], ok)
+}
+
 // A stage funnel tapers each segment to the next nonincreasing value.
 fn funnel(values: []const f32, bounds: geometry.Rect, gap: f32, points: []Coord, layers: []Layout) -> ([]Layout, err) {
     if values.len == 0usize { ret (zero, Empty) }
