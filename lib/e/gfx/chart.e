@@ -1521,6 +1521,89 @@ fn quiver(x: []const f32, y: []const f32, u: []const f32, v: []const f32, bounds
     ret (Layout { kind: .Rug, coords: zero, segments: arrows[..used], bars: zero, x_min: placed.x_min, x_max: placed.x_max, y_min: placed.y_min, y_max: placed.y_max }, ok)
 }
 
+// The regular grid is row-major with y increasing by row. Coordinates are
+// clamped only to handle a midpoint on the outermost sample boundary.
+fn flow_sample(u: []const f32, v: []const f32, columns: usize, rows: usize, x: f64, y: f64, xmin: f64, xmax: f64, ymin: f64, ymax: f64) -> (f64, f64) {
+    var fx = (x - xmin) / (xmax - xmin) * f64(columns - 1usize)
+    var fy = (y - ymin) / (ymax - ymin) * f64(rows - 1usize)
+    if fx < 0.0f64 { fx = 0.0f64 }
+    if fy < 0.0f64 { fy = 0.0f64 }
+    if fx > f64(columns - 1usize) { fx = f64(columns - 1usize) }
+    if fy > f64(rows - 1usize) { fy = f64(rows - 1usize) }
+    var ix = usize(fx)
+    var iy = usize(fy)
+    if ix == columns - 1usize { ix -= 1usize }
+    if iy == rows - 1usize { iy -= 1usize }
+    let tx = fx - f64(ix)
+    let ty = fy - f64(iy)
+    let a = iy * columns + ix
+    let b = a + columns
+    let u0 = f64(u[a]) * (1.0f64 - tx) + f64(u[a + 1usize]) * tx
+    let u1 = f64(u[b]) * (1.0f64 - tx) + f64(u[b + 1usize]) * tx
+    let v0 = f64(v[a]) * (1.0f64 - tx) + f64(v[a + 1usize]) * tx
+    let v1 = f64(v[b]) * (1.0f64 - tx) + f64(v[b + 1usize]) * tx
+    ret (u0 * (1.0f64 - ty) + u1 * ty, v0 * (1.0f64 - ty) + v1 * ty)
+}
+
+// Fixed-distance midpoint integration follows direction, not field magnitude.
+// ponytail: no streamline occupancy grid; add one if dense seeds visibly overlap.
+fn streamlines(u: []const f32, v: []const f32, columns: usize, rows: usize, x_min: f32, x_max: f32, y_min: f32, y_max: f32, seeds: []const Coord, step: f32, max_steps: usize, bounds: geometry.Rect, segments: []Segment) -> (Layout, err) {
+    if seeds.len == 0usize { ret (zero, Empty) }
+    if columns < 2usize || rows < 2usize || rows > u.len / columns || u.len != rows * columns || v.len != u.len || !valid_bounds(bounds) || !finite(x_min) || !finite(x_max) || !finite(y_min) || !finite(y_max) || x_max <= x_min || y_max <= y_min || !finite(step) || step <= 0.0 || max_steps == 0usize { ret (zero, Invalid) }
+    var i = 0usize
+    while i < u.len {
+        if !finite(u[i]) || !finite(v[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var used = 0usize
+    i = 0usize
+    while i < seeds.len {
+        if !finite(seeds[i].x) || !finite(seeds[i].y) || seeds[i].x < x_min || seeds[i].x > x_max || seeds[i].y < y_min || seeds[i].y > y_max { ret (zero, Invalid) }
+        var x = f64(seeds[i].x)
+        var y = f64(seeds[i].y)
+        var count = 0usize
+        while count < max_steps {
+            let (u0, v0) = flow_sample(u, v, columns, rows, x, y, f64(x_min), f64(x_max), f64(y_min), f64(y_max))
+            let speed0 = math.sqrt[f64](u0 * u0 + v0 * v0)
+            if speed0 == 0.0f64 { break }
+            let middle_x = x + f64(step) * 0.5f64 * u0 / speed0
+            let middle_y = y + f64(step) * 0.5f64 * v0 / speed0
+            let (u1, v1) = flow_sample(u, v, columns, rows, middle_x, middle_y, f64(x_min), f64(x_max), f64(y_min), f64(y_max))
+            let speed1 = math.sqrt[f64](u1 * u1 + v1 * v1)
+            if speed1 == 0.0f64 { break }
+            let dx = f64(step) * u1 / speed1
+            let dy = f64(step) * v1 / speed1
+            var stop = 1.0f64
+            if dx > 0.0f64 && x + dx > f64(x_max) { stop = (f64(x_max) - x) / dx }
+            if dx < 0.0f64 && x + dx < f64(x_min) { stop = (f64(x_min) - x) / dx }
+            if dy > 0.0f64 && y + dy > f64(y_max) {
+                let hit = (f64(y_max) - y) / dy
+                if hit < stop { stop = hit }
+            }
+            if dy < 0.0f64 && y + dy < f64(y_min) {
+                let hit = (f64(y_min) - y) / dy
+                if hit < stop { stop = hit }
+            }
+            if stop <= 0.0f64 { break }
+            let next_x = x + dx * stop
+            let next_y = y + dy * stop
+            if next_x == x && next_y == y { break }
+            if used == segments.len { ret (zero, TooLarge) }
+            let from = Coord { x: f32(f64(bounds.x) + f64(bounds.width) * (x - f64(x_min)) / (f64(x_max) - f64(x_min))), y: f32(f64(bounds.y) + f64(bounds.height) * (f64(y_max) - y) / (f64(y_max) - f64(y_min))) }
+            let to = Coord { x: f32(f64(bounds.x) + f64(bounds.width) * (next_x - f64(x_min)) / (f64(x_max) - f64(x_min))), y: f32(f64(bounds.y) + f64(bounds.height) * (f64(y_max) - next_y) / (f64(y_max) - f64(y_min))) }
+            if !finite(from.x) || !finite(from.y) || !finite(to.x) || !finite(to.y) { ret (zero, Invalid) }
+            segments[used] = Segment { from: from, to: to }
+            used += 1usize
+            x = next_x
+            y = next_y
+            count += 1usize
+            if stop < 1.0f64 { break }
+        }
+        i += 1usize
+    }
+    ret (Layout { kind: .Rug, coords: zero, segments: segments[..used], bars: zero, x_min: x_min, x_max: x_max, y_min: y_min, y_max: y_max }, ok)
+}
+
 // Equal-angle rose sectors. Square-root radii make sector area proportional
 // to each nonnegative pre-binned weight, as in a circular histogram.
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {

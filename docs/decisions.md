@@ -33944,3 +33944,15 @@ and vertical coordinates, signed and zero vectors, invalid/capacity refusals,
 and scene/SVG output on Windows and Linux. The gallery adds a PNG/SVG pair.
 Streamline integration and magnitude-colour legends remain planned. References:
 R `graphics::arrows`, `ggquiver::geom_quiver` and Matplotlib `quiver`.
+
+## D1884 — Streamlines integrate a regular vector field into independent strokes
+
+`streamlines` accepts row-major u/v grids, domain limits, caller seeds, a
+fixed-distance step and a per-seed step cap. Bilinear field sampling and a
+midpoint direction step produce paths clipped at the domain boundary. The
+returned Rug segments stay independent across seeds; a Line layout would join
+unrelated paths in the current scene adapter. `gfx_chart_streamlines` checks
+uniform, varying and stationary fields, edge clipping, refusals and scene/SVG
+output on Windows and Linux. The gallery adds one PNG/SVG pair. Bidirectional
+tracing, adaptive error control and crowding suppression remain planned.
+References: R `metR::geom_streamline` and Matplotlib `streamplot`.

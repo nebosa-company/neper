@@ -2783,6 +2783,68 @@ fn render_quiver_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_streamlines_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    var u: [85]f32 = zero
+    var v: [85]f32 = zero
+    var i = 0usize
+    while i < u.len {
+        let x = f64(i % 17usize) / 16.0f64
+        u[i] = 1.0
+        v[i] = f32(math.cos[f64](6.283185307179586f64 * x))
+        i += 1usize
+    }
+    var seeds: [5]chart.Coord = zero
+    i = 0usize
+    while i < seeds.len {
+        seeds[i] = chart.Coord { x: 0.0, y: 0.2 + f32(i) * 0.15 }
+        i += 1usize
+    }
+    var strokes: [450]chart.Segment = zero
+    let (paths, chart_error) = chart.streamlines(u[..], v[..], 17usize, 5usize, 0.0, 1.0, 0.0, 1.0, seeds[..], 0.02, 90usize, geometry.rect(35.0, 48.0, 290.0, 156.0), strokes[..])
+    if chart_error != ok { ret chart_error }
+    let ink = paint.rgba(0.07, 0.35, 0.76, 1.0)
+    let axis = paint.rgba(0.30, 0.36, 0.45, 1.0)
+    let grid = paint.rgba(0.86, 0.89, 0.93, 1.0)
+    let labels = [2]chart.Label{
+        chart.Label { text: "Wave-field streamlines", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "u = 1, v = cos(2 pi x)", anchor: chart.Coord { x: 180.0, y: 230.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 31u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 480usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 1usize
+    while i < 4usize {
+        try fill(&builder, geometry.rect(35.0, 48.0 + f32(i) * 39.0, 290.0, 1.0), paint.Brush { Solid: grid })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &paths, paint.Brush { Solid: ink })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 10.0, paint.Brush { Solid: axis })
+    let path = "docs/chart-previews/streamlines.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 1usize
+    while i < 4usize {
+        try chart_svg.rect(&writer, geometry.rect(35.0, 48.0 + f32(i) * 39.0, 290.0, 1.0), grid, false)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &paths, ink)
+    try chart_svg.append_labels(&writer, labels[..1usize], axis, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], axis, 10.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
     if layers.len != 9usize || rects.len != layers.len || names.len != layers.len { ret chart.Invalid }
     let colors = [6]paint.Color{
@@ -3541,6 +3603,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_radar_preview(a, queue, output_target, canvas, &renderer)
     try render_ternary_preview(a, queue, output_target, canvas, &renderer)
     try render_quiver_preview(a, queue, output_target, canvas, &renderer)
+    try render_streamlines_preview(a, queue, output_target, canvas, &renderer)
     let rose_values = [5]f32{ 10.0, 18.0, 8.0, 5.0, 14.0 }
     let rose_names = [5]str{ "0 deg", "72 deg", "144 deg", "216 deg", "288 deg" }
     var rose_points: [115]chart.Coord = zero

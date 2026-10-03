@@ -3157,6 +3157,11 @@ $gfxChartQuiverWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $gfxChartQuiverWritten -ne 'executable written') { throw 'gfx_chart_quiver emission failed' }
 $gfxChartQuiverOutput = & $gfxChartQuiverPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartQuiverOutput -ne 'gfx chart quiver ok') { throw "the e.gfx.chart vector arrows answered wrongly: exit $LASTEXITCODE" }
+$gfxChartStreamlinesPath = Join-Path $testBuild 'gfx-chart-streamlines-selfhost.exe'
+$gfxChartStreamlinesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_streamlines\src\main.e') $repo 'x64' 'windows' $gfxChartStreamlinesPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStreamlinesWritten -ne 'executable written') { throw 'gfx_chart_streamlines emission failed' }
+$gfxChartStreamlinesOutput = & $gfxChartStreamlinesPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStreamlinesOutput -ne 'gfx chart streamlines ok') { throw "the e.gfx.chart streamline integration answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

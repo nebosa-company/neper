@@ -2779,6 +2779,11 @@ gfx_chart_quiver_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/gfx-chart-quiver-selfhost"
 gfx_chart_quiver_output=$("$test_build/gfx-chart-quiver-selfhost")
 [ "$gfx_chart_quiver_output" = 'gfx chart quiver ok' ]
+gfx_chart_streamlines_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_streamlines/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-streamlines-selfhost")
+[ "$gfx_chart_streamlines_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-streamlines-selfhost"
+gfx_chart_streamlines_output=$("$test_build/gfx-chart-streamlines-selfhost")
+[ "$gfx_chart_streamlines_output" = 'gfx chart streamlines ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")
