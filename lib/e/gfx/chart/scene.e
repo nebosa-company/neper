@@ -190,14 +190,15 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
 // Matrix palettes are supplied by the caller. Correlation uses a neutral
 // midpoint at zero; ordinary heatmaps interpolate directly from low to high.
 fn append_matrix(builder: *scene.Builder, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err {
-    if marks.kind != .Heatmap && marks.kind != .Correlation && marks.kind != .Mosaic { ret chart.Invalid }
-    if marks.columns == 0usize || marks.rows == 0usize || marks.cells.len == 0usize || (marks.cells.len - 1usize) / marks.columns >= marks.rows { ret chart.Invalid }
+    if marks.kind != .Heatmap && marks.kind != .Correlation && marks.kind != .Mosaic && marks.kind != .Association { ret chart.Invalid }
+    if marks.columns == 0usize || marks.rows == 0usize || (marks.cells.len == 0usize && marks.kind != .Association) { ret chart.Invalid }
+    if marks.cells.len > 0usize && (marks.cells.len - 1usize) / marks.columns >= marks.rows { ret chart.Invalid }
     var i = 0usize
     while i < marks.cells.len {
         let cell = marks.cells[i]
         if cell.value != cell.value || cell.value - cell.value != 0.0 || cell.rect.width <= 0.0 || cell.rect.height <= 0.0 { ret chart.Invalid }
         var color = middle
-        if marks.kind == .Correlation || marks.kind == .Mosaic {
+        if marks.kind == .Correlation || marks.kind == .Mosaic || marks.kind == .Association {
             let value = cell.value / marks.value_max
             if value < 0.0 { color = paint.mix(low, middle, value + 1.0) }
             if value > 0.0 { color = paint.mix(middle, high, value) }

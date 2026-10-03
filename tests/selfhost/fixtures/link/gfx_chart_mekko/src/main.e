@@ -5,6 +5,7 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.io
+use e.math
 use e.mem
 use e.str
 
@@ -57,7 +58,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if mosaic_gutter != chart.Invalid { ret chart.Invalid }
     let (again_mosaic, again_mosaic_error) = chart.mosaic(counts[..], 2usize, bounds, 2.0, mosaic_columns[..], mosaic_rows[..], mosaic_cells[..])
     if again_mosaic_error != ok { ret again_mosaic_error }
-    let (made, builder_error) = scene.builder(a, 8usize)
+    var association_cells: [4]chart.Cell = zero
+    var association_baselines: [2]chart.Segment = zero
+    let (association, association_error) = chart.association(counts[..], 2usize, bounds, 0.1, mosaic_columns[..], mosaic_rows[..], association_cells[..], association_baselines[..])
+    if association_error != ok || association.kind != .Association || association.cells.len != 4usize { ret chart.Invalid }
+    if !near(association.cells[0usize].value, 1.0328) || !near(association.cells[2usize].value, -0.8729) { ret chart.Invalid }
+    if !near(association_baselines[0usize].from.y, 25.0) || !near(association_baselines[1usize].from.y, 75.0) || association.cells[0usize].rect.y >= 25.0 || association.cells[1usize].rect.y != 25.0 || association.cells[2usize].rect.y != 75.0 { ret chart.Invalid }
+    let first_expected = 5.0f64 * 4.0f64 / 12.0f64
+    let second_expected = 7.0f64 * 4.0f64 / 12.0f64
+    if !near(association.cells[0usize].rect.width / association.cells[2usize].rect.width, f32(math.sqrt[f64](first_expected / second_expected))) { ret chart.Invalid }
+    let first_area = association.cells[0usize].rect.width * association.cells[0usize].rect.height / f32(3.0f64 - first_expected)
+    let fourth_expected = 7.0f64 * 8.0f64 / 12.0f64
+    let fourth_area = association.cells[3usize].rect.width * association.cells[3usize].rect.height / f32(6.0f64 - fourth_expected)
+    if !near(first_area, fourth_area) { ret chart.Invalid }
+    let independent = [4]f64{ 1.0, 1.0, 1.0, 1.0 }
+    let (independent_plot, independent_error) = chart.association(independent[..], 2usize, bounds, 0.1, mosaic_columns[..], mosaic_rows[..], association_cells[..], association_baselines[..])
+    if independent_error != ok || independent_plot.cells.len != 0usize || !near(independent_plot.value_max, 1.0) { ret chart.Invalid }
+    let zero_row = [4]f64{ 3.0, 0.0, 2.0, 0.0 }
+    let (empty_row_plot, empty_row_error) = chart.association(zero_row[..], 2usize, bounds, 0.1, mosaic_columns[..], mosaic_rows[..], association_cells[..], association_baselines[..])
+    if empty_row_error != ok || empty_row_plot.cells.len != 0usize || !near(association_baselines[1usize].from.y, 75.0) { ret chart.Invalid }
+    let (_, association_negative) = chart.association(negative_counts[..], 2usize, bounds, 0.1, mosaic_columns[..], mosaic_rows[..], association_cells[..], association_baselines[..])
+    if association_negative != chart.Invalid { ret chart.Invalid }
+    let (_, association_empty) = chart.association(empty_counts[..], 2usize, bounds, 0.1, mosaic_columns[..], mosaic_rows[..], association_cells[..], association_baselines[..])
+    if association_empty != chart.Empty { ret chart.Invalid }
+    let (_, association_shape) = chart.association(counts[..3usize], 2usize, bounds, 0.1, mosaic_columns[..], mosaic_rows[..], association_cells[..], association_baselines[..])
+    if association_shape != chart.Invalid { ret chart.Invalid }
+    let (_, association_space) = chart.association(counts[..], 2usize, bounds, 1.0, mosaic_columns[..], mosaic_rows[..], association_cells[..], association_baselines[..])
+    if association_space != chart.Invalid { ret chart.Invalid }
+    let (_, association_short) = chart.association(counts[..], 2usize, bounds, 0.1, mosaic_columns[..], mosaic_rows[..], association_cells[..3usize], association_baselines[..])
+    if association_short != chart.TooLarge { ret chart.Invalid }
+    let (again_association, again_association_error) = chart.association(counts[..], 2usize, bounds, 0.1, mosaic_columns[..], mosaic_rows[..], association_cells[..], association_baselines[..])
+    if again_association_error != ok { ret again_association_error }
+    let (made, builder_error) = scene.builder(a, 16usize)
     if builder_error != ok { ret builder_error }
     var builder = made
     let blue = paint.rgba(0.1, 0.3, 0.8, 1.0)
@@ -69,7 +101,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let low = paint.rgba(0.85, 0.25, 0.25, 1.0)
     let middle = paint.rgba(0.96, 0.96, 0.96, 1.0)
     try chart_scene.append_matrix(&builder, &again_mosaic, low, middle, blue)
-    if scene.builder_count(&builder) != 8usize { ret chart.Invalid }
+    try chart_scene.append_matrix(&builder, &again_association, low, middle, blue)
+    if scene.builder_count(&builder) != 12usize { ret chart.Invalid }
     let (state, unused, writer_error) = io.memory_writer(a, 0usize)
     if writer_error != ok { ret writer_error }
     var held = state
@@ -81,6 +114,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     try chart_svg.append_matrix(&writer, &again_mosaic, low, middle, blue)
+    try chart_svg.append_matrix(&writer, &again_association, low, middle, blue)
+    try chart_svg.append_matrix(&writer, &independent_plot, low, middle, blue)
     try chart_svg.finish(&writer)
     let svg = io.memory_bytes(&held)
     if !str.contains(svg, "<rect") || !str.contains(svg, "</svg>") { ret chart.Invalid }

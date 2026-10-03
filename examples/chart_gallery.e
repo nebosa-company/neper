@@ -4,6 +4,7 @@ use e.algo.stat
 use e.fs
 use e.gpu
 use e.io
+use e.math
 use e.mem
 use e.str
 use e.fmt.png
@@ -1706,6 +1707,82 @@ fn render_mosaic_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_association_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let counts = [12]f64{ 12.0, 2.0, 1.0, 2.0, 10.0, 3.0, 7.0, 5.0, 10.0, 3.0, 1.0, 8.0 }
+    let bounds = geometry.rect(60.0, 47.0, 220.0, 145.0)
+    var columns: [4]f64 = zero
+    var rows: [3]f64 = zero
+    var cells: [12]chart.Cell = zero
+    var baselines: [3]chart.Segment = zero
+    let (marks, marks_error) = chart.association(counts[..], 4usize, bounds, 0.08, columns[..], rows[..], cells[..], baselines[..])
+    if marks_error != ok { ret marks_error }
+    let guides = chart.Layout { kind: .Rug, coords: zero, segments: baselines[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let deficit = paint.rgba(0.80, 0.24, 0.29, 1.0)
+    let neutral = paint.rgba(0.96, 0.96, 0.96, 1.0)
+    let surplus = paint.rgba(0.08, 0.38, 0.75, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let rule = paint.rgba(0.69, 0.73, 0.80, 1.0)
+    let row_names = [3]str{ "R1", "R2", "R3" }
+    let column_names = [4]str{ "A", "B", "C", "D" }
+    var labels: [10]chart.Label = zero
+    var i = 0usize
+    while i < rows.len {
+        labels[i] = chart.Label { text: row_names[i], anchor: chart.Coord { x: 51.0, y: baselines[i].from.y + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    var root_total = 0.0f64
+    i = 0usize
+    while i < columns.len {
+        root_total += math.sqrt[f64](columns[i])
+        i += 1usize
+    }
+    var cumulative = 0.0f64
+    i = 0usize
+    while i < columns.len {
+        let width = math.sqrt[f64](columns[i])
+        labels[3usize + i] = chart.Label { text: column_names[i], anchor: chart.Coord { x: bounds.x + bounds.width * f32((cumulative + width * 0.5f64) / root_total), y: 211.0 }, align: .Center }
+        cumulative += width
+        i += 1usize
+    }
+    labels[7usize] = chart.Label { text: "Association • residuals", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[8usize] = chart.Label { text: "Deficit", anchor: chart.Coord { x: 301.0, y: 83.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "Surplus", anchor: chart.Coord { x: 301.0, y: 129.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 21u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let deficit_swatch = geometry.rect(295.0, 60.0, 12.0, 12.0)
+    let surplus_swatch = geometry.rect(295.0, 106.0, 12.0, 12.0)
+    let (made, builder_error) = scene.builder(a, 48usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append(a, &builder, &guides, paint.Brush { Solid: rule })
+    try chart_scene.append_matrix(&builder, &marks, deficit, neutral, surplus)
+    try fill(&builder, deficit_swatch, paint.Brush { Solid: deficit })
+    try fill(&builder, surplus_swatch, paint.Brush { Solid: surplus })
+    try chart_scene.append_labels(a, &builder, labels[..7usize], font, 10.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[7usize..8usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[8usize..], font, 9.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/association.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &guides, rule)
+    try chart_svg.append_matrix(&writer, &marks, deficit, neutral, surplus)
+    try chart_svg.rect(&writer, deficit_swatch, deficit, false)
+    try chart_svg.rect(&writer, surplus_swatch, surplus, false)
+    try chart_svg.append_labels(&writer, labels[..7usize], dark, 10.0)
+    try chart_svg.append_labels(&writer, labels[7usize..8usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[8usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
     if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
     let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
@@ -2728,6 +2805,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if mekko_error != ok { ret mekko_error }
     try render_mekko(a, queue, output_target, canvas, &renderer, mekko_layers, category_names[..], mekko_series[..], "docs/chart-previews/mekko.png")
     try render_mosaic_preview(a, queue, output_target, canvas, &renderer)
+    try render_association_preview(a, queue, output_target, canvas, &renderer)
     let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
     let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
     let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }

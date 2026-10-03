@@ -33809,3 +33809,15 @@ existing matrix scene/SVG palettes, with a neutral zero and explicit gutter.
 The `Mosaic` kind keeps this statistical meaning distinct from heatmaps and
 Mekko bars. `gfx_chart_mekko` checks geometry, residuals, refusals and both
 adapters on Windows and Linux; the gallery adds a labeled PNG/SVG pair.
+
+## D1870 — Association plots encode signed departures from independence
+
+`association` accepts column-major nonnegative two-way counts and computes
+Pearson residuals from the row and column margins. It lays out each row against
+its own zero baseline with rectangle widths proportional to square-root
+expected counts and signed heights proportional to residuals, giving a common
+area scale for observed-minus-expected counts. Zero residuals emit no bar;
+zero-margin rows retain their baseline. The `Association` matrix kind reuses
+the diverging scene/SVG palette, and existing Rug segments draw baselines.
+`gfx_chart_mekko` checks reference residuals, geometry, empty/invalid/capacity
+paths and both adapters on Windows and Linux; the gallery adds a PNG/SVG pair.

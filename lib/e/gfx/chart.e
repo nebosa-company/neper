@@ -12,7 +12,7 @@ use e.mem
 use e.str
 use e.text.layout as text_layout
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp, Mosaic }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp, Mosaic, Association }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
@@ -2675,6 +2675,103 @@ fn mosaic(counts: []const f64, columns: usize, bounds: geometry.Rect, gutter: f3
     }
     if maximum == 0.0 { maximum = 1.0 }
     ret (MatrixLayout { kind: .Mosaic, cells: cells[..used], columns: columns, rows: rows, value_min: -maximum, value_max: maximum }, ok)
+}
+
+// Cohen-Friendly association plot: rectangle area is proportional to the
+// observed-minus-expected count. Input is column-major; output tiles are
+// compact row-major. Each row has its own independence baseline.
+fn association(counts: []const f64, columns: usize, bounds: geometry.Rect, space: f32, column_totals: []f64, row_totals: []f64, cells: []Cell, baselines: []Segment) -> (MatrixLayout, err) {
+    if counts.len == 0usize { ret (zero, Empty) }
+    if columns == 0usize || counts.len % columns != 0usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(space) || space < 0.0 || space >= 1.0 { ret (zero, Invalid) }
+    let rows = counts.len / columns
+    if column_totals.len < columns || row_totals.len < rows || cells.len < counts.len || baselines.len < rows { ret (zero, TooLarge) }
+    var row = 0usize
+    while row < rows {
+        row_totals[row] = 0.0f64
+        row += 1usize
+    }
+    var grand = 0.0f64
+    var column = 0usize
+    while column < columns {
+        var total = 0.0f64
+        row = 0usize
+        while row < rows {
+            let value = counts[column * rows + row]
+            if !finite64(value) || value < 0.0f64 { ret (zero, Invalid) }
+            total += value
+            row_totals[row] += value
+            row += 1usize
+        }
+        if !finite64(total) { ret (zero, Invalid) }
+        column_totals[column] = total
+        grand += total
+        column += 1usize
+    }
+    if !finite(f32(grand)) { ret (zero, Invalid) }
+    if grand <= 0.0f64 { ret (zero, Empty) }
+    var widest = 0.0f64
+    var maximum = 0.0f32
+    row = 0usize
+    while row < rows {
+        var width = 0.0f64
+        column = 0usize
+        while column < columns {
+            let expected = (row_totals[row] / grand) * column_totals[column]
+            if !finite64(expected) { ret (zero, Invalid) }
+            if expected <= 0.0f64 && counts[column * rows + row] > 0.0f64 { ret (zero, Invalid) }
+            if expected > 0.0f64 {
+                let root = math.sqrt[f64](expected)
+                let residual = f32((counts[column * rows + row] - expected) / root)
+                if !finite(residual) { ret (zero, Invalid) }
+                width += root
+                var magnitude = residual
+                if magnitude < 0.0 { magnitude = -magnitude }
+                if magnitude > maximum { maximum = magnitude }
+            }
+            column += 1usize
+        }
+        if !finite64(width) { ret (zero, Invalid) }
+        if width > widest { widest = width }
+        row += 1usize
+    }
+    if widest <= 0.0f64 { ret (zero, Invalid) }
+    if maximum == 0.0 { maximum = 1.0 }
+    let row_band = bounds.height / f32(rows)
+    let horizontal = f64(bounds.width) / widest
+    let vertical = row_band * 0.45 * (1.0 - space) / maximum
+    if !finite(row_band) || row_band <= 0.0 || !finite64(horizontal) || !finite(vertical) || vertical <= 0.0 { ret (zero, Invalid) }
+    var used = 0usize
+    row = 0usize
+    while row < rows {
+        let baseline = bounds.y + row_band * (f32(row) + 0.5)
+        if !finite(baseline) { ret (zero, Invalid) }
+        baselines[row] = Segment { from: Coord { x: bounds.x, y: baseline }, to: Coord { x: bounds.x + bounds.width, y: baseline } }
+        var cursor = f64(bounds.x)
+        column = 0usize
+        while column < columns {
+            let expected = (row_totals[row] / grand) * column_totals[column]
+            if expected > 0.0f64 {
+                let footprint = math.sqrt[f64](expected) * horizontal
+                let residual = f32((counts[column * rows + row] - expected) / math.sqrt[f64](expected))
+                if residual != 0.0 {
+                    let x = f32(cursor + footprint * f64(space) * 0.5f64)
+                    let width = f32(footprint * f64(1.0 - space))
+                    var magnitude = residual
+                    if magnitude < 0.0 { magnitude = -magnitude }
+                    let height = vertical * magnitude
+                    var y = baseline
+                    if residual > 0.0 { y -= height }
+                    if !finite(x) || !finite(y) || !finite(width) || !finite(height) || width <= 0.0 || height <= 0.0 { ret (zero, Invalid) }
+                    cells[used] = Cell { rect: geometry.rect(x, y, width, height), value: residual }
+                    used += 1usize
+                }
+                cursor += footprint
+            }
+            column += 1usize
+        }
+        row += 1usize
+    }
+    ret (MatrixLayout { kind: .Association, cells: cells[..used], columns: columns, rows: rows, value_min: -maximum, value_max: maximum }, ok)
 }
 
 // Two nonnegative age series diverge from a shared central label gutter.
