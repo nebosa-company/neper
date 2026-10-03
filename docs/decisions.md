@@ -34179,3 +34179,14 @@ buffers and reuse Bar/Rug scene and SVG rendering. The Windows and Linux
 fixture checks hierarchy, ordering, capacity and malformed trees; the gallery
 adds one PNG/SVG pair. Multiple roots, dotted-line relationships and collapse
 behavior remain separate work.
+
+## D1909 — Layer dependency graphs by longest path through a DAG
+
+`dependency_graph` uses a caller-owned Kahn traversal to validate acyclicity,
+allow multiple sources and disconnected nodes, and assign each node its longest
+incoming-path rank. Each rank gets an x column; peers share its y slots, and
+five Rug segments per dependency form orthogonal arrows into Bar node boxes.
+Windows and Linux fixtures check merges, splits, disconnected nodes, cycles,
+invalid endpoints, capacities and scene/SVG adapters. The gallery adds a
+PNG/SVG pair. Crossing reduction, edge-port selection and editing are future
+work, not implied by this static layout.

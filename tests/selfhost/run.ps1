@@ -3267,6 +3267,11 @@ $gfxChartOrgChartWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $gfxChartOrgChartWritten -ne 'executable written') { throw 'gfx_chart_org_chart emission failed' }
 $gfxChartOrgChartOutput = & $gfxChartOrgChartPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartOrgChartOutput -ne 'gfx chart org chart ok') { throw "the e.gfx.chart org chart answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDependencyGraphPath = Join-Path $testBuild 'gfx-chart-dependency-graph-selfhost.exe'
+$gfxChartDependencyGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_dependency_graph\src\main.e') $repo 'x64' 'windows' $gfxChartDependencyGraphPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDependencyGraphWritten -ne 'executable written') { throw 'gfx_chart_dependency_graph emission failed' }
+$gfxChartDependencyGraphOutput = & $gfxChartDependencyGraphPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDependencyGraphOutput -ne 'gfx chart dependency graph ok') { throw "the e.gfx.chart dependency graph answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

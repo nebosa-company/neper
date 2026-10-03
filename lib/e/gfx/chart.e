@@ -55,6 +55,9 @@ type OrgLink = struct { manager: usize, report: usize }
 type OrgPlacement = struct { depth: usize, leaf_start: usize, leaf_count: usize, direct_reports: usize }
 type OrgWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize }
 type OrgLayout = struct { nodes: Layout, connectors: Layout, levels: usize, leaves: usize }
+type DependencyLink = struct { from: usize, to: usize }
+type DependencyWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize, stage: []usize, stage_counts: []usize, stage_used: []usize }
+type DependencyLayout = struct { nodes: Layout, connectors: Layout, stages: usize, sources: usize }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2838,6 +2841,109 @@ fn org_chart(node_count: usize, links: []const OrgLink, bounds: geometry.Rect, p
     let people = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..node_count], x_min: 0.0, x_max: f32(leaves), y_min: 0.0, y_max: f32(levels) }
     let reporting = Layout { kind: .Rug, coords: zero, segments: connectors[..links.len * 3usize], bars: zero, x_min: 0.0, x_max: f32(leaves), y_min: 0.0, y_max: f32(levels) }
     ret (OrgLayout { nodes: people, connectors: reporting, levels: levels, leaves: leaves }, ok)
+}
+
+// Longest-path ranks give every edge a left-to-right direction. Kahn's pass
+// handles multiple sources, merges and disconnected components; cycles refuse.
+fn dependency_graph(node_count: usize, links: []const DependencyLink, bounds: geometry.Rect, work: DependencyWork, boxes: []geometry.Rect, arrows: []Segment) -> (DependencyLayout, err) {
+    if node_count == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if work.indegree.len < node_count || work.head.len < node_count || work.order.len < node_count || work.stage.len < node_count || work.stage_counts.len < node_count || work.stage_used.len < node_count || work.next.len < links.len || boxes.len < node_count || arrows.len / 5usize < links.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < node_count {
+        work.indegree[i] = 0usize
+        work.head[i] = 0usize
+        work.stage[i] = 0usize
+        work.stage_counts[i] = 0usize
+        work.stage_used[i] = 0usize
+        i += 1usize
+    }
+    i = links.len
+    while i > 0usize {
+        i -= 1usize
+        let link = links[i]
+        if link.from >= node_count || link.to >= node_count || link.from == link.to { ret (zero, Invalid) }
+        work.indegree[link.to] += 1usize
+        work.next[i] = work.head[link.from]
+        work.head[link.from] = i + 1usize
+    }
+    var tail = 0usize
+    var sources = 0usize
+    i = 0usize
+    while i < node_count {
+        if work.indegree[i] == 0usize {
+            work.order[tail] = i
+            tail += 1usize
+            sources += 1usize
+        }
+        i += 1usize
+    }
+    var front = 0usize
+    var stages = 1usize
+    while front < tail {
+        let node = work.order[front]
+        var edge = work.head[node]
+        while edge != 0usize {
+            let to = links[edge - 1usize].to
+            let next_stage = work.stage[node] + 1usize
+            if next_stage > work.stage[to] { work.stage[to] = next_stage }
+            if next_stage + 1usize > stages { stages = next_stage + 1usize }
+            work.indegree[to] -= 1usize
+            if work.indegree[to] == 0usize {
+                work.order[tail] = to
+                tail += 1usize
+            }
+            edge = work.next[edge - 1usize]
+        }
+        front += 1usize
+    }
+    if tail != node_count { ret (zero, Invalid) }
+    i = 0usize
+    while i < node_count {
+        work.stage_counts[work.stage[i]] += 1usize
+        i += 1usize
+    }
+    let cell_width = bounds.width / f32(stages)
+    var box_width = cell_width * 0.66
+    if box_width > 96.0 { box_width = 96.0 }
+    let box_height = 30.0f32
+    if !finite(cell_width) || !finite(box_width) || box_width < 32.0 { ret (zero, TooLarge) }
+    i = 0usize
+    while i < node_count {
+        let rank = work.stage[i]
+        let slot_height = bounds.height / f32(work.stage_counts[rank])
+        if !finite(slot_height) || slot_height < box_height + 6.0 { ret (zero, TooLarge) }
+        let x = bounds.x + (f32(rank) + 0.5) * cell_width - box_width * 0.5
+        let y = bounds.y + (f32(work.stage_used[rank]) + 0.5) * slot_height - box_height * 0.5
+        if !finite(x) || !finite(y) || !finite(x + box_width) || !finite(y + box_height) { ret (zero, Invalid) }
+        boxes[i] = geometry.rect(x, y, box_width, box_height)
+        work.stage_used[rank] += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < links.len {
+        let from = boxes[links[i].from]
+        let to = boxes[links[i].to]
+        let x0 = from.x + from.width
+        let x1 = to.x
+        let y0 = from.y + from.height * 0.5
+        let y1 = to.y + to.height * 0.5
+        let mid = x0 + (x1 - x0) * 0.5
+        var head = (x1 - x0) * 0.18
+        if head > 7.0 { head = 7.0 }
+        if !finite(mid) || !finite(head) || head <= 0.0 { ret (zero, TooLarge) }
+        let tip = Coord { x: x1, y: y1 }
+        let first = i * 5usize
+        arrows[first] = Segment { from: Coord { x: x0, y: y0 }, to: Coord { x: mid, y: y0 } }
+        arrows[first + 1usize] = Segment { from: Coord { x: mid, y: y0 }, to: Coord { x: mid, y: y1 } }
+        arrows[first + 2usize] = Segment { from: Coord { x: mid, y: y1 }, to: tip }
+        arrows[first + 3usize] = Segment { from: Coord { x: x1 - head, y: y1 - head * 0.7 }, to: tip }
+        arrows[first + 4usize] = Segment { from: Coord { x: x1 - head, y: y1 + head * 0.7 }, to: tip }
+        i += 1usize
+    }
+    let nodes = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..node_count], x_min: 0.0, x_max: f32(stages), y_min: 0.0, y_max: 1.0 }
+    let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..links.len * 5usize], bars: zero, x_min: 0.0, x_max: f32(stages), y_min: 0.0, y_max: 1.0 }
+    ret (DependencyLayout { nodes: nodes, connectors: connectors, stages: stages, sources: sources }, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

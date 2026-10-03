@@ -2889,6 +2889,11 @@ gfx_chart_org_chart_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$test_build/gfx-chart-org-chart-selfhost"
 gfx_chart_org_chart_output=$("$test_build/gfx-chart-org-chart-selfhost")
 [ "$gfx_chart_org_chart_output" = 'gfx chart org chart ok' ]
+gfx_chart_dependency_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_dependency_graph/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-dependency-graph-selfhost")
+[ "$gfx_chart_dependency_graph_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-dependency-graph-selfhost"
+gfx_chart_dependency_graph_output=$("$test_build/gfx-chart-dependency-graph-selfhost")
+[ "$gfx_chart_dependency_graph_output" = 'gfx chart dependency graph ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")
