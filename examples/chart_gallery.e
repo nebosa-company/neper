@@ -164,6 +164,64 @@ fn render_scatter_overlay(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targ
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_ridgelines(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, path: str) -> err {
+    if layers.len != 3usize || names.len != layers.len { ret chart.Invalid }
+    let plot = geometry.rect(44.0, 30.0, 286.0, 174.0)
+    let grid_color = paint.rgba(0.88, 0.91, 0.95, 1.0)
+    let axis_color = paint.rgba(0.32, 0.38, 0.48, 1.0)
+    let colors = [3]paint.Color{ paint.rgba(0.07, 0.35, 0.76, 0.86), paint.rgba(0.22, 0.65, 0.48, 0.86), paint.rgba(0.94, 0.42, 0.12, 0.86) }
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var x_ticks: [4]chart.Tick = zero
+    let (ticks, tick_error) = chart.nice_ticks(linear, layers[0usize].x_min, layers[0usize].x_max, 4usize, x_ticks[..])
+    if tick_error != ok { ret tick_error }
+    var tick_words: [4]str = zero
+    var tick_text: [128]u8 = zero
+    let (words, words_error) = chart.format_ticks(ticks, tick_words[..], tick_text[..])
+    if words_error != ok { ret words_error }
+    var labels: [8]chart.Label = zero
+    let (_, labels_error) = chart.guide_labels(plot, ticks, words, x_ticks[..0usize], words[..0usize], 9.0, labels[..ticks.len])
+    if labels_error != ok { ret labels_error }
+    var i = 0usize
+    while i < layers.len {
+        labels[ticks.len + i] = chart.Label { text: names[i], anchor: chart.Coord { x: plot.x - 6.0, y: layers[i].coords[0usize].y + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    labels[ticks.len + layers.len] = chart.Label { text: "Shared-scale ridgeline density", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 32usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, plot, ticks, x_ticks[..0usize], paint.Brush { Solid: grid_color }, paint.Brush { Solid: axis_color })
+    i = layers.len
+    while i > 0usize {
+        i -= 1usize
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+    }
+    try chart_scene.append_labels(a, &builder, labels[..ticks.len + layers.len], font, 9.0, paint.Brush { Solid: axis_color })
+    try chart_scene.append_labels(a, &builder, labels[ticks.len + layers.len..ticks.len + layers.len + 1usize], font, 11.0, paint.Brush { Solid: axis_color })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_guides(&writer, plot, ticks, x_ticks[..0usize], grid_color, axis_color)
+    i = layers.len
+    while i > 0usize {
+        i -= 1usize
+        try chart_svg.append(&writer, &layers[i], colors[i])
+    }
+    try chart_svg.append_labels(&writer, labels[..ticks.len + layers.len], axis_color, 9.0)
+    try chart_svg.append_labels(&writer, labels[ticks.len + layers.len..ticks.len + layers.len + 1usize], axis_color, 11.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, title: str, path: str) -> err {
     if layers.len != 2usize || names.len != layers.len { ret chart.Invalid }
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
@@ -778,6 +836,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (violin_plot, violin_error) = chart.violin(density_values[..], bounds, 0.0f64, grid[..], estimates[..], violin_outline[..])
     if violin_error != ok { ret violin_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &violin_plot, "docs/chart-previews/violin.png")
+    let ridge_values = [36]f64{
+        1.0, 2.0, 2.0, 2.5, 3.0, 3.0, 3.5, 4.0, 4.0, 4.5, 5.0, 5.5,
+        2.0, 2.5, 3.0, 3.0, 3.5, 4.0, 5.0, 5.0, 5.5, 6.0, 6.5, 7.0,
+        4.0, 4.5, 5.0, 5.5, 6.0, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0,
+    }
+    let ridge_lengths = [3]usize{ 12usize, 12usize, 12usize }
+    let ridge_names = [3]str{ "Early", "Middle", "Late" }
+    var ridge_grid: [64]f64 = zero
+    var ridge_estimates: [192]f64 = zero
+    var ridge_bandwidths: [3]f64 = zero
+    var ridge_outline: [198]chart.Coord = zero
+    var ridge_storage: [3]chart.Layout = zero
+    let (ridges, ridge_error) = chart.ridgeline(ridge_values[..], ridge_lengths[..], bounds, 0.0f64, 1.45, ridge_grid[..], ridge_estimates[..], ridge_bandwidths[..], ridge_outline[..], ridge_storage[..])
+    if ridge_error != ok { ret ridge_error }
+    try render_ridgelines(a, queue, output_target, canvas, &renderer, ridges, ridge_names[..], "docs/chart-previews/ridgeline.png")
     let qq_values = [9]f64{ -2.4, -1.5, -1.1, -0.4, 0.1, 0.5, 1.2, 1.7, 3.0 }
     var qq_points: [9]chart.Coord = zero
     var qq_reference: [1]chart.Segment = zero

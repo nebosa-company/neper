@@ -1572,6 +1572,89 @@ fn density(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f
     ret (Layout { kind: .Density, coords: zero, segments: segments[..grid.len - 1usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }, ok)
 }
 
+// Groups are concatenated in `values` and drawn top-to-bottom on one KDE x
+// domain. `overlap` is ridge height in row spacings; heights share one density
+// scale, so unlike per-ridge normalization they retain cross-group magnitude.
+fn ridgeline(values: []const f64, lengths: []const usize, bounds: geometry.Rect, bandwidth: f64, overlap: f32, grid: []f64, estimates: []f64, bandwidths: []f64, outline: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if values.len == 0usize || lengths.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(overlap) || overlap <= 0.0 || bandwidth < 0.0f64 || !finite64(bandwidth) { ret (zero, Invalid) }
+    if grid.len < 2usize || estimates.len / grid.len < lengths.len || outline.len / (grid.len + 2usize) < lengths.len || bandwidths.len < lengths.len || layers.len < lengths.len { ret (zero, TooLarge) }
+    var lo = values[0usize]
+    var hi = lo
+    var offset = 0usize
+    var max_bandwidth = 0.0f64
+    var group = 0usize
+    while group < lengths.len {
+        let count = lengths[group]
+        if count == 0usize || count > values.len - offset { ret (zero, Invalid) }
+        var i = offset
+        while i < offset + count {
+            if !finite(f32(values[i])) { ret (zero, Invalid) }
+            if values[i] < lo { lo = values[i] }
+            if values[i] > hi { hi = values[i] }
+            i += 1usize
+        }
+        var bw = bandwidth
+        if bw == 0.0f64 {
+            let (chosen, defined) = stat.kde_bandwidth(values[offset..offset + count], .Scott)
+            if !defined { ret (zero, Invalid) }
+            bw = chosen
+        }
+        if !(bw > 0.0f64) || !finite(f32(bw)) { ret (zero, Invalid) }
+        bandwidths[group] = bw
+        if bw > max_bandwidth { max_bandwidth = bw }
+        offset += count
+        group += 1usize
+    }
+    if offset != values.len { ret (zero, Invalid) }
+    lo -= 3.0f64 * max_bandwidth
+    hi += 3.0f64 * max_bandwidth
+    if !finite(f32(lo)) || !finite(f32(hi)) || !(hi > lo) { ret (zero, Invalid) }
+    var i = 0usize
+    while i < grid.len {
+        grid[i] = lo + (hi - lo) * f64(i) / f64(grid.len - 1usize)
+        i += 1usize
+    }
+    var peak = 0.0f64
+    offset = 0usize
+    group = 0usize
+    while group < lengths.len {
+        let first = group * grid.len
+        let kde_error = stat.kde(values[offset..offset + lengths[group]], bandwidths[group], grid, estimates[first..first + grid.len])
+        if kde_error != ok { ret (zero, kde_error) }
+        i = first
+        while i < first + grid.len {
+            if estimates[i] > peak { peak = estimates[i] }
+            i += 1usize
+        }
+        offset += lengths[group]
+        group += 1usize
+    }
+    if !(peak > 0.0f64) || !finite(f32(peak)) { ret (zero, Invalid) }
+    let spacing = bounds.height / (f32(lengths.len - 1usize) + overlap)
+    let height = spacing * overlap
+    if !finite(spacing) || !finite(height) || spacing <= 0.0 || height <= 0.0 { ret (zero, Invalid) }
+    group = 0usize
+    while group < lengths.len {
+        let baseline = bounds.y + height + spacing * f32(group)
+        if !finite(baseline) { ret (zero, Invalid) }
+        let first = group * (grid.len + 2usize)
+        outline[first] = Coord { x: bounds.x, y: baseline }
+        i = 0usize
+        while i < grid.len {
+            let x = bounds.x + bounds.width * f32(i) / f32(grid.len - 1usize)
+            let y = baseline - height * f32(estimates[group * grid.len + i] / peak)
+            if !finite(x) || !finite(y) { ret (zero, Invalid) }
+            outline[first + i + 1usize] = Coord { x: x, y: y }
+            i += 1usize
+        }
+        outline[first + grid.len + 1usize] = Coord { x: bounds.x + bounds.width, y: baseline }
+        layers[group] = Layout { kind: .Area, coords: outline[first..first + grid.len + 2usize], segments: zero, bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(lengths.len) }
+        group += 1usize
+    }
+    ret (layers[..lengths.len], ok)
+}
+
 // The same estimate mirrored around the panel center. `outline` holds the
 // closed shape's left side bottom-to-top and right side top-to-bottom.
 fn violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err) {

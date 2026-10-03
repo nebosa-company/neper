@@ -2,13 +2,13 @@
 
 Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, waterfall, bullet, Pareto, pie, donut, waffle, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
-confidence bands, dumbbells, ECDF, box, density, normal Q-Q, violin, heatmap
+confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
 reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-forty-six PNG plus forty-six SVG previews from Neper. L061 remains partial
+forty-seven PNG plus forty-seven SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -79,6 +79,11 @@ and emits exact 1/n rises, including tied observations. Box plots reuse R7
 quartiles for Tukey whiskers; density reuses Gaussian KDE with an explicit or
 Scott bandwidth; Q-Q plots reuse normal quantiles and an R7 quartile reference.
 Violin plots mirror that same Gaussian estimate into a filled outline.
+Ridgeline plots evaluate per-group Gaussian KDE on one shared x grid and draw
+filled Area layers on spaced baselines. A global density peak preserves height
+comparability; the caller controls bandwidth, overlap, group membership and
+storage. `gfx_chart_ridgeline` checks numeric values, refusal paths and both
+adapters on Windows and Linux. Group-wise weights and transformed x scales remain.
 Frequency polygons reuse histogram counts and join bin centers to zero at the
 outer edges. Rugs map every observation to an independent short x-axis stroke,
 preserving ties rather than binning them. Both reuse the existing line/stroke
@@ -200,7 +205,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, basic waterfall, bullet, Pareto, pie, donut, waffle and basic stage funnel are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, basic waterfall, bullet, Pareto, pie, donut, waffle and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -241,7 +246,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    executable fixtures.
 2. **Core distributions (delivered):** histogram, frequency polygon, rug, strip,
    beeswarm, binned dot plot, box,
-   violin, density, ECDF and normal Q-Q have executable fixtures and PNG previews. Other distribution
+   violin, density, ridgeline, ECDF and normal Q-Q have executable fixtures and PNG previews. Other distribution
    variants in the catalogue remain planned.
 3. **Matrix and facets (partial):** heatmap and Pearson correlation matrix have
    executable fixtures and PNG previews; `facet_grid` places panels and a
@@ -271,7 +276,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with forty-six vector previews, automatic numeric tick text and
+   adapter with forty-seven vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

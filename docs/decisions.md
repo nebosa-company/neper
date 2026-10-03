@@ -33322,3 +33322,17 @@ guides but formats numeric right-hand ticks for a volume/index preview.
 `gfx_chart_composition` checks signed bars, independent domains, alignment,
 invalid data/capacity and scene/SVG output on Windows and Linux. Irregular
 x, additional axes and aligned axis tables remain planned.
+
+## D1829 — Keep ridgeline heights comparable across groups
+
+`chart.ridgeline` borrows concatenated group samples and lengths, uses the
+existing Gaussian KDE estimator on one shared x grid, and fills caller-owned
+Area polygons on top-to-bottom baselines. Bandwidth may be supplied or chosen
+per group by Scott's rule; a single maximum across all estimated densities
+scales every ridge, preserving cross-group peak-height differences. The caller
+sets ridge height in row spacings, allowing controlled overlap without clipping
+the top or bottom of the panel. Empty/mismatched groups, non-finite values,
+invalid bandwidth/overlap and short storage are refused. `gfx_chart_ridgeline`
+checks a numeric KDE reference and scene/SVG output on Windows and Linux; the
+gallery adds one labeled PNG/SVG pair. Weighted samples and transformed axes
+remain future work.
