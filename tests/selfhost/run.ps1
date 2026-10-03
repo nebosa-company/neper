@@ -3117,6 +3117,11 @@ $gfxChartHorizonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $gfxChartHorizonWritten -ne 'executable written') { throw 'gfx_chart_horizon emission failed' }
 $gfxChartHorizonOutput = & $gfxChartHorizonPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartHorizonOutput -ne 'gfx chart horizon ok') { throw "the e.gfx.chart horizon bands answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSeasonalPath = Join-Path $testBuild 'gfx-chart-seasonal-selfhost.exe'
+$gfxChartSeasonalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_seasonal\src\main.e') $repo 'x64' 'windows' $gfxChartSeasonalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSeasonalWritten -ne 'executable written') { throw 'gfx_chart_seasonal emission failed' }
+$gfxChartSeasonalOutput = & $gfxChartSeasonalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSeasonalOutput -ne 'gfx chart seasonal ok') { throw "the e.gfx.chart seasonal subseries answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

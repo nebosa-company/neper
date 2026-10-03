@@ -1941,6 +1941,75 @@ fn render_horizon_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targ
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_seasonal_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let values = [16]f32{ 8.0, 12.0, 18.0, 11.0, 9.0, 13.0, 20.0, 12.0, 10.0, 16.0, 21.0, 13.0, 11.0, 17.0, 23.0, 14.0 }
+    let bounds = geometry.rect(44.0, 49.0, 272.0, 139.0)
+    var segments: [12]chart.Segment = zero
+    var means: [4]chart.Segment = zero
+    var storage: [4]chart.Layout = zero
+    let (series, mean_marks, layout_error) = chart.seasonal_subseries(values[..], 4usize, bounds, segments[..], means[..], storage[..])
+    if layout_error != ok { ret layout_error }
+    let blue = paint.rgba(0.06, 0.35, 0.72, 1.0)
+    let orange = paint.rgba(0.88, 0.34, 0.13, 1.0)
+    let pale = paint.rgba(0.95, 0.97, 0.99, 1.0)
+    let rule = paint.rgba(0.79, 0.82, 0.87, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let labels = [6]chart.Label{
+        chart.Label { text: "Seasonal subseries • quarters", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "Q1", anchor: chart.Coord { x: 78.0, y: 205.0 }, align: .Center },
+        chart.Label { text: "Q2", anchor: chart.Coord { x: 146.0, y: 205.0 }, align: .Center },
+        chart.Label { text: "Q3", anchor: chart.Coord { x: 214.0, y: 205.0 }, align: .Center },
+        chart.Label { text: "Q4", anchor: chart.Coord { x: 282.0, y: 205.0 }, align: .Center },
+        chart.Label { text: "Blue: year sequence     Orange: quarter mean", anchor: chart.Coord { x: 180.0, y: 228.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 24u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var i = 0usize
+    while i < 4usize {
+        if i % 2usize == 0usize { try fill(&builder, geometry.rect(bounds.x + f32(i) * 68.0, bounds.y, 68.0, bounds.height), paint.Brush { Solid: pale }) }
+        if i > 0usize { try fill(&builder, geometry.rect(bounds.x + f32(i) * 68.0, bounds.y, 1.0, bounds.height), paint.Brush { Solid: rule }) }
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &mean_marks, paint.Brush { Solid: orange })
+    i = 0usize
+    while i < series.len {
+        try chart_scene.append(a, &builder, &series[i], paint.Brush { Solid: blue })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/seasonal_subseries.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 4usize {
+        if i % 2usize == 0usize { try chart_svg.rect(&writer, geometry.rect(bounds.x + f32(i) * 68.0, bounds.y, 68.0, bounds.height), pale, false) }
+        if i > 0usize { try chart_svg.rect(&writer, geometry.rect(bounds.x + f32(i) * 68.0, bounds.y, 1.0, bounds.height), rule, false) }
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &mean_marks, orange)
+    i = 0usize
+    while i < series.len {
+        try chart_svg.append(&writer, &series[i], blue)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
     if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
     let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
@@ -2966,6 +3035,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_association_preview(a, queue, output_target, canvas, &renderer)
     try render_fourfold_preview(a, queue, output_target, canvas, &renderer)
     try render_horizon_preview(a, queue, output_target, canvas, &renderer)
+    try render_seasonal_preview(a, queue, output_target, canvas, &renderer)
     let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
     let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
     let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }

@@ -15959,6 +15959,7 @@ fn mosaic(counts: []const f64, columns: usize, bounds: geometry.Rect, gutter: f3
 fn association(counts: []const f64, columns: usize, bounds: geometry.Rect, space: f32, column_totals: []f64, row_totals: []f64, cells: []Cell, baselines: []Segment) -> (MatrixLayout, err)
 fn fourfold(counts: []const f64, bounds: geometry.Rect, confidence: f64, points: []Coord, ring_segments: []Segment, wedges: []Layout) -> (FourfoldLayout, err)
 fn horizon(x: []const f32, y: []const f32, origin: f32, band_width: f32, bands: usize, bounds: geometry.Rect, points: []Coord, patches: []HorizonPatch) -> ([]HorizonPatch, err)
+fn seasonal_subseries(values: []const f32, period: usize, bounds: geometry.Rect, segments: []Segment, means: []Segment, layers: []Layout) -> ([]Layout, Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err)
 fn rug(values: []const f32, bounds: geometry.Rect, height: f32, segments: []Segment) -> (Layout, err)

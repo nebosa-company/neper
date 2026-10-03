@@ -33848,3 +33848,15 @@ spacing, storage/invalid refusals and scene/SVG parity on Windows and Linux;
 the gallery adds a PNG/SVG pair. Automatic scaling, missing gaps and grouped
 multi-series layout remain planned. Reference: latticeExtra `horizonplot` and
 ggHoriPlot `geom_horizon` documentation.
+
+## D1874 — Seasonal subseries compose line traces and mean rules
+
+`seasonal_subseries` groups a numeric sequence by caller-selected period,
+placing consecutive cycles inside one x slot per seasonal position. Each slot
+returns a Line layout, and a Rug rule marks that position's arithmetic mean.
+A partial final cycle is retained; a one-cycle series, invalid bounds and short
+caller storage are refused. `gfx_chart_seasonal` checks exact positions, means,
+partial cycles, flat data and scene/SVG output on Windows and Linux; the gallery
+adds a PNG/SVG pair. Explicit phase labels/times, missing-value gaps and
+alternative reference statistics remain planned. Reference: R `stats::monthplot`
+and forecast `ggsubseriesplot` documentation.

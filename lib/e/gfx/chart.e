@@ -2981,6 +2981,57 @@ fn horizon(x: []const f32, y: []const f32, origin: f32, band_width: f32, bands: 
     ret (patches[..used], ok)
 }
 
+// Consecutive observations are assigned to repeated seasonal positions.
+// Each position gets a Line subseries and a horizontal mean Rug rule.
+fn seasonal_subseries(values: []const f32, period: usize, bounds: geometry.Rect, segments: []Segment, means: []Segment, layers: []Layout) -> ([]Layout, Layout, err) {
+    if values.len == 0usize { ret (zero, zero, Empty) }
+    if period == 0usize || values.len / period < 2usize || !valid_bounds(bounds) { ret (zero, zero, Invalid) }
+    if segments.len < values.len - period || means.len < period || layers.len < period { ret (zero, zero, TooLarge) }
+    let (raw_min, raw_max, extent_error) = extent(values)
+    if extent_error != ok { ret (zero, zero, extent_error) }
+    var low = f64(raw_min)
+    var high = f64(raw_max)
+    if low == high {
+        low -= 1.0f64
+        high += 1.0f64
+    }
+    let cycles = (values.len - 1usize) / period + 1usize
+    let cell_width = f64(bounds.width) / f64(period)
+    var used = 0usize
+    var phase = 0usize
+    while phase < period {
+        let start = used
+        var cycle = 0usize
+        var sum = 0.0f64
+        var previous: Coord = zero
+        var index = phase
+        while index < values.len {
+            let px = f32(f64(bounds.x) + (f64(phase) + 0.1f64 + 0.8f64 * f64(cycle) / f64(cycles - 1usize)) * cell_width)
+            let py = f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (f64(values[index]) - low) / (high - low)))
+            if !finite(px) || !finite(py) { ret (zero, zero, Invalid) }
+            let point = Coord { x: px, y: py }
+            if cycle > 0usize {
+                segments[used] = Segment { from: previous, to: point }
+                used += 1usize
+            }
+            previous = point
+            sum += f64(values[index])
+            cycle += 1usize
+            index += period
+        }
+        let mean = sum / f64(cycle)
+        let mean_y = f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (mean - low) / (high - low)))
+        let left = f32(f64(bounds.x) + (f64(phase) + 0.1f64) * cell_width)
+        let right = f32(f64(bounds.x) + (f64(phase) + 0.9f64) * cell_width)
+        if !finite(mean_y) || !finite(left) || !finite(right) || right <= left { ret (zero, zero, Invalid) }
+        means[phase] = Segment { from: Coord { x: left, y: mean_y }, to: Coord { x: right, y: mean_y } }
+        layers[phase] = Layout { kind: .Line, coords: zero, segments: segments[start..used], bars: zero, x_min: 0.0, x_max: f32(cycles - 1usize), y_min: raw_min, y_max: raw_max }
+        phase += 1usize
+    }
+    let mean_marks = Layout { kind: .Rug, coords: zero, segments: means[..period], bars: zero, x_min: 0.0, x_max: f32(cycles - 1usize), y_min: raw_min, y_max: raw_max }
+    ret (layers[..period], mean_marks, ok)
+}
+
 // Two nonnegative age series diverge from a shared central label gutter.
 // Input rows run from youngest (bottom) to oldest (top).
 fn population_pyramid(left: []const f32, right: []const f32, bounds: geometry.Rect, gutter: f32, row_gap: f32, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
