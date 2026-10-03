@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and fifty PNG plus one hundred and fifty SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram and a basic swimlane workflow are also delivered. Individuals, moving-range,
+one hundred and fifty-one PNG plus one hundred and fifty-one SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow and a Kanban board layout are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -477,6 +477,14 @@ duplicate/out-of-range nodes, backward links, storage refusals and scene/SVG
 output on Windows and Linux. The gallery includes a labeled PNG/SVG pair.
 This is a basic diagram layout, not a BPMN 2.0 execution model or interchange
 format; gateways, events and automatic collision routing remain planned.
+`kanban` lays variable-height cards in caller-specified workflow columns,
+preserving their input order within each column. It returns column and card
+rectangles plus counts and WIP-limit status; a breached limit remains visible
+instead of deleting or refusing cards. A zero limit means unrestricted.
+`gfx_chart_kanban` checks stable placement, over-limit status, empty boards,
+invalid geometry, storage/panel overflow and scene/SVG output on Windows and
+Linux. The gallery includes a labeled PNG/SVG pair. Pull policies, grouped
+WIP limits and live drag/drop are separate application or L062 work.
 `forest_plot` validates study estimates inside intervals and maps them to
 horizontal segments plus center markers on linear, log10 or symlog x scales;
 the reference line is a separate caller-colourable Rug layer. Study weights,
@@ -547,6 +555,7 @@ The planned/earned/actual-cost earned-value curve is delivered.
 The likelihood-impact risk matrix with caller-supplied ratings is delivered.
 The variable-width resource histogram with explicit capacity is delivered.
 The basic role-lane workflow with directional cross-lane links is delivered.
+The variable-height Kanban board with visible per-column WIP status is delivered.
 
 ### General-purpose statistical and business charts
 
@@ -711,7 +720,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and fifty vector previews, automatic numeric tick text and
+   adapter with one hundred and fifty-one vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

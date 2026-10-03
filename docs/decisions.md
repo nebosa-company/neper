@@ -34088,3 +34088,17 @@ role and step labels. This is not a BPMN 2.0 model: gateways, events, message
 flows, execution semantics and interchange remain separate work. OMG's BPMN
 specification distinguishes lane partitions from sequence flow:
 https://www.omg.org/spec/BPMN/2.0/PDF
+
+## D1900 — Kanban boards show WIP breaches without discarding cards
+
+`kanban` borrows cards in caller order, stacks each column independently and
+returns column/card Bar geometry plus per-column count, limit and breach status.
+A zero limit is unrestricted; positive limits are visible policies, not a reason
+to reject an overfull board. Caller-owned card heights support different text
+contents, while explicit padding, gutters and header space keep the geometry
+deterministic. The focused fixture checks interleaved input order, a 2/1 breach,
+unrestricted and empty columns, invalid/overflow cases and scene/SVG output on
+Windows and Linux. The gallery adds a PNG/SVG pair. Pull rules, commitment
+points and grouped WIP limits remain separate work. Kanban University's guide
+describes workflow columns and visible WIP limits:
+https://kanban.university/kanban-guide/

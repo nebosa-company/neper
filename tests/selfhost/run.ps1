@@ -3237,6 +3237,11 @@ $gfxChartSwimlaneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $gfxChartSwimlaneWritten -ne 'executable written') { throw 'gfx_chart_swimlane emission failed' }
 $gfxChartSwimlaneOutput = & $gfxChartSwimlanePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSwimlaneOutput -ne 'gfx chart swimlane ok') { throw "the e.gfx.chart swimlane answered wrongly: exit $LASTEXITCODE" }
+$gfxChartKanbanPath = Join-Path $testBuild 'gfx-chart-kanban-selfhost.exe'
+$gfxChartKanbanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_kanban\src\main.e') $repo 'x64' 'windows' $gfxChartKanbanPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartKanbanWritten -ne 'executable written') { throw 'gfx_chart_kanban emission failed' }
+$gfxChartKanbanOutput = & $gfxChartKanbanPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartKanbanOutput -ne 'gfx chart kanban ok') { throw "the e.gfx.chart Kanban board answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

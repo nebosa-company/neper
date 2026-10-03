@@ -2859,6 +2859,11 @@ gfx_chart_swimlane_written=$($test_build/neper-self emit-executable "$repo/tests
 chmod +x "$test_build/gfx-chart-swimlane-selfhost"
 gfx_chart_swimlane_output=$("$test_build/gfx-chart-swimlane-selfhost")
 [ "$gfx_chart_swimlane_output" = 'gfx chart swimlane ok' ]
+gfx_chart_kanban_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_kanban/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-kanban-selfhost")
+[ "$gfx_chart_kanban_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-kanban-selfhost"
+gfx_chart_kanban_output=$("$test_build/gfx-chart-kanban-selfhost")
+[ "$gfx_chart_kanban_output" = 'gfx chart kanban ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

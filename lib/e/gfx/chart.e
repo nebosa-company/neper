@@ -33,6 +33,8 @@ type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
 type ResourceSpan = struct { start: f64, end: f64, units: f64 }
 type SwimlaneStep = struct { lane: usize, stage: usize }
 type SwimlaneLink = struct { from: usize, to: usize }
+type KanbanCard = struct { column: usize, height: f32 }
+type KanbanStatus = struct { count: usize, limit: usize, exceeded: bool }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2214,6 +2216,52 @@ fn swimlane(steps: []const SwimlaneStep, links: []const SwimlaneLink, lane_count
     let nodes = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..steps.len], x_min: 0.0, x_max: f32(stage_count), y_min: 0.0, y_max: f32(lane_count) }
     let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..links.len * 5usize], bars: zero, x_min: 0.0, x_max: f32(stage_count), y_min: 0.0, y_max: f32(lane_count) }
     ret (nodes, connectors, ok)
+}
+
+// A board's columns are policy names; card order within each column follows
+// input order. Zero limit means unrestricted, while a breach stays visible.
+fn kanban(cards: []const KanbanCard, limits: []const usize, bounds: geometry.Rect, gutter: f32, padding: f32, header_height: f32, card_gap: f32, columns: []geometry.Rect, card_boxes: []geometry.Rect, status: []KanbanStatus, next_y: []f32) -> (Layout, Layout, err) {
+    if limits.len == 0usize { ret (zero, zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(gutter) || gutter < 0.0 || !finite(padding) || padding < 0.0 || !finite(header_height) || header_height <= 0.0 || !finite(card_gap) || card_gap < 0.0 { ret (zero, zero, Invalid) }
+    if columns.len < limits.len || card_boxes.len < cards.len || status.len < limits.len || next_y.len < limits.len { ret (zero, zero, TooLarge) }
+    let total_gap = gutter * f32(limits.len - 1usize)
+    let column_width = (bounds.width - total_gap) / f32(limits.len)
+    let card_width = column_width - padding * 2.0
+    if !finite(total_gap) || !finite(column_width) || !finite(card_width) || column_width <= 0.0 || card_width <= 0.0 || header_height + padding * 2.0 >= bounds.height { ret (zero, zero, Invalid) }
+    var i = 0usize
+    while i < cards.len {
+        if cards[i].column >= limits.len || !finite(cards[i].height) || cards[i].height <= 0.0 { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < limits.len {
+        let x = bounds.x + f32(i) * (column_width + gutter)
+        if !finite(x) || !finite(x + column_width) { ret (zero, zero, Invalid) }
+        columns[i] = geometry.rect(x, bounds.y, column_width, bounds.height)
+        next_y[i] = bounds.y + header_height + padding
+        status[i] = KanbanStatus { count: 0usize, limit: limits[i], exceeded: false }
+        i += 1usize
+    }
+    i = 0usize
+    while i < cards.len {
+        let card = cards[i]
+        let column = card.column
+        let y = next_y[column]
+        let bottom = y + card.height
+        if !finite(bottom) || bottom > bounds.y + bounds.height - padding { ret (zero, zero, TooLarge) }
+        card_boxes[i] = geometry.rect(columns[column].x + padding, y, card_width, card.height)
+        next_y[column] = bottom + card_gap
+        status[column].count += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < limits.len {
+        status[i].exceeded = status[i].limit > 0usize && status[i].count > status[i].limit
+        i += 1usize
+    }
+    let background = Layout { kind: .Bar, coords: zero, segments: zero, bars: columns[..limits.len], x_min: 0.0, x_max: f32(limits.len), y_min: 0.0, y_max: 1.0 }
+    let items = Layout { kind: .Bar, coords: zero, segments: zero, bars: card_boxes[..cards.len], x_min: 0.0, x_max: f32(limits.len), y_min: 0.0, y_max: 1.0 }
+    ret (background, items, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.
