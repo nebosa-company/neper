@@ -33821,3 +33821,16 @@ zero-margin rows retain their baseline. The `Association` matrix kind reuses
 the diverging scene/SVG palette, and existing Rug segments draw baselines.
 `gfx_chart_mekko` checks reference residuals, geometry, empty/invalid/capacity
 paths and both adapters on Windows and Linux; the gallery adds a PNG/SVG pair.
+
+## D1871 — Fourfold geometry composes existing area and line marks
+
+`fourfold` represents one 2x2 table as four quarter-circle Area polygons and
+optional odds-ratio confidence arcs as Rug segments, with caller-owned storage.
+Equal-margin standardization maps the log odds ratio to diagonal/off-diagonal
+shares while retaining association direction; squared radii therefore track
+the standardized frequencies. Confidence arcs map a Wald log-odds interval to
+the same shares, using a 0.5 continuity correction when any observed cell is
+zero. Multi-stratum composition and alternate R standardizations remain
+planned. `gfx_chart_mekko` checks numeric references and scene/SVG parity on
+Windows and Linux; the gallery adds a PNG/SVG pair. Reference: R graphics
+`fourfoldplot` and vcd `fourfold` documentation.

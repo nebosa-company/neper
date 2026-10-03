@@ -15932,6 +15932,7 @@ type Cell = struct { rect: geometry.Rect, value: f32 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
+type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 error Invalid
 error Empty
 error TooLarge
@@ -15955,6 +15956,7 @@ fn grouped_bars(values: []const f32, categories: usize, series: usize, bounds: g
 fn stacked_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, normalize: bool, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err)
 fn mosaic(counts: []const f64, columns: usize, bounds: geometry.Rect, gutter: f32, column_totals: []f64, row_totals: []f64, cells: []Cell) -> (MatrixLayout, err)
 fn association(counts: []const f64, columns: usize, bounds: geometry.Rect, space: f32, column_totals: []f64, row_totals: []f64, cells: []Cell, baselines: []Segment) -> (MatrixLayout, err)
+fn fourfold(counts: []const f64, bounds: geometry.Rect, confidence: f64, points: []Coord, ring_segments: []Segment, wedges: []Layout) -> (FourfoldLayout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err)
 fn rug(values: []const f32, bounds: geometry.Rect, height: f32, segments: []Segment) -> (Layout, err)

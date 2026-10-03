@@ -33,6 +33,7 @@ type TimelineEvent = struct { time: f64, row: usize }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
+type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 error Invalid
 error Empty
 error TooLarge
@@ -2772,6 +2773,109 @@ fn association(counts: []const f64, columns: usize, bounds: geometry.Rect, space
         row += 1usize
     }
     ret (MatrixLayout { kind: .Association, cells: cells[..used], columns: columns, rows: rows, value_min: -maximum, value_max: maximum }, ok)
+}
+
+fn fourfold_share(log_odds: f64) -> f64 {
+    if log_odds >= 0.0f64 { ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - log_odds * 0.5f64)) }
+    let smaller = math.exp[f64](log_odds * 0.5f64)
+    ret smaller / (1.0f64 + smaller)
+}
+
+// One 2x2 stratum in column-major order: TL, BL, TR, BR. Equal-margin
+// standardization retains the odds ratio; quarter-circle area follows fit.
+// Confidence arcs use a Wald interval with 0.5 continuity correction for zeros.
+fn fourfold(counts: []const f64, bounds: geometry.Rect, confidence: f64, points: []Coord, ring_segments: []Segment, wedges: []Layout) -> (FourfoldLayout, err) {
+    if counts.len == 0usize { ret (zero, Empty) }
+    if counts.len != 4usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite64(confidence) || confidence < 0.0f64 || confidence >= 1.0f64 { ret (zero, Invalid) }
+    if points.len < 72usize || wedges.len < 4usize || (confidence > 0.0f64 && ring_segments.len < 128usize) { ret (zero, TooLarge) }
+    var total = 0.0f64
+    var any_zero = false
+    var i = 0usize
+    while i < 4usize {
+        if !finite64(counts[i]) || counts[i] < 0.0f64 { ret (zero, Invalid) }
+        if counts[i] == 0.0f64 { any_zero = true }
+        total += counts[i]
+        i += 1usize
+    }
+    if !finite(f32(total)) { ret (zero, Invalid) }
+    if total <= 0.0f64 { ret (zero, Empty) }
+    var corrected: [4]f64 = zero
+    var se_squared = 0.0f64
+    i = 0usize
+    while i < 4usize {
+        corrected[i] = counts[i]
+        if any_zero { corrected[i] += 0.5f64 }
+        se_squared += 1.0f64 / corrected[i]
+        i += 1usize
+    }
+    let log_odds = math.log[f64](corrected[0usize]) + math.log[f64](corrected[3usize]) - math.log[f64](corrected[1usize]) - math.log[f64](corrected[2usize])
+    let odds_ratio = math.exp[f64](log_odds)
+    if !finite64(log_odds) || !finite64(odds_ratio) || odds_ratio <= 0.0f64 || !finite64(se_squared) { ret (zero, Invalid) }
+    var delta = 0.0f64
+    if confidence > 0.0f64 { delta = special.normal_quantile((1.0f64 + confidence) * 0.5f64) * math.sqrt[f64](se_squared) }
+    if !finite64(delta) { ret (zero, Invalid) }
+    let ci_low = math.exp[f64](log_odds - delta)
+    let ci_high = math.exp[f64](log_odds + delta)
+    if !finite64(ci_low) || !finite64(ci_high) || ci_low <= 0.0f64 || ci_high <= 0.0f64 { ret (zero, Invalid) }
+    let radius = f64(bounds.width) * 0.5f64
+    var max_radius = radius
+    if bounds.height < bounds.width { max_radius = f64(bounds.height) * 0.5f64 }
+    let cx = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let cy = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    let starts = [4]f64{ 90.0, 180.0, 0.0, 270.0 }
+    let fit = fourfold_share(log_odds)
+    var used = 0usize
+    i = 0usize
+    while i < 4usize {
+        var share = fit
+        if i == 1usize || i == 2usize { share = 1.0f64 - fit }
+        let r = max_radius * math.sqrt[f64](share)
+        let first = used
+        points[used] = Coord { x: f32(cx), y: f32(cy) }
+        used += 1usize
+        var j = 0usize
+        while j <= 16usize {
+            let angle = (starts[i] + 90.0f64 * f64(j) / 16.0f64) * 0.017453292519943295f64
+            let x = f32(cx + r * math.cos[f64](angle))
+            let y = f32(cy - r * math.sin[f64](angle))
+            if !finite(x) || !finite(y) { ret (zero, Invalid) }
+            points[used] = Coord { x: x, y: y }
+            used += 1usize
+            j += 1usize
+        }
+        wedges[i] = Layout { kind: .Area, coords: points[first..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    var ring_used = 0usize
+    if confidence > 0.0f64 {
+        var bound = 0usize
+        while bound < 2usize {
+            var log_limit = log_odds - delta
+            if bound == 1usize { log_limit = log_odds + delta }
+            let limit_share = fourfold_share(log_limit)
+            i = 0usize
+            while i < 4usize {
+                var share = limit_share
+                if i == 1usize || i == 2usize { share = 1.0f64 - limit_share }
+                let r = max_radius * math.sqrt[f64](share)
+                var j = 0usize
+                while j < 16usize {
+                    let first_angle = (starts[i] + 90.0f64 * f64(j) / 16.0f64) * 0.017453292519943295f64
+                    let next_angle = (starts[i] + 90.0f64 * f64(j + 1usize) / 16.0f64) * 0.017453292519943295f64
+                    let from = Coord { x: f32(cx + r * math.cos[f64](first_angle)), y: f32(cy - r * math.sin[f64](first_angle)) }
+                    let to = Coord { x: f32(cx + r * math.cos[f64](next_angle)), y: f32(cy - r * math.sin[f64](next_angle)) }
+                    if !finite(from.x) || !finite(from.y) || !finite(to.x) || !finite(to.y) { ret (zero, Invalid) }
+                    ring_segments[ring_used] = Segment { from: from, to: to }
+                    ring_used += 1usize
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            bound += 1usize
+        }
+    }
+    let rings = Layout { kind: .Rug, coords: zero, segments: ring_segments[..ring_used], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    ret (FourfoldLayout { wedges: wedges[..4usize], rings: rings, odds_ratio: odds_ratio, ci_low: ci_low, ci_high: ci_high }, ok)
 }
 
 // Two nonnegative age series diverge from a shared central label gutter.

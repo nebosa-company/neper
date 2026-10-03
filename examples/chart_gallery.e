@@ -1783,6 +1783,82 @@ fn render_association_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_fourfold_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let counts = [4]f64{ 10.0, 2.0, 4.0, 8.0 }
+    let bounds = geometry.rect(48.0, 45.0, 190.0, 175.0)
+    var points: [72]chart.Coord = zero
+    var ring_segments: [128]chart.Segment = zero
+    var wedges: [4]chart.Layout = zero
+    let (marks, marks_error) = chart.fourfold(counts[..], bounds, 0.95, points[..], ring_segments[..], wedges[..])
+    if marks_error != ok { ret marks_error }
+    var cross_segments: [2]chart.Segment = zero
+    cross_segments[0usize] = chart.Segment { from: chart.Coord { x: 48.0, y: 132.5 }, to: chart.Coord { x: 238.0, y: 132.5 } }
+    cross_segments[1usize] = chart.Segment { from: chart.Coord { x: 143.0, y: 45.0 }, to: chart.Coord { x: 143.0, y: 220.0 } }
+    let cross = chart.Layout { kind: .Rug, coords: zero, segments: cross_segments[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let same = paint.rgba(0.08, 0.38, 0.75, 1.0)
+    let other = paint.rgba(0.80, 0.24, 0.29, 1.0)
+    let ring = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let same_swatch = geometry.rect(271.0, 77.0, 14.0, 14.0)
+    let other_swatch = geometry.rect(271.0, 128.0, 14.0, 14.0)
+    var labels: [8]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Fourfold • 95% CI", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "OR = 10", anchor: chart.Coord { x: 302.0, y: 58.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "Same", anchor: chart.Coord { x: 303.0, y: 106.0 }, align: .Center }
+    labels[3usize] = chart.Label { text: "Opposite", anchor: chart.Coord { x: 303.0, y: 157.0 }, align: .Center }
+    labels[4usize] = chart.Label { text: "10", anchor: chart.Coord { x: 102.0, y: 99.0 }, align: .Center }
+    labels[5usize] = chart.Label { text: "2", anchor: chart.Coord { x: 121.0, y: 153.0 }, align: .Center }
+    labels[6usize] = chart.Label { text: "4", anchor: chart.Coord { x: 163.0, y: 114.0 }, align: .Center }
+    labels[7usize] = chart.Label { text: "8", anchor: chart.Coord { x: 184.0, y: 174.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 22u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 180usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    var i = 0usize
+    while i < marks.wedges.len {
+        var color = same
+        if i == 1usize || i == 2usize { color = other }
+        try chart_scene.append(a, &builder, &marks.wedges[i], paint.Brush { Solid: color })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &marks.rings, paint.Brush { Solid: ring })
+    try chart_scene.append(a, &builder, &cross, paint.Brush { Solid: dark })
+    try fill(&builder, same_swatch, paint.Brush { Solid: same })
+    try fill(&builder, other_swatch, paint.Brush { Solid: other })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..4usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[4usize..], font, 10.0, paint.Brush { Solid: white })
+    let path = "docs/chart-previews/fourfold.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < marks.wedges.len {
+        var color = same
+        if i == 1usize || i == 2usize { color = other }
+        try chart_svg.append(&writer, &marks.wedges[i], color)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &marks.rings, ring)
+    try chart_svg.append(&writer, &cross, dark)
+    try chart_svg.rect(&writer, same_swatch, same, false)
+    try chart_svg.rect(&writer, other_swatch, other, false)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..4usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[4usize..], white, 10.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
     if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
     let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
@@ -2806,6 +2882,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_mekko(a, queue, output_target, canvas, &renderer, mekko_layers, category_names[..], mekko_series[..], "docs/chart-previews/mekko.png")
     try render_mosaic_preview(a, queue, output_target, canvas, &renderer)
     try render_association_preview(a, queue, output_target, canvas, &renderer)
+    try render_fourfold_preview(a, queue, output_target, canvas, &renderer)
     let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
     let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
     let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }

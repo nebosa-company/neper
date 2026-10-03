@@ -89,7 +89,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if association_short != chart.TooLarge { ret chart.Invalid }
     let (again_association, again_association_error) = chart.association(counts[..], 2usize, bounds, 0.1, mosaic_columns[..], mosaic_rows[..], association_cells[..], association_baselines[..])
     if again_association_error != ok { ret again_association_error }
-    let (made, builder_error) = scene.builder(a, 16usize)
+    let fourfold_counts = [4]f64{ 10.0, 2.0, 4.0, 8.0 }
+    var fourfold_points: [72]chart.Coord = zero
+    var fourfold_rings: [128]chart.Segment = zero
+    var fourfold_wedges: [4]chart.Layout = zero
+    let (fourfold, fourfold_error) = chart.fourfold(fourfold_counts[..], bounds, 0.95, fourfold_points[..], fourfold_rings[..], fourfold_wedges[..])
+    if fourfold_error != ok || fourfold.wedges.len != 4usize || fourfold.rings.segments.len != 128usize || !near(f32(fourfold.odds_ratio), 10.0) || fourfold.ci_low <= 1.4f64 || fourfold.ci_low >= 1.5f64 || fourfold.ci_high <= 68.0f64 || fourfold.ci_high >= 70.0f64 { ret chart.Invalid }
+    let same_radius = 50.0 - fourfold.wedges[0usize].coords[1usize].y
+    let other_radius = 60.0 - fourfold.wedges[1usize].coords[1usize].x
+    if !near(same_radius * same_radius / (other_radius * other_radius), f32(math.sqrt[f64](10.0f64))) { ret chart.Invalid }
+    let fourfold_zero = [4]f64{ 10.0, 0.0, 4.0, 8.0 }
+    let (corrected_fourfold, corrected_error) = chart.fourfold(fourfold_zero[..], bounds, 0.0, fourfold_points[..], fourfold_rings[..], fourfold_wedges[..])
+    if corrected_error != ok || corrected_fourfold.rings.segments.len != 0usize || corrected_fourfold.odds_ratio <= 0.0f64 { ret chart.Invalid }
+    let (neutral_fourfold, neutral_error) = chart.fourfold(independent[..], bounds, 0.0, fourfold_points[..], fourfold_rings[..], fourfold_wedges[..])
+    if neutral_error != ok || !near(f32(neutral_fourfold.odds_ratio), 1.0) || !near(50.0 - neutral_fourfold.wedges[0usize].coords[1usize].y, 60.0 - neutral_fourfold.wedges[1usize].coords[1usize].x) { ret chart.Invalid }
+    let no_counts: [0]f64 = zero
+    let (_, fourfold_no_counts) = chart.fourfold(no_counts[..], bounds, 0.95, fourfold_points[..], fourfold_rings[..], fourfold_wedges[..])
+    if fourfold_no_counts != chart.Empty { ret chart.Invalid }
+    let (_, fourfold_negative) = chart.fourfold(negative_counts[..], bounds, 0.95, fourfold_points[..], fourfold_rings[..], fourfold_wedges[..])
+    if fourfold_negative != chart.Invalid { ret chart.Invalid }
+    let (_, fourfold_empty) = chart.fourfold(empty_counts[..], bounds, 0.95, fourfold_points[..], fourfold_rings[..], fourfold_wedges[..])
+    if fourfold_empty != chart.Empty { ret chart.Invalid }
+    let (_, fourfold_confidence) = chart.fourfold(fourfold_counts[..], bounds, 1.0, fourfold_points[..], fourfold_rings[..], fourfold_wedges[..])
+    if fourfold_confidence != chart.Invalid { ret chart.Invalid }
+    let (_, fourfold_shape) = chart.fourfold(fourfold_counts[..3usize], bounds, 0.95, fourfold_points[..], fourfold_rings[..], fourfold_wedges[..])
+    if fourfold_shape != chart.Invalid { ret chart.Invalid }
+    let (_, fourfold_short) = chart.fourfold(fourfold_counts[..], bounds, 0.95, fourfold_points[..71usize], fourfold_rings[..], fourfold_wedges[..])
+    if fourfold_short != chart.TooLarge { ret chart.Invalid }
+    let (_, fourfold_short_rings) = chart.fourfold(fourfold_counts[..], bounds, 0.95, fourfold_points[..], fourfold_rings[..127usize], fourfold_wedges[..])
+    if fourfold_short_rings != chart.TooLarge { ret chart.Invalid }
+    let (no_rings, no_rings_error) = chart.fourfold(fourfold_counts[..], bounds, 0.0, fourfold_points[..], fourfold_rings[..0usize], fourfold_wedges[..])
+    if no_rings_error != ok || no_rings.rings.segments.len != 0usize { ret chart.Invalid }
+    let (again_fourfold, again_fourfold_error) = chart.fourfold(fourfold_counts[..], bounds, 0.95, fourfold_points[..], fourfold_rings[..], fourfold_wedges[..])
+    if again_fourfold_error != ok { ret again_fourfold_error }
+    let (made, builder_error) = scene.builder(a, 160usize)
     if builder_error != ok { ret builder_error }
     var builder = made
     let blue = paint.rgba(0.1, 0.3, 0.8, 1.0)
@@ -102,7 +135,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let middle = paint.rgba(0.96, 0.96, 0.96, 1.0)
     try chart_scene.append_matrix(&builder, &again_mosaic, low, middle, blue)
     try chart_scene.append_matrix(&builder, &again_association, low, middle, blue)
-    if scene.builder_count(&builder) != 12usize { ret chart.Invalid }
+    i = 0usize
+    while i < again_fourfold.wedges.len {
+        try chart_scene.append(a, &builder, &again_fourfold.wedges[i], paint.Brush { Solid: blue })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &again_fourfold.rings, paint.Brush { Solid: low })
+    if scene.builder_count(&builder) != 144usize { ret chart.Invalid }
     let (state, unused, writer_error) = io.memory_writer(a, 0usize)
     if writer_error != ok { ret writer_error }
     var held = state
@@ -116,6 +155,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try chart_svg.append_matrix(&writer, &again_mosaic, low, middle, blue)
     try chart_svg.append_matrix(&writer, &again_association, low, middle, blue)
     try chart_svg.append_matrix(&writer, &independent_plot, low, middle, blue)
+    i = 0usize
+    while i < again_fourfold.wedges.len {
+        try chart_svg.append(&writer, &again_fourfold.wedges[i], blue)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &again_fourfold.rings, low)
     try chart_svg.finish(&writer)
     let svg = io.memory_bytes(&held)
     if !str.contains(svg, "<rect") || !str.contains(svg, "</svg>") { ret chart.Invalid }
