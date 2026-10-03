@@ -807,6 +807,53 @@ fn streamgraph(x: []const f32, values: []const f32, series: usize, bounds: geome
     ret (layers[..series], ok)
 }
 
+// Equal-height rank bands over increasing x positions. Values are sample-major;
+// higher values rank first, and ties keep the original series order.
+// ponytail: O(samples * series^2) comparisons; sort per sample if large series counts matter.
+fn ribbon_rank(x: []const f32, values: []const f32, series: usize, bounds: geometry.Rect, gap: f32, outline: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if x.len < 2usize || series == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(gap) || gap < 0.0 || values.len / x.len != series || values.len % x.len != 0usize { ret (zero, Invalid) }
+    if outline.len / x.len / 2usize < series || layers.len < series { ret (zero, TooLarge) }
+    let total_gap = gap * f32(series - 1usize)
+    if !finite(total_gap) || total_gap >= bounds.height { ret (zero, Invalid) }
+    let band_height = (bounds.height - total_gap) / f32(series)
+    var i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || (i > 0usize && x[i] <= x[i - 1usize]) { ret (zero, Invalid) }
+        var j = 0usize
+        while j < series {
+            if !finite(values[i * series + j]) { ret (zero, Invalid) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var layer = 0usize
+    while layer < series {
+        let first = layer * 2usize * x.len
+        i = 0usize
+        while i < x.len {
+            let value = values[i * series + layer]
+            var rank = 0usize
+            var other = 0usize
+            while other < series {
+                let candidate = values[i * series + other]
+                if candidate > value || (candidate == value && other < layer) { rank += 1usize }
+                other += 1usize
+            }
+            let px = bounds.x + bounds.width * f32((f64(x[i]) - f64(x[0usize])) / (f64(x[x.len - 1usize]) - f64(x[0usize])))
+            let top = bounds.y + f32(rank) * (band_height + gap)
+            let bottom = top + band_height
+            if !finite(px) || !finite(top) || !finite(bottom) { ret (zero, Invalid) }
+            outline[first + i] = Coord { x: px, y: top }
+            outline[first + 2usize * x.len - 1usize - i] = Coord { x: px, y: bottom }
+            i += 1usize
+        }
+        layers[layer] = Layout { kind: .Area, coords: outline[first..first + 2usize * x.len], segments: zero, bars: zero, x_min: x[0usize], x_max: x[x.len - 1usize], y_min: 0.0, y_max: f32(series) }
+        layer += 1usize
+    }
+    ret (layers[..series], ok)
+}
+
 // Horizontal intervals with a dot at each endpoint; `position` is the
 // numeric vertical axis, so repeated positions naturally overlay.
 fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err) {

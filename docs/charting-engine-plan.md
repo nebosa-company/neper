@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, stage funnel,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-sixty-one PNG plus sixty-one SVG previews from Neper. L061 remains partial
+sixty-two PNG plus sixty-two SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -219,6 +219,11 @@ silhouette baseline, using one scale across all times and caller-owned Area
 polygons. It reuses the existing scene/SVG fill adapters; the focused fixture
 checks geometry, malformed values, storage and both adapters on Windows and
 Linux. Wiggle offsets and automatic layer ordering remain planned.
+`ribbon_rank` maps sample-major values to equal-height ordinal bands, with
+larger values ranked first and stable input-order ties. Caller-owned Area
+polygons reuse both renderers; `gfx_chart_ribbon_rank` checks reference ranks,
+ties, malformed inputs, capacity and scene/SVG output on Windows and Linux.
+Missing categories and curved crossover interpolation remain planned.
 `chord` lays out a square row-major directed matrix as group arcs and
 one ribbon per unordered pair. Opposite cell weights control the two ribbon
 ends independently, retaining asymmetry; diagonal values form self loops.
@@ -285,7 +290,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph and basic stage funnel are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -365,6 +370,8 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    `gfx_chart_alluvial` checks conservation and both adapters on both hosts.
    Streamgraph centers sample-major stacks into caller-owned Area polygons;
    `gfx_chart_streamgraph` checks shared scale and both adapters on both hosts.
+   Rank ribbons map sample-major values to stable ordinal bands in Area layers;
+   `gfx_chart_ribbon_rank` checks ties, geometry and both adapters on both hosts.
    Chord maps asymmetric matrix pairs into ribbons and group rings;
    `gfx_chart_chord` checks geometry and both adapters on both hosts.
    Mekko uses variable-width category columns and series-major Bar layers;
@@ -383,7 +390,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with sixty-one vector previews, automatic numeric tick text and
+   adapter with sixty-two vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

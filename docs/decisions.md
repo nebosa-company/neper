@@ -33479,3 +33479,14 @@ makes no area-proportional claim. Both return caller-owned Bubble layers and
 reuse the scene/SVG adapters. `gfx_chart_venn_euler` checks overlap geometry,
 membership, refusals and both adapters on Windows and Linux; the gallery adds
 two PNG/SVG pairs. Arbitrary three-set area fitting remains future work.
+
+## D1842 — Keep rank-over-time ribbons ordinal and tie-stable
+
+`chart.ribbon_rank` compares sample-major series values at each ordered x
+position and maps their stable ranks to equal-height, gapped Area bands.
+Higher values rank first; ties retain caller series order. The existing
+scene/SVG Area adapters and five-series preview renderer need no new paint
+path. `gfx_chart_ribbon_rank` checks rank geometry, ties, refusals and both
+adapters on Windows and Linux; the gallery adds one PNG/SVG pair. The
+quadratic comparison scan is sufficient for small series counts; missing
+categories and smoother crossovers remain separate work.

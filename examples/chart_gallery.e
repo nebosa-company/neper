@@ -1407,6 +1407,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (stream_layers, stream_error) = chart.streamgraph(stream_x[..], stream_values[..], 5usize, geometry.rect(18.0, 42.0, 192.0, 176.0), stream_totals[..], stream_cumulative[..], stream_points[..], stream_storage[..])
     if stream_error != ok { ret stream_error }
     try render_share(a, queue, output_target, canvas, &renderer, stream_layers, stream_names[..], "Centered streamgraph", "docs/chart-previews/streamgraph.png")
+    let rank_x = [6]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0 }
+    let rank_values = [30]f32{
+        90.0, 75.0, 60.0, 45.0, 30.0,
+        80.0, 95.0, 65.0, 50.0, 35.0,
+        65.0, 82.0, 98.0, 55.0, 40.0,
+        54.0, 72.0, 85.0, 110.0, 46.0,
+        45.0, 62.0, 75.0, 93.0, 115.0,
+        55.0, 70.0, 85.0, 100.0, 120.0,
+    }
+    let rank_names = [5]str{ "Atlas", "Beacon", "Comet", "Delta", "Ember" }
+    var rank_points: [60]chart.Coord = zero
+    var rank_storage: [5]chart.Layout = zero
+    let (rank_layers, rank_error) = chart.ribbon_rank(rank_x[..], rank_values[..], 5usize, geometry.rect(18.0, 42.0, 192.0, 176.0), 5.0, rank_points[..], rank_storage[..])
+    if rank_error != ok { ret rank_error }
+    try render_share(a, queue, output_target, canvas, &renderer, rank_layers, rank_names[..], "Ranks over time", "docs/chart-previews/ribbon_rank.png")
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero
