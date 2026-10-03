@@ -869,6 +869,66 @@ fn render_diagnostic_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     ret render_diagnostic_preview_extra(a, q, output_target, canvas, renderer, marks, baseline, &empty, title, x_label, y_label, path)
 }
 
+fn render_parallel_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let values = [24]f64{
+        0.0, 80.0, 10.0, 2.0, 2.0, 65.0, 30.0, 4.0,
+        4.0, 90.0, 20.0, 3.0, 6.0, 55.0, 45.0, 7.0,
+        8.0, 72.0, 35.0, 5.0, 10.0, 95.0, 50.0, 6.0,
+    }
+    let plot = geometry.rect(36.0, 56.0, 288.0, 120.0)
+    var minimums: [4]f64 = zero
+    var maximums: [4]f64 = zero
+    var lines: [18]chart.Segment = zero
+    var axes: [4]chart.Segment = zero
+    let (marks, guides, layout_error) = chart.parallel_coordinates(values[..], 4usize, plot, minimums[..], maximums[..], lines[..], axes[..])
+    if layout_error != ok { ret layout_error }
+    let blue = paint.rgba(0.08, 0.40, 0.76, 0.62)
+    let gray = paint.rgba(0.62, 0.67, 0.74, 1.0)
+    let pale = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 18u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let top = [4]str{ "10", "95", "50", "7" }
+    let bottom = [4]str{ "0", "55", "10", "2" }
+    let names = [4]str{ "Speed", "Cost", "Quality", "Risk" }
+    var labels: [13]chart.Label = zero
+    var i = 0usize
+    while i < 4usize {
+        let x = plot.x + plot.width * f32(i) / 3.0
+        labels[i] = chart.Label { text: top[i], anchor: chart.Coord { x: x, y: 49.0 }, align: .Center }
+        labels[4usize + i] = chart.Label { text: bottom[i], anchor: chart.Coord { x: x, y: 191.0 }, align: .Center }
+        labels[8usize + i] = chart.Label { text: names[i], anchor: chart.Coord { x: x, y: 210.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[12usize] = chart.Label { text: "Parallel coordinates", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &guides, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..12usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[12usize..], font, 14.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/parallel_coordinates.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &guides, gray)
+    try chart_svg.append(&writer, &marks, blue)
+    try chart_svg.append_labels(&writer, labels[..12usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[12usize..], dark, 14.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_binary_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, metric: chart.BinaryMetric, title: str, x_label: str, y_label: str, path: str) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     var x: [17]f32 = zero
@@ -2835,6 +2895,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_control_previews(a, queue, output_target, canvas, &renderer)
     try render_subgroup_phase_previews(a, queue, output_target, canvas, &renderer)
     try render_run_rules_preview(a, queue, output_target, canvas, &renderer)
+    try render_parallel_preview(a, queue, output_target, canvas, &renderer)
     try render_phase_control_preview(a, queue, output_target, canvas, &renderer)
     try render_weighted_control_previews(a, queue, output_target, canvas, &renderer)
     try render_attribute_previews(a, queue, output_target, canvas, &renderer)

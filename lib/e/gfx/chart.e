@@ -3226,6 +3226,57 @@ fn correlation_matrix(observations: []const f64, columns: usize, bounds: geometr
     ret (MatrixLayout { kind: .Correlation, cells: cells[..columns * columns], columns: columns, rows: columns, value_min: -1.0, value_max: 1.0 }, ok)
 }
 
+// Each row crosses one independently normalized vertical axis per column.
+fn parallel_coordinates(observations: []const f64, columns: usize, bounds: geometry.Rect, minimums: []f64, maximums: []f64, lines: []Segment, axes: []Segment) -> (Layout, Layout, err) {
+    if observations.len == 0usize { ret (zero, zero, Empty) }
+    if columns < 2usize || observations.len % columns != 0usize || !valid_bounds(bounds) { ret (zero, zero, Invalid) }
+    let rows = observations.len / columns
+    if minimums.len < columns || maximums.len < columns || axes.len < columns || lines.len / (columns - 1usize) < rows { ret (zero, zero, TooLarge) }
+    var i = 0usize
+    while i < observations.len {
+        if !finite64(observations[i]) { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    var column = 0usize
+    while column < columns {
+        minimums[column] = observations[column]
+        maximums[column] = observations[column]
+        i = 1usize
+        while i < rows {
+            let value = observations[i * columns + column]
+            if value < minimums[column] { minimums[column] = value }
+            if value > maximums[column] { maximums[column] = value }
+            i += 1usize
+        }
+        if !finite64(maximums[column] - minimums[column]) { ret (zero, zero, Invalid) }
+        let x = bounds.x + bounds.width * f32(column) / f32(columns - 1usize)
+        axes[column] = Segment { from: Coord { x: x, y: bounds.y }, to: Coord { x: x, y: bounds.y + bounds.height } }
+        column += 1usize
+    }
+    var row = 0usize
+    while row < rows {
+        column = 0usize
+        while column + 1usize < columns {
+            var first = 0.5f64
+            var second = 0.5f64
+            if maximums[column] > minimums[column] { first = (observations[row * columns + column] - minimums[column]) / (maximums[column] - minimums[column]) }
+            if maximums[column + 1usize] > minimums[column + 1usize] { second = (observations[row * columns + column + 1usize] - minimums[column + 1usize]) / (maximums[column + 1usize] - minimums[column + 1usize]) }
+            if !finite64(first) || !finite64(second) { ret (zero, zero, Invalid) }
+            let left = bounds.x + bounds.width * f32(column) / f32(columns - 1usize)
+            let right = bounds.x + bounds.width * f32(column + 1usize) / f32(columns - 1usize)
+            lines[row * (columns - 1usize) + column] = Segment {
+                from: Coord { x: left, y: bounds.y + bounds.height * (1.0 - f32(first)) },
+                to: Coord { x: right, y: bounds.y + bounds.height * (1.0 - f32(second)) },
+            }
+            column += 1usize
+        }
+        row += 1usize
+    }
+    let data = Layout { kind: .Rug, coords: zero, segments: lines[..rows * (columns - 1usize)], bars: zero, x_min: 0.0, x_max: f32(columns - 1usize), y_min: 0.0, y_max: 1.0 }
+    let guides = Layout { kind: .Rug, coords: zero, segments: axes[..columns], bars: zero, x_min: 0.0, x_max: f32(columns - 1usize), y_min: 0.0, y_max: 1.0 }
+    ret (data, guides, ok)
+}
+
 // Row-major equal panels for a later facet mapping stage. All panels use the
 // same outer bounds; callers choose shared or independent data scales.
 fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err) {

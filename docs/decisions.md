@@ -33755,3 +33755,15 @@ storage and nonfinite values on Windows and Linux. Unequal subgroup sizes and
 historical parameter overrides remain planned. References:
 https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/variables-charts-for-subgroups/xbar-r-chart/perform-the-analysis/xbar-r-options/define-stages/
 and https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/variables-charts-for-subgroups/xbar-s-chart/interpret-the-results/all-statistics-and-graphs/
+
+## D1865 — Parallel coordinates reuse independent segment marks
+
+Map row-major finite observations to one vertical axis per column, with each
+axis normalized against that column's data range. Put constant columns at the
+midpoint instead of rejecting otherwise usable rows. Return caller-owned
+axis and row segments as existing Rug layouts, so scene and SVG need no new
+mark implementation. The gallery labels axes and their min/max values;
+`gfx_chart_parallel_coordinates` checks geometry, constant axes, refusal
+paths and both adapters on Windows and Linux. Per-row colour, reordering,
+brushing and missing-value policy remain planned. Reference:
+https://plotly.com/python/parallel-coordinates-plot/
