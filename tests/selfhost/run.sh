@@ -2764,6 +2764,11 @@ gfx_chart_variogram_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$test_build/gfx-chart-variogram-selfhost"
 gfx_chart_variogram_output=$("$test_build/gfx-chart-variogram-selfhost")
 [ "$gfx_chart_variogram_output" = 'gfx chart variogram ok' ]
+gfx_chart_radial_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_radial/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-radial-selfhost")
+[ "$gfx_chart_radial_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-radial-selfhost"
+gfx_chart_radial_output=$("$test_build/gfx-chart-radial-selfhost")
+[ "$gfx_chart_radial_output" = 'gfx chart radial ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

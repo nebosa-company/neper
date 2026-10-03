@@ -1396,6 +1396,97 @@ fn pie(values: []const f32, bounds: geometry.Rect, hole: f32, points: []Coord, l
     ret (layers[..values.len], ok)
 }
 
+fn polar_point(center_x: f64, center_y: f64, radius: f64, angle: f64) -> Coord {
+    ret Coord { x: f32(center_x + radius * math.cos[f64](angle)), y: f32(center_y + radius * math.sin[f64](angle)) }
+}
+
+// Normalize each radar axis against its own caller-supplied range. The same
+// ranges and bounds can be reused for overlaying multiple series.
+fn radar(values: []const f32, minimum: []const f32, maximum: []const f32, bounds: geometry.Rect, levels: usize, points: []Coord, guides: []Segment) -> (Layout, Layout, err) {
+    if values.len < 3usize || minimum.len != values.len || maximum.len != values.len || levels == 0usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, zero, Invalid) }
+    if points.len <= values.len || guides.len / values.len <= levels { ret (zero, zero, TooLarge) }
+    let count = values.len
+    let center_x = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let center_y = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    var radius = f64(bounds.width) * 0.5f64
+    if bounds.height < bounds.width { radius = f64(bounds.height) * 0.5f64 }
+    let turn = 6.283185307179586f64
+    var i = 0usize
+    while i < count {
+        if !finite(values[i]) || !finite(minimum[i]) || !finite(maximum[i]) || maximum[i] <= minimum[i] || values[i] < minimum[i] || values[i] > maximum[i] { ret (zero, zero, Invalid) }
+        let normalized = (f64(values[i]) - f64(minimum[i])) / (f64(maximum[i]) - f64(minimum[i]))
+        let angle = -1.5707963267948966f64 + turn * f64(i) / f64(count)
+        points[i] = polar_point(center_x, center_y, radius * normalized, angle)
+        guides[i] = Segment { from: Coord { x: f32(center_x), y: f32(center_y) }, to: polar_point(center_x, center_y, radius, angle) }
+        if !finite(points[i].x) || !finite(points[i].y) || !finite(guides[i].to.x) || !finite(guides[i].to.y) { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    points[count] = points[0usize]
+    var used = count
+    var level = 1usize
+    while level <= levels {
+        let ring_radius = radius * f64(level) / f64(levels)
+        i = 0usize
+        while i < count {
+            let angle = -1.5707963267948966f64 + turn * f64(i) / f64(count)
+            let next_angle = -1.5707963267948966f64 + turn * f64((i + 1usize) % count) / f64(count)
+            guides[used] = Segment { from: polar_point(center_x, center_y, ring_radius, angle), to: polar_point(center_x, center_y, ring_radius, next_angle) }
+            if !finite(guides[used].from.x) || !finite(guides[used].from.y) || !finite(guides[used].to.x) || !finite(guides[used].to.y) { ret (zero, zero, Invalid) }
+            used += 1usize
+            i += 1usize
+        }
+        level += 1usize
+    }
+    let polygon = Layout { kind: .Area, coords: points[..count + 1usize], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let guide_marks = Layout { kind: .Rug, coords: zero, segments: guides[..used], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    ret (polygon, guide_marks, ok)
+}
+
+// Equal-angle rose sectors. Square-root radii make sector area proportional
+// to each nonnegative pre-binned weight, as in a circular histogram.
+fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if values.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if layers.len < values.len { ret (zero, TooLarge) }
+    let steps = 2usize + 96usize / values.len
+    let per_sector = steps + 2usize
+    if values.len > points.len / per_sector { ret (zero, TooLarge) }
+    var largest = 0.0f32
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) || values[i] < 0.0 { ret (zero, Invalid) }
+        if values[i] > largest { largest = values[i] }
+        i += 1usize
+    }
+    if largest <= 0.0 { ret (zero, Invalid) }
+    let center_x = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let center_y = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    var outer = f64(bounds.width) * 0.5f64
+    if bounds.height < bounds.width { outer = f64(bounds.height) * 0.5f64 }
+    let turn = 6.283185307179586f64
+    var used = 0usize
+    i = 0usize
+    while i < values.len {
+        let start = -1.5707963267948966f64 + turn * (f64(i) - 0.5f64) / f64(values.len)
+        let finish = start + turn / f64(values.len)
+        let radius = outer * math.sqrt[f64](f64(values[i]) / f64(largest))
+        let first = used
+        points[used] = Coord { x: f32(center_x), y: f32(center_y) }
+        used += 1usize
+        var j = 0usize
+        while j <= steps {
+            let angle = start + (finish - start) * f64(j) / f64(steps)
+            points[used] = polar_point(center_x, center_y, radius, angle)
+            if !finite(points[used].x) || !finite(points[used].y) { ret (zero, Invalid) }
+            used += 1usize
+            j += 1usize
+        }
+        layers[i] = Layout { kind: .Area, coords: points[first..used], segments: zero, bars: zero, x_min: 0.0, x_max: f32(values.len), y_min: 0.0, y_max: largest }
+        i += 1usize
+    }
+    ret (layers[..values.len], ok)
+}
+
 // Half-ring gauge: background, measured value and target rule, in paint order.
 // The ring fits a semicircle inside bounds; the caller owns all three marks.
 fn gauge(value: f32, target_value: f32, maximum: f32, bounds: geometry.Rect, hole: f32, points: []Coord, target_line: []Segment, layers: []Layout) -> ([]Layout, err) {

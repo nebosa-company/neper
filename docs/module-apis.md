@@ -15964,6 +15964,8 @@ fn seasonal_subseries(values: []const f32, period: usize, bounds: geometry.Rect,
 fn decomposition(values: []const f32, period: usize, bounds: geometry.Rect, gap: f32, trend: []f32, seasonal: []f32, residual: []f32, segments: []Segment, panels: []Layout) -> ([]Layout, usize, usize, err)
 fn correlogram(values: []const f32, max_lag: usize, bounds: geometry.Rect, gap: f32, acf: []f64, pacf: []f64, coefficients: []f64, next: []f64, stems: []Segment, guides: []Segment, panels: []Layout) -> ([]Layout, Layout, err)
 fn variogram(x: []const f32, y: []const f32, values: []const f32, cutoff: f32, bounds: geometry.Rect, pair_counts: []u64, distances: []f64, semivariances: []f64, points: []Coord) -> (Layout, err)
+fn radar(values: []const f32, minimum: []const f32, maximum: []const f32, bounds: geometry.Rect, levels: usize, points: []Coord, guides: []Segment) -> (Layout, Layout, err)
+fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err)
 fn rug(values: []const f32, bounds: geometry.Rect, height: f32, segments: []Segment) -> (Layout, err)

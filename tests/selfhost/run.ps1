@@ -3142,6 +3142,11 @@ $gfxChartVariogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartVariogramWritten -ne 'executable written') { throw 'gfx_chart_variogram emission failed' }
 $gfxChartVariogramOutput = & $gfxChartVariogramPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartVariogramOutput -ne 'gfx chart variogram ok') { throw "the e.gfx.chart empirical variogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartRadialPath = Join-Path $testBuild 'gfx-chart-radial-selfhost.exe'
+$gfxChartRadialWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_radial\src\main.e') $repo 'x64' 'windows' $gfxChartRadialPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRadialWritten -ne 'executable written') { throw 'gfx_chart_radial emission failed' }
+$gfxChartRadialOutput = & $gfxChartRadialPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRadialOutput -ne 'gfx chart radial ok') { throw "the e.gfx.chart radar or rose answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

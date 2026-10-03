@@ -2594,6 +2594,83 @@ fn render_share(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_radar_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let first = [6]f32{ 80.0, 72.0, 62.0, 88.0, 58.0, 77.0 }
+    let second = [6]f32{ 63.0, 89.0, 76.0, 68.0, 83.0, 64.0 }
+    let minimum = [6]f32{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }
+    let maximum = [6]f32{ 100.0, 100.0, 100.0, 100.0, 100.0, 100.0 }
+    let bounds = geometry.rect(80.0, 50.0, 200.0, 160.0)
+    var first_points: [7]chart.Coord = zero
+    var second_points: [7]chart.Coord = zero
+    var guide_segments: [18]chart.Segment = zero
+    let (first_area, _, first_error) = chart.radar(first[..], minimum[..], maximum[..], bounds, 2usize, first_points[..], guide_segments[..])
+    if first_error != ok { ret first_error }
+    let (second_area, guides, second_error) = chart.radar(second[..], minimum[..], maximum[..], bounds, 2usize, second_points[..], guide_segments[..])
+    if second_error != ok { ret second_error }
+    var first_lines: [6]chart.Segment = zero
+    var second_lines: [6]chart.Segment = zero
+    var i = 0usize
+    while i < 6usize {
+        first_lines[i] = chart.Segment { from: first_points[i], to: first_points[i + 1usize] }
+        second_lines[i] = chart.Segment { from: second_points[i], to: second_points[i + 1usize] }
+        i += 1usize
+    }
+    let first_outline = chart.Layout { kind: .Line, coords: zero, segments: first_lines[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let second_outline = chart.Layout { kind: .Line, coords: zero, segments: second_lines[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let blue = paint.rgba(0.08, 0.39, 0.77, 0.44)
+    let orange = paint.rgba(0.93, 0.42, 0.13, 0.40)
+    let solid_blue = paint.rgba(0.08, 0.39, 0.77, 1.0)
+    let solid_orange = paint.rgba(0.93, 0.42, 0.13, 1.0)
+    let grid = paint.rgba(0.74, 0.79, 0.85, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var labels: [9]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Radar comparison", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Speed", anchor: chart.Coord { x: 180.0, y: 45.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "Power", anchor: chart.Coord { x: 258.0, y: 93.0 }, align: .Left }
+    labels[3usize] = chart.Label { text: "Quality", anchor: chart.Coord { x: 258.0, y: 173.0 }, align: .Left }
+    labels[4usize] = chart.Label { text: "Reach", anchor: chart.Coord { x: 180.0, y: 221.0 }, align: .Center }
+    labels[5usize] = chart.Label { text: "Growth", anchor: chart.Coord { x: 102.0, y: 173.0 }, align: .Right }
+    labels[6usize] = chart.Label { text: "Value", anchor: chart.Coord { x: 102.0, y: 93.0 }, align: .Right }
+    labels[7usize] = chart.Label { text: "A", anchor: chart.Coord { x: 104.0, y: 235.0 }, align: .Left }
+    labels[8usize] = chart.Label { text: "B", anchor: chart.Coord { x: 244.0, y: 235.0 }, align: .Left }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 28u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append(a, &builder, &guides, paint.Brush { Solid: grid })
+    try chart_scene.append(a, &builder, &first_area, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &second_area, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &first_outline, paint.Brush { Solid: solid_blue })
+    try chart_scene.append(a, &builder, &second_outline, paint.Brush { Solid: solid_orange })
+    try fill(&builder, geometry.rect(87.0, 229.0, 12.0, 5.0), paint.Brush { Solid: solid_blue })
+    try fill(&builder, geometry.rect(227.0, 229.0, 12.0, 5.0), paint.Brush { Solid: solid_orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/radar.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &guides, grid)
+    try chart_svg.append(&writer, &first_area, blue)
+    try chart_svg.append(&writer, &second_area, orange)
+    try chart_svg.append(&writer, &first_outline, solid_blue)
+    try chart_svg.append(&writer, &second_outline, solid_orange)
+    try chart_svg.rect(&writer, geometry.rect(87.0, 229.0, 12.0, 5.0), solid_blue, false)
+    try chart_svg.rect(&writer, geometry.rect(227.0, 229.0, 12.0, 5.0), solid_orange, false)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
     if layers.len != 9usize || rects.len != layers.len || names.len != layers.len { ret chart.Invalid }
     let colors = [6]paint.Color{
@@ -3349,6 +3426,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (donut_layers, donut_error) = chart.pie(pie_values[..], pie_bounds, 0.54, pie_points[..], pie_storage[..])
     if donut_error != ok { ret donut_error }
     try render_share(a, queue, output_target, canvas, &renderer, donut_layers, pie_names[..], "Category share", "docs/chart-previews/donut.png")
+    try render_radar_preview(a, queue, output_target, canvas, &renderer)
+    let rose_values = [5]f32{ 10.0, 18.0, 8.0, 5.0, 14.0 }
+    let rose_names = [5]str{ "0 deg", "72 deg", "144 deg", "216 deg", "288 deg" }
+    var rose_points: [115]chart.Coord = zero
+    var rose_storage: [5]chart.Layout = zero
+    let (rose_layers, rose_error) = chart.rose(rose_values[..], pie_bounds, rose_points[..], rose_storage[..])
+    if rose_error != ok { ret rose_error }
+    try render_share(a, queue, output_target, canvas, &renderer, rose_layers, rose_names[..], "Area-scaled wind rose", "docs/chart-previews/rose.png")
     var waffle_bars: [100]geometry.Rect = zero
     let (waffle_layers, waffle_error) = chart.waffle(pie_values[..], pie_bounds, 10usize, 10usize, 2.0, waffle_bars[..], pie_storage[..])
     if waffle_error != ok { ret waffle_error }

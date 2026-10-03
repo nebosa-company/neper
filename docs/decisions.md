@@ -33908,3 +33908,16 @@ empty/capacity refusals and both adapters on Windows and Linux. The gallery
 adds a PNG/SVG preview. Geographic distances, directional and robust
 estimators, trend removal and model fitting remain planned. Reference:
 `gstat::variogram` documentation.
+
+## D1880 — Radar and rose reuse polar Area polygons and Rug guides
+
+`radar` maps three or more values through explicit per-axis minimum/maximum
+ranges into a closed Area polygon, with caller-owned spoke and ring-grid Rug
+segments. Multiple calls sharing ranges and bounds overlay comparable series.
+`rose` accepts pre-binned nonnegative angular weights, uses equal-angle sectors
+centered on each bin direction and square-root radii so sector area tracks
+weight. Its filled sectors reuse the existing pie/share renderer. The
+`gfx_chart_radial` fixture checks reference coordinates, area scaling,
+refusals and scene/SVG output on Windows and Linux; two PNG/SVG previews are
+added. Raw-angle binning, curved text and polar axis interaction remain planned.
+References: R `fmsb::radarchart`, `circular::rose.diag` and ggplot2 `coord_radial`.
