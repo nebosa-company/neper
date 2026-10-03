@@ -3357,6 +3357,16 @@ $gfxChartMarginalHistogramWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $gfxChartMarginalHistogramWritten -ne 'executable written') { throw 'gfx_chart_marginal_histogram emission failed' }
 $gfxChartMarginalHistogramOutput = & $gfxChartMarginalHistogramPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartMarginalHistogramOutput -ne 'gfx chart marginal histogram ok') { throw "the e.gfx.chart marginal histogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDoseResponsePath = Join-Path $testBuild 'gfx-chart-dose-response-selfhost.exe'
+$gfxChartDoseResponseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_dose_response\src\main.e') $repo 'x64' 'windows' $gfxChartDoseResponsePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDoseResponseWritten -ne 'executable written') { throw 'gfx_chart_dose_response emission failed' }
+$gfxChartDoseResponseOutput = & $gfxChartDoseResponsePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDoseResponseOutput -ne 'gfx chart dose response ok') { throw "the e.gfx.chart dose response answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHazardRatePath = Join-Path $testBuild 'gfx-chart-hazard-rate-selfhost.exe'
+$gfxChartHazardRateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_hazard_rate\src\main.e') $repo 'x64' 'windows' $gfxChartHazardRatePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHazardRateWritten -ne 'executable written') { throw 'gfx_chart_hazard_rate emission failed' }
+$gfxChartHazardRateOutput = & $gfxChartHazardRatePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHazardRateOutput -ne 'gfx chart hazard rate ok') { throw "the e.gfx.chart hazard rate answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

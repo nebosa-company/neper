@@ -65,6 +65,10 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("connected_scatter", planned)
         self.assertIn("marginal_histogram", rendered)
         self.assertNotIn("marginal_histogram", planned)
+        self.assertIn("dose_response", rendered)
+        self.assertNotIn("dose_response", planned)
+        self.assertIn("hazard_rate", rendered)
+        self.assertNotIn("hazard_rate", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)

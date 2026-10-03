@@ -2979,6 +2979,16 @@ gfx_chart_marginal_histogram_written=$($test_build/neper-self emit-executable "$
 chmod +x "$test_build/gfx-chart-marginal-histogram-selfhost"
 gfx_chart_marginal_histogram_output=$("$test_build/gfx-chart-marginal-histogram-selfhost")
 [ "$gfx_chart_marginal_histogram_output" = 'gfx chart marginal histogram ok' ]
+gfx_chart_dose_response_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_dose_response/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-dose-response-selfhost")
+[ "$gfx_chart_dose_response_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-dose-response-selfhost"
+gfx_chart_dose_response_output=$("$test_build/gfx-chart-dose-response-selfhost")
+[ "$gfx_chart_dose_response_output" = 'gfx chart dose response ok' ]
+gfx_chart_hazard_rate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_hazard_rate/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-hazard-rate-selfhost")
+[ "$gfx_chart_hazard_rate_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-hazard-rate-selfhost"
+gfx_chart_hazard_rate_output=$("$test_build/gfx-chart-hazard-rate-selfhost")
+[ "$gfx_chart_hazard_rate_output" = 'gfx chart hazard rate ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

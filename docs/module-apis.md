@@ -3195,6 +3195,8 @@ fn regression_slope(s: *const Regression) -> (f64, bool)
 fn regression_intercept(s: *const Regression) -> (f64, bool)
 fn regression_diagnostics(x: []const f64, y: []const f64, out: []RegressionDiagnostic) -> err
 fn survival_curve(times: []const f64, event: []const bool, out: []SurvivalPoint) -> ([]SurvivalPoint, err)
+fn log_logistic4(dose: f64, lower: f64, upper: f64, ec50: f64, slope: f64) -> (f64, err)
+fn interval_hazard(times: []const f64, event: []const bool, edges: []const f64, counts: []u64, exposure: []f64, rates: []f64) -> err
 fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimits, err)
 fn imr_phase_control(values: []const f64, starts: []const bool, moving: []f64, out: []AttributeControlPoint) -> err
 fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err)
@@ -15939,6 +15941,7 @@ type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64,
 type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
 type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
 type MarginalHistogramLayout = struct { scatter: Layout, top: Layout, right: Layout }
+type DoseResponseLayout = struct { observations: Layout, curve: Layout }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
@@ -16002,6 +16005,8 @@ fn milestone_roadmap(events: []const TimelineEvent, rows: usize, domain_start: f
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 fn marginal_histogram(x: []const f32, y: []const f32, bounds: geometry.Rect, top_height: f32, right_width: f32, gap: f32, points: []Coord, x_counts: []u64, x_bars: []geometry.Rect, y_counts: []u64, y_bars: []geometry.Rect) -> (MarginalHistogramLayout, err)
+fn dose_response(dose: []const f64, response: []const f64, lower: f64, upper: f64, ec50: f64, slope: f64, bounds: geometry.Rect, grid: []f64, estimates: []f64, points: []Coord, segments: []Segment) -> (DoseResponseLayout, err)
+fn hazard_rate(edges: []const f64, rates: []const f64, bounds: geometry.Rect, segments: []Segment) -> (Layout, err)
 fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err)
 fn rug(values: []const f32, bounds: geometry.Rect, height: f32, segments: []Segment) -> (Layout, err)
 fn strip(values: []const f32, bounds: geometry.Rect, spread: f32, coords: []Coord) -> (Layout, err)

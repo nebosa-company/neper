@@ -2529,6 +2529,124 @@ fn render_marginal_histogram_preview(a: *mem.Arena, q: *gpu.Queue, output_target
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_dose_response_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/dose_response.png"
+    let plot = geometry.rect(60.0, 48.0, 244.0, 150.0)
+    let doses = [10]f64{ 0.1f64, 0.2f64, 0.5f64, 1.0f64, 2.0f64, 5.0f64, 10.0f64, 20.0f64, 50.0f64, 100.0f64 }
+    let responses = [10]f64{ 2.0f64, 4.0f64, 6.0f64, 10.0f64, 15.0f64, 33.0f64, 52.0f64, 69.0f64, 88.0f64, 97.0f64 }
+    var grid: [65]f64 = zero
+    var estimates: [65]f64 = zero
+    var points: [10]chart.Coord = zero
+    var lines: [64]chart.Segment = zero
+    let (map, map_error) = chart.dose_response(doses[..], responses[..], 0.0f64, 100.0f64, 10.0f64, -1.8f64, plot, grid[..], estimates[..], points[..], lines[..])
+    if map_error != ok || map.curve.segments.len != 64usize { ret chart.Invalid }
+    let pale = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.10, 0.43, 0.78, 1.0)
+    let orange = paint.rgba(0.87, 0.38, 0.17, 1.0)
+    let gray = paint.rgba(0.76, 0.81, 0.87, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let midpoint = geometry.rect(plot.x + plot.width * 0.6666667 - 0.5, plot.y, 1.0, plot.height)
+    let labels = [9]chart.Label{
+        chart.Label { text: "Dose response / LL.4 mean", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "0.1", anchor: chart.Coord { x: plot.x, y: 214.0 }, align: .Center },
+        chart.Label { text: "1", anchor: chart.Coord { x: plot.x + plot.width * 0.3333333, y: 214.0 }, align: .Center },
+        chart.Label { text: "10 / EC50", anchor: chart.Coord { x: plot.x + plot.width * 0.6666667, y: 214.0 }, align: .Center },
+        chart.Label { text: "100", anchor: chart.Coord { x: plot.x + plot.width, y: 214.0 }, align: .Center },
+        chart.Label { text: "Log dose; parameters supplied, not fitted", anchor: chart.Coord { x: 180.0, y: 234.0 }, align: .Center },
+        chart.Label { text: "100", anchor: chart.Coord { x: 54.0, y: plot.y + 3.0 }, align: .Right },
+        chart.Label { text: "50", anchor: chart.Coord { x: 54.0, y: plot.y + plot.height * 0.5 + 3.0 }, align: .Right },
+        chart.Label { text: "0", anchor: chart.Coord { x: 54.0, y: plot.y + plot.height + 3.0 }, align: .Right },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 26u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try fill(&builder, midpoint, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.curve, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.observations, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.rect(&writer, midpoint, gray, false)
+    try chart_svg.append(&writer, &map.curve, blue)
+    try chart_svg.append(&writer, &map.observations, orange)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_hazard_rate_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/hazard_rate.png"
+    let plot = geometry.rect(55.0, 48.0, 250.0, 150.0)
+    let times = [14]f64{ 0.8f64, 1.7f64, 2.3f64, 3.1f64, 3.8f64, 4.2f64, 5.4f64, 6.1f64, 6.7f64, 7.3f64, 8.5f64, 9.2f64, 10.6f64, 12.0f64 }
+    let events = [14]bool{ true, false, true, false, true, false, true, false, true, false, true, false, true, false }
+    let edges = [7]f64{ 0.0f64, 2.0f64, 4.0f64, 6.0f64, 8.0f64, 10.0f64, 12.0f64 }
+    var counts: [6]u64 = zero
+    var exposure: [6]f64 = zero
+    var rates: [6]f64 = zero
+    try stat.interval_hazard(times[..], events[..], edges[..], counts[..], exposure[..], rates[..])
+    var segments: [11]chart.Segment = zero
+    let (marks, marks_error) = chart.hazard_rate(edges[..], rates[..], plot, segments[..])
+    if marks_error != ok || marks.segments.len != 11usize { ret chart.Invalid }
+    let pale = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.10, 0.43, 0.78, 1.0)
+    let gray = paint.rgba(0.78, 0.82, 0.87, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let labels = [9]chart.Label{
+        chart.Label { text: "Interval hazard / event exposure", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "0", anchor: chart.Coord { x: plot.x, y: 213.0 }, align: .Center },
+        chart.Label { text: "4", anchor: chart.Coord { x: plot.x + plot.width * 0.3333333, y: 213.0 }, align: .Center },
+        chart.Label { text: "8", anchor: chart.Coord { x: plot.x + plot.width * 0.6666667, y: 213.0 }, align: .Center },
+        chart.Label { text: "12", anchor: chart.Coord { x: plot.x + plot.width, y: 213.0 }, align: .Center },
+        chart.Label { text: "Events / person-time in each interval", anchor: chart.Coord { x: 180.0, y: 233.0 }, align: .Center },
+        chart.Label { text: "0.385", anchor: chart.Coord { x: 49.0, y: plot.y + 3.0 }, align: .Right },
+        chart.Label { text: "0.2", anchor: chart.Coord { x: 49.0, y: plot.y + plot.height * 0.48 + 3.0 }, align: .Right },
+        chart.Label { text: "0", anchor: chart.Coord { x: 49.0, y: plot.y + plot.height + 3.0 }, align: .Right },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 27u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try fill(&builder, geometry.rect(plot.x, plot.y + plot.height - 1.0, plot.width, 1.0), paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.rect(&writer, geometry.rect(plot.x, plot.y + plot.height - 1.0, plot.width, 1.0), gray, false)
+    try chart_svg.append(&writer, &marks, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -6500,6 +6618,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_slopegraph_preview(a, queue, output_target, canvas, &renderer)
     try render_connected_scatter_preview(a, queue, output_target, canvas, &renderer)
     try render_marginal_histogram_preview(a, queue, output_target, canvas, &renderer)
+    try render_dose_response_preview(a, queue, output_target, canvas, &renderer)
+    try render_hazard_rate_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

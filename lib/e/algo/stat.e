@@ -402,6 +402,65 @@ fn survival_curve(times: []const f64, event: []const bool, out: []SurvivalPoint)
     ret (out[..used], ok)
 }
 
+// Four-parameter log-logistic mean (drc LL.4 parameterisation). This evaluates
+// caller-supplied parameters; it does not infer or fit them from observations.
+fn log_logistic4(dose: f64, lower: f64, upper: f64, ec50: f64, slope: f64) -> (f64, err) {
+    if dose <= 0.0f64 || ec50 <= 0.0f64 || lower >= upper || slope == 0.0f64 { ret (0.0f64, Invalid) }
+    if dose - dose != 0.0f64 || lower - lower != 0.0f64 || upper - upper != 0.0f64 || ec50 - ec50 != 0.0f64 || slope - slope != 0.0f64 { ret (0.0f64, Invalid) }
+    let exponent = slope * (math.log[f64](dose) - math.log[f64](ec50))
+    var fraction = 0.0f64
+    if exponent < -40.0f64 {
+        fraction = 1.0f64
+    } else if exponent < 40.0f64 {
+        fraction = 1.0f64 / (1.0f64 + math.exp[f64](exponent))
+    }
+    let response = lower + (upper - lower) * fraction
+    if response - response != 0.0f64 { ret (0.0f64, Invalid) }
+    ret (response, ok)
+}
+
+// Piecewise event/person-time rates for intervals (edges[i], edges[i+1]].
+// Every subject enters at time zero and contributes exposure until its event
+// or right-censoring time; zero-exposure bins have no estimable rate.
+fn interval_hazard(times: []const f64, event: []const bool, edges: []const f64, counts: []u64, exposure: []f64, rates: []f64) -> err {
+    if times.len == 0usize || event.len != times.len || edges.len < 2usize { ret Invalid }
+    let bins = edges.len - 1usize
+    if counts.len < bins || exposure.len < bins || rates.len < bins { ret TooSmall }
+    if edges[0usize] != 0.0f64 { ret Invalid }
+    var j = 0usize
+    while j < bins {
+        if edges[j] - edges[j] != 0.0f64 || edges[j + 1usize] - edges[j + 1usize] != 0.0f64 || edges[j + 1usize] <= edges[j] { ret Invalid }
+        counts[j] = 0u64
+        exposure[j] = 0.0f64
+        rates[j] = 0.0f64
+        j += 1usize
+    }
+    var i = 0usize
+    while i < times.len {
+        let time = times[i]
+        if time <= 0.0f64 || time > edges[bins] || time - time != 0.0f64 { ret Invalid }
+        j = 0usize
+        while j < bins {
+            let lower = edges[j]
+            let upper = edges[j + 1usize]
+            var observed_end = time
+            if observed_end > upper { observed_end = upper }
+            if observed_end > lower { exposure[j] += observed_end - lower }
+            if event[i] && time > lower && time <= upper { counts[j] += 1u64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    j = 0usize
+    while j < bins {
+        if exposure[j] <= 0.0f64 || exposure[j] - exposure[j] != 0.0f64 { ret Invalid }
+        rates[j] = f64(counts[j]) / exposure[j]
+        if rates[j] - rates[j] != 0.0f64 { ret Invalid }
+        j += 1usize
+    }
+    ret ok
+}
+
 // Three-sigma Individuals and moving-range limits for consecutive pairs.
 fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimits, err) {
     if values.len < 2usize { ret (zero, zero, Invalid) }

@@ -34361,3 +34361,27 @@ domains match the scatter domain, including constant-data expansion; bins and
 counts stay caller-owned. Two Windows/Linux fixtures cover order, exact counts,
 alignment, scene/SVG adapters and refusals. Two PNG/SVG previews join the
 gallery. Sequence labels and automatic layout remain gallery concerns.
+
+## D1925 — Separate modelled dose means from observed interval hazards
+
+The dose preview evaluates the `drc` LL.4 parameterization
+`c + (d-c)/(1+exp(b*(log(dose)-log(EC50))))` for strictly positive dose,
+caller-supplied lower/upper asymptotes, midpoint and nonzero slope. Negative
+slope increases the curve; positive slope decreases it. Neither fitting nor
+parameter uncertainty is claimed. `chart.dose_response` shares the log-dose
+axis and response domain between observed points and the sampled mean curve.
+
+The hazard preview is an *interval* event-rate estimate, not an instantaneous
+hazard: events in `(left,right]` divided by observed person-time in that bin.
+Subjects enter at zero and contribute until event or right censoring. Empty
+exposure bins refuse instead of displaying a misleading zero rate. The step
+geometry uses the same explicit edges; no smoothing, delayed entry or competing
+risks is claimed. Focused Windows/Linux fixtures pin the LL.4 midpoint and
+tails, exposure totals, boundary events, rendering and refusal paths. Two
+PNG/SVG pairs join the gallery.
+
+Sources: R `drc` log-logistic documentation
+(https://stat.ethz.ch/CRAN/web/packages/drc/drc.pdf), R `survival::pyears`
+(https://stat.ethz.ch/R-manual/R-devel/library/survival/html/pyears.html),
+and NIST's hazard-rate definition
+(https://www.itl.nist.gov/div898/handbook/apr/section1/apr123.htm).

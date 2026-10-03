@@ -100,6 +100,7 @@ type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64,
 type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
 type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
 type MarginalHistogramLayout = struct { scatter: Layout, top: Layout, right: Layout }
+type DoseResponseLayout = struct { observations: Layout, curve: Layout }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -5693,6 +5694,92 @@ fn marginal_histogram(x: []const f32, y: []const f32, bounds: geometry.Rect, top
     }
     let right_marks = Layout { kind: .Histogram, coords: zero, segments: zero, bars: y_bars, x_min: 0.0, x_max: right_raw.y_max, y_min: right_raw.x_min, y_max: right_raw.x_max }
     ret (MarginalHistogramLayout { scatter: scatter_marks, top: top_marks, right: right_marks }, ok)
+}
+
+// Observed doses and a caller-parameterised LL.4 mean curve share a log-dose
+// axis. Fitting and uncertainty intervals are separate statistical work.
+fn dose_response(dose: []const f64, response: []const f64, lower: f64, upper: f64, ec50: f64, slope: f64, bounds: geometry.Rect, grid: []f64, estimates: []f64, points: []Coord, segments: []Segment) -> (DoseResponseLayout, err) {
+    if dose.len == 0usize { ret (zero, Empty) }
+    if dose.len != response.len || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if grid.len < 2usize || estimates.len < grid.len || points.len < dose.len || segments.len < grid.len - 1usize { ret (zero, TooLarge) }
+    var dose_min = dose[0usize]
+    var dose_max = dose[0usize]
+    var ymin = lower
+    var ymax = upper
+    var i = 0usize
+    while i < dose.len {
+        if !finite64(dose[i]) || dose[i] <= 0.0f64 || !finite64(response[i]) { ret (zero, Invalid) }
+        if dose[i] < dose_min { dose_min = dose[i] }
+        if dose[i] > dose_max { dose_max = dose[i] }
+        if response[i] < ymin { ymin = response[i] }
+        if response[i] > ymax { ymax = response[i] }
+        i += 1usize
+    }
+    if dose_min == dose_max || !finite64(ymin) || !finite64(ymax) || ymax <= ymin { ret (zero, Invalid) }
+    let log_min = math.log[f64](dose_min)
+    let log_span = math.log[f64](dose_max) - log_min
+    let y_span = ymax - ymin
+    if !finite64(log_span) || !finite64(y_span) || log_span <= 0.0f64 || y_span <= 0.0f64 || !finite(f32(dose_min)) || !finite(f32(dose_max)) || !finite(f32(ymin)) || !finite(f32(ymax)) { ret (zero, Invalid) }
+    i = 0usize
+    while i < dose.len {
+        let px = bounds.x + bounds.width * f32((math.log[f64](dose[i]) - log_min) / log_span)
+        let py = bounds.y + bounds.height * f32((ymax - response[i]) / y_span)
+        if !finite(px) || !finite(py) { ret (zero, Invalid) }
+        points[i] = Coord { x: px, y: py }
+        i += 1usize
+    }
+    i = 0usize
+    while i < grid.len {
+        grid[i] = math.exp[f64](log_min + log_span * f64(i) / f64(grid.len - 1usize))
+        let (estimate, model_error) = stat.log_logistic4(grid[i], lower, upper, ec50, slope)
+        if model_error != ok { ret (zero, Invalid) }
+        estimates[i] = estimate
+        let px = bounds.x + bounds.width * f32(i) / f32(grid.len - 1usize)
+        let py = bounds.y + bounds.height * f32((ymax - estimate) / y_span)
+        if !finite(px) || !finite(py) { ret (zero, Invalid) }
+        if i > 0usize {
+            let previous = Coord { x: bounds.x + bounds.width * f32(i - 1usize) / f32(grid.len - 1usize), y: bounds.y + bounds.height * f32((ymax - estimates[i - 1usize]) / y_span) }
+            segments[i - 1usize] = Segment { from: previous, to: Coord { x: px, y: py } }
+        }
+        i += 1usize
+    }
+    let observed = Layout { kind: .Scatter, coords: points[..dose.len], segments: zero, bars: zero, x_min: f32(dose_min), x_max: f32(dose_max), y_min: f32(ymin), y_max: f32(ymax) }
+    let curve = Layout { kind: .Line, coords: zero, segments: segments[..grid.len - 1usize], bars: zero, x_min: f32(dose_min), x_max: f32(dose_max), y_min: f32(ymin), y_max: f32(ymax) }
+    ret (DoseResponseLayout { observations: observed, curve: curve }, ok)
+}
+
+// Draw interval event/person-time estimates as one step per explicit interval.
+fn hazard_rate(edges: []const f64, rates: []const f64, bounds: geometry.Rect, segments: []Segment) -> (Layout, err) {
+    if rates.len == 0usize { ret (zero, Empty) }
+    if edges.len != rates.len + 1usize || !valid_bounds(bounds) || !finite64(edges[0usize]) || edges[0usize] < 0.0f64 { ret (zero, Invalid) }
+    if segments.len < rates.len || segments.len - rates.len < rates.len - 1usize { ret (zero, TooLarge) }
+    var maximum = 0.0f64
+    var i = 0usize
+    while i < rates.len {
+        if !finite64(edges[i + 1usize]) || edges[i + 1usize] <= edges[i] || !finite64(rates[i]) || rates[i] < 0.0f64 { ret (zero, Invalid) }
+        if rates[i] > maximum { maximum = rates[i] }
+        i += 1usize
+    }
+    if maximum == 0.0f64 { maximum = 1.0f64 }
+    let span = edges[edges.len - 1usize] - edges[0usize]
+    if !finite64(span) || span <= 0.0f64 || !finite(f32(edges[0usize])) || !finite(f32(edges[edges.len - 1usize])) || !finite(f32(maximum)) { ret (zero, Invalid) }
+    var used = 0usize
+    i = 0usize
+    while i < rates.len {
+        let left_x = bounds.x + bounds.width * f32((edges[i] - edges[0usize]) / span)
+        let right_x = bounds.x + bounds.width * f32((edges[i + 1usize] - edges[0usize]) / span)
+        let y = bounds.y + bounds.height * f32((maximum - rates[i]) / maximum)
+        if !finite(left_x) || !finite(right_x) || !finite(y) { ret (zero, Invalid) }
+        if i > 0usize {
+            let previous_y = bounds.y + bounds.height * f32((maximum - rates[i - 1usize]) / maximum)
+            segments[used] = Segment { from: Coord { x: left_x, y: previous_y }, to: Coord { x: left_x, y: y } }
+            used += 1usize
+        }
+        segments[used] = Segment { from: Coord { x: left_x, y: y }, to: Coord { x: right_x, y: y } }
+        used += 1usize
+        i += 1usize
+    }
+    ret (Layout { kind: .Step, coords: zero, segments: segments[..used], bars: zero, x_min: f32(edges[0usize]), x_max: f32(edges[edges.len - 1usize]), y_min: 0.0, y_max: f32(maximum) }, ok)
 }
 
 // Connect each histogram bin center, closing at zero at the outer bin edges.
