@@ -83,6 +83,8 @@ type BranchSummary = struct { output_fraction: f64, expected_processing_time: f6
 type BranchLayout = struct { nodes: Layout, connectors: Layout, summary: BranchSummary }
 type StemLeafRow = struct { stem: i64, first: usize, count: usize, baseline: f32 }
 type StemLeafLayout = struct { rows: []StemLeafRow, leaves: []u8, divider: Segment, leaf_start: f32, leaf_step: f32, leaf_unit: f64 }
+type RangeInterval = struct { row: usize, lower: f64, upper: f64 }
+type RangeIntervalLayout = struct { ranges: Layout, caps: Layout }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2085,6 +2087,39 @@ fn word_cloud(words: []const str, weights: []const f32, unit_widths: []const f32
         used += 1usize
     }
     ret (marks[..active], ok)
+}
+
+// Floating low-to-high bars use an explicit shared numeric domain and
+// categorical rows. Unlike a dumbbell, the interval itself carries area;
+// endpoint caps remain a separate stroke layer for independent styling.
+fn range_intervals(items: []const RangeInterval, rows: usize, domain_min: f64, domain_max: f64, bounds: geometry.Rect, thickness: f32, bands: []geometry.Rect, endpoints: []Segment) -> (RangeIntervalLayout, err) {
+    if items.len == 0usize { ret (zero, Empty) }
+    if rows == 0usize || !finite64(domain_min) || !finite64(domain_max) || domain_max <= domain_min || !finite64(domain_max - domain_min) || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(thickness) || thickness <= 0.0 || thickness > 1.0 { ret (zero, Invalid) }
+    let x_min = f32(domain_min)
+    let x_max = f32(domain_max)
+    let y_max = f32(rows)
+    if !finite(x_min) || !finite(x_max) || x_max <= x_min || !finite(y_max) { ret (zero, Invalid) }
+    if bands.len < items.len || endpoints.len / 2usize < items.len { ret (zero, TooLarge) }
+    let lane_height = bounds.height / f32(rows)
+    let bar_height = lane_height * thickness
+    let cap_height = lane_height * 0.8
+    if !finite(lane_height) || !finite(bar_height) || lane_height < 10.0 || bar_height < 2.0 { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < items.len {
+        let item = items[i]
+        if item.row >= rows || !finite64(item.lower) || !finite64(item.upper) || item.lower < domain_min || item.upper > domain_max || item.upper <= item.lower { ret (zero, Invalid) }
+        let left = bounds.x + bounds.width * f32((item.lower - domain_min) / (domain_max - domain_min))
+        let right = bounds.x + bounds.width * f32((item.upper - domain_min) / (domain_max - domain_min))
+        let middle = bounds.y + (f32(item.row) + 0.5) * lane_height
+        if !finite(left) || !finite(right) || !finite(middle) || right <= left { ret (zero, Invalid) }
+        bands[i] = geometry.rect(left, middle - bar_height * 0.5, right - left, bar_height)
+        endpoints[2usize * i] = Segment { from: Coord { x: left, y: middle - cap_height * 0.5 }, to: Coord { x: left, y: middle + cap_height * 0.5 } }
+        endpoints[2usize * i + 1usize] = Segment { from: Coord { x: right, y: middle - cap_height * 0.5 }, to: Coord { x: right, y: middle + cap_height * 0.5 } }
+        i += 1usize
+    }
+    let ranges = Layout { kind: .Bar, coords: zero, segments: zero, bars: bands[..items.len], x_min: x_min, x_max: x_max, y_min: 0.0, y_max: y_max }
+    let caps = Layout { kind: .Rug, coords: zero, segments: endpoints[..2usize * items.len], bars: zero, x_min: x_min, x_max: x_max, y_min: 0.0, y_max: y_max }
+    ret (RangeIntervalLayout { ranges: ranges, caps: caps }, ok)
 }
 
 // Task durations and completion fractions share a numeric time domain and

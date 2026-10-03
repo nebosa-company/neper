@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>range_interval</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="79" y="54" width="246" height="24" fill="rgb(240,247,252)" fill-opacity="1"/>
+<rect x="79" y="102" width="246" height="24" fill="rgb(240,247,252)" fill-opacity="1"/>
+<rect x="79" y="150" width="246" height="24" fill="rgb(240,247,252)" fill-opacity="1"/>
+<line x1="79" y1="54" x2="79" y2="198" stroke="rgb(207,219,235)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="79" y1="198" x2="79" y2="203" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="140.5" y1="54" x2="140.5" y2="198" stroke="rgb(207,219,235)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="140.5" y1="198" x2="140.5" y2="203" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="202" y1="54" x2="202" y2="198" stroke="rgb(207,219,235)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="202" y1="198" x2="202" y2="203" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="263.5" y1="54" x2="263.5" y2="198" stroke="rgb(207,219,235)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="263.5" y1="198" x2="263.5" y2="203" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="325" y1="54" x2="325" y2="198" stroke="rgb(207,219,235)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="325" y1="198" x2="325" y2="203" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="79" y1="54" x2="79" y2="198" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="79" y1="198" x2="325" y2="198" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<rect x="103.5999984741211" y="61.91999816894531" width="86.0999984741211" height="8.15999984741211" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="122.05000305175781" y="85.91999816894531" width="92.25" height="8.15999984741211" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="140.5" y="109.91999816894531" width="110.69999694824219" height="8.15999984741211" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="177.39999389648438" y="133.9199981689453" width="116.85000610351562" height="8.15999984741211" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="152.8000030517578" y="157.9199981689453" width="110.69999694824219" height="8.15999984741211" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="115.9000015258789" y="181.9199981689453" width="86.0999984741211" height="8.15999984741211" fill="rgb(20,99,189)" fill-opacity="1"/>
+<line x1="103.5999984741211" y1="56.400001525878906" x2="103.5999984741211" y2="75.5999984741211" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="189.6999969482422" y1="56.400001525878906" x2="189.6999969482422" y2="75.5999984741211" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="122.05000305175781" y1="80.4000015258789" x2="122.05000305175781" y2="99.5999984741211" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="214.3000030517578" y1="80.4000015258789" x2="214.3000030517578" y2="99.5999984741211" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="140.5" y1="104.4000015258789" x2="140.5" y2="123.5999984741211" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="251.1999969482422" y1="104.4000015258789" x2="251.1999969482422" y2="123.5999984741211" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="177.39999389648438" y1="128.39999389648438" x2="177.39999389648438" y2="147.60000610351562" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="294.25" y1="128.39999389648438" x2="294.25" y2="147.60000610351562" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="152.8000030517578" y1="152.39999389648438" x2="152.8000030517578" y2="171.60000610351562" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="263.5" y1="152.39999389648438" x2="263.5" y2="171.60000610351562" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="115.9000015258789" y1="176.39999389648438" x2="115.9000015258789" y2="195.60000610351562" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="202" y1="176.39999389648438" x2="202" y2="195.60000610351562" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="24" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Daily temperature ranges</text>
+<text x="69" y="69" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">Mon</text>
+<text x="69" y="93" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">Tue</text>
+<text x="69" y="117" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">Wed</text>
+<text x="69" y="141" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">Thu</text>
+<text x="69" y="165" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">Fri</text>
+<text x="69" y="189" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">Sat</text>
+<text x="79" y="216" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">-10</text>
+<text x="140.5" y="216" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">0</text>
+<text x="202" y="216" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">10</text>
+<text x="263.5" y="216" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">20</text>
+<text x="325" y="216" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">30</text>
+<text x="180" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Daily low to high (C)</text>
+</svg>

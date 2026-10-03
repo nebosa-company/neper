@@ -3302,6 +3302,11 @@ $gfxChartStemLeafWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $gfxChartStemLeafWritten -ne 'executable written') { throw 'gfx_chart_stem_and_leaf emission failed' }
 $gfxChartStemLeafOutput = & $gfxChartStemLeafPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartStemLeafOutput -ne 'gfx chart stem and leaf ok') { throw "the e.gfx.chart stem and leaf answered wrongly: exit $LASTEXITCODE" }
+$gfxChartRangeIntervalPath = Join-Path $testBuild 'gfx-chart-range-interval-selfhost.exe'
+$gfxChartRangeIntervalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_range_interval\src\main.e') $repo 'x64' 'windows' $gfxChartRangeIntervalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRangeIntervalWritten -ne 'executable written') { throw 'gfx_chart_range_interval emission failed' }
+$gfxChartRangeIntervalOutput = & $gfxChartRangeIntervalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRangeIntervalOutput -ne 'gfx chart range interval ok') { throw "the e.gfx.chart range interval answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

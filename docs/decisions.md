@@ -34260,3 +34260,14 @@ duplicates, geometry, capacity and malformed inputs. Focused Linux checks
 also now pass for the previously pending ER and branching-process fixtures.
 Automatic leaf-unit selection, split stems and label collision handling remain
 follow-on work.
+
+## D1916 — Floating range bars keep bounds and interval fill separate
+
+`range_intervals` maps nonzero low-to-high values onto an explicit shared
+numeric domain and categorical rows. It returns caller-owned Bar rectangles
+for the filled spans and a distinct Rug layer for vertical endpoint caps,
+allowing both adapters to style the bounds independently. The focused Windows
+and Linux fixture checks exact pixel geometry, unsorted input rows, capacities,
+invalid intervals/domains and scene/SVG output. The gallery adds a daily
+temperature range PNG/SVG pair. Zero-length point intervals, open endpoints,
+overlap dodging and automatic domain selection remain follow-on work.

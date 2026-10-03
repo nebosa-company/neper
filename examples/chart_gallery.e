@@ -1914,6 +1914,90 @@ fn render_stem_and_leaf_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gp
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_range_interval_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/range_interval.png"
+    let plot = geometry.rect(79.0, 54.0, 246.0, 144.0)
+    let ranges = [6]chart.RangeInterval{
+        chart.RangeInterval { row: 0usize, lower: -6.0f64, upper: 8.0f64 },
+        chart.RangeInterval { row: 1usize, lower: -3.0f64, upper: 12.0f64 },
+        chart.RangeInterval { row: 2usize, lower: 0.0f64, upper: 18.0f64 },
+        chart.RangeInterval { row: 3usize, lower: 6.0f64, upper: 25.0f64 },
+        chart.RangeInterval { row: 4usize, lower: 2.0f64, upper: 20.0f64 },
+        chart.RangeInterval { row: 5usize, lower: -4.0f64, upper: 10.0f64 },
+    }
+    var bands: [6]geometry.Rect = zero
+    var caps: [12]chart.Segment = zero
+    let (map, map_error) = chart.range_intervals(ranges[..], 6usize, -10.0f64, 30.0f64, plot, 0.34, bands[..], caps[..])
+    if map_error != ok || map.ranges.bars.len != 6usize || map.caps.segments.len != 12usize { ret chart.Invalid }
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let grid = paint.rgba(0.81, 0.86, 0.92, 1.0)
+    let pale = paint.rgba(0.94, 0.97, 0.99, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let days = [6]str{ "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" }
+    let tick_text = [5]str{ "-10", "0", "10", "20", "30" }
+    let ticks = [5]chart.Tick{
+        chart.Tick { value: -10.0, fraction: 0.0 },
+        chart.Tick { value: 0.0, fraction: 0.25 },
+        chart.Tick { value: 10.0, fraction: 0.5 },
+        chart.Tick { value: 20.0, fraction: 0.75 },
+        chart.Tick { value: 30.0, fraction: 1.0 },
+    }
+    var no_y: [1]chart.Tick = zero
+    var labels: [13]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Daily temperature ranges", anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center }
+    var i = 0usize
+    while i < days.len {
+        labels[1usize + i] = chart.Label { text: days[i], anchor: chart.Coord { x: 69.0, y: plot.y + (f32(i) + 0.5) * 24.0 + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < ticks.len {
+        labels[7usize + i] = chart.Label { text: tick_text[i], anchor: chart.Coord { x: plot.x + plot.width * ticks[i].fraction, y: 216.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[12usize] = chart.Label { text: "Daily low to high (C)", anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    i = 0usize
+    while i < days.len {
+        if i % 2usize == 0usize { try fill(&builder, geometry.rect(plot.x, plot.y + 24.0 * f32(i), plot.width, 24.0), paint.Brush { Solid: pale }) }
+        i += 1usize
+    }
+    try chart_scene.append_guides(&builder, plot, ticks[..], no_y[..0usize], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &map.ranges, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.caps, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..12usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[12usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < days.len {
+        if i % 2usize == 0usize { try chart_svg.rect(&writer, geometry.rect(plot.x, plot.y + 24.0 * f32(i), plot.width, 24.0), pale, false) }
+        i += 1usize
+    }
+    try chart_svg.append_guides(&writer, plot, ticks[..], no_y[..0usize], grid, dark)
+    try chart_svg.append(&writer, &map.ranges, blue)
+    try chart_svg.append(&writer, &map.caps, dark)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..12usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[12usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -5866,6 +5950,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_entity_relationship_preview(a, queue, output_target, canvas, &renderer)
     try render_branching_process_preview(a, queue, output_target, canvas, &renderer)
     try render_stem_and_leaf_preview(a, queue, output_target, canvas, &renderer)
+    try render_range_interval_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)
