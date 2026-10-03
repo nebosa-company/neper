@@ -1209,6 +1209,79 @@ fn icicle(parents: []const usize, weights: []const f32, bounds: geometry.Rect, t
     ret (layers[..parents.len], ok)
 }
 
+// Siblings occupy disjoint circles inside their parent; area ratios match
+// subtree totals. Each sibling group uses one deterministic ring.
+fn circle_pack(parents: []const usize, weights: []const f32, bounds: geometry.Rect, padding: f32, totals: []f64, circles: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if !valid_bounds(bounds) || !finite(padding) || padding < 0.0 || padding >= 1.0 { ret (zero, Invalid) }
+    let total_error = hierarchy_totals(parents, weights, totals)
+    if total_error != ok { ret (zero, total_error) }
+    if circles.len < parents.len || layers.len < parents.len { ret (zero, TooLarge) }
+    var root_radius = f64(bounds.width) * 0.5f64
+    if bounds.height < bounds.width { root_radius = f64(bounds.height) * 0.5f64 }
+    let root_x = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let root_y = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    if !finite(f32(root_x - root_radius)) || !finite(f32(root_y - root_radius)) || !finite(f32(root_radius * 2.0f64)) { ret (zero, Invalid) }
+    circles[0usize] = geometry.rect(f32(root_x - root_radius), f32(root_y - root_radius), f32(root_radius * 2.0f64), f32(root_radius * 2.0f64))
+    var i = 0usize
+    while i < parents.len {
+        var count = 0usize
+        var maximum = 0.0f64
+        var j = i + 1usize
+        while j < parents.len {
+            if parents[j] == i {
+                count += 1usize
+                if totals[j] > maximum { maximum = totals[j] }
+            }
+            j += 1usize
+        }
+        if count > 0usize {
+            let parent = circles[i]
+            let center_x = f64(parent.x) + f64(parent.width) * 0.5f64
+            let center_y = f64(parent.y) + f64(parent.height) * 0.5f64
+            let parent_radius = f64(parent.width) * 0.5f64
+            let orbit = parent_radius * f64(1.0 - padding) * 0.5f64
+            var rank = 0usize
+            // ponytail: sibling scans are O(n^2) and ring packing wastes space
+            // for large groups; use caller-scratch tangent packing if density matters.
+            j = i + 1usize
+            while j < parents.len {
+                if parents[j] == i {
+                    var angle = 0.0f64
+                    var radius = 0.0f64
+                    if count == 1usize {
+                        radius = parent_radius * f64(1.0 - padding)
+                    } else {
+                        angle = 6.283185307179586f64 * f64(rank) / f64(count)
+                        if maximum > 0.0f64 { radius = orbit * math.sin[f64](3.141592653589793f64 / f64(count)) * math.sqrt[f64](totals[j] / maximum) }
+                    }
+                    var x = center_x
+                    var y = center_y
+                    if count > 1usize {
+                        x += orbit * math.cos[f64](angle)
+                        y += orbit * math.sin[f64](angle)
+                    }
+                    let left = f32(x - radius)
+                    let top = f32(y - radius)
+                    let diameter = f32(radius * 2.0f64)
+                    if !finite(left) || !finite(top) || !finite(diameter) || (totals[j] > 0.0f64 && diameter <= 0.0) { ret (zero, Invalid) }
+                    circles[j] = geometry.rect(left, top, diameter, diameter)
+                    rank += 1usize
+                }
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < parents.len {
+        var bars: []geometry.Rect = zero
+        if totals[i] > 0.0f64 { bars = circles[i..i + 1usize] }
+        layers[i] = Layout { kind: .Bubble, coords: zero, segments: zero, bars: bars, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    ret (layers[..parents.len], ok)
+}
+
 // Root occupies the innermost ring, each generation the next. A leaf extends
 // through any remaining rings; zero-total nodes return empty Bar layers.
 fn sunburst(parents: []const usize, weights: []const f32, bounds: geometry.Rect, hole: f32, totals: []f64, depths: []usize, arcs: []SunburstArc, points: []Coord, layers: []Layout) -> ([]Layout, err) {

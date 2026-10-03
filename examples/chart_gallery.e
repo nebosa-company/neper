@@ -629,18 +629,20 @@ fn render_icicle(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canva
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
-fn render_sunburst(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, path: str) -> err {
-    if layers.len != 8usize || names.len != 5usize { ret chart.Invalid }
+fn render_radial_hierarchy(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, first_color: usize, center_label: bool, title: str, path: str) -> err {
+    if layers.len != 8usize || names.len + first_color != layers.len { ret chart.Invalid }
     let colors = [8]paint.Color{
         paint.rgba(0.35, 0.41, 0.51, 1.0), paint.rgba(0.11, 0.35, 0.69, 1.0), paint.rgba(0.16, 0.53, 0.38, 1.0),
         paint.rgba(0.08, 0.39, 0.79, 1.0), paint.rgba(0.34, 0.35, 0.74, 1.0), paint.rgba(0.11, 0.56, 0.70, 1.0),
         paint.rgba(0.10, 0.62, 0.44, 1.0), paint.rgba(0.73, 0.40, 0.13, 1.0),
     }
     let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
-    var legend: [5]chart.LegendItem = zero
-    let (entries, legend_error) = chart.legend_items(names, chart.Coord { x: 232.0, y: 58.0 }, 10.0, 29.0, legend[..])
+    var legend: [7]chart.LegendItem = zero
+    var legend_step = 29.0f32
+    if names.len > 5usize { legend_step = 24.0 }
+    let (entries, legend_error) = chart.legend_items(names, chart.Coord { x: 232.0, y: 58.0 }, 10.0, legend_step, legend[..])
     if legend_error != ok { ret legend_error }
-    var labels: [7]chart.Label = zero
+    var labels: [9]chart.Label = zero
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
     if font_error != ok { ret font_error }
     let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
@@ -656,14 +658,18 @@ fn render_sunburst(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, can
     }
     i = 0usize
     while i < entries.len {
-        try fill(&builder, entries[i].swatch, paint.Brush { Solid: colors[i + 3usize] })
+        try fill(&builder, entries[i].swatch, paint.Brush { Solid: colors[i + first_color] })
         labels[i] = entries[i].label
         i += 1usize
     }
-    labels[5usize] = chart.Label { text: "All", anchor: chart.Coord { x: 120.0, y: 131.0 }, align: .Center }
-    labels[6usize] = chart.Label { text: "Hierarchical sunburst", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
-    try chart_scene.append_labels(a, &builder, labels[..6usize], font, 9.0, paint.Brush { Solid: dark })
-    try chart_scene.append_labels(a, &builder, labels[6usize..], font, 13.0, paint.Brush { Solid: dark })
+    var title_index = entries.len
+    if center_label {
+        labels[title_index] = chart.Label { text: "All", anchor: chart.Coord { x: 120.0, y: 131.0 }, align: .Center }
+        title_index += 1usize
+    }
+    labels[title_index] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    try chart_scene.append_labels(a, &builder, labels[..title_index], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[title_index..title_index + 1usize], font, 13.0, paint.Brush { Solid: dark })
     try render_builder(a, q, output_target, canvas, renderer, &builder, path)
     let (svg_held, svg_error) = svg_start(a, path)
     if svg_error != ok { ret svg_error }
@@ -676,11 +682,11 @@ fn render_sunburst(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, can
     }
     i = 0usize
     while i < entries.len {
-        try chart_svg.rect(&writer, entries[i].swatch, colors[i + 3usize], false)
+        try chart_svg.rect(&writer, entries[i].swatch, colors[i + first_color], false)
         i += 1usize
     }
-    try chart_svg.append_labels(&writer, labels[..6usize], dark, 9.0)
-    try chart_svg.append_labels(&writer, labels[6usize..], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[..title_index], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[title_index..title_index + 1usize], dark, 13.0)
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
@@ -987,7 +993,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var sun_storage: [8]chart.Layout = zero
     let (sun_layers, sun_error) = chart.sunburst(sun_parents[..], sun_weights[..], geometry.rect(25.0, 33.0, 190.0, 190.0), 0.23, sun_totals[..], sun_depths[..], sun_arcs[..], sun_points[..], sun_storage[..])
     if sun_error != ok { ret sun_error }
-    try render_sunburst(a, queue, output_target, canvas, &renderer, sun_layers, sun_names[..], "docs/chart-previews/sunburst.png")
+    try render_radial_hierarchy(a, queue, output_target, canvas, &renderer, sun_layers, sun_names[..], 3usize, true, "Hierarchical sunburst", "docs/chart-previews/sunburst.png")
+    var circle_rects: [8]geometry.Rect = zero
+    var circle_storage: [8]chart.Layout = zero
+    let (circle_layers, circle_error) = chart.circle_pack(sun_parents[..], sun_weights[..], geometry.rect(25.0, 33.0, 190.0, 190.0), 0.04, sun_totals[..], circle_rects[..], circle_storage[..])
+    if circle_error != ok { ret circle_error }
+    let circle_names = [7]str{ "Digital", "Operations", "Cloud 30", "Apps 20", "Data 10", "Supply 25", "Field 15" }
+    try render_radial_hierarchy(a, queue, output_target, canvas, &renderer, circle_layers, circle_names[..], 1usize, false, "Circle packing", "docs/chart-previews/circle_pack.png")
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

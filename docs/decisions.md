@@ -33385,3 +33385,16 @@ layers to scene and SVG. Zero-total nodes have empty layers. A preceding-
 sibling scan stays quadratic until large-tree evidence justifies caller-owned
 cursors. `gfx_chart_icicle` checks shares, depth, invalid input/storage and
 both adapters on Windows and Linux; the gallery adds one labeled PNG/SVG pair.
+
+## D1834 — Place hierarchy circles on safe sibling rings
+
+`chart.circle_pack` shares hierarchy validation and subtree totals with the
+treemap, icicle and sunburst. The root fits the panel's shorter side; each
+sibling group sits on an inner ring with radii proportional to square roots
+of subtree totals. Scaling by the largest sibling and ring chord guarantees
+containment and non-overlap without iterative search. The caller owns circle
+bounds and padding, and existing Bubble scene/SVG paths draw the result.
+Zero-total nodes remain empty. `gfx_chart_circle_pack` checks ratios, nested
+containment, sibling separation, invalid input/storage and both adapters on
+Windows and Linux; the gallery adds one PNG/SVG pair. The ring layout trades
+density for predictable cost; tangent packing can replace it if needed.
