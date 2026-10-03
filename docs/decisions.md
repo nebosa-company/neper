@@ -34295,3 +34295,14 @@ Unlike `mosaic`, category color is stable rather than Pearson-residual based.
 Windows and Linux fixtures check exact geometry, zero cells, refusals and
 scene/SVG output. The gallery adds a PNG/SVG pair with outcome legend. Empty
 columns are refused; automatic zero-column omission remains follow-on work.
+
+## D1919 — Hexagonal bins conserve observations at panel boundaries
+
+`hexbin` uses an explicit data domain and a pointy-top offset-row lattice within
+the caller's panel. It assigns each observation to the nearest valid center,
+including points exactly on domain boundaries, so total cell count equals input
+length. Caller-owned cells retain counts and six-vertex `Area` polygons reuse
+the existing scene and SVG adapters; colour remains an application choice.
+Windows and Linux fixtures cover count conservation, corner assignment,
+geometry, adapters and malformed/capacity inputs. The gallery adds a PNG/SVG
+pair. Adaptive bins and weighted counts remain planned.

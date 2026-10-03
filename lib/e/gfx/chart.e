@@ -88,6 +88,8 @@ type RangeIntervalLayout = struct { ranges: Layout, caps: Layout }
 type ProbabilityFamily = enum u8 { Normal, Exponential }
 type ProbabilityLayout = struct { observations: Layout, reference: Layout, probability_ticks: []Tick }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
+type HexCell = struct { center: Coord, count: u64 }
+type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -6236,6 +6238,99 @@ fn pp_normal(sorted: []const f64, mean: f64, deviation: f64, bounds: geometry.Re
         to: Coord { x: bounds.x + bounds.width, y: bounds.y },
     }
     ret (Layout { kind: .Pp, coords: points[..sorted.len], segments: reference[..1usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }, ok)
+}
+
+// A pointy-top, offset-row hex lattice. Each observation is assigned to its
+// nearest valid centre, considering the three neighbouring rows and columns;
+// this also assigns points on panel boundaries without dropping counts.
+// Six-vertex Area polygons are inset slightly to separate adjacent bins.
+fn hexbin(x: []const f32, y: []const f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, bounds: geometry.Rect, columns: usize, rows: usize, cells: []HexCell, vertices: []Coord, layers: []Layout) -> (HexbinLayout, err) {
+    if x.len == 0usize { ret (zero, Empty) }
+    if x.len != y.len || !finite(x_min) || !finite(x_max) || !finite(y_min) || !finite(y_max) || x_max <= x_min || y_max <= y_min || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || columns == 0usize || rows == 0usize { ret (zero, Invalid) }
+    if columns > cells.len / rows { ret (zero, TooLarge) }
+    let needed = columns * rows
+    if vertices.len / 6usize < needed || layers.len < needed { ret (zero, TooLarge) }
+    let sqrt3 = 1.7320508f32
+    let horizontal_radius = bounds.width / (sqrt3 * (f32(columns) + 0.5))
+    let vertical_radius = bounds.height / (1.5 * f32(rows - 1usize) + 2.0)
+    var radius = horizontal_radius
+    if vertical_radius < radius { radius = vertical_radius }
+    if !finite(radius) || radius < 3.0 { ret (zero, TooLarge) }
+    let step_x = sqrt3 * radius
+    let step_y = 1.5 * radius
+    let margin_x = (bounds.width - step_x * (f32(columns) + 0.5)) * 0.5
+    let margin_y = (bounds.height - radius * (1.5 * f32(rows - 1usize) + 2.0)) * 0.5
+    let first_x = bounds.x + margin_x + step_x * 0.5
+    let first_y = bounds.y + margin_y + radius
+    var row = 0usize
+    while row < rows {
+        var column = 0usize
+        while column < columns {
+            let offset = f32(row % 2usize) * step_x * 0.5
+            cells[row * columns + column] = HexCell { center: Coord { x: first_x + f32(column) * step_x + offset, y: first_y + f32(row) * step_y }, count: 0u64 }
+            column += 1usize
+        }
+        row += 1usize
+    }
+    var i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || !finite(y[i]) || x[i] < x_min || x[i] > x_max || y[i] < y_min || y[i] > y_max { ret (zero, Invalid) }
+        let px = bounds.x + bounds.width * (x[i] - x_min) / (x_max - x_min)
+        let py = bounds.y + bounds.height * (1.0 - (y[i] - y_min) / (y_max - y_min))
+        if !finite(px) || !finite(py) { ret (zero, Invalid) }
+        var row_position = (py - first_y) / step_y
+        if row_position < 0.0 { row_position = 0.0 }
+        if row_position > f32(rows - 1usize) { row_position = f32(rows - 1usize) }
+        let near_row = i64(math.round[f32](row_position))
+        var best = needed
+        var best_distance = 0.0f64
+        var candidate_row = near_row - 1i64
+        while candidate_row <= near_row + 1i64 {
+            if candidate_row >= 0i64 && candidate_row < i64(rows) {
+                let offset = f32(usize(candidate_row) % 2usize) * step_x * 0.5
+                var column_position = (px - first_x - offset) / step_x
+                if column_position < 0.0 { column_position = 0.0 }
+                if column_position > f32(columns - 1usize) { column_position = f32(columns - 1usize) }
+                let near_column = i64(math.round[f32](column_position))
+                var candidate_column = near_column - 1i64
+                while candidate_column <= near_column + 1i64 {
+                    if candidate_column >= 0i64 && candidate_column < i64(columns) {
+                        let index = usize(candidate_row) * columns + usize(candidate_column)
+                        let dx = f64(px - cells[index].center.x)
+                        let dy = f64(py - cells[index].center.y)
+                        let distance = dx * dx + dy * dy
+                        if best == needed || distance < best_distance || (distance == best_distance && index < best) {
+                            best = index
+                            best_distance = distance
+                        }
+                    }
+                    candidate_column += 1i64
+                }
+            }
+            candidate_row += 1i64
+        }
+        if best == needed { ret (zero, Invalid) }
+        cells[best].count += 1u64
+        i += 1usize
+    }
+    let drawn_radius = radius * 0.94
+    let half_width = sqrt3 * drawn_radius * 0.5
+    var max_count = 0u64
+    i = 0usize
+    while i < needed {
+        let center = cells[i].center
+        if cells[i].count > max_count { max_count = cells[i].count }
+        let first = i * 6usize
+        vertices[first] = Coord { x: center.x, y: center.y - drawn_radius }
+        vertices[first + 1usize] = Coord { x: center.x + half_width, y: center.y - drawn_radius * 0.5 }
+        vertices[first + 2usize] = Coord { x: center.x + half_width, y: center.y + drawn_radius * 0.5 }
+        vertices[first + 3usize] = Coord { x: center.x, y: center.y + drawn_radius }
+        vertices[first + 4usize] = Coord { x: center.x - half_width, y: center.y + drawn_radius * 0.5 }
+        vertices[first + 5usize] = Coord { x: center.x - half_width, y: center.y - drawn_radius * 0.5 }
+        layers[i] = Layout { kind: .Area, coords: vertices[first..first + 6usize], segments: zero, bars: zero, x_min: x_min, x_max: x_max, y_min: y_min, y_max: y_max }
+        i += 1usize
+    }
+    ret (HexbinLayout { cells: cells[..needed], hexes: layers[..needed], max_count: max_count, total_count: u64(x.len) }, ok)
 }
 
 fn cell_rect(bounds: geometry.Rect, column: usize, row: usize, columns: usize, rows: usize) -> geometry.Rect {

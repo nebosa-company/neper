@@ -3317,6 +3317,11 @@ $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }
 $gfxChartSpinePlotOutput = & $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotOutput -ne 'gfx chart spine plot ok') { throw "the e.gfx.chart spine plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHexbinPath = Join-Path $testBuild 'gfx-chart-hexbin-selfhost.exe'
+$gfxChartHexbinWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_hexbin\src\main.e') $repo 'x64' 'windows' $gfxChartHexbinPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHexbinWritten -ne 'executable written') { throw 'gfx_chart_hexbin emission failed' }
+$gfxChartHexbinOutput = & $gfxChartHexbinPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHexbinOutput -ne 'gfx chart hexbin ok') { throw "the e.gfx.chart hexbin answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

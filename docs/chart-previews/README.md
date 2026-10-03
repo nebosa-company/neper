@@ -12,6 +12,8 @@ companion streamed from the same layout with title and
 description metadata. Grouped and stacked bars include category labels and a
 two-series legend in both formats. The labeled preview uses the repository's Montserrat
 TrueType font for scene rendering; SVG viewers use their sans-serif fallback.
+The hexbin preview assigns two synthetic clusters to a pointy-top hexagonal
+lattice; colour intensity represents the observation count in each cell.
 Both formats come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:
 
