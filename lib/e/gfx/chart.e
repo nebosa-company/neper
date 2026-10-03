@@ -35,6 +35,11 @@ type SwimlaneStep = struct { lane: usize, stage: usize }
 type SwimlaneLink = struct { from: usize, to: usize }
 type KanbanCard = struct { column: usize, height: f32 }
 type KanbanStatus = struct { count: usize, limit: usize, exceeded: bool }
+type CpmActivity = struct { optimistic: f64, likely: f64, pessimistic: f64 }
+type CpmDependency = struct { from: usize, to: usize }
+type CpmTiming = struct { expected: f64, variance: f64, earliest_start: f64, earliest_finish: f64, latest_start: f64, latest_finish: f64, slack: f64, stage: usize, critical: bool }
+type CpmSummary = struct { duration: f64, critical_count: usize, stages: usize }
+type CpmWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2262,6 +2267,160 @@ fn kanban(cards: []const KanbanCard, limits: []const usize, bounds: geometry.Rec
     let background = Layout { kind: .Bar, coords: zero, segments: zero, bars: columns[..limits.len], x_min: 0.0, x_max: f32(limits.len), y_min: 0.0, y_max: 1.0 }
     let items = Layout { kind: .Bar, coords: zero, segments: zero, bars: card_boxes[..cards.len], x_min: 0.0, x_max: f32(limits.len), y_min: 0.0, y_max: 1.0 }
     ret (background, items, ok)
+}
+
+// Activity-on-node PERT uses the three-point mean and variance. CPM timing is
+// unconstrained elapsed time: no calendars, leads/lags or resource levelling.
+// The caller supplies all work arrays; a cycle or invalid estimate is refused.
+fn pert_cpm_schedule(activities: []const CpmActivity, dependencies: []const CpmDependency, timings: []CpmTiming, work: CpmWork) -> (CpmSummary, err) {
+    let n = activities.len
+    if n == 0usize { ret (zero, Empty) }
+    if timings.len < n || work.indegree.len < n || work.head.len < n || work.order.len < n || work.next.len < dependencies.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        let task = activities[i]
+        if !finite64(task.optimistic) || !finite64(task.likely) || !finite64(task.pessimistic) || task.optimistic < 0.0f64 || task.optimistic > task.likely || task.likely > task.pessimistic { ret (zero, Invalid) }
+        let expected = (task.optimistic + 4.0f64 * task.likely + task.pessimistic) / 6.0f64
+        let spread = (task.pessimistic - task.optimistic) / 6.0f64
+        let variance = spread * spread
+        if !finite64(expected) || !finite64(variance) { ret (zero, Invalid) }
+        timings[i] = CpmTiming { expected: expected, variance: variance, earliest_start: 0.0f64, earliest_finish: 0.0f64, latest_start: 0.0f64, latest_finish: 0.0f64, slack: 0.0f64, stage: 0usize, critical: false }
+        work.indegree[i] = 0usize
+        work.head[i] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < dependencies.len {
+        let link = dependencies[i]
+        if link.from >= n || link.to >= n || link.from == link.to { ret (zero, Invalid) }
+        work.indegree[link.to] += 1usize
+        work.next[i] = work.head[link.from]
+        work.head[link.from] = i + 1usize
+        i += 1usize
+    }
+    var tail = 0usize
+    i = 0usize
+    while i < n {
+        if work.indegree[i] == 0usize {
+            work.order[tail] = i
+            tail += 1usize
+        }
+        i += 1usize
+    }
+    var front = 0usize
+    var duration = 0.0f64
+    var stages = 0usize
+    while front < tail {
+        let node = work.order[front]
+        let finish = timings[node].earliest_start + timings[node].expected
+        if !finite64(finish) { ret (zero, Invalid) }
+        timings[node].earliest_finish = finish
+        if finish > duration { duration = finish }
+        if timings[node].stage + 1usize > stages { stages = timings[node].stage + 1usize }
+        var edge = work.head[node]
+        while edge != 0usize {
+            let child = dependencies[edge - 1usize].to
+            if finish > timings[child].earliest_start { timings[child].earliest_start = finish }
+            if timings[node].stage + 1usize > timings[child].stage { timings[child].stage = timings[node].stage + 1usize }
+            work.indegree[child] -= 1usize
+            if work.indegree[child] == 0usize {
+                work.order[tail] = child
+                tail += 1usize
+            }
+            edge = work.next[edge - 1usize]
+        }
+        front += 1usize
+    }
+    if tail != n { ret (zero, Invalid) }
+    let tolerance = (duration + 1.0f64) * 0.00000001f64
+    var critical_count = 0usize
+    i = n
+    while i > 0usize {
+        i -= 1usize
+        let node = work.order[i]
+        var latest_finish = duration
+        var edge = work.head[node]
+        while edge != 0usize {
+            let child = dependencies[edge - 1usize].to
+            if timings[child].latest_start < latest_finish { latest_finish = timings[child].latest_start }
+            edge = work.next[edge - 1usize]
+        }
+        let latest_start = latest_finish - timings[node].expected
+        let slack = latest_start - timings[node].earliest_start
+        if !finite64(latest_start) || !finite64(slack) || slack < 0.0f64 - tolerance { ret (zero, Invalid) }
+        timings[node].latest_finish = latest_finish
+        timings[node].latest_start = latest_start
+        timings[node].slack = slack
+        timings[node].critical = slack <= tolerance
+        if timings[node].critical { critical_count += 1usize }
+    }
+    ret (CpmSummary { duration: duration, critical_count: critical_count, stages: stages }, ok)
+}
+
+// Layer by longest dependency depth, then spread peers vertically. Five Rug
+// segments per dependency include the arrowhead. Critical links are flagged
+// only when they connect zero-slack activities without a timing gap.
+fn pert_cpm_network(dependencies: []const CpmDependency, timings: []const CpmTiming, summary: CpmSummary, bounds: geometry.Rect, stage_counts: []usize, stage_used: []usize, boxes: []geometry.Rect, arrows: []Segment, critical_links: []bool) -> (Layout, Layout, err) {
+    let n = timings.len
+    if n == 0usize { ret (zero, zero, Empty) }
+    if summary.stages == 0usize || summary.stages > n || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, zero, Invalid) }
+    if stage_counts.len < summary.stages || stage_used.len < summary.stages || boxes.len < n || arrows.len / 5usize < dependencies.len || critical_links.len < dependencies.len { ret (zero, zero, TooLarge) }
+    var i = 0usize
+    while i < summary.stages {
+        stage_counts[i] = 0usize
+        stage_used[i] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if timings[i].stage >= summary.stages { ret (zero, zero, Invalid) }
+        stage_counts[timings[i].stage] += 1usize
+        i += 1usize
+    }
+    let cell_width = bounds.width / f32(summary.stages)
+    let box_width = cell_width * 0.70
+    let box_height = 39.0f32
+    if !finite(cell_width) || !finite(box_width) || box_width <= 0.0 || bounds.height < box_height { ret (zero, zero, Invalid) }
+    i = 0usize
+    while i < n {
+        let stage = timings[i].stage
+        let slot_height = bounds.height / f32(stage_counts[stage])
+        if !finite(slot_height) || slot_height < box_height { ret (zero, zero, TooLarge) }
+        let x = bounds.x + (f32(stage) + 0.15) * cell_width
+        let y = bounds.y + (f32(stage_used[stage]) + 0.5) * slot_height - box_height * 0.5
+        if !finite(x) || !finite(y) || !finite(x + box_width) || !finite(y + box_height) { ret (zero, zero, Invalid) }
+        boxes[i] = geometry.rect(x, y, box_width, box_height)
+        stage_used[stage] += 1usize
+        i += 1usize
+    }
+    let tolerance = (summary.duration + 1.0f64) * 0.00000001f64
+    i = 0usize
+    while i < dependencies.len {
+        let link = dependencies[i]
+        if link.from >= n || link.to >= n || timings[link.from].stage >= timings[link.to].stage { ret (zero, zero, Invalid) }
+        let from = boxes[link.from]
+        let to = boxes[link.to]
+        let x0 = from.x + from.width
+        let x1 = to.x
+        let y0 = from.y + from.height * 0.5
+        let y1 = to.y + to.height * 0.5
+        let middle = x0 + (x1 - x0) * 0.5
+        let head = (x1 - x0) * 0.18
+        if !finite(head) || head <= 0.0 { ret (zero, zero, Invalid) }
+        let first = i * 5usize
+        let tip = Coord { x: x1, y: y1 }
+        arrows[first] = Segment { from: Coord { x: x0, y: y0 }, to: Coord { x: middle, y: y0 } }
+        arrows[first + 1usize] = Segment { from: Coord { x: middle, y: y0 }, to: Coord { x: middle, y: y1 } }
+        arrows[first + 2usize] = Segment { from: Coord { x: middle, y: y1 }, to: tip }
+        arrows[first + 3usize] = Segment { from: Coord { x: x1 - head, y: y1 - head * 0.7 }, to: tip }
+        arrows[first + 4usize] = Segment { from: Coord { x: x1 - head, y: y1 + head * 0.7 }, to: tip }
+        let gap = timings[link.to].earliest_start - timings[link.from].earliest_finish
+        critical_links[i] = timings[link.from].critical && timings[link.to].critical && gap <= tolerance && gap >= 0.0f64 - tolerance
+        i += 1usize
+    }
+    let nodes = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..n], x_min: 0.0, x_max: f32(summary.stages), y_min: 0.0, y_max: 1.0 }
+    let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..dependencies.len * 5usize], bars: zero, x_min: 0.0, x_max: f32(summary.stages), y_min: 0.0, y_max: 1.0 }
+    ret (nodes, connectors, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

@@ -868,6 +868,105 @@ fn render_swimlane_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_pert_cpm_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/pert-cpm-network.png"
+    let plot = geometry.rect(17.0, 58.0, 326.0, 142.0)
+    let activities = [4]chart.CpmActivity{
+        chart.CpmActivity { optimistic: 2.0f64, likely: 2.0f64, pessimistic: 2.0f64 },
+        chart.CpmActivity { optimistic: 3.0f64, likely: 3.0f64, pessimistic: 3.0f64 },
+        chart.CpmActivity { optimistic: 0.0f64, likely: 1.0f64, pessimistic: 2.0f64 },
+        chart.CpmActivity { optimistic: 4.0f64, likely: 4.0f64, pessimistic: 4.0f64 },
+    }
+    let links = [4]chart.CpmDependency{
+        chart.CpmDependency { from: 0usize, to: 1usize },
+        chart.CpmDependency { from: 0usize, to: 2usize },
+        chart.CpmDependency { from: 1usize, to: 3usize },
+        chart.CpmDependency { from: 2usize, to: 3usize },
+    }
+    var timings: [4]chart.CpmTiming = zero
+    var indegree: [4]usize = zero
+    var head: [4]usize = zero
+    var next: [4]usize = zero
+    var order: [4]usize = zero
+    let work = chart.CpmWork { indegree: indegree[..], head: head[..], next: next[..], order: order[..] }
+    let (summary, schedule_error) = chart.pert_cpm_schedule(activities[..], links[..], timings[..], work)
+    if schedule_error != ok || summary.duration != 9.0f64 || summary.critical_count != 3usize { ret chart.Invalid }
+    var stage_counts: [4]usize = zero
+    var stage_used: [4]usize = zero
+    var boxes: [4]geometry.Rect = zero
+    var arrows: [20]chart.Segment = zero
+    var critical_links: [4]bool = zero
+    let (nodes, connectors, layout_error) = chart.pert_cpm_network(links[..], timings[..], summary, plot, stage_counts[..], stage_used[..], boxes[..], arrows[..], critical_links[..])
+    if layout_error != ok { ret layout_error }
+    let red = paint.rgba(0.80, 0.18, 0.19, 1.0)
+    let blue = paint.rgba(0.15, 0.42, 0.73, 1.0)
+    let gray = paint.rgba(0.59, 0.66, 0.74, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let names = [4]str{ "A / 2d", "B / 3d", "C / 1d", "D / 4d" }
+    var labels: [6]chart.Label = zero
+    labels[0usize] = chart.Label { text: "PERT / CPM network", anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Critical A-B-D: 9d    C slack: 2d", anchor: chart.Coord { x: 180.0, y: 222.0 }, align: .Center }
+    var i = 0usize
+    while i < boxes.len {
+        labels[i + 2usize] = chart.Label { text: names[i], anchor: chart.Coord { x: boxes[i].x + boxes[i].width * 0.5, y: boxes[i].y + boxes[i].height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &connectors, paint.Brush { Solid: gray })
+    i = 0usize
+    while i < links.len {
+        if critical_links[i] {
+            let edge = chart.Layout { kind: .Rug, coords: zero, segments: arrows[i * 5usize..i * 5usize + 5usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+            try chart_scene.append(a, &builder, &edge, paint.Brush { Solid: red })
+        }
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &nodes, paint.Brush { Solid: blue })
+    i = 0usize
+    while i < boxes.len {
+        if timings[i].critical { try fill(&builder, boxes[i], paint.Brush { Solid: red }) }
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..], font, 10.0, paint.Brush { Solid: white })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &connectors, gray)
+    i = 0usize
+    while i < links.len {
+        if critical_links[i] {
+            let edge = chart.Layout { kind: .Rug, coords: zero, segments: arrows[i * 5usize..i * 5usize + 5usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+            try chart_svg.append(&writer, &edge, red)
+        }
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &nodes, blue)
+    i = 0usize
+    while i < boxes.len {
+        if timings[i].critical { try chart_svg.rect(&writer, boxes[i], red, false) }
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[2usize..], white, 10.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -4808,6 +4907,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_resource_histogram_preview(a, queue, output_target, canvas, &renderer)
     try render_swimlane_preview(a, queue, output_target, canvas, &renderer)
     try render_kanban_preview(a, queue, output_target, canvas, &renderer)
+    try render_pert_cpm_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

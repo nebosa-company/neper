@@ -34102,3 +34102,18 @@ Windows and Linux. The gallery adds a PNG/SVG pair. Pull rules, commitment
 points and grouped WIP limits remain separate work. Kanban University's guide
 describes workflow columns and visible WIP limits:
 https://kanban.university/kanban-guide/
+
+## D1901 — PERT/CPM separates task timing from network geometry
+
+`pert_cpm_schedule` borrows activity estimates and dependencies, then computes
+the PERT three-point mean and per-activity variance. A caller-owned adjacency
+workspace supports topological forward and backward passes in O(V+E), yielding
+earliest/latest times, slack and the unconstrained project duration. Cycles,
+invalid estimates and insufficient storage are refused. `pert_cpm_network`
+places activity boxes by dependency depth and emits directional connectors;
+only zero-slack, timing-contiguous edges are highlighted as critical. The
+Windows/Linux fixture checks timing, variance, refusal paths and scene/SVG
+adapters; the gallery adds a PNG/SVG pair. Calendars, lag constraints, resource
+levelling, multiple-path uncertainty and Monte Carlo completion forecasts are
+not implied by this slice. The forward/backward calculation follows PMI's
+critical-path description: https://www.pmi.org/learning/library/critical-path-method-calculations-scheduling-8040

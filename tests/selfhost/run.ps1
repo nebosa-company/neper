@@ -3242,6 +3242,11 @@ $gfxChartKanbanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $gfxChartKanbanWritten -ne 'executable written') { throw 'gfx_chart_kanban emission failed' }
 $gfxChartKanbanOutput = & $gfxChartKanbanPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartKanbanOutput -ne 'gfx chart kanban ok') { throw "the e.gfx.chart Kanban board answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPertCpmPath = Join-Path $testBuild 'gfx-chart-pert-cpm-selfhost.exe'
+$gfxChartPertCpmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_pert_cpm\src\main.e') $repo 'x64' 'windows' $gfxChartPertCpmPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPertCpmWritten -ne 'executable written') { throw 'gfx_chart_pert_cpm emission failed' }
+$gfxChartPertCpmOutput = & $gfxChartPertCpmPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPertCpmOutput -ne 'gfx chart pert cpm ok') { throw "the e.gfx.chart PERT/CPM network answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

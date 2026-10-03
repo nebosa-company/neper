@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and fifty-one PNG plus one hundred and fifty-one SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow and a Kanban board layout are also delivered. Individuals, moving-range,
+one hundred and fifty-two PNG plus one hundred and fifty-two SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout and a PERT/CPM activity network are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -556,6 +556,11 @@ The likelihood-impact risk matrix with caller-supplied ratings is delivered.
 The variable-width resource histogram with explicit capacity is delivered.
 The basic role-lane workflow with directional cross-lane links is delivered.
 The variable-height Kanban board with visible per-column WIP status is delivered.
+The activity-on-node PERT/CPM network computes three-point expected durations and
+per-activity variance, forward/backward elapsed-time passes, slack and the
+unconstrained critical path. It rejects cycles and invalid estimates, and lays
+out staged nodes and directional links. Working calendars, leads/lags, resource
+levelling and project-duration uncertainty remain planned.
 
 ### General-purpose statistical and business charts
 
@@ -720,7 +725,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and fifty-one vector previews, automatic numeric tick text and
+   adapter with one hundred and fifty-two vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow
