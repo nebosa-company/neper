@@ -28,6 +28,7 @@ type TargetStatus = struct { delta: f32, achieved: bool }
 type CloudWord = struct { label: Label, size: f32, box: geometry.Rect }
 type StateSpan = struct { row: usize, start: f64, end: f64, state: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
+type TimelineEvent = struct { time: f64, row: usize }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
@@ -323,6 +324,21 @@ fn sparkline(values: []const f32, bounds: geometry.Rect, x: []f32, segments: []S
     var unused_bars: [1]geometry.Rect = zero
     let (marks, marks_error) = layout(&plot, unused_coords[..0usize], segments, unused_bars[..0usize])
     ret (marks, marks_error)
+}
+
+// One bar per caller-supplied cell, all measured against the same maximum.
+fn in_cell_bars(values: []const f32, maximum: f32, cells: []const geometry.Rect, inset: f32, bars: []geometry.Rect) -> (Layout, err) {
+    if values.len == 0usize { ret (zero, Empty) }
+    if cells.len != values.len || !finite(maximum) || maximum <= 0.0 || !finite(inset) || inset < 0.0 { ret (zero, Invalid) }
+    if bars.len < values.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < values.len {
+        let cell = cells[i]
+        if !valid_bounds(cell) || cell.width <= inset * 2.0 || cell.height <= inset * 2.0 || !finite(values[i]) || values[i] < 0.0 || values[i] > maximum { ret (zero, Invalid) }
+        bars[i] = geometry.rect(cell.x + inset, cell.y + inset, (cell.width - 2.0 * inset) * (values[i] / maximum), cell.height - 2.0 * inset)
+        i += 1usize
+    }
+    ret (Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[..values.len], x_min: 0.0, x_max: maximum, y_min: 0.0, y_max: f32(values.len) }, ok)
 }
 
 // Empty limits use each series' own domain; two values fix the domain so
@@ -1324,6 +1340,27 @@ fn state_timeline(spans: []const StateSpan, rows: usize, states: usize, domain_s
         i += 1usize
     }
     ret (layers[..used], ok)
+}
+
+// Discrete events become lane-centered lollipop marks on an f64 time domain.
+fn event_timeline(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, points: []Coord, stems: []Segment) -> (Layout, err) {
+    if events.len == 0usize { ret (zero, Empty) }
+    if rows == 0usize || !finite64(domain_start) || !finite64(domain_end) || domain_end <= domain_start || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if points.len < events.len || stems.len < events.len { ret (zero, TooLarge) }
+    let lane = bounds.height / f32(rows)
+    if !finite(lane) || lane <= 0.0 { ret (zero, Invalid) }
+    var i = 0usize
+    while i < events.len {
+        let e = events[i]
+        if e.row >= rows || !finite64(e.time) || e.time < domain_start || e.time > domain_end || (i > 0usize && e.time < events[i - 1usize].time) { ret (zero, Invalid) }
+        let x = bounds.x + bounds.width * f32((e.time - domain_start) / (domain_end - domain_start))
+        let y = bounds.y + (f32(e.row) + 0.5) * lane
+        if !finite(x) || !finite(y) { ret (zero, Invalid) }
+        points[i] = Coord { x: x, y: y }
+        stems[i] = Segment { from: Coord { x: x, y: y + lane * 0.28 }, to: points[i] }
+        i += 1usize
+    }
+    ret (Layout { kind: .Lollipop, coords: points[..events.len], segments: stems[..events.len], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: f32(rows) }, ok)
 }
 
 fn chord_point(center: Coord, radius: f64, angle: f64) -> Coord {

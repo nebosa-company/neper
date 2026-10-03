@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>in_cell_data_bars</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="126" y="48" width="178" height="22" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="126" y="77" width="178" height="22" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="126" y="106" width="178" height="22" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="126" y="135" width="178" height="22" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="126" y="164" width="178" height="22" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="126" y="193" width="178" height="22" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="129" y="51" width="134.1599884033203" height="16" fill="rgb(26,115,199)" fill-opacity="1"/>
+<rect x="129" y="80" width="77.4000015258789" height="16" fill="rgb(26,115,199)" fill-opacity="1"/>
+<rect x="129" y="109" width="163.39999389648438" height="16" fill="rgb(26,115,199)" fill-opacity="1"/>
+<rect x="129" y="138" width="104.92000579833984" height="16" fill="rgb(26,115,199)" fill-opacity="1"/>
+<rect x="129" y="167" width="43" height="16" fill="rgb(26,115,199)" fill-opacity="1"/>
+<text x="116" y="63" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">North</text>
+<text x="116" y="92" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">South</text>
+<text x="116" y="121" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">East</text>
+<text x="116" y="150" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">West</text>
+<text x="116" y="179" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Central</text>
+<text x="116" y="208" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Remote</text>
+<text x="314" y="63" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">78</text>
+<text x="314" y="92" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">45</text>
+<text x="314" y="121" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">95</text>
+<text x="314" y="150" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">61</text>
+<text x="314" y="179" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">25</text>
+<text x="314" y="208" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">In-cell data bars</text>
+</svg>

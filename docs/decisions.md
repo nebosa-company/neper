@@ -33539,3 +33539,13 @@ unobserved offsets remain visible as background, and a caller gap separates
 tiles. `gfx_chart_calendar_sparkline` checks layout, refusals and both adapters
 on Windows and Linux. Locale/date text, calendar-domain scales, null samples
 and cross-cell sparklines scales remain later work.
+
+## D1847 — Compose discrete events and report bars from existing marks
+
+`chart.event_timeline` maps sorted f64 timestamps to row-centered Lollipop
+points and short stems on an explicit time domain. Event identity and text stay
+with the caller. `chart.in_cell_bars` maps nonnegative values to Bar rectangles
+inside caller-owned cells using one explicit maximum and inset; a zero value
+draws no fill. `gfx_chart_events_cellbars` checks numeric geometry, invalid
+inputs, storage and scene/SVG output on Windows and Linux. Event label collision,
+missing report values and per-row normalization stay planned.

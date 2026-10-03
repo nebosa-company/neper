@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>event_timeline</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="62" y="52" width="246" height="43" fill="rgb(242,245,250)" fill-opacity="1"/>
+<rect x="62" y="100" width="246" height="43" fill="rgb(242,245,250)" fill-opacity="1"/>
+<rect x="62" y="148" width="246" height="43" fill="rgb(242,245,250)" fill-opacity="1"/>
+<line x1="82.5" y1="89.44000244140625" x2="82.5" y2="76" stroke="rgb(18,97,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.60000610351562" y1="137.44000244140625" x2="127.60000610351562" y2="124" stroke="rgb(18,97,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="166.5500030517578" y1="185.44000244140625" x2="166.5500030517578" y2="172" stroke="rgb(18,97,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="230.10000610351562" y1="89.44000244140625" x2="230.10000610351562" y2="76" stroke="rgb(18,97,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="287.5" y1="185.44000244140625" x2="287.5" y2="172" stroke="rgb(18,97,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="79.5" y="73" width="6" height="6" fill="rgb(18,97,194)" fill-opacity="1"/>
+<rect x="124.60000610351562" y="121" width="6" height="6" fill="rgb(18,97,194)" fill-opacity="1"/>
+<rect x="163.5500030517578" y="169" width="6" height="6" fill="rgb(18,97,194)" fill-opacity="1"/>
+<rect x="227.10000610351562" y="73" width="6" height="6" fill="rgb(18,97,194)" fill-opacity="1"/>
+<rect x="284.5" y="169" width="6" height="6" fill="rgb(18,97,194)" fill-opacity="1"/>
+<text x="53" y="79" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Plan</text>
+<text x="53" y="127" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Build</text>
+<text x="53" y="175" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Ship</text>
+<text x="82.5" y="64" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Kickoff</text>
+<text x="127.60000610351562" y="112" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Prototype</text>
+<text x="166.5500030517578" y="160" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">QA</text>
+<text x="230.10000610351562" y="64" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Release</text>
+<text x="287.5" y="160" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Review</text>
+<text x="62" y="218" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="144" y="218" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">4</text>
+<text x="226" y="218" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">8</text>
+<text x="308" y="218" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">12</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Event timeline</text>
+</svg>

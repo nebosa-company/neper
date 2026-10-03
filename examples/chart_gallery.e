@@ -557,6 +557,130 @@ fn render_calendar_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_event_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/event_timeline.png"
+    let plot = geometry.rect(62.0, 52.0, 246.0, 144.0)
+    let events = [5]chart.TimelineEvent{
+        chart.TimelineEvent { time: 1.0f64, row: 0usize },
+        chart.TimelineEvent { time: 3.2f64, row: 1usize },
+        chart.TimelineEvent { time: 5.1f64, row: 2usize },
+        chart.TimelineEvent { time: 8.2f64, row: 0usize },
+        chart.TimelineEvent { time: 11.0f64, row: 2usize },
+    }
+    let row_names = [3]str{ "Plan", "Build", "Ship" }
+    let event_names = [5]str{ "Kickoff", "Prototype", "QA", "Release", "Review" }
+    let ticks = [4]str{ "0", "4", "8", "12" }
+    let blue = paint.rgba(0.07, 0.38, 0.76, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let pale = paint.rgba(0.95, 0.96, 0.98, 1.0)
+    var points: [5]chart.Coord = zero
+    var stems: [5]chart.Segment = zero
+    let (marks, marks_error) = chart.event_timeline(events[..], 3usize, 0.0f64, 12.0f64, plot, points[..], stems[..])
+    if marks_error != ok { ret marks_error }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var labels: [13]chart.Label = zero
+    var i = 0usize
+    while i < 3usize {
+        try fill(&builder, geometry.rect(plot.x, plot.y + f32(i) * 48.0, plot.width, 43.0), paint.Brush { Solid: pale })
+        labels[i] = chart.Label { text: row_names[i], anchor: chart.Coord { x: 53.0, y: plot.y + f32(i) * 48.0 + 27.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 5usize {
+        labels[3usize + i] = chart.Label { text: event_names[i], anchor: chart.Coord { x: marks.coords[i].x, y: marks.coords[i].y - 12.0 }, align: .Center }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 4usize {
+        labels[8usize + i] = chart.Label { text: ticks[i], anchor: chart.Coord { x: plot.x + plot.width * f32(i) / 3.0, y: 218.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[12usize] = chart.Label { text: "Event timeline", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..12usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[12usize..], font, 14.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 3usize {
+        try chart_svg.rect(&writer, geometry.rect(plot.x, plot.y + f32(i) * 48.0, plot.width, 43.0), pale, false)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &marks, blue)
+    try chart_svg.append_labels(&writer, labels[..12usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[12usize..], dark, 14.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_cell_bars_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/in_cell_data_bars.png"
+    let values = [6]f32{ 78.0, 45.0, 95.0, 61.0, 25.0, 0.0 }
+    let names = [6]str{ "North", "South", "East", "West", "Central", "Remote" }
+    let counts = [6]str{ "78", "45", "95", "61", "25", "0" }
+    let blue = paint.rgba(0.10, 0.45, 0.78, 1.0)
+    let pale = paint.rgba(0.94, 0.96, 0.98, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var cells: [6]geometry.Rect = zero
+    var i = 0usize
+    while i < 6usize {
+        cells[i] = geometry.rect(126.0, 48.0 + f32(i) * 29.0, 178.0, 22.0)
+        i += 1usize
+    }
+    var bars: [6]geometry.Rect = zero
+    let (marks, marks_error) = chart.in_cell_bars(values[..], 100.0, cells[..], 3.0, bars[..])
+    if marks_error != ok { ret marks_error }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var labels: [13]chart.Label = zero
+    i = 0usize
+    while i < 6usize {
+        try fill(&builder, cells[i], paint.Brush { Solid: pale })
+        labels[i] = chart.Label { text: names[i], anchor: chart.Coord { x: 116.0, y: cells[i].y + 15.0 }, align: .Right }
+        labels[6usize + i] = chart.Label { text: counts[i], anchor: chart.Coord { x: 314.0, y: cells[i].y + 15.0 }, align: .Left }
+        i += 1usize
+    }
+    labels[12usize] = chart.Label { text: "In-cell data bars", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..12usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[12usize..], font, 14.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 6usize {
+        try chart_svg.rect(&writer, cells[i], pale, false)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &marks, blue)
+    try chart_svg.append_labels(&writer, labels[..12usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[12usize..], dark, 14.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_mekko(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, path: str) -> err {
     if layers.len != 3usize || categories.len != 4usize || names.len != layers.len || layers[0usize].bars.len != categories.len { ret chart.Invalid }
     let colors = [3]paint.Color{
@@ -1876,6 +2000,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_state_timeline(a, queue, output_target, canvas, &renderer, history_layers, timeline_state_ids[..], timeline_rows[..], history_states[..], history_colors[..], "Status history", "docs/chart-previews/status_history.png")
     try render_sparklines(a, queue, output_target, canvas, &renderer)
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
+    try render_event_preview(a, queue, output_target, canvas, &renderer)
+    try render_cell_bars_preview(a, queue, output_target, canvas, &renderer)
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero
