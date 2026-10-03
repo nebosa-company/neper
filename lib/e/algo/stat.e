@@ -23,6 +23,7 @@ error Invalid
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
 type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
+type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, at_risk: usize, events: usize, censored: usize }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
@@ -356,6 +357,40 @@ fn regression_diagnostics(x: []const f64, y: []const f64, out: []RegressionDiagn
         i += 1usize
     }
     ret ok
+}
+
+// Sorted nonnegative follow-up times; tied events precede censoring within a
+// time group. Output includes a time-zero baseline and each distinct time.
+fn survival_curve(times: []const f64, event: []const bool, out: []SurvivalPoint) -> ([]SurvivalPoint, err) {
+    if times.len == 0usize || event.len != times.len { ret (zero, Invalid) }
+    if out.len <= times.len { ret (zero, TooSmall) }
+    var i = 0usize
+    while i < times.len {
+        if times[i] < 0.0f64 || times[i] - times[i] != 0.0f64 || (i > 0usize && times[i] < times[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    out[0usize] = SurvivalPoint { time: 0.0f64, survival: 1.0f64, cumulative_hazard: 0.0f64, at_risk: times.len, events: 0usize, censored: 0usize }
+    var used = 1usize
+    var risk = times.len
+    var survival = 1.0f64
+    var hazard = 0.0f64
+    i = 0usize
+    while i < times.len {
+        let time = times[i]
+        var events = 0usize
+        var censored = 0usize
+        while i < times.len && times[i] == time {
+            if event[i] { events += 1usize } else { censored += 1usize }
+            i += 1usize
+        }
+        let fraction = f64(events) / f64(risk)
+        survival *= 1.0f64 - fraction
+        hazard += fraction
+        out[used] = SurvivalPoint { time: time, survival: survival, cumulative_hazard: hazard, at_risk: risk, events: events, censored: censored }
+        used += 1usize
+        risk -= events + censored
+    }
+    ret (out[..used], ok)
 }
 
 fn correlation(s: *const Regression) -> (f64, bool) {

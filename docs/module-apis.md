@@ -3151,6 +3151,7 @@ missingness are `u8` flags; scores must stay inside (0, 1).
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
 type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
+type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, at_risk: usize, events: usize, censored: usize }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
@@ -3187,6 +3188,7 @@ fn regression_add(s: *Regression, x: f64, y: f64)
 fn regression_slope(s: *const Regression) -> (f64, bool)
 fn regression_intercept(s: *const Regression) -> (f64, bool)
 fn regression_diagnostics(x: []const f64, y: []const f64, out: []RegressionDiagnostic) -> err
+fn survival_curve(times: []const f64, event: []const bool, out: []SurvivalPoint) -> ([]SurvivalPoint, err)
 fn correlation(s: *const Regression) -> (f64, bool)
 fn sum_plain(values: []const f64) -> f64
 fn mean_compensated(values: []const f64) -> (f64, bool)

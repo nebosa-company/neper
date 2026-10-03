@@ -882,6 +882,53 @@ fn render_binary_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
     ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &marks, &baseline, title, x_label, y_label, path)
 }
 
+fn render_survival_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let times = [12]f64{ 0.08, 0.14, 0.14, 0.24, 0.31, 0.38, 0.47, 0.53, 0.53, 0.67, 0.78, 0.92 }
+    let event = [12]bool{ true, true, false, true, false, true, true, false, true, false, true, false }
+    var storage: [13]stat.SurvivalPoint = zero
+    let (curve, curve_error) = stat.survival_curve(times[..], event[..], storage[..])
+    if curve_error != ok { ret curve_error }
+    var x: [13]f32 = zero
+    var survival: [13]f32 = zero
+    var hazard: [13]f32 = zero
+    var censor_x: [12]f32 = zero
+    var censor_y: [12]f32 = zero
+    var censored = 0usize
+    var i = 0usize
+    while i < curve.len {
+        x[i] = f32(curve[i].time)
+        survival[i] = f32(curve[i].survival)
+        hazard[i] = f32(curve[i].cumulative_hazard)
+        if curve[i].censored > 0usize {
+            censor_x[censored] = x[i]
+            censor_y[censored] = survival[i]
+            censored += 1usize
+        }
+        i += 1usize
+    }
+    let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
+    let x_limits = [2]f32{ 0.0, 1.0 }
+    let probability_limits = [2]f32{ 0.0, 1.0 }
+    let hazard_limits = [2]f32{ 0.0, 1.5 }
+    var survival_spec = chart.spec(.Step, plot, x[..curve.len], survival[..curve.len])
+    var survival_segments: [24]chart.Segment = zero
+    let (survival_marks, survival_error) = chart.layout_with_limits(&survival_spec, zero, survival_segments[..], zero, x_limits[..], probability_limits[..])
+    if survival_error != ok { ret survival_error }
+    var censor_spec = chart.spec(.Scatter, plot, censor_x[..censored], censor_y[..censored])
+    var censor_coords: [12]chart.Coord = zero
+    let (censor_marks, censor_error) = chart.layout_with_limits(&censor_spec, censor_coords[..], zero, zero, x_limits[..], probability_limits[..])
+    if censor_error != ok { ret censor_error }
+    try render_diagnostic_preview(a, q, output_target, canvas, renderer, &survival_marks, &censor_marks, "Kaplan-Meier survival", "Years", "Survival", "docs/chart-previews/kaplan_meier.png")
+    var hazard_spec = chart.spec(.Step, plot, x[..curve.len], hazard[..curve.len])
+    var hazard_segments: [24]chart.Segment = zero
+    let (hazard_marks, hazard_error) = chart.layout_with_limits(&hazard_spec, zero, hazard_segments[..], zero, x_limits[..], hazard_limits[..])
+    if hazard_error != ok { ret hazard_error }
+    let bottom = plot.y + plot.height
+    var rule_segments = [1]chart.Segment{ chart.Segment { from: chart.Coord { x: plot.x, y: bottom }, to: chart.Coord { x: plot.x + plot.width, y: bottom } } }
+    let rule = chart.Layout { kind: .Rug, coords: zero, segments: rule_segments[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.5 }
+    ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &hazard_marks, &rule, "Cumulative hazard", "Years", "Hazard", "docs/chart-previews/cumulative_hazard.png")
+}
+
 fn render_roc_extension_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, partial: bool, path: str) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     var x: [17]f32 = zero
@@ -2445,6 +2492,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_cell_bars_preview(a, queue, output_target, canvas, &renderer)
     try render_forest_preview(a, queue, output_target, canvas, &renderer)
     try render_agreement_preview(a, queue, output_target, canvas, &renderer)
+    try render_survival_previews(a, queue, output_target, canvas, &renderer)
     let diagnostic_scores = [16]f64{ 0.98f64, 0.93f64, 0.89f64, 0.84f64, 0.78f64, 0.72f64, 0.68f64, 0.62f64, 0.56f64, 0.50f64, 0.44f64, 0.38f64, 0.32f64, 0.26f64, 0.18f64, 0.08f64 }
     let diagnostic_positive = [16]bool{ true, true, false, true, true, false, true, false, true, false, true, false, false, true, false, false }
     var diagnostic_order: [16]usize = zero

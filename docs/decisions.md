@@ -33605,3 +33605,14 @@ reuses Lollipop, preserving scene/SVG parity without a new geom. A five-point
 numeric reference plus adapter check passes on Windows and Linux; three new
 PNG/SVG gallery pairs are generated. Leave-one-out influence, robust fits and
 automatic diagnostic thresholds remain planned.
+
+## D1854 — Group tied follow-up times before drawing survival steps
+
+`e.algo.stat.survival_curve` accepts sorted nonnegative times with event flags,
+groups ties, counts events before censoring at each time, and emits both
+Kaplan–Meier survival and Nelson–Aalen cumulative hazard from the same risk set.
+The time-zero baseline and per-time risk, event and censor counts support later
+risk tables and censor markers. Existing Step and Scatter marks render two new
+PNG/SVG pairs without a survival-specific painter. A numeric tie/censor fixture
+and scene/SVG check pass on Windows and Linux. Greenwood intervals, log-rank
+comparisons and competing risks remain separate work.
