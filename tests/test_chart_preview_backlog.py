@@ -40,6 +40,8 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("stem_and_leaf", planned)
         self.assertIn("range_interval", rendered)
         self.assertNotIn("range_interval", planned)
+        self.assertIn("probability_plot", rendered)
+        self.assertNotIn("probability_plot", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)

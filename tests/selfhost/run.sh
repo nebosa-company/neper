@@ -2929,6 +2929,11 @@ gfx_chart_range_interval_written=$($test_build/neper-self emit-executable "$repo
 chmod +x "$test_build/gfx-chart-range-interval-selfhost"
 gfx_chart_range_interval_output=$("$test_build/gfx-chart-range-interval-selfhost")
 [ "$gfx_chart_range_interval_output" = 'gfx chart range interval ok' ]
+gfx_chart_probability_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_probability_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-probability-plot-selfhost")
+[ "$gfx_chart_probability_plot_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-probability-plot-selfhost"
+gfx_chart_probability_plot_output=$("$test_build/gfx-chart-probability-plot-selfhost")
+[ "$gfx_chart_probability_plot_output" = 'gfx chart probability plot ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

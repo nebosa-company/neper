@@ -3,7 +3,6 @@
 # This is a finite delivery backlog, not a claim to enumerate every possible chart.
 
 # Cartesian and distribution variants
-probability_plot
 spine_plot
 hexbin
 bin2d

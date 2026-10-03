@@ -3307,6 +3307,11 @@ $gfxChartRangeIntervalWritten = & $compiler emit-executable (Join-Path $PSScript
 if ($LASTEXITCODE -ne 0 -or $gfxChartRangeIntervalWritten -ne 'executable written') { throw 'gfx_chart_range_interval emission failed' }
 $gfxChartRangeIntervalOutput = & $gfxChartRangeIntervalPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartRangeIntervalOutput -ne 'gfx chart range interval ok') { throw "the e.gfx.chart range interval answered wrongly: exit $LASTEXITCODE" }
+$gfxChartProbabilityPlotPath = Join-Path $testBuild 'gfx-chart-probability-plot-selfhost.exe'
+$gfxChartProbabilityPlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_probability_plot\src\main.e') $repo 'x64' 'windows' $gfxChartProbabilityPlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartProbabilityPlotWritten -ne 'executable written') { throw 'gfx_chart_probability_plot emission failed' }
+$gfxChartProbabilityPlotOutput = & $gfxChartProbabilityPlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartProbabilityPlotOutput -ne 'gfx chart probability plot ok') { throw "the e.gfx.chart probability plot answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

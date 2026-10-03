@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>probability_plot</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="68" y="43" width="248" height="156" fill="rgb(250,252,255)" fill-opacity="1"/>
+<line x1="92.80000305175781" y1="43" x2="92.80000305175781" y2="199" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="92.80000305175781" y1="199" x2="92.80000305175781" y2="204" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="142.39999389648438" y1="43" x2="142.39999389648438" y2="199" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="142.39999389648438" y1="199" x2="142.39999389648438" y2="204" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="192" y1="43" x2="192" y2="199" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="192" y1="199" x2="192" y2="204" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="241.59999084472656" y1="43" x2="241.59999084472656" y2="199" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="241.59999084472656" y1="199" x2="241.59999084472656" y2="204" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="291.20001220703125" y1="43" x2="291.20001220703125" y2="199" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="291.20001220703125" y1="199" x2="291.20001220703125" y2="204" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="199" x2="316" y2="199" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="199" x2="68" y2="199" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="176.15020751953125" x2="316" y2="176.15020751953125" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="176.15020751953125" x2="68" y2="176.15020751953125" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="143.61492919921875" x2="316" y2="143.61492919921875" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="143.61492919921875" x2="68" y2="143.61492919921875" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="121" x2="316" y2="121" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="121" x2="68" y2="121" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="98.38507080078125" x2="316" y2="98.38507080078125" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="98.38507080078125" x2="68" y2="98.38507080078125" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="65.84978485107422" x2="316" y2="65.84978485107422" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="65.84978485107422" x2="68" y2="65.84978485107422" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="43" x2="316" y2="43" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="43" x2="68" y2="43" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="43" x2="68" y2="199" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="199" x2="316" y2="199" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<path d="M76.61314392089844 199 L307.3868408203125 43" fill="none" stroke="rgb(232,87,41)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="99.72000122070312" y="176.06088256835938" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="124.52000427246094" y="156.57000732421875" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="139.39999389648438" y="145.23281860351562" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="154.27999877929688" y="136.39138793945312" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="169.16000366210938" y="128.68365478515625" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="179.0800018310547" y="121.50824737548828" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="189" y="114.49175262451172" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="203.8800048828125" y="107.31635284423828" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="218.75999450683594" y="99.60862731933594" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="233.63999938964844" y="90.76719665527344" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="258.44000244140625" y="79.42999267578125" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="283.239990234375" y="59.939109802246094" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<text x="180" y="24" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Normal probability plot</text>
+<text x="58" y="202" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">1%</text>
+<text x="58" y="179.15020751953125" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">5%</text>
+<text x="58" y="146.61492919921875" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">25%</text>
+<text x="58" y="124" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">50%</text>
+<text x="58" y="101.38507080078125" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">75%</text>
+<text x="58" y="68.84978485107422" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">95%</text>
+<text x="58" y="46" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">99%</text>
+<text x="92.80000305175781" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">-2</text>
+<text x="142.39999389648438" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">-1</text>
+<text x="192" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">0</text>
+<text x="241.59999084472656" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">1</text>
+<text x="291.20001220703125" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">2</text>
+<text x="180" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Observed value / cumulative probability</text>
+</svg>

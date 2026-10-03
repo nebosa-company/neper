@@ -34271,3 +34271,15 @@ and Linux fixture checks exact pixel geometry, unsorted input rows, capacities,
 invalid intervals/domains and scene/SVG output. The gallery adds a daily
 temperature range PNG/SVG pair. Zero-length point intervals, open endpoints,
 overlap dodging and automatic domain selection remain follow-on work.
+
+## D1917 — Probability paper separates observed values from percent-scale geometry
+
+`probability_plot` maps sorted sample values to `(i + 1/2)/n` positions on
+normal or exponential probability paper. Tick metadata contains the original
+probabilities and nonlinear screen fractions, while the fitted location/scale
+reference is clipped to both the explicit numeric domain and 1%-99% paper.
+The output uses separate caller-owned Scatter and Line layers, allowing
+independent adapter styling. Windows and Linux fixtures check ties, normal
+symmetry, exponential nonlinear spacing, reference clipping, storage and
+invalid inputs; the gallery adds a labeled PNG/SVG pair. Automatic fitting,
+confidence envelopes and other families remain follow-on work.

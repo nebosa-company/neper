@@ -85,6 +85,8 @@ type StemLeafRow = struct { stem: i64, first: usize, count: usize, baseline: f32
 type StemLeafLayout = struct { rows: []StemLeafRow, leaves: []u8, divider: Segment, leaf_start: f32, leaf_step: f32, leaf_unit: f64 }
 type RangeInterval = struct { row: usize, lower: f64, upper: f64 }
 type RangeIntervalLayout = struct { ranges: Layout, caps: Layout }
+type ProbabilityFamily = enum u8 { Normal, Exponential }
+type ProbabilityLayout = struct { observations: Layout, reference: Layout, probability_ticks: []Tick }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -6046,6 +6048,63 @@ fn violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f6
         i += 1usize
     }
     ret (Layout { kind: .Violin, coords: outline[..2usize * grid.len], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: f32(lo), y_max: f32(hi) }, ok)
+}
+
+fn probability_paper_quantile(family: ProbabilityFamily, p: f64) -> f64 {
+    if family == .Exponential { ret 0.0f64 - math.log[f64](1.0f64 - p) }
+    ret special.normal_quantile(p)
+}
+
+// An observed-value axis against nonlinearly spaced probability paper.
+// Plotting positions are (i + 1/2)/n; the returned ticks carry percentage
+// values and transformed fractions, while the fitted line is clipped to both
+// the numeric domain and the fixed 1%-99% paper. Caller owns all output.
+fn probability_plot(sorted: []const f64, family: ProbabilityFamily, location: f64, scale: f64, domain_min: f64, domain_max: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment, tick_storage: []Tick) -> (ProbabilityLayout, err) {
+    if sorted.len < 2usize { ret (zero, Empty) }
+    if !finite64(location) || !finite64(scale) || scale <= 0.0f64 || !finite64(domain_min) || !finite64(domain_max) || domain_max <= domain_min || !finite64(domain_max - domain_min) || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    let x_min = f32(domain_min)
+    let x_max = f32(domain_max)
+    if !finite(x_min) || !finite(x_max) || x_max <= x_min { ret (zero, Invalid) }
+    if points.len < sorted.len || reference.len == 0usize || tick_storage.len < 7usize { ret (zero, TooLarge) }
+    let paper_lo = probability_paper_quantile(family, 0.01f64)
+    let paper_hi = probability_paper_quantile(family, 0.99f64)
+    if !finite64(paper_lo) || !finite64(paper_hi) || paper_hi <= paper_lo || !finite(f32(paper_lo)) || !finite(f32(paper_hi)) { ret (zero, Invalid) }
+    let sample_count = f64(sorted.len)
+    var i = 0usize
+    while i < sorted.len {
+        let value = sorted[i]
+        if !finite64(value) || value < domain_min || value > domain_max || (i > 0usize && value < sorted[i - 1usize]) { ret (zero, Invalid) }
+        let p = (f64(i) + 0.5f64) / sample_count
+        let paper = probability_paper_quantile(family, p)
+        let x = bounds.x + bounds.width * f32((value - domain_min) / (domain_max - domain_min))
+        let y = bounds.y + bounds.height * f32((paper_hi - paper) / (paper_hi - paper_lo))
+        if !finite(x) || !finite(y) { ret (zero, Invalid) }
+        points[i] = Coord { x: x, y: y }
+        i += 1usize
+    }
+    var line_lo = (domain_min - location) / scale
+    var line_hi = (domain_max - location) / scale
+    if !finite64(line_lo) || !finite64(line_hi) { ret (zero, Invalid) }
+    if line_lo < paper_lo { line_lo = paper_lo }
+    if line_hi > paper_hi { line_hi = paper_hi }
+    if line_hi <= line_lo { ret (zero, Invalid) }
+    let from_x = bounds.x + bounds.width * f32((location + scale * line_lo - domain_min) / (domain_max - domain_min))
+    let to_x = bounds.x + bounds.width * f32((location + scale * line_hi - domain_min) / (domain_max - domain_min))
+    let from_y = bounds.y + bounds.height * f32((paper_hi - line_lo) / (paper_hi - paper_lo))
+    let to_y = bounds.y + bounds.height * f32((paper_hi - line_hi) / (paper_hi - paper_lo))
+    if !finite(from_x) || !finite(to_x) || !finite(from_y) || !finite(to_y) { ret (zero, Invalid) }
+    reference[0usize] = Segment { from: Coord { x: from_x, y: from_y }, to: Coord { x: to_x, y: to_y } }
+    let probabilities = [7]f64{ 0.01f64, 0.05f64, 0.25f64, 0.5f64, 0.75f64, 0.95f64, 0.99f64 }
+    i = 0usize
+    while i < probabilities.len {
+        let position = f32((probability_paper_quantile(family, probabilities[i]) - paper_lo) / (paper_hi - paper_lo))
+        if !finite(position) || position < 0.0 || position > 1.0 { ret (zero, Invalid) }
+        tick_storage[i] = Tick { value: f32(probabilities[i]), fraction: position }
+        i += 1usize
+    }
+    let observed = Layout { kind: .Scatter, coords: points[..sorted.len], segments: zero, bars: zero, x_min: x_min, x_max: x_max, y_min: f32(paper_lo), y_max: f32(paper_hi) }
+    let fitted = Layout { kind: .Line, coords: zero, segments: reference[..1usize], bars: zero, x_min: x_min, x_max: x_max, y_min: f32(paper_lo), y_max: f32(paper_hi) }
+    ret (ProbabilityLayout { observations: observed, reference: fitted, probability_ticks: tick_storage[..7usize] }, ok)
 }
 
 // Normal Q-Q positions use (i + 1/2) / n. The reference joins the sample's
