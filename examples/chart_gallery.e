@@ -1859,6 +1859,88 @@ fn render_fourfold_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_horizon_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let x = [18]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0 }
+    let y = [18]f32{ 0.0, 0.8, 1.7, 2.8, 2.2, 0.5, -1.2, -2.4, -1.6, 0.2, 1.3, 2.9, 2.1, -0.4, -1.8, -2.8, -1.0, 0.3 }
+    let bounds = geometry.rect(43.0, 48.0, 232.0, 137.0)
+    var points: [2048]chart.Coord = zero
+    var storage: [512]chart.HorizonPatch = zero
+    let (patches, layout_error) = chart.horizon(x[..], y[..], 0.0, 1.0, 3usize, bounds, points[..], storage[..])
+    if layout_error != ok { ret layout_error }
+    let positive = [3]paint.Color{ paint.rgba(0.72, 0.85, 0.96, 1.0), paint.rgba(0.30, 0.61, 0.83, 1.0), paint.rgba(0.04, 0.33, 0.69, 1.0) }
+    let negative = [3]paint.Color{ paint.rgba(0.96, 0.73, 0.74, 1.0), paint.rgba(0.84, 0.36, 0.41, 1.0), paint.rgba(0.63, 0.13, 0.22, 1.0) }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let light_rule = paint.rgba(0.73, 0.77, 0.83, 1.0)
+    var labels: [12]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Horizon • folded bands", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "0", anchor: chart.Coord { x: 43.0, y: 207.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "4", anchor: chart.Coord { x: 97.6, y: 207.0 }, align: .Center }
+    labels[3usize] = chart.Label { text: "8", anchor: chart.Coord { x: 152.2, y: 207.0 }, align: .Center }
+    labels[4usize] = chart.Label { text: "12", anchor: chart.Coord { x: 206.8, y: 207.0 }, align: .Center }
+    labels[5usize] = chart.Label { text: "17", anchor: chart.Coord { x: 275.0, y: 207.0 }, align: .Center }
+    let legend_names = [6]str{ "+1", "+2", "+3", "-1", "-2", "-3" }
+    var swatches: [6]geometry.Rect = zero
+    var i = 0usize
+    while i < 6usize {
+        let top = 60.0 + f32(i) * 25.0
+        swatches[i] = geometry.rect(294.0, top, 13.0, 13.0)
+        labels[i + 6usize] = chart.Label { text: legend_names[i], anchor: chart.Coord { x: 324.0, y: top + 11.0 }, align: .Center }
+        i += 1usize
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 23u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 0usize
+    while i < patches.len {
+        var color = positive[patches[i].band]
+        if patches[i].negative { color = negative[patches[i].band] }
+        try chart_scene.append(a, &builder, &patches[i].layout, paint.Brush { Solid: color })
+        i += 1usize
+    }
+    try fill(&builder, geometry.rect(bounds.x, bounds.y + bounds.height, bounds.width, 1.0), paint.Brush { Solid: light_rule })
+    i = 0usize
+    while i < 6usize {
+        var color = positive[0usize]
+        if i < 3usize { color = positive[i] } else { color = negative[i - 3usize] }
+        try fill(&builder, swatches[i], paint.Brush { Solid: color })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/horizon.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < patches.len {
+        var color = positive[patches[i].band]
+        if patches[i].negative { color = negative[patches[i].band] }
+        try chart_svg.append(&writer, &patches[i].layout, color)
+        i += 1usize
+    }
+    try chart_svg.rect(&writer, geometry.rect(bounds.x, bounds.y + bounds.height, bounds.width, 1.0), light_rule, false)
+    i = 0usize
+    while i < 6usize {
+        var color = positive[0usize]
+        if i < 3usize { color = positive[i] } else { color = negative[i - 3usize] }
+        try chart_svg.rect(&writer, swatches[i], color, false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
     if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
     let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
@@ -2883,6 +2965,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_mosaic_preview(a, queue, output_target, canvas, &renderer)
     try render_association_preview(a, queue, output_target, canvas, &renderer)
     try render_fourfold_preview(a, queue, output_target, canvas, &renderer)
+    try render_horizon_preview(a, queue, output_target, canvas, &renderer)
     let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
     let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
     let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }

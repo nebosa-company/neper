@@ -33834,3 +33834,17 @@ zero. Multi-stratum composition and alternate R standardizations remain
 planned. `gfx_chart_mekko` checks numeric references and scene/SVG parity on
 Windows and Linux; the gallery adds a PNG/SVG pair. Reference: R graphics
 `fourfoldplot` and vcd `fourfold` documentation.
+
+## D1872 — Horizon bands split at every threshold crossing
+
+`horizon` accepts sorted numeric x values, an explicit origin, band width and
+band count. It folds positive and negative deviations into the same panel and
+returns caller-owned four-point Area patches carrying band and sign metadata
+for palette selection. Each source segment is split where it crosses either
+edge of a band, avoiding the inaccurate straight-line clipping that would
+result from transforming only the original samples. Data beyond the supplied
+range is refused. `gfx_chart_horizon` checks threshold positions, irregular
+spacing, storage/invalid refusals and scene/SVG parity on Windows and Linux;
+the gallery adds a PNG/SVG pair. Automatic scaling, missing gaps and grouped
+multi-series layout remain planned. Reference: latticeExtra `horizonplot` and
+ggHoriPlot `geom_horizon` documentation.

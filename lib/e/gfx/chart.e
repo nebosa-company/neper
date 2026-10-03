@@ -34,6 +34,7 @@ type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []con
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
+type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
 error Empty
 error TooLarge
@@ -2876,6 +2877,108 @@ fn fourfold(counts: []const f64, bounds: geometry.Rect, confidence: f64, points:
     }
     let rings = Layout { kind: .Rug, coords: zero, segments: ring_segments[..ring_used], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
     ret (FourfoldLayout { wedges: wedges[..4usize], rings: rings, odds_ratio: odds_ratio, ci_low: ci_low, ci_high: ci_high }, ok)
+}
+
+fn horizon_height(deviation: f64, lower: f64, width: f64) -> f64 {
+    var height = deviation - lower
+    if height < 0.0f64 { height = 0.0f64 }
+    if height > width { height = width }
+    ret height
+}
+
+// Fold signed deviations into caller-coloured bands. Each four-point Area
+// patch covers one linear segment between threshold crossings.
+// ponytail: O(samples * bands) patches; batch adjacent paths if long series become draw-bound.
+fn horizon(x: []const f32, y: []const f32, origin: f32, band_width: f32, bands: usize, bounds: geometry.Rect, points: []Coord, patches: []HorizonPatch) -> ([]HorizonPatch, err) {
+    if x.len == 0usize { ret (zero, Empty) }
+    if x.len != y.len || x.len < 2usize || bands == 0usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(origin) || !finite(band_width) || band_width <= 0.0 { ret (zero, Invalid) }
+    let range = f64(band_width) * f64(bands)
+    let x_span = f64(x[x.len - 1usize]) - f64(x[0usize])
+    if !finite64(range) || range <= 0.0f64 || !finite64(x_span) || x_span <= 0.0f64 { ret (zero, Invalid) }
+    var i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || !finite(y[i]) || (i > 0usize && x[i] <= x[i - 1usize]) { ret (zero, Invalid) }
+        let deviation = f64(y[i]) - f64(origin)
+        if !finite64(deviation) || deviation > range || deviation < 0.0f64 - range { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var used = 0usize
+    var side = 0usize
+    while side < 2usize {
+        var level = 0usize
+        while level < bands {
+            let lower = f64(band_width) * f64(level)
+            let upper = lower + f64(band_width)
+            i = 0usize
+            while i + 1usize < x.len {
+                var d0 = f64(y[i]) - f64(origin)
+                var d1 = f64(y[i + 1usize]) - f64(origin)
+                if side == 1usize {
+                    d0 = 0.0f64 - d0
+                    d1 = 0.0f64 - d1
+                }
+                var cuts: [4]f64 = zero
+                cuts[0usize] = 0.0f64
+                cuts[1usize] = 1.0f64
+                var count = 2usize
+                if d1 != d0 {
+                    let low_cut = (lower - d0) / (d1 - d0)
+                    let high_cut = (upper - d0) / (d1 - d0)
+                    if low_cut > 0.0f64 && low_cut < 1.0f64 {
+                        cuts[count] = low_cut
+                        count += 1usize
+                    }
+                    if high_cut > 0.0f64 && high_cut < 1.0f64 {
+                        cuts[count] = high_cut
+                        count += 1usize
+                    }
+                }
+                var j = 1usize
+                while j < count {
+                    let selected = cuts[j]
+                    var k = j
+                    while k > 0usize && cuts[k - 1usize] > selected {
+                        cuts[k] = cuts[k - 1usize]
+                        k -= 1usize
+                    }
+                    cuts[k] = selected
+                    j += 1usize
+                }
+                j = 0usize
+                while j + 1usize < count {
+                    let first = cuts[j]
+                    let last = cuts[j + 1usize]
+                    let middle = (first + last) * 0.5f64
+                    if d0 + (d1 - d0) * middle > lower {
+                        if used >= patches.len || used >= points.len / 4usize { ret (zero, TooLarge) }
+                        let dx = f64(x[i + 1usize]) - f64(x[i])
+                        let left_data = f64(x[i]) + dx * first
+                        let right_data = f64(x[i]) + dx * last
+                        let left = bounds.x + bounds.width * f32((left_data - f64(x[0usize])) / x_span)
+                        let right = bounds.x + bounds.width * f32((right_data - f64(x[0usize])) / x_span)
+                        let left_height = horizon_height(d0 + (d1 - d0) * first, lower, f64(band_width))
+                        let right_height = horizon_height(d0 + (d1 - d0) * last, lower, f64(band_width))
+                        let top_left = bounds.y + bounds.height * (1.0 - f32(left_height / f64(band_width)))
+                        let top_right = bounds.y + bounds.height * (1.0 - f32(right_height / f64(band_width)))
+                        let bottom = bounds.y + bounds.height
+                        if !finite(left) || !finite(right) || !finite(top_left) || !finite(top_right) || right <= left { ret (zero, Invalid) }
+                        let first_point = used * 4usize
+                        points[first_point] = Coord { x: left, y: bottom }
+                        points[first_point + 1usize] = Coord { x: left, y: top_left }
+                        points[first_point + 2usize] = Coord { x: right, y: top_right }
+                        points[first_point + 3usize] = Coord { x: right, y: bottom }
+                        patches[used] = HorizonPatch { layout: Layout { kind: .Area, coords: points[first_point..first_point + 4usize], segments: zero, bars: zero, x_min: x[0usize], x_max: x[x.len - 1usize], y_min: 0.0, y_max: band_width }, band: level, negative: side == 1usize }
+                        used += 1usize
+                    }
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            level += 1usize
+        }
+        side += 1usize
+    }
+    ret (patches[..used], ok)
 }
 
 // Two nonnegative age series diverge from a shared central label gutter.
