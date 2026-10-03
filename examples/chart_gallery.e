@@ -2066,6 +2066,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (fit_dots, fit_dots_error) = chart.layout_with_limits(&overlay_spec, points[..], segments[..0usize], bars[..0usize], fit_x_limits[..], fit_y_limits[..])
     if fit_dots_error != ok { ret fit_dots_error }
     try render_scatter_overlay(a, queue, output_target, canvas, &renderer, &fit_dots, &fit, zero, "docs/chart-previews/regression_fit.png")
+    let diagnostic_x = [8]f64{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 9.0 }
+    let diagnostic_y = [8]f64{ 1.2, 2.1, 2.8, 4.2, 4.7, 6.0, 7.2, 14.1 }
+    var diagnostics: [8]stat.RegressionDiagnostic = zero
+    try stat.regression_diagnostics(diagnostic_x[..], diagnostic_y[..], diagnostics[..])
+    var fitted_values: [8]f32 = zero
+    var residual_values: [8]f32 = zero
+    var leverage_values: [8]f32 = zero
+    var standardized_values: [8]f32 = zero
+    var indices: [8]f32 = zero
+    var cook_values: [8]f32 = zero
+    i = 0usize
+    while i < diagnostics.len {
+        fitted_values[i] = f32(diagnostics[i].fitted)
+        residual_values[i] = f32(diagnostics[i].residual)
+        leverage_values[i] = f32(diagnostics[i].leverage)
+        standardized_values[i] = f32(diagnostics[i].standardized)
+        indices[i] = f32(i + 1usize)
+        cook_values[i] = f32(diagnostics[i].cook)
+        i += 1usize
+    }
+    var residual_spec = chart.spec(.Scatter, bounds, fitted_values[..], residual_values[..])
+    let (residual_marks, residual_error) = chart.layout(&residual_spec, points[..], segments[..], bars[..])
+    if residual_error != ok { ret residual_error }
+    let zero_x = [2]f32{ residual_marks.x_min, residual_marks.x_max }
+    let zero_y = [2]f32{ 0.0, 0.0 }
+    var zero_spec = chart.spec(.Line, bounds, zero_x[..], zero_y[..])
+    var zero_segments: [1]chart.Segment = zero
+    let residual_x_limits = [2]f32{ residual_marks.x_min, residual_marks.x_max }
+    var residual_y_limits = [2]f32{ residual_marks.y_min, residual_marks.y_max }
+    if residual_y_limits[0usize] > 0.0 { residual_y_limits[0usize] = 0.0 }
+    if residual_y_limits[1usize] < 0.0 { residual_y_limits[1usize] = 0.0 }
+    let (zero_line, zero_error) = chart.layout_with_limits(&zero_spec, points[..0usize], zero_segments[..], bars[..0usize], residual_x_limits[..], residual_y_limits[..])
+    if zero_error != ok { ret zero_error }
+    let (residual_dots, residual_dots_error) = chart.layout_with_limits(&residual_spec, points[..], segments[..0usize], bars[..0usize], residual_x_limits[..], residual_y_limits[..])
+    if residual_dots_error != ok { ret residual_dots_error }
+    try render_scatter_overlay(a, queue, output_target, canvas, &renderer, &residual_dots, &zero_line, zero, "docs/chart-previews/residual_fitted.png")
+    var leverage_spec = chart.spec(.Scatter, bounds, leverage_values[..], standardized_values[..])
+    let (leverage_marks, leverage_error) = chart.layout(&leverage_spec, points[..], segments[..], bars[..])
+    if leverage_error != ok { ret leverage_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &leverage_marks, "docs/chart-previews/leverage_residual.png")
+    var cook_spec = chart.spec(.Lollipop, bounds, indices[..], cook_values[..])
+    let (cook_marks, cook_error) = chart.layout(&cook_spec, points[..], segments[..], bars[..])
+    if cook_error != ok { ret cook_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &cook_marks, "docs/chart-previews/cooks_distance.png")
     var ellipse_segments: [64]chart.Segment = zero
     let (ellipse, ellipse_error) = chart.covariance_ellipse(x[..], y[..], bounds, 2.4477, ellipse_segments[..])
     if ellipse_error != ok { ret ellipse_error }

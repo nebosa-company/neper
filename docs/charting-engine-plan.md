@@ -8,7 +8,9 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-eighty-two PNG plus eighty-two SVG previews from Neper. L061 remains partial
+eighty-five PNG plus eighty-five SVG previews from Neper. OLS residual/fitted,
+leverage/standardized-residual and Cook's-distance diagnostics are delivered.
+L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -111,6 +113,13 @@ polygon resolution; the filled Band and fitted Line share a domain including
 observations. `gfx_chart_overlays` checks numeric values and both adapters on
 Windows and Linux. Simultaneous confidence bands, nonlinear smoothers,
 automatic quantiles and transformed-axis overlays remain planned.
+`e.algo.stat.regression_diagnostics` emits fitted values, raw and internally
+standardized residuals, leverage and Cook's distance from one streaming OLS
+fit into caller storage. It refuses singular x, exact fits and undefined
+influence statistics. Scatter and Lollipop layouts produce three diagnostics
+without a new painter. `gfx_chart_regression_diagnostics` checks reference
+numbers and scene/SVG output on Windows and Linux. Leave-one-out residuals and
+robust regression remain planned.
 Binary classification diagnostics share `e.algo.stat.binary_curve`: a caller-owned
 descending score order, with tied scores advanced as one threshold. The same
 cumulative true/false-positive counts yield ROC, precision–recall, cumulative
@@ -466,7 +475,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with eighty-two vector previews, automatic numeric tick text and
+   adapter with eighty-five vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

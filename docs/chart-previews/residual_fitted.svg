@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>residual_fitted</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33334350585938" y1="30" x2="139.33334350585938" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33334350585938" y1="204" x2="139.33334350585938" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.6666717529297" y1="30" x2="234.6666717529297" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.6666717529297" y1="204" x2="234.6666717529297" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<rect x="41" y="70.67391967773438" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="72.77777862548828" y="98.5273208618164" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="104.55555725097656" y="138.64549255371094" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="136.33334350585938" y="135.8369598388672" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="168.11111450195312" y="188.21990966796875" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="199.88890075683594" y="191.54376220703125" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="231.6666717529297" y="201" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="327" y="27" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<path d="M44 134.43092346191406 L330 134.43092346191406" fill="none" stroke="rgb(240,107,31)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+</svg>

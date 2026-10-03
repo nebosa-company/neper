@@ -22,6 +22,7 @@ error Invalid
 
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
+type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
@@ -321,6 +322,40 @@ fn regression_intercept(s: *const Regression) -> (f64, bool) {
     let (slope, has_slope) = regression_slope(s)
     if !has_slope { ret (0.0, false) }
     ret (s.mean_y - slope * s.mean_x, true)
+}
+
+// Internally standardized residuals and Cook's distance for an intercept/slope OLS fit.
+// An exact fit has zero residual variance, so these diagnostics are undefined.
+fn regression_diagnostics(x: []const f64, y: []const f64, out: []RegressionDiagnostic) -> err {
+    if x.len < 4usize || y.len != x.len { ret Invalid }
+    if out.len < x.len { ret TooSmall }
+    var s = regression()
+    var i = 0usize
+    while i < x.len {
+        if x[i] - x[i] != 0.0f64 || y[i] - y[i] != 0.0f64 { ret Invalid }
+        regression_add(&s, x[i], y[i])
+        i += 1usize
+    }
+    let (slope, defined) = regression_slope(&s)
+    if !defined { ret Invalid }
+    let intercept = s.mean_y - slope * s.mean_x
+    let mse = (s.m2_y - slope * s.cov) / f64(x.len - 2usize)
+    if mse <= 0.0f64 || mse - mse != 0.0f64 || intercept - intercept != 0.0f64 { ret Invalid }
+    i = 0usize
+    while i < x.len {
+        let dx = x[i] - s.mean_x
+        let leverage = 1.0f64 / f64(x.len) + dx * dx / s.m2_x
+        let fitted = intercept + slope * x[i]
+        let residual = y[i] - fitted
+        let remaining = 1.0f64 - leverage
+        if remaining <= 0.0f64 { ret Invalid }
+        let standardized = residual / math.sqrt[f64](mse * remaining)
+        let cook = residual * residual / (2.0f64 * mse) * leverage / (remaining * remaining)
+        if standardized - standardized != 0.0f64 || cook - cook != 0.0f64 { ret Invalid }
+        out[i] = RegressionDiagnostic { fitted: fitted, residual: residual, leverage: leverage, standardized: standardized, cook: cook }
+        i += 1usize
+    }
+    ret ok
 }
 
 fn correlation(s: *const Regression) -> (f64, bool) {

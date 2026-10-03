@@ -33592,3 +33592,16 @@ model and treat-all net benefit; treat-none is zero. It deliberately scans each
 threshold, with a sorted-sweep upgrade path if large grids demand it. The
 existing Area, Rug and Line adapters render all three previews. Numeric and
 scene/SVG checks run in `gfx_chart_binary_curves` on Windows and Linux.
+
+## D1853 — Derive OLS influence values once, then reuse existing marks
+
+`e.algo.stat.regression_diagnostics` streams the existing bivariate moments once
+and writes fitted values, raw/internally standardized residuals, leverage and
+Cook's distance to caller storage. Cook's distance uses two fitted parameters
+and mean squared error with n-2 residual degrees of freedom. Singular x,
+exact fits and non-finite inputs cannot yield these statistics and are refused.
+Residual/fitted and leverage/residual views reuse Scatter; Cook by observation
+reuses Lollipop, preserving scene/SVG parity without a new geom. A five-point
+numeric reference plus adapter check passes on Windows and Linux; three new
+PNG/SVG gallery pairs are generated. Leave-one-out influence, robust fits and
+automatic diagnostic thresholds remain planned.
