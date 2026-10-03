@@ -34339,3 +34339,14 @@ fences. Their eleven deterministic x lanes may overlap on dense ties; future
 packing can improve this without changing the statistical summary. Separate
 Windows and Linux fixtures cover symmetry, quartiles, outliers, adapters and
 capacity/invalid-input refusals. Two PNG/SVG previews join the gallery.
+
+## D1923 — Slopegraphs use a shared paired-value scale
+
+`slopegraph` preserves each caller-ordered before/after pair as a separate
+segment with two endpoints at fixed left and right positions. All series use
+the same vertical domain, including pairs that cross or tie; constant data
+expand symmetrically. The adapter draws segments independently rather than
+joining them into a misleading polyline. The gallery labels both ends of all
+five sample series. Windows and Linux fixtures check exact geometry, scene/SVG
+output, constant-domain expansion and invalid/capacity refusals. Automatic
+endpoint-label collision handling remains planned.

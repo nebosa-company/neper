@@ -3,6 +3,7 @@
 from pathlib import Path
 import re
 import unittest
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +21,10 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertTrue(all(re.fullmatch(r"[a-z][a-z0-9_]*", name) for name in planned))
         self.assertFalse(rendered.intersection(planned))
         self.assertTrue(all((PREVIEWS / f"{name}.svg").is_file() for name in rendered))
+        for name in rendered:
+            self.assertEqual((PREVIEWS / f"{name}.png").read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+            self.assertEqual(ET.parse(PREVIEWS / f"{name}.svg").getroot().tag,
+                             "{http://www.w3.org/2000/svg}svg")
         self.assertIn("decision_tree", rendered)
         self.assertNotIn("decision_tree", planned)
         self.assertIn("org_chart", rendered)
@@ -54,6 +59,8 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("half_violin", planned)
         self.assertIn("raincloud", rendered)
         self.assertNotIn("raincloud", planned)
+        self.assertIn("slopegraph", rendered)
+        self.assertNotIn("slopegraph", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)

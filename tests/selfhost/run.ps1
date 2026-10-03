@@ -3342,6 +3342,11 @@ $gfxChartRaincloudWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartRaincloudWritten -ne 'executable written') { throw 'gfx_chart_raincloud emission failed' }
 $gfxChartRaincloudOutput = & $gfxChartRaincloudPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartRaincloudOutput -ne 'gfx chart raincloud ok') { throw "the e.gfx.chart raincloud answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSlopegraphPath = Join-Path $testBuild 'gfx-chart-slopegraph-selfhost.exe'
+$gfxChartSlopegraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_slopegraph\src\main.e') $repo 'x64' 'windows' $gfxChartSlopegraphPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSlopegraphWritten -ne 'executable written') { throw 'gfx_chart_slopegraph emission failed' }
+$gfxChartSlopegraphOutput = & $gfxChartSlopegraphPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSlopegraphOutput -ne 'gfx chart slopegraph ok') { throw "the e.gfx.chart slopegraph answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

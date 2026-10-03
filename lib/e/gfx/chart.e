@@ -12,7 +12,7 @@ use e.mem
 use e.str
 use e.text.layout as text_layout
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp, Mosaic, Association }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, SlopeGraph, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp, Mosaic, Association }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
@@ -499,7 +499,7 @@ fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars
         if line_error != ok { ret (zero, line_error) }
         ret (Layout { kind: .PointLine, coords: points.coords, segments: line.segments, bars: zero, x_min: points.x_min, x_max: points.x_max, y_min: points.y_min, y_max: points.y_max }, ok)
     }
-    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell || s.kind == .FrequencyPolygon || s.kind == .Rug || s.kind == .Strip || s.kind == .Beeswarm || s.kind == .DotPlot || s.kind == .Bubble { ret (zero, Invalid) }
+    if s.kind == .Histogram || s.kind == .Ecdf || s.kind == .Box || s.kind == .Density || s.kind == .Qq || s.kind == .Violin || s.kind == .Heatmap || s.kind == .Correlation || s.kind == .ErrorBar || s.kind == .Band || s.kind == .Dumbbell || s.kind == .SlopeGraph || s.kind == .FrequencyPolygon || s.kind == .Rug || s.kind == .Strip || s.kind == .Beeswarm || s.kind == .DotPlot || s.kind == .Bubble { ret (zero, Invalid) }
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if (x_limits.len != 0usize && x_limits.len != 2usize) || (y_limits.len != 0usize && y_limits.len != 2usize) { ret (zero, Invalid) }
@@ -1131,6 +1131,41 @@ fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bound
         i += 1usize
     }
     ret (Layout { kind: .Dumbbell, coords: points[..2usize * position.len], segments: lines[..position.len], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
+}
+
+// Paired values share one vertical scale; input order preserves series identity
+// even when the segments cross. Coordinates are before/after pairs.
+fn slopegraph(before: []const f32, after: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err) {
+    if before.len == 0usize { ret (zero, Empty) }
+    if before.len != after.len || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if points.len / 2usize < before.len || lines.len < before.len { ret (zero, TooLarge) }
+    var ymin = before[0usize]
+    var ymax = before[0usize]
+    var i = 0usize
+    while i < before.len {
+        if !finite(before[i]) || !finite(after[i]) { ret (zero, Invalid) }
+        if before[i] < ymin { ymin = before[i] }
+        if after[i] < ymin { ymin = after[i] }
+        if before[i] > ymax { ymax = before[i] }
+        if after[i] > ymax { ymax = after[i] }
+        i += 1usize
+    }
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+    }
+    if !finite(ymin) || !finite(ymax) { ret (zero, Invalid) }
+    i = 0usize
+    while i < before.len {
+        let left = Coord { x: bounds.x, y: bounds.y + bounds.height - mapped(before[i], ymin, ymax, 0.0, bounds.height) }
+        let right = Coord { x: bounds.x + bounds.width, y: bounds.y + bounds.height - mapped(after[i], ymin, ymax, 0.0, bounds.height) }
+        if !finite(left.y) || !finite(right.y) { ret (zero, Invalid) }
+        points[2usize * i] = left
+        points[2usize * i + 1usize] = right
+        lines[i] = Segment { from: left, to: right }
+        i += 1usize
+    }
+    ret (Layout { kind: .SlopeGraph, coords: points[..2usize * before.len], segments: lines[..before.len], bars: zero, x_min: 0.0, x_max: 1.0, y_min: ymin, y_max: ymax }, ok)
 }
 
 // Horizontal study intervals, center estimates and one reference rule.

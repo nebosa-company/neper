@@ -163,7 +163,7 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
     } else if marks.kind == .Area || marks.kind == .Violin || marks.kind == .Band {
         if marks.coords.len < 4usize { ret Invalid }
         try path(w, marks.coords, ink, true)
-    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Qq || marks.kind == .Pp || marks.kind == .Dumbbell || marks.kind == .Rug {
+    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Qq || marks.kind == .Pp || marks.kind == .Dumbbell || marks.kind == .SlopeGraph || marks.kind == .Rug {
         var i = 0usize
         while i < marks.bars.len {
             if marks.bars[i].width > 0.0 && marks.bars[i].height > 0.0 { try rect(w, marks.bars[i], ink, true) }

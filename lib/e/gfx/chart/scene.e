@@ -86,7 +86,7 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
             path: geometry.finish(&path), brush: brush,
             stroke: paint.Stroke { width: 2.0, cap: .Round, join: .Round, miter_limit: 4.0 },
         } })
-    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Dumbbell || marks.kind == .Rug {
+    } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Dumbbell || marks.kind == .SlopeGraph || marks.kind == .Rug {
         var i = 0usize
         while i < marks.bars.len {
             let r = marks.bars[i]

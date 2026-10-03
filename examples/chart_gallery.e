@@ -2367,6 +2367,64 @@ fn render_one_sided_distribution_preview(a: *mem.Arena, q: *gpu.Queue, output_ta
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_slopegraph_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/slopegraph.png"
+    let plot = geometry.rect(72.0, 54.0, 216.0, 138.0)
+    let before = [5]f32{ 23.0, 42.0, 57.0, 74.0, 88.0 }
+    let after = [5]f32{ 82.0, 54.0, 67.0, 31.0, 18.0 }
+    var points: [10]chart.Coord = zero
+    var lines: [5]chart.Segment = zero
+    let (marks, marks_error) = chart.slopegraph(before[..], after[..], plot, points[..], lines[..])
+    if marks_error != ok || marks.segments.len != 5usize { ret chart.Invalid }
+    let pale = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.10, 0.43, 0.78, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let labels = [14]chart.Label{
+        chart.Label { text: "Slopegraph / paired changes", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "Before", anchor: chart.Coord { x: plot.x, y: 213.0 }, align: .Center },
+        chart.Label { text: "After", anchor: chart.Coord { x: plot.x + plot.width, y: 213.0 }, align: .Center },
+        chart.Label { text: "Five series / shared value axis", anchor: chart.Coord { x: 180.0, y: 233.0 }, align: .Center },
+        chart.Label { text: "A 23", anchor: chart.Coord { x: 67.0, y: points[0usize].y + 3.0 }, align: .Right },
+        chart.Label { text: "A 82", anchor: chart.Coord { x: 293.0, y: points[1usize].y + 3.0 }, align: .Left },
+        chart.Label { text: "B 42", anchor: chart.Coord { x: 67.0, y: points[2usize].y + 3.0 }, align: .Right },
+        chart.Label { text: "B 54", anchor: chart.Coord { x: 293.0, y: points[3usize].y + 3.0 }, align: .Left },
+        chart.Label { text: "C 57", anchor: chart.Coord { x: 67.0, y: points[4usize].y + 3.0 }, align: .Right },
+        chart.Label { text: "C 67", anchor: chart.Coord { x: 293.0, y: points[5usize].y + 3.0 }, align: .Left },
+        chart.Label { text: "D 74", anchor: chart.Coord { x: 67.0, y: points[6usize].y + 3.0 }, align: .Right },
+        chart.Label { text: "D 31", anchor: chart.Coord { x: 293.0, y: points[7usize].y + 3.0 }, align: .Left },
+        chart.Label { text: "E 88", anchor: chart.Coord { x: 67.0, y: points[8usize].y + 3.0 }, align: .Right },
+        chart.Label { text: "E 18", anchor: chart.Coord { x: 293.0, y: points[9usize].y + 3.0 }, align: .Left },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 23u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, geometry.rect(48.0, 46.0, 264.0, 154.0), paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..4usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[4usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, geometry.rect(48.0, 46.0, 264.0, 154.0), pale, false)
+    try chart_svg.append(&writer, &marks, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..4usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[4usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -6335,6 +6393,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)
     try render_one_sided_distribution_preview(a, queue, output_target, canvas, &renderer, false)
     try render_one_sided_distribution_preview(a, queue, output_target, canvas, &renderer, true)
+    try render_slopegraph_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)
