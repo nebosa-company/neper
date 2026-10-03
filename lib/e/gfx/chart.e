@@ -1618,6 +1618,41 @@ fn stacked_bars(values: []const f32, categories: usize, series: usize, bounds: g
     ret (bar_layers(categories, series, bars, layers, low, high), ok)
 }
 
+// Two nonnegative age series diverge from a shared central label gutter.
+// Input rows run from youngest (bottom) to oldest (top).
+fn population_pyramid(left: []const f32, right: []const f32, bounds: geometry.Rect, gutter: f32, row_gap: f32, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if left.len == 0usize { ret (zero, Empty) }
+    if left.len != right.len || !valid_bounds(bounds) || !finite(gutter) || !finite(row_gap) || gutter < 0.0 || gutter >= bounds.width || row_gap < 0.0 { ret (zero, Invalid) }
+    if left.len > bars.len / 2usize || layers.len < 2usize { ret (zero, TooLarge) }
+    let slot = bounds.height / f32(left.len)
+    let half = (bounds.width - gutter) * 0.5
+    if !finite(slot) || !finite(half) || slot <= row_gap || half <= 0.0 { ret (zero, Invalid) }
+    var maximum = 0.0f32
+    var i = 0usize
+    while i < left.len {
+        if !finite(left[i]) || !finite(right[i]) || left[i] < 0.0 || right[i] < 0.0 { ret (zero, Invalid) }
+        if left[i] > maximum { maximum = left[i] }
+        if right[i] > maximum { maximum = right[i] }
+        i += 1usize
+    }
+    if maximum <= 0.0 { ret (zero, Invalid) }
+    let center = bounds.x + bounds.width * 0.5
+    if !finite(center) { ret (zero, Invalid) }
+    i = 0usize
+    while i < left.len {
+        let left_width = half * f32(f64(left[i]) / f64(maximum))
+        let right_width = half * f32(f64(right[i]) / f64(maximum))
+        let y = bounds.y + bounds.height - slot * f32(i + 1usize) + row_gap * 0.5
+        if !finite(left_width) || !finite(right_width) || !finite(y) || !finite(center - gutter * 0.5 - left_width) { ret (zero, Invalid) }
+        bars[i] = geometry.rect(center - gutter * 0.5 - left_width, y, left_width, slot - row_gap)
+        bars[left.len + i] = geometry.rect(center + gutter * 0.5, y, right_width, slot - row_gap)
+        i += 1usize
+    }
+    layers[0usize] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[..left.len], x_min: 0.0 - maximum, x_max: maximum, y_min: 0.0, y_max: f32(left.len) }
+    layers[1usize] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[left.len..left.len * 2usize], x_min: 0.0 - maximum, x_max: maximum, y_min: 0.0, y_max: f32(left.len) }
+    ret (layers[..2usize], ok)
+}
+
 // Equal-width bins, left-closed/right-open except the last bin (which includes
 // the maximum). Counts and rectangles are caller-owned; bars touch edge to edge.
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err) {

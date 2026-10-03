@@ -33398,3 +33398,14 @@ Zero-total nodes remain empty. `gfx_chart_circle_pack` checks ratios, nested
 containment, sibling separation, invalid input/storage and both adapters on
 Windows and Linux; the gallery adds one PNG/SVG pair. The ring layout trades
 density for predictable cost; tangent packing can replace it if needed.
+
+## D1835 — Mirror population bars on one scale
+
+`chart.population_pyramid` takes aligned nonnegative age columns, finds one
+maximum and makes opposing horizontal Bar layers from a central gutter. Input
+age groups run youngest to oldest and display bottom to top. Caller-owned
+gutter and row gap leave space for age labels; colours and labels stay with
+the caller. The common Bar scene/SVG adapters need no new painter.
+`gfx_chart_population_pyramid` checks reference geometry, malformed values,
+gaps, storage and both adapters on Windows and Linux; the gallery adds a
+labeled PNG/SVG pair.

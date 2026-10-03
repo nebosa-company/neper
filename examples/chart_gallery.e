@@ -347,6 +347,55 @@ fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, c
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
+    if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
+    let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var labels: [9]chart.Label = zero
+    var i = 0usize
+    while i < ages.len {
+        labels[i] = chart.Label { text: ages[i], anchor: chart.Coord { x: 180.0, y: bars[i].y + bars[i].height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[6usize] = chart.Label { text: "Population pyramid", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[7usize] = chart.Label { text: "Group A", anchor: chart.Coord { x: 88.0, y: 45.0 }, align: .Center }
+    labels[8usize] = chart.Label { text: "Group B", anchor: chart.Coord { x: 272.0, y: 45.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..6usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[7usize..], font, 10.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[6usize..7usize], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..6usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[7usize..], dark, 10.0)
+    try chart_svg.append_labels(&writer, labels[6usize..7usize], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_bullet(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, path: str) -> err {
     if layers.len != 5usize { ret chart.Invalid }
     let plot = geometry.rect(44.0, 86.0, 286.0, 66.0)
@@ -920,6 +969,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (normalized, normalized_error) = chart.stacked_bars(grouped_values[..], 4usize, 2usize, bar_bounds, true, series_bars[..], series_layers[..])
     if normalized_error != ok { ret normalized_error }
     try render_bar_layers(a, queue, output_target, canvas, &renderer, normalized, category_names[..], series_names[..], "Share by category", "docs/chart-previews/stacked_100.png")
+    let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
+    let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
+    let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }
+    var pyramid_bars: [12]geometry.Rect = zero
+    var pyramid_storage: [2]chart.Layout = zero
+    let (pyramid_layers, pyramid_error) = chart.population_pyramid(pyramid_left[..], pyramid_right[..], geometry.rect(20.0, 58.0, 320.0, 156.0), 50.0, 4.0, pyramid_bars[..], pyramid_storage[..])
+    if pyramid_error != ok { ret pyramid_error }
+    try render_population_pyramid(a, queue, output_target, canvas, &renderer, pyramid_layers, pyramid_bars[..], pyramid_ages[..], "docs/chart-previews/population_pyramid.png")
     let bullet_ranges = [3]f32{ 40.0, 70.0, 100.0 }
     var bullet_bars: [4]geometry.Rect = zero
     var bullet_target: [1]chart.Segment = zero

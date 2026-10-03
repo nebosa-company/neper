@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, pie, donut, waffle, treemap, sunburst, icicle, circle packing, stage funnel,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, treemap, sunburst, icicle, circle packing, stage funnel,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-fifty-three PNG plus fifty-three SVG previews from Neper. L061 remains partial
+fifty-four PNG plus fifty-four SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -141,6 +141,11 @@ and returns frequency Bar and cumulative-fraction PointLine layers with independ
 left count and right percentage domains. It refuses zero totals; the gallery
 labels both axes. The insertion sort is quadratic until category counts warrant
 a caller-scratch mergesort.
+`population_pyramid` maps two nonnegative age columns to left/right Bar layers
+with one shared maximum, a caller-sized central label gutter and row gaps.
+Input runs youngest to oldest, displayed bottom to top. The fixture checks
+mirrored geometry, invalid counts, gaps and storage plus scene/SVG adapters on
+Windows and Linux. Age labels and series names remain caller-owned guide text.
 `combo_bar_line` composes existing Bar and PointLine layouts at identical
 category centers. The bar domain includes zero; the line keeps its independent
 vertical domain, and the caller renders the corresponding left/right guides.
@@ -241,7 +246,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, pie, donut, waffle, treemap, sunburst, icicle, basic circle packing and basic stage funnel are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, Pareto, population pyramid, pie, donut, waffle, treemap, sunburst, icicle, basic circle packing and basic stage funnel are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -299,6 +304,8 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    refusals and both adapters on Windows and Linux.
    Pareto composes stable descending frequency bars with a cumulative-share
    PointLine layer and an explicit percentage axis in the gallery.
+   Population pyramid uses mirrored horizontal Bar layers with a shared maximum;
+   `gfx_chart_population_pyramid` checks geometry and both adapters on both hosts.
    Pie and donut reuse Area polygons, explicit colour/legend metadata and the
    common scene/SVG adapters; `gfx_chart_polar` checks both on Windows and Linux.
    Waffle and stage funnel reuse Bar and Area layers respectively;
@@ -325,7 +332,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with fifty-three vector previews, automatic numeric tick text and
+   adapter with fifty-four vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow
