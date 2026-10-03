@@ -33885,3 +33885,14 @@ references, flat data, window and capacity refusals, and scene/SVG output on
 Windows and Linux; the gallery adds a PNG/SVG pair. Multiplicative and STL
 decomposition, missing observations and date labels remain planned. Reference:
 R `stats::decompose` and forecast `autoplot.decomposed.ts` documentation.
+
+## D1878 — Correlogram shares Rug strokes across ACF and PACF
+
+`correlogram` computes mean-centered, lag-zero-normalized sample ACF and
+Durbin–Levinson PACF with caller-owned arrays. Two comparable [-1, 1] stem
+panels and zero/approximate 95% reference rules reuse Rug scene/SVG adapters;
+PACF omits lag zero. `gfx_chart_correlogram` checks exact numerical values,
+geometry, refusals and both adapters on Windows and Linux. The gallery adds a
+paired-panel PNG/SVG preview. Missing-value policy, alternative confidence
+intervals and FFT acceleration for long lag windows remain planned. Reference:
+R `stats::acf` / `stats::pacf` documentation.

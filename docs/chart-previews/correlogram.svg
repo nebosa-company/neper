@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>correlogram</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="49" y="44" width="278" height="69" fill="rgb(247,250,255)" fill-opacity="1"/>
+<rect x="49" y="123" width="278" height="69" fill="rgb(247,250,255)" fill-opacity="1"/>
+<line x1="49" y1="78.5" x2="327" y2="78.5" stroke="rgb(186,199,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="49" y1="65.72102355957031" x2="327" y2="65.72102355957031" stroke="rgb(186,199,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="49" y1="91.27897644042969" x2="327" y2="91.27897644042969" stroke="rgb(186,199,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="49" y1="157.5" x2="327" y2="157.5" stroke="rgb(186,199,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="49" y1="144.7210235595703" x2="327" y2="144.7210235595703" stroke="rgb(186,199,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="49" y1="170.2789764404297" x2="327" y2="170.2789764404297" stroke="rgb(186,199,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="49" y1="78.5" x2="49" y2="44" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="72.16666412353516" y1="78.5" x2="72.16666412353516" y2="56.368125915527344" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="95.33333587646484" y1="78.5" x2="95.33333587646484" y2="81.20027923583984" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="118.5" y1="78.5" x2="118.5" y2="101.21229553222656" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="141.6666717529297" y1="78.5" x2="141.6666717529297" y2="103.96710205078125" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="164.8333282470703" y1="78.5" x2="164.8333282470703" y2="89.64556884765625" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="188" y1="78.5" x2="188" y2="69.0665283203125" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="211.1666717529297" y1="78.5" x2="211.1666717529297" y2="56.13618850708008" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="234.3333282470703" y1="78.5" x2="234.3333282470703" y2="58.530208587646484" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="257.5" y1="78.5" x2="257.5" y2="73.66341400146484" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="280.6666564941406" y1="78.5" x2="280.6666564941406" y2="90.07621002197266" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="303.8333435058594" y1="78.5" x2="303.8333435058594" y2="97.15277862548828" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="327" y1="78.5" x2="327" y2="91.99140930175781" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="72.16666412353516" y1="157.5" x2="72.16666412353516" y2="135.3681182861328" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="95.33333587646484" y1="157.5" x2="95.33333587646484" y2="186.2149200439453" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="118.5" y1="157.5" x2="118.5" y2="163.6809844970703" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="141.6666717529297" y1="157.5" x2="141.6666717529297" y2="156.76123046875" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="164.8333282470703" y1="157.5" x2="164.8333282470703" y2="156.0476531982422" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="188" y1="157.5" x2="188" y2="153.78480529785156" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="211.1666717529297" y1="157.5" x2="211.1666717529297" y2="154.90513610839844" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="234.3333282470703" y1="157.5" x2="234.3333282470703" y2="155.721435546875" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="257.5" y1="157.5" x2="257.5" y2="158.1941680908203" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="280.6666564941406" y1="157.5" x2="280.6666564941406" y2="153.94039916992188" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="303.8333435058594" y1="157.5" x2="303.8333435058594" y2="157.68423461914062" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="327" y1="157.5" x2="327" y2="161.4764404296875" stroke="rgb(224,102,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">ACF / PACF correlogram</text>
+<text x="43" y="81.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">ACF</text>
+<text x="43" y="160.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">PACF</text>
+<text x="49" y="207" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="327" y="207" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">12 lags</text>
+<text x="180" y="226" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">95% reference = ±1.96/√n</text>
+</svg>

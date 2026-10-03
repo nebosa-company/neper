@@ -2161,6 +2161,79 @@ fn render_decomposition_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gp
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_correlogram_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let values = [28]f32{ 0.4, 1.1, 1.4, 0.9, 0.2, -0.3, -0.7, -0.2, 0.5, 1.2, 1.0, 0.3, -0.4, -0.8, -0.4, 0.1, 0.8, 1.3, 0.7, 0.0, -0.6, -0.9, -0.3, 0.4, 1.0, 0.6, -0.1, -0.5 }
+    let bounds = geometry.rect(49.0, 44.0, 278.0, 148.0)
+    let gap = 10.0f32
+    let panel_height = (bounds.height - gap) * 0.5
+    var acf: [13]f64 = zero
+    var pacf: [13]f64 = zero
+    var coefficients: [13]f64 = zero
+    var next: [13]f64 = zero
+    var stems: [25]chart.Segment = zero
+    var guides: [6]chart.Segment = zero
+    var storage: [2]chart.Layout = zero
+    let (panels, guide_marks, chart_error) = chart.correlogram(values[..], 12usize, bounds, gap, acf[..], pacf[..], coefficients[..], next[..], stems[..], guides[..], storage[..])
+    if chart_error != ok { ret chart_error }
+    let inks = [2]paint.Color{ paint.rgba(0.06, 0.35, 0.72, 1.0), paint.rgba(0.88, 0.40, 0.13, 1.0) }
+    let pale = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let rule = paint.rgba(0.73, 0.78, 0.85, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var labels: [6]chart.Label = zero
+    labels[0usize] = chart.Label { text: "ACF / PACF correlogram", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "ACF", anchor: chart.Coord { x: 43.0, y: bounds.y + panel_height * 0.5 + 3.0 }, align: .Right }
+    labels[2usize] = chart.Label { text: "PACF", anchor: chart.Coord { x: 43.0, y: bounds.y + panel_height + gap + panel_height * 0.5 + 3.0 }, align: .Right }
+    labels[3usize] = chart.Label { text: "0", anchor: chart.Coord { x: bounds.x, y: 207.0 }, align: .Center }
+    labels[4usize] = chart.Label { text: "12 lags", anchor: chart.Coord { x: bounds.x + bounds.width, y: 207.0 }, align: .Center }
+    labels[5usize] = chart.Label { text: "95% reference = ±1.96/√n", anchor: chart.Coord { x: 180.0, y: 226.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 27u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var i = 0usize
+    while i < 2usize {
+        let box = geometry.rect(bounds.x, bounds.y + f32(i) * (panel_height + gap), bounds.width, panel_height)
+        try fill(&builder, box, paint.Brush { Solid: pale })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &guide_marks, paint.Brush { Solid: rule })
+    i = 0usize
+    while i < 2usize {
+        try chart_scene.append(a, &builder, &panels[i], paint.Brush { Solid: inks[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/correlogram.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 2usize {
+        let box = geometry.rect(bounds.x, bounds.y + f32(i) * (panel_height + gap), bounds.width, panel_height)
+        try chart_svg.rect(&writer, box, pale, false)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &guide_marks, rule)
+    i = 0usize
+    while i < 2usize {
+        try chart_svg.append(&writer, &panels[i], inks[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
     if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
     let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
@@ -3189,6 +3262,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_seasonal_preview(a, queue, output_target, canvas, &renderer)
     try render_fan_preview(a, queue, output_target, canvas, &renderer)
     try render_decomposition_preview(a, queue, output_target, canvas, &renderer)
+    try render_correlogram_preview(a, queue, output_target, canvas, &renderer)
     let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
     let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
     let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }

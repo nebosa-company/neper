@@ -3210,6 +3210,106 @@ fn decomposition(values: []const f32, period: usize, bounds: geometry.Rect, gap:
     ret (panels[..4usize], first_valid, end_valid, ok)
 }
 
+// Biased sample ACF and Durbin-Levinson PACF, with paired zero-centered stem panels.
+// The ACF includes lag zero; PACF stems begin at lag one.
+fn correlogram(values: []const f32, max_lag: usize, bounds: geometry.Rect, gap: f32, acf: []f64, pacf: []f64, coefficients: []f64, next: []f64, stems: []Segment, guides: []Segment, panels: []Layout) -> ([]Layout, Layout, err) {
+    if values.len == 0usize { ret (zero, zero, Empty) }
+    if values.len < 4usize || max_lag == 0usize || max_lag >= values.len || !valid_bounds(bounds) || !finite(gap) || gap < 0.0 { ret (zero, zero, Invalid) }
+    if acf.len <= max_lag || pacf.len <= max_lag || coefficients.len <= max_lag || next.len <= max_lag || stems.len == 0usize || max_lag > (stems.len - 1usize) / 2usize || guides.len < 6usize || panels.len < 2usize { ret (zero, zero, TooLarge) }
+    let panel_height = (bounds.height - gap) * 0.5
+    if !finite(panel_height) || panel_height <= 0.0 || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(f32(max_lag)) { ret (zero, zero, Invalid) }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) { ret (zero, zero, Invalid) }
+        mean += f64(values[i])
+        i += 1usize
+    }
+    mean /= f64(values.len)
+    var variance = 0.0f64
+    i = 0usize
+    while i < values.len {
+        let delta = f64(values[i]) - mean
+        variance += delta * delta
+        i += 1usize
+    }
+    if variance <= 0.0f64 || !finite64(variance) { ret (zero, zero, Invalid) }
+    acf[0usize] = 1.0f64
+    pacf[0usize] = 1.0f64
+    // ponytail: direct O(n * lags) covariance; use FFT only if long lag windows need it.
+    var lag = 1usize
+    while lag <= max_lag {
+        var covariance = 0.0f64
+        i = lag
+        while i < values.len {
+            covariance += (f64(values[i]) - mean) * (f64(values[i - lag]) - mean)
+            i += 1usize
+        }
+        acf[lag] = covariance / variance
+        if !finite64(acf[lag]) { ret (zero, zero, Invalid) }
+        lag += 1usize
+    }
+    var prediction_variance = 1.0f64
+    lag = 1usize
+    while lag <= max_lag {
+        if prediction_variance <= 0.0f64 { ret (zero, zero, Invalid) }
+        var numerator = acf[lag]
+        var j = 1usize
+        while j < lag {
+            numerator -= coefficients[j] * acf[lag - j]
+            j += 1usize
+        }
+        let reflection = numerator / prediction_variance
+        if !finite64(reflection) || reflection <= -1.0f64 || reflection >= 1.0f64 { ret (zero, zero, Invalid) }
+        j = 1usize
+        while j < lag {
+            next[j] = coefficients[j] - reflection * coefficients[lag - j]
+            j += 1usize
+        }
+        next[lag] = reflection
+        j = 1usize
+        while j <= lag {
+            coefficients[j] = next[j]
+            j += 1usize
+        }
+        pacf[lag] = reflection
+        prediction_variance *= 1.0f64 - reflection * reflection
+        lag += 1usize
+    }
+    let confidence = 1.96f64 / math.sqrt[f64](f64(values.len))
+    var used = 0usize
+    var panel = 0usize
+    while panel < 2usize {
+        let top = bounds.y + f32(panel) * (panel_height + gap)
+        let baseline = top + panel_height * 0.5
+        let start = used
+        lag = panel
+        while lag <= max_lag {
+            var correlation = acf[lag]
+            if panel == 1usize { correlation = pacf[lag] }
+            let x = f32(f64(bounds.x) + f64(bounds.width) * f64(lag) / f64(max_lag))
+            let y = f32(f64(baseline) - f64(panel_height) * correlation * 0.5f64)
+            if !finite(x) || !finite(y) { ret (zero, zero, Invalid) }
+            stems[used] = Segment { from: Coord { x: x, y: baseline }, to: Coord { x: x, y: y } }
+            used += 1usize
+            lag += 1usize
+        }
+        panels[panel] = Layout { kind: .Rug, coords: zero, segments: stems[start..used], bars: zero, x_min: 0.0, x_max: f32(max_lag), y_min: -1.0, y_max: 1.0 }
+        var rule = 0usize
+        while rule < 3usize {
+            var level = 0.0f64
+            if rule == 1usize { level = confidence }
+            if rule == 2usize { level = -confidence }
+            let y = f32(f64(baseline) - f64(panel_height) * level * 0.5f64)
+            guides[panel * 3usize + rule] = Segment { from: Coord { x: bounds.x, y: y }, to: Coord { x: bounds.x + bounds.width, y: y } }
+            rule += 1usize
+        }
+        panel += 1usize
+    }
+    let guide_marks = Layout { kind: .Rug, coords: zero, segments: guides[..6usize], bars: zero, x_min: 0.0, x_max: f32(max_lag), y_min: -1.0, y_max: 1.0 }
+    ret (panels[..2usize], guide_marks, ok)
+}
+
 // Two nonnegative age series diverge from a shared central label gutter.
 // Input rows run from youngest (bottom) to oldest (top).
 fn population_pyramid(left: []const f32, right: []const f32, bounds: geometry.Rect, gutter: f32, row_gap: f32, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
