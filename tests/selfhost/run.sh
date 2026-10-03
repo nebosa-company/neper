@@ -2794,6 +2794,16 @@ gfx_chart_recurrence_written=$($test_build/neper-self emit-executable "$repo/tes
 chmod +x "$test_build/gfx-chart-recurrence-selfhost"
 gfx_chart_recurrence_output=$("$test_build/gfx-chart-recurrence-selfhost")
 [ "$gfx_chart_recurrence_output" = 'gfx chart recurrence ok' ]
+gfx_chart_drawdown_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_drawdown/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-drawdown-selfhost")
+[ "$gfx_chart_drawdown_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-drawdown-selfhost"
+gfx_chart_drawdown_output=$("$test_build/gfx-chart-drawdown-selfhost")
+[ "$gfx_chart_drawdown_output" = 'gfx chart drawdown ok' ]
+gfx_chart_cohort_retention_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_cohort_retention/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-cohort-retention-selfhost")
+[ "$gfx_chart_cohort_retention_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-cohort-retention-selfhost"
+gfx_chart_cohort_retention_output=$("$test_build/gfx-chart-cohort-retention-selfhost")
+[ "$gfx_chart_cohort_retention_output" = 'gfx chart cohort retention ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

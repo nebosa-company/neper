@@ -3172,6 +3172,16 @@ $gfxChartRecurrenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gfxChartRecurrenceWritten -ne 'executable written') { throw 'gfx_chart_recurrence emission failed' }
 $gfxChartRecurrenceOutput = & $gfxChartRecurrencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartRecurrenceOutput -ne 'gfx chart recurrence ok') { throw "the e.gfx.chart recurrence matrix answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDrawdownPath = Join-Path $testBuild 'gfx-chart-drawdown-selfhost.exe'
+$gfxChartDrawdownWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_drawdown\src\main.e') $repo 'x64' 'windows' $gfxChartDrawdownPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDrawdownWritten -ne 'executable written') { throw 'gfx_chart_drawdown emission failed' }
+$gfxChartDrawdownOutput = & $gfxChartDrawdownPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDrawdownOutput -ne 'gfx chart drawdown ok') { throw "the e.gfx.chart drawdown answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCohortRetentionPath = Join-Path $testBuild 'gfx-chart-cohort-retention-selfhost.exe'
+$gfxChartCohortRetentionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_cohort_retention\src\main.e') $repo 'x64' 'windows' $gfxChartCohortRetentionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCohortRetentionWritten -ne 'executable written') { throw 'gfx_chart_cohort_retention emission failed' }
+$gfxChartCohortRetentionOutput = & $gfxChartCohortRetentionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCohortRetentionOutput -ne 'gfx chart cohort retention ok') { throw "the e.gfx.chart cohort retention answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

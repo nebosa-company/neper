@@ -1661,6 +1661,26 @@ fn recurrence(values: []const f32, lag: usize, radius: f32, bounds: geometry.Rec
     ret (MatrixLayout { kind: .Heatmap, cells: cells[..count * count], columns: count, rows: count, value_min: 0.0, value_max: 1.0 }, ok)
 }
 
+// Drawdowns are fractional losses from the running peak; a new high returns to zero.
+fn drawdown(x: []const f32, prices: []const f32, bounds: geometry.Rect, losses: []f32, points: []Coord) -> (Layout, err) {
+    if prices.len < 2usize { ret (zero, Empty) }
+    if x.len != prices.len || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if losses.len < prices.len || points.len / 2usize < prices.len { ret (zero, TooLarge) }
+    var peak = prices[0usize]
+    var i = 0usize
+    while i < prices.len {
+        if !finite(prices[i]) || prices[i] <= 0.0 { ret (zero, Invalid) }
+        if prices[i] > peak { peak = prices[i] }
+        losses[i] = f32(f64(prices[i]) / f64(peak) - 1.0f64)
+        i += 1usize
+    }
+    let plot = spec(.Area, bounds, x, losses[..prices.len])
+    var unused_segments: [1]Segment = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let (marks, layout_error) = layout(&plot, points, unused_segments[..0usize], unused_bars[..0usize])
+    ret (marks, layout_error)
+}
+
 // Equal-angle rose sectors. Square-root radii make sector area proportional
 // to each nonnegative pre-binned weight, as in a circular histogram.
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {
@@ -4322,6 +4342,41 @@ fn heatmap(values: []const f64, columns: usize, bounds: geometry.Rect, cells: []
         i += 1usize
     }
     ret (MatrixLayout { kind: .Heatmap, cells: cells[..values.len], columns: columns, rows: rows, value_min: f32(lo), value_max: f32(hi) }, ok)
+}
+
+// Compact row-major triangle: the oldest cohort has every period, the newest one.
+// Each row's first count is its positive cohort size; later cells are fractions of it.
+fn cohort_retention(counts: []const f64, periods: usize, bounds: geometry.Rect, gap: f32, cells: []Cell) -> (MatrixLayout, err) {
+    if counts.len == 0usize { ret (zero, Empty) }
+    if periods == 0usize || !valid_bounds(bounds) || !finite(gap) || gap < 0.0 { ret (zero, Invalid) }
+    if periods > counts.len { ret (zero, Invalid) }
+    var required = 0usize
+    var width = periods
+    while width > 0usize {
+        if width > counts.len - required { ret (zero, Invalid) }
+        required += width
+        width -= 1usize
+    }
+    if required != counts.len { ret (zero, Invalid) }
+    if cells.len < required { ret (zero, TooLarge) }
+    var row = 0usize
+    var used = 0usize
+    while row < periods {
+        let cohort_size = counts[used]
+        if !finite64(cohort_size) || cohort_size <= 0.0f64 { ret (zero, Invalid) }
+        var col = 0usize
+        while col < periods - row {
+            let value = counts[used]
+            if !finite64(value) || value < 0.0f64 || value > cohort_size { ret (zero, Invalid) }
+            let tile = cell_rect(bounds, col, row, periods, periods)
+            if tile.width <= gap || tile.height <= gap { ret (zero, Invalid) }
+            cells[used] = Cell { rect: geometry.rect(tile.x + gap * 0.5, tile.y + gap * 0.5, tile.width - gap, tile.height - gap), value: f32(value / cohort_size) }
+            used += 1usize
+            col += 1usize
+        }
+        row += 1usize
+    }
+    ret (MatrixLayout { kind: .Heatmap, cells: cells[..used], columns: periods, rows: periods, value_min: 0.0, value_max: 1.0 }, ok)
 }
 
 // Monday is row zero. Missing offsets emit no tile, preserving a visible gap.

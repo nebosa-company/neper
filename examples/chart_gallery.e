@@ -2937,6 +2937,109 @@ fn render_recurrence_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_drawdown_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let x = [10]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0 }
+    let prices = [10]f32{ 100.0, 120.0, 98.0, 110.0, 90.0, 140.0, 125.0, 150.0, 130.0, 160.0 }
+    var losses: [10]f32 = zero
+    var points: [20]chart.Coord = zero
+    let plot = geometry.rect(49.0, 43.0, 272.0, 160.0)
+    let (marks, chart_error) = chart.drawdown(x[..], prices[..], plot, losses[..], points[..])
+    if chart_error != ok { ret chart_error }
+    var segments: [9]chart.Segment = zero
+    var unused_coords: [1]chart.Coord = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let line = chart.spec(.Line, plot, x[..], losses[..])
+    let (outline, line_error) = chart.layout(&line, unused_coords[..0usize], segments[..], unused_bars[..0usize])
+    if line_error != ok { ret line_error }
+    let fill_color = paint.rgba(0.88, 0.26, 0.31, 0.34)
+    let line_color = paint.rgba(0.74, 0.16, 0.23, 1.0)
+    let grid = paint.rgba(0.85, 0.88, 0.92, 1.0)
+    let axis = paint.rgba(0.30, 0.36, 0.45, 1.0)
+    let labels = [4]chart.Label{
+        chart.Label { text: "Drawdown from running peak", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "0%", anchor: chart.Coord { x: 42.0, y: 46.0 }, align: .Right },
+        chart.Label { text: "-25%", anchor: chart.Coord { x: 42.0, y: 201.0 }, align: .Right },
+        chart.Label { text: "Observation", anchor: chart.Coord { x: 180.0, y: 234.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 31u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 32usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: paint.rgba(0.98, 0.97, 0.97, 1.0) })
+    try fill(&builder, geometry.rect(plot.x, plot.y + plot.height - 1.0, plot.width, 1.0), paint.Brush { Solid: grid })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: fill_color })
+    try chart_scene.append(a, &builder, &outline, paint.Brush { Solid: line_color })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: axis })
+    let path = "docs/chart-previews/drawdown.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, paint.rgba(0.98, 0.97, 0.97, 1.0), false)
+    try chart_svg.rect(&writer, geometry.rect(plot.x, plot.y + plot.height - 1.0, plot.width, 1.0), grid, false)
+    try chart_svg.append(&writer, &marks, fill_color)
+    try chart_svg.append(&writer, &outline, line_color)
+    try chart_svg.append_labels(&writer, labels[..1usize], axis, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], axis, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_cohort_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let counts = [10]f64{ 120.0f64, 94.0f64, 76.0f64, 62.0f64, 100.0f64, 73.0f64, 59.0f64, 90.0f64, 70.0f64, 110.0f64 }
+    var cells: [10]chart.Cell = zero
+    let (marks, chart_error) = chart.cohort_retention(counts[..], 4usize, geometry.rect(84.0, 43.0, 224.0, 168.0), 3.0, cells[..])
+    if chart_error != ok { ret chart_error }
+    let low = paint.rgba(0.93, 0.96, 0.98, 1.0)
+    let mid = paint.rgba(0.42, 0.72, 0.79, 1.0)
+    let high = paint.rgba(0.05, 0.39, 0.58, 1.0)
+    let axis = paint.rgba(0.30, 0.36, 0.45, 1.0)
+    let labels = [10]chart.Label{
+        chart.Label { text: "Cohort retention", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "Jan", anchor: chart.Coord { x: 75.0, y: 67.0 }, align: .Right },
+        chart.Label { text: "Feb", anchor: chart.Coord { x: 75.0, y: 109.0 }, align: .Right },
+        chart.Label { text: "Mar", anchor: chart.Coord { x: 75.0, y: 151.0 }, align: .Right },
+        chart.Label { text: "Apr", anchor: chart.Coord { x: 75.0, y: 193.0 }, align: .Right },
+        chart.Label { text: "0", anchor: chart.Coord { x: 112.0, y: 227.0 }, align: .Center },
+        chart.Label { text: "1", anchor: chart.Coord { x: 168.0, y: 227.0 }, align: .Center },
+        chart.Label { text: "2", anchor: chart.Coord { x: 224.0, y: 227.0 }, align: .Center },
+        chart.Label { text: "3", anchor: chart.Coord { x: 280.0, y: 227.0 }, align: .Center },
+        chart.Label { text: "Months since start", anchor: chart.Coord { x: 180.0, y: 239.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 31u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 32usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_matrix(&builder, &marks, low, mid, high)
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: axis })
+    let path = "docs/chart-previews/cohort_retention.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_matrix(&writer, &marks, low, mid, high)
+    try chart_svg.append_labels(&writer, labels[..1usize], axis, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], axis, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
     if layers.len != 9usize || rects.len != layers.len || names.len != layers.len { ret chart.Invalid }
     let colors = [6]paint.Color{
@@ -3698,6 +3801,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_streamlines_preview(a, queue, output_target, canvas, &renderer)
     try render_phase_space_preview(a, queue, output_target, canvas, &renderer)
     try render_recurrence_preview(a, queue, output_target, canvas, &renderer)
+    try render_drawdown_preview(a, queue, output_target, canvas, &renderer)
+    try render_cohort_preview(a, queue, output_target, canvas, &renderer)
     let rose_values = [5]f32{ 10.0, 18.0, 8.0, 5.0, 14.0 }
     let rose_names = [5]str{ "0 deg", "72 deg", "144 deg", "216 deg", "288 deg" }
     var rose_points: [115]chart.Coord = zero

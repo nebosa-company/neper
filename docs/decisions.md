@@ -33969,3 +33969,15 @@ the gallery adds two PNG/SVG previews. Its existing font ID is reused to stay
 within the scene renderer's 16-font registration limit. Higher-dimensional
 embedding and recurrence quantification remain planned. References: R
 `nonlinearTseries::buildTakens` and `nonlinearTseries::recurrencePlot`.
+
+## D1886 — Drawdown and cohort retention reuse Area and Heatmap
+
+`drawdown` divides positive prices by their running maximum and subtracts one,
+so recoveries meet a zero baseline and losses fill an existing Area polygon.
+`cohort_retention` accepts a compact oldest-to-newest row-major triangle; each
+row's first positive count is its denominator, and future periods emit no tile.
+Its Heatmap fixes the palette to 0..1 across datasets. Both return caller-owned
+geometry and reuse scene/SVG adapters. Focused fixtures check values, shape and
+capacity refusals, and adapters on Windows and Linux; the gallery adds two
+PNG/SVG previews. Returns/volatility, cohort date labels and automated colour
+legends remain separate work.
