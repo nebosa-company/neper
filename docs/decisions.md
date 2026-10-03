@@ -33671,3 +33671,18 @@ refusal checks pass on Windows and Linux; two PNG/SVG pairs bring the gallery
 to 102. Historical baselines and special-cause run rules remain planned.
 References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-p-chart/methods-and-formulas/methods-and-formulas/
 and https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-u-chart/methods-and-formulas/methods-and-formulas/.
+
+## D1859 — Rare-event gaps use geometric limits; elapsed times use exponential limits
+
+`g_control_limits` accepts whole opportunities between events, estimates the
+geometric event probability as one over mean gap plus one, and interpolates
+neighboring discrete CDF steps at 0.135%, 50% and 99.865%. The lower bound
+cannot be negative. `t_exponential_control_limits` accepts strictly positive
+elapsed times and uses their mean as the exponential MLE scale at the same
+percentiles. These are distinct models with distinct input types, rendered
+through existing PointLine/Rug marks. The fixture checks numeric values,
+degenerate and invalid inputs, and large-gap precision on Windows and Linux;
+two previews bring the gallery to 104 pairs. Date conversion, simultaneous
+events, Weibull limits and rare-event run tests remain planned.
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/rare-event-charts/g-chart/methods-and-formulas/methods-and-formulas/
+and https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/rare-event-charts/t-chart/methods-and-formulas/methods-and-formulas/.

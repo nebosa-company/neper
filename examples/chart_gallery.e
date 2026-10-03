@@ -1093,6 +1093,23 @@ fn render_laney_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
     ret render_attribute_preview(a, q, output_target, canvas, renderer, samples[..], "Laney U-prime", "Defect rate", "docs/chart-previews/laney_u.png")
 }
 
+fn render_rare_event_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let gaps = [10]usize{ 12usize, 14usize, 9usize, 11usize, 16usize, 10usize, 13usize, 8usize, 15usize, 250usize }
+    var gap_values: [10]f64 = zero
+    var i = 0usize
+    while i < gaps.len {
+        gap_values[i] = f64(gaps[i])
+        i += 1usize
+    }
+    let (g_limits, g_error) = stat.g_control_limits(gaps[..])
+    if g_error != ok { ret g_error }
+    try render_control_preview(a, q, output_target, canvas, renderer, gap_values[..], g_limits, "G chart", "Opportunities", "docs/chart-previews/g_control.png")
+    let intervals = [10]f64{ 4.0, 3.2, 5.1, 4.8, 3.7, 4.2, 5.4, 3.9, 4.5, 80.0 }
+    let (t_limits, t_error) = stat.t_exponential_control_limits(intervals[..])
+    if t_error != ok { ret t_error }
+    ret render_control_preview(a, q, output_target, canvas, renderer, intervals[..], t_limits, "T chart / exponential", "Days", "docs/chart-previews/t_control.png")
+}
+
 fn render_roc_extension_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, partial: bool, path: str) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     var x: [17]f32 = zero
@@ -2661,6 +2678,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_weighted_control_previews(a, queue, output_target, canvas, &renderer)
     try render_attribute_previews(a, queue, output_target, canvas, &renderer)
     try render_laney_previews(a, queue, output_target, canvas, &renderer)
+    try render_rare_event_previews(a, queue, output_target, canvas, &renderer)
     let diagnostic_scores = [16]f64{ 0.98f64, 0.93f64, 0.89f64, 0.84f64, 0.78f64, 0.72f64, 0.68f64, 0.62f64, 0.56f64, 0.50f64, 0.44f64, 0.38f64, 0.32f64, 0.26f64, 0.18f64, 0.08f64 }
     let diagnostic_positive = [16]bool{ true, true, false, true, true, false, true, false, true, false, true, false, false, true, false, false }
     var diagnostic_order: [16]usize = zero

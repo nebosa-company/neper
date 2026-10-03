@@ -563,6 +563,62 @@ fn laney_control(kind: AttributeControlKind, counts: []const usize, sizes: []con
     ret (sigma_z, ok)
 }
 
+// Interpolate adjacent geometric CDF steps, then convert trials-until to gaps-between.
+fn geometric_gap_percentile(probability: f64, fraction: f64) -> (f64, bool) {
+    if !(probability > 0.0f64) || probability > 1.0f64 || fraction < 0.0f64 || !(fraction < 1.0f64) { ret (0.0f64, false) }
+    if probability == 1.0f64 { ret (0.0f64, true) }
+    var log_survival = math.log[f64](1.0f64 - probability)
+    if probability < 0.00000001f64 { log_survival = -probability - probability * probability / 2.0f64 }
+    let trials = math.log[f64](1.0f64 - fraction) / log_survival
+    let before = math.floor[f64](trials)
+    let lower_cdf = 1.0f64 - math.exp[f64](before * log_survival)
+    let upper_cdf = 1.0f64 - math.exp[f64]((before + 1.0f64) * log_survival)
+    var gap = trials - 1.0f64
+    if upper_cdf > lower_cdf { gap = before - 1.0f64 + (fraction - lower_cdf) / (upper_cdf - lower_cdf) }
+    if gap < 0.0f64 { gap = 0.0f64 }
+    if gap - gap != 0.0f64 { ret (0.0f64, false) }
+    ret (gap, true)
+}
+
+// G chart: whole opportunities between events, with a fitted geometric model.
+fn g_control_limits(gaps: []const usize) -> (ControlLimits, err) {
+    if gaps.len < 2usize { ret (zero, Invalid) }
+    var sample = moments()
+    var i = 0usize
+    while i < gaps.len {
+        moments_add(&sample, f64(gaps[i]))
+        i += 1usize
+    }
+    let probability = 1.0f64 / (sample.mean + 1.0f64)
+    if !(probability > 0.0f64) || probability > 1.0f64 { ret (zero, Invalid) }
+    let (center, center_ok) = geometric_gap_percentile(probability, 0.5f64)
+    let (lower, lower_ok) = geometric_gap_percentile(probability, 0.00135f64)
+    let (upper, upper_ok) = geometric_gap_percentile(probability, 0.99865f64)
+    if !center_ok || !lower_ok || !upper_ok { ret (zero, Invalid) }
+    let limits = ControlLimits { center: center, lower: lower, upper: upper }
+    if limits.upper - limits.upper != 0.0f64 { ret (zero, Invalid) }
+    ret (limits, ok)
+}
+
+// T chart: positive continuous elapsed time with exponential MLE scale.
+fn t_exponential_control_limits(intervals: []const f64) -> (ControlLimits, err) {
+    if intervals.len < 2usize { ret (zero, Invalid) }
+    var sample = moments()
+    var i = 0usize
+    while i < intervals.len {
+        if !(intervals[i] > 0.0f64) || intervals[i] - intervals[i] != 0.0f64 { ret (zero, Invalid) }
+        moments_add(&sample, intervals[i])
+        i += 1usize
+    }
+    let limits = ControlLimits {
+        center: sample.mean * (0.0f64 - math.log[f64](0.5f64)),
+        lower: sample.mean * (0.0f64 - math.log[f64](1.0f64 - 0.00135f64)),
+        upper: sample.mean * (0.0f64 - math.log[f64](1.0f64 - 0.99865f64)),
+    }
+    if limits.upper - limits.upper != 0.0f64 { ret (zero, Invalid) }
+    ret (limits, ok)
+}
+
 // Subgroup-major X-bar/S limits use sample SD and the gamma-derived c4 factor.
 fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations: []f64) -> (ControlLimits, ControlLimits, err) {
     if subgroup < 2usize || subgroup > values.len / 2usize || values.len % subgroup != 0usize { ret (zero, zero, Invalid) }

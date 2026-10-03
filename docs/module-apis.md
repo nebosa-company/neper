@@ -3197,6 +3197,9 @@ fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimi
 fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err)
 fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> err
 fn laney_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> (f64, err)
+fn geometric_gap_percentile(probability: f64, fraction: f64) -> (f64, bool)
+fn g_control_limits(gaps: []const usize) -> (ControlLimits, err)
+fn t_exponential_control_limits(intervals: []const f64) -> (ControlLimits, err)
 fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations: []f64) -> (ControlLimits, ControlLimits, err)
 fn cusum_control(values: []const f64, center: f64, reference: f64, decision: f64, out: []CusumPoint) -> err
 fn ewma_control(values: []const f64, center: f64, sigma: f64, lambda: f64, width: f64, out: []AttributeControlPoint) -> err
