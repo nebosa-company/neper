@@ -36,6 +36,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if capacity_error != chart.TooLarge { ret chart.Invalid }
     let (again, again_error) = chart.mekko(values[..], 2usize, 2usize, bounds, totals[..], bars[..], storage[..])
     if again_error != ok { ret again_error }
+    let counts = [4]f64{ 3.0, 1.0, 2.0, 6.0 }
+    var mosaic_columns: [2]f64 = zero
+    var mosaic_rows: [2]f64 = zero
+    var mosaic_cells: [4]chart.Cell = zero
+    let (mosaic, mosaic_error) = chart.mosaic(counts[..], 2usize, bounds, 2.0, mosaic_columns[..], mosaic_rows[..], mosaic_cells[..])
+    if mosaic_error != ok || mosaic.kind != .Mosaic || mosaic.cells.len != 4usize || !near(f32(mosaic_columns[0usize]), 4.0) || !near(f32(mosaic_rows[0usize]), 5.0) || !near(mosaic.cells[0usize].rect.x, 1.0) || !near(mosaic.cells[0usize].rect.y, 26.0) || !near(mosaic.cells[0usize].rect.width, 38.0) || !near(mosaic.cells[0usize].rect.height, 73.0) || !near(mosaic.cells[0usize].value, 1.0328) || !near(mosaic.cells[1usize].value, -0.8729) || !near(mosaic.value_max, 1.0328) { ret chart.Invalid }
+    let sparse = [4]f64{ 3.0, 0.0, 0.0, 6.0 }
+    let (sparse_mosaic, sparse_error) = chart.mosaic(sparse[..], 2usize, bounds, 2.0, mosaic_columns[..], mosaic_rows[..], mosaic_cells[..])
+    if sparse_error != ok || sparse_mosaic.cells.len != 2usize { ret chart.Invalid }
+    let negative_counts = [4]f64{ 3.0, -1.0, 2.0, 6.0 }
+    let (_, mosaic_negative) = chart.mosaic(negative_counts[..], 2usize, bounds, 2.0, mosaic_columns[..], mosaic_rows[..], mosaic_cells[..])
+    if mosaic_negative != chart.Invalid { ret chart.Invalid }
+    let empty_counts = [4]f64{ 0.0, 0.0, 0.0, 0.0 }
+    let (_, mosaic_empty) = chart.mosaic(empty_counts[..], 2usize, bounds, 2.0, mosaic_columns[..], mosaic_rows[..], mosaic_cells[..])
+    if mosaic_empty != chart.Empty { ret chart.Invalid }
+    let (_, mosaic_short) = chart.mosaic(counts[..], 2usize, bounds, 2.0, mosaic_columns[..], mosaic_rows[..], mosaic_cells[..3usize])
+    if mosaic_short != chart.TooLarge { ret chart.Invalid }
+    let (_, mosaic_gutter) = chart.mosaic(counts[..], 2usize, bounds, 26.0, mosaic_columns[..], mosaic_rows[..], mosaic_cells[..])
+    if mosaic_gutter != chart.Invalid { ret chart.Invalid }
+    let (again_mosaic, again_mosaic_error) = chart.mosaic(counts[..], 2usize, bounds, 2.0, mosaic_columns[..], mosaic_rows[..], mosaic_cells[..])
+    if again_mosaic_error != ok { ret again_mosaic_error }
     let (made, builder_error) = scene.builder(a, 8usize)
     if builder_error != ok { ret builder_error }
     var builder = made
@@ -45,7 +66,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try chart_scene.append(a, &builder, &again[i], paint.Brush { Solid: blue })
         i += 1usize
     }
-    if scene.builder_count(&builder) != 4usize { ret chart.Invalid }
+    let low = paint.rgba(0.85, 0.25, 0.25, 1.0)
+    let middle = paint.rgba(0.96, 0.96, 0.96, 1.0)
+    try chart_scene.append_matrix(&builder, &again_mosaic, low, middle, blue)
+    if scene.builder_count(&builder) != 8usize { ret chart.Invalid }
     let (state, unused, writer_error) = io.memory_writer(a, 0usize)
     if writer_error != ok { ret writer_error }
     var held = state
@@ -56,6 +80,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try chart_svg.append(&writer, &again[i], blue)
         i += 1usize
     }
+    try chart_svg.append_matrix(&writer, &again_mosaic, low, middle, blue)
     try chart_svg.finish(&writer)
     let svg = io.memory_bytes(&held)
     if !str.contains(svg, "<rect") || !str.contains(svg, "</svg>") { ret chart.Invalid }

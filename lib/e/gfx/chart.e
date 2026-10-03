@@ -12,7 +12,7 @@ use e.mem
 use e.str
 use e.text.layout as text_layout
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp, Mosaic }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
@@ -2608,6 +2608,73 @@ fn mekko(values: []const f32, categories: usize, series: usize, bounds: geometry
         i += 1usize
     }
     ret (made, ok)
+}
+
+// Contingency-table mosaic: tile area follows count, colour follows Pearson
+// residual from independence. Input is column-major; zero cells emit no tile.
+fn mosaic(counts: []const f64, columns: usize, bounds: geometry.Rect, gutter: f32, column_totals: []f64, row_totals: []f64, cells: []Cell) -> (MatrixLayout, err) {
+    if counts.len == 0usize { ret (zero, Empty) }
+    if columns == 0usize || counts.len % columns != 0usize || !valid_bounds(bounds) || !finite(gutter) || gutter < 0.0 { ret (zero, Invalid) }
+    let rows = counts.len / columns
+    if column_totals.len < columns || row_totals.len < rows || cells.len < counts.len { ret (zero, TooLarge) }
+    var row = 0usize
+    while row < rows {
+        row_totals[row] = 0.0f64
+        row += 1usize
+    }
+    var grand = 0.0f64
+    var column = 0usize
+    while column < columns {
+        var total = 0.0f64
+        row = 0usize
+        while row < rows {
+            let value = counts[column * rows + row]
+            if !finite64(value) || value < 0.0f64 { ret (zero, Invalid) }
+            total += value
+            row_totals[row] += value
+            row += 1usize
+        }
+        if !finite64(total) { ret (zero, Invalid) }
+        column_totals[column] = total
+        grand += total
+        column += 1usize
+    }
+    if !finite64(grand) { ret (zero, Invalid) }
+    if grand <= 0.0f64 { ret (zero, Empty) }
+    var cumulative = 0.0f64
+    var used = 0usize
+    var maximum = 0.0f32
+    column = 0usize
+    while column < columns {
+        let left = bounds.x + bounds.width * f32(cumulative / grand)
+        cumulative += column_totals[column]
+        let right = bounds.x + bounds.width * f32(cumulative / grand)
+        var stacked = 0.0f64
+        row = 0usize
+        while row < rows {
+            let value = counts[column * rows + row]
+            if value > 0.0f64 {
+                let bottom = bounds.y + bounds.height * f32(1.0f64 - stacked / column_totals[column])
+                stacked += value
+                let top = bounds.y + bounds.height * f32(1.0f64 - stacked / column_totals[column])
+                let expected = (column_totals[column] / grand) * row_totals[row]
+                if expected <= 0.0f64 { ret (zero, Invalid) }
+                let residual = f32((value - expected) / math.sqrt[f64](expected))
+                let width = right - left - gutter
+                let height = bottom - top - gutter
+                if !finite(residual) || !finite(left) || !finite(top) || !finite(width) || !finite(height) || width <= 0.0 || height <= 0.0 { ret (zero, Invalid) }
+                cells[used] = Cell { rect: geometry.rect(left + gutter / 2.0, top + gutter / 2.0, width, height), value: residual }
+                var magnitude = residual
+                if magnitude < 0.0 { magnitude = -magnitude }
+                if magnitude > maximum { maximum = magnitude }
+                used += 1usize
+            }
+            row += 1usize
+        }
+        column += 1usize
+    }
+    if maximum == 0.0 { maximum = 1.0 }
+    ret (MatrixLayout { kind: .Mosaic, cells: cells[..used], columns: columns, rows: rows, value_min: -maximum, value_max: maximum }, ok)
 }
 
 // Two nonnegative age series diverge from a shared central label gutter.

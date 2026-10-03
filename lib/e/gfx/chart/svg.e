@@ -216,7 +216,7 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
 }
 
 fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err {
-    if marks.kind != .Heatmap && marks.kind != .Correlation { ret Invalid }
+    if marks.kind != .Heatmap && marks.kind != .Correlation && marks.kind != .Mosaic { ret Invalid }
     if marks.columns == 0usize || marks.rows == 0usize || marks.cells.len == 0usize || (marks.cells.len - 1usize) / marks.columns >= marks.rows { ret Invalid }
     if !paint.color_ok(low) || !paint.color_ok(middle) || !paint.color_ok(high) { ret Invalid }
     var i = 0usize
@@ -224,9 +224,10 @@ fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Col
         let cell = marks.cells[i]
         if !chart.finite(cell.value) { ret Invalid }
         var ink = middle
-        if marks.kind == .Correlation {
-            if cell.value < 0.0 { ink = paint.mix(low, middle, cell.value + 1.0) }
-            if cell.value > 0.0 { ink = paint.mix(middle, high, cell.value) }
+        if marks.kind == .Correlation || marks.kind == .Mosaic {
+            let value = cell.value / marks.value_max
+            if value < 0.0 { ink = paint.mix(low, middle, value + 1.0) }
+            if value > 0.0 { ink = paint.mix(middle, high, value) }
         } else if marks.value_max > marks.value_min {
             ink = paint.mix(low, high, (cell.value - marks.value_min) / (marks.value_max - marks.value_min))
         }

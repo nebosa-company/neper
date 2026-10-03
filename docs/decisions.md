@@ -33798,3 +33798,14 @@ marks render the nested ranges and observations beyond the deepest range in
 both scene and SVG. `gfx_chart_qq` checks numeric levels and refusal paths
 on Windows and Linux; the gallery adds a PNG/SVG pair. Automatic depth
 selection and richer per-level styling remain planned.
+
+## D1869 — Mosaic separates area from contingency residual colour
+
+`mosaic` takes a column-major nonnegative contingency table. Column widths
+follow marginal totals, and within-column heights follow observed counts;
+zero cells emit no drawable tile. It computes each cell's Pearson residual
+against the independence expectation and supplies symmetric bounds for the
+existing matrix scene/SVG palettes, with a neutral zero and explicit gutter.
+The `Mosaic` kind keeps this statistical meaning distinct from heatmaps and
+Mekko bars. `gfx_chart_mekko` checks geometry, residuals, refusals and both
+adapters on Windows and Linux; the gallery adds a labeled PNG/SVG pair.
