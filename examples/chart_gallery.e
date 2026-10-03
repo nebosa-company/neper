@@ -2647,6 +2647,75 @@ fn render_hazard_rate_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_influence_plot_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/influence_plot.png"
+    let plot = geometry.rect(59.0, 48.0, 247.0, 148.0)
+    let x = [8]f64{ 0.0f64, 1.0f64, 2.0f64, 3.0f64, 4.0f64, 5.0f64, 6.0f64, 9.0f64 }
+    let y = [8]f64{ 1.2f64, 2.1f64, 2.8f64, 4.2f64, 4.7f64, 6.0f64, 7.2f64, 14.1f64 }
+    var diagnostics: [8]stat.RegressionDiagnostic = zero
+    try stat.regression_diagnostics(x[..], y[..], diagnostics[..])
+    var points: [8]chart.Coord = zero
+    var circles: [8]geometry.Rect = zero
+    var reference_lines: [5]chart.Segment = zero
+    let (map, map_error) = chart.influence_plot(diagnostics[..], plot, 10.0, points[..], circles[..], reference_lines[..])
+    if map_error != ok || map.guides.segments.len != 5usize { ret chart.Invalid }
+    var max_index = 0usize
+    var i = 1usize
+    while i < diagnostics.len {
+        if diagnostics[i].cook > diagnostics[max_index].cook { max_index = i }
+        i += 1usize
+    }
+    let highlighted = chart.Layout { kind: .Bubble, coords: points[max_index..max_index + 1usize], segments: zero, bars: circles[max_index..max_index + 1usize], x_min: map.bubbles.x_min, x_max: map.bubbles.x_max, y_min: map.bubbles.y_min, y_max: map.bubbles.y_max }
+    let pale = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.10, 0.43, 0.78, 0.72)
+    let orange = paint.rgba(0.88, 0.34, 0.17, 1.0)
+    let gray = paint.rgba(0.75, 0.80, 0.86, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let yabs = map.bubbles.y_max
+    let labels = [8]chart.Label{
+        chart.Label { text: "Regression influence / Cook area", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "+2", anchor: chart.Coord { x: 53.0, y: plot.y + plot.height * (yabs - 2.0) / (2.0 * yabs) + 3.0 }, align: .Right },
+        chart.Label { text: "0", anchor: chart.Coord { x: 53.0, y: plot.y + plot.height * 0.5 + 3.0 }, align: .Right },
+        chart.Label { text: "-2", anchor: chart.Coord { x: 53.0, y: plot.y + plot.height * (yabs + 2.0) / (2.0 * yabs) + 3.0 }, align: .Right },
+        chart.Label { text: "Leverage (hat value)", anchor: chart.Coord { x: 180.0, y: 219.0 }, align: .Center },
+        chart.Label { text: "Internally standardized residual", anchor: chart.Coord { x: 180.0, y: 239.0 }, align: .Center },
+        chart.Label { text: "2x", anchor: chart.Coord { x: reference_lines[3usize].from.x, y: 204.0 }, align: .Center },
+        chart.Label { text: "3x", anchor: chart.Coord { x: reference_lines[4usize].from.x, y: 204.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 28u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &map.guides, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.points, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &map.bubbles, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &highlighted, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &map.guides, gray)
+    try chart_svg.append(&writer, &map.points, dark)
+    try chart_svg.append(&writer, &map.bubbles, blue)
+    try chart_svg.append(&writer, &highlighted, orange)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -6620,6 +6689,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_marginal_histogram_preview(a, queue, output_target, canvas, &renderer)
     try render_dose_response_preview(a, queue, output_target, canvas, &renderer)
     try render_hazard_rate_preview(a, queue, output_target, canvas, &renderer)
+    try render_influence_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

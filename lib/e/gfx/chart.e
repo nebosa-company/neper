@@ -101,6 +101,7 @@ type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64,
 type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
 type MarginalHistogramLayout = struct { scatter: Layout, top: Layout, right: Layout }
 type DoseResponseLayout = struct { observations: Layout, curve: Layout }
+type InfluenceLayout = struct { points: Layout, bubbles: Layout, guides: Layout, max_cook: f64 }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -701,6 +702,70 @@ fn bubble(s: *const Spec, sizes: []const f32, max_radius: f32, coords: []Coord, 
         i += 1usize
     }
     ret (Layout { kind: .Bubble, coords: positions.coords, segments: zero, bars: circles[..sizes.len], x_min: positions.x_min, x_max: positions.x_max, y_min: positions.y_min, y_max: positions.y_max }, ok)
+}
+
+// One-predictor OLS influence map: leverage x internally standardized
+// residual, with bubble *area* proportional to Cook's distance. Reference
+// lines at +/-2 and 2x/3x mean leverage are visual guides, not tests.
+fn influence_plot(diagnostics: []const stat.RegressionDiagnostic, bounds: geometry.Rect, max_radius: f32, points: []Coord, circles: []geometry.Rect, reference_lines: []Segment) -> (InfluenceLayout, err) {
+    if diagnostics.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(max_radius) || max_radius <= 0.0 || !finite(max_radius * 2.0) { ret (zero, Invalid) }
+    if points.len < diagnostics.len || circles.len < diagnostics.len || reference_lines.len < 5usize { ret (zero, TooLarge) }
+    var max_leverage = 0.0f64
+    var max_abs_residual = 2.0f64
+    var max_cook = 0.0f64
+    var i = 0usize
+    while i < diagnostics.len {
+        let entry = diagnostics[i]
+        if !finite64(entry.leverage) || !finite64(entry.standardized) || !finite64(entry.cook) || entry.leverage < 0.0f64 || entry.leverage >= 1.0f64 || entry.cook < 0.0f64 { ret (zero, Invalid) }
+        if entry.leverage > max_leverage { max_leverage = entry.leverage }
+        if entry.standardized > max_abs_residual { max_abs_residual = entry.standardized }
+        if 0.0f64 - entry.standardized > max_abs_residual { max_abs_residual = 0.0f64 - entry.standardized }
+        if entry.cook > max_cook { max_cook = entry.cook }
+        i += 1usize
+    }
+    if max_cook <= 0.0f64 { ret (zero, Invalid) }
+    var leverage_guide = 6.0f64 / f64(diagnostics.len)
+    if leverage_guide > 1.0f64 { leverage_guide = 1.0f64 }
+    if leverage_guide > max_leverage { max_leverage = leverage_guide }
+    let xmax = max_leverage * 1.08f64
+    let yabs = max_abs_residual * 1.10f64
+    if !finite64(xmax) || !finite64(yabs) || !finite(f32(xmax)) || !finite(f32(yabs)) { ret (zero, Invalid) }
+    i = 0usize
+    while i < diagnostics.len {
+        let entry = diagnostics[i]
+        let px = bounds.x + bounds.width * f32(entry.leverage / xmax)
+        let py = bounds.y + bounds.height * f32((yabs - entry.standardized) / (2.0f64 * yabs))
+        let radius = max_radius * f32(math.sqrt[f64](entry.cook / max_cook))
+        if !finite(px) || !finite(py) || !finite(radius) || !finite(px - radius) || !finite(py - radius) { ret (zero, Invalid) }
+        points[i] = Coord { x: px, y: py }
+        circles[i] = geometry.rect(px - radius, py - radius, radius * 2.0, radius * 2.0)
+        i += 1usize
+    }
+    var used = 0usize
+    let levels = [3]f64{ -2.0f64, 0.0f64, 2.0f64 }
+    i = 0usize
+    while i < levels.len {
+        let py = bounds.y + bounds.height * f32((yabs - levels[i]) / (2.0f64 * yabs))
+        reference_lines[used] = Segment { from: Coord { x: bounds.x, y: py }, to: Coord { x: bounds.x + bounds.width, y: py } }
+        used += 1usize
+        i += 1usize
+    }
+    let multipliers = [2]f64{ 4.0f64, 6.0f64 }
+    i = 0usize
+    while i < multipliers.len {
+        let threshold = multipliers[i] / f64(diagnostics.len)
+        if threshold <= 1.0f64 {
+            let px = bounds.x + bounds.width * f32(threshold / xmax)
+            reference_lines[used] = Segment { from: Coord { x: px, y: bounds.y }, to: Coord { x: px, y: bounds.y + bounds.height } }
+            used += 1usize
+        }
+        i += 1usize
+    }
+    let dots = Layout { kind: .Scatter, coords: points[..diagnostics.len], segments: zero, bars: zero, x_min: 0.0, x_max: f32(xmax), y_min: 0.0 - f32(yabs), y_max: f32(yabs) }
+    let bubbles = Layout { kind: .Bubble, coords: points[..diagnostics.len], segments: zero, bars: circles[..diagnostics.len], x_min: 0.0, x_max: f32(xmax), y_min: 0.0 - f32(yabs), y_max: f32(yabs) }
+    let guides = Layout { kind: .Rug, coords: zero, segments: reference_lines[..used], bars: zero, x_min: 0.0, x_max: f32(xmax), y_min: 0.0 - f32(yabs), y_max: f32(yabs) }
+    ret (InfluenceLayout { points: dots, bubbles: bubbles, guides: guides, max_cook: max_cook }, ok)
 }
 
 type PairedStats = struct { summary: stat.Regression, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }

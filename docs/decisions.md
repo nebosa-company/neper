@@ -34385,3 +34385,19 @@ Sources: R `drc` log-logistic documentation
 (https://stat.ethz.ch/R-manual/R-devel/library/survival/html/pyears.html),
 and NIST's hazard-rate definition
 (https://www.itl.nist.gov/div898/handbook/apr/section1/apr123.htm).
+
+## D1926 — Influence bubbles reuse one-predictor OLS diagnostics
+
+`chart.influence_plot` consumes the existing `stat.regression_diagnostics`
+rows. Horizontal position is leverage, vertical position is the internally
+standardized residual, and circle area is proportional to Cook's distance.
+The separate point layer keeps observations with zero Cook's distance visible.
+The guide layer draws residual levels -2, 0 and +2, and optional leverage
+levels 2x and 3x the mean hat value (2/n for intercept plus one predictor).
+These are visual heuristics, not significance tests. Unlike the default of
+R `car::influencePlot`, Neper does not yet compute externally studentized
+residuals or automatic noteworthy labels. A Windows/Linux fixture checks the
+known OLS reference, area ratios, guide geometry, adapters and refusals; the
+gallery adds one PNG/SVG pair.
+
+Reference: https://search.r-project.org/CRAN/refmans/car/html/influencePlot.html

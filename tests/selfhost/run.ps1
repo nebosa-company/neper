@@ -3367,6 +3367,11 @@ $gfxChartHazardRateWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gfxChartHazardRateWritten -ne 'executable written') { throw 'gfx_chart_hazard_rate emission failed' }
 $gfxChartHazardRateOutput = & $gfxChartHazardRatePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartHazardRateOutput -ne 'gfx chart hazard rate ok') { throw "the e.gfx.chart hazard rate answered wrongly: exit $LASTEXITCODE" }
+$gfxChartInfluencePlotPath = Join-Path $testBuild 'gfx-chart-influence-plot-selfhost.exe'
+$gfxChartInfluencePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_influence_plot\src\main.e') $repo 'x64' 'windows' $gfxChartInfluencePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartInfluencePlotWritten -ne 'executable written') { throw 'gfx_chart_influence_plot emission failed' }
+$gfxChartInfluencePlotOutput = & $gfxChartInfluencePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartInfluencePlotOutput -ne 'gfx chart influence plot ok') { throw "the e.gfx.chart influence plot answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'
