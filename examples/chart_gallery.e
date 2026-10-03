@@ -3068,6 +3068,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (box, box_error) = chart.box_plot(box_values[..], bounds, box_points[..], box_lines[..], box_rects[..])
     if box_error != ok { ret box_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &box, "docs/chart-previews/box.png")
+    let boxen_values = [32]f64{
+        0.0, 1.0, 2.0, 3.0, 3.0, 4.0, 4.0, 5.0, 5.0, 6.0, 6.0, 7.0, 7.0, 8.0, 8.0, 9.0,
+        9.0, 10.0, 10.0, 11.0, 11.0, 12.0, 13.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 20.0, 22.0, 30.0,
+    }
+    var boxen_tails: [32]chart.Coord = zero
+    var boxen_median: [1]chart.Segment = zero
+    var boxen_boxes: [3]geometry.Rect = zero
+    let (boxen, boxen_error) = chart.boxen_plot(boxen_values[..], bounds, 3usize, boxen_tails[..], boxen_median[..], boxen_boxes[..])
+    if boxen_error != ok { ret boxen_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &boxen, "docs/chart-previews/boxen.png")
     let density_values = [16]f64{ 1.0, 2.0, 2.0, 2.5, 3.0, 3.5, 4.0, 4.0, 4.0, 5.0, 5.5, 6.0, 6.0, 7.0, 8.0, 8.5 }
     var grid: [64]f64 = zero
     var estimates: [64]f64 = zero

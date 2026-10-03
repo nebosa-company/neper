@@ -33787,3 +33787,14 @@ and SVG scatter adapters. `gfx_chart_parallel_coordinates` checks constant
 columns, refusals and both adapters on Windows and Linux; the gallery adds
 a labeled 3-by-3 PNG/SVG pair. Diagonal histograms and linked brushing remain
 planned.
+
+## D1868 — Boxen reuses R7 quantiles and Box marks
+
+`boxen_plot` takes a sorted sample and an explicit letter-value depth. Each
+level halves the lower-tail probability from 1/4, uses R7 quantiles, and
+narrows the wider outer range; depth is refused once a tail has fewer than
+one expected observation. Existing Box outlines, median segments and point
+marks render the nested ranges and observations beyond the deepest range in
+both scene and SVG. `gfx_chart_qq` checks numeric levels and refusal paths
+on Windows and Linux; the gallery adds a PNG/SVG pair. Automatic depth
+selection and richer per-level styling remain planned.

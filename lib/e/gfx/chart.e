@@ -2929,6 +2929,58 @@ fn box_plot(sorted: []const f64, bounds: geometry.Rect, outliers: []Coord, lines
     ret (Layout { kind: .Box, coords: outliers[..placed], segments: lines[..5usize], bars: boxes[..1usize], x_min: 0.0, x_max: 1.0, y_min: f32(lo), y_max: f32(hi) }, ok)
 }
 
+// Nested R7 letter-value ranges; depth is explicit and each tail must retain
+// at least one observation. Points beyond the outer range are tail observations.
+fn boxen_plot(sorted: []const f64, bounds: geometry.Rect, depth: usize, tails: []Coord, median_line: []Segment, boxes: []geometry.Rect) -> (Layout, err) {
+    if sorted.len < 4usize { ret (zero, Empty) }
+    if depth == 0usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if boxes.len < depth || median_line.len < 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < sorted.len {
+        if !finite(f32(sorted[i])) || (i > 0usize && sorted[i] < sorted[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var lo = sorted[0usize]
+    var hi = sorted[sorted.len - 1usize]
+    if lo == hi {
+        lo -= 0.5f64
+        hi += 0.5f64
+    }
+    let cx = bounds.x + bounds.width / 2.0
+    var probability = 0.25f64
+    var outer_low = lo
+    var outer_high = hi
+    i = 0usize
+    while i < depth {
+        if probability * f64(sorted.len) < 1.0f64 { ret (zero, Invalid) }
+        let (low, low_ok) = stat.quantile(sorted, probability, .R7)
+        let (high, high_ok) = stat.quantile(sorted, 1.0f64 - probability, .R7)
+        if !low_ok || !high_ok { ret (zero, Invalid) }
+        let width = bounds.width * 0.72 * f32(depth - i) / f32(depth)
+        let top = box_y(high, lo, hi, bounds)
+        boxes[i] = geometry.rect(cx - width / 2.0, top, width, box_y(low, lo, hi, bounds) - top)
+        outer_low = low
+        outer_high = high
+        probability *= 0.5f64
+        i += 1usize
+    }
+    let (middle, middle_ok) = stat.quantile(sorted, 0.5f64, .R7)
+    if !middle_ok { ret (zero, Invalid) }
+    let median_y = box_y(middle, lo, hi, bounds)
+    median_line[0usize] = Segment { from: Coord { x: boxes[0usize].x, y: median_y }, to: Coord { x: boxes[0usize].x + boxes[0usize].width, y: median_y } }
+    var used = 0usize
+    i = 0usize
+    while i < sorted.len {
+        if sorted[i] < outer_low || sorted[i] > outer_high {
+            if used >= tails.len { ret (zero, TooLarge) }
+            tails[used] = Coord { x: cx, y: box_y(sorted[i], lo, hi, bounds) }
+            used += 1usize
+        }
+        i += 1usize
+    }
+    ret (Layout { kind: .Box, coords: tails[..used], segments: median_line[..1usize], bars: boxes[..depth], x_min: 0.0, x_max: 1.0, y_min: f32(lo), y_max: f32(hi) }, ok)
+}
+
 // Shared Gaussian estimate for density and violin marks. The caller owns both
 // arrays; zero bandwidth selects Scott's rule.
 fn kde_grid(values: []const f64, bandwidth: f64, grid: []f64, estimates: []f64) -> (f64, f64, f64, err) {
