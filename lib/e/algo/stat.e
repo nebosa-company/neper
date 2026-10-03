@@ -25,6 +25,8 @@ type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
+type CalibrationBin = struct { count: usize, positives: usize, score_sum: f64 }
+type BinaryConfusion = struct { true_negative: usize, false_positive: usize, false_negative: usize, true_positive: usize }
 
 fn moments() -> Moments {
     var s: Moments = zero
@@ -170,6 +172,51 @@ fn average_precision(c: *const BinaryCurve) -> (f64, bool) {
     }
     if c.points[0usize].tp != 0usize || c.points[0usize].fp != 0usize || c.points[c.points.len - 1usize].tp != c.positives || c.points[c.points.len - 1usize].fp != c.negatives { ret (0.0f64, false) }
     ret (area, true)
+}
+
+// Equal-width probability bins; callers choose resolution through storage length.
+fn binary_calibration(scores: []const f64, positive: []const bool, bins: []CalibrationBin) -> err {
+    if scores.len == 0usize || positive.len != scores.len { ret Invalid }
+    if bins.len == 0usize { ret TooSmall }
+    var i = 0usize
+    while i < scores.len {
+        let score = scores[i]
+        if score != score || score - score != 0.0f64 || score < 0.0f64 || score > 1.0f64 { ret Invalid }
+        i += 1usize
+    }
+    i = 0usize
+    while i < bins.len {
+        bins[i] = CalibrationBin { count: 0usize, positives: 0usize, score_sum: 0.0f64 }
+        i += 1usize
+    }
+    i = 0usize
+    while i < scores.len {
+        var bucket = usize(scores[i] * f64(bins.len))
+        if bucket == bins.len { bucket -= 1usize }
+        bins[bucket].count += 1usize
+        if positive[i] { bins[bucket].positives += 1usize }
+        bins[bucket].score_sum += scores[i]
+        i += 1usize
+    }
+    ret ok
+}
+
+// Rows are actual negative/positive; columns are predicted negative/positive.
+fn binary_confusion(scores: []const f64, positive: []const bool, threshold: f64) -> (BinaryConfusion, err) {
+    if scores.len == 0usize || positive.len != scores.len || threshold != threshold || threshold - threshold != 0.0f64 { ret (zero, Invalid) }
+    var counts: BinaryConfusion = zero
+    var i = 0usize
+    while i < scores.len {
+        let score = scores[i]
+        if score != score || score - score != 0.0f64 { ret (zero, Invalid) }
+        if positive[i] {
+            if score >= threshold { counts.true_positive += 1usize } else { counts.false_negative += 1usize }
+        } else {
+            if score >= threshold { counts.false_positive += 1usize } else { counts.true_negative += 1usize }
+        }
+        i += 1usize
+    }
+    ret (counts, ok)
 }
 
 fn regression() -> Regression {

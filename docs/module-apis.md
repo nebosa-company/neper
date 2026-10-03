@@ -3153,6 +3153,8 @@ type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
+type CalibrationBin = struct { count: usize, positives: usize, score_sum: f64 }
+type BinaryConfusion = struct { true_negative: usize, false_positive: usize, false_negative: usize, true_positive: usize }
 type QuantileMethod = enum u8 { R1, R2, R3, R4, R5, R6, R7, R8, R9, Nearest }
 type Bandwidth = enum u8 { Silverman, Scott }
 type Distribution = enum u8 { Normal, Exponential, Gamma, Beta }
@@ -3174,6 +3176,8 @@ fn agreement_limits(left: []const f64, right: []const f64, critical: f64) -> (Ag
 fn binary_curve(scores: []const f64, positive: []const bool, order: []usize, out: []BinaryPoint) -> (BinaryCurve, err)
 fn roc_auc(c: *const BinaryCurve) -> (f64, bool)
 fn average_precision(c: *const BinaryCurve) -> (f64, bool)
+fn binary_calibration(scores: []const f64, positive: []const bool, bins: []CalibrationBin) -> err
+fn binary_confusion(scores: []const f64, positive: []const bool, threshold: f64) -> (BinaryConfusion, err)
 fn regression() -> Regression
 fn regression_add(s: *Regression, x: f64, y: f64)
 fn regression_slope(s: *const Regression) -> (f64, bool)

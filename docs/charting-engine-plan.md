@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, basic word cloud, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain and cumulative lift,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, basic word cloud, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain, cumulative lift, calibration and confusion matrix,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-seventy-seven PNG plus seventy-seven SVG previews from Neper. L061 remains partial
+seventy-nine PNG plus seventy-nine SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -117,8 +117,11 @@ cumulative true/false-positive counts yield ROC, precision–recall, cumulative
 gain and lift geometry. `roc_auc` uses trapezoids and `average_precision` uses
 recall-weighted precision steps; neither invents a threshold inside a tied
 score. `gfx_chart_binary_curves` checks reference values, all-one-class and
-storage refusals, and scene/SVG output on Windows and Linux. Calibration and
-confusion-matrix displays remain planned.
+storage refusals, and scene/SVG output on Windows and Linux. Equal-width
+calibration bins aggregate mean predicted and observed probabilities; a
+caller-selected threshold produces four confusion counts. Existing PointLine
+and Heatmap layouts draw both, without new mark types. `gfx_chart_diagnostic_tables`
+checks numeric references, refusals and both adapters on Windows and Linux.
 Beeswarm starts from strip's exact numeric x mapping and packs overlapping
 six-pixel square marks into free vertical lanes. The current candidate scan is
 cubic in the worst case and refuses a panel too short to fit every observation.
@@ -344,7 +347,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, basic word cloud, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons, basic stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, basic forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain and cumulative lift are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, basic word cloud, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons, basic stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, basic forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain, cumulative lift, calibration and confusion matrix are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -457,13 +460,14 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with seventy-seven vector previews, automatic numeric tick text and
+   adapter with seventy-nine vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow
    existing gfx renderer practice.
 5. **Specialized calculators (partial):** tied-score binary threshold sweeps,
-   ROC AUC and average precision, plus Bland–Altman limits, are delivered in
+   ROC AUC, average precision, calibration bins and confusion counts, plus
+   Bland–Altman limits, are delivered in
    `e.algo.stat`; survival, SPC, capability, pooled forest/funnel estimators,
    contour/surface and other domain diagrams remain in their owning modules.
 6. **Interaction and acceleration:** hit regions, selection, zoom/pan, animation,

@@ -33570,3 +33570,13 @@ existing Line scene/SVG adapters. AUC uses trapezoids; average precision uses
 recall-weighted precision steps. `gfx_chart_binary_curves` checks reference
 values, ties, capacity and class refusals on Windows and Linux. Calibration,
 threshold selection and confusion-matrix views remain separate work.
+
+## D1850 — Keep classifier diagnostics as statistics plus existing marks
+
+`e.algo.stat.binary_calibration` aggregates caller-chosen equal-width probability
+bins, including score 1 in the last bin; empty bins remain explicit. A separate
+thresholded `binary_confusion` counts actual/predicted negative and positive
+cases without requiring both classes. Gallery compositions map nonempty bins to
+PointLine on fixed unit axes and the four confusion counts to a 2×2 Heatmap.
+`gfx_chart_diagnostic_tables` checks reference values, input/storage refusals
+and scene/SVG output on Windows and Linux. No new painter branch is needed.
