@@ -3162,6 +3162,16 @@ $gfxChartStreamlinesWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChartStreamlinesWritten -ne 'executable written') { throw 'gfx_chart_streamlines emission failed' }
 $gfxChartStreamlinesOutput = & $gfxChartStreamlinesPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartStreamlinesOutput -ne 'gfx chart streamlines ok') { throw "the e.gfx.chart streamline integration answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPhaseSpacePath = Join-Path $testBuild 'gfx-chart-phase-space-selfhost.exe'
+$gfxChartPhaseSpaceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_phase_space\src\main.e') $repo 'x64' 'windows' $gfxChartPhaseSpacePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPhaseSpaceWritten -ne 'executable written') { throw 'gfx_chart_phase_space emission failed' }
+$gfxChartPhaseSpaceOutput = & $gfxChartPhaseSpacePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPhaseSpaceOutput -ne 'gfx chart phase space ok') { throw "the e.gfx.chart delay embedding answered wrongly: exit $LASTEXITCODE" }
+$gfxChartRecurrencePath = Join-Path $testBuild 'gfx-chart-recurrence-selfhost.exe'
+$gfxChartRecurrenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_recurrence\src\main.e') $repo 'x64' 'windows' $gfxChartRecurrencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRecurrenceWritten -ne 'executable written') { throw 'gfx_chart_recurrence emission failed' }
+$gfxChartRecurrenceOutput = & $gfxChartRecurrencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRecurrenceOutput -ne 'gfx chart recurrence ok') { throw "the e.gfx.chart recurrence matrix answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

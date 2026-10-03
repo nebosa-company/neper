@@ -2845,6 +2845,98 @@ fn render_streamlines_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_phase_space_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    var values: [31]f32 = zero
+    var i = 0usize
+    while i < values.len {
+        values[i] = f32(math.sin[f64](6.283185307179586f64 * f64(i) / 24.0f64))
+        i += 1usize
+    }
+    var points: [25]chart.Coord = zero
+    var segments: [24]chart.Segment = zero
+    let (marks, chart_error) = chart.phase_space(values[..], 6usize, geometry.rect(80.0, 42.0, 180.0, 180.0), points[..], segments[..])
+    if chart_error != ok { ret chart_error }
+    let ink = paint.rgba(0.08, 0.39, 0.77, 1.0)
+    let axis = paint.rgba(0.30, 0.36, 0.45, 1.0)
+    let grid = paint.rgba(0.86, 0.89, 0.93, 1.0)
+    let labels = [3]chart.Label{
+        chart.Label { text: "Lagged phase portrait", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "x(t)", anchor: chart.Coord { x: 170.0, y: 237.0 }, align: .Center },
+        chart.Label { text: "x(t+6)", anchor: chart.Coord { x: 74.0, y: 133.0 }, align: .Right },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 31u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 80usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, geometry.rect(80.0, 131.5, 180.0, 1.0), paint.Brush { Solid: grid })
+    try fill(&builder, geometry.rect(169.5, 42.0, 1.0, 180.0), paint.Brush { Solid: grid })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: ink })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: axis })
+    let path = "docs/chart-previews/phase_space.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, geometry.rect(80.0, 131.5, 180.0, 1.0), grid, false)
+    try chart_svg.rect(&writer, geometry.rect(169.5, 42.0, 1.0, 180.0), grid, false)
+    try chart_svg.append(&writer, &marks, ink)
+    try chart_svg.append_labels(&writer, labels[..1usize], axis, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], axis, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_recurrence_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    var values: [49]f32 = zero
+    var i = 0usize
+    while i < values.len {
+        values[i] = f32(math.sin[f64](6.283185307179586f64 * f64(i) / 24.0f64))
+        i += 1usize
+    }
+    var cells: [1849]chart.Cell = zero
+    let (marks, chart_error) = chart.recurrence(values[..], 6usize, 0.55, geometry.rect(87.0, 37.0, 186.0, 186.0), cells[..])
+    if chart_error != ok { ret chart_error }
+    let low = paint.rgba(0.93, 0.95, 0.98, 1.0)
+    let high = paint.rgba(0.08, 0.34, 0.74, 1.0)
+    let axis = paint.rgba(0.30, 0.36, 0.45, 1.0)
+    let labels = [2]chart.Label{
+        chart.Label { text: "Lagged recurrence", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center },
+        chart.Label { text: "lag 6, radius 0.55", anchor: chart.Coord { x: 180.0, y: 238.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 31u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 1872usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_matrix(&builder, &marks, low, low, high)
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: axis })
+    let path = "docs/chart-previews/recurrence.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_matrix(&writer, &marks, low, low, high)
+    try chart_svg.append_labels(&writer, labels[..1usize], axis, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], axis, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, rects: []geometry.Rect, names: []const str, path: str) -> err {
     if layers.len != 9usize || rects.len != layers.len || names.len != layers.len { ret chart.Invalid }
     let colors = [6]paint.Color{
@@ -3604,6 +3696,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_ternary_preview(a, queue, output_target, canvas, &renderer)
     try render_quiver_preview(a, queue, output_target, canvas, &renderer)
     try render_streamlines_preview(a, queue, output_target, canvas, &renderer)
+    try render_phase_space_preview(a, queue, output_target, canvas, &renderer)
+    try render_recurrence_preview(a, queue, output_target, canvas, &renderer)
     let rose_values = [5]f32{ 10.0, 18.0, 8.0, 5.0, 14.0 }
     let rose_names = [5]str{ "0 deg", "72 deg", "144 deg", "216 deg", "288 deg" }
     var rose_points: [115]chart.Coord = zero

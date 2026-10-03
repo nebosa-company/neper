@@ -1604,6 +1604,63 @@ fn streamlines(u: []const f32, v: []const f32, columns: usize, rows: usize, x_mi
     ret (Layout { kind: .Rug, coords: zero, segments: segments[..used], bars: zero, x_min: x_min, x_max: x_max, y_min: y_min, y_max: y_max }, ok)
 }
 
+// A two-dimensional delay embedding, (value[t], value[t+lag]), retains one
+// shared numeric domain and a square panel so slopes remain comparable.
+fn phase_space(values: []const f32, lag: usize, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err) {
+    if values.len < 3usize { ret (zero, Empty) }
+    if lag == 0usize || lag >= values.len - 1usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    let count = values.len - lag
+    if points.len < count || segments.len < count - 1usize { ret (zero, TooLarge) }
+    let (raw_lo, raw_hi, range_error) = extent(values)
+    if range_error != ok { ret (zero, range_error) }
+    var lo = raw_lo
+    var hi = raw_hi
+    if lo == hi {
+        lo -= 0.5
+        hi += 0.5
+    }
+    if !finite(lo) || !finite(hi) || hi <= lo { ret (zero, Invalid) }
+    var side = bounds.width
+    if bounds.height < side { side = bounds.height }
+    let square = geometry.rect(bounds.x + (bounds.width - side) * 0.5, bounds.y + (bounds.height - side) * 0.5, side, side)
+    if !finite(square.x + side) || !finite(square.y + side) { ret (zero, Invalid) }
+    let limits = [2]f32{ lo, hi }
+    let plot = spec(.PointLine, square, values[..count], values[lag..])
+    let (marks, layout_error) = layout_with_limits(&plot, points, segments, zero, limits[..], limits[..])
+    ret (marks, layout_error)
+}
+
+// Threshold Euclidean distances between the same delay-embedded states.
+// ponytail: the dense matrix is quadratic; use sparse tiles for long series.
+fn recurrence(values: []const f32, lag: usize, radius: f32, bounds: geometry.Rect, cells: []Cell) -> (MatrixLayout, err) {
+    if values.len < 3usize { ret (zero, Empty) }
+    if lag == 0usize || lag >= values.len - 1usize || !valid_bounds(bounds) || !finite(radius) || radius < 0.0 { ret (zero, Invalid) }
+    let count = values.len - lag
+    if count > cells.len / count { ret (zero, TooLarge) }
+    let (_, _, range_error) = extent(values)
+    if range_error != ok { ret (zero, range_error) }
+    let width = f32(f64(bounds.width) / f64(count))
+    let height = f32(f64(bounds.height) / f64(count))
+    if width <= 0.0 || height <= 0.0 { ret (zero, Invalid) }
+    let threshold = f64(radius) * f64(radius)
+    var row = 0usize
+    while row < count {
+        var column = 0usize
+        while column < count {
+            let dx = f64(values[row]) - f64(values[column])
+            let dy = f64(values[row + lag]) - f64(values[column + lag])
+            var present = 0.0f32
+            if dx * dx + dy * dy <= threshold { present = 1.0 }
+            let rect = geometry.rect(bounds.x + f32(column) * width, bounds.y + f32(row) * height, width, height)
+            if !finite(rect.x) || !finite(rect.y) { ret (zero, Invalid) }
+            cells[row * count + column] = Cell { rect: rect, value: present }
+            column += 1usize
+        }
+        row += 1usize
+    }
+    ret (MatrixLayout { kind: .Heatmap, cells: cells[..count * count], columns: count, rows: count, value_min: 0.0, value_max: 1.0 }, ok)
+}
+
 // Equal-angle rose sectors. Square-root radii make sector area proportional
 // to each nonnegative pre-binned weight, as in a circular histogram.
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {

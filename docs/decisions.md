@@ -33956,3 +33956,16 @@ uniform, varying and stationary fields, edge clipping, refusals and scene/SVG
 output on Windows and Linux. The gallery adds one PNG/SVG pair. Bidirectional
 tracing, adaptive error control and crowding suppression remain planned.
 References: R `metR::geom_streamline` and Matplotlib `streamplot`.
+
+## D1885 — Share a two-dimensional delay embedding across phase and recurrence plots
+
+`phase_space` pairs x(t) with x(t+lag), uses one numeric domain and centers an
+equal-aspect panel so slopes are not distorted. Existing PointLine geometry
+connects the orbit in temporal order. `recurrence` compares the same pairs
+with an inclusive Euclidean radius and emits a symmetric binary Heatmap with
+its diagonal present. The two focused fixtures check coordinates, cell values,
+constant/repeated inputs, refusals and scene/SVG adapters on Windows and Linux;
+the gallery adds two PNG/SVG previews. Its existing font ID is reused to stay
+within the scene renderer's 16-font registration limit. Higher-dimensional
+embedding and recurrence quantification remain planned. References: R
+`nonlinearTseries::buildTakens` and `nonlinearTseries::recurrencePlot`.

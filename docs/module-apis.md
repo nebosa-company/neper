@@ -15968,6 +15968,8 @@ fn radar(values: []const f32, minimum: []const f32, maximum: []const f32, bounds
 fn ternary(a: []const f32, b: []const f32, c: []const f32, bounds: geometry.Rect, levels: usize, points: []Coord, guides: []Segment) -> (Layout, Layout, err)
 fn quiver(x: []const f32, y: []const f32, u: []const f32, v: []const f32, bounds: geometry.Rect, pixels_per_unit: f32, head_size: f32, tails: []Coord, arrows: []Segment) -> (Layout, err)
 fn streamlines(u: []const f32, v: []const f32, columns: usize, rows: usize, x_min: f32, x_max: f32, y_min: f32, y_max: f32, seeds: []const Coord, step: f32, max_steps: usize, bounds: geometry.Rect, segments: []Segment) -> (Layout, err)
+fn phase_space(values: []const f32, lag: usize, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
+fn recurrence(values: []const f32, lag: usize, radius: f32, bounds: geometry.Rect, cells: []Cell) -> (MatrixLayout, err)
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err)
