@@ -1465,6 +1465,101 @@ fn render_flowchart_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_state_machine_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/state_machine.png"
+    let plot = geometry.rect(18.0, 45.0, 324.0, 176.0)
+    let states = [4]chart.MachineState{
+        chart.MachineState { center: chart.Coord { x: 65.0, y: 137.0 }, initial: true, final: false },
+        chart.MachineState { center: chart.Coord { x: 155.0, y: 90.0 }, initial: false, final: false },
+        chart.MachineState { center: chart.Coord { x: 265.0, y: 90.0 }, initial: false, final: true },
+        chart.MachineState { center: chart.Coord { x: 155.0, y: 180.0 }, initial: false, final: true },
+    }
+    let names = [4]str{ "Idle", "Load", "Ready", "Error" }
+    let events = [6]str{ "open", "ok", "fail", "close", "reset", "refresh" }
+    let transitions = [6]chart.MachineTransition{
+        chart.MachineTransition { from: 0usize, to: 1usize, event: 0usize },
+        chart.MachineTransition { from: 1usize, to: 2usize, event: 1usize },
+        chart.MachineTransition { from: 1usize, to: 3usize, event: 2usize },
+        chart.MachineTransition { from: 2usize, to: 3usize, event: 3usize },
+        chart.MachineTransition { from: 3usize, to: 0usize, event: 4usize },
+        chart.MachineTransition { from: 2usize, to: 2usize, event: 5usize },
+    }
+    var outlines: [96]chart.Coord = zero
+    var shapes: [4]chart.Layout = zero
+    var arrows: [30]chart.Segment = zero
+    var final_rings: [48]chart.Segment = zero
+    var start_segments: [3]chart.Segment = zero
+    var event_labels: [6]chart.Label = zero
+    let (machine, layout_error) = chart.state_machine(states[..], transitions[..], events[..], plot, 21.0, outlines[..], shapes[..], arrows[..], final_rings[..], start_segments[..], event_labels[..])
+    if layout_error != ok || machine.states.len != 4usize || machine.final_rings.segments.len != 48usize { ret chart.Invalid }
+    let (next, fired, step_error) = chart.state_machine_step(4usize, 0usize, 0usize, transitions[..])
+    if step_error != ok || !fired || next != 1usize { ret chart.Invalid }
+    let blue = paint.rgba(0.16, 0.43, 0.76, 1.0)
+    let teal = paint.rgba(0.13, 0.53, 0.46, 1.0)
+    let amber = paint.rgba(0.79, 0.43, 0.13, 1.0)
+    let navy = paint.rgba(0.16, 0.30, 0.54, 1.0)
+    let gray = paint.rgba(0.56, 0.63, 0.72, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var labels: [6]chart.Label = zero
+    labels[0usize] = chart.Label { text: "State machine / events", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Initial arrow, final rings, self-loop", anchor: chart.Coord { x: 180.0, y: 238.0 }, align: .Center }
+    var i = 0usize
+    while i < states.len {
+        labels[i + 2usize] = chart.Label { text: names[i], anchor: chart.Coord { x: states[i].center.x, y: states[i].center.y + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &machine.transitions, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &machine.initial_marker, paint.Brush { Solid: gray })
+    i = 0usize
+    while i < machine.states.len {
+        var color = blue
+        if i == 0usize { color = navy }
+        if i == 2usize { color = teal }
+        if i == 3usize { color = amber }
+        try chart_scene.append(a, &builder, &machine.states[i], paint.Brush { Solid: color })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &machine.final_rings, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..], font, 8.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, machine.event_labels, font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &machine.transitions, gray)
+    try chart_svg.append(&writer, &machine.initial_marker, gray)
+    i = 0usize
+    while i < machine.states.len {
+        var color = blue
+        if i == 0usize { color = navy }
+        if i == 2usize { color = teal }
+        if i == 3usize { color = amber }
+        try chart_svg.append(&writer, &machine.states[i], color)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &machine.final_rings, white)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[2usize..], white, 8.0)
+    try chart_svg.append_labels(&writer, machine.event_labels, dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -5412,6 +5507,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_org_chart_preview(a, queue, output_target, canvas, &renderer)
     try render_dependency_graph_preview(a, queue, output_target, canvas, &renderer)
     try render_flowchart_preview(a, queue, output_target, canvas, &renderer)
+    try render_state_machine_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

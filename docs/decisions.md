@@ -34201,3 +34201,14 @@ invalid ports and inward/backward routes refuse. Windows and Linux fixtures
 cover a decision loop, geometry, adapters and refusals. Automatic layout,
 collision-free routing and
 mixed-axis ports remain separate work.
+
+## D1911 — State machines pair deterministic events with explicit diagram geometry
+
+`state_machine_step` keeps the current state on an absent event, advances on a
+unique `(state,event)` match and rejects ambiguous transitions. `state_machine`
+requires one initial state, checks event and state indices and overlapping
+circles, and emits caller-owned circular Area nodes, arrowed Rug transitions,
+event labels, a start arrow and final-state inner rings. Self-loops use a routed
+arch. Windows and Linux fixtures check event behavior, visual geometry,
+adapters and refusals; the gallery adds a PNG/SVG pair. Hierarchical/concurrent
+states and automatic placement remain future work.

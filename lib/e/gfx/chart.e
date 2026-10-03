@@ -63,6 +63,9 @@ type FlowPort = enum u8 { Top, Right, Bottom, Left }
 type FlowNode = struct { kind: FlowKind, center: Coord }
 type FlowLink = struct { from: usize, to: usize, exit: FlowPort, entry: FlowPort }
 type FlowLayout = struct { nodes: []Layout, connectors: Layout }
+type MachineState = struct { center: Coord, initial: bool, final: bool }
+type MachineTransition = struct { from: usize, to: usize, event: usize }
+type MachineLayout = struct { states: []Layout, transitions: Layout, initial_marker: Layout, final_rings: Layout, event_labels: []Label }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -3045,6 +3048,140 @@ fn flowchart(nodes: []const FlowNode, links: []const FlowLink, bounds: geometry.
     }
     let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..links.len * 5usize], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
     ret (FlowLayout { nodes: shapes[..nodes.len], connectors: connectors }, ok)
+}
+
+// No matching event leaves the machine in place. Duplicate (state,event)
+// transitions are an error, regardless of their destination.
+fn state_machine_step(state_count: usize, current: usize, event: usize, transitions: []const MachineTransition) -> (usize, bool, err) {
+    if state_count == 0usize { ret (0usize, false, Empty) }
+    if current >= state_count { ret (0usize, false, Invalid) }
+    var next = current
+    var fired = false
+    var i = 0usize
+    while i < transitions.len {
+        let transition = transitions[i]
+        if transition.from >= state_count || transition.to >= state_count { ret (0usize, false, Invalid) }
+        if transition.from == current && transition.event == event {
+            if fired { ret (0usize, false, Invalid) }
+            next = transition.to
+            fired = true
+        }
+        i += 1usize
+    }
+    ret (next, fired, ok)
+}
+
+// Explicit centers keep cycles and self loops; circles and edge labels are
+// caller-owned geometry. A single initial state and deterministic events are
+// required, while any number of final states is allowed.
+fn state_machine(states: []const MachineState, transitions: []const MachineTransition, events: []const str, bounds: geometry.Rect, radius: f32, outlines: []Coord, shapes: []Layout, arrows: []Segment, ring_segments: []Segment, start_segments: []Segment, event_labels: []Label) -> (MachineLayout, err) {
+    if states.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(radius) || radius < 12.0 { ret (zero, Invalid) }
+    if outlines.len / 24usize < states.len || shapes.len < states.len || arrows.len / 5usize < transitions.len || event_labels.len < transitions.len || start_segments.len < 3usize { ret (zero, TooLarge) }
+    var initial = states.len
+    var final_count = 0usize
+    var i = 0usize
+    while i < states.len {
+        let state = states[i]
+        if !finite(state.center.x) || !finite(state.center.y) || state.center.x - radius < bounds.x || state.center.x + radius > bounds.x + bounds.width || state.center.y - radius < bounds.y || state.center.y + radius > bounds.y + bounds.height { ret (zero, Invalid) }
+        if state.initial {
+            if initial != states.len { ret (zero, Invalid) }
+            initial = i
+        }
+        if state.final { final_count += 1usize }
+        var earlier = 0usize
+        while earlier < i {
+            let dx = f64(state.center.x) - f64(states[earlier].center.x)
+            let dy = f64(state.center.y) - f64(states[earlier].center.y)
+            let minimum = f64(radius * 2.0 + 8.0)
+            if dx * dx + dy * dy < minimum * minimum { ret (zero, Invalid) }
+            earlier += 1usize
+        }
+        let first = i * 24usize
+        var point = 0usize
+        while point < 24usize {
+            let angle = 6.283185307179586f64 * f64(point) / 24.0f64
+            outlines[first + point] = Coord { x: state.center.x + radius * f32(math.cos[f64](angle)), y: state.center.y + radius * f32(math.sin[f64](angle)) }
+            point += 1usize
+        }
+        shapes[i] = Layout { kind: .Area, coords: outlines[first..first + 24usize], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    if initial == states.len { ret (zero, Invalid) }
+    if ring_segments.len / 24usize < final_count { ret (zero, TooLarge) }
+    let initial_center = states[initial].center
+    if initial_center.x - radius - 19.0 < bounds.x { ret (zero, TooLarge) }
+    let start = Coord { x: initial_center.x - radius - 19.0, y: initial_center.y }
+    let tip = Coord { x: initial_center.x - radius, y: initial_center.y }
+    start_segments[0usize] = Segment { from: start, to: tip }
+    start_segments[1usize] = Segment { from: Coord { x: tip.x - 6.0, y: tip.y - 4.0 }, to: tip }
+    start_segments[2usize] = Segment { from: Coord { x: tip.x - 6.0, y: tip.y + 4.0 }, to: tip }
+    var rings_used = 0usize
+    i = 0usize
+    while i < states.len {
+        if states[i].final {
+            let center = states[i].center
+            var point = 0usize
+            while point < 24usize {
+                let first_angle = 6.283185307179586f64 * f64(point) / 24.0f64
+                let second_angle = 6.283185307179586f64 * f64((point + 1usize) % 24usize) / 24.0f64
+                let inner = radius * 0.78
+                let from = Coord { x: center.x + inner * f32(math.cos[f64](first_angle)), y: center.y + inner * f32(math.sin[f64](first_angle)) }
+                let to = Coord { x: center.x + inner * f32(math.cos[f64](second_angle)), y: center.y + inner * f32(math.sin[f64](second_angle)) }
+                ring_segments[rings_used] = Segment { from: from, to: to }
+                rings_used += 1usize
+                point += 1usize
+            }
+        }
+        i += 1usize
+    }
+    var arrows_used = 0usize
+    i = 0usize
+    while i < transitions.len {
+        let transition = transitions[i]
+        if transition.from >= states.len || transition.to >= states.len || transition.event >= events.len { ret (zero, Invalid) }
+        var earlier = 0usize
+        while earlier < i {
+            if transitions[earlier].from == transition.from && transitions[earlier].event == transition.event { ret (zero, Invalid) }
+            earlier += 1usize
+        }
+        let from = states[transition.from].center
+        let to = states[transition.to].center
+        if transition.from == transition.to {
+            let top = from.y - radius - 18.0
+            if top < bounds.y { ret (zero, TooLarge) }
+            let loop_start = Coord { x: from.x + radius * 0.55, y: from.y - radius * 0.80 }
+            let loop_end = Coord { x: from.x - radius * 0.55, y: from.y - radius * 0.80 }
+            let upper_right = Coord { x: loop_start.x, y: top }
+            let upper_left = Coord { x: loop_end.x, y: top }
+            arrows[arrows_used] = Segment { from: loop_start, to: upper_right }
+            arrows[arrows_used + 1usize] = Segment { from: upper_right, to: upper_left }
+            arrows[arrows_used + 2usize] = Segment { from: upper_left, to: loop_end }
+            arrows[arrows_used + 3usize] = Segment { from: Coord { x: loop_end.x - 4.0, y: loop_end.y - 6.0 }, to: loop_end }
+            arrows[arrows_used + 4usize] = Segment { from: Coord { x: loop_end.x + 4.0, y: loop_end.y - 6.0 }, to: loop_end }
+            arrows_used += 5usize
+            event_labels[i] = Label { text: events[transition.event], anchor: Coord { x: from.x, y: top - 5.0 }, align: .Center }
+        } else {
+            let dx = f64(to.x) - f64(from.x)
+            let dy = f64(to.y) - f64(from.y)
+            let distance = math.sqrt[f64](dx * dx + dy * dy)
+            if !finite64(distance) || distance <= f64(radius * 2.0 + 8.0) { ret (zero, Invalid) }
+            let ux = f32(dx / distance)
+            let uy = f32(dy / distance)
+            let edge_start = Coord { x: from.x + ux * radius, y: from.y + uy * radius }
+            let edge_end = Coord { x: to.x - ux * radius, y: to.y - uy * radius }
+            arrows[arrows_used] = Segment { from: edge_start, to: edge_end }
+            arrows[arrows_used + 1usize] = Segment { from: Coord { x: edge_end.x - ux * 7.0 - uy * 4.0, y: edge_end.y - uy * 7.0 + ux * 4.0 }, to: edge_end }
+            arrows[arrows_used + 2usize] = Segment { from: Coord { x: edge_end.x - ux * 7.0 + uy * 4.0, y: edge_end.y - uy * 7.0 - ux * 4.0 }, to: edge_end }
+            arrows_used += 3usize
+            event_labels[i] = Label { text: events[transition.event], anchor: Coord { x: (from.x + to.x) * 0.5 + uy * 10.0, y: (from.y + to.y) * 0.5 - ux * 10.0 }, align: .Center }
+        }
+        i += 1usize
+    }
+    let routes = Layout { kind: .Rug, coords: zero, segments: arrows[..arrows_used], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    let initial_route = Layout { kind: .Rug, coords: zero, segments: start_segments[..3usize], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    let finals = Layout { kind: .Rug, coords: zero, segments: ring_segments[..rings_used], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    ret (MachineLayout { states: shapes[..states.len], transitions: routes, initial_marker: initial_route, final_rings: finals, event_labels: event_labels[..transitions.len] }, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.
