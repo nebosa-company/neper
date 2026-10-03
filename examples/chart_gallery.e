@@ -1,5 +1,6 @@
 // Render the currently delivered chart kinds through Neper's CPU scene and PNG encoder.
 // From the repository root, run this executable to refresh docs/chart-previews/*.png.
+use e.algo.stat
 use e.fs
 use e.gpu
 use e.io
@@ -806,6 +807,69 @@ fn render_agreement_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     try chart_svg.append_labels(&writer, labels[..6usize], dark, 8.0)
     try chart_svg.append_labels(&writer, labels[6usize..7usize], dark, 14.0)
     try chart_svg.append_labels(&writer, labels[7usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_binary_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, metric: chart.BinaryMetric, title: str, x_label: str, y_label: str, path: str) -> err {
+    let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
+    let blue = paint.rgba(0.08, 0.40, 0.76, 1.0)
+    let baseline_color = paint.rgba(0.64, 0.69, 0.76, 1.0)
+    let pale = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var x: [17]f32 = zero
+    var y: [17]f32 = zero
+    var segments: [16]chart.Segment = zero
+    let (marks, marks_error) = chart.binary_metric_curve(data, metric, plot, x[..], y[..], segments[..])
+    if marks_error != ok { ret marks_error }
+    var baseline_segments: [1]chart.Segment = zero
+    let bottom = plot.y + plot.height
+    if metric == .Roc || metric == .CumulativeGain {
+        baseline_segments[0usize] = chart.Segment { from: chart.Coord { x: plot.x, y: bottom }, to: chart.Coord { x: plot.x + plot.width, y: plot.y } }
+    } else {
+        var fraction = f32(data.positives) / f32(data.positives + data.negatives)
+        if metric == .Lift { fraction = 1.0 / marks.y_max }
+        let line_y = bottom - plot.height * fraction
+        baseline_segments[0usize] = chart.Segment { from: chart.Coord { x: plot.x, y: line_y }, to: chart.Coord { x: plot.x + plot.width, y: line_y } }
+    }
+    let baseline = chart.Layout { kind: .Rug, coords: zero, segments: baseline_segments[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: marks.y_min, y_max: marks.y_max }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &baseline, paint.Brush { Solid: baseline_color })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: blue })
+    let ticks = [3]str{ "0", "0.5", "1" }
+    var labels: [6]chart.Label = zero
+    var i = 0usize
+    while i < 3usize {
+        labels[i] = chart.Label { text: ticks[i], anchor: chart.Coord { x: plot.x + f32(i) * plot.width * 0.5, y: 210.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[3usize] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[4usize] = chart.Label { text: x_label, anchor: chart.Coord { x: 180.0, y: 231.0 }, align: .Center }
+    labels[5usize] = chart.Label { text: y_label, anchor: chart.Coord { x: 56.0, y: 38.0 }, align: .Left }
+    try chart_scene.append_labels(a, &builder, labels[..3usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[3usize..4usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[4usize..], font, 9.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &baseline, baseline_color)
+    try chart_svg.append(&writer, &marks, blue)
+    try chart_svg.append_labels(&writer, labels[..3usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[3usize..4usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[4usize..], dark, 9.0)
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
@@ -2135,6 +2199,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_cell_bars_preview(a, queue, output_target, canvas, &renderer)
     try render_forest_preview(a, queue, output_target, canvas, &renderer)
     try render_agreement_preview(a, queue, output_target, canvas, &renderer)
+    let diagnostic_scores = [16]f64{ 0.98f64, 0.93f64, 0.89f64, 0.84f64, 0.78f64, 0.72f64, 0.68f64, 0.62f64, 0.56f64, 0.50f64, 0.44f64, 0.38f64, 0.32f64, 0.26f64, 0.18f64, 0.08f64 }
+    let diagnostic_positive = [16]bool{ true, true, false, true, true, false, true, false, true, false, true, false, false, true, false, false }
+    var diagnostic_order: [16]usize = zero
+    var diagnostic_points: [17]stat.BinaryPoint = zero
+    let (diagnostic, diagnostic_error) = stat.binary_curve(diagnostic_scores[..], diagnostic_positive[..], diagnostic_order[..], diagnostic_points[..])
+    if diagnostic_error != ok { ret diagnostic_error }
+    try render_binary_preview(a, queue, output_target, canvas, &renderer, &diagnostic, .Roc, "ROC curve", "False-positive rate", "TPR", "docs/chart-previews/roc.png")
+    try render_binary_preview(a, queue, output_target, canvas, &renderer, &diagnostic, .PrecisionRecall, "Precision-recall", "Recall", "Precision", "docs/chart-previews/precision_recall.png")
+    try render_binary_preview(a, queue, output_target, canvas, &renderer, &diagnostic, .CumulativeGain, "Cumulative gain", "Population share", "Gain", "docs/chart-previews/cumulative_gain.png")
+    try render_binary_preview(a, queue, output_target, canvas, &renderer, &diagnostic, .Lift, "Cumulative lift", "Population share", "Lift", "docs/chart-previews/cumulative_lift.png")
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

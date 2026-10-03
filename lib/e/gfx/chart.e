@@ -14,6 +14,7 @@ use e.text.layout as text_layout
 
 type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
+type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
 type Coord = struct { x: f32, y: f32 }
@@ -324,6 +325,46 @@ fn sparkline(values: []const f32, bounds: geometry.Rect, x: []f32, segments: []S
     var unused_bars: [1]geometry.Rect = zero
     let (marks, marks_error) = layout(&plot, unused_coords[..0usize], segments, unused_bars[..0usize])
     ret (marks, marks_error)
+}
+
+// Four diagnostic curves from one tie-grouped classifier threshold sweep.
+fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err) {
+    let (_, valid) = stat.roc_auc(c)
+    if !valid || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if x.len < c.points.len || y.len < c.points.len || segments.len + 1usize < c.points.len { ret (zero, TooLarge) }
+    let total = c.positives + c.negatives
+    let prevalence = f64(c.positives) / f64(total)
+    var ymax = 1.0f32
+    var i = 0usize
+    while i < c.points.len {
+        let p = c.points[i]
+        let selected = p.tp + p.fp
+        if metric == .Roc {
+            x[i] = f32(f64(p.fp) / f64(c.negatives))
+            y[i] = f32(f64(p.tp) / f64(c.positives))
+        } else if metric == .PrecisionRecall {
+            x[i] = f32(f64(p.tp) / f64(c.positives))
+            y[i] = 1.0
+            if selected > 0usize { y[i] = f32(f64(p.tp) / f64(selected)) }
+        } else if metric == .CumulativeGain {
+            x[i] = f32(f64(selected) / f64(total))
+            y[i] = f32(f64(p.tp) / f64(c.positives))
+        } else {
+            x[i] = f32(f64(selected) / f64(total))
+            y[i] = 1.0
+            if selected > 0usize { y[i] = f32((f64(p.tp) / f64(selected)) / prevalence) }
+        }
+        if !finite(x[i]) || !finite(y[i]) { ret (zero, Invalid) }
+        if y[i] > ymax { ymax = y[i] }
+        i += 1usize
+    }
+    let x_limits = [2]f32{ 0.0, 1.0 }
+    let y_limits = [2]f32{ 0.0, ymax }
+    let plot = spec(.Line, bounds, x[..c.points.len], y[..c.points.len])
+    var unused_coords: [1]Coord = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let (marks, layout_error) = layout_with_limits(&plot, unused_coords[..0usize], segments, unused_bars[..0usize], x_limits[..], y_limits[..])
+    ret (marks, layout_error)
 }
 
 // One bar per caller-supplied cell, all measured against the same maximum.

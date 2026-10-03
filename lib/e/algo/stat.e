@@ -23,6 +23,8 @@ error Invalid
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
+type BinaryPoint = struct { tp: usize, fp: usize }
+type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
 
 fn moments() -> Moments {
     var s: Moments = zero
@@ -101,6 +103,73 @@ fn agreement_limits(left: []const f64, right: []const f64, critical: f64) -> (Ag
     let upper = s.mean + critical * sd
     if lower - lower != 0.0f64 || upper - upper != 0.0f64 { ret (zero, false) }
     ret (AgreementLimits { bias: s.mean, lower: lower, upper: upper }, true)
+}
+
+// Sort once and advance all equal-score observations at the same threshold.
+fn binary_curve(scores: []const f64, positive: []const bool, order: []usize, out: []BinaryPoint) -> (BinaryCurve, err) {
+    if scores.len == 0usize || positive.len != scores.len { ret (zero, Invalid) }
+    if order.len < scores.len || out.len <= scores.len { ret (zero, TooSmall) }
+    var positives = 0usize
+    var i = 0usize
+    while i < scores.len {
+        if scores[i] != scores[i] || scores[i] - scores[i] != 0.0f64 { ret (zero, Invalid) }
+        if positive[i] { positives += 1usize }
+        order[i] = i
+        i += 1usize
+    }
+    let negatives = scores.len - positives
+    if positives == 0usize || negatives == 0usize { ret (zero, Invalid) }
+    var key = RankKey { values: scores }
+    sort.in_place_by[usize, RankKey](order[..scores.len], &key, compare_by_value)
+    out[0usize] = BinaryPoint { tp: 0usize, fp: 0usize }
+    var used = 1usize
+    var remaining = scores.len
+    var tp = 0usize
+    var fp = 0usize
+    while remaining > 0usize {
+        let threshold = scores[order[remaining - 1usize]]
+        while remaining > 0usize && scores[order[remaining - 1usize]] == threshold {
+            remaining -= 1usize
+            if positive[order[remaining]] { tp += 1usize } else { fp += 1usize }
+        }
+        out[used] = BinaryPoint { tp: tp, fp: fp }
+        used += 1usize
+    }
+    ret (BinaryCurve { points: out[..used], positives: positives, negatives: negatives }, ok)
+}
+
+fn roc_auc(c: *const BinaryCurve) -> (f64, bool) {
+    if c.positives == 0usize || c.negatives == 0usize || c.points.len < 2usize { ret (0.0f64, false) }
+    var area = 0.0f64
+    var i = 1usize
+    while i < c.points.len {
+        let before = c.points[i - 1usize]
+        let after = c.points[i]
+        if after.tp < before.tp || after.fp < before.fp || after.tp > c.positives || after.fp > c.negatives { ret (0.0f64, false) }
+        let dx = f64(after.fp - before.fp) / f64(c.negatives)
+        area += dx * ((f64(before.tp) + f64(after.tp)) / (2.0f64 * f64(c.positives)))
+        i += 1usize
+    }
+    if c.points[0usize].tp != 0usize || c.points[0usize].fp != 0usize || c.points[c.points.len - 1usize].tp != c.positives || c.points[c.points.len - 1usize].fp != c.negatives { ret (0.0f64, false) }
+    ret (area, true)
+}
+
+fn average_precision(c: *const BinaryCurve) -> (f64, bool) {
+    if c.positives == 0usize || c.negatives == 0usize || c.points.len < 2usize { ret (0.0f64, false) }
+    var area = 0.0f64
+    var i = 1usize
+    while i < c.points.len {
+        let before = c.points[i - 1usize]
+        let after = c.points[i]
+        if after.tp < before.tp || after.fp < before.fp || after.tp > c.positives || after.fp > c.negatives { ret (0.0f64, false) }
+        if after.tp > before.tp {
+            let selected = after.tp + after.fp
+            area += (f64(after.tp - before.tp) / f64(c.positives)) * (f64(after.tp) / f64(selected))
+        }
+        i += 1usize
+    }
+    if c.points[0usize].tp != 0usize || c.points[0usize].fp != 0usize || c.points[c.points.len - 1usize].tp != c.positives || c.points[c.points.len - 1usize].fp != c.negatives { ret (0.0f64, false) }
+    ret (area, true)
 }
 
 fn regression() -> Regression {

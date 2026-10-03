@@ -3151,6 +3151,8 @@ missingness are `u8` flags; scores must stay inside (0, 1).
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
+type BinaryPoint = struct { tp: usize, fp: usize }
+type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
 type QuantileMethod = enum u8 { R1, R2, R3, R4, R5, R6, R7, R8, R9, Nearest }
 type Bandwidth = enum u8 { Silverman, Scott }
 type Distribution = enum u8 { Normal, Exponential, Gamma, Beta }
@@ -3169,6 +3171,9 @@ fn variance_sample(s: *const Moments) -> (f64, bool)
 fn standard_deviation_population(s: *const Moments) -> (f64, bool)
 fn standard_deviation_sample(s: *const Moments) -> (f64, bool)
 fn agreement_limits(left: []const f64, right: []const f64, critical: f64) -> (AgreementLimits, bool)
+fn binary_curve(scores: []const f64, positive: []const bool, order: []usize, out: []BinaryPoint) -> (BinaryCurve, err)
+fn roc_auc(c: *const BinaryCurve) -> (f64, bool)
+fn average_precision(c: *const BinaryCurve) -> (f64, bool)
 fn regression() -> Regression
 fn regression_add(s: *Regression, x: f64, y: f64)
 fn regression_slope(s: *const Regression) -> (f64, bool)
@@ -15880,6 +15885,7 @@ fn step_cues(cues: []Cue) -> err
 ### `e.gfx.chart`
 
 ```neper
+type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
 type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
@@ -15907,6 +15913,7 @@ fn category_ticks(count: usize, out: []Tick) -> ([]Tick, err)
 fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32, out: []LegendItem) -> ([]LegendItem, err)
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
+fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)
 fn band(x: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, outline: []Coord) -> (Layout, err)
 fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)

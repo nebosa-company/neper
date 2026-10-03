@@ -33560,3 +33560,13 @@ estimated effects and intervals, with a separate reference Rug and existing
 linear/log10/symlog scales. `gfx_chart_agreement_forest` checks numeric values,
 refusals and scene/SVG output on Windows and Linux. Pooled-effect estimators,
 study weighting and uncertainty intervals stay in statistics work.
+
+## D1849 — Group tied classification scores before drawing diagnostic curves
+
+`e.algo.stat.binary_curve` sorts caller-owned indices by score and advances all
+equal scores as one threshold, exposing cumulative true/false-positive counts.
+ROC, precision–recall, cumulative gain and lift reuse those counts and the
+existing Line scene/SVG adapters. AUC uses trapezoids; average precision uses
+recall-weighted precision steps. `gfx_chart_binary_curves` checks reference
+values, ties, capacity and class refusals on Windows and Linux. Calibration,
+threshold selection and confusion-matrix views remain separate work.
