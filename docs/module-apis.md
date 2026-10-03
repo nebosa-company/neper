@@ -3150,6 +3150,7 @@ missingness are `u8` flags; scores must stay inside (0, 1).
 ```neper
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
+type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type QuantileMethod = enum u8 { R1, R2, R3, R4, R5, R6, R7, R8, R9, Nearest }
 type Bandwidth = enum u8 { Silverman, Scott }
 type Distribution = enum u8 { Normal, Exponential, Gamma, Beta }
@@ -3167,6 +3168,7 @@ fn variance_population(s: *const Moments) -> (f64, bool)
 fn variance_sample(s: *const Moments) -> (f64, bool)
 fn standard_deviation_population(s: *const Moments) -> (f64, bool)
 fn standard_deviation_sample(s: *const Moments) -> (f64, bool)
+fn agreement_limits(left: []const f64, right: []const f64, critical: f64) -> (AgreementLimits, bool)
 fn regression() -> Regression
 fn regression_add(s: *Regression, x: f64, y: f64)
 fn regression_slope(s: *const Regression) -> (f64, bool)

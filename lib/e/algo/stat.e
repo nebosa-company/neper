@@ -22,6 +22,7 @@ error Invalid
 
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
+type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 
 fn moments() -> Moments {
     var s: Moments = zero
@@ -81,6 +82,25 @@ fn standard_deviation_sample(s: *const Moments) -> (f64, bool) {
     let (variance, has_variance) = variance_sample(s)
     if !has_variance { ret (0.0, false) }
     ret (math.sqrt[f64](variance), true)
+}
+
+// Paired method differences use sample SD; critical is caller-selected.
+fn agreement_limits(left: []const f64, right: []const f64, critical: f64) -> (AgreementLimits, bool) {
+    if left.len < 2usize || right.len != left.len || critical != critical || critical - critical != 0.0f64 || critical <= 0.0f64 { ret (zero, false) }
+    var s = moments()
+    var i = 0usize
+    while i < left.len {
+        let difference = left[i] - right[i]
+        if left[i] != left[i] || right[i] != right[i] || difference != difference || difference - difference != 0.0f64 { ret (zero, false) }
+        moments_add(&s, difference)
+        i += 1usize
+    }
+    let (sd, defined) = standard_deviation_sample(&s)
+    if !defined { ret (zero, false) }
+    let lower = s.mean - critical * sd
+    let upper = s.mean + critical * sd
+    if lower - lower != 0.0f64 || upper - upper != 0.0f64 { ret (zero, false) }
+    ret (AgreementLimits { bias: s.mean, lower: lower, upper: upper }, true)
 }
 
 fn regression() -> Regression {

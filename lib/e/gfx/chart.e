@@ -932,6 +932,88 @@ fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bound
     ret (Layout { kind: .Dumbbell, coords: points[..2usize * position.len], segments: lines[..position.len], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
 }
 
+// Horizontal study intervals, center estimates and one reference rule.
+fn forest_plot(estimate: []const f32, lower: []const f32, upper: []const f32, reference: f32, scale: Scale, bounds: geometry.Rect, points: []Coord, intervals: []Segment, reference_rule: []Segment) -> (Layout, Layout, err) {
+    if estimate.len == 0usize { ret (zero, zero, Empty) }
+    if lower.len != estimate.len || upper.len != estimate.len || !valid_bounds(bounds) || !finite(reference) { ret (zero, zero, Invalid) }
+    if points.len < estimate.len || intervals.len < estimate.len || reference_rule.len == 0usize { ret (zero, zero, TooLarge) }
+    var xmin = reference
+    var xmax = reference
+    var i = 0usize
+    while i < estimate.len {
+        if !finite(estimate[i]) || !finite(lower[i]) || !finite(upper[i]) || lower[i] > estimate[i] || estimate[i] > upper[i] { ret (zero, zero, Invalid) }
+        if lower[i] < xmin { xmin = lower[i] }
+        if upper[i] > xmax { xmax = upper[i] }
+        i += 1usize
+    }
+    if xmin == xmax {
+        if scale.kind == .Log10 {
+            if xmin <= 0.0 { ret (zero, zero, Invalid) }
+            xmin *= 0.5
+            xmax *= 2.0
+        } else {
+            xmin -= 0.5
+            xmax += 0.5
+        }
+    }
+    if !valid_scale(scale, xmin, xmax) { ret (zero, zero, Invalid) }
+    i = 0usize
+    while i < estimate.len {
+        let y = bounds.y + bounds.height * (f32(i) + 0.5) / f32(estimate.len)
+        let left = bounds.x + bounds.width * fraction(lower[i], xmin, xmax, scale)
+        let middle = bounds.x + bounds.width * fraction(estimate[i], xmin, xmax, scale)
+        let right = bounds.x + bounds.width * fraction(upper[i], xmin, xmax, scale)
+        if !finite(y) || !finite(left) || !finite(middle) || !finite(right) { ret (zero, zero, Invalid) }
+        points[i] = Coord { x: middle, y: y }
+        intervals[i] = Segment { from: Coord { x: left, y: y }, to: Coord { x: right, y: y } }
+        i += 1usize
+    }
+    let reference_x = bounds.x + bounds.width * fraction(reference, xmin, xmax, scale)
+    reference_rule[0usize] = Segment { from: Coord { x: reference_x, y: bounds.y }, to: Coord { x: reference_x, y: bounds.y + bounds.height } }
+    let studies = Layout { kind: .Dumbbell, coords: points[..estimate.len], segments: intervals[..estimate.len], bars: zero, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: f32(estimate.len) }
+    let rule = Layout { kind: .Rug, coords: zero, segments: reference_rule[..1usize], bars: zero, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: f32(estimate.len) }
+    ret (studies, rule, ok)
+}
+
+// Means and differences are chart scratch; agreement limits come from e.algo.stat.
+fn bland_altman(left: []const f64, right: []const f64, critical: f64, bounds: geometry.Rect, means: []f32, differences: []f32, points: []Coord, rules: []Segment) -> (Layout, Layout, err) {
+    if left.len < 2usize { ret (zero, zero, Empty) }
+    if right.len != left.len || !valid_bounds(bounds) { ret (zero, zero, Invalid) }
+    if means.len < left.len || differences.len < left.len || points.len < left.len || rules.len < 3usize { ret (zero, zero, TooLarge) }
+    let (agreement, defined) = stat.agreement_limits(left, right, critical)
+    if !defined || !finite(f32(agreement.lower)) || !finite(f32(agreement.bias)) || !finite(f32(agreement.upper)) { ret (zero, zero, Invalid) }
+    var ymin = f32(agreement.lower)
+    var ymax = f32(agreement.upper)
+    var i = 0usize
+    while i < left.len {
+        means[i] = f32(left[i] * 0.5f64 + right[i] * 0.5f64)
+        differences[i] = f32(left[i] - right[i])
+        if !finite(means[i]) || !finite(differences[i]) { ret (zero, zero, Invalid) }
+        if differences[i] < ymin { ymin = differences[i] }
+        if differences[i] > ymax { ymax = differences[i] }
+        i += 1usize
+    }
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+    }
+    let y_limits = [2]f32{ ymin, ymax }
+    let plot = spec(.Scatter, bounds, means[..left.len], differences[..left.len])
+    var unused_segments: [1]Segment = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let (dots, dots_error) = layout_with_limits(&plot, points, unused_segments[..0usize], unused_bars[..0usize], means[..0usize], y_limits[..])
+    if dots_error != ok { ret (zero, zero, dots_error) }
+    let levels = [3]f32{ f32(agreement.lower), f32(agreement.bias), f32(agreement.upper) }
+    i = 0usize
+    while i < 3usize {
+        let y = y_position(&plot, levels[i], ymin, ymax)
+        rules[i] = Segment { from: Coord { x: bounds.x, y: y }, to: Coord { x: bounds.x + bounds.width, y: y } }
+        i += 1usize
+    }
+    let guides = Layout { kind: .Rug, coords: zero, segments: rules[..3usize], bars: zero, x_min: dots.x_min, x_max: dots.x_max, y_min: ymin, y_max: ymax }
+    ret (dots, guides, ok)
+}
+
 fn bar_grid_ok(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect) -> bool {
     ret valid_bounds(bounds) && values.len / categories == series && values.len % categories == 0usize && finite(f32(categories))
 }

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>bland_altman</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="56" y="43" width="252" height="151" fill="rgb(245,247,252)" fill-opacity="1"/>
+<line x1="56" y1="194" x2="308" y2="194" stroke="rgb(184,82,77)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="118.5" x2="308" y2="118.5" stroke="rgb(184,82,77)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="43" x2="308" y2="43" stroke="rgb(184,82,77)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="53" y="141.6043243408203" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="79.328369140625" y="101.18472290039062" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="116.00000762939453" y="80.97492980957031" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="163.01492309570312" y="107.92132568359375" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="198.74627685546875" y="148.34091186523438" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="226.95523071289062" y="67.50173950195312" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="277.7313232421875" y="94.4481201171875" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="305" y="182.02392578125" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<text x="301" y="190" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Lower LoA</text>
+<text x="301" y="114.5" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Bias</text>
+<text x="301" y="39" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Upper LoA</text>
+<text x="71.0447769165039" y="211" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">10</text>
+<text x="165.07461547851562" y="211" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">15</text>
+<text x="259.1044921875" y="211" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">20</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Bland-Altman agreement</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Pair mean</text>
+</svg>

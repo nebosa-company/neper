@@ -681,6 +681,137 @@ fn render_cell_bars_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_forest_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/forest_plot.png"
+    let plot = geometry.rect(100.0, 48.0, 214.0, 144.0)
+    let estimates = [5]f32{ 0.72, 0.95, 1.10, 1.35, 1.80 }
+    let lows = [5]f32{ 0.45, 0.70, 0.85, 1.05, 1.30 }
+    let highs = [5]f32{ 1.10, 1.25, 1.45, 1.80, 2.50 }
+    let names = [5]str{ "Study A", "Study B", "Study C", "Study D", "Study E" }
+    let tick_names = [3]str{ "0.5", "1.0", "2.0" }
+    let tick_values = [3]f32{ 0.5, 1.0, 2.0 }
+    let scale = chart.Scale { kind: .Log10, reverse: false, linthresh: 1.0 }
+    let blue = paint.rgba(0.08, 0.40, 0.76, 1.0)
+    let axis = paint.rgba(0.52, 0.58, 0.66, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let pale = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    var centers: [5]chart.Coord = zero
+    var intervals: [5]chart.Segment = zero
+    var reference: [1]chart.Segment = zero
+    let (marks, rule, marks_error) = chart.forest_plot(estimates[..], lows[..], highs[..], 1.0, scale, plot, centers[..], intervals[..], reference[..])
+    if marks_error != ok { ret marks_error }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var labels: [10]chart.Label = zero
+    var i = 0usize
+    while i < 5usize {
+        if i % 2usize == 0usize { try fill(&builder, geometry.rect(plot.x, plot.y + f32(i) * plot.height / 5.0, plot.width, plot.height / 5.0), paint.Brush { Solid: pale }) }
+        labels[i] = chart.Label { text: names[i], anchor: chart.Coord { x: 89.0, y: centers[i].y + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 3usize {
+        let x = plot.x + plot.width * chart.fraction(tick_values[i], marks.x_min, marks.x_max, scale)
+        labels[5usize + i] = chart.Label { text: tick_names[i], anchor: chart.Coord { x: x, y: 210.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[8usize] = chart.Label { text: "Forest plot", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "Risk ratio (log)", anchor: chart.Coord { x: 208.0, y: 231.0 }, align: .Center }
+    try chart_scene.append(a, &builder, &rule, paint.Brush { Solid: axis })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..8usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[8usize..9usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[9usize..], font, 9.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 5usize {
+        if i % 2usize == 0usize { try chart_svg.rect(&writer, geometry.rect(plot.x, plot.y + f32(i) * plot.height / 5.0, plot.width, plot.height / 5.0), pale, false) }
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &rule, axis)
+    try chart_svg.append(&writer, &marks, blue)
+    try chart_svg.append_labels(&writer, labels[..8usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[8usize..9usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[9usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_agreement_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/bland_altman.png"
+    let plot = geometry.rect(56.0, 43.0, 252.0, 151.0)
+    let left = [8]f64{ 9.1f64, 10.8f64, 12.9f64, 15.2f64, 16.8f64, 18.9f64, 21.4f64, 22.2f64 }
+    let right = [8]f64{ 9.3f64, 10.4f64, 12.2f64, 14.9f64, 17.1f64, 18.0f64, 20.9f64, 23.0f64 }
+    let blue = paint.rgba(0.08, 0.40, 0.76, 1.0)
+    let rule_color = paint.rgba(0.72, 0.32, 0.30, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let pale = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    var means: [8]f32 = zero
+    var differences: [8]f32 = zero
+    var points: [8]chart.Coord = zero
+    var rule_segments: [3]chart.Segment = zero
+    let (dots, rules, layout_error) = chart.bland_altman(left[..], right[..], 1.96f64, plot, means[..], differences[..], points[..], rule_segments[..])
+    if layout_error != ok { ret layout_error }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &rules, paint.Brush { Solid: rule_color })
+    try chart_scene.append(a, &builder, &dots, paint.Brush { Solid: blue })
+    var labels: [8]chart.Label = zero
+    let levels = [3]str{ "Lower LoA", "Bias", "Upper LoA" }
+    var i = 0usize
+    while i < 3usize {
+        labels[i] = chart.Label { text: levels[i], anchor: chart.Coord { x: 301.0, y: rule_segments[i].from.y - 4.0 }, align: .Right }
+        i += 1usize
+    }
+    let ticks = [3]str{ "10", "15", "20" }
+    let tick_values = [3]f32{ 10.0, 15.0, 20.0 }
+    let scale = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    i = 0usize
+    while i < 3usize {
+        labels[3usize + i] = chart.Label { text: ticks[i], anchor: chart.Coord { x: plot.x + plot.width * chart.fraction(tick_values[i], dots.x_min, dots.x_max, scale), y: 211.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[6usize] = chart.Label { text: "Bland-Altman agreement", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[7usize] = chart.Label { text: "Pair mean", anchor: chart.Coord { x: 180.0, y: 231.0 }, align: .Center }
+    try chart_scene.append_labels(a, &builder, labels[..6usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[6usize..7usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[7usize..], font, 9.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &rules, rule_color)
+    try chart_svg.append(&writer, &dots, blue)
+    try chart_svg.append_labels(&writer, labels[..6usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[6usize..7usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[7usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_mekko(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, path: str) -> err {
     if layers.len != 3usize || categories.len != 4usize || names.len != layers.len || layers[0usize].bars.len != categories.len { ret chart.Invalid }
     let colors = [3]paint.Color{
@@ -2002,6 +2133,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)
     try render_cell_bars_preview(a, queue, output_target, canvas, &renderer)
+    try render_forest_preview(a, queue, output_target, canvas, &renderer)
+    try render_agreement_preview(a, queue, output_target, canvas, &renderer)
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

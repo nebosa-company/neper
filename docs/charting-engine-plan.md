@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, basic word cloud, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko, two-set Euler, three-set Venn, basic word cloud, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, rank-over-time ribbon, stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, forest plot, Bland–Altman agreement,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, density, ridgeline, normal Q-Q, violin, heatmap
 and correlation matrix are delivered, with linear/log10/symmetric-log and
@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-seventy-one PNG plus seventy-one SVG previews from Neper. L061 remains partial
+seventy-three PNG plus seventy-three SVG previews from Neper. L061 remains partial
 until the remaining families, full export coverage and widget integration are
 evidenced.
 
@@ -279,6 +279,17 @@ zero values leave the track blank. `gfx_chart_events_cellbars` checks large
 timestamps, geometry, ordering, bounds/capacity refusals and scene/SVG output
 on Windows and Linux. Event labels and row names remain caller-owned; collision
 avoidance and nullable/reporting data remain planned.
+`forest_plot` validates study estimates inside intervals and maps them to
+horizontal segments plus center markers on linear, log10 or symlog x scales;
+the reference line is a separate caller-colourable Rug layer. Study weights,
+pooled estimates and interval computation remain statistical inputs, not
+implicit chart operations. `e.algo.stat.agreement_limits` computes paired
+difference bias and sample-SD limits with a caller-selected critical multiplier.
+`bland_altman` maps paired means/differences to Scatter marks and three Rug
+guides at the lower limit, bias and upper limit. The focused fixture checks
+numeric references, invalid inputs, capacities and scene/SVG adapters on
+Windows and Linux. Confidence intervals for limits, proportional-bias analysis
+and nonlinear method comparison remain planned.
 `funnel` maps nonincreasing stage counts to centered trapezoid Area layers with
 an explicit inter-stage gap. This is the business conversion funnel, not the
 statistical funnel plot. Both charts refuse invalid totals/stages and short
@@ -325,7 +336,7 @@ This is the planned registry, grouped by the calculation or geometry they share.
 Scatter, line, points+line, bar, grouped/dodged bar, stacked bar, 100% stacked bar,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step/stairs, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF,
-box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, basic word cloud, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons, basic stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars and calendar heatmap are delivered; every other entry
+box, density, ridgeline, Q-Q, violin, heatmap, correlation matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, basic word cloud, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic rank-over-time ribbons, basic stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, basic forest plot and Bland–Altman agreement are delivered; every other entry
 remains planned.
 
 ### General-purpose statistical and business charts
@@ -423,6 +434,9 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    Heatmap cells; `gfx_chart_calendar_sparkline` checks both adapters and hosts.
    Event timelines reuse Lollipop points/stems and in-cell data bars reuse Bar
    rectangles; `gfx_chart_events_cellbars` checks both adapters and hosts.
+   Forest intervals reuse Dumbbell/Rug marks with log-ratio support;
+   Bland–Altman agreement reuses Scatter/Rug marks and `e.algo.stat` sample SD.
+   `gfx_chart_agreement_forest` checks numeric references and adapters on both hosts.
    OLS fit and covariance data-ellipse overlays reuse Line layers and shared
    scatter limits; mean-confidence and prediction ribbons add filled Band
    layers on the same domain. `gfx_chart_overlays` checks references and adapters
@@ -435,7 +449,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with seventy-one vector previews, automatic numeric tick text and
+   adapter with seventy-three vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

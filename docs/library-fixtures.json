@@ -849,6 +849,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_agreement_forest",
     "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_calendar_sparkline",
@@ -985,6 +986,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_agreement_forest",
     "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_calendar_sparkline",
@@ -1031,6 +1033,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_agreement_forest",
     "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_calendar_sparkline",
@@ -1073,6 +1076,7 @@
    "delivered": 7,
    "pending": [],
    "fixtures": [
+    "gfx_chart_agreement_forest",
     "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_calendar_sparkline",
@@ -1176,6 +1180,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_agreement_forest",
     "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_calendar_sparkline",
@@ -1288,6 +1293,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_agreement_forest",
     "gfx_chart_alluvial",
     "gfx_chart_bubble",
     "gfx_chart_calendar_sparkline",

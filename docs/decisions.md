@@ -33549,3 +33549,14 @@ inside caller-owned cells using one explicit maximum and inset; a zero value
 draws no fill. `gfx_chart_events_cellbars` checks numeric geometry, invalid
 inputs, storage and scene/SVG output on Windows and Linux. Event label collision,
 missing report values and per-row normalization stay planned.
+
+## D1848 — Keep agreement statistics outside chart geometry
+
+`e.algo.stat.agreement_limits` computes paired-difference bias and sample-SD
+limits from a caller-selected multiplier. `chart.bland_altman` only maps those
+statistics, means and differences to Scatter/Rug layouts; it does not hide a
+confidence-interval policy. `chart.forest_plot` similarly accepts already
+estimated effects and intervals, with a separate reference Rug and existing
+linear/log10/symlog scales. `gfx_chart_agreement_forest` checks numeric values,
+refusals and scene/SVG output on Windows and Linux. Pooled-effect estimators,
+study weighting and uncertainty intervals stay in statistics work.

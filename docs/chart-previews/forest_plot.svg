@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>forest_plot</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="100" y="48" width="214" height="28.799999237060547" fill="rgb(245,247,252)" fill-opacity="1"/>
+<rect x="100" y="105.5999984741211" width="214" height="28.799999237060547" fill="rgb(245,247,252)" fill-opacity="1"/>
+<rect x="100" y="163.1999969482422" width="214" height="28.799999237060547" fill="rgb(245,247,252)" fill-opacity="1"/>
+<line x1="199.65057373046875" y1="48" x2="199.65057373046875" y2="192" stroke="rgb(133,148,168)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="100" y1="62.400001525878906" x2="211.544921875" y2="62.400001525878906" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="155.1389617919922" y1="91.19999694824219" x2="227.49798583984375" y2="91.19999694824219" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="179.36886596679688" y1="120" x2="246.02023315429688" y2="120" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="205.7393798828125" y1="148.8000030517578" x2="273.0039978027344" y2="148.8000030517578" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="232.392578125" y1="177.60000610351562" x2="314" y2="177.60000610351562" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="155.6545867919922" y="59.400001525878906" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="190.24937438964844" y="88.19999694824219" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="208.544921875" y="117" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="234.10243225097656" y="145.8000030517578" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<rect x="270.0039978027344" y="174.60000610351562" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
+<text x="89" y="65.4000015258789" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Study A</text>
+<text x="89" y="94.19999694824219" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Study B</text>
+<text x="89" y="123" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Study C</text>
+<text x="89" y="151.8000030517578" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Study D</text>
+<text x="89" y="180.60000610351562" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Study E</text>
+<text x="113.14857482910156" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
+<text x="199.65057373046875" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">1.0</text>
+<text x="286.152587890625" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">2.0</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Forest plot</text>
+<text x="208" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Risk ratio (log)</text>
+</svg>
