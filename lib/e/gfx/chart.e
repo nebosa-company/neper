@@ -3090,6 +3090,126 @@ fn seasonal_subseries(values: []const f32, period: usize, bounds: geometry.Rect,
     ret (layers[..period], mean_marks, ok)
 }
 
+fn decomposition_line(values: []const f32, first: usize, end: usize, bounds: geometry.Rect, segments: []Segment) -> (Layout, err) {
+    if first >= end || end > values.len || end - first < 2usize || segments.len < end - first - 1usize { ret (zero, Invalid) }
+    var low = f64(values[first])
+    var high = low
+    var i = first + 1usize
+    while i < end {
+        if f64(values[i]) < low { low = f64(values[i]) }
+        if f64(values[i]) > high { high = f64(values[i]) }
+        i += 1usize
+    }
+    let raw_min = f32(low)
+    let raw_max = f32(high)
+    if low == high {
+        low -= 1.0f64
+        high += 1.0f64
+    }
+    i = first
+    while i + 1usize < end {
+        let left = Coord { x: f32(f64(bounds.x) + f64(bounds.width) * f64(i) / f64(values.len - 1usize)), y: f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (f64(values[i]) - low) / (high - low))) }
+        let right = Coord { x: f32(f64(bounds.x) + f64(bounds.width) * f64(i + 1usize) / f64(values.len - 1usize)), y: f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (f64(values[i + 1usize]) - low) / (high - low))) }
+        if !finite(left.x) || !finite(left.y) || !finite(right.x) || !finite(right.y) { ret (zero, Invalid) }
+        segments[i - first] = Segment { from: left, to: right }
+        i += 1usize
+    }
+    ret (Layout { kind: .Line, coords: zero, segments: segments[..end - first - 1usize], bars: zero, x_min: 0.0, x_max: f32(values.len - 1usize), y_min: raw_min, y_max: raw_max }, ok)
+}
+
+// Classical additive decomposition: observed = centered-MA trend + seasonal + remainder.
+// Trend and remainder are defined only on [first_valid, end_valid).
+fn decomposition(values: []const f32, period: usize, bounds: geometry.Rect, gap: f32, trend: []f32, seasonal: []f32, residual: []f32, segments: []Segment, panels: []Layout) -> ([]Layout, usize, usize, err) {
+    if values.len == 0usize { ret (zero, 0usize, 0usize, Empty) }
+    if period < 2usize || values.len / period < 2usize || !valid_bounds(bounds) || !finite(gap) || gap < 0.0 { ret (zero, 0usize, 0usize, Invalid) }
+    if trend.len < values.len || seasonal.len < values.len || residual.len < values.len || segments.len / (values.len - 1usize) < 4usize || panels.len < 4usize { ret (zero, 0usize, 0usize, TooLarge) }
+    let panel_height = (bounds.height - 3.0 * gap) / 4.0
+    if !finite(panel_height) || panel_height <= 0.0 || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, 0usize, 0usize, Invalid) }
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) { ret (zero, 0usize, 0usize, Invalid) }
+        i += 1usize
+    }
+    let radius = period / 2usize
+    let first_valid = radius
+    let end_valid = values.len - radius
+    i = first_valid
+    while i < end_valid {
+        var weighted = 0.0f64
+        var j = i - radius
+        while j <= i + radius {
+            var weight = 1.0f64
+            if period % 2usize == 0usize && (j == i - radius || j == i + radius) { weight = 0.5f64 }
+            weighted += f64(values[j]) * weight
+            j += 1usize
+        }
+        trend[i] = f32(weighted / f64(period))
+        if !finite(trend[i]) { ret (zero, 0usize, 0usize, Invalid) }
+        i += 1usize
+    }
+    var season_total = 0.0f64
+    var phase = 0usize
+    while phase < period {
+        var sum = 0.0f64
+        var count = 0usize
+        i = phase
+        while i < end_valid {
+            if i >= first_valid {
+                sum += f64(values[i]) - f64(trend[i])
+                count += 1usize
+            }
+            i += period
+        }
+        if count == 0usize { ret (zero, 0usize, 0usize, Invalid) }
+        seasonal[phase] = f32(sum / f64(count))
+        if !finite(seasonal[phase]) { ret (zero, 0usize, 0usize, Invalid) }
+        season_total += f64(seasonal[phase])
+        phase += 1usize
+    }
+    let season_mean = season_total / f64(period)
+    i = 0usize
+    while i < period {
+        seasonal[i] = f32(f64(seasonal[i]) - season_mean)
+        if !finite(seasonal[i]) { ret (zero, 0usize, 0usize, Invalid) }
+        i += 1usize
+    }
+    while i < values.len {
+        seasonal[i] = seasonal[i % period]
+        i += 1usize
+    }
+    i = first_valid
+    while i < end_valid {
+        residual[i] = values[i] - trend[i] - seasonal[i]
+        if !finite(residual[i]) { ret (zero, 0usize, 0usize, Invalid) }
+        i += 1usize
+    }
+    var used = 0usize
+    var panel = 0usize
+    while panel < 4usize {
+        var source = values
+        var first = 0usize
+        var end = values.len
+        if panel == 1usize {
+            source = trend[..values.len]
+            first = first_valid
+            end = end_valid
+        }
+        if panel == 2usize { source = seasonal[..values.len] }
+        if panel == 3usize {
+            source = residual[..values.len]
+            first = first_valid
+            end = end_valid
+        }
+        let panel_bounds = geometry.rect(bounds.x, bounds.y + f32(panel) * (panel_height + gap), bounds.width, panel_height)
+        let (marks, mark_error) = decomposition_line(source, first, end, panel_bounds, segments[used..])
+        if mark_error != ok { ret (zero, 0usize, 0usize, mark_error) }
+        panels[panel] = marks
+        used += marks.segments.len
+        panel += 1usize
+    }
+    ret (panels[..4usize], first_valid, end_valid, ok)
+}
+
 // Two nonnegative age series diverge from a shared central label gutter.
 // Input rows run from youngest (bottom) to oldest (top).
 fn population_pyramid(left: []const f32, right: []const f32, bounds: geometry.Rect, gutter: f32, row_gap: f32, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {

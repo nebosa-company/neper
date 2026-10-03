@@ -33872,3 +33872,16 @@ nesting, flat distributions, capacity refusals and scene/SVG output on Windows
 and Linux; the gallery adds a PNG/SVG pair. Simulation-to-quantile conversion,
 probability labels, observed-history anchoring and automated forecasting
 remain planned. Reference: CRAN fanplot `fan` and fabletools forecast-plot docs.
+
+## D1876 — Classical additive decomposition owns calculation and four-panel layout
+
+`decomposition` computes a centered moving-average trend, using half-weighted
+endpoints for even periods, then phase-average seasonal values centered to
+zero and an additive remainder. Only samples with a complete trend window
+enter trend/remainder traces; all four panels keep the full time-axis mapping
+and independently scale their values. Caller-owned slices hold numeric
+components and Line segments. `gfx_chart_decomposition` checks exact even/odd
+references, flat data, window and capacity refusals, and scene/SVG output on
+Windows and Linux; the gallery adds a PNG/SVG pair. Multiplicative and STL
+decomposition, missing observations and date labels remain planned. Reference:
+R `stats::decompose` and forecast `autoplot.decomposed.ts` documentation.

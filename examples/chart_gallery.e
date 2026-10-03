@@ -2098,6 +2098,69 @@ fn render_fan_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, 
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_decomposition_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let values = [24]f32{ 16.0, 20.0, 24.0, 31.0, 24.0, 21.0, 20.0, 25.0, 27.0, 34.0, 29.0, 26.0, 25.0, 30.0, 37.0, 39.0, 34.0, 31.0, 30.0, 35.0, 37.0, 44.0, 39.0, 36.0 }
+    let bounds = geometry.rect(72.0, 45.0, 256.0, 146.0)
+    let gap = 4.0f32
+    let panel_height = (bounds.height - 3.0 * gap) / 4.0
+    var trend: [24]f32 = zero
+    var seasonal: [24]f32 = zero
+    var residual: [24]f32 = zero
+    var segments: [92]chart.Segment = zero
+    var storage: [4]chart.Layout = zero
+    let (panels, _, _, chart_error) = chart.decomposition(values[..], 6usize, bounds, gap, trend[..], seasonal[..], residual[..], segments[..], storage[..])
+    if chart_error != ok { ret chart_error }
+    let inks = [4]paint.Color{ paint.rgba(0.06, 0.34, 0.71, 1.0), paint.rgba(0.12, 0.55, 0.45, 1.0), paint.rgba(0.88, 0.42, 0.14, 1.0), paint.rgba(0.67, 0.22, 0.37, 1.0) }
+    let pale = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let names = [4]str{ "Observed", "Trend", "Seasonal", "Remainder" }
+    var labels: [7]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Additive time-series decomposition", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    var i = 0usize
+    while i < 4usize {
+        labels[i + 1usize] = chart.Label { text: names[i], anchor: chart.Coord { x: 65.0, y: bounds.y + f32(i) * (panel_height + gap) + panel_height * 0.5 + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    labels[5usize] = chart.Label { text: "1", anchor: chart.Coord { x: 72.0, y: 210.0 }, align: .Center }
+    labels[6usize] = chart.Label { text: "24", anchor: chart.Coord { x: 328.0, y: 210.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 26u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 0usize
+    while i < 4usize {
+        let box = geometry.rect(bounds.x, bounds.y + f32(i) * (panel_height + gap), bounds.width, panel_height)
+        try fill(&builder, box, paint.Brush { Solid: pale })
+        try chart_scene.append(a, &builder, &panels[i], paint.Brush { Solid: inks[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/decomposition.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 4usize {
+        let box = geometry.rect(bounds.x, bounds.y + f32(i) * (panel_height + gap), bounds.width, panel_height)
+        try chart_svg.rect(&writer, box, pale, false)
+        try chart_svg.append(&writer, &panels[i], inks[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
     if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
     let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
@@ -3125,6 +3188,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_horizon_preview(a, queue, output_target, canvas, &renderer)
     try render_seasonal_preview(a, queue, output_target, canvas, &renderer)
     try render_fan_preview(a, queue, output_target, canvas, &renderer)
+    try render_decomposition_preview(a, queue, output_target, canvas, &renderer)
     let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
     let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
     let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }

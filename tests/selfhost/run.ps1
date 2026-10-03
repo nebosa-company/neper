@@ -3127,6 +3127,11 @@ $gfxChartFanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $gfxChartFanWritten -ne 'executable written') { throw 'gfx_chart_fan emission failed' }
 $gfxChartFanOutput = & $gfxChartFanPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFanOutput -ne 'gfx chart fan ok') { throw "the e.gfx.chart forecast fan answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDecompositionPath = Join-Path $testBuild 'gfx-chart-decomposition-selfhost.exe'
+$gfxChartDecompositionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_decomposition\src\main.e') $repo 'x64' 'windows' $gfxChartDecompositionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDecompositionWritten -ne 'executable written') { throw 'gfx_chart_decomposition emission failed' }
+$gfxChartDecompositionOutput = & $gfxChartDecompositionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDecompositionOutput -ne 'gfx chart decomposition ok') { throw "the e.gfx.chart additive decomposition answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'
