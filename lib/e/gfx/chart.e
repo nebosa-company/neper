@@ -1503,6 +1503,129 @@ fn circle_pack(parents: []const usize, weights: []const f32, bounds: geometry.Re
     ret (layers[..parents.len], ok)
 }
 
+// Exact two-circle overlap in the same area units as r1 and r2.
+fn circle_overlap_area(r1: f64, r2: f64, distance: f64) -> f64 {
+    let pi = 3.141592653589793f64
+    if distance >= r1 + r2 { ret 0.0f64 }
+    var difference = r1 - r2
+    if difference < 0.0f64 { difference = 0.0f64 - difference }
+    if distance <= difference {
+        var smaller = r1
+        if r2 < smaller { smaller = r2 }
+        ret pi * smaller * smaller
+    }
+    var first = (distance * distance + r1 * r1 - r2 * r2) / (2.0f64 * distance * r1)
+    var second = (distance * distance + r2 * r2 - r1 * r1) / (2.0f64 * distance * r2)
+    if first < -1.0f64 { first = -1.0f64 }
+    if first > 1.0f64 { first = 1.0f64 }
+    if second < -1.0f64 { second = -1.0f64 }
+    if second > 1.0f64 { second = 1.0f64 }
+    var root = (0.0f64 - distance + r1 + r2) * (distance + r1 - r2) * (distance - r1 + r2) * (distance + r1 + r2)
+    if root < 0.0f64 { root = 0.0f64 }
+    ret r1 * r1 * math.acos[f64](first) + r2 * r2 * math.acos[f64](second) - 0.5f64 * math.sqrt[f64](root)
+}
+
+// Two-set area-proportional Euler diagram. A full subset is concentric;
+// disjoint sets get a small visual gap. The caller owns both circle marks.
+fn euler2(first: f32, second: f32, overlap: f32, bounds: geometry.Rect, circles: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if !valid_bounds(bounds) || !finite(first) || !finite(second) || !finite(overlap) || first < 0.0 || second < 0.0 || overlap < 0.0 || overlap > first || overlap > second { ret (zero, Invalid) }
+    if circles.len < 2usize || layers.len < 2usize { ret (zero, TooLarge) }
+    if first == 0.0 && second == 0.0 { ret (zero, Empty) }
+    let pi = 3.141592653589793f64
+    let r1 = math.sqrt[f64](f64(first) / pi)
+    let r2 = math.sqrt[f64](f64(second) / pi)
+    var distance = 0.0f64
+    if overlap == 0.0 {
+        var smaller = r1
+        if r2 < smaller { smaller = r2 }
+        distance = r1 + r2 + smaller * 0.18f64
+    } else {
+        var smaller = first
+        if second < smaller { smaller = second }
+        if overlap < smaller {
+            var low = r1 - r2
+            if low < 0.0f64 { low = 0.0f64 - low }
+            var high = r1 + r2
+            var step = 0usize
+            while step < 56usize {
+                let middle = (low + high) * 0.5f64
+                if circle_overlap_area(r1, r2, middle) > f64(overlap) { low = middle } else { high = middle }
+                step += 1usize
+            }
+            distance = (low + high) * 0.5f64
+        }
+    }
+    var left = 0.0f64 - r1
+    if distance - r2 < left { left = distance - r2 }
+    var right = r1
+    if distance + r2 > right { right = distance + r2 }
+    var tall = r1
+    if r2 > tall { tall = r2 }
+    var scale = f64(bounds.width) / (right - left)
+    let vertical = f64(bounds.height) / (2.0f64 * tall)
+    if vertical < scale { scale = vertical }
+    scale *= 0.92f64
+    let cx1 = f64(bounds.x) + (f64(bounds.width) - (right - left) * scale) * 0.5f64 - left * scale
+    let cx2 = cx1 + distance * scale
+    let cy = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    let radii = [2]f64{ r1 * scale, r2 * scale }
+    let centers = [2]f64{ cx1, cx2 }
+    var i = 0usize
+    while i < 2usize {
+        let x = f32(centers[i] - radii[i])
+        let y = f32(cy - radii[i])
+        let diameter = f32(2.0f64 * radii[i])
+        if !finite(x) || !finite(y) || !finite(diameter) || (radii[i] > 0.0f64 && diameter <= 0.0) { ret (zero, Invalid) }
+        circles[i] = geometry.rect(x, y, diameter, diameter)
+        var bars: []geometry.Rect = zero
+        if diameter > 0.0 { bars = circles[i..i + 1usize] }
+        layers[i] = Layout { kind: .Bubble, coords: zero, segments: zero, bars: bars, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    ret (layers[..2usize], ok)
+}
+
+// Nominal three-set Venn: all seven memberships have nonempty regions.
+// Anchor order is A, B, C, AB, AC, BC, ABC; no area claims are made.
+// ponytail: fixed circles cannot encode seven arbitrary region areas; add a fitted-region solver only when those areas are required.
+fn venn3(bounds: geometry.Rect, circles: []geometry.Rect, anchors: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    if circles.len < 3usize || anchors.len < 7usize || layers.len < 3usize { ret (zero, TooLarge) }
+    var radius = f64(bounds.width) / 3.15f64
+    let vertical = f64(bounds.height) / 2.995929214352104f64
+    if vertical < radius { radius = vertical }
+    radius *= 0.92f64
+    let distance = radius * 1.15f64
+    let dy = distance * 0.2886751345948129f64
+    let cx = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let cy = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    let xs = [3]f64{ cx, cx - distance * 0.5f64, cx + distance * 0.5f64 }
+    let ys = [3]f64{ cy - 2.0f64 * dy, cy + dy, cy + dy }
+    var i = 0usize
+    while i < 3usize {
+        let x = f32(xs[i] - radius)
+        let y = f32(ys[i] - radius)
+        let diameter = f32(2.0f64 * radius)
+        if !finite(x) || !finite(y) || !finite(diameter) || diameter <= 0.0 { ret (zero, Invalid) }
+        circles[i] = geometry.rect(x, y, diameter, diameter)
+        layers[i] = Layout { kind: .Bubble, coords: zero, segments: zero, bars: circles[i..i + 1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    anchors[0usize] = Coord { x: f32(xs[0usize]), y: f32(ys[0usize] - radius * 0.5f64) }
+    anchors[1usize] = Coord { x: f32(xs[1usize] - radius * 0.45f64), y: f32(ys[1usize] + radius * 0.3f64) }
+    anchors[2usize] = Coord { x: f32(xs[2usize] + radius * 0.45f64), y: f32(ys[2usize] + radius * 0.3f64) }
+    anchors[3usize] = Coord { x: f32((xs[0usize] + xs[1usize]) * 0.5f64 - radius * 0.18f64), y: f32((ys[0usize] + ys[1usize]) * 0.5f64) }
+    anchors[4usize] = Coord { x: f32((xs[0usize] + xs[2usize]) * 0.5f64 + radius * 0.18f64), y: f32((ys[0usize] + ys[2usize]) * 0.5f64) }
+    anchors[5usize] = Coord { x: f32(cx), y: f32(cy + dy + radius * 0.23f64) }
+    anchors[6usize] = Coord { x: f32(cx), y: f32(cy) }
+    i = 0usize
+    while i < 7usize {
+        if !finite(anchors[i].x) || !finite(anchors[i].y) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    ret (layers[..3usize], ok)
+}
+
 // Nodes are ordered within zero-based columns; links go strictly forward.
 // Link layers precede node layers so painted nodes cover ribbon endpoints.
 // ponytail: fixed input order can cross ribbons; add barycentric ordering only

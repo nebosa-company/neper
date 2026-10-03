@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>euler2</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<circle cx="91.13390350341797" cy="127.5" r="63.13390350341797" fill="rgb(26,110,199)" fill-opacity="0.5"/>
+<circle cx="154.3668975830078" cy="127.5" r="57.63310623168945" fill="rgb(232,99,64)" fill-opacity="0.5"/>
+<rect x="237" y="64" width="11" height="11" fill="rgb(26,110,199)" fill-opacity="1"/>
+<rect x="237" y="100" width="11" height="11" fill="rgb(232,99,64)" fill-opacity="1"/>
+<text x="254" y="75" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">A 30</text>
+<text x="254" y="111" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">B 25</text>
+<text x="59.566951751708984" y="130.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">20</text>
+<text x="122.75039672851562" y="130.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">10</text>
+<text x="183.18345642089844" y="130.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">15</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Measured overlap</text>
+</svg>

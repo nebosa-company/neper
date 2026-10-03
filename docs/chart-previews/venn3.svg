@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>venn3</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<circle cx="120" cy="91.81944274902344" r="53.739585876464844" fill="rgb(26,110,199)" fill-opacity="0.5"/>
+<circle cx="89.0997314453125" cy="145.34027099609375" r="53.739585876464844" fill="rgb(232,99,64)" fill-opacity="0.5"/>
+<circle cx="150.9002685546875" cy="145.34027099609375" r="53.739585876464844" fill="rgb(41,163,115)" fill-opacity="0.5"/>
+<rect x="237" y="64" width="11" height="11" fill="rgb(26,110,199)" fill-opacity="1"/>
+<rect x="237" y="100" width="11" height="11" fill="rgb(232,99,64)" fill-opacity="1"/>
+<rect x="237" y="136" width="11" height="11" fill="rgb(41,163,115)" fill-opacity="1"/>
+<text x="254" y="75" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">A</text>
+<text x="254" y="111" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">B</text>
+<text x="254" y="147" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">C</text>
+<text x="120" y="67.94965362548828" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">A</text>
+<text x="64.91692352294922" y="164.462158203125" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">B</text>
+<text x="175.0830841064453" y="164.462158203125" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">C</text>
+<text x="94.87673950195312" y="121.57986450195312" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">AB</text>
+<text x="145.12326049804688" y="121.57986450195312" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">AC</text>
+<text x="120" y="160.70037841796875" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">BC</text>
+<text x="120" y="130.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">ABC</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Three-set Venn</text>
+</svg>

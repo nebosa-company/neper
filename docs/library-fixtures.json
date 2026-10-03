@@ -875,6 +875,7 @@
     "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap",
+    "gfx_chart_venn_euler",
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
@@ -1004,7 +1005,8 @@
     "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
     "gfx_chart_svg",
-    "gfx_chart_treemap"
+    "gfx_chart_treemap",
+    "gfx_chart_venn_euler"
    ]
   },
   {
@@ -1040,7 +1042,8 @@
     "gfx_chart_scale",
     "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
-    "gfx_chart_treemap"
+    "gfx_chart_treemap",
+    "gfx_chart_venn_euler"
    ]
   },
   {
@@ -1071,7 +1074,8 @@
     "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
     "gfx_chart_svg",
-    "gfx_chart_treemap"
+    "gfx_chart_treemap",
+    "gfx_chart_venn_euler"
    ]
   },
   {
@@ -1173,6 +1177,7 @@
     "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap",
+    "gfx_chart_venn_euler",
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
@@ -1277,6 +1282,7 @@
     "gfx_chart_streamgraph",
     "gfx_chart_sunburst",
     "gfx_chart_treemap",
+    "gfx_chart_venn_euler",
     "gfx_scene",
     "gfx_scene_plan",
     "ui_a11y_controls",

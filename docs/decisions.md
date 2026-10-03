@@ -33468,3 +33468,14 @@ and SVG adapters, with labels and palette owned by the caller.
 `gfx_chart_mekko` checks numeric area references, malformed inputs, zero
 categories, capacity and adapters on Windows and Linux; the gallery adds
 one PNG/SVG pair. Pixel gaps are omitted because they would distort area.
+
+## D1841 — Separate measured two-set Euler from nominal three-set Venn
+
+`chart.euler2` derives circle radii from set totals and bisects the exact
+two-circle intersection formula to place the circles for a requested overlap.
+Disjoint and full-containment cases use explicit layouts. `chart.venn3` uses
+three fixed equal circles with anchors in all seven membership regions, but
+makes no area-proportional claim. Both return caller-owned Bubble layers and
+reuse the scene/SVG adapters. `gfx_chart_venn_euler` checks overlap geometry,
+membership, refusals and both adapters on Windows and Linux; the gallery adds
+two PNG/SVG pairs. Arbitrary three-set area fitting remains future work.

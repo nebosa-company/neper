@@ -801,6 +801,70 @@ fn render_radial_hierarchy(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_circle_sets(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, regions: []const str, anchors: []const chart.Coord, title: str, path: str) -> err {
+    if (layers.len != 2usize && layers.len != 3usize) || names.len != layers.len || regions.len != anchors.len || regions.len > 7usize { ret chart.Invalid }
+    let colors = [3]paint.Color{ paint.rgba(0.10, 0.43, 0.78, 0.50), paint.rgba(0.91, 0.39, 0.25, 0.50), paint.rgba(0.16, 0.64, 0.45, 0.50) }
+    let swatches = [3]paint.Color{ paint.rgba(0.10, 0.43, 0.78, 1.0), paint.rgba(0.91, 0.39, 0.25, 1.0), paint.rgba(0.16, 0.64, 0.45, 1.0) }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var legend: [3]chart.LegendItem = zero
+    let (entries, legend_error) = chart.legend_items(names, chart.Coord { x: 237.0, y: 64.0 }, 11.0, 36.0, legend[..])
+    if legend_error != ok { ret legend_error }
+    var labels: [11]chart.Label = zero
+    var i = 0usize
+    while i < entries.len {
+        labels[i] = entries[i].label
+        i += 1usize
+    }
+    var j = 0usize
+    while j < regions.len {
+        labels[i + j] = chart.Label { text: regions[j], anchor: chart.Coord { x: anchors[j].x, y: anchors[j].y + 3.0 }, align: .Center }
+        j += 1usize
+    }
+    let title_index = i + j
+    labels[title_index] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        try fill(&builder, entries[i].swatch, paint.Brush { Solid: swatches[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..title_index], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[title_index..title_index + 1usize], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        try chart_svg.rect(&writer, entries[i].swatch, swatches[i], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..title_index], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[title_index..title_index + 1usize], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_chord(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, path: str) -> err {
     if layers.len != 14usize || names.len != 4usize { ret chart.Invalid }
     let ribbons = [4]paint.Color{
@@ -1254,6 +1318,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if circle_error != ok { ret circle_error }
     let circle_names = [7]str{ "Digital", "Operations", "Cloud 30", "Apps 20", "Data 10", "Supply 25", "Field 15" }
     try render_radial_hierarchy(a, queue, output_target, canvas, &renderer, circle_layers, circle_names[..], 1usize, false, "Circle packing", "docs/chart-previews/circle_pack.png")
+    var euler_circles: [2]geometry.Rect = zero
+    var euler_storage: [2]chart.Layout = zero
+    let (euler_layers, euler_error) = chart.euler2(30.0, 25.0, 10.0, geometry.rect(20.0, 40.0, 200.0, 175.0), euler_circles[..], euler_storage[..])
+    if euler_error != ok { ret euler_error }
+    let ex0 = euler_circles[0usize].x + euler_circles[0usize].width * 0.5
+    let ex1 = euler_circles[1usize].x + euler_circles[1usize].width * 0.5
+    let ey = euler_circles[0usize].y + euler_circles[0usize].height * 0.5
+    let euler_anchors = [3]chart.Coord{
+        chart.Coord { x: ex0 - euler_circles[0usize].width * 0.25, y: ey },
+        chart.Coord { x: (ex0 + ex1) * 0.5, y: ey },
+        chart.Coord { x: ex1 + euler_circles[1usize].width * 0.25, y: ey },
+    }
+    let euler_names = [2]str{ "A 30", "B 25" }
+    let euler_regions = [3]str{ "20", "10", "15" }
+    try render_circle_sets(a, queue, output_target, canvas, &renderer, euler_layers, euler_names[..], euler_regions[..], euler_anchors[..], "Measured overlap", "docs/chart-previews/euler2.png")
+    var venn_circles: [3]geometry.Rect = zero
+    var venn_anchors: [7]chart.Coord = zero
+    var venn_storage: [3]chart.Layout = zero
+    let (venn_layers, venn_error) = chart.venn3(geometry.rect(20.0, 40.0, 200.0, 175.0), venn_circles[..], venn_anchors[..], venn_storage[..])
+    if venn_error != ok { ret venn_error }
+    let venn_names = [3]str{ "A", "B", "C" }
+    let venn_regions = [7]str{ "A", "B", "C", "AB", "AC", "BC", "ABC" }
+    try render_circle_sets(a, queue, output_target, canvas, &renderer, venn_layers, venn_names[..], venn_regions[..], venn_anchors[..], "Three-set Venn", "docs/chart-previews/venn3.png")
     let chord_values = [16]f32{ 0.0, 8.0, 5.0, 3.0, 4.0, 0.0, 6.0, 5.0, 7.0, 3.0, 0.0, 4.0, 2.0, 6.0, 5.0, 0.0 }
     let chord_names = [4]str{ "Design", "Build", "Sales", "Support" }
     var chord_totals: [4]f64 = zero
