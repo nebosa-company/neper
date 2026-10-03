@@ -220,6 +220,7 @@ backlog = '\n'.join(
         score=float(item['score']), evidence=html.escape(item['evidence']))
     for item in queue_items
 )
+preview_paths = sorted(Path('docs/chart-previews').glob('*.png'))
 previews = ''.join(
     '<figure><img src="chart-previews/{name}" alt="Neper {title} chart preview" '
     'width="360" height="240"><figcaption>{title}{vector}</figcaption></figure>'.format(
@@ -227,14 +228,14 @@ previews = ''.join(
         vector=(' <a href="chart-previews/{name}">SVG</a>'.format(
             name=html.escape(path.with_suffix('.svg').name))
             if path.with_suffix('.svg').exists() else ''))
-    for path in sorted(Path('docs/chart-previews').glob('*.png'))
+    for path in preview_paths
 )
 chart_section = (
     '<section class="tools" aria-label="Charting engine plan">'
     '<h2>Charting engine</h2>'
     '<p>Chart capability <code>L061</code>: {score:.0%} complete. {evidence}</p>'
     '<h3>Delivery roadmap</h3><ol>{roadmap}</ol>'
-    '<h3>Rendered previews</h3><div class="previews">{previews}</div>'
+    '<h3>Rendered previews ({preview_count}/155)</h3><div class="previews">{previews}</div>'
     '<details><summary>Full chart plan and chart/diagram catalogue</summary>'
     '<pre class="plan">{plan}</pre></details></section>'
     '<section class="tools" aria-label="Unfinished work queue">'
@@ -243,7 +244,8 @@ chart_section = (
     '<table><thead><tr><th>ID</th><th>Capability</th><th>Progress</th><th>Evidence and remaining work</th></tr></thead>'
     '<tbody>{backlog}</tbody></table></div></details></section>'
 ).format(score=float(chart_item['score']), evidence=html.escape(chart_item['evidence']),
-         roadmap=''.join(roadmap), previews=previews, plan=html.escape(chart_plan),
+         roadmap=''.join(roadmap), preview_count=len(preview_paths), previews=previews,
+         plan=html.escape(chart_plan),
          count=len(queue_items), backlog=backlog)
 
 page_html = """<!doctype html>
