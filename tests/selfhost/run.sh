@@ -2854,6 +2854,11 @@ gfx_chart_resource_histogram_written=$($test_build/neper-self emit-executable "$
 chmod +x "$test_build/gfx-chart-resource-histogram-selfhost"
 gfx_chart_resource_histogram_output=$("$test_build/gfx-chart-resource-histogram-selfhost")
 [ "$gfx_chart_resource_histogram_output" = 'gfx chart resource histogram ok' ]
+gfx_chart_swimlane_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_swimlane/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-swimlane-selfhost")
+[ "$gfx_chart_swimlane_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-swimlane-selfhost"
+gfx_chart_swimlane_output=$("$test_build/gfx-chart-swimlane-selfhost")
+[ "$gfx_chart_swimlane_output" = 'gfx chart swimlane ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

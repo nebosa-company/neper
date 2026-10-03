@@ -34075,3 +34075,16 @@ checks overlap and gap loads, over-capacity geometry, invalid/caller-storage
 paths and scene/SVG output on Windows and Linux. The gallery adds a PNG/SVG
 pair. Microsoft Project's Resource Graph documents workload bars and a maximum
 units comparison: https://support.microsoft.com/en-us/project/view-resource-workloads-and-availability-in-project-desktop
+
+## D1899 — Swimlane flows cross role partitions without claiming BPMN conformance
+
+`swimlane` maps steps to one role lane and one ordered stage each, returning
+caller-owned lane bands and step Bar rectangles. Forward links become five Rug
+strokes: an orthogonal route plus two arrowhead sides. Cross-lane handoffs and
+same-lane flows share this geometry. Duplicate cells, out-of-range or backward
+links and short storage are refused. The focused Windows/Linux fixture checks
+positions and both scene/SVG adapters; the gallery adds a PNG/SVG pair with
+role and step labels. This is not a BPMN 2.0 model: gateways, events, message
+flows, execution semantics and interchange remain separate work. OMG's BPMN
+specification distinguishes lane partitions from sequence flow:
+https://www.omg.org/spec/BPMN/2.0/PDF

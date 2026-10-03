@@ -3232,6 +3232,11 @@ $gfxChartResourceHistogramWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $gfxChartResourceHistogramWritten -ne 'executable written') { throw 'gfx_chart_resource_histogram emission failed' }
 $gfxChartResourceHistogramOutput = & $gfxChartResourceHistogramPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartResourceHistogramOutput -ne 'gfx chart resource histogram ok') { throw "the e.gfx.chart resource histogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSwimlanePath = Join-Path $testBuild 'gfx-chart-swimlane-selfhost.exe'
+$gfxChartSwimlaneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_swimlane\src\main.e') $repo 'x64' 'windows' $gfxChartSwimlanePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSwimlaneWritten -ne 'executable written') { throw 'gfx_chart_swimlane emission failed' }
+$gfxChartSwimlaneOutput = & $gfxChartSwimlanePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSwimlaneOutput -ne 'gfx chart swimlane ok') { throw "the e.gfx.chart swimlane answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

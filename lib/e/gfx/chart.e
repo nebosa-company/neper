@@ -31,6 +31,8 @@ type CloudWord = struct { label: Label, size: f32, box: geometry.Rect }
 type StateSpan = struct { row: usize, start: f64, end: f64, state: usize }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
 type ResourceSpan = struct { start: f64, end: f64, units: f64 }
+type SwimlaneStep = struct { lane: usize, stage: usize }
+type SwimlaneLink = struct { from: usize, to: usize }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2146,6 +2148,72 @@ fn resource_histogram(spans: []const ResourceSpan, domain_start: f64, domain_end
     let excess = Layout { kind: .Bar, coords: zero, segments: zero, bars: excess_bars[..periods], x_min: f32(domain_start), x_max: f32(domain_end), y_min: 0.0, y_max: f32(maximum) }
     let limit = Layout { kind: .Rug, coords: zero, segments: capacity_rule[..1usize], bars: zero, x_min: f32(domain_start), x_max: f32(domain_end), y_min: 0.0, y_max: f32(maximum) }
     ret (normal, excess, limit, ok)
+}
+
+// Lanes partition roles; stages order steps. Five strokes per link include
+// an orthogonal elbow and an arrowhead. Labels and lane colours stay caller-side.
+fn swimlane(steps: []const SwimlaneStep, links: []const SwimlaneLink, lane_count: usize, stage_count: usize, bounds: geometry.Rect, lane_bands: []geometry.Rect, boxes: []geometry.Rect, arrows: []Segment) -> (Layout, Layout, err) {
+    if steps.len == 0usize { ret (zero, zero, Empty) }
+    if lane_count == 0usize || stage_count == 0usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, zero, Invalid) }
+    if lane_bands.len < lane_count || boxes.len < steps.len || arrows.len / 5usize < links.len { ret (zero, zero, TooLarge) }
+    let lane_height = bounds.height / f32(lane_count)
+    let stage_width = bounds.width / f32(stage_count)
+    let box_width = stage_width * 0.72
+    let box_height = lane_height * 0.44
+    if !finite(lane_height) || !finite(stage_width) || !finite(box_width) || !finite(box_height) || box_width <= 0.0 || box_height <= 0.0 { ret (zero, zero, Invalid) }
+    var i = 0usize
+    while i < steps.len {
+        if steps[i].lane >= lane_count || steps[i].stage >= stage_count { ret (zero, zero, Invalid) }
+        var j = 0usize
+        while j < i {
+            if steps[j].lane == steps[i].lane && steps[j].stage == steps[i].stage { ret (zero, zero, Invalid) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < links.len {
+        let link = links[i]
+        if link.from >= steps.len || link.to >= steps.len || steps[link.from].stage >= steps[link.to].stage { ret (zero, zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < lane_count {
+        lane_bands[i] = geometry.rect(bounds.x, bounds.y + lane_height * f32(i), bounds.width, lane_height)
+        i += 1usize
+    }
+    i = 0usize
+    while i < steps.len {
+        let step = steps[i]
+        let x = bounds.x + stage_width * f32(step.stage) + (stage_width - box_width) * 0.5
+        let y = bounds.y + lane_height * f32(step.lane) + (lane_height - box_height) * 0.5
+        if !finite(x) || !finite(y) || !finite(x + box_width) || !finite(y + box_height) { ret (zero, zero, Invalid) }
+        boxes[i] = geometry.rect(x, y, box_width, box_height)
+        i += 1usize
+    }
+    i = 0usize
+    while i < links.len {
+        let from = boxes[links[i].from]
+        let to = boxes[links[i].to]
+        let x0 = from.x + from.width
+        let x1 = to.x
+        let y0 = from.y + from.height * 0.5
+        let y1 = to.y + to.height * 0.5
+        let middle = x0 + (x1 - x0) * 0.5
+        let head = (x1 - x0) * 0.18
+        if !finite(x0) || !finite(x1) || !finite(y0) || !finite(y1) || !finite(middle) || !finite(head) || head <= 0.0 { ret (zero, zero, Invalid) }
+        let first = i * 5usize
+        let tip = Coord { x: x1, y: y1 }
+        arrows[first] = Segment { from: Coord { x: x0, y: y0 }, to: Coord { x: middle, y: y0 } }
+        arrows[first + 1usize] = Segment { from: Coord { x: middle, y: y0 }, to: Coord { x: middle, y: y1 } }
+        arrows[first + 2usize] = Segment { from: Coord { x: middle, y: y1 }, to: tip }
+        arrows[first + 3usize] = Segment { from: Coord { x: x1 - head, y: y1 - head * 0.7 }, to: tip }
+        arrows[first + 4usize] = Segment { from: Coord { x: x1 - head, y: y1 + head * 0.7 }, to: tip }
+        i += 1usize
+    }
+    let nodes = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..steps.len], x_min: 0.0, x_max: f32(stage_count), y_min: 0.0, y_max: f32(lane_count) }
+    let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..links.len * 5usize], bars: zero, x_min: 0.0, x_max: f32(stage_count), y_min: 0.0, y_max: f32(lane_count) }
+    ret (nodes, connectors, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

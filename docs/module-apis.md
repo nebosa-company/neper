@@ -15936,6 +15936,8 @@ type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64,
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
 type ResourceSpan = struct { start: f64, end: f64, units: f64 }
+type SwimlaneStep = struct { lane: usize, stage: usize }
+type SwimlaneLink = struct { from: usize, to: usize }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type TimelineEvent = struct { time: f64, row: usize }
 error Invalid
@@ -15982,6 +15984,7 @@ fn burnup(x: []const f32, completed: []const f32, scope: []const f32, bounds: ge
 fn earned_value(x: []const f32, planned: []const f32, earned: []const f32, actual: []const f32, bounds: geometry.Rect, planned_segments: []Segment, earned_segments: []Segment, actual_segments: []Segment) -> (Layout, Layout, Layout, err)
 fn gantt(tasks: []const GanttTask, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, row_gap: f32, spans: []geometry.Rect, completed: []geometry.Rect) -> (Layout, Layout, err)
 fn resource_histogram(spans: []const ResourceSpan, domain_start: f64, domain_end: f64, capacity: f64, bounds: geometry.Rect, edges: []f64, loads: []f64, normal_bars: []geometry.Rect, excess_bars: []geometry.Rect, capacity_rule: []Segment) -> (Layout, Layout, Layout, err)
+fn swimlane(steps: []const SwimlaneStep, links: []const SwimlaneLink, lane_count: usize, stage_count: usize, bounds: geometry.Rect, lane_bands: []geometry.Rect, boxes: []geometry.Rect, arrows: []Segment) -> (Layout, Layout, err)
 fn event_timeline(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, points: []Coord, stems: []Segment) -> (Layout, err)
 fn milestone_roadmap(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, size: f32, centers: []Coord, stems: []Segment, diamonds: []Coord, layers: []Layout) -> ([]Layout, err)
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)

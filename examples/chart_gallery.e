@@ -787,6 +787,87 @@ fn render_resource_histogram_preview(a: *mem.Arena, q: *gpu.Queue, output_target
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_swimlane_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/swimlane.png"
+    let plot = geometry.rect(82.0, 49.0, 248.0, 150.0)
+    let steps = [4]chart.SwimlaneStep{
+        chart.SwimlaneStep { lane: 0usize, stage: 0usize },
+        chart.SwimlaneStep { lane: 1usize, stage: 1usize },
+        chart.SwimlaneStep { lane: 1usize, stage: 2usize },
+        chart.SwimlaneStep { lane: 2usize, stage: 3usize },
+    }
+    let links = [3]chart.SwimlaneLink{
+        chart.SwimlaneLink { from: 0usize, to: 1usize },
+        chart.SwimlaneLink { from: 1usize, to: 2usize },
+        chart.SwimlaneLink { from: 2usize, to: 3usize },
+    }
+    let names = [4]str{ "Intake", "Review", "Approve", "Ship" }
+    let lane_names = [3]str{ "Sales", "Risk", "Ops" }
+    let band_colors = [3]paint.Color{
+        paint.rgba(0.92, 0.96, 1.0, 1.0),
+        paint.rgba(0.96, 0.98, 1.0, 1.0),
+        paint.rgba(0.92, 0.96, 1.0, 1.0),
+    }
+    let blue = paint.rgba(0.10, 0.39, 0.73, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var lanes: [3]geometry.Rect = zero
+    var boxes: [4]geometry.Rect = zero
+    var arrows: [15]chart.Segment = zero
+    let (nodes, connectors, layout_error) = chart.swimlane(steps[..], links[..], 3usize, 4usize, plot, lanes[..], boxes[..], arrows[..])
+    if layout_error != ok { ret layout_error }
+    var labels: [8]chart.Label = zero
+    var i = 0usize
+    while i < lanes.len {
+        labels[i] = chart.Label { text: lane_names[i], anchor: chart.Coord { x: 73.0, y: lanes[i].y + lanes[i].height * 0.5 + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < boxes.len {
+        let box = boxes[i]
+        labels[3usize + i] = chart.Label { text: names[i], anchor: chart.Coord { x: box.x + box.width * 0.5, y: box.y + box.height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[7usize] = chart.Label { text: "Swimlane handoffs", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    i = 0usize
+    while i < lanes.len {
+        try fill(&builder, lanes[i], paint.Brush { Solid: band_colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &connectors, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &nodes, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..3usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[3usize..7usize], font, 9.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[7usize..], font, 14.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < lanes.len {
+        try chart_svg.rect(&writer, lanes[i], band_colors[i], false)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &connectors, dark)
+    try chart_svg.append(&writer, &nodes, blue)
+    try chart_svg.append_labels(&writer, labels[..3usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[3usize..7usize], white, 9.0)
+    try chart_svg.append_labels(&writer, labels[7usize..], dark, 14.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_gantt_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/gantt.png"
     let plot = geometry.rect(89.0, 52.0, 225.0, 143.0)
@@ -4634,6 +4715,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
     try render_risk_matrix_preview(a, queue, output_target, canvas, &renderer)
     try render_resource_histogram_preview(a, queue, output_target, canvas, &renderer)
+    try render_swimlane_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)
