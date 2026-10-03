@@ -3056,6 +3056,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (qq_plot, qq_error) = chart.qq_normal(qq_values[..], bounds, qq_points[..], qq_reference[..])
     if qq_error != ok { ret qq_error }
     try render_chart(a, queue, output_target, canvas, &renderer, &qq_plot, "docs/chart-previews/qq.png")
+    var pp_points: [9]chart.Coord = zero
+    var pp_reference: [1]chart.Segment = zero
+    let (pp_plot, pp_error) = chart.pp_normal(qq_values[..], 0.0f64, 1.5f64, bounds, pp_points[..], pp_reference[..])
+    if pp_error != ok { ret pp_error }
+    try render_chart(a, queue, output_target, canvas, &renderer, &pp_plot, "docs/chart-previews/pp_normal.png")
     let tile_values = [36]f64{
         0.0, 1.0, 2.0, 3.0, 2.0, 1.0,
         1.0, 2.0, 4.0, 6.0, 4.0, 2.0,

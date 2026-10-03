@@ -12,7 +12,7 @@ use e.mem
 use e.str
 use e.text.layout as text_layout
 
-type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
@@ -3133,6 +3133,31 @@ fn qq_normal(sorted: []const f64, bounds: geometry.Rect, points: []Coord, refere
         to: Coord { x: mapped(theory_q3, xmin, xmax, bounds.x, bounds.width), y: bounds.y + bounds.height - mapped(f32(q3), ymin, ymax, 0.0, bounds.height) },
     }
     ret (Layout { kind: .Qq, coords: points[..sorted.len], segments: reference[..1usize], bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
+}
+
+// Compare the empirical plotting positions with a caller-specified normal CDF.
+fn pp_normal(sorted: []const f64, mean: f64, deviation: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment) -> (Layout, err) {
+    if sorted.len < 2usize { ret (zero, Empty) }
+    if points.len < sorted.len || reference.len < 1usize { ret (zero, TooLarge) }
+    if !valid_bounds(bounds) || !finite64(mean) || !finite64(deviation) || deviation <= 0.0f64 { ret (zero, Invalid) }
+    var i = 0usize
+    while i < sorted.len {
+        if !finite64(sorted[i]) || (i > 0usize && sorted[i] < sorted[i - 1usize]) { ret (zero, Invalid) }
+        let z = (sorted[i] - mean) / deviation
+        if !finite64(z) { ret (zero, Invalid) }
+        let theoretical = special.normal_cdf(z)
+        let empirical = (f64(i) + 0.5f64) / f64(sorted.len)
+        points[i] = Coord {
+            x: bounds.x + bounds.width * f32(theoretical),
+            y: bounds.y + bounds.height * f32(1.0f64 - empirical),
+        }
+        i += 1usize
+    }
+    reference[0usize] = Segment {
+        from: Coord { x: bounds.x, y: bounds.y + bounds.height },
+        to: Coord { x: bounds.x + bounds.width, y: bounds.y },
+    }
+    ret (Layout { kind: .Pp, coords: points[..sorted.len], segments: reference[..1usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }, ok)
 }
 
 fn cell_rect(bounds: geometry.Rect, column: usize, row: usize, columns: usize, rows: usize) -> geometry.Rect {

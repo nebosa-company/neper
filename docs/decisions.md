@@ -33767,3 +33767,12 @@ mark implementation. The gallery labels axes and their min/max values;
 paths and both adapters on Windows and Linux. Per-row colour, reordering,
 brushing and missing-value policy remain planned. Reference:
 https://plotly.com/python/parallel-coordinates-plot/
+
+## D1866 — Normal P-P shares the Q-Q point-and-reference adapters
+
+`pp_normal` compares sorted observations' empirical midpoint ranks with a
+caller-specified normal CDF. Keep the mean and positive standard deviation
+explicit so the plot does not silently fit parameters. Reuse the Q-Q
+point-and-reference scene/SVG paths but retain a distinct `Pp` kind and
+fixed probability axes. The `gfx_chart_qq` fixture checks numeric positions,
+refusals and both adapters; the gallery adds a PNG/SVG pair.

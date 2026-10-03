@@ -142,7 +142,7 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
         }
         try geometry.close_path(&path)
         try scene.push(builder, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&path), brush: brush } })
-    } else if marks.kind == .Qq {
+    } else if marks.kind == .Qq || marks.kind == .Pp {
         let line = chart.Layout { kind: .Line, coords: zero, segments: marks.segments, bars: zero, x_min: marks.x_min, x_max: marks.x_max, y_min: marks.y_min, y_max: marks.y_max }
         try append(a, builder, &line, brush)
         let dots = chart.Layout { kind: .Scatter, coords: marks.coords, segments: zero, bars: zero, x_min: marks.x_min, x_max: marks.x_max, y_min: marks.y_min, y_max: marks.y_max }
