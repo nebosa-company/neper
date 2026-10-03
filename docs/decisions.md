@@ -34020,3 +34020,13 @@ not silently infer dependencies or a project calendar. `gfx_chart_gantt`
 checks geometry, refusals and scene/SVG adapters on Windows and Linux. The
 gallery adds a PNG/SVG pair; milestones, dependency links and critical-path
 calculation remain separate planned capabilities.
+
+## D1893 — Milestone roadmaps reuse time positions with filled diamond marks
+
+`milestone_roadmap` calls the existing validated event-position mapping and
+turns each lane-centered timestamp into a caller-owned four-point Area polygon.
+The existing scene and SVG adapters fill those polygons; no new backend mark
+is needed. Marker size is bounded by lane height, while exact time ordering,
+row/domain validation and capacity refusals follow the event contract. The
+focused fixture passes on Windows and Linux, and the gallery adds a PNG/SVG
+pair. Dependency links and calendar scheduling remain separate work.

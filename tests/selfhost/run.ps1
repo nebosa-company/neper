@@ -3207,6 +3207,11 @@ $gfxChartGanttWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gfxChartGanttWritten -ne 'executable written') { throw 'gfx_chart_gantt emission failed' }
 $gfxChartGanttOutput = & $gfxChartGanttPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartGanttOutput -ne 'gfx chart gantt ok') { throw "the e.gfx.chart Gantt durations and completion answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMilestoneRoadmapPath = Join-Path $testBuild 'gfx-chart-milestone-roadmap-selfhost.exe'
+$gfxChartMilestoneRoadmapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_milestone_roadmap\src\main.e') $repo 'x64' 'windows' $gfxChartMilestoneRoadmapPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMilestoneRoadmapWritten -ne 'executable written') { throw 'gfx_chart_milestone_roadmap emission failed' }
+$gfxChartMilestoneRoadmapOutput = & $gfxChartMilestoneRoadmapPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMilestoneRoadmapOutput -ne 'gfx chart milestone roadmap ok') { throw "the e.gfx.chart milestone diamonds answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

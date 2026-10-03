@@ -2039,6 +2039,31 @@ fn event_timeline(events: []const TimelineEvent, rows: usize, domain_start: f64,
     ret (Layout { kind: .Lollipop, coords: points[..events.len], segments: stems[..events.len], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: f32(rows) }, ok)
 }
 
+// Milestones reuse event positions but fill diamonds instead of lollipop dots.
+fn milestone_roadmap(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, size: f32, centers: []Coord, stems: []Segment, diamonds: []Coord, layers: []Layout) -> ([]Layout, err) {
+    let x_min = f32(domain_start)
+    let x_max = f32(domain_end)
+    if !finite(x_min) || !finite(x_max) || x_max <= x_min || !finite(size) || size <= 0.0 { ret (zero, Invalid) }
+    if diamonds.len / 4usize < events.len || layers.len < events.len { ret (zero, TooLarge) }
+    let (positions, position_error) = event_timeline(events, rows, domain_start, domain_end, bounds, centers, stems)
+    if position_error != ok { ret (zero, position_error) }
+    let lane = bounds.height / f32(rows)
+    if !finite(lane) || size > lane * 0.5 { ret (zero, Invalid) }
+    var i = 0usize
+    while i < events.len {
+        let center = positions.coords[i]
+        if !finite(center.x - size) || !finite(center.x + size) || !finite(center.y - size) || !finite(center.y + size) { ret (zero, Invalid) }
+        let start = i * 4usize
+        diamonds[start] = Coord { x: center.x, y: center.y - size }
+        diamonds[start + 1usize] = Coord { x: center.x + size, y: center.y }
+        diamonds[start + 2usize] = Coord { x: center.x, y: center.y + size }
+        diamonds[start + 3usize] = Coord { x: center.x - size, y: center.y }
+        layers[i] = Layout { kind: .Area, coords: diamonds[start..start + 4usize], segments: zero, bars: zero, x_min: x_min, x_max: x_max, y_min: 0.0, y_max: f32(rows) }
+        i += 1usize
+    }
+    ret (layers[..events.len], ok)
+}
+
 fn chord_point(center: Coord, radius: f64, angle: f64) -> Coord {
     ret Coord { x: center.x + f32(radius * math.cos[f64](angle)), y: center.y + f32(radius * math.sin[f64](angle)) }
 }
