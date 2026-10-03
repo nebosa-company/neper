@@ -3169,6 +3169,89 @@ fn render_recurrence_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_earned_value_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/earned_value.png"
+    let plot = geometry.rect(52.0, 47.0, 256.0, 136.0)
+    let x = [7]f32{ 0.0, 0.17, 0.33, 0.5, 0.67, 0.83, 1.0 }
+    let planned = [7]f32{ 0.0, 8.0, 17.0, 28.0, 39.0, 50.0, 60.0 }
+    let earned = [5]f32{ 0.0, 6.0, 14.0, 20.0, 27.0 }
+    let actual = [5]f32{ 0.0, 7.0, 17.0, 25.0, 34.0 }
+    var planned_segments: [6]chart.Segment = zero
+    var earned_segments: [4]chart.Segment = zero
+    var actual_segments: [4]chart.Segment = zero
+    let (pv, ev, ac, layout_error) = chart.earned_value(x[..], planned[..], earned[..], actual[..], plot, planned_segments[..], earned_segments[..], actual_segments[..])
+    if layout_error != ok { ret layout_error }
+    let colors = [3]paint.Color{ paint.rgba(0.08, 0.40, 0.76, 1.0), paint.rgba(0.15, 0.60, 0.46, 1.0), paint.rgba(0.86, 0.40, 0.17, 1.0) }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let grid = paint.rgba(0.87, 0.90, 0.94, 1.0)
+    var x_ticks: [4]chart.Tick = zero
+    var y_ticks: [4]chart.Tick = zero
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    let (_, x_error) = chart.ticks(linear, pv.x_min, pv.x_max, x_ticks[..])
+    if x_error != ok { ret x_error }
+    let (_, y_error) = chart.ticks(linear, pv.y_min, pv.y_max, y_ticks[..])
+    if y_error != ok { ret y_error }
+    let x_names = [4]str{ "0", "1/3", "2/3", "1" }
+    let y_names = [4]str{ "0", "20", "40", "60" }
+    let legend_names = [3]str{ "PV plan", "EV earned", "AC actual" }
+    var labels: [12]chart.Label = zero
+    var swatches: [3]geometry.Rect = zero
+    var i = 0usize
+    while i < 4usize {
+        labels[i] = chart.Label { text: x_names[i], anchor: chart.Coord { x: plot.x + plot.width * x_ticks[i].fraction, y: 199.0 }, align: .Center }
+        labels[4usize + i] = chart.Label { text: y_names[i], anchor: chart.Coord { x: 43.0, y: plot.y + plot.height * (1.0 - y_ticks[i].fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    labels[8usize] = chart.Label { text: "Earned value (PV / EV / AC)", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    i = 0usize
+    while i < 3usize {
+        swatches[i] = geometry.rect(47.0 + f32(i) * 100.0, 217.0, 10.0, 10.0)
+        labels[9usize + i] = chart.Label { text: legend_names[i], anchor: chart.Coord { x: swatches[i].x + 16.0, y: 226.0 }, align: .Left }
+        i += 1usize
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &pv, paint.Brush { Solid: colors[0usize] })
+    try chart_scene.append(a, &builder, &ev, paint.Brush { Solid: colors[1usize] })
+    try chart_scene.append(a, &builder, &ac, paint.Brush { Solid: colors[2usize] })
+    i = 0usize
+    while i < 3usize {
+        try fill(&builder, swatches[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..8usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[8usize..9usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[9usize..], font, 9.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append(&writer, &pv, colors[0usize])
+    try chart_svg.append(&writer, &ev, colors[1usize])
+    try chart_svg.append(&writer, &ac, colors[2usize])
+    i = 0usize
+    while i < 3usize {
+        try chart_svg.rect(&writer, swatches[i], colors[i], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..8usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[8usize..9usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[9usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_burn_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     let x = [7]f32{ 0.0, 0.17, 0.33, 0.5, 0.67, 0.83, 1.0 }
@@ -4161,6 +4244,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_streamlines_preview(a, queue, output_target, canvas, &renderer)
     try render_phase_space_preview(a, queue, output_target, canvas, &renderer)
     try render_recurrence_preview(a, queue, output_target, canvas, &renderer)
+    try render_earned_value_preview(a, queue, output_target, canvas, &renderer)
     try render_burn_previews(a, queue, output_target, canvas, &renderer)
     try render_drawdown_preview(a, queue, output_target, canvas, &renderer)
     try render_cohort_preview(a, queue, output_target, canvas, &renderer)

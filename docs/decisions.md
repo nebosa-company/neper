@@ -34041,3 +34041,14 @@ positions agree. The focused fixture checks irregular time steps, references,
 flat series, invalid/capacity paths and scene/SVG output on Windows and Linux.
 The gallery adds two PNG/SVG pairs. Missing observations, sprint calendars
 and forecasts remain separate planned work.
+
+## D1895 — Earned-value curves keep the plan horizon separate from observations
+
+`earned_value` aligns PV, EV and AC Line layers with one explicit time and
+nonnegative value domain. Planned value may extend beyond the measured EV/AC
+prefix; the adapter neither fabricates future results nor treats actual cost
+as earned value. The focused fixture checks numeric positions, partial horizon,
+flat series, invalid/capacity paths and scene/SVG output on Windows and Linux.
+The gallery adds a PNG/SVG pair. Variance indices and forecasts remain project
+analytics, not implicit chart calculations. Terminology follows NASA's EVM
+tutorial: https://www.nasa.gov/ocfo/ppc-corner/evm/tutorial/

@@ -2839,6 +2839,11 @@ gfx_chart_burn_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/gfx-chart-burn-selfhost"
 gfx_chart_burn_output=$("$test_build/gfx-chart-burn-selfhost")
 [ "$gfx_chart_burn_output" = 'gfx chart burn ok' ]
+gfx_chart_earned_value_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_earned_value/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-earned-value-selfhost")
+[ "$gfx_chart_earned_value_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-earned-value-selfhost"
+gfx_chart_earned_value_output=$("$test_build/gfx-chart-earned-value-selfhost")
+[ "$gfx_chart_earned_value_output" = 'gfx chart earned value ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

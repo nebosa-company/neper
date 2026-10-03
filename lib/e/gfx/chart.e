@@ -1833,6 +1833,40 @@ fn burnup(x: []const f32, completed: []const f32, scope: []const f32, bounds: ge
     ret (completed_marks, scope_marks, pair_error)
 }
 
+// Planned value may continue beyond the measured earned-value/actual-cost
+// prefix. All three curves use the full planned x and y domains.
+fn earned_value(x: []const f32, planned: []const f32, earned: []const f32, actual: []const f32, bounds: geometry.Rect, planned_segments: []Segment, earned_segments: []Segment, actual_segments: []Segment) -> (Layout, Layout, Layout, err) {
+    if x.len < 2usize { ret (zero, zero, zero, Empty) }
+    if planned.len != x.len || earned.len != actual.len || earned.len < 2usize || earned.len > x.len || !valid_bounds(bounds) { ret (zero, zero, zero, Invalid) }
+    if planned_segments.len < x.len - 1usize || earned_segments.len < earned.len - 1usize || actual_segments.len < actual.len - 1usize { ret (zero, zero, zero, TooLarge) }
+    var maximum = 0.0f32
+    var i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || (i > 0usize && x[i] <= x[i - 1usize]) || !finite(planned[i]) || planned[i] < 0.0 { ret (zero, zero, zero, Invalid) }
+        if planned[i] > maximum { maximum = planned[i] }
+        if i < earned.len {
+            if !finite(earned[i]) || earned[i] < 0.0 || !finite(actual[i]) || actual[i] < 0.0 { ret (zero, zero, zero, Invalid) }
+            if earned[i] > maximum { maximum = earned[i] }
+            if actual[i] > maximum { maximum = actual[i] }
+        }
+        i += 1usize
+    }
+    if maximum == 0.0 { maximum = 1.0 }
+    let x_limits = [2]f32{ x[0usize], x[x.len - 1usize] }
+    let y_limits = [2]f32{ 0.0, maximum }
+    var unused_coords: [1]Coord = zero
+    var unused_bars: [1]geometry.Rect = zero
+    let planned_spec = spec(.Line, bounds, x, planned)
+    let (planned_marks, planned_error) = layout_with_limits(&planned_spec, unused_coords[..0usize], planned_segments, unused_bars[..0usize], x_limits[..], y_limits[..])
+    if planned_error != ok { ret (zero, zero, zero, planned_error) }
+    let earned_spec = spec(.Line, bounds, x[..earned.len], earned)
+    let (earned_marks, earned_error) = layout_with_limits(&earned_spec, unused_coords[..0usize], earned_segments, unused_bars[..0usize], x_limits[..], y_limits[..])
+    if earned_error != ok { ret (zero, zero, zero, earned_error) }
+    let actual_spec = spec(.Line, bounds, x[..actual.len], actual)
+    let (actual_marks, actual_error) = layout_with_limits(&actual_spec, unused_coords[..0usize], actual_segments, unused_bars[..0usize], x_limits[..], y_limits[..])
+    ret (planned_marks, earned_marks, actual_marks, actual_error)
+}
+
 // Equal-angle rose sectors. Square-root radii make sector area proportional
 // to each nonnegative pre-binned weight, as in a circular histogram.
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err) {

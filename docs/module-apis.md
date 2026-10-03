@@ -15977,6 +15977,7 @@ fn price_volume(x: []const f32, prices: []const f32, volumes: []const f32, bound
 fn returns_volatility(x: []const f32, prices: []const f32, window: usize, bounds: geometry.Rect, gap: f32, returns: []f32, volatility: []f32, return_segments: []Segment, volatility_segments: []Segment) -> (Layout, Layout, err)
 fn burndown(x: []const f32, remaining: []const f32, bounds: geometry.Rect, ideal: []f32, remaining_segments: []Segment, ideal_segments: []Segment) -> (Layout, Layout, err)
 fn burnup(x: []const f32, completed: []const f32, scope: []const f32, bounds: geometry.Rect, completed_segments: []Segment, scope_segments: []Segment) -> (Layout, Layout, err)
+fn earned_value(x: []const f32, planned: []const f32, earned: []const f32, actual: []const f32, bounds: geometry.Rect, planned_segments: []Segment, earned_segments: []Segment, actual_segments: []Segment) -> (Layout, Layout, Layout, err)
 fn gantt(tasks: []const GanttTask, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, row_gap: f32, spans: []geometry.Rect, completed: []geometry.Rect) -> (Layout, Layout, err)
 fn event_timeline(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, points: []Coord, stems: []Segment) -> (Layout, err)
 fn milestone_roadmap(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, size: f32, centers: []Coord, stems: []Segment, diamonds: []Coord, layers: []Layout) -> ([]Layout, err)

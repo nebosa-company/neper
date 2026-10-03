@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and forty-six PNG plus one hundred and forty-six SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown and burnup are also delivered. Individuals, moving-range,
+one hundred and forty-seven PNG plus one hundred and forty-seven SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup and earned-value curves are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -448,6 +448,14 @@ burndown work may rise after scope changes. `gfx_chart_burn` checks irregular
 times, numeric references, flat data, refusals and scene/SVG output on Windows
 and Linux. Missing observations, sprint-calendar dates and forecast confidence
 intervals remain planned.
+`earned_value` aligns planned value (PV), earned value (EV) and actual cost
+(AC) on one numeric time/value domain. The PV curve may continue beyond the
+observed EV/AC prefix, keeping the reporting point distinct from the plan
+horizon. It validates nonnegative finite values, ordered time and caller
+capacity, then reuses three Line layouts and existing adapters.
+`gfx_chart_earned_value` checks partial-horizon alignment, numeric references,
+flat data, refusals and scene/SVG output on Windows and Linux. Forecasts,
+variance indices and earned-value estimation stay with project analytics.
 `forest_plot` validates study estimates inside intervals and maps them to
 horizontal segments plus center markers on linear, log10 or symlog x scales;
 the reference line is a separate caller-colourable Rug layer. Study weights,
@@ -514,6 +522,7 @@ remains planned.
 
 Basic Gantt task spans and completion layers and diamond milestone roadmaps
 are delivered, as are burndown and burnup traces; dependency links remain planned.
+The planned/earned/actual-cost earned-value curve is delivered.
 
 ### General-purpose statistical and business charts
 
@@ -678,7 +687,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and forty-six vector previews, automatic numeric tick text and
+   adapter with one hundred and forty-seven vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

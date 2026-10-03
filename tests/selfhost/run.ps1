@@ -3217,6 +3217,11 @@ $gfxChartBurnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $gfxChartBurnWritten -ne 'executable written') { throw 'gfx_chart_burn emission failed' }
 $gfxChartBurnOutput = & $gfxChartBurnPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartBurnOutput -ne 'gfx chart burn ok') { throw "the e.gfx.chart burndown and burnup answered wrongly: exit $LASTEXITCODE" }
+$gfxChartEarnedValuePath = Join-Path $testBuild 'gfx-chart-earned-value-selfhost.exe'
+$gfxChartEarnedValueWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_earned_value\src\main.e') $repo 'x64' 'windows' $gfxChartEarnedValuePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartEarnedValueWritten -ne 'executable written') { throw 'gfx_chart_earned_value emission failed' }
+$gfxChartEarnedValueOutput = & $gfxChartEarnedValuePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartEarnedValueOutput -ne 'gfx chart earned value ok') { throw "the e.gfx.chart PV/EV/AC alignment answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'
