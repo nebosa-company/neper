@@ -1087,6 +1087,33 @@ fn render_control_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret render_control_preview(a, q, output_target, canvas, renderer, deviations[..], s_limits, "Standard deviation chart", "S", "docs/chart-previews/s_control.png")
 }
 
+fn render_subgroup_phase_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let values = [24]f64{
+        9.0, 10.0, 11.0, 10.0, 12.0, 11.0, 8.0, 9.0, 10.0, 10.0, 10.0, 13.0,
+        19.0, 20.0, 21.0, 20.0, 22.0, 23.0, 18.0, 19.0, 20.0, 21.0, 22.0, 24.0,
+    }
+    let starts = [8]bool{ true, false, false, false, true, false, false, false }
+    let kinds = [2]stat.SubgroupSpreadKind{ .Range, .StdDev }
+    let mean_titles = [2]str{ "Phased X-bar / R", "Phased X-bar / S" }
+    let spread_titles = [2]str{ "Phased Range", "Phased S chart" }
+    let mean_paths = [2]str{ "docs/chart-previews/phased_xbar_r.png", "docs/chart-previews/phased_xbar_s.png" }
+    let spread_paths = [2]str{ "docs/chart-previews/phased_range.png", "docs/chart-previews/phased_s.png" }
+    var means: [8]f64 = zero
+    var spreads: [8]f64 = zero
+    var mean_points: [8]stat.AttributeControlPoint = zero
+    var spread_points: [8]stat.AttributeControlPoint = zero
+    var i = 0usize
+    while i < 2usize {
+        try stat.subgroup_control_phased(kinds[i], values[..], 3usize, starts[..], means[..], spreads[..], mean_points[..], spread_points[..])
+        try render_attribute_preview_phased(a, q, output_target, canvas, renderer, mean_points[..], starts[..], mean_titles[i], "Mean", mean_paths[i])
+        var spread_label = "Range"
+        if kinds[i] == .StdDev { spread_label = "S" }
+        try render_attribute_preview_phased(a, q, output_target, canvas, renderer, spread_points[..], starts[..], spread_titles[i], spread_label, spread_paths[i])
+        i += 1usize
+    }
+    ret ok
+}
+
 fn render_weighted_control_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let observations = [10]f64{ 10.6, 11.1, 11.4, 12.0, 11.8, 9.2, 8.8, 8.5, 8.0, 8.5 }
     var sums: [10]stat.CusumPoint = zero
@@ -2806,6 +2833,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_agreement_preview(a, queue, output_target, canvas, &renderer)
     try render_survival_previews(a, queue, output_target, canvas, &renderer)
     try render_control_previews(a, queue, output_target, canvas, &renderer)
+    try render_subgroup_phase_previews(a, queue, output_target, canvas, &renderer)
     try render_run_rules_preview(a, queue, output_target, canvas, &renderer)
     try render_phase_control_preview(a, queue, output_target, canvas, &renderer)
     try render_weighted_control_previews(a, queue, output_target, canvas, &renderer)

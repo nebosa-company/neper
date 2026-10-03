@@ -25,6 +25,7 @@ type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y
 type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
 type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, at_risk: usize, events: usize, censored: usize }
 type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
+type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
 type CusumPoint = struct { high: f64, low: f64, high_signal: bool, low_signal: bool }
@@ -839,6 +840,57 @@ fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations:
     let s = ControlLimits { center: spread.mean, lower: s_lower, upper: spread.mean * (1.0f64 + s_factor) }
     if xbar.lower - xbar.lower != 0.0f64 || xbar.upper - xbar.upper != 0.0f64 || s.upper - s.upper != 0.0f64 { ret (zero, zero, Invalid) }
     ret (xbar, s, ok)
+}
+
+// Phase starts are subgroup indices; both charts re-estimate from each phase.
+fn subgroup_control_phased(kind: SubgroupSpreadKind, values: []const f64, subgroup: usize, starts: []const bool, means: []f64, spreads: []f64, mean_points: []AttributeControlPoint, spread_points: []AttributeControlPoint) -> err {
+    if subgroup < 2usize || (kind == .Range && subgroup > 10usize) || values.len % subgroup != 0usize { ret Invalid }
+    let groups = values.len / subgroup
+    if groups < 2usize || starts.len != groups || !starts[0usize] { ret Invalid }
+    if means.len < groups || spreads.len < groups || mean_points.len < groups || spread_points.len < groups { ret TooSmall }
+    var begin = 0usize
+    var group = 0usize
+    while group < groups {
+        if group > 0usize && starts[group] {
+            if group - begin < 2usize { ret Invalid }
+            begin = group
+        }
+        group += 1usize
+    }
+    if groups - begin < 2usize { ret Invalid }
+    var i = 0usize
+    while i < values.len {
+        if values[i] - values[i] != 0.0f64 { ret Invalid }
+        i += 1usize
+    }
+    begin = 0usize
+    while begin < groups {
+        var end = begin + 1usize
+        while end < groups && !starts[end] { end += 1usize }
+        var mean_limits: ControlLimits = zero
+        var spread_limits: ControlLimits = zero
+        var calc_error: err = ok
+        if kind == .Range {
+            let (mean_result, spread_result, result_error) = xbar_r_limits(values[begin * subgroup..end * subgroup], subgroup, means[begin..end], spreads[begin..end])
+            mean_limits = mean_result
+            spread_limits = spread_result
+            calc_error = result_error
+        } else {
+            let (mean_result, spread_result, result_error) = xbar_s_limits(values[begin * subgroup..end * subgroup], subgroup, means[begin..end], spreads[begin..end])
+            mean_limits = mean_result
+            spread_limits = spread_result
+            calc_error = result_error
+        }
+        if calc_error != ok { ret calc_error }
+        group = begin
+        while group < end {
+            mean_points[group] = AttributeControlPoint { value: means[group], center: mean_limits.center, lower: mean_limits.lower, upper: mean_limits.upper }
+            spread_points[group] = AttributeControlPoint { value: spreads[group], center: spread_limits.center, lower: spread_limits.lower, upper: spread_limits.upper }
+            group += 1usize
+        }
+        begin = end
+    }
+    ret ok
 }
 
 // One-sided tabular sums share the target, reference allowance and decision h.

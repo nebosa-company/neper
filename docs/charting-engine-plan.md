@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and twelve PNG plus one hundred and twelve SVG previews from Neper. Individuals, moving-range,
+one hundred and sixteen PNG plus one hundred and sixteen SVG previews from Neper. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -140,10 +140,15 @@ standard deviations with the c4 bias correction for three-sigma mean and S
 limits. `cusum_control` computes upper/lower tabular sums and decision signals;
 `ewma_control` computes recursive weighted means with startup-adjusted limits.
 `gfx_chart_weighted_control` checks numeric references and refusal paths on
-Windows and Linux. `imr_phase_control` estimates separate Individuals limits
+Windows and Linux. `subgroup_control_phased` reuses the X-bar/R or X-bar/S
+calculator within each phase of at least two equal-size subgroups and returns
+per-subgroup mean and spread limits. `gfx_chart_subgroup_phases` compares both
+modes with independent phase calculations and checks refusal paths on Windows
+and Linux; four phase-split PNG/SVG previews show X-bar/R, R, X-bar/S and S.
+`imr_phase_control` estimates separate Individuals limits
 for each phase of at least two observations, excludes cross-boundary moving
 ranges, and emits per-point limits. The gallery shows a visible phase split;
-subgroup phase estimation remains planned.
+unequal subgroup sizes and historical parameter overrides remain planned.
 `e.algo.stat.attribute_control` computes pooled binomial p/np and Poisson c/u
 three-sigma values and limits in caller storage. Variable subgroup sizes
 change p/u limits per observation; np requires equal size and c equal unit
@@ -535,7 +540,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and twelve vector previews, automatic numeric tick text and
+   adapter with one hundred and sixteen vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

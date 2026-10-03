@@ -3153,6 +3153,7 @@ type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y
 type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
 type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, at_risk: usize, events: usize, censored: usize }
 type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
+type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
 type CusumPoint = struct { high: f64, low: f64, high_signal: bool, low_signal: bool }
@@ -3207,6 +3208,7 @@ fn t_exponential_control_limits(intervals: []const f64) -> (ControlLimits, err)
 fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const f64, out: []ControlSignal) -> err
 fn control_run_rules_phased(values: []const f64, centers: []const f64, sigmas: []const f64, starts: []const bool, out: []ControlSignal) -> err
 fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations: []f64) -> (ControlLimits, ControlLimits, err)
+fn subgroup_control_phased(kind: SubgroupSpreadKind, values: []const f64, subgroup: usize, starts: []const bool, means: []f64, spreads: []f64, mean_points: []AttributeControlPoint, spread_points: []AttributeControlPoint) -> err
 fn cusum_control(values: []const f64, center: f64, reference: f64, decision: f64, out: []CusumPoint) -> err
 fn ewma_control(values: []const f64, center: f64, sigma: f64, lambda: f64, width: f64, out: []AttributeControlPoint) -> err
 fn correlation(s: *const Regression) -> (f64, bool)

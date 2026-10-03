@@ -33740,3 +33740,18 @@ renderer for two new PNG/SVG pairs. `gfx_chart_laney_phases` compares both
 kinds with independent phase calculations and checks refusals on Windows and
 Linux. Subgroup X-bar/R/S phases remain planned. Reference:
 https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-p-chart/interpret-the-results/all-statistics-and-graphs/
+
+## D1864 — Re-estimate X-bar/R and X-bar/S limits by phase
+
+Use subgroup-index phase starts and the existing X-bar/R or X-bar/S calculator
+within each phase. Require at least two complete, equal-size subgroups per
+phase; retain caller-owned mean/spread scratch and per-subgroup plotted values
+with their phase-specific limits. One kind selector avoids duplicating the
+phase traversal and keeps range and standard-deviation formulas in their
+existing calculators. Reuse the phase-aware attribute renderer for four new
+PNG/SVG pairs. The focused `gfx_chart_subgroup_phases` fixture compares both
+methods with independent phase calculations and checks malformed boundaries,
+storage and nonfinite values on Windows and Linux. Unequal subgroup sizes and
+historical parameter overrides remain planned. References:
+https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/variables-charts-for-subgroups/xbar-r-chart/perform-the-analysis/xbar-r-options/define-stages/
+and https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/variables-charts-for-subgroups/xbar-s-chart/interpret-the-results/all-statistics-and-graphs/
